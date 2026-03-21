@@ -1,0 +1,128 @@
+syntax = "proto3";
+package auth.v1;
+
+// 認証（セッション管理、OAuth、Magic Link）
+service AuthService {
+  rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc FindAccountByUserId(FindAccountByUserIdRequest) returns (FindAccountByUserIdResponse);
+  rpc SignOut(SignOutRequest) returns (SignOutResponse);
+  rpc SendMagicLink(SendMagicLinkRequest) returns (SendMagicLinkResponse);
+}
+
+// ユーザー管理（user テーブルが auth-service DB に存在するため必要）
+service UserService {
+  rpc FindUserByEmail(FindUserByEmailRequest) returns (FindUserByEmailResponse);
+  rpc FindUserById(FindUserByIdRequest) returns (FindUserByIdResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
+}
+
+// 共通メッセージ
+message User {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  bool email_verified = 4;
+  optional string image = 5;
+  string created_at = 6;
+  string updated_at = 7;
+}
+
+message Session {
+  string id = 1;
+  string token = 2;
+  string expires_at = 3;
+  string user_id = 4;
+  optional string ip_address = 5;
+  optional string user_agent = 6;
+}
+
+message Account {
+  string id = 1;
+  string account_id = 2;
+  string provider_id = 3;
+  string user_id = 4;
+  optional string access_token = 5;
+  optional string refresh_token = 6;
+  optional string scope = 7;
+}
+
+// AuthService メッセージ
+message VerifySessionRequest {
+  string session_token = 1;
+}
+
+message VerifySessionResponse {
+  optional User user = 1;
+  optional Session session = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message GetUserResponse {
+  optional User user = 1;
+}
+
+message FindAccountByUserIdRequest {
+  string user_id = 1;
+}
+
+message FindAccountByUserIdResponse {
+  optional Account account = 1;
+}
+
+message SignOutRequest {
+  string session_token = 1;
+}
+
+message SignOutResponse {
+  bool success = 1;
+}
+
+message SendMagicLinkRequest {
+  string email = 1;
+  string callback_url = 2;
+}
+
+message SendMagicLinkResponse {
+  bool success = 1;
+}
+
+// UserService メッセージ
+message FindUserByEmailRequest {
+  string email = 1;
+}
+
+message FindUserByEmailResponse {
+  optional User user = 1;
+}
+
+message FindUserByIdRequest {
+  string user_id = 1;
+}
+
+message FindUserByIdResponse {
+  optional User user = 1;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  optional string name = 2;
+  optional string image = 3;
+  bool clear_image = 4; // true で image を null に設定（clearImage 相当）
+}
+
+message UpdateUserResponse {
+  User user = 1;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message DeleteUserResponse {
+  bool success = 1;
+}
