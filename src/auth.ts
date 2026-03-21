@@ -13,6 +13,7 @@ import {
   isTestEnvironment,
 } from "./email/client";
 import MagicLinkEmail from "./email/magic-link";
+import { redisStorage } from "./redis";
 
 // 新規ユーザー判定の閾値（10秒以内に作成されたユーザーは新規登録）
 const NEW_USER_THRESHOLD_MS = 10000;
@@ -22,6 +23,8 @@ const isJustSignedUp = (createdAt: Date): boolean =>
 
 export const auth = betterAuth({
   baseURL: process.env.AUTH_SERVICE_URL,
+
+  secondaryStorage: redisStorage,
 
   advanced: {
     useSecureCookies: !isTestEnvironment(),

@@ -15,6 +15,16 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   auth-service:
     build: .
     ports:
@@ -22,6 +32,7 @@ services:
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
+      REDIS_URL: redis://auth-redis:6379
       AUTH_SERVICE_URL: http://localhost:3100
       AUTH_COOKIE_DOMAIN: localhost
       AUTH_TRUSTED_ORIGINS: http://localhost:3000
@@ -29,6 +40,8 @@ services:
       APP_NAME: taimei
     depends_on:
       auth-postgres:
+        condition: service_healthy
+      auth-redis:
         condition: service_healthy
     develop:
       watch:

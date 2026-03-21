@@ -1,6 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
+import { connectRedis, redis } from "./redis";
+import { db } from "@/db/client";
+import { sql } from "drizzle-orm";
 
 const app = new Hono();
 
@@ -41,7 +44,30 @@ app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
 });
 
-app.get("/health", (c) => c.json({ status: "ok" }));
+// ヘルスチェック（DB + Redis 疎通確認）
+app.get("/health", async (c) => {
+  const checks: Record<string, string> = {};
+
+  try {
+    await db.execute(sql`SELECT 1`);
+    checks.db = "ok";
+  } catch {
+    checks.db = "error";
+  }
+
+  try {
+    await redis.ping();
+    checks.redis = "ok";
+  } catch {
+    checks.redis = "error";
+  }
+
+  const healthy = checks.db === "ok" && checks.redis === "ok";
+  return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
+});
+
+// Redis 接続後にサーバー起動
+await connectRedis();
 
 const port = Number(process.env.PORT) || 3100;
 console.log(`auth-service listening on port ${port}`);
