@@ -35,7 +35,7 @@ services:
       REDIS_URL: redis://auth-redis:6379
       AUTH_SERVICE_URL: http://localhost:3100
       AUTH_COOKIE_DOMAIN: localhost
-      AUTH_TRUSTED_ORIGINS: http://localhost:3000
+      AUTH_TRUSTED_ORIGINS: http://localhost:3000,http://localhost:3001
       APP_ENV: development
       APP_NAME: taimei
     depends_on:

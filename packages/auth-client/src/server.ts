@@ -3,7 +3,7 @@ import { createConnectTransport } from "@connectrpc/connect-node";
 import {
   AuthService,
   UserService,
-} from "../../../src/gen/auth/v1/auth_pb";
+} from "./gen/auth/v1/auth_pb";
 import {
   AuthServiceUnavailable,
   AuthServiceTimeout,
