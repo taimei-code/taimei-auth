@@ -112,6 +112,19 @@ app.use(
   }),
 );
 
+// /account/* も同じ SPA で処理 (plan: アカウント管理画面は /account/ 直下)。
+// Layer B の Vite base="/auth/" のため index.html の script src は /auth/assets/... を指すが、
+// /account 訪問時もブラウザはそれを取りに行き、上の /auth/* serveStatic で配信されるため整合する。
+app.get("/account/*", async (c) => {
+  const pathname = new URL(c.req.url).pathname;
+  if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+    return c.notFound();
+  }
+  return new Response(Bun.file(SPA_INDEX_HTML), {
+    headers: { "Content-Type": "text/html; charset=UTF-8" },
+  });
+});
+
 app.get("/auth/*", async (c) => {
   const pathname = new URL(c.req.url).pathname;
   if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
