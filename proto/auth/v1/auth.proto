@@ -27,6 +27,12 @@ message User {
   optional string image = 5;
   string created_at = 6;
   string updated_at = 7;
+
+  // ADR-001 R6 / ADR-002 Phase 1.5: 将来の AI / multi-tenant 対応用に予約
+  // 詳細: ~/.claude/plans/taimei/ADR-001-auth-separation.md, ADR-002-ai-native-strategy.md
+  reserved 8 to 20;
+  reserved "ai_consent_settings", "active_ai_clients", "revision",
+           "tenant_id", "default_company_id", "locale";
 }
 
 message Session {
@@ -36,6 +42,14 @@ message Session {
   string user_id = 4;
   optional string ip_address = 5;
   optional string user_agent = 6;
+
+  // ADR-001 R6 / ADR-002 Phase 1.5: 将来の AI / multi-tenant / Become / system session 用に予約
+  // 詳細: ~/.claude/plans/taimei/ADR-001-auth-separation.md, ADR-002-ai-native-strategy.md
+  reserved 7 to 30;
+  reserved "company_id", "scopes", "actor_type",
+           "client_id", "session_kind", "issued_for_ai",
+           "become_admin_id", "original_user_id", "delegation_scope",
+           "issued_at", "auth_method", "user_revision";
 }
 
 message Account {
