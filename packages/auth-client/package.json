@@ -1,6 +1,6 @@
 {
   "name": "@taimei/auth-client",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

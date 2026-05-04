@@ -9,43 +9,38 @@ import { auth } from "../auth";
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      const result = await db
-        .select()
-        .from(session)
-        .where(eq(session.token, req.sessionToken))
-        .then((rows) => rows.at(0));
+      // Better Auth は secondaryStorage(Redis) と DB を内部で使い分けるため、
+      // db を直接クエリせず auth.api.getSession を経由する必要がある。
+      // sessionToken を Cookie ヘッダ形式で渡して Better Auth に委譲する。
+      const headers = new Headers();
+      headers.set(
+        "cookie",
+        `better-auth.session_token=${req.sessionToken}; __Secure-better-auth.session_token=${req.sessionToken}`
+      );
 
-      if (!result || new Date(result.expiresAt) < new Date()) {
-        return { user: undefined, session: undefined };
-      }
+      const result = await auth.api.getSession({ headers });
 
-      const userResult = await db
-        .select()
-        .from(user)
-        .where(eq(user.id, result.userId))
-        .then((rows) => rows.at(0));
-
-      if (!userResult) {
+      if (!result || !result.user || !result.session) {
         return { user: undefined, session: undefined };
       }
 
       return {
         user: {
-          id: userResult.id,
-          name: userResult.name,
-          email: userResult.email,
-          emailVerified: userResult.emailVerified,
-          image: userResult.image ?? undefined,
-          createdAt: userResult.createdAt.toISOString(),
-          updatedAt: userResult.updatedAt.toISOString(),
+          id: result.user.id,
+          name: result.user.name,
+          email: result.user.email,
+          emailVerified: result.user.emailVerified,
+          image: result.user.image ?? undefined,
+          createdAt: new Date(result.user.createdAt).toISOString(),
+          updatedAt: new Date(result.user.updatedAt).toISOString(),
         },
         session: {
-          id: result.id,
-          token: result.token,
-          expiresAt: result.expiresAt.toISOString(),
-          userId: result.userId,
-          ipAddress: result.ipAddress ?? undefined,
-          userAgent: result.userAgent ?? undefined,
+          id: result.session.id,
+          token: result.session.token,
+          expiresAt: new Date(result.session.expiresAt).toISOString(),
+          userId: result.session.userId,
+          ipAddress: result.session.ipAddress ?? undefined,
+          userAgent: result.session.userAgent ?? undefined,
         },
       };
     },

@@ -52,37 +52,41 @@ export function createAuthGuard(options: GuardOptions) {
         );
       }
 
+      // Next.js の redirect() は NEXT_REDIRECT を throw する制御フロー実装のため、
+      // try/catch で囲むと catch 句に NEXT_REDIRECT が捕捉されてリダイレクトが機能しない。
+      // RPC 呼び出しのみを try で囲み、redirect は外側で実行する。
+      let result;
       try {
-        const result = await client.authService.verifySession({
+        result = await client.authService.verifySession({
           sessionToken: token!,
         });
-
-        if (!result.user || !result.session) {
-          redirect(
-            `/auth?callbackUrl=${encodeURIComponent(opts?.returnTo ?? "/dashboard")}`
-          );
-        }
-
-        return {
-          user: {
-            id: result.user!.id,
-            name: result.user!.name,
-            email: result.user!.email,
-            emailVerified: result.user!.emailVerified,
-            image: result.user!.image,
-            createdAt: result.user!.createdAt,
-            updatedAt: result.user!.updatedAt,
-          },
-          session: {
-            id: result.session!.id,
-            token: result.session!.token,
-            expiresAt: result.session!.expiresAt,
-            userId: result.session!.userId,
-          },
-        };
       } catch (error) {
         throw mapConnectError(error);
       }
+
+      if (!result.user || !result.session) {
+        redirect(
+          `/auth?callbackUrl=${encodeURIComponent(opts?.returnTo ?? "/dashboard")}`
+        );
+      }
+
+      return {
+        user: {
+          id: result.user!.id,
+          name: result.user!.name,
+          email: result.user!.email,
+          emailVerified: result.user!.emailVerified,
+          image: result.user!.image,
+          createdAt: result.user!.createdAt,
+          updatedAt: result.user!.updatedAt,
+        },
+        session: {
+          id: result.session!.id,
+          token: result.session!.token,
+          expiresAt: result.session!.expiresAt,
+          userId: result.session!.userId,
+        },
+      };
     }
   );
 
