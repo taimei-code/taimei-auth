@@ -5,7 +5,7 @@
  * signIn, signOut, useSession 等は Better Auth のネイティブ API をそのまま使用。
  *
  * 使用例:
- *   import { createBrowserAuthClient } from "@taimei/auth-client/browser";
+ *   import { createBrowserAuthClient } from "@taimei-code/auth-client/browser";
  *   const authClient = createBrowserAuthClient({ baseURL: "https://auth.taimei-code.com" });
  *   const { signIn, signOut, useSession } = authClient;
  */

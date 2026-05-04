@@ -2,7 +2,7 @@
  * Next.js 用セッション検証ヘルパー
  *
  * 使用例:
- *   import { createAuthGuard } from "@taimei/auth-client/guard";
+ *   import { createAuthGuard } from "@taimei-code/auth-client/guard";
  *   const { verifySession, getSession } = createAuthGuard({ ... });
  *
  * Next.js の cache() と redirect() を外部注入することで、

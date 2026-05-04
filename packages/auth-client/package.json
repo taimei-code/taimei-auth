@@ -1,9 +1,12 @@
 {
-  "name": "@taimei/auth-client",
-  "version": "0.0.3",
+  "name": "@taimei-code/auth-client",
+  "version": "0.0.4",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
