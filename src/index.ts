@@ -1,6 +1,7 @@
 import * as http from "node:http";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { serveStatic } from "hono/bun";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { auth } from "./auth";
 import { connectRedis, redis } from "./redis";
@@ -81,6 +82,32 @@ app.all("/rpc/*", async (c) => {
 // Better Auth HTTP ハンドラー
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
+});
+
+// Layer B: Vite build 出力 (web/dist) を /auth/* に配信。
+// vite.config.ts の base="/auth/" と整合。serveStatic で hit しないパス (= SPA route) は
+// 後続の SPA fallback ハンドラで index.html を返却し、クライアントサイドルーティングに委ねる。
+// 拡張子付きパス (.js / .css / .png 等) は asset とみなし fallback せず 404 を返す
+// (存在しない asset を index.html で返すと、ブラウザが script として解釈して破綻するため)。
+const WEB_DIST = "./web/dist";
+const SPA_INDEX_HTML = `${WEB_DIST}/index.html`;
+
+app.use(
+  "/auth/*",
+  serveStatic({
+    root: WEB_DIST,
+    rewriteRequestPath: (path) => path.replace(/^\/auth/, ""),
+  }),
+);
+
+app.get("/auth/*", async (c) => {
+  const pathname = new URL(c.req.url).pathname;
+  if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
+    return c.notFound();
+  }
+  return new Response(Bun.file(SPA_INDEX_HTML), {
+    headers: { "Content-Type": "text/html; charset=UTF-8" },
+  });
 });
 
 // ヘルスチェック（DB + Redis 疎通確認）
