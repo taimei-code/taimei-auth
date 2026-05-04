@@ -8,6 +8,8 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build:web": "vite build --config web/vite.config.ts",
     "generate": "buf generate",
     "test": "bun test"
   },
@@ -20,6 +22,8 @@
     "drizzle-orm": "^0.44.4",
     "hono": "^4.7.0",
     "pg": "^8.16.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
     "redis": "^5.11.0",
     "resend": "^6.6.0",
     "zod": "^4.4.3"
@@ -30,7 +34,9 @@
     "@types/node": "20.14.8",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
     "drizzle-kit": "^0.31.4",
-    "typescript": "5.9.2"
+    "typescript": "5.9.2",
+    "vite": "^8.0.10"
   }
 }
