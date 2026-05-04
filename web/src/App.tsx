@@ -1,17 +1,18 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { SignIn } from "./pages/SignIn";
+import { SignUp } from "./pages/SignUp";
 import { ErrorPage } from "./pages/Error";
 
 // Layer B Router: vite.config.ts の base="/auth/" と Hono の serveStatic prefix と整合する basename。
-// React Router v7 の BrowserRouter を使う (createBrowserRouter も可だが Layer B はルートが少なく
-// ネスト navigation も無いため BrowserRouter で十分)。
-// PR3b で /signup と /verify-magic-link を追加予定。
+// /verify-magic-link は Better Auth 標準の /api/auth/magic-link/verify が token verify + callbackURL
+// redirect を完結させるため、Layer B 側に UI ルートは不要 (plan の項目4 から撤廃)。
 export const App = () => {
   return (
     <BrowserRouter basename="/auth">
       <Routes>
         <Route path="/" element={<SignIn />} />
+        <Route path="signup" element={<SignUp />} />
         <Route path="error" element={<ErrorPage />} />
       </Routes>
     </BrowserRouter>
