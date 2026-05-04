@@ -5,6 +5,7 @@ import { connectNodeAdapter } from "@connectrpc/connect-node";
 import { auth } from "./auth";
 import { connectRedis, redis } from "./redis";
 import { registerRoutes } from "./rpc/routes";
+import { buildProxyHeaders } from "./proxy-helpers";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 
@@ -54,16 +55,21 @@ rpcServer.listen(rpcPort, "127.0.0.1", () => {
 });
 
 // Hono → ConnectRPC プロキシ（API Key 認証を通過した後にプロキシ）
+// Node.js の connectNodeAdapter は Content-Length 付きリクエストを期待するため、
+// Bun の ReadableStream をそのまま転送するとチャンク転送になり 400 を返す。
+// 一旦 ArrayBuffer に読み出してから Content-Length 付きで再送する。
 app.all("/rpc/*", async (c) => {
   const url = new URL(c.req.url);
   const proxyUrl = `http://127.0.0.1:${rpcPort}${url.pathname}`;
 
+  const bodyBuffer =
+    c.req.method !== "GET" ? await c.req.raw.arrayBuffer() : undefined;
+  const headers = buildProxyHeaders(c.req.raw.headers, bodyBuffer?.byteLength);
+
   const proxyRes = await fetch(proxyUrl, {
     method: c.req.method,
-    headers: c.req.raw.headers,
-    body: c.req.method !== "GET" ? c.req.raw.body : undefined,
-    // @ts-expect-error Bun supports duplex
-    duplex: "half",
+    headers,
+    body: bodyBuffer,
   });
 
   return new Response(proxyRes.body, {

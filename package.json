@@ -8,7 +8,8 @@
   "scripts": {
     "dev": "bun run src/index.ts",
     "build": "bun build src/index.ts --outdir dist --target bun",
-    "generate": "buf generate"
+    "generate": "buf generate",
+    "test": "bun test"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",

@@ -29,6 +29,8 @@ services:
     build: .
     ports:
       - "3100:3100"
+    env_file:
+      - .env
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
