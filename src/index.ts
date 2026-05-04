@@ -10,6 +10,10 @@ import { buildProxyHeaders } from "./proxy-helpers";
 import { killswitch } from "./middleware/killswitch";
 import { loginShortcut } from "./handlers/login-shortcut";
 import { avatarUploadHandler } from "./handlers/avatar-upload";
+import { canaryToken } from "./handlers/canary-token";
+import { initSentry } from "./sentry";
+
+initSentry();
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 
@@ -91,6 +95,9 @@ app.use("/login", killswitch);
 
 // /login → /auth/?service_name=accounts&redirect_url=<auth>/account のショートカット
 app.route("/", loginShortcut);
+
+// canary token 検知 endpoint (Layer B 画面の 3 種埋込から到達 → Sentry 通報)
+app.route("/", canaryToken);
 
 // Better Auth HTTP ハンドラー
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
