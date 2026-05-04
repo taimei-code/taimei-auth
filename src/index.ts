@@ -7,6 +7,8 @@ import { auth } from "./auth";
 import { connectRedis, redis } from "./redis";
 import { registerRoutes } from "./rpc/routes";
 import { buildProxyHeaders } from "./proxy-helpers";
+import { killswitch } from "./middleware/killswitch";
+import { loginShortcut } from "./handlers/login-shortcut";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 
@@ -78,6 +80,16 @@ app.all("/rpc/*", async (c) => {
     headers: proxyRes.headers,
   });
 });
+
+// COMMON_LOGIN_KILLSWITCH 緊急ブレーキ: /auth/* / /api/auth/* / /login のみに適用。
+// /rpc/* (verifySession) は対象外で既存セッションは維持される (auth/login の入口は止まるが
+// 既ログイン済みユーザーの taimei 利用は継続できる Zero-downtime 設計)。
+app.use("/auth/*", killswitch);
+app.use("/api/auth/*", killswitch);
+app.use("/login", killswitch);
+
+// /login → /auth/?service_name=accounts&redirect_url=<auth>/account のショートカット
+app.route("/", loginShortcut);
 
 // Better Auth HTTP ハンドラー
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
