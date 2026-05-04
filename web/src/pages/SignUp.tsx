@@ -5,6 +5,7 @@ import { Mail, Github, Loader2 } from "lucide-react";
 import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { authClient } from "@/lib/auth-client";
+import { CanaryTokens } from "@/components/CanaryTokens";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -78,7 +79,8 @@ export const SignUp = () => {
   };
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
+    <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
+      <CanaryTokens />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{service.name} に登録</CardTitle>
