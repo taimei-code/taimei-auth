@@ -5,6 +5,9 @@ import { SignUp } from "./pages/SignUp";
 import { ErrorPage } from "./pages/Error";
 import { AccountLayout } from "./components/account/AccountLayout";
 import { AccountIndex } from "./pages/account/Index";
+import { Security } from "./pages/account/Security";
+import { Sessions } from "./pages/account/Sessions";
+import { Connections } from "./pages/account/Connections";
 import { SessionGuard } from "./lib/session-guard";
 
 // Layer B Router: /auth/* と /account/* の 2 系統を 1 つの SPA で扱う。basename は使わず
@@ -33,6 +36,9 @@ export const App = () => {
           }
         >
           <Route index element={<AccountIndex />} />
+          <Route path="security" element={<Security />} />
+          <Route path="sessions" element={<Sessions />} />
+          <Route path="connections" element={<Connections />} />
         </Route>
       </Routes>
     </BrowserRouter>
