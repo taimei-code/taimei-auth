@@ -9,6 +9,7 @@ import { registerRoutes } from "./rpc/routes";
 import { buildProxyHeaders } from "./proxy-helpers";
 import { killswitch } from "./middleware/killswitch";
 import { loginShortcut } from "./handlers/login-shortcut";
+import { avatarUploadHandler } from "./handlers/avatar-upload";
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 
@@ -95,6 +96,10 @@ app.route("/", loginShortcut);
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
 });
+
+// Vercel Blob client upload の token 発行 endpoint (PR8b)。
+// Better Auth Cookie で認証 → 画像のみ + 5MB 上限の signed token を返却。
+app.post("/api/account/avatar/upload-token", avatarUploadHandler);
 
 // Layer B: Vite build 出力 (web/dist) を /auth/* に配信。
 // vite.config.ts の base="/auth/" と整合。serveStatic で hit しないパス (= SPA route) は
