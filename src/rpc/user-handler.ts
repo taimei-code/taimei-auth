@@ -93,10 +93,7 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      const result = await db
-        .delete(user)
-        .where(eq(user.id, req.userId))
-        .returning();
+      const result = await db.delete(user).where(eq(user.id, req.userId)).returning();
 
       if (result.length === 0) {
         throw new ConnectError("User not found", Code.NotFound);

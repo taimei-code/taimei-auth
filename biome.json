@@ -1,0 +1,72 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!web/dist",
+      "!drizzle",
+      "!src/gen",
+      "!packages/auth-client/dist",
+      "!packages/auth-client/src/gen",
+      "!bun.lock",
+      "!web/src/index.css"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": {
+        "noNonNullAssertion": "off",
+        "useImportType": "off"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noImplicitAnyLet": "warn",
+        "noUnknownAtRules": "off"
+      },
+      "correctness": {
+        "noUnusedImports": "warn"
+      },
+      "complexity": {
+        "useOptionalChain": "warn"
+      },
+      "a11y": {
+        "useAnchorContent": "warn"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "formatter": {
+      "enabled": true
+    }
+  }
+}

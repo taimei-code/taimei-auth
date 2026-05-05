@@ -18,24 +18,27 @@ export interface TaimeiServiceConfig {
   readonly noindex: boolean;
 }
 
-// APP_ENV !== "production" (= test / development / 未設定) では .local hostname も許可。
-// Vite bundle には vite.config.ts の define で文字列置換される。Hono server 側は
-// 通常の process.env 参照。validateRedirectUrl は url.hostname (port 含まない) で
-// 比較するため regex も port を含めない。production だけ厳格な .com のみ。
+// APP_ENV !== "production" (= test / development / 未設定) では .local hostname と
+// localhost も許可。Vite bundle には vite.config.ts の define で文字列置換される。
+// Hono server 側は通常の process.env 参照。validateRedirectUrl は url.hostname
+// (port 含まない) で比較するため regex も port を含めない。
+// localhost を含める理由: docker compose 単体起動時 (auth-service:3100) で /etc/hosts や
+// reverse proxy 無しに redirect_url=http://localhost:3100/account を通すため。完全一致なので
+// localhost.evil.com 等の suffix attack は弾かれる。production は厳格な .com のみ。
 const isLocalEnv = process.env.APP_ENV !== "production";
 
 export const TAIMEI_SERVICES: Record<ServiceName, TaimeiServiceConfig> = {
   taimei: {
     name: "taimei",
     allowedHostPattern: isLocalEnv
-      ? /^app\.taimei-code\.(com|local)$/
+      ? /^app\.taimei-code\.(com|local)$|^localhost$/
       : /^app\.taimei-code\.com$/,
     noindex: false,
   },
   accounts: {
     name: "taimei-auth",
     allowedHostPattern: isLocalEnv
-      ? /^auth\.taimei-code\.(com|local)$/
+      ? /^auth\.taimei-code\.(com|local)$|^localhost$/
       : /^auth\.taimei-code\.com$/,
     noindex: true,
   },

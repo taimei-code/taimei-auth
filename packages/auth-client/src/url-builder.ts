@@ -30,12 +30,8 @@ export interface BuildAuthLogoutUrlOptions {
   redirectTo?: string;
 }
 
-export const buildAuthLogoutUrl = (
-  opts: BuildAuthLogoutUrlOptions,
-): string => {
-  const url = new URL(
-    `${opts.authBaseUrl.replace(/\/$/, "")}/auth/sign-out`,
-  );
+export const buildAuthLogoutUrl = (opts: BuildAuthLogoutUrlOptions): string => {
+  const url = new URL(`${opts.authBaseUrl.replace(/\/$/, "")}/auth/sign-out`);
   url.searchParams.set("service_name", opts.service);
   if (opts.redirectTo !== undefined) {
     url.searchParams.set("redirect_url", opts.redirectTo);

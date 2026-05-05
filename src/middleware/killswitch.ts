@@ -29,8 +29,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 
 export const killswitch = createMiddleware(async (c, next) => {
   const envOn = process.env.COMMON_LOGIN_KILLSWITCH === "1";
-  const queryOn =
-    new URL(c.req.url).searchParams.get("disable_common_login") === "1";
+  const queryOn = new URL(c.req.url).searchParams.get("disable_common_login") === "1";
 
   if (envOn || queryOn) {
     return new Response(MAINTENANCE_HTML, {

@@ -12,9 +12,7 @@ describe("buildAuthLoginUrl", () => {
     expect(parsed.origin).toBe("https://auth.taimei-code.com");
     expect(parsed.pathname).toBe("/auth/");
     expect(parsed.searchParams.get("service_name")).toBe("taimei");
-    expect(parsed.searchParams.get("redirect_url")).toBe(
-      "https://app.taimei-code.com/dashboard",
-    );
+    expect(parsed.searchParams.get("redirect_url")).toBe("https://app.taimei-code.com/dashboard");
   });
 
   test("authBaseUrl 末尾スラッシュは正規化される", () => {

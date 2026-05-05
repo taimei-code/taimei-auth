@@ -11,9 +11,7 @@ export function getResendClient(): Resend {
     const apiKey = process.env.AUTH_RESEND_KEY;
 
     if (!apiKey) {
-      throw new Error(
-        "AUTH_RESEND_KEY is not configured. Please set it in .env file."
-      );
+      throw new Error("AUTH_RESEND_KEY is not configured. Please set it in .env file.");
     }
 
     resendInstance = new Resend(apiKey);

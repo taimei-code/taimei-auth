@@ -1,9 +1,4 @@
-import {
-  useState,
-  useEffect,
-  type FormEvent,
-  type ChangeEvent,
-} from "react";
+import { useState, useEffect, type FormEvent, type ChangeEvent } from "react";
 import { upload } from "@vercel/blob/client";
 import { Loader2, Upload, Trash2 } from "lucide-react";
 
@@ -87,9 +82,7 @@ export const AccountIndex = () => {
       });
       setImageUrl(blob.url);
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "アップロードに失敗しました",
-      );
+      setErrorMessage(err instanceof Error ? err.message : "アップロードに失敗しました");
     } finally {
       setUploading(false);
     }
@@ -112,9 +105,7 @@ export const AccountIndex = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">プロフィール</h1>
-        <p className="text-sm text-muted-foreground">
-          アカウント情報の表示と編集
-        </p>
+        <p className="text-sm text-muted-foreground">アカウント情報の表示と編集</p>
       </div>
 
       <Card>
@@ -148,9 +139,7 @@ export const AccountIndex = () => {
                   onChange={handleAvatarUpload}
                   disabled={uploading}
                 />
-                <p className="text-xs text-muted-foreground">
-                  PNG / JPEG / WebP, 5MB まで
-                </p>
+                <p className="text-xs text-muted-foreground">PNG / JPEG / WebP, 5MB まで</p>
               </div>
             </div>
 
@@ -170,12 +159,8 @@ export const AccountIndex = () => {
               />
             </div>
 
-            {errorMessage && (
-              <p className="text-sm text-destructive">{errorMessage}</p>
-            )}
-            {savedMessage && (
-              <p className="text-sm text-muted-foreground">{savedMessage}</p>
-            )}
+            {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
+            {savedMessage && <p className="text-sm text-muted-foreground">{savedMessage}</p>}
           </CardContent>
           <CardFooter>
             <Button type="submit" disabled={submitting || uploading}>
@@ -212,11 +197,7 @@ export const AccountIndex = () => {
                 <DialogClose asChild>
                   <Button variant="outline">キャンセル</Button>
                 </DialogClose>
-                <Button
-                  variant="destructive"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                >
+                <Button variant="destructive" onClick={handleDelete} disabled={deleting}>
                   {deleting && <Loader2 className="size-4 animate-spin" />}
                   退会を確定する
                 </Button>

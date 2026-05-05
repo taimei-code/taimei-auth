@@ -42,13 +42,7 @@ export default function WelcomeEmail({
         <Body className="mx-auto bg-white font-sans">
           <Container className="mx-auto max-w-[480px] px-6 py-12">
             <Section className="text-center">
-              <Img
-                src={logoUrl}
-                width="80"
-                height="80"
-                alt={appName}
-                className="mx-auto"
-              />
+              <Img src={logoUrl} width="80" height="80" alt={appName} className="mx-auto" />
             </Section>
 
             <Section className="mt-10">
@@ -94,10 +88,7 @@ export default function WelcomeEmail({
 
             <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
 
-            <Text
-              className="m-0 text-center text-xs"
-              style={{ color: "#d4d4d4" }}
-            >
+            <Text className="m-0 text-center text-xs" style={{ color: "#d4d4d4" }}>
               © {new Date().getFullYear()} {appName}
             </Text>
           </Container>

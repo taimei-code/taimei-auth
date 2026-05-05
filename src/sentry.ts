@@ -9,9 +9,7 @@ export const initSentry = (): void => {
   if (initialized) return;
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) {
-    console.warn(
-      "[sentry] SENTRY_DSN is not set, Sentry will not be initialized",
-    );
+    console.warn("[sentry] SENTRY_DSN is not set, Sentry will not be initialized");
     return;
   }
   Sentry.init({

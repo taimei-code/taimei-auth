@@ -23,6 +23,17 @@ describe("validateRedirectUrl", () => {
     test("http も許可 (e2e / dev 環境用)", () => {
       expect(validateRedirectUrl("http://app.taimei-code.com/", "taimei")).toBe(true);
     });
+
+    test("APP_ENV !== production では localhost も許可 (docker compose 単体起動用)", () => {
+      // テスト実行時は APP_ENV 未設定 = local env 扱い
+      expect(validateRedirectUrl("http://localhost:3100/account", "accounts")).toBe(true);
+      expect(validateRedirectUrl("http://localhost:3100/", "taimei")).toBe(true);
+    });
+
+    test("localhost suffix attack は弾く", () => {
+      expect(validateRedirectUrl("http://localhost.evil.com/", "accounts")).toBe(false);
+      expect(validateRedirectUrl("http://evil-localhost/", "accounts")).toBe(false);
+    });
   });
 
   describe("malicious URL fuzz (33 payloads)", () => {

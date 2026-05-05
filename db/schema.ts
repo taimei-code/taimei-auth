@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  timestamp,
-  text,
-  uniqueIndex,
-  index,
-  boolean,
-} from "drizzle-orm/pg-core";
+import { pgTable, timestamp, text, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const user = pgTable(
@@ -23,11 +16,8 @@ export const user = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex("user_email_key").using(
-      "btree",
-      table.email.asc().nullsLast().op("text_ops")
-    ),
-  ]
+    uniqueIndex("user_email_key").using("btree", table.email.asc().nullsLast().op("text_ops")),
+  ],
 );
 
 export const session = pgTable(
@@ -47,7 +37,7 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
   },
-  (table) => [index("session_userId_idx").on(table.userId)]
+  (table) => [index("session_userId_idx").on(table.userId)],
 );
 
 export const account = pgTable(
@@ -72,7 +62,7 @@ export const account = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("account_userId_idx").on(table.userId)]
+  (table) => [index("account_userId_idx").on(table.userId)],
 );
 
 export const verification = pgTable(
@@ -88,7 +78,7 @@ export const verification = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("verification_identifier_idx").on(table.identifier)]
+  (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
 export const userRelations = relations(user, ({ many }) => ({

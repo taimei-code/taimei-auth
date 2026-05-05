@@ -25,8 +25,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # drizzle-kit migrate を起動毎に実行する one-shot service。
+  # auth-service の起動を depends_on (service_completed_successfully) で待たせて、
+  # schema 不整合時のサーバ起動 → 500 を防ぐ。idempotent なので毎回走らせて問題ない。
+  auth-migrate:
+    build:
+      context: .
+      args:
+        APP_ENV: development
+    command: ["bun", "run", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+
   auth-service:
-    build: .
+    # APP_ENV を build args に渡す理由: web/vite.config.ts が define で APP_ENV を bundle に
+    # 埋め込むため、build 時に値が決まっていないと Vite は "production" でビルドしてしまい
+    # services.ts の isLocalEnv が false になり localhost / .local が allowlist で弾かれる。
+    build:
+      context: .
+      args:
+        APP_ENV: development
     ports:
       - "3100:3100"
     env_file:
@@ -37,7 +58,9 @@ services:
       REDIS_URL: redis://auth-redis:6379
       AUTH_SERVICE_URL: http://localhost:3100
       AUTH_COOKIE_DOMAIN: localhost
-      AUTH_TRUSTED_ORIGINS: http://localhost:3000,http://localhost:3001
+      # better-auth の trustedOrigins に同一オリジン (localhost:3100) を含める必要がある。
+      # 3000/3001 は将来の consumer app (taimei web) からの cross-origin 検証用。
+      AUTH_TRUSTED_ORIGINS: http://localhost:3100,http://localhost:3000,http://localhost:3001
       APP_ENV: development
       APP_NAME: taimei
     depends_on:
@@ -45,6 +68,8 @@ services:
         condition: service_healthy
       auth-redis:
         condition: service_healthy
+      auth-migrate:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: sync

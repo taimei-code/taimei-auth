@@ -34,12 +34,7 @@ export const CanaryTokens = () => {
       >
         canary
       </a>
-      <input
-        type="hidden"
-        name="canary_token"
-        value={tokenId}
-        aria-hidden="true"
-      />
+      <input type="hidden" name="canary_token" value={tokenId} aria-hidden="true" />
     </>
   );
 };

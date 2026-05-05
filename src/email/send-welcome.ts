@@ -8,10 +8,7 @@ import {
 } from "./client";
 import WelcomeEmail from "./welcome";
 
-export async function sendWelcomeEmail(
-  email: string,
-  userName?: string | null
-): Promise<void> {
+export async function sendWelcomeEmail(email: string, userName?: string | null): Promise<void> {
   if (isLocalEnvironment()) {
     console.log(`[TEST] Welcome email for ${email}`);
     return;
