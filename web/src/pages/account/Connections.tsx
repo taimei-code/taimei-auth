@@ -2,17 +2,11 @@ import { useEffect, useState } from "react";
 import { Loader2, Github } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 // 連携アカウント (OAuth provider) 一覧の表示のみ。追加 / 解除は Phase 4 で実装予定。
-type AccountList = Awaited<
-  ReturnType<typeof authClient.listAccounts>
->["data"];
+type AccountList = Awaited<ReturnType<typeof authClient.listAccounts>>["data"];
+type AccountItem = NonNullable<AccountList>[number];
 
 export const Connections = () => {
   const [accounts, setAccounts] = useState<AccountList | null>(null);
@@ -30,9 +24,7 @@ export const Connections = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">連携アカウント</h1>
-        <p className="text-sm text-muted-foreground">
-          外部サービスとの連携状況
-        </p>
+        <p className="text-sm text-muted-foreground">外部サービスとの連携状況</p>
       </div>
 
       {loading ? (
@@ -41,7 +33,7 @@ export const Connections = () => {
         </div>
       ) : accounts && accounts.length > 0 ? (
         <div className="space-y-3">
-          {accounts.map((a) => (
+          {accounts.map((a: AccountItem) => (
             <Card key={a.id}>
               <CardHeader className="flex-row items-center gap-3 space-y-0">
                 {a.providerId === "github" ? (
@@ -52,9 +44,7 @@ export const Connections = () => {
                   </span>
                 )}
                 <div>
-                  <CardTitle className="text-base capitalize">
-                    {a.providerId}
-                  </CardTitle>
+                  <CardTitle className="text-base capitalize">{a.providerId}</CardTitle>
                   <CardDescription>{a.accountId}</CardDescription>
                 </div>
               </CardHeader>
@@ -62,14 +52,10 @@ export const Connections = () => {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">
-          連携アカウントはありません。
-        </p>
+        <p className="text-sm text-muted-foreground">連携アカウントはありません。</p>
       )}
 
-      <p className="text-xs text-muted-foreground">
-        追加 / 解除は Phase 4 で実装予定。
-      </p>
+      <p className="text-xs text-muted-foreground">追加 / 解除は Phase 4 で実装予定。</p>
     </div>
   );
 };

@@ -36,15 +36,17 @@ export const auth = betterAuth({
 
   advanced: {
     useSecureCookies: !isLocalEnvironment(),
+    // local 環境 (docker compose 単体起動) では cross-subdomain cookie を無効化する。
+    // 理由: ブラウザは "localhost" を public suffix として扱わないが、Set-Cookie の Domain 属性に
+    // localhost を指定すると一部ブラウザ実装で reject されセッションが落ちる。production の
+    // app/auth.taimei-code.com 連携時のみ enable する。
     crossSubDomainCookies: {
-      enabled: true,
+      enabled: !isLocalEnvironment(),
       domain: process.env.AUTH_COOKIE_DOMAIN || "taimei-code.com",
     },
   },
 
-  trustedOrigins: (process.env.AUTH_TRUSTED_ORIGINS || "")
-    .split(",")
-    .filter(Boolean),
+  trustedOrigins: (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean),
 
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -57,11 +59,17 @@ export const auth = betterAuth({
     enabled: false,
   },
 
+  // GitHub OAuth は env が両方揃っているときだけ有効化する。
+  // local 環境では Magic Link を主導線とし、GitHub を使わなくてもサーバ起動を妨げないため。
   socialProviders: {
-    github: {
-      clientId: process.env.AUTH_GITHUB_ID!,
-      clientSecret: process.env.AUTH_GITHUB_SECRET!,
-    },
+    ...(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
+      ? {
+          github: {
+            clientId: process.env.AUTH_GITHUB_ID,
+            clientSecret: process.env.AUTH_GITHUB_SECRET,
+          },
+        }
+      : {}),
   },
 
   plugins: [
@@ -127,8 +135,8 @@ export const auth = betterAuth({
         // リダイレクトハンドラーで対応（Phase 2 以降で実装）
 
         if (isJustSignedUp(createdAt)) {
-          sendWelcomeEmail(newSession.user.email, newSession.user.name).catch(
-            (e) => console.error("Welcome email failed:", e)
+          sendWelcomeEmail(newSession.user.email, newSession.user.name).catch((e) =>
+            console.error("Welcome email failed:", e),
           );
         }
       }
