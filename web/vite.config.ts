@@ -17,6 +17,11 @@ export default defineConfig({
   plugins: [react()],
   base: "/auth/",
   root: __dirname,
+  // services.ts (URL allowlist) が APP_ENV=test 時に localhost を許可するため、
+  // Vite bundle にも APP_ENV を埋め込む。これがないと client side で undefined。
+  define: {
+    "process.env.APP_ENV": JSON.stringify(process.env.APP_ENV ?? "production"),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
