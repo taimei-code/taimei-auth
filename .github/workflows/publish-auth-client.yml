@@ -17,7 +17,7 @@ jobs:
       packages: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # actions/setup-node の registry-url + scope は .npmrc を自動生成し、
       # NODE_AUTH_TOKEN を Bearer として GitHub Packages 認証に使う。
