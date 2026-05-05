@@ -26,6 +26,13 @@ export const auth = betterAuth({
 
   secondaryStorage: redisStorage,
 
+  // secondaryStorage 有効時、Better Auth は verification を Redis のみに保存する。
+  // e2e は postgres から token を取得して Magic Link verify を行うため、
+  // test 環境のみ storeInDatabase=true で両方に書く (production は Redis-only)。
+  verification: {
+    storeInDatabase: isTestEnvironment(),
+  },
+
   advanced: {
     useSecureCookies: !isTestEnvironment(),
     crossSubDomainCookies: {

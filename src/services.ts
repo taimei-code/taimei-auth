@@ -18,15 +18,25 @@ export interface TaimeiServiceConfig {
   readonly noindex: boolean;
 }
 
+// APP_ENV=test (e2e) では .local hostname も許可。
+// Vite bundle には vite.config.ts の define で文字列置換される。Hono server 側は
+// 通常の process.env 参照。validateRedirectUrl は url.hostname (port 含まない) で
+// 比較するため regex も port を含めない。
+const isTestEnv = process.env.APP_ENV === "test";
+
 export const TAIMEI_SERVICES: Record<ServiceName, TaimeiServiceConfig> = {
   taimei: {
     name: "taimei",
-    allowedHostPattern: /^app\.taimei-code\.com$/,
+    allowedHostPattern: isTestEnv
+      ? /^app\.taimei-code\.(com|local)$/
+      : /^app\.taimei-code\.com$/,
     noindex: false,
   },
   accounts: {
     name: "taimei-auth",
-    allowedHostPattern: /^auth\.taimei-code\.com$/,
+    allowedHostPattern: isTestEnv
+      ? /^auth\.taimei-code\.(com|local)$/
+      : /^auth\.taimei-code\.com$/,
     noindex: true,
   },
 } as const;

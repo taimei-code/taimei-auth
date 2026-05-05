@@ -10,6 +10,11 @@ RUN bun install
 # src/ を COPY する理由: web/vite.config.ts の "@core" alias が ../src を指しており
 # SignIn/SignUp で TAIMEI_SERVICES, signInParamsSchema を import するため。
 FROM deps AS web-build
+# APP_ENV を build args で受け取り、Vite が define で bundle に embed する。
+# production 時は "production" (default) のため allowlist は厳格な regex のみ、
+# test 時 (e2e) は "test" を渡すことで services.ts が localhost も許可する。
+ARG APP_ENV=production
+ENV APP_ENV=$APP_ENV
 COPY web ./web
 COPY src ./src
 COPY tsconfig.json ./
