@@ -2,8 +2,8 @@ import { Resend } from "resend";
 
 let resendInstance: Resend | null = null;
 
-export function isTestEnvironment(): boolean {
-  return process.env.APP_ENV === "test";
+export function isLocalEnvironment(): boolean {
+  return process.env.APP_ENV !== "production";
 }
 
 export function getResendClient(): Resend {

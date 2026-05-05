@@ -10,7 +10,7 @@ import {
   getResendClient,
   getMagicLinkFromEmail,
   getAppName,
-  isTestEnvironment,
+  isLocalEnvironment,
 } from "./email/client";
 import MagicLinkEmail from "./email/magic-link";
 import { redisStorage } from "./redis";
@@ -28,13 +28,14 @@ export const auth = betterAuth({
 
   // secondaryStorage 有効時、Better Auth は verification を Redis のみに保存する。
   // e2e は postgres から token を取得して Magic Link verify を行うため、
-  // test 環境のみ storeInDatabase=true で両方に書く (production は Redis-only)。
+  // local 環境 (test / development) のみ storeInDatabase=true で両方に書く
+  // (production は Redis-only)。
   verification: {
-    storeInDatabase: isTestEnvironment(),
+    storeInDatabase: isLocalEnvironment(),
   },
 
   advanced: {
-    useSecureCookies: !isTestEnvironment(),
+    useSecureCookies: !isLocalEnvironment(),
     crossSubDomainCookies: {
       enabled: true,
       domain: process.env.AUTH_COOKIE_DOMAIN || "taimei-code.com",
@@ -67,7 +68,7 @@ export const auth = betterAuth({
     // nextCookies() は除去（Next.js 非依存）
     magicLink({
       sendMagicLink: async ({ email, url }) => {
-        if (isTestEnvironment()) {
+        if (isLocalEnvironment()) {
           console.log(`[TEST] Magic Link for ${email}: ${url}`);
           return;
         }
@@ -94,7 +95,7 @@ export const auth = betterAuth({
         }
       },
       expiresIn: 300,
-      rateLimit: isTestEnvironment() ? { window: 1, max: 1000 } : undefined,
+      rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : undefined,
     }),
   ],
 

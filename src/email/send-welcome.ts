@@ -4,7 +4,7 @@ import {
   getWelcomeFromEmail,
   getAppName,
   getAppUrl,
-  isTestEnvironment,
+  isLocalEnvironment,
 } from "./client";
 import WelcomeEmail from "./welcome";
 
@@ -12,7 +12,7 @@ export async function sendWelcomeEmail(
   email: string,
   userName?: string | null
 ): Promise<void> {
-  if (isTestEnvironment()) {
+  if (isLocalEnvironment()) {
     console.log(`[TEST] Welcome email for ${email}`);
     return;
   }
