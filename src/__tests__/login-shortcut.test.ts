@@ -17,25 +17,19 @@ describe("loginShortcut", () => {
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.pathname).toBe("/auth/");
     expect(location.searchParams.get("service_name")).toBe("accounts");
-    expect(location.searchParams.get("redirect_url")).toBe(
-      "http://auth.taimei-code.com/account",
-    );
+    expect(location.searchParams.get("redirect_url")).toBe("http://auth.taimei-code.com/account");
   });
 
   test("error クエリは passthrough する", async () => {
     const app = buildApp();
-    const res = await app.request(
-      "http://auth.taimei-code.com/login?error=signin_failed",
-    );
+    const res = await app.request("http://auth.taimei-code.com/login?error=signin_failed");
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.searchParams.get("error")).toBe("signin_failed");
   });
 
   test("disable_common_login クエリは passthrough する", async () => {
     const app = buildApp();
-    const res = await app.request(
-      "http://auth.taimei-code.com/login?disable_common_login=1",
-    );
+    const res = await app.request("http://auth.taimei-code.com/login?disable_common_login=1");
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.searchParams.get("disable_common_login")).toBe("1");
   });

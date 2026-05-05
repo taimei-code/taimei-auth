@@ -13,8 +13,7 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   },
   signup_already_completed: {
     title: "サインアップ済みです",
-    description:
-      "既に登録済みのアカウントです。ログイン画面からログインしてください。",
+    description: "既に登録済みのアカウントです。ログイン画面からログインしてください。",
   },
   signin_failed: {
     title: "ログインに失敗しました",
@@ -22,8 +21,7 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   },
   default: {
     title: "エラーが発生しました",
-    description:
-      "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
+    description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
   },
 };
 

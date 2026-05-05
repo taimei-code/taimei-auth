@@ -70,9 +70,7 @@ describe("killswitch middleware", () => {
 
   test("disable_common_login=1 クエリは KILLSWITCH=0 でも 503 を返す (監視ツール用強制再現)", async () => {
     const app = buildApp();
-    const res = await app.request(
-      "http://auth.taimei-code.com/auth/?disable_common_login=1",
-    );
+    const res = await app.request("http://auth.taimei-code.com/auth/?disable_common_login=1");
     expect(res.status).toBe(503);
   });
 });

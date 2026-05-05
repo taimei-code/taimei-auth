@@ -8,9 +8,6 @@ import { magicLinkClient } from "better-auth/client/plugins";
 // SPA は client-only 実行のため SSR 時の window 不在は考慮不要だが、 typeof guard でビルド時の
 // 静的解析もクリアする。
 export const authClient = createAuthClient({
-  baseURL:
-    typeof window !== "undefined"
-      ? `${window.location.origin}/api/auth`
-      : "",
+  baseURL: typeof window !== "undefined" ? `${window.location.origin}/api/auth` : "",
   plugins: [magicLinkClient()],
 });

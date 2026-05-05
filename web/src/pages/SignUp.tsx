@@ -29,9 +29,7 @@ export const SignUp = () => {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [magicLinkSent, setMagicLinkSent] = useState(false);
-  const [submitting, setSubmitting] = useState<"magic-link" | "github" | null>(
-    null,
-  );
+  const [submitting, setSubmitting] = useState<"magic-link" | "github" | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const parseResult = useMemo(
@@ -84,15 +82,13 @@ export const SignUp = () => {
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>{service.name} に登録</CardTitle>
-          <CardDescription>
-            Magic Link または GitHub で新規登録
-          </CardDescription>
+          <CardDescription>Magic Link または GitHub で新規登録</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {magicLinkSent ? (
             <p className="text-sm text-muted-foreground">
-              <strong className="font-medium text-foreground">{email}</strong>{" "}
-              に Magic Link を送信しました。メール内のリンクをクリックして登録を完了してください。
+              <strong className="font-medium text-foreground">{email}</strong> に Magic Link
+              を送信しました。メール内のリンクをクリックして登録を完了してください。
             </p>
           ) : (
             <>
@@ -124,15 +120,9 @@ export const SignUp = () => {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={
-                    submitting !== null || email === "" || name === ""
-                  }
+                  disabled={submitting !== null || email === "" || name === ""}
                 >
-                  {submitting === "magic-link" ? (
-                    <Loader2 className="animate-spin" />
-                  ) : (
-                    <Mail />
-                  )}
+                  {submitting === "magic-link" ? <Loader2 className="animate-spin" /> : <Mail />}
                   Magic Link で登録
                 </Button>
               </form>
@@ -142,9 +132,7 @@ export const SignUp = () => {
                   <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">
-                    または
-                  </span>
+                  <span className="bg-card px-2 text-muted-foreground">または</span>
                 </div>
               </div>
 
@@ -155,19 +143,13 @@ export const SignUp = () => {
                 onClick={handleGitHub}
                 disabled={submitting !== null}
               >
-                {submitting === "github" ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  <Github />
-                )}
+                {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
                 GitHub で登録
               </Button>
             </>
           )}
 
-          {errorMessage && (
-            <p className="text-sm text-destructive">{errorMessage}</p>
-          )}
+          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
         </CardContent>
         <CardFooter className="text-xs text-muted-foreground">
           URL が auth.taimei-code.com であることを確認してください

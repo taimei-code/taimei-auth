@@ -20,9 +20,7 @@ import { sql } from "drizzle-orm";
 const app = new Hono();
 
 // CORS middleware
-const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "")
-  .split(",")
-  .filter(Boolean);
+const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
 
 app.use(
   "*",
@@ -31,7 +29,7 @@ app.use(
     credentials: true,
     allowHeaders: ["Content-Type", "Authorization", "X-Service-Key", "Connect-Protocol-Version"],
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  })
+  }),
 );
 
 // サービス間認証 middleware（/rpc/* のみ）
@@ -70,8 +68,7 @@ app.all("/rpc/*", async (c) => {
   const url = new URL(c.req.url);
   const proxyUrl = `http://127.0.0.1:${rpcPort}${url.pathname}`;
 
-  const bodyBuffer =
-    c.req.method !== "GET" ? await c.req.raw.arrayBuffer() : undefined;
+  const bodyBuffer = c.req.method !== "GET" ? await c.req.raw.arrayBuffer() : undefined;
   const headers = buildProxyHeaders(c.req.raw.headers, bodyBuffer?.byteLength);
 
   const proxyRes = await fetch(proxyUrl, {

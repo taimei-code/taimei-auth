@@ -1,14 +1,7 @@
 import { createClient, ConnectError, Code } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import {
-  AuthService,
-  UserService,
-} from "./gen/auth/v1/auth_pb";
-import {
-  AuthServiceUnavailable,
-  AuthServiceTimeout,
-  AuthServiceUnauthorized,
-} from "./errors";
+import { AuthService, UserService } from "./gen/auth/v1/auth_pb";
+import { AuthServiceUnavailable, AuthServiceTimeout, AuthServiceUnauthorized } from "./errors";
 
 type ClientOptions = {
   baseUrl: string;
@@ -36,7 +29,9 @@ export function createAuthClient(options: ClientOptions) {
 }
 
 // ConnectError → TaggedError 変換
-export function mapConnectError(error: unknown): AuthServiceUnavailable | AuthServiceTimeout | AuthServiceUnauthorized {
+export function mapConnectError(
+  error: unknown,
+): AuthServiceUnavailable | AuthServiceTimeout | AuthServiceUnauthorized {
   if (error instanceof ConnectError) {
     switch (error.code) {
       case Code.Unavailable:

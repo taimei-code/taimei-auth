@@ -15,7 +15,7 @@ export function registerAuthService(router: ConnectRouter) {
       const headers = new Headers();
       headers.set(
         "cookie",
-        `better-auth.session_token=${req.sessionToken}; __Secure-better-auth.session_token=${req.sessionToken}`
+        `better-auth.session_token=${req.sessionToken}; __Secure-better-auth.session_token=${req.sessionToken}`,
       );
 
       const result = await auth.api.getSession({ headers });
@@ -110,10 +110,7 @@ export function registerAuthService(router: ConnectRouter) {
         });
         return { success: true };
       } catch (e) {
-        throw new ConnectError(
-          `Failed to send magic link: ${e}`,
-          Code.Internal
-        );
+        throw new ConnectError(`Failed to send magic link: ${e}`, Code.Internal);
       }
     },
   });

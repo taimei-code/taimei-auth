@@ -6,10 +6,7 @@ import { TAIMEI_SERVICES, type ServiceName } from "./services";
 // 末尾ドット (app.taimei-code.com.) は parser が保持する場合があるため明示的に除去する。
 const ALLOWED_PROTOCOLS = ["http:", "https:"] as const;
 
-export const validateRedirectUrl = (
-  redirectUrl: string,
-  service: ServiceName
-): boolean => {
+export const validateRedirectUrl = (redirectUrl: string, service: ServiceName): boolean => {
   let url: URL;
   try {
     url = new URL(redirectUrl);
