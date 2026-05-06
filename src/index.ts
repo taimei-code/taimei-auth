@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
+import { getSessionCookie } from "better-auth/cookies";
 import { auth } from "./auth";
 import { connectRedis, redis } from "./redis";
 import { registerRoutes } from "./rpc/routes";
@@ -84,6 +85,8 @@ app.all("/rpc/*", async (c) => {
 
 // /, /login → session 有りで /account, 未認証で /auth/?service_name=accounts&redirect_url=<auth>/account
 const loginShortcut = buildLoginShortcut(async (headers) => {
+  // Cookie 自体無ければ Redis/DB を叩かずに未認証確定。`/` は最も hot な entry のため、未認証多数派の latency を削る。
+  if (!getSessionCookie(headers)) return false;
   const result = await auth.api.getSession({ headers });
   return result !== null;
 });

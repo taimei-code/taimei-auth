@@ -152,7 +152,7 @@ export const SignUp = () => {
                 すでにアカウントをお持ちの方は{" "}
                 <Link
                   to={`/auth?${buildSignParams(searchParams)}`}
-                  className="font-medium text-foreground underline"
+                  className="rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   ログイン
                 </Link>

@@ -133,7 +133,7 @@ export const SignIn = () => {
                 アカウントをお持ちでない方は{" "}
                 <Link
                   to={`/auth/signup?${buildSignParams(searchParams)}`}
-                  className="font-medium text-foreground underline"
+                  className="rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   新規登録
                 </Link>

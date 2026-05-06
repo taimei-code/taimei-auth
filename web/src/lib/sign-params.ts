@@ -1,5 +1,5 @@
-// 共通ログイン画面 ↔ 共通サインアップ画面 の相互リンクで引き継ぐクエリ。
-// allowlist 方式: stale state (例: error=signin_failed) を遷移先に持ち込まない。
+// signInParamsSchema (src/sign-in-params.ts) のキー集合と同期させる。
+// allowlist 方式: stale state (例: error=signin_failed) を相互リンクで持ち込まないため。
 const ALLOWLIST = ["service_name", "redirect_url", "sign_up_url"] as const;
 
 export const buildSignParams = (searchParams: URLSearchParams): string => {
