@@ -27,13 +27,6 @@ describe("loginShortcut", () => {
     expect(location.searchParams.get("error")).toBe("signin_failed");
   });
 
-  test("disable_common_login クエリは passthrough する", async () => {
-    const app = buildApp();
-    const res = await app.request("http://auth.taimei-code.com/login?disable_common_login=1");
-    const location = new URL(res.headers.get("location") ?? "");
-    expect(location.searchParams.get("disable_common_login")).toBe("1");
-  });
-
   test("未知のクエリは破棄される (allowlist 方式)", async () => {
     const app = buildApp();
     const res = await app.request(

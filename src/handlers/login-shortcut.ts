@@ -7,7 +7,7 @@ import { Hono } from "hono";
 //
 // passthrough 対象クエリ: /auth/ 側で意味を持つ既知キーのみ (allowlist 方式)。
 // 知らないクエリは破棄して /auth/ に渡らないようにする (パラメータ汚染防止)。
-const PASSTHROUGH_QUERY_KEYS = ["error", "disable_common_login"] as const;
+const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
 
 export const loginShortcut = new Hono();
 
