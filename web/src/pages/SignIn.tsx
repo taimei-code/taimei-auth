@@ -1,10 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Mail, Github, Loader2 } from "lucide-react";
 
 import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { authClient } from "@/lib/auth-client";
+import { buildSignParams } from "@/lib/sign-params";
 import { CanaryTokens } from "@/components/CanaryTokens";
 import { Button } from "@/components/ui/button";
 import {
@@ -127,6 +128,16 @@ export const SignIn = () => {
                 {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
                 GitHub でログイン
               </Button>
+
+              <p className="text-center text-sm text-muted-foreground">
+                アカウントをお持ちでない方は{" "}
+                <Link
+                  to={`/auth/signup?${buildSignParams(searchParams)}`}
+                  className="font-medium text-foreground underline"
+                >
+                  新規登録
+                </Link>
+              </p>
             </>
           )}
 
