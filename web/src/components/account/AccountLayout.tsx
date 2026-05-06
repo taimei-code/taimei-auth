@@ -1,15 +1,10 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { ChevronLeft, User, ShieldCheck, Monitor, Plug, LogOut } from "lucide-react";
+import { User, ShieldCheck, Monitor, Plug, LogOut } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 // アカウント管理画面の共通 Layout: 左 Sidebar nav + 右 Outlet (各ページ)。
-// 「taimei に戻る」リンクは固定先 (https://app.taimei-code.com/): cross-origin の Referrer は
-// strict-origin-when-cross-origin policy でデフォルト消えるため referrer ベースは動かず、
-// ?return_to= クエリでの動的化は将来の multi-product 化時に対応する。
-const TAIMEI_HOME_URL = "https://app.taimei-code.com/";
-
 const navItems = [
   { to: "/account", icon: User, label: "プロフィール", end: true },
   { to: "/account/security", icon: ShieldCheck, label: "セキュリティ", end: false },
@@ -28,15 +23,7 @@ export const AccountLayout = () => {
   return (
     <div className="flex min-h-svh bg-background">
       <aside className="flex w-64 flex-col gap-1 border-r p-4">
-        <a
-          href={TAIMEI_HOME_URL}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-        >
-          <ChevronLeft className="size-4" />
-          taimei に戻る
-        </a>
-
-        <div className="mb-2 mt-4 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="mb-2 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           アカウント
         </div>
 
