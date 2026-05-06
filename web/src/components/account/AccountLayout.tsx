@@ -1,6 +1,7 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { ChevronLeft, User, ShieldCheck, Monitor, Plug } from "lucide-react";
+import { ChevronLeft, User, ShieldCheck, Monitor, Plug, LogOut } from "lucide-react";
 
+import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 // アカウント管理画面の共通 Layout: 左 Sidebar nav + 右 Outlet (各ページ)。
@@ -17,18 +18,25 @@ const navItems = [
 ] as const;
 
 export const AccountLayout = () => {
+  // signOut 後に window.location で / に飛ばす理由: react-router 内 navigate だと
+  // SessionGuard が再 mount されない可能性があり、stale な session 状態で /account を出してしまうため。
+  const handleSignOut = async () => {
+    await authClient.signOut();
+    window.location.href = "/";
+  };
+
   return (
     <div className="flex min-h-svh bg-background">
-      <aside className="w-64 border-r p-4 flex flex-col gap-1">
+      <aside className="flex w-64 flex-col gap-1 border-r p-4">
         <a
           href={TAIMEI_HOME_URL}
-          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
           <ChevronLeft className="size-4" />
           taimei に戻る
         </a>
 
-        <div className="mt-4 mb-2 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="mb-2 mt-4 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           アカウント
         </div>
 
@@ -50,6 +58,15 @@ export const AccountLayout = () => {
             {item.label}
           </NavLink>
         ))}
+
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="mt-auto flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LogOut className="size-4" />
+          ログアウト
+        </button>
       </aside>
 
       <main className="flex-1 p-6 md:p-10">
