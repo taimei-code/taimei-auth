@@ -3,11 +3,12 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { serveStatic } from "hono/bun";
 import { connectNodeAdapter } from "@connectrpc/connect-node";
+import { getSessionCookie } from "better-auth/cookies";
 import { auth } from "./auth";
 import { connectRedis, redis } from "./redis";
 import { registerRoutes } from "./rpc/routes";
 import { buildProxyHeaders } from "./proxy-helpers";
-import { loginShortcut } from "./handlers/login-shortcut";
+import { buildLoginShortcut } from "./handlers/login-shortcut";
 import { avatarUploadHandler } from "./handlers/avatar-upload";
 import { canaryToken } from "./handlers/canary-token";
 import { initSentry } from "./sentry";
@@ -82,7 +83,13 @@ app.all("/rpc/*", async (c) => {
   });
 });
 
-// /login → /auth/?service_name=accounts&redirect_url=<auth>/account のショートカット
+// /, /login → session 有りで /account, 未認証で /auth/?service_name=accounts&redirect_url=<auth>/account
+const loginShortcut = buildLoginShortcut(async (headers) => {
+  // Cookie 自体無ければ Redis/DB を叩かずに未認証確定。`/` は最も hot な entry のため、未認証多数派の latency を削る。
+  if (!getSessionCookie(headers)) return false;
+  const result = await auth.api.getSession({ headers });
+  return result !== null;
+});
 app.route("/", loginShortcut);
 
 // canary token 検知 endpoint (Layer B 画面の 3 種埋込から到達 → Sentry 通報)
