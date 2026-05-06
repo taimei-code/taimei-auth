@@ -40,11 +40,10 @@ curl http://localhost:3100/health
 # => {"status":"ok","checks":{"db":"ok","redis":"ok"}}
 ```
 
-ブラウザで以下にアクセス:
+ブラウザで <http://localhost:3100/> にアクセス。session-aware な root ハンドラが状態に応じて振り分ける:
 
-- 既存ユーザーログイン: <http://localhost:3100/login>
-  - 内部で `/auth/?service_name=accounts&redirect_url=http://localhost:3100/account` に 302
-- 新規登録: <http://localhost:3100/auth/signup?service_name=accounts&redirect_url=http://localhost:3100/account>
+- 未認証 → 共通ログイン画面 (`/auth/?service_name=accounts&redirect_url=http://localhost:3100/account`) に 302。新規登録したい場合は画面下部の「新規登録」リンクから共通サインアップ画面へ
+- ログイン済 → `/account` に 302
 
 メールアドレス (+ 新規なら名前) を入力 → `Magic Link を送信` → サーバ log に Magic Link URL が出る:
 
