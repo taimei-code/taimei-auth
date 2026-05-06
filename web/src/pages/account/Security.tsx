@@ -1,34 +1,46 @@
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 
-// PR8b では UI 表示のみ。Passkey 登録/削除は PR11、パスワード変更/MFA は Phase 4。
+const items = [
+  {
+    title: "Passkey",
+    description: "指紋・顔認証・PIN でログインできます",
+    status: "PR11 で実装予定",
+  },
+  {
+    title: "パスワード変更",
+    description: "メール + 現パスワードで新しいパスワードに更新できます",
+    status: "Phase 4 で実装予定",
+  },
+  {
+    title: "多要素認証 (MFA)",
+    description: "TOTP / 認証アプリでログイン時に追加の確認コードを要求します",
+    status: "Phase 4 で実装予定",
+  },
+] as const;
+
 export const Security = () => {
   return (
-    <div className="space-y-6">
+    <div>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">セキュリティ</h1>
-        <p className="text-sm text-muted-foreground">認証方法とセキュリティ設定</p>
+        <h1 className="text-xl font-semibold tracking-tight">セキュリティ</h1>
+        <p className="mt-1 text-sm text-muted-foreground">認証方法とセキュリティ設定</p>
       </div>
+      <Separator className="my-6" />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Passkey</CardTitle>
-          <CardDescription>指紋・顔認証・PIN でログインできます (PR11 で実装予定)</CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>パスワード変更</CardTitle>
-          <CardDescription>Phase 4 で実装予定</CardDescription>
-        </CardHeader>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>多要素認証 (MFA)</CardTitle>
-          <CardDescription>Phase 4 で実装予定</CardDescription>
-        </CardHeader>
-      </Card>
+      <ul className="divide-y">
+        {items.map((item) => (
+          <li key={item.title} className="flex items-start justify-between gap-4 py-5">
+            <div>
+              <p className="font-medium">{item.title}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
+            </div>
+            <Badge variant="secondary" className="shrink-0">
+              {item.status}
+            </Badge>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };

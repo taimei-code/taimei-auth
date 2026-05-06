@@ -1,61 +1,73 @@
 import { useEffect, useState } from "react";
-import { Loader2, Github } from "lucide-react";
+import { Github } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { LoadingRow } from "@/components/account/LoadingRow";
 
-// 連携アカウント (OAuth provider) 一覧の表示のみ。追加 / 解除は Phase 4 で実装予定。
 type AccountList = Awaited<ReturnType<typeof authClient.listAccounts>>["data"];
 type AccountItem = NonNullable<AccountList>[number];
 
 export const Connections = () => {
   const [accounts, setAccounts] = useState<AccountList | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    void (async () => {
-      const { data } = await authClient.listAccounts();
-      setAccounts(data);
-      setLoading(false);
-    })();
+    authClient
+      .listAccounts()
+      .then(({ data }) => setAccounts(data))
+      .catch((error: unknown) => {
+        setErrorMessage(
+          error instanceof Error ? error.message : "連携アカウントの取得に失敗しました",
+        );
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div>
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">連携アカウント</h1>
-        <p className="text-sm text-muted-foreground">外部サービスとの連携状況</p>
+        <h1 className="text-xl font-semibold tracking-tight">連携アカウント</h1>
+        <p className="mt-1 text-sm text-muted-foreground">外部サービスとの連携状況</p>
       </div>
+      <Separator className="my-6" />
 
       {loading ? (
-        <div className="flex justify-center p-8">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
+        <LoadingRow />
+      ) : errorMessage ? (
+        <p role="alert" className="text-sm text-destructive">
+          {errorMessage}
+        </p>
       ) : accounts && accounts.length > 0 ? (
-        <div className="space-y-3">
-          {accounts.map((a: AccountItem) => (
-            <Card key={a.id}>
-              <CardHeader className="flex-row items-center gap-3 space-y-0">
-                {a.providerId === "github" ? (
-                  <Github className="size-6" />
+        <ul className="divide-y">
+          {accounts.map((account: AccountItem) => (
+            <li key={account.id} className="flex items-center gap-4 py-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                {account.providerId === "github" ? (
+                  <Github className="size-5" aria-hidden="true" />
                 ) : (
-                  <span className="size-6 text-2xl leading-none">
-                    {a.providerId.charAt(0).toUpperCase()}
+                  <span className="text-base font-semibold uppercase" aria-hidden="true">
+                    {account.providerId.charAt(0)}
                   </span>
                 )}
-                <div>
-                  <CardTitle className="text-base capitalize">{a.providerId}</CardTitle>
-                  <CardDescription>{a.accountId}</CardDescription>
-                </div>
-              </CardHeader>
-            </Card>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium capitalize" translate="no">
+                  {account.providerId}
+                </p>
+                <p className="truncate text-sm text-muted-foreground" translate="no">
+                  {account.accountId}
+                </p>
+              </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
         <p className="text-sm text-muted-foreground">連携アカウントはありません。</p>
       )}
 
-      <p className="text-xs text-muted-foreground">追加 / 解除は Phase 4 で実装予定。</p>
+      <p className="mt-6 text-xs text-muted-foreground">追加 / 解除は Phase 4 で実装予定。</p>
     </div>
   );
 };
