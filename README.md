@@ -16,7 +16,7 @@ taimei の認証サービス。better-auth + Hono (Bun) + drizzle (Postgres) + R
 cp .env.example .env
 ```
 
-GitHub OAuth / Resend は optional。未設定でも Magic Link がサーバ log に出るので動作確認可能。
+GitHub OAuth / Resend / Vercel Blob (`BLOB_READ_WRITE_TOKEN`) は optional。未設定でも Magic Link がサーバ log に出るのでログインまでは動作確認可能。avatar アップロードを試す場合のみ `BLOB_READ_WRITE_TOKEN` が要る。
 
 ### 2. compose 起動
 
@@ -40,11 +40,10 @@ curl http://localhost:3100/health
 # => {"status":"ok","checks":{"db":"ok","redis":"ok"}}
 ```
 
-ブラウザで以下にアクセス:
+ブラウザで <http://localhost:3100/> にアクセス。session-aware な root ハンドラが状態に応じて振り分ける:
 
-- 既存ユーザーログイン: <http://localhost:3100/login>
-  - 内部で `/auth/?service_name=accounts&redirect_url=http://localhost:3100/account` に 302
-- 新規登録: <http://localhost:3100/auth/signup?service_name=accounts&redirect_url=http://localhost:3100/account>
+- 未認証 → 共通ログイン画面 (`/auth/?service_name=accounts&redirect_url=http://localhost:3100/account`) に 302。新規登録したい場合は画面下部の「新規登録」リンクから共通サインアップ画面へ
+- ログイン済 → `/account` に 302
 
 メールアドレス (+ 新規なら名前) を入力 → `Magic Link を送信` → サーバ log に Magic Link URL が出る:
 
@@ -52,7 +51,7 @@ curl http://localhost:3100/health
 [TEST] Magic Link for me@example.com: http://localhost:3100/api/auth/magic-link/verify?token=...&callbackURL=http://localhost:3100/account
 ```
 
-URL を別タブで開くと `/account` に遷移し、自分の name / email がプロフィール画面に表示される。
+URL を別タブで開くと `/account` に遷移し、GitHub Settings 風の sidebar (プロフィール / セキュリティ / セッション / 連携アカウント) と中央の編集パネルが表示される。プロフィール編集 / アバター変更 / 退会 / ログアウトはここから操作する。
 
 ### 4. DB 確認
 
@@ -134,10 +133,11 @@ docker compose exec auth-redis redis-cli
 
 ## スコープ外 (現状未対応)
 
-- avatar upload — `BLOB_READ_WRITE_TOKEN` (Vercel Blob) が必要
 - GitHub OAuth — env 設定 + GitHub App 側で `http://localhost:3100/api/auth/callback/github` を Authorization callback URL に登録が必要
 - Resend 経由のメール送信 — local では console.log で代替
 - `app.taimei-code.local` 経由の cross-subdomain 動作 — `/etc/hosts` 編集 + reverse proxy が要るため別タスク
+- Passkey / パスワード変更 / MFA — `/account/security` に枠だけあり PR11 / Phase 4 で実装予定
+- セッション個別 revoke / 連携アカウント追加・解除 — `/account/sessions` `/account/connections` に閲覧 UI のみ、変更操作は Phase 4
 
 ---
 

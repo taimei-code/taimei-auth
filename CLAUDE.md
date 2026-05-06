@@ -64,3 +64,9 @@ taimei-auth を別 process に分割しても、consumer 側の修正は `auth-c
 - スキーマ変更時は `db/schema.ts` 編集 → `db:generate` で生成された `drizzle/NNNN_*.sql` を commit するフロー以外で migration SQL を手書きしない。compose 起動時に `auth-migrate` service が適用するため、host で `drizzle-kit migrate` を直接叩くと order が崩れる
 - Proto 生成物 (`src/gen/`) は手動編集せず、`generate` script の出力のみを commit する。`buf.gen.yaml` 経由で再現性を保つ
 - ホスト側に bun / postgres / redis を直接入れる手順 (README の "ホスト側で bun を直接動かす" 節) は option。原則 compose のみで完結させる
+
+## ルール 5: Build 設定の path 解決は CWD 非依存にする
+
+`web/tailwind.config.ts` / `web/postcss.config.js` のように subdirectory に置いた build 設定ファイルでは、content / include / files 系の相対 path を使わず `path.dirname(fileURLToPath(import.meta.url))` 起点の絶対 path で書く。
+
+理由: 本リポジトリは root から `vite build --config web/vite.config.ts` を走らせるため、相対 path は CWD = repo root 起点で解決される。`./src/**` と書くと `web/src/` ではなく repo の `src/` を見に行き、Tailwind なら class が一切 scan されない silent な空 CSS になる。`bun run lint` `bun run typecheck` `bun run build:web` はいずれも exit 0 で完走するため事後検知できない。設定段階で絶対 path 化して防ぐ。
