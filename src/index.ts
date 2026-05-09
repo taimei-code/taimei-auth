@@ -135,9 +135,7 @@ app.use("/auth/*", async (c, next) => {
   const session = await auth.api.getSession({ headers });
   if (!session) return next();
 
-  const params = signInParamsSchema.safeParse(
-    Object.fromEntries(new URL(c.req.url).searchParams),
-  );
+  const params = signInParamsSchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
   if (!params.success) return next();
 
   return c.redirect(params.data.redirect_url);
