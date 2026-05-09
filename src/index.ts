@@ -12,6 +12,7 @@ import { buildLoginShortcut } from "./handlers/login-shortcut";
 import { avatarUploadHandler } from "./handlers/avatar-upload";
 import { canaryToken } from "./handlers/canary-token";
 import { initSentry } from "./sentry";
+import { signInParamsSchema } from "./sign-in-params";
 
 initSentry();
 import { db } from "@/db/client";
@@ -111,6 +112,34 @@ app.post("/api/account/avatar/upload-token", avatarUploadHandler);
 // (存在しない asset を index.html で返すと、ブラウザが script として解釈して破綻するため)。
 const WEB_DIST = "./web/dist";
 const SPA_INDEX_HTML = `${WEB_DIST}/index.html`;
+
+// /auth/ と /auth/signup でログイン済 session を検知したら redirect_url に直接 302。
+// login 画面の再表示で改めてメアド入力させる冗長 UX を回避するための 1 hop 最適化。
+// /auth/error や /auth/verify-magic-link は対象外 (signup_already_completed 表示や
+// Magic Link 着地で session 有でも画面表示が必要)。
+//
+// 配置は serveStatic より前: Hono serveStatic は directory path (/auth/) に対して
+// index.html を auto-serve するため、後続 handler を抜けてしまう。
+//
+// redirect_url の host 検証は signInParamsSchema が validateRedirectUrl 経由で実施
+// (open redirect 対策)。
+const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
+
+app.use("/auth/*", async (c, next) => {
+  // pathname check を先頭に: asset リクエスト (`/auth/assets/*.js` 等) で URL parse を回避。
+  if (!AUTH_ENTRY_PATHS.has(c.req.path)) return next();
+
+  const headers = c.req.raw.headers;
+  if (!getSessionCookie(headers)) return next();
+
+  const session = await auth.api.getSession({ headers });
+  if (!session) return next();
+
+  const params = signInParamsSchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
+  if (!params.success) return next();
+
+  return c.redirect(params.data.redirect_url);
+});
 
 app.use(
   "/auth/*",

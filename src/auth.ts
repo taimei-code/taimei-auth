@@ -21,6 +21,9 @@ const NEW_USER_THRESHOLD_MS = 10000;
 const isJustSignedUp = (createdAt: Date): boolean =>
   Date.now() - createdAt.getTime() < NEW_USER_THRESHOLD_MS;
 
+// 同じ env を 3 箇所で読むのを避けるため module 評価時に 1 回束縛する。
+const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
+
 export const auth = betterAuth({
   baseURL: process.env.AUTH_SERVICE_URL,
 
@@ -36,13 +39,15 @@ export const auth = betterAuth({
 
   advanced: {
     useSecureCookies: !isLocalEnvironment(),
-    // local 環境 (docker compose 単体起動) では cross-subdomain cookie を無効化する。
-    // 理由: ブラウザは "localhost" を public suffix として扱わないが、Set-Cookie の Domain 属性に
-    // localhost を指定すると一部ブラウザ実装で reject されセッションが落ちる。production の
-    // app/auth.taimei-code.com 連携時のみ enable する。
+    // crossSubDomainCookies の有効化条件は AUTH_COOKIE_DOMAIN 値そのもので判定する:
+    // - 未指定 / "localhost": disable (Set-Cookie の Domain=localhost を reject するブラウザ
+    //   実装があるため。docker compose 単体起動の互換性確保)。
+    // - それ以外 (.taimei-code.local のローカル開発統合, .taimei-code.com 本番): enable。
+    //   AUTH_COOKIE_DOMAIN を明示設定したのは「subdomain 跨ぎで Cookie を共有したい」という
+    //   ユーザー意思の表明であり、APP_ENV (development/production) と独立に判定するのが安全。
     crossSubDomainCookies: {
-      enabled: !isLocalEnvironment(),
-      domain: process.env.AUTH_COOKIE_DOMAIN || "taimei-code.com",
+      enabled: !!authCookieDomain && authCookieDomain !== "localhost",
+      domain: authCookieDomain || "taimei-code.com",
     },
   },
 
