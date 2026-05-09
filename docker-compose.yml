@@ -1,3 +1,15 @@
+# taimei-auth (認証サーバー) を独立起動するための compose。
+# taimei (Next.js) と組み合わせる場合は、本 compose を先に `docker compose up` してから
+# taimei 側の docker-compose.yml を起動する。
+# 共有ネットワーク `taimei-network` は本 compose が作成主 (define)。taimei 側は external 参照。
+# cross-subdomain Cookie (.taimei-code.local) を成立させるため、auth-service には
+# network alias `auth.taimei-code.local` を付与する。
+
+networks:
+  taimei-network:
+    name: taimei-network
+    driver: bridge
+
 services:
   auth-postgres:
     image: postgres:16.8-alpine3.21
@@ -14,6 +26,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - taimei-network
 
   auth-redis:
     image: redis:7-alpine
@@ -24,6 +38,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - taimei-network
 
   # drizzle-kit migrate を起動毎に実行する one-shot service。
   # auth-service の起動を depends_on (service_completed_successfully) で待たせて、
@@ -39,6 +55,8 @@ services:
     depends_on:
       auth-postgres:
         condition: service_healthy
+    networks:
+      - taimei-network
 
   auth-service:
     # APP_ENV を build args に渡す理由: web/vite.config.ts が define で APP_ENV を bundle に
@@ -56,13 +74,20 @@ services:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
       REDIS_URL: redis://auth-redis:6379
-      AUTH_SERVICE_URL: http://localhost:3100
-      AUTH_COOKIE_DOMAIN: localhost
-      # better-auth の trustedOrigins に同一オリジン (localhost:3100) を含める必要がある。
-      # 3000/3001 は将来の consumer app (taimei web) からの cross-origin 検証用。
-      AUTH_TRUSTED_ORIGINS: http://localhost:3100,http://localhost:3000,http://localhost:3001
+      # taimei (app.taimei-code.local:3001) との cross-subdomain Cookie を成立させるため、
+      # localhost ではなく .taimei-code.local 系の host を採用する。
+      AUTH_SERVICE_URL: http://auth.taimei-code.local:3100
+      AUTH_COOKIE_DOMAIN: taimei-code.local
+      AUTH_TRUSTED_ORIGINS: http://app.taimei-code.local:3001,http://auth.taimei-code.local:3100
       APP_ENV: development
       APP_NAME: taimei
+      # taimei (application) と Cookie 署名検証を一致させるため、両 compose で同じ dev secret を hardcoded。
+      # 本番はこの環境変数を docker-compose 経由ではなくホスト側の secret manager 等で注入すること。
+      AUTH_SECRET: dev-secret-for-local-development-32chars
+      # ConnectRPC の X-Service-Key 検証用。taimei application の AUTH_SERVICE_KEY と一致必須。
+      # .env 経由でも上書き可能だが、両 compose で対称に hardcoded して「設定し忘れ → silent skip」
+      # (index.ts の AUTH_SERVICE_KEY 未設定時パスに入る) を防ぐ。
+      AUTH_SERVICE_KEY: local-dev-key
     depends_on:
       auth-postgres:
         condition: service_healthy
@@ -80,6 +105,10 @@ services:
           target: /app/db
         - action: rebuild
           path: package.json
+    networks:
+      taimei-network:
+        aliases:
+          - auth.taimei-code.local
 
 volumes:
   auth-postgres-data:
