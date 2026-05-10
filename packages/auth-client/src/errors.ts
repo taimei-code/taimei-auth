@@ -1,8 +1,6 @@
 import { Data } from "effect";
 
-// インフラエラー（認証サービスの通信障害）
-// ドメインエラー（SessionError 等）とは区別し、呼び出し側で適切にハンドリングできるようにする
-
+// 認証サービスの通信障害を表すインフラエラー (consumer 側でドメインエラーと区別してハンドリング)
 export class AuthServiceUnavailable extends Data.TaggedError("AuthServiceUnavailable")<{
   message: string;
   cause?: unknown;

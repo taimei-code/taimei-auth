@@ -1,8 +1,5 @@
-// taimei-auth (sign 流) の共通ログイン URL を組み立てる helper。
-// 各プロダクトの proxy / middleware からこれらを呼び、SignInParams (PR1 の Zod schema) と
-// 整合する形のクエリ文字列を生成する。helper 側で URL 組み立てを集約することで、
-// クエリ名の typo (例: redirect_url vs redirectUrl) や順序の揺らぎを排除する。
-
+// 共通ログイン URL を SDK 側で組み立てる (sign 流)。consumer 側で `redirect_url` 等のキー名 typo や
+// 順序の揺らぎが発生しないよう、URL 組み立てをこの helper に集約する
 export interface BuildAuthLoginUrlOptions {
   authBaseUrl: string;
   service: string;

@@ -2,13 +2,7 @@ import { Hono } from "hono";
 
 import { Sentry } from "../sentry";
 
-// canary token 検知 endpoint。Layer B SignIn / SignUp 画面の 3 種埋込
-// (不可視リンク / hidden input / favicon URL) からアクセスされた場合、Sentry に通報。
-// 通常ユーザーが踏まないため、ヒットすればフィッシング・自動化 (DOM scraping / form auto-submit /
-// favicon prefetch) の試行を疑える。
-//
-// 攻撃者にフィードバックを与えないため 204 No Content を返却 (favicon URL の場合も
-// 透明な空ボディで content-type 不明のまま — favicon fetch 失敗としてブラウザは無視する)。
+// 共通画面 SPA 3 経路埋込からの canary token 受信。詳細: docs/adr/0005-canary-token-embedding.md
 export const canaryToken = new Hono();
 
 canaryToken.get("/auth/canary-token/:token", (c) => {

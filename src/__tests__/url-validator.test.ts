@@ -24,8 +24,7 @@ describe("validateRedirectUrl", () => {
       expect(validateRedirectUrl("http://app.taimei-code.com/", "taimei")).toBe(true);
     });
 
-    test("APP_ENV !== production では localhost も許可 (docker compose 単体起動用)", () => {
-      // テスト実行時は APP_ENV 未設定 = local env 扱い
+    test("APP_ENV 未設定 (= local 扱い) では localhost も許可", () => {
       expect(validateRedirectUrl("http://localhost:3100/account", "accounts")).toBe(true);
       expect(validateRedirectUrl("http://localhost:3100/", "taimei")).toBe(true);
     });

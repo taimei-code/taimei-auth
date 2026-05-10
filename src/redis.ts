@@ -12,7 +12,6 @@ export async function connectRedis() {
   }
 }
 
-// Better Auth secondaryStorage アダプター
 export const redisStorage = {
   get: async (key: string) => {
     return await redis.get(key);

@@ -3,13 +3,7 @@ import type { Context } from "hono";
 
 import { Sentry } from "../sentry";
 
-// taimei-auth 自身用ショートカット: GET /login と GET / で session 状態に応じた 302 を返す。
-// freee-accounts の `/login` パスと UX を揃え、auth.taimei-code.com/login (および /) で
-// アカウント管理 (/account) へのログインフローを起動する目的。session 有りなら /account 直行、
-// 未認証なら共通ログイン画面へ。Layer B の SignIn 画面に Layer A 相当の役割を担わせる (sign 流: プロダクト側 URL 構築の自身版)。
-//
-// passthrough 対象クエリ: /auth/ 側で意味を持つ既知キーのみ (allowlist 方式)。
-// 知らないクエリは破棄して /auth/ に渡らないようにする (パラメータ汚染防止)。
+// 未知のクエリは破棄し、allowlist 経由のみ /auth/ に渡す (パラメータ汚染防止)
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
 
 const buildLoginRedirect = (url: URL): URL => {
@@ -27,7 +21,6 @@ const buildLoginRedirect = (url: URL): URL => {
   return target;
 };
 
-// handler は session 有無 (boolean) のみ判断。better-auth の内部 shape を露出させない role interface。
 export type IsAuthenticated = (headers: Headers) => Promise<boolean>;
 
 export const buildLoginShortcut = (isAuthenticated: IsAuthenticated) => {
@@ -37,12 +30,12 @@ export const buildLoginShortcut = (isAuthenticated: IsAuthenticated) => {
     const url = new URL(c.req.url);
 
     const authenticated = await isAuthenticated(c.req.raw.headers).catch((err) => {
-      // Redis transient 失敗を 5xx にせず、未認証扱いで共通ログイン画面に流す。Sentry warning として観測可能にしておく。
+      // Redis transient 失敗は 5xx にせず未認証扱いで共通ログイン画面に流す。Sentry warning で観測のみ
       Sentry.captureException(err, { level: "warning", tags: { handler: "loginShortcut" } });
       return false;
     });
 
-    // 302 Location は session 状態 (Cookie) で分岐するため CDN/proxy の共有 cache 不可。session-leak 防止。
+    // 302 Location が Cookie で分岐するため CDN/proxy の共有 cache を禁止 (session-leak 防止)
     c.header("Cache-Control", "private, no-store");
     c.header("Vary", "Cookie");
 

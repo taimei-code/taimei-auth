@@ -1,8 +1,5 @@
 import * as Sentry from "@sentry/bun";
 
-// Sentry 初期化: SENTRY_DSN が設定されている時のみ initialize する。
-// canary token 通報の主経路として使用 (Sentry.captureMessage)。
-// 開発時 (DSN 未設定) は warn ログのみで Sentry 通信は行わない。
 let initialized = false;
 
 export const initSentry = (): void => {

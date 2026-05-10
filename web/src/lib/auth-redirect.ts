@@ -1,7 +1,4 @@
-// 認証ライフサイクル直後のリダイレクト用 helper。
-// react-router の navigate ではなく window.location を使う理由: SessionGuard が認証状態を
-// 再評価するタイミングは初回 mount のみで、navigate 経由だと再 mount されず stale な session
-// 状態のまま /account を出してしまう可能性がある。完全な再 boot で副作用を断ち切る。
+// SessionGuard は初回 mount のみで session を再評価するため、navigate ではなく full reload で副作用を断つ
 export const AUTH_REDIRECT_TARGETS = {
   signOut: "/",
   deleteAccount: "/auth",

@@ -2,13 +2,7 @@ import { z } from "zod";
 import { TAIMEI_SERVICES, type ServiceName } from "./services";
 import { validateRedirectUrl } from "./url-allowlist";
 
-// SignInParams: 共通ログイン画面 (/auth/) のクエリパラメータスキーマ (sign 流)。
-// freee-accounts の SignInParamsForm に相当するが、Zod で実装。Layer B 側で parse して
-// 不正値は 400 + エラー画面に誘導 (バックエンドへの不正パラメータ流入を Layer B で遮断)。
-//
-// max(2048) の根拠: 主要ブラウザ / nginx default の URL 長制限が 2048-8192 byte。
-// safe side として 2048 を採用。production で長尺 URL が必要になったら個別に緩める。
-
+// 検証ポリシー: docs/adr/0003-redirect-url-allowlist-policy.md
 const serviceNameSchema = z.enum(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]);
 
 export const signInParamsSchema = z
