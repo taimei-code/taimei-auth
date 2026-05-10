@@ -21,6 +21,10 @@ type GuardOptions = {
   getSessionToken: () => Promise<string | undefined>;
 };
 
+// SessionData.session に `token` / `userId` を増やしてはならない (ADR-004 L4)。
+// 理由: token は IdP 内部表現 (Better Auth は opaque ID, Go 自作 IdP では JWT 等になる可能性)
+// であり、消費側 (taimei) に露出すると IdP 移行時の format 差分が SDK 外に漏れる。
+// userId は user.id で代替可能、token は Cookie 経由で IdP に再提示するだけなので消費側不要。
 type SessionData = {
   user: {
     id: string;
@@ -33,9 +37,7 @@ type SessionData = {
   };
   session: {
     id: string;
-    token: string;
     expiresAt: string;
-    userId: string;
   };
 };
 
@@ -77,9 +79,7 @@ export function createAuthGuard(options: GuardOptions) {
       },
       session: {
         id: result.session!.id,
-        token: result.session!.token,
         expiresAt: result.session!.expiresAt,
-        userId: result.session!.userId,
       },
     };
   });
@@ -108,9 +108,7 @@ export function createAuthGuard(options: GuardOptions) {
         },
         session: {
           id: result.session.id,
-          token: result.session.token,
           expiresAt: result.session.expiresAt,
-          userId: result.session.userId,
         },
       };
     } catch {

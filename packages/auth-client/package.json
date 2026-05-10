@@ -1,6 +1,6 @@
 {
   "name": "@taimei-code/auth-client",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,9 +20,9 @@
       "types": "./dist/guard.d.ts",
       "default": "./dist/guard.js"
     },
-    "./browser": {
-      "types": "./dist/browser.d.ts",
-      "default": "./dist/browser.js"
+    "./cookie": {
+      "types": "./dist/cookie.d.ts",
+      "default": "./dist/cookie.js"
     },
     "./errors": {
       "types": "./dist/errors.d.ts",
