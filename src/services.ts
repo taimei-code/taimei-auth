@@ -1,3 +1,5 @@
+import { isLocalEnvironment } from "./env";
+
 // 検証ポリシー: docs/adr/0003-redirect-url-allowlist-policy.md
 export type ServiceName = "taimei" | "accounts";
 
@@ -7,7 +9,7 @@ export interface TaimeiServiceConfig {
   readonly noindex: boolean;
 }
 
-const isLocalEnv = process.env.APP_ENV !== "production";
+const isLocalEnv = isLocalEnvironment();
 
 export const TAIMEI_SERVICES: Record<ServiceName, TaimeiServiceConfig> = {
   taimei: {

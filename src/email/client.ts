@@ -2,10 +2,6 @@ import { Resend } from "resend";
 
 let resendInstance: Resend | null = null;
 
-export function isLocalEnvironment(): boolean {
-  return process.env.APP_ENV !== "production";
-}
-
 export function getResendClient(): Resend {
   if (!resendInstance) {
     const apiKey = process.env.AUTH_RESEND_KEY;

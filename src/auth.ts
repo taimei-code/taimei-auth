@@ -6,12 +6,8 @@ import { render } from "@react-email/components";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { sendWelcomeEmail } from "./email/send-welcome";
-import {
-  getResendClient,
-  getMagicLinkFromEmail,
-  getAppName,
-  isLocalEnvironment,
-} from "./email/client";
+import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
+import { isLocalEnvironment } from "./env";
 import MagicLinkEmail from "./email/magic-link";
 import { redisStorage } from "./redis";
 
