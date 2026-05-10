@@ -18,33 +18,11 @@ type GuardOptions = {
 
 // proto レスポンスの shape subset。proto 型を直接 import すると hard couple するため、
 // SDK 内部で必要な user / session フィールドを SessionData 形状で部分的に表現する。
+// proto.Session と SessionData.session は shape が一致 (token 等は proto から削除済 / ADR-006 D6)。
 type VerifySessionResult = {
   user?: SessionData["user"];
   session?: SessionData["session"];
 };
-
-// SessionData に乗らないフィールド (token / userId 等) を allowlist 的に切り捨てて
-// IdP 内部表現の漏洩を防ぐ。新フィールド追加は SessionData 型と同時にここを更新する責務分担。
-function mapToSessionData(input: {
-  user: SessionData["user"];
-  session: SessionData["session"];
-}): SessionData {
-  return {
-    user: {
-      id: input.user.id,
-      name: input.user.name,
-      email: input.user.email,
-      emailVerified: input.user.emailVerified,
-      image: input.user.image,
-      createdAt: input.user.createdAt,
-      updatedAt: input.user.updatedAt,
-    },
-    session: {
-      id: input.session.id,
-      expiresAt: input.session.expiresAt,
-    },
-  };
-}
 
 function buildLoginRedirectPath(returnTo: string): string {
   return `/auth?callbackUrl=${encodeURIComponent(returnTo)}`;
@@ -72,7 +50,7 @@ export function createAuthGuard(options: GuardOptions) {
     const { user, session } = verifyResult;
     if (!user || !session) return null;
 
-    return mapToSessionData({ user, session });
+    return { user, session };
   };
 
   // requireSession: session 不在なら redirect で「以降の処理を中断」する強制版。

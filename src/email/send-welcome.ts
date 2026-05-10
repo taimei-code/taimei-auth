@@ -1,11 +1,6 @@
 import { render } from "@react-email/components";
-import {
-  getResendClient,
-  getWelcomeFromEmail,
-  getAppName,
-  getAppUrl,
-  isLocalEnvironment,
-} from "./client";
+import { isLocalEnvironment } from "../env";
+import { getAppName, getAppUrl, getResendClient, getWelcomeFromEmail } from "./client";
 import WelcomeEmail from "./welcome";
 
 export async function sendWelcomeEmail(email: string, userName?: string | null): Promise<void> {

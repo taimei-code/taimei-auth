@@ -25,6 +25,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # taimei-auth (root) が `@taimei-code/auth-client` を workspace dep として import するため、
+      # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (ADR-006 D3 dogfooding)。
+      - name: Build auth-client SDK
+        working-directory: packages/auth-client
+        run: bun run build
+
       - name: Lint (Biome)
         run: bun run lint
 

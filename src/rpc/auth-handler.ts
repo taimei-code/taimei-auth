@@ -1,24 +1,23 @@
 import type { ConnectRouter } from "@connectrpc/connect";
-import { ConnectError, Code } from "@connectrpc/connect";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { AuthService } from "../gen/auth/v1/auth_pb";
-import { db } from "@/db/client";
-import { user, session, account, verification } from "@/db/schema";
-import { eq } from "drizzle-orm";
 import { auth } from "../auth";
+import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositories/account";
+import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
+import { toProtoAccount, toProtoUser } from "./mappers";
 
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      // better-auth の Redis/DB 使い分けに乗るため、db を直接クエリせず Cookie ヘッダ形式で auth.api.getSession に委譲する
+      // better-auth.api.getSession 経由で Redis cookieCache (auth.ts:106 maxAge 5 分) を温存する (token 直引きは cache bypass)。
+      // 戻り型 (image: string | null | undefined) は drizzle row (image: string | null) と微妙にずれるため mappers.ts は流用不可。
       const headers = new Headers();
-      headers.set(
-        "cookie",
-        `better-auth.session_token=${req.sessionToken}; __Secure-better-auth.session_token=${req.sessionToken}`,
-      );
+      headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
 
       const result = await auth.api.getSession({ headers });
 
-      if (!result || !result.user || !result.session) {
+      if (!result?.user || !result?.session) {
         return { user: undefined, session: undefined };
       }
 
@@ -34,82 +33,45 @@ export function registerAuthService(router: ConnectRouter) {
         },
         session: {
           id: result.session.id,
-          token: result.session.token,
           expiresAt: new Date(result.session.expiresAt).toISOString(),
-          userId: result.session.userId,
-          ipAddress: result.session.ipAddress ?? undefined,
-          userAgent: result.session.userAgent ?? undefined,
         },
       };
     },
 
     async getUser(req) {
-      const result = await db
-        .select()
-        .from(user)
-        .where(eq(user.id, req.userId))
-        .then((rows) => rows.at(0));
-
-      if (!result) {
-        return { user: undefined };
-      }
-
-      return {
-        user: {
-          id: result.id,
-          name: result.name,
-          email: result.email,
-          emailVerified: result.emailVerified,
-          image: result.image ?? undefined,
-          createdAt: result.createdAt.toISOString(),
-          updatedAt: result.updatedAt.toISOString(),
-        },
-      };
+      const row = await findUserByIdRepo(req.userId);
+      if (!row) return { user: undefined };
+      return { user: toProtoUser(row) };
     },
 
     async findAccountByUserId(req) {
-      const result = await db
-        .select()
-        .from(account)
-        .where(eq(account.userId, req.userId))
-        .then((rows) => rows.at(0));
-
-      if (!result) {
-        return { account: undefined };
-      }
-
-      return {
-        account: {
-          id: result.id,
-          accountId: result.accountId,
-          providerId: result.providerId,
-          userId: result.userId,
-          accessToken: result.accessToken ?? undefined,
-          refreshToken: result.refreshToken ?? undefined,
-          scope: result.scope ?? undefined,
-        },
-      };
+      const row = await findAccountByUserIdRepo(req.userId);
+      if (!row) return { account: undefined };
+      return { account: toProtoAccount(row) };
     },
 
     async signOut(req) {
-      const result = await db
-        .delete(session)
-        .where(eq(session.token, req.sessionToken))
-        .returning();
-
-      return { success: result.length > 0 };
+      // auth.api.signOut 経由で Redis cookieCache (auth.ts:106) と DB session を一括 invalidate する。
+      // repository 直叩きで DB だけ消すと cache 5 分の窓で session が valid に見える期間が生じる。
+      // better-auth は session 不在 / DB delete 失敗を内部で吸収して常に { success: true } を返すため、
+      // ここで catch すると意図しない例外 (signature mismatch / rate limit 等) も握り潰す。
+      // 透過させて ConnectRPC adapter に Code.Unknown 化を委譲する方が consumer に正しく伝わる。
+      const headers = new Headers();
+      headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
+      await auth.api.signOut({ headers });
+      return { success: true };
     },
 
     async sendMagicLink(req) {
-      try {
-        await auth.api.signInMagicLink({
+      await auth.api
+        .signInMagicLink({
           body: { email: req.email, callbackURL: req.callbackUrl },
           headers: new Headers(),
+        })
+        .catch((error) => {
+          throw new ConnectError(`Failed to send magic link: ${error}`, Code.Internal);
         });
-        return { success: true };
-      } catch (e) {
-        throw new ConnectError(`Failed to send magic link: ${e}`, Code.Internal);
-      }
+      return { success: true };
     },
   });
 }

@@ -47,16 +47,41 @@
         "noUnknownAtRules": "off"
       },
       "correctness": {
-        "noUnusedImports": "warn"
+        "noUnusedImports": "warn",
+        "noPrivateImports": "off"
       },
       "complexity": {
         "useOptionalChain": "warn"
       },
       "a11y": {
         "useAnchorContent": "warn"
+      },
+      "performance": {
+        "noBarrelFile": "off"
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/rpc/**", "!src/rpc/__tests__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)",
+                  "@/db/schema": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)",
+                  "@/db/client": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "javascript": {
     "formatter": {
       "quoteStyle": "double",

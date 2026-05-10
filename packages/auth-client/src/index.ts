@@ -2,6 +2,7 @@ export { createAuthClient, mapConnectError } from "./server";
 export { createAuthGuard } from "./guard";
 export type { SessionData } from "./types";
 export {
+  buildSessionCookieHeader,
   extractSessionTokenFromCookieHeader,
   getSessionTokenFromCookieStore,
   hasAuthCookie,
