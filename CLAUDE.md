@@ -42,6 +42,8 @@ const rows = await db.select().from(user).where(...);  // NG
 
 剥がすときに置き換える対象を repository 関数に局所化する。better-auth の internal 利用(`/src/auth.ts`)は例外として schema に直接触ってよい。
 
+例外: `Session` / `User` の **削除・更新**は better-auth が `secondaryStorage` (Redis cookieCache, `src/auth.ts:106` `maxAge: 5*60`) と DB を二重保管するため、`db/repositories/<entity>.ts` を作って repository 経由にすると最大 5 分の窓で stale session が cookieCache hit で valid に見える。`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、cache invalidation を lifecycle hook に委ねる。`Session` repository を作らないのはこの理由。詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (D2)
+
 ## ルール 3: consumer app からは必ず `@taimei-code/auth-client` 経由で話す
 
 外部 consumer app は taimei-auth の DB / 内部 RPC / 内部関数を共有しない。窓口は以下のみ:
@@ -70,3 +72,23 @@ taimei-auth を別 process に分割しても、consumer 側の修正は `auth-c
 `web/tailwind.config.ts` / `web/postcss.config.js` のように subdirectory に置いた build 設定ファイルでは、content / include / files 系の相対 path を使わず `path.dirname(fileURLToPath(import.meta.url))` 起点の絶対 path で書く。
 
 理由: 本リポジトリは root から `vite build --config web/vite.config.ts` を走らせるため、相対 path は CWD = repo root 起点で解決される。`./src/**` と書くと `web/src/` ではなく repo の `src/` を見に行き、Tailwind なら class が一切 scan されない silent な空 CSS になる。`bun run lint` `bun run typecheck` `bun run build:web` はいずれも exit 0 で完走するため事後検知できない。設定段階で絶対 path 化して防ぐ。
+
+## ルール 6: workspace dep を追加・変更したら Dockerfile も検証する
+
+`package.json` の `dependencies` に `"@taimei-code/auth-client": "workspace:*"` 形式の workspace 参照を追加・変更したら、CI workflow の SDK build step に加えて **Dockerfile の deps stage でも `packages/` を `COPY` し SDK を pre-build する**こと。手元で `docker build .` を 1 回実行して通ることを確認する。
+
+理由: `bun install` は workspace dep を解決するために `packages/<name>/package.json` を見に行く。Dockerfile の `deps` stage が `COPY package.json bun.lock* ./` のみだと `Workspace dependency "<name>" not found` で失敗する。`bun run typecheck` / `lint` / `test` / CI の Lint workflow / Test workflow は workspace 構造を root に持つため通るが、別 build context (例: taimei 側 e2e の `context: '../taimei-auth'`) で初めて顕在化する。詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → fix #35 の経緯)。
+
+具体的に追加すべき記述 (Dockerfile):
+```dockerfile
+FROM base AS deps
+COPY package.json bun.lock* ./
+COPY packages ./packages              # workspace 解決のため必須
+RUN bun install
+RUN cd packages/auth-client && bun run build  # handler が dist 経由で型解決するため
+
+FROM base AS runner
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages ./packages   # symlink target が必要
+...
+```
