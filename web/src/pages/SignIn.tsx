@@ -19,8 +19,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Layer B のログイン画面。signInParamsSchema (PR1) でクエリ検証 → 不正なら /auth/error に誘導。
-// Magic Link (Better Auth magicLinkClient) と GitHub OAuth (signIn.social) の 2 経路を提供。
 export const SignIn = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");

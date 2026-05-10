@@ -15,13 +15,11 @@ import {
 import MagicLinkEmail from "./email/magic-link";
 import { redisStorage } from "./redis";
 
-// 新規ユーザー判定の閾値（10秒以内に作成されたユーザーは新規登録）
 const NEW_USER_THRESHOLD_MS = 10000;
 
 const isJustSignedUp = (createdAt: Date): boolean =>
   Date.now() - createdAt.getTime() < NEW_USER_THRESHOLD_MS;
 
-// 同じ env を 3 箇所で読むのを避けるため module 評価時に 1 回束縛する。
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
 export const auth = betterAuth({
@@ -29,22 +27,14 @@ export const auth = betterAuth({
 
   secondaryStorage: redisStorage,
 
-  // secondaryStorage 有効時、Better Auth は verification を Redis のみに保存する。
-  // e2e は postgres から token を取得して Magic Link verify を行うため、
-  // local 環境 (test / development) のみ storeInDatabase=true で両方に書く
-  // (production は Redis-only)。
+  // local 環境のみ verification を DB にも保存 (e2e で postgres から token を取得するため)
   verification: {
     storeInDatabase: isLocalEnvironment(),
   },
 
   advanced: {
     useSecureCookies: !isLocalEnvironment(),
-    // crossSubDomainCookies の有効化条件は AUTH_COOKIE_DOMAIN 値そのもので判定する:
-    // - 未指定 / "localhost": disable (Set-Cookie の Domain=localhost を reject するブラウザ
-    //   実装があるため。docker compose 単体起動の互換性確保)。
-    // - それ以外 (.taimei-code.local のローカル開発統合, .taimei-code.com 本番): enable。
-    //   AUTH_COOKIE_DOMAIN を明示設定したのは「subdomain 跨ぎで Cookie を共有したい」という
-    //   ユーザー意思の表明であり、APP_ENV (development/production) と独立に判定するのが安全。
+    // 判定基準は AUTH_COOKIE_DOMAIN 値そのもの (APP_ENV 非依存)。詳細: docs/adr/0004-cross-subdomain-cookie-rule.md
     crossSubDomainCookies: {
       enabled: !!authCookieDomain && authCookieDomain !== "localhost",
       domain: authCookieDomain || "taimei-code.com",
@@ -64,8 +54,7 @@ export const auth = betterAuth({
     enabled: false,
   },
 
-  // GitHub OAuth は env が両方揃っているときだけ有効化する。
-  // local 環境では Magic Link を主導線とし、GitHub を使わなくてもサーバ起動を妨げないため。
+  // env 不揃い時は GitHub OAuth を無効化 (local では Magic Link を主導線にしてサーバ起動を妨げない)
   socialProviders: {
     ...(process.env.AUTH_GITHUB_ID && process.env.AUTH_GITHUB_SECRET
       ? {
@@ -78,7 +67,6 @@ export const auth = betterAuth({
   },
 
   plugins: [
-    // nextCookies() は除去（Next.js 非依存）
     magicLink({
       sendMagicLink: async ({ email, url }) => {
         if (isLocalEnvironment()) {
@@ -132,13 +120,6 @@ export const auth = betterAuth({
 
       if (newSession) {
         const createdAt = new Date(newSession.user.createdAt);
-
-        // setFlash は使わない（Next.js 依存）
-        // 代わりにリダイレクト URL にクエリパラメータを付与し、
-        // プロダクト側で受け取ってフラッシュメッセージを表示する
-        // この処理は callbackURL にパラメータを追加する形で Better Auth の
-        // リダイレクトハンドラーで対応（Phase 2 以降で実装）
-
         if (isJustSignedUp(createdAt)) {
           sendWelcomeEmail(newSession.user.email, newSession.user.name).catch((e) =>
             console.error("Welcome email failed:", e),

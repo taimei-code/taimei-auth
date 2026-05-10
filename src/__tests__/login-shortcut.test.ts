@@ -52,7 +52,6 @@ describe("loginShortcut (未認証)", () => {
     );
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.searchParams.get("evil")).toBe(null);
-    // service_name は handler 側で固定されるため override 不可
     expect(location.searchParams.get("service_name")).toBe("accounts");
   });
 });

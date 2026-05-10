@@ -12,10 +12,7 @@ type Props = {
   fallbackName: string;
 };
 
-// Vercel Blob client upload (handleUploadUrl で Hono の avatar-upload-token endpoint に問い合わせ
-// → signed token で blob に直接 PUT) → 完了後すぐ authClient.updateUser({ image }) で永続化する。
-// 「画像を変更」と「保存」を分けず即時保存にする理由: アップロード後 form 保存を忘れて画面遷移すると
-// blob は残るが user.image に反映されないという data drift が発生するため、両者を 1 アクションに束ねる。
+// アップロード完了と同時に永続化する (form 保存と分離しない)。詳細: docs/adr/0008-avatar-immediate-persist.md
 export const AvatarUploader = ({ initialImageUrl, fallbackName }: Props) => {
   const [imageUrl, setImageUrl] = useState(initialImageUrl);
   const [uploading, setUploading] = useState(false);

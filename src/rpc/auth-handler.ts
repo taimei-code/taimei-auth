@@ -9,9 +9,7 @@ import { auth } from "../auth";
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      // Better Auth は secondaryStorage(Redis) と DB を内部で使い分けるため、
-      // db を直接クエリせず auth.api.getSession を経由する必要がある。
-      // sessionToken を Cookie ヘッダ形式で渡して Better Auth に委譲する。
+      // better-auth の Redis/DB 使い分けに乗るため、db を直接クエリせず Cookie ヘッダ形式で auth.api.getSession に委譲する
       const headers = new Headers();
       headers.set(
         "cookie",

@@ -1,12 +1,6 @@
 import { useEffect } from "react";
 
-// 3 経路 canary token 埋込:
-// (1) 不可視リンク: 画面外配置で DOM scraping bot が <a href> を辿る挙動を検出
-// (2) hidden input: form 自動送信ボットが name="canary_token" を拾う挙動を検出
-// (3) favicon URL: useEffect で <link rel="icon"> を動的注入、favicon prefetch 自動化を検出
-//
-// VITE_CANARY_TOKEN_ID env で制御 — 未設定なら何も埋込まない (開発環境のノイズ削減)。
-// production / staging で固定値を設定する想定 (env-specific token id でフィッシングサイトを区別可能)。
+// 3 経路 (不可視リンク / hidden input / favicon) で canary token を埋込む。詳細: docs/adr/0005-canary-token-embedding.md
 const tokenId = import.meta.env.VITE_CANARY_TOKEN_ID as string | undefined;
 
 export const CanaryTokens = () => {

@@ -11,8 +11,9 @@ import { buildProxyHeaders } from "./proxy-helpers";
 import { buildLoginShortcut } from "./handlers/login-shortcut";
 import { avatarUploadHandler } from "./handlers/avatar-upload";
 import { canaryToken } from "./handlers/canary-token";
+import { authEntryRedirect } from "./handlers/auth-entry-redirect";
+import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
-import { signInParamsSchema } from "./sign-in-params";
 
 initSentry();
 import { db } from "@/db/client";
@@ -20,7 +21,6 @@ import { sql } from "drizzle-orm";
 
 const app = new Hono();
 
-// CORS middleware
 const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
 
 app.use(
@@ -33,7 +33,6 @@ app.use(
   }),
 );
 
-// サービス間認証 middleware（/rpc/* のみ）
 app.use("/rpc/*", async (c, next) => {
   const serviceKey = c.req.header("X-Service-Key");
   const expectedKey = process.env.AUTH_SERVICE_KEY;
@@ -50,7 +49,7 @@ app.use("/rpc/*", async (c, next) => {
   return next();
 });
 
-// ConnectRPC: Node.js http サーバーを内部ポートで起動（Bun の Web API と互換させるため）
+// ConnectRPC は Node.js http に bind し、Hono からプロキシ。詳細: docs/adr/0001-rpc-proxy-content-length.md
 const rpcPort = Number(process.env.RPC_INTERNAL_PORT) || 3101;
 const rpcHandler = connectNodeAdapter({
   routes: registerRoutes,
@@ -61,10 +60,6 @@ rpcServer.listen(rpcPort, "127.0.0.1", () => {
   console.log(`ConnectRPC handler listening on 127.0.0.1:${rpcPort}`);
 });
 
-// Hono → ConnectRPC プロキシ（API Key 認証を通過した後にプロキシ）
-// Node.js の connectNodeAdapter は Content-Length 付きリクエストを期待するため、
-// Bun の ReadableStream をそのまま転送するとチャンク転送になり 400 を返す。
-// 一旦 ArrayBuffer に読み出してから Content-Length 付きで再送する。
 app.all("/rpc/*", async (c) => {
   const url = new URL(c.req.url);
   const proxyUrl = `http://127.0.0.1:${rpcPort}${url.pathname}`;
@@ -84,62 +79,28 @@ app.all("/rpc/*", async (c) => {
   });
 });
 
-// /, /login → session 有りで /account, 未認証で /auth/?service_name=accounts&redirect_url=<auth>/account
 const loginShortcut = buildLoginShortcut(async (headers) => {
-  // Cookie 自体無ければ Redis/DB を叩かずに未認証確定。`/` は最も hot な entry のため、未認証多数派の latency を削る。
+  // `/` は最も hot な entry。Cookie 不在なら Redis/DB を叩かず未認証確定で latency を削る
   if (!getSessionCookie(headers)) return false;
   const result = await auth.api.getSession({ headers });
   return result !== null;
 });
 app.route("/", loginShortcut);
 
-// canary token 検知 endpoint (Layer B 画面の 3 種埋込から到達 → Sentry 通報)
 app.route("/", canaryToken);
 
-// Better Auth HTTP ハンドラー
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
 });
 
-// Vercel Blob client upload の token 発行 endpoint (PR8b)。
-// Better Auth Cookie で認証 → 画像のみ + 5MB 上限の signed token を返却。
 app.post("/api/account/avatar/upload-token", avatarUploadHandler);
 
-// Layer B: Vite build 出力 (web/dist) を /auth/* に配信。
-// vite.config.ts の base="/auth/" と整合。serveStatic で hit しないパス (= SPA route) は
-// 後続の SPA fallback ハンドラで index.html を返却し、クライアントサイドルーティングに委ねる。
-// 拡張子付きパス (.js / .css / .png 等) は asset とみなし fallback せず 404 を返す
-// (存在しない asset を index.html で返すと、ブラウザが script として解釈して破綻するため)。
 const WEB_DIST = "./web/dist";
 const SPA_INDEX_HTML = `${WEB_DIST}/index.html`;
+const spaFallback = buildSpaFallbackHandler(SPA_INDEX_HTML);
 
-// /auth/ と /auth/signup でログイン済 session を検知したら redirect_url に直接 302。
-// login 画面の再表示で改めてメアド入力させる冗長 UX を回避するための 1 hop 最適化。
-// /auth/error や /auth/verify-magic-link は対象外 (signup_already_completed 表示や
-// Magic Link 着地で session 有でも画面表示が必要)。
-//
-// 配置は serveStatic より前: Hono serveStatic は directory path (/auth/) に対して
-// index.html を auto-serve するため、後続 handler を抜けてしまう。
-//
-// redirect_url の host 検証は signInParamsSchema が validateRedirectUrl 経由で実施
-// (open redirect 対策)。
-const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
-
-app.use("/auth/*", async (c, next) => {
-  // pathname check を先頭に: asset リクエスト (`/auth/assets/*.js` 等) で URL parse を回避。
-  if (!AUTH_ENTRY_PATHS.has(c.req.path)) return next();
-
-  const headers = c.req.raw.headers;
-  if (!getSessionCookie(headers)) return next();
-
-  const session = await auth.api.getSession({ headers });
-  if (!session) return next();
-
-  const params = signInParamsSchema.safeParse(Object.fromEntries(new URL(c.req.url).searchParams));
-  if (!params.success) return next();
-
-  return c.redirect(params.data.redirect_url);
-});
+// session-aware redirect を serveStatic より前に登録する必要がある。詳細: docs/adr/0002-spa-routing-and-static-assets.md
+app.use("/auth/*", authEntryRedirect);
 
 app.use(
   "/auth/*",
@@ -149,30 +110,9 @@ app.use(
   }),
 );
 
-// /account/* も同じ SPA で処理 (plan: アカウント管理画面は /account/ 直下)。
-// Layer B の Vite base="/auth/" のため index.html の script src は /auth/assets/... を指すが、
-// /account 訪問時もブラウザはそれを取りに行き、上の /auth/* serveStatic で配信されるため整合する。
-app.get("/account/*", async (c) => {
-  const pathname = new URL(c.req.url).pathname;
-  if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
-    return c.notFound();
-  }
-  return new Response(Bun.file(SPA_INDEX_HTML), {
-    headers: { "Content-Type": "text/html; charset=UTF-8" },
-  });
-});
+app.get("/auth/*", spaFallback);
+app.get("/account/*", spaFallback);
 
-app.get("/auth/*", async (c) => {
-  const pathname = new URL(c.req.url).pathname;
-  if (/\.[a-zA-Z0-9]+$/.test(pathname)) {
-    return c.notFound();
-  }
-  return new Response(Bun.file(SPA_INDEX_HTML), {
-    headers: { "Content-Type": "text/html; charset=UTF-8" },
-  });
-});
-
-// ヘルスチェック（DB + Redis 疎通確認）
 app.get("/health", async (c) => {
   const checks: Record<string, string> = {};
 
@@ -194,7 +134,6 @@ app.get("/health", async (c) => {
   return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
 });
 
-// Redis 接続後にサーバー起動
 await connectRedis();
 
 const port = Number(process.env.PORT) || 3100;

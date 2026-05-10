@@ -1,14 +1,3 @@
-/**
- * Next.js 用セッション検証ヘルパー
- *
- * 使用例:
- *   import { createAuthGuard } from "@taimei-code/auth-client/guard";
- *   const { verifySession, getSession } = createAuthGuard({ ... });
- *
- * Next.js の cache() と redirect() を外部注入することで、
- * このモジュール自体は Next.js に直接依存しない。
- */
-
 import type { createAuthClient } from "./server";
 import { mapConnectError } from "./server";
 
@@ -21,10 +10,7 @@ type GuardOptions = {
   getSessionToken: () => Promise<string | undefined>;
 };
 
-// SessionData.session に `token` / `userId` を増やしてはならない (ADR-004 L4)。
-// 理由: token は IdP 内部表現 (Better Auth は opaque ID, Go 自作 IdP では JWT 等になる可能性)
-// であり、消費側 (taimei) に露出すると IdP 移行時の format 差分が SDK 外に漏れる。
-// userId は user.id で代替可能、token は Cookie 経由で IdP に再提示するだけなので消費側不要。
+// SessionData に IdP 内部表現 (token / userId) を増やしてはならない。詳細: docs/adr/0006-sdk-encapsulation.md
 type SessionData = {
   user: {
     id: string;
@@ -51,9 +37,8 @@ export function createAuthGuard(options: GuardOptions) {
       redirect(`/auth?callbackUrl=${encodeURIComponent(opts?.returnTo ?? "/dashboard")}`);
     }
 
-    // Next.js の redirect() は NEXT_REDIRECT を throw する制御フロー実装のため、
-    // try/catch で囲むと catch 句に NEXT_REDIRECT が捕捉されてリダイレクトが機能しない。
-    // RPC 呼び出しのみを try で囲み、redirect は外側で実行する。
+    // Next.js の redirect() は NEXT_REDIRECT を throw する制御フローのため、try で包むと catch されて
+    // リダイレクトが機能しない。RPC 呼び出しのみ try で囲み、redirect は外側で実行する
     let result;
     try {
       result = await client.authService.verifySession({

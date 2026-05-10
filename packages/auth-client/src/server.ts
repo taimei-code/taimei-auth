@@ -28,7 +28,6 @@ export function createAuthClient(options: ClientOptions) {
   return { authService, userService };
 }
 
-// ConnectError → TaggedError 変換
 export function mapConnectError(
   error: unknown,
 ): AuthServiceUnavailable | AuthServiceTimeout | AuthServiceUnauthorized {

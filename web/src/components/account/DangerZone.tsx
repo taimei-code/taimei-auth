@@ -15,8 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-// 退会 = 確認ダイアログ + Better Auth deleteUser。Magic Link / OAuth ユーザーは password を持たず、
-// Better Auth 側で session ごと完全削除されるので、再認証 step は挟まずシンプル確認のみとしている。
+// Magic Link / OAuth ユーザーは password を持たず better-auth 側で session ごと完全削除されるため、再認証 step は挟まない
 export const DangerZone = () => {
   const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

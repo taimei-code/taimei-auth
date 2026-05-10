@@ -19,12 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-// Layer B のサインアップ画面。SignIn と同じ Better Auth Magic Link / GitHub OAuth を使うが、
-// 違いは 2 点: (1) name 入力欄を追加して新規ユーザー名を取得、(2) callbackURL は sign_up_url
-// 優先 (welcome screen 等の onboarding 入口に着地させるため)、無ければ redirect_url にフォールバック。
-//
-// signin/signup 統合方針 (auth-design.md / Better Auth disableImplicitSignUp: false): 新規/既存
-// ユーザーの API レベル分岐は不要。画面は分けるが、内部的には同じ signIn.magicLink を呼ぶ。
+// SignIn と同じ signIn.magicLink を呼ぶ (画面のみ分離)。詳細: docs/adr/0007-signin-signup-unified-api.md
 export const SignUp = () => {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");

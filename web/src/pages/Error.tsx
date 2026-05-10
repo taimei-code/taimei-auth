@@ -3,8 +3,6 @@ import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// reason クエリで定義済の文言テーブルを引く。未知の reason は default にフォールバック。
-// PR3b で signup_already_completed の文言経路 (/auth/signup → after-signup) も使い始める。
 const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   invalid_redirect_url: {
     title: "不正なリダイレクト URL",

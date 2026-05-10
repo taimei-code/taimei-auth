@@ -1,5 +1,4 @@
-// signInParamsSchema (src/sign-in-params.ts) のキー集合と同期させる。
-// allowlist 方式: stale state (例: error=signin_failed) を相互リンクで持ち込まないため。
+// signInParamsSchema のキーのみ通す (error=signin_failed 等の stale state を相互リンクで持ち込ませない)
 const ALLOWLIST = ["service_name", "redirect_url", "sign_up_url"] as const;
 
 export const buildSignParams = (searchParams: URLSearchParams): string => {
