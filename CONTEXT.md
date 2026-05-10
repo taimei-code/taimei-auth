@@ -4,19 +4,31 @@ taimei-auth は taimei エコシステム全体で共有する認証サービス
 
 ## Language
 
-### 認証画面 (Layer B)
+### 認証画面 (共通画面 SPA)
 
 **共通ログイン画面**:
-複数プロダクトが共有して使う、認証の起点となる Web UI (`/auth/`)。技術的には Vite + React の CSR app として `web/dist` から配信される。
+複数プロダクトが共有して使う、認証の起点となる Web UI (`/auth/`)。**共通画面 SPA** が React Router で出すサブ画面のひとつ。
 _Avoid_: ログイン画面, SignIn 画面, `/auth/`
 
 **共通サインアップ画面**:
 新規ユーザー登録用の対称画面 (`/auth/signup`)。`name` 入力欄が追加されること以外は **共通ログイン画面** と同じ Magic Link / GitHub OAuth 経路を提供する。
 _Avoid_: SignUp 画面, 新規登録画面, サインアップ
 
-**Layer B**:
-`/auth/*` 配下の React app の総称。Layer A (= Hono server-side ハンドラ) と対をなす。
-_Avoid_: フロント, クライアント
+**アカウント管理画面**:
+ログイン後のプロフィール / セキュリティ / セッション / 連携アカウント管理画面 (`/account/*`)。**共通画面 SPA** が React Router で出す 3 つ目のサブ画面群。
+_Avoid_: マイページ, account ページ
+
+**auth ホスト**:
+`auth.taimei-code.com` の HTTP entry すべてを 1 プロセスで担う Hono server (`src/index.ts`)。better-auth IdP (`/api/auth/*`)、ConnectRPC (`/rpc/*`)、`/login` ショートカット、`/health`、**共通画面 SPA** の配信 (`/auth/*` `/account/*`) を同居させる (CLAUDE.md ルール 1-2 の「Web UI / IdP / DB の同居」のうち HTTP 入口を担う層)。**共通画面 SPA** からの fetch と consumer app からの RPC の両方を受ける。
+_Avoid_: Layer A (順序ラベルで内容を示さない), バックエンド, server (より広義), Hono server (実装名で抽象が剥がれる)
+
+**共通画面 SPA**:
+`web/` 配下の Vite + React CSR app。**auth ホスト** が `/auth/*` `/account/*` で配信する単一 build で、React Router で **共通ログイン画面** / **共通サインアップ画面** / **アカウント管理画面** の 3 系統に分岐する。詳細: ADR-0002。
+_Avoid_: Layer B (順序ラベルで内容を示さない), フロント, クライアント, Web UI (より広義)
+
+**canary token**:
+**共通画面 SPA** のログイン / サインアップ画面に 3 経路で埋込まれる識別子 (`VITE_CANARY_TOKEN_ID`)。不可視リンク / hidden input / favicon URL の 3 経路は通常ユーザーが踏まないため、ヒットすればフィッシング DOM scraping や form 自動送信、favicon prefetch 等の自動化試行を Sentry に通報できる。`/auth/canary-token/:token` で受けて 204 No Content を返却 (攻撃者へのフィードバック遮断)。詳細は ADR-0005 参照。
+_Avoid_: ハニーポット (より広義), ビーコン
 
 ### URL 構築 / 経路
 
@@ -88,6 +100,7 @@ _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
 
 ## Flagged ambiguities
 
-- 「ログイン画面」は「共通ログイン画面」(Layer B at `/auth/`) と「`/login` ショートカット URL」の両方に解釈される時期があった — resolved: 前者を **共通ログイン画面**、後者を **`/login` ショートカット** に canonical 化
+- 「ログイン画面」は「共通ログイン画面」(**共通画面 SPA** の `/auth/`) と「`/login` ショートカット URL」の両方に解釈される時期があった — resolved: 前者を **共通ログイン画面**、後者を **`/login` ショートカット** に canonical 化
+- 初期は「Layer A」「Layer B」と順序ラベルで server / client を区別していたが、内容を示さない抽象表現だったため廃止 — server 側は **auth ホスト**、client 側は **共通画面 SPA** に canonical 化
 - 「callbackURL」は better-auth API の引数名としてはそのまま使うが、設計議論では **redirect_url** を使う — better-auth 内部では callbackURL、外部 (URL クエリ) では redirect_url
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
