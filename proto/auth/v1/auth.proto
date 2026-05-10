@@ -37,11 +37,12 @@ message User {
 
 message Session {
   string id = 1;
-  string token = 2;
   string expires_at = 3;
-  string user_id = 4;
-  optional string ip_address = 5;
-  optional string user_agent = 6;
+
+  // ADR-006 D6: token/user_id は SDK で trim 済の dead field、ip_address/user_agent は
+  // better-auth client が直接参照のため proto 経由不要 (詳細: ~/.claude/plans/taimei/ADR-006-codebase-slim-down.md)。
+  reserved 2, 4, 5, 6;
+  reserved "token", "user_id", "ip_address", "user_agent";
 
   // ADR-001 R6 / ADR-002 Phase 1.5: 将来の AI / multi-tenant / Become / system session 用に予約
   // 詳細: ~/.claude/plans/taimei/ADR-001-auth-separation.md, ADR-002-ai-native-strategy.md
