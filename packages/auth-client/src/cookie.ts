@@ -25,6 +25,11 @@ export function hasAuthCookie(request: RequestLike): boolean {
   return getSessionTokenFromCookieStore(request.cookies) !== undefined;
 }
 
+// HTTP 用と HTTPS 用 (Secure prefix) の両 cookie 名を提示する: better-auth が適切な方を採用するため、呼出側で環境判定が要らない。
+export function buildSessionCookieHeader(token: string): string {
+  return SESSION_COOKIE_NAMES.map((name) => `${name}=${token}`).join("; ");
+}
+
 // 値は URL decode しない (現行 IdP は URL-safe な opaque ID のみを発行)
 export function extractSessionTokenFromCookieHeader(cookieHeader: string): string | undefined {
   if (!cookieHeader) return undefined;

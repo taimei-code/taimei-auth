@@ -123,6 +123,7 @@ describe("createAuthGuard.requireSession - redirect propagation", () => {
   });
 
   test("成功時は SessionData (user / session のみ) を返し、IdP 内部表現が漏れない", async () => {
+    // SessionData の trim は proto から token/userId 等を削除済 (ADR-006 D6) で根本解消。本 test は defense-in-depth。
     const guard = createAuthGuard({
       client: {
         authService: {
@@ -139,10 +140,6 @@ describe("createAuthGuard.requireSession - redirect propagation", () => {
             session: {
               id: "sess-1",
               expiresAt: "2026-12-31T00:00:00Z",
-              // SessionData に乗ってはならない IdP 内部フィールド (token / userId 等) が
-              // RPC レスポンスに含まれていても mapToSessionData で除外されること
-              token: "internal-token",
-              userId: "user-1",
             },
           }),
         },
