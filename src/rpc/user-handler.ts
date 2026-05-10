@@ -1,62 +1,31 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { UserService } from "../gen/auth/v1/auth_pb";
-import { db } from "@/db/client";
-import { user } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  deleteUser as deleteUserRepo,
+  findUserByEmail as findUserByEmailRepo,
+  findUserById as findUserByIdRepo,
+  updateUser as updateUserRepo,
+} from "@/db/repositories/user";
+import { toProtoUser } from "./mappers";
 
 export function registerUserService(router: ConnectRouter) {
   router.service(UserService, {
     async findUserByEmail(req) {
-      const result = await db
-        .select()
-        .from(user)
-        .where(eq(user.email, req.email))
-        .then((rows) => rows.at(0));
-
-      if (!result) {
-        return { user: undefined };
-      }
-
-      return {
-        user: {
-          id: result.id,
-          name: result.name,
-          email: result.email,
-          emailVerified: result.emailVerified,
-          image: result.image ?? undefined,
-          createdAt: result.createdAt.toISOString(),
-          updatedAt: result.updatedAt.toISOString(),
-        },
-      };
+      const row = await findUserByEmailRepo(req.email);
+      if (!row) return { user: undefined };
+      return { user: toProtoUser(row) };
     },
 
     async findUserById(req) {
-      const result = await db
-        .select()
-        .from(user)
-        .where(eq(user.id, req.userId))
-        .then((rows) => rows.at(0));
-
-      if (!result) {
-        return { user: undefined };
-      }
-
-      return {
-        user: {
-          id: result.id,
-          name: result.name,
-          email: result.email,
-          emailVerified: result.emailVerified,
-          image: result.image ?? undefined,
-          createdAt: result.createdAt.toISOString(),
-          updatedAt: result.updatedAt.toISOString(),
-        },
-      };
+      const row = await findUserByIdRepo(req.userId);
+      if (!row) return { user: undefined };
+      return { user: toProtoUser(row) };
     },
 
     async updateUser(req) {
-      const updates: Record<string, unknown> = {};
+      // proto の clearImage flag → null 変換は handler 責務 (repository は drizzle 列のまま受ける)。
+      const updates: { name?: string; image?: string | null } = {};
       if (req.name !== undefined) updates.name = req.name;
       if (req.clearImage) {
         updates.image = null;
@@ -68,38 +37,19 @@ export function registerUserService(router: ConnectRouter) {
         throw new ConnectError("No fields to update", Code.InvalidArgument);
       }
 
-      const result = await db
-        .update(user)
-        .set(updates)
-        .where(eq(user.id, req.userId))
-        .returning()
-        .then((rows) => rows.at(0));
-
-      if (!result) {
+      const row = await updateUserRepo(req.userId, updates);
+      if (!row) {
         throw new ConnectError("User not found", Code.NotFound);
       }
 
-      return {
-        user: {
-          id: result.id,
-          name: result.name,
-          email: result.email,
-          emailVerified: result.emailVerified,
-          image: result.image ?? undefined,
-          createdAt: result.createdAt.toISOString(),
-          updatedAt: result.updatedAt.toISOString(),
-        },
-      };
+      return { user: toProtoUser(row) };
     },
 
     async deleteUser(req) {
-      const result = await db.delete(user).where(eq(user.id, req.userId)).returning();
-
-      if (result.length === 0) {
+      const row = await deleteUserRepo(req.userId);
+      if (!row) {
         throw new ConnectError("User not found", Code.NotFound);
       }
-
-      // session, account は CASCADE で自動削除
       return { success: true };
     },
   });
