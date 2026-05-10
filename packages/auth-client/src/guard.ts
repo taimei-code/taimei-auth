@@ -1,105 +1,99 @@
 import type { createAuthClient } from "./server";
 import { mapConnectError } from "./server";
+import type { SessionData } from "./types";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
 
+// React.cache 互換シグネチャを `any` を使わず Args/R の dual generic で表現する。
+type CacheFn = <Args extends readonly unknown[], R>(
+  fn: (...args: Args) => R,
+) => (...args: Args) => R;
+
 type GuardOptions = {
   client: AuthClient;
-  cache: <T extends (...args: any[]) => any>(fn: T) => T;
+  cache: CacheFn;
   redirect: (url: string) => never;
   getSessionToken: () => Promise<string | undefined>;
 };
 
-// SessionData に IdP 内部表現 (token / userId) を増やしてはならない。詳細: docs/adr/0006-sdk-encapsulation.md
-type SessionData = {
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    emailVerified: boolean;
-    image?: string;
-    createdAt: string;
-    updatedAt: string;
-  };
-  session: {
-    id: string;
-    expiresAt: string;
-  };
+// proto レスポンスの shape subset。proto 型を直接 import すると hard couple するため、
+// SDK 内部で必要な user / session フィールドを SessionData 形状で部分的に表現する。
+type VerifySessionResult = {
+  user?: SessionData["user"];
+  session?: SessionData["session"];
 };
+
+// SessionData に乗らないフィールド (token / userId 等) を allowlist 的に切り捨てて
+// IdP 内部表現の漏洩を防ぐ。新フィールド追加は SessionData 型と同時にここを更新する責務分担。
+function mapToSessionData(input: {
+  user: SessionData["user"];
+  session: SessionData["session"];
+}): SessionData {
+  return {
+    user: {
+      id: input.user.id,
+      name: input.user.name,
+      email: input.user.email,
+      emailVerified: input.user.emailVerified,
+      image: input.user.image,
+      createdAt: input.user.createdAt,
+      updatedAt: input.user.updatedAt,
+    },
+    session: {
+      id: input.session.id,
+      expiresAt: input.session.expiresAt,
+    },
+  };
+}
+
+function buildLoginRedirectPath(returnTo: string): string {
+  return `/auth?callbackUrl=${encodeURIComponent(returnTo)}`;
+}
 
 export function createAuthGuard(options: GuardOptions) {
   const { client, cache, redirect, getSessionToken } = options;
 
-  const verifySession = cache(async (opts?: { returnTo?: string }): Promise<SessionData> => {
+  // requireSession / getSession の共通パイプライン。token 不在 / RPC 失敗 / user/session 欠落を
+  // すべて null に正規化し、policy (redirect か null か) を呼び出し側に委ねる。
+  // onRpcError は RPC 失敗時の振る舞い切替: requireSession は throw、getSession は null 返し。
+  const loadSession = async (onRpcError: (error: unknown) => null): Promise<SessionData | null> => {
     const token = await getSessionToken();
-
-    if (!token) {
-      redirect(`/auth?callbackUrl=${encodeURIComponent(opts?.returnTo ?? "/dashboard")}`);
-    }
-
-    // Next.js の redirect() は NEXT_REDIRECT を throw する制御フローのため、try で包むと catch されて
-    // リダイレクトが機能しない。RPC 呼び出しのみ try で囲み、redirect は外側で実行する
-    let result;
-    try {
-      result = await client.authService.verifySession({
-        sessionToken: token!,
-      });
-    } catch (error) {
-      throw mapConnectError(error);
-    }
-
-    if (!result.user || !result.session) {
-      redirect(`/auth?callbackUrl=${encodeURIComponent(opts?.returnTo ?? "/dashboard")}`);
-    }
-
-    return {
-      user: {
-        id: result.user!.id,
-        name: result.user!.name,
-        email: result.user!.email,
-        emailVerified: result.user!.emailVerified,
-        image: result.user!.image,
-        createdAt: result.user!.createdAt,
-        updatedAt: result.user!.updatedAt,
-      },
-      session: {
-        id: result.session!.id,
-        expiresAt: result.session!.expiresAt,
-      },
-    };
-  });
-
-  const getSession = cache(async (): Promise<SessionData | null> => {
-    const token = await getSessionToken();
-
     if (!token) return null;
 
-    try {
-      const result = await client.authService.verifySession({
-        sessionToken: token!,
-      });
+    // RPC 呼び出しのみ .catch() chain で wrap し、redirect 制御フロー (NEXT_REDIRECT throw) と分離する。
+    const verifyResult: VerifySessionResult | null = await client.authService
+      .verifySession({ sessionToken: token })
+      .catch(onRpcError);
 
-      if (!result.user || !result.session) return null;
+    if (!verifyResult) return null;
 
-      return {
-        user: {
-          id: result.user.id,
-          name: result.user.name,
-          email: result.user.email,
-          emailVerified: result.user.emailVerified,
-          image: result.user.image,
-          createdAt: result.user.createdAt,
-          updatedAt: result.user.updatedAt,
-        },
-        session: {
-          id: result.session.id,
-          expiresAt: result.session.expiresAt,
-        },
-      };
-    } catch {
-      return null;
+    // local 変数に destructure してから narrow する。プロパティアクセス narrowing は中間関数呼び出しで
+    // invalidated される TS の制約があるため。
+    const { user, session } = verifyResult;
+    if (!user || !session) return null;
+
+    return mapToSessionData({ user, session });
+  };
+
+  // requireSession: session 不在なら redirect で「以降の処理を中断」する強制版。
+  // returnTo は consumer ごとに既定値が異なる (taimei は /dashboard、admin app は別) ため SDK では
+  // 必須引数とし、consumer 側 wrap 関数で既定値を注入する責務分割を取る。
+  const requireSession = cache(async (opts: { returnTo: string }): Promise<SessionData> => {
+    const session = await loadSession((error) => {
+      throw mapConnectError(error);
+    });
+
+    // session 不在時は redirect で制御を切る。`return redirect(...)` で `Promise<never>` となり
+    // `Promise<SessionData>` に assignable (bottom type の性質)。これをしないと後続の narrow が効かない。
+    if (!session) {
+      return redirect(buildLoginRedirectPath(opts.returnTo));
     }
+
+    return session;
   });
 
-  return { verifySession, getSession };
+  // getSession: layout/page で「ログイン状態に応じた分岐」用 (requireSession の non-throwing 対)。
+  const getSession = cache((): Promise<SessionData | null> => loadSession(() => null));
+
+  return { requireSession, getSession };
 }
