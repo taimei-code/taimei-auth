@@ -1,6 +1,10 @@
 export { createAuthClient, mapConnectError } from "./server";
 export { createAuthGuard } from "./guard";
-export { createBrowserAuthClient } from "./browser";
+export {
+  extractSessionTokenFromCookieHeader,
+  getSessionTokenFromCookieStore,
+  hasAuthCookie,
+} from "./cookie";
 export {
   AuthServiceUnavailable,
   AuthServiceTimeout,
