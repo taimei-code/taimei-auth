@@ -1,48 +1,41 @@
 import { describe, expect, test } from "bun:test";
-import {
-  extractSessionTokenFromCookieHeader,
-  getSessionTokenFromCookieStore,
-  hasAuthCookie,
-} from "../src/cookie";
+import type { CookieReader } from "../src/cookie";
+import { extractSessionTokenFromCookieHeader, getSessionToken, hasAuthCookie } from "../src/cookie";
 
-const makeStore = (entries: Record<string, string>) => ({
-  get: (name: string) => (entries[name] !== undefined ? { value: entries[name] } : undefined),
-});
-
-const makeRequest = (entries: Record<string, string>) => ({
-  cookies: makeStore(entries),
-});
+const makeReader = (entries: Record<string, string>): CookieReader => {
+  return (name) => entries[name];
+};
 
 describe("hasAuthCookie", () => {
   test("HTTP 用 cookie 名が存在すれば true", () => {
-    expect(hasAuthCookie(makeRequest({ "better-auth.session_token": "tok" }))).toBe(true);
+    expect(hasAuthCookie(makeReader({ "better-auth.session_token": "tok" }))).toBe(true);
   });
 
   test("HTTPS 用 (__Secure- prefix) cookie 名が存在すれば true", () => {
-    expect(hasAuthCookie(makeRequest({ "__Secure-better-auth.session_token": "tok" }))).toBe(true);
+    expect(hasAuthCookie(makeReader({ "__Secure-better-auth.session_token": "tok" }))).toBe(true);
   });
 
   test("無関係な cookie のみなら false", () => {
-    expect(hasAuthCookie(makeRequest({ "other.cookie": "x" }))).toBe(false);
+    expect(hasAuthCookie(makeReader({ "other.cookie": "x" }))).toBe(false);
   });
 
   test("空 cookie 値は未存在扱い (false)", () => {
-    expect(hasAuthCookie(makeRequest({ "better-auth.session_token": "" }))).toBe(false);
+    expect(hasAuthCookie(makeReader({ "better-auth.session_token": "" }))).toBe(false);
   });
 });
 
-describe("getSessionTokenFromCookieStore", () => {
+describe("getSessionToken", () => {
   test("HTTP 用 cookie の値を返す", () => {
-    expect(
-      getSessionTokenFromCookieStore(makeStore({ "better-auth.session_token": "tok-http" })),
-    ).toBe("tok-http");
+    expect(getSessionToken(makeReader({ "better-auth.session_token": "tok-http" }))).toBe(
+      "tok-http",
+    );
   });
 
   test("両方存在する場合は配列順 (HTTP 名が先) に従い HTTP 側を返す", () => {
     // 実運用では HTTP/HTTPS どちらか一方しか発行されないため、両立は理論ケース。
     expect(
-      getSessionTokenFromCookieStore(
-        makeStore({
+      getSessionToken(
+        makeReader({
           "better-auth.session_token": "tok-http",
           "__Secure-better-auth.session_token": "tok-https",
         }),
@@ -51,15 +44,13 @@ describe("getSessionTokenFromCookieStore", () => {
   });
 
   test("HTTPS 用のみ存在する場合は HTTPS の値", () => {
-    expect(
-      getSessionTokenFromCookieStore(
-        makeStore({ "__Secure-better-auth.session_token": "tok-https" }),
-      ),
-    ).toBe("tok-https");
+    expect(getSessionToken(makeReader({ "__Secure-better-auth.session_token": "tok-https" }))).toBe(
+      "tok-https",
+    );
   });
 
   test("どちらも無ければ undefined", () => {
-    expect(getSessionTokenFromCookieStore(makeStore({}))).toBeUndefined();
+    expect(getSessionToken(makeReader({}))).toBeUndefined();
   });
 });
 

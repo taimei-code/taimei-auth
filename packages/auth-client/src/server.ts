@@ -1,31 +1,30 @@
-import { createClient, ConnectError, Code } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-node";
+import {
+  createClient,
+  ConnectError,
+  Code,
+  type Interceptor,
+  type Transport,
+} from "@connectrpc/connect";
 import { AuthService, UserService } from "./gen/auth/v1/auth_pb";
 import { AuthServiceUnavailable, AuthServiceTimeout, AuthServiceUnauthorized } from "./errors";
 
 type ClientOptions = {
-  baseUrl: string;
-  serviceKey?: string;
+  transport: Transport;
 };
 
 export function createAuthClient(options: ClientOptions) {
-  const transport = createConnectTransport({
-    httpVersion: "1.1",
-    baseUrl: options.baseUrl,
-    interceptors: [
-      (next) => async (req) => {
-        if (options.serviceKey) {
-          req.header.set("X-Service-Key", options.serviceKey);
-        }
-        return next(req);
-      },
-    ],
-  });
-
-  const authService = createClient(AuthService, transport);
-  const userService = createClient(UserService, transport);
-
+  const authService = createClient(AuthService, options.transport);
+  const userService = createClient(UserService, options.transport);
   return { authService, userService };
+}
+
+// Service Key header (`X-Service-Key`) は taimei-auth IdP の private contract。
+// ADR-004 の Cookie 名と同格の隠蔽対象で、consumer は header 名を直接書かないこと (ADR-007 §3)。
+export function createServiceKeyInterceptor(serviceKey: string): Interceptor {
+  return (next) => async (req) => {
+    req.header.set("X-Service-Key", serviceKey);
+    return next(req);
+  };
 }
 
 export function mapConnectError(
