@@ -1,5 +1,4 @@
 import type { createAuthClient } from "./server";
-import { mapConnectError } from "./server";
 import type { SessionData } from "./types";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
@@ -11,67 +10,43 @@ type CacheFn = <Args extends readonly unknown[], R>(
 
 type GuardOptions = {
   client: AuthClient;
-  cache: CacheFn;
-  redirect: (url: string) => never;
   getSessionToken: () => Promise<string | undefined>;
+  // Next.js consumer は React.cache を注入することで 1 request 内 dedup を得る。
+  // 省略時は dedup 無し: 1 request 内で getSession() を N 回呼ぶと verifySession が N 回発火する。
+  // Hono / Express 等で同 request 内多重呼出する場合は consumer 側で memoize するか cache を注入する。
+  cache?: CacheFn;
 };
 
 // proto レスポンスの shape subset。proto 型を直接 import すると hard couple するため、
 // SDK 内部で必要な user / session フィールドを SessionData 形状で部分的に表現する。
-// proto.Session と SessionData.session は shape が一致 (token 等は proto から削除済 / ADR-006 D6)。
 type VerifySessionResult = {
   user?: SessionData["user"];
   session?: SessionData["session"];
 };
 
-function buildLoginRedirectPath(returnTo: string): string {
-  return `/auth?callbackUrl=${encodeURIComponent(returnTo)}`;
-}
+const identity: CacheFn = (fn) => fn;
 
 export function createAuthGuard(options: GuardOptions) {
-  const { client, cache, redirect, getSessionToken } = options;
+  const { client, getSessionToken, cache = identity } = options;
 
-  // requireSession / getSession の共通パイプライン。token 不在 / RPC 失敗 / user/session 欠落を
-  // すべて null に正規化し、policy (redirect か null か) を呼び出し側に委ねる。
-  // onRpcError は RPC 失敗時の振る舞い切替: requireSession は throw、getSession は null 返し。
-  const loadSession = async (onRpcError: (error: unknown) => null): Promise<SessionData | null> => {
+  // 失敗 (token 不在 / RPC エラー / user/session 欠落) を null に統一することで consumer 側は単一の null 分岐で済む。
+  // 「未ログイン」と「IdP ダウン」を区別したい consumer は raw `client.authService` + `mapConnectError` を使うこと。
+  // redirect 等の framework 固有制御フローは consumer 側 wrapper に委ね、SDK は副作用を持たない (ADR-007)。
+  const getSession = cache(async (): Promise<SessionData | null> => {
     const token = await getSessionToken();
     if (!token) return null;
 
-    // RPC 呼び出しのみ .catch() chain で wrap し、redirect 制御フロー (NEXT_REDIRECT throw) と分離する。
     const verifyResult: VerifySessionResult | null = await client.authService
       .verifySession({ sessionToken: token })
-      .catch(onRpcError);
+      .catch(() => null);
 
     if (!verifyResult) return null;
 
-    // local 変数に destructure してから narrow する。プロパティアクセス narrowing は中間関数呼び出しで
-    // invalidated される TS の制約があるため。
     const { user, session } = verifyResult;
     if (!user || !session) return null;
 
     return { user, session };
-  };
-
-  // requireSession: session 不在なら redirect で「以降の処理を中断」する強制版。
-  // returnTo は consumer ごとに既定値が異なる (taimei は /dashboard、admin app は別) ため SDK では
-  // 必須引数とし、consumer 側 wrap 関数で既定値を注入する責務分割を取る。
-  const requireSession = cache(async (opts: { returnTo: string }): Promise<SessionData> => {
-    const session = await loadSession((error) => {
-      throw mapConnectError(error);
-    });
-
-    // session 不在時は redirect で制御を切る。`return redirect(...)` で `Promise<never>` となり
-    // `Promise<SessionData>` に assignable (bottom type の性質)。これをしないと後続の narrow が効かない。
-    if (!session) {
-      return redirect(buildLoginRedirectPath(opts.returnTo));
-    }
-
-    return session;
   });
 
-  // getSession: layout/page で「ログイン状態に応じた分岐」用 (requireSession の non-throwing 対)。
-  const getSession = cache((): Promise<SessionData | null> => loadSession(() => null));
-
-  return { requireSession, getSession };
+  return { getSession };
 }

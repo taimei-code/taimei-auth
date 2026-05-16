@@ -80,6 +80,31 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/auth-client/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "next": "auth-client は consumer framework 非依存 (ADR-007)",
+                  "next/headers": "auth-client は consumer framework 非依存 (ADR-007)",
+                  "next/navigation": "auth-client は consumer framework 非依存 (ADR-007)",
+                  "next/server": "auth-client は consumer framework 非依存 (ADR-007)",
+                  "next/cache": "auth-client は consumer framework 非依存 (ADR-007)",
+                  "react": "SDK は React.cache 等の React 固有 API に依存しない (ADR-007)",
+                  "react-dom": "SDK は React 固有 API に依存しない (ADR-007)",
+                  "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (ADR-007)",
+                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (ADR-007)"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "javascript": {

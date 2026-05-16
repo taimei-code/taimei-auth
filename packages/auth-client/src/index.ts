@@ -1,11 +1,12 @@
-export { createAuthClient, mapConnectError } from "./server";
+export { createAuthClient, createServiceKeyInterceptor, mapConnectError } from "./server";
 export { createAuthGuard } from "./guard";
 export type { SessionData } from "./types";
 export {
   buildSessionCookieHeader,
   extractSessionTokenFromCookieHeader,
-  getSessionTokenFromCookieStore,
+  getSessionToken,
   hasAuthCookie,
+  type CookieReader,
 } from "./cookie";
 export {
   AuthServiceUnavailable,
