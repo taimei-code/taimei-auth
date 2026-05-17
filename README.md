@@ -124,12 +124,14 @@ docker compose exec auth-redis redis-cli
 2. `docker compose run --rm auth-service bun run db:generate` で `drizzle/NNNN_*.sql` を生成 (commit する)
 3. 次回 `docker compose up` 時に `auth-migrate` service が自動適用 (手動実行は `docker compose run --rm auth-migrate`)
 
-> **DB trigger は `drizzle/manual/` に分離**: PL/pgSQL trigger は drizzle-kit が管理しないため `drizzle/manual/*.sql` に置く。`auth-migrate` service が `bun run db:migrate` 後に `bun run db:migrate-manual` (db/migrate-manual.ts) を実行して順次 apply する。`bun run db:generate` の再生成で trigger SQL が消える事故を防ぐための分離 (ADR-001 R1)。
+> **DB trigger は `drizzle/manual/` に分離**: PL/pgSQL trigger は drizzle-kit が管理しないため `drizzle/manual/*.sql` に置く。`auth-migrate` service が `bun run db:migrate` 後に `bun run db:migrate-manual` (db/migrate-manual.ts) を実行して順次 apply する。`bun run db:generate` の再生成で trigger SQL が消える事故を防ぐための分離。
 
 ### Proto 変更フロー
 
 1. `proto/` 配下の `.proto` を編集
-2. `docker compose run --rm auth-service bun run generate` で `src/gen/` を再生成 (commit する)
+2. `docker compose run --rm auth-service bun run generate` で `src/gen/` を再生成し、同 script が `packages/auth-client/src/gen/` へ自動コピー (両方 commit する)
+3. CI の `Buf breaking check` step が `main` を baseline に wire 互換性違反を検出する。意図的な breaking が必要な場合は SDK の major 版を bump し、CHANGELOG に migration 例を追記すること
+4. 別 IdP 移行や proto v2 切替で並行運用が必要になった時は `docs/migration-strategy.md` の Dual Read/Write 段階移行 playbook を発動する
 
 ---
 
@@ -138,8 +140,8 @@ docker compose exec auth-redis redis-cli
 - GitHub OAuth — env 設定 + GitHub App 側で `http://localhost:3100/api/auth/callback/github` を Authorization callback URL に登録が必要
 - Resend 経由のメール送信 — local では console.log で代替
 - `app.taimei-code.local` 経由の cross-subdomain 動作 — `/etc/hosts` 編集 + reverse proxy が要るため別タスク
-- Passkey / パスワード変更 / MFA — `/account/security` に枠だけあり PR11 / Phase 4 で実装予定
-- セッション個別 revoke / 連携アカウント追加・解除 — `/account/sessions` `/account/connections` に閲覧 UI のみ、変更操作は Phase 4
+- Passkey / パスワード変更 / MFA — `/account/security` に枠だけあり、本番デプロイ後の拡張機能フェーズで実装予定
+- セッション個別 revoke / 連携アカウント追加・解除 — `/account/sessions` `/account/connections` に閲覧 UI のみ、変更操作は本番デプロイ後の拡張機能フェーズで実装予定
 
 ---
 
