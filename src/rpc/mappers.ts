@@ -10,6 +10,18 @@ export function toProtoUser(row: UserRow) {
     image: row.image ?? undefined,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    revision: row.revision,
+  };
+}
+
+// ADR-001 R7: session_kind は現状 "user" 固定。将来 "admin" | "system" | "assumed" に拡張。
+type SessionRowLike = { id: string; expiresAt: Date };
+
+export function toProtoSession(row: SessionRowLike) {
+  return {
+    id: row.id,
+    expiresAt: row.expiresAt.toISOString(),
+    sessionKind: "user",
   };
 }
 
