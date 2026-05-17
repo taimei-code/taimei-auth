@@ -46,6 +46,15 @@ export const auth = betterAuth({
     },
   }),
 
+  user: {
+    additionalFields: {
+      // ADR-001 R1: secondaryStorage payload に revision を含めるための宣言。
+      // 実際の ++ は db/manual/0001_user_revision_triggers.sql の DB trigger に閉じる。
+      // input: false により API 経由の client からは書き換え不能。
+      revision: { type: "number", required: true, defaultValue: 0, input: false },
+    },
+  },
+
   emailAndPassword: {
     enabled: false,
   },
