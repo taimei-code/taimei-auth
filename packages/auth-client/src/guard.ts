@@ -43,21 +43,23 @@ export function createAuthGuard(options: GuardOptions) {
     }
     const token: ExternalToken = asExternalToken(raw);
 
-    const verifyResult = await client.authService
+    // verifyResponse: RPC からの raw proto レスポンス。外側関数の戻り値型 `VerifyResult` と
+    // 名前が衝突しないよう response を用いる (MECE C5 brand 内部実装の可読性)。
+    const verifyResponse = await client.authService
       .verifySession({ sessionToken: token.raw })
       .catch(() => null);
 
-    if (!verifyResult) {
+    if (!verifyResponse) {
       return { ok: false, reason: Result.UNSPECIFIED };
     }
 
     // proto-es oneof は case: "ok" | "error" | undefined。default 経路は MECE I6 の
     // 「outcome 想定外」fallback (consumer は再ログインに倒す単一 fallback)。
-    switch (verifyResult.outcome.case) {
+    switch (verifyResponse.outcome.case) {
       case "error":
-        return { ok: false, reason: verifyResult.outcome.value.reason };
+        return { ok: false, reason: verifyResponse.outcome.value.reason };
       case "ok": {
-        const { user, session } = verifyResult.outcome.value;
+        const { user, session } = verifyResponse.outcome.value;
         if (!user || !session) {
           return { ok: false, reason: Result.UNSPECIFIED };
         }

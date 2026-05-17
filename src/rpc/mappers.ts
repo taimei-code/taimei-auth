@@ -1,40 +1,45 @@
 import type { AccountRow } from "@/db/repositories/account";
 import type { UserRow } from "@/db/repositories/user";
+import type { Session } from "../auth";
 
-export function toProtoUser(row: UserRow) {
+export function toProtoUser(userRow: UserRow) {
   return {
-    id: row.id,
-    name: row.name,
-    email: row.email,
-    emailVerified: row.emailVerified,
-    image: row.image ?? undefined,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    revision: row.revision,
+    id: userRow.id,
+    name: userRow.name,
+    email: userRow.email,
+    emailVerified: userRow.emailVerified,
+    image: userRow.image ?? undefined,
+    createdAt: userRow.createdAt.toISOString(),
+    updatedAt: userRow.updatedAt.toISOString(),
+    revision: userRow.revision,
   };
 }
 
-// ADR-001 R7: session_kind は現状 "user" 固定。将来 "admin" | "system" | "assumed" に拡張。
+// ADR-001 R7: session_kind は現状 "user" 固定。将来 enum 化を予定 (ADR-001 R7 を参照)。
 // db/CLAUDE.md ルール 2 例外: session repository を作らない方針 (better-auth secondaryStorage の
-// stale 問題回避) のため、SessionRow 型を import せず better-auth Session の最小サブセットで受ける。
-type SessionRowLike = { id: string; expiresAt: Date };
+// stale 問題回避) のため、SessionRow 型を import せず better-auth Session 型から派生する。
+// better-auth の Session.session 型変更を compile-time に検出するため Pick で型固定。
+type SessionRowLike = Pick<Session["session"], "id" | "expiresAt">;
 
-export function toProtoSession(row: SessionRowLike) {
+export function toProtoSession(sessionRow: SessionRowLike) {
   return {
-    id: row.id,
-    expiresAt: row.expiresAt.toISOString(),
+    id: sessionRow.id,
+    expiresAt: sessionRow.expiresAt.toISOString(),
     sessionKind: "user",
   };
 }
 
-export function toProtoAccount(row: AccountRow) {
+// ADR-006: password / idToken / accessTokenExpiresAt 等は proto に乗せない (consumer は不要)。
+// 漏出するとセキュリティリスク (password hash leak) かつ ADR-006 D6 (SDK で trim 済の dead field)
+// に該当するため、明示的に whitelist mapping する。
+export function toProtoAccount(accountRow: AccountRow) {
   return {
-    id: row.id,
-    accountId: row.accountId,
-    providerId: row.providerId,
-    userId: row.userId,
-    accessToken: row.accessToken ?? undefined,
-    refreshToken: row.refreshToken ?? undefined,
-    scope: row.scope ?? undefined,
+    id: accountRow.id,
+    accountId: accountRow.accountId,
+    providerId: accountRow.providerId,
+    userId: accountRow.userId,
+    accessToken: accountRow.accessToken ?? undefined,
+    refreshToken: accountRow.refreshToken ?? undefined,
+    scope: accountRow.scope ?? undefined,
   };
 }
