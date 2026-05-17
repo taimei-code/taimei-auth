@@ -4,12 +4,14 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { render } from "@react-email/components";
 import { db } from "@/db/client";
+import { appendAuditLog } from "@/db/repositories/audit-log";
 import * as schema from "@/db/schema";
 import { sendWelcomeEmail } from "./email/send-welcome";
 import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
 import { isLocalEnvironment } from "./env";
 import MagicLinkEmail from "./email/magic-link";
 import { redisStorage } from "./redis";
+import { Sentry } from "./sentry";
 
 const NEW_USER_THRESHOLD_MS = 10000;
 
@@ -132,6 +134,22 @@ export const auth = betterAuth({
             console.error("Welcome email failed:", e),
           );
         }
+
+        // sign-out path は ctx.context.newSession を populate しないため (better-auth 1.6.9 仕様)、
+        // sign-out audit は handler 側で取る。ここは sign-in 経路のみ通る。
+        const method = ctx.path.includes("/sign-in/magic-link") ? "magic_link" : "github";
+        const ip =
+          ctx.headers?.get("x-forwarded-for")?.split(",")[0].trim() ||
+          ctx.headers?.get("x-real-ip") ||
+          "unknown";
+        const userAgent = ctx.headers?.get("user-agent") || "unknown";
+        appendAuditLog({
+          eventType: "sign_in",
+          userId: newSession.user.id,
+          payload: { method, ip, userAgent },
+        }).catch((e) => {
+          Sentry.captureException(e, { tags: { component: "audit-log", event: "sign_in" } });
+        });
       }
     }),
   },
