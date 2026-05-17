@@ -16,8 +16,7 @@ import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
 
 initSentry();
-import { db } from "@/db/client";
-import { sql } from "drizzle-orm";
+import { pingDatabase } from "@/db/repositories/health";
 
 // MECE C4: production で AUTH_SERVICE_KEY 未設定なら起動拒否。
 // dev / test 環境では従来通り warn のみで通す (compose の local-dev-key を hardcoded する運用も維持)。
@@ -129,23 +128,20 @@ app.get("/auth/*", spaFallback);
 app.get("/account/*", spaFallback);
 
 app.get("/health", async (c) => {
-  const checks: Record<string, string> = {};
-
-  try {
-    await db.execute(sql`SELECT 1`);
-    checks.db = "ok";
-  } catch {
-    checks.db = "error";
-  }
-
-  try {
-    await redis.ping();
-    checks.redis = "ok";
-  } catch {
-    checks.redis = "error";
-  }
-
-  const healthy = checks.db === "ok" && checks.redis === "ok";
+  // db/CLAUDE.md ルール 1: drizzle / @/db/client を直接 import せず repository 経由で ping する。
+  // typescript-coding.md ルール: try-catch ではなく then-catch で書く。
+  const [dbOk, redisOk] = await Promise.all([
+    pingDatabase(),
+    redis
+      .ping()
+      .then(() => true)
+      .catch(() => false),
+  ]);
+  const checks = {
+    db: dbOk ? "ok" : "error",
+    redis: redisOk ? "ok" : "error",
+  };
+  const healthy = dbOk && redisOk;
   return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
 });
 
