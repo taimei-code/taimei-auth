@@ -1,5 +1,6 @@
 import type { createAuthClient } from "./server";
-import type { SessionData } from "./types";
+import type { SessionData, VerifyResult } from "./types";
+import { Result } from "./gen/auth/v1/auth_pb";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
 
@@ -12,40 +13,76 @@ type GuardOptions = {
   client: AuthClient;
   getSessionToken: () => Promise<string | undefined>;
   // Next.js consumer は React.cache を注入することで 1 request 内 dedup を得る。
-  // 省略時は dedup 無し: 1 request 内で getSession() を N 回呼ぶと verifySession が N 回発火する。
-  // Hono / Express 等で同 request 内多重呼出する場合は consumer 側で memoize するか cache を注入する。
+  // 省略時は dedup 無し。Hono / Express 等で同 request 内多重呼出する場合は consumer 側で
+  // memoize するか cache を注入する。
   cache?: CacheFn;
 };
 
-// proto レスポンスの shape subset。proto 型を直接 import すると hard couple するため、
-// SDK 内部で必要な user / session フィールドを SessionData 形状で部分的に表現する。
-type VerifySessionResult = {
-  user?: SessionData["user"];
-  session?: SessionData["session"];
-};
+// MECE C5: ExternalToken / InternalSession brand 型は本 module 内に閉じる。
+// declare const symbol は dist/guard.d.ts に登場しないため consumer に漏出しない。
+declare const externalTokenBrand: unique symbol;
+declare const internalSessionBrand: unique symbol;
+
+type ExternalToken = { readonly raw: string; readonly [externalTokenBrand]: true };
+type InternalSession = SessionData & { readonly [internalSessionBrand]: true };
 
 const identity: CacheFn = (fn) => fn;
+
+const asExternalToken = (raw: string): ExternalToken => ({ raw }) as ExternalToken;
+const asInternalSession = (data: SessionData): InternalSession => data as InternalSession;
 
 export function createAuthGuard(options: GuardOptions) {
   const { client, getSessionToken, cache = identity } = options;
 
-  // 失敗 (token 不在 / RPC エラー / user/session 欠落) を null に統一することで consumer 側は単一の null 分岐で済む。
-  // 「未ログイン」と「IdP ダウン」を区別したい consumer は raw `client.authService` + `mapConnectError` を使うこと。
-  // redirect 等の framework 固有制御フローは consumer 側 wrapper に委ね、SDK は副作用を持たない (ADR-007)。
-  const getSession = cache(async (): Promise<SessionData | null> => {
-    const token = await getSessionToken();
-    if (!token) return null;
+  // ADR-001 R2: 戻り値は VerifyResult。consumer は `result.ok` で分岐する。
+  // RPC エラー (transport down 等) は Result.UNSPECIFIED を返し、consumer は再ログインに倒す。
+  const getSession = cache(async (): Promise<VerifyResult> => {
+    const raw = await getSessionToken();
+    if (!raw) {
+      return { ok: false, reason: Result.SESSION_NOT_FOUND };
+    }
+    const token: ExternalToken = asExternalToken(raw);
 
-    const verifyResult: VerifySessionResult | null = await client.authService
-      .verifySession({ sessionToken: token })
+    const verifyResult = await client.authService
+      .verifySession({ sessionToken: token.raw })
       .catch(() => null);
 
-    if (!verifyResult) return null;
+    if (!verifyResult) {
+      return { ok: false, reason: Result.UNSPECIFIED };
+    }
 
-    const { user, session } = verifyResult;
-    if (!user || !session) return null;
+    if (verifyResult.outcome.case === "error") {
+      return { ok: false, reason: verifyResult.outcome.value.reason };
+    }
 
-    return { user, session };
+    if (verifyResult.outcome.case === "ok") {
+      const okValue = verifyResult.outcome.value;
+      const user = okValue.user;
+      const session = okValue.session;
+      if (!user || !session) {
+        return { ok: false, reason: Result.UNSPECIFIED };
+      }
+      // brand 型で internal-only な session 表現を作る。consumer には plain SessionData として返す。
+      const internal: InternalSession = asInternalSession({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          image: user.image,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        session: {
+          id: session.id,
+          expiresAt: session.expiresAt,
+          kind: "user",
+        },
+      });
+      return { ok: true, data: internal };
+    }
+
+    return { ok: false, reason: Result.UNSPECIFIED };
   });
 
   return { getSession };
