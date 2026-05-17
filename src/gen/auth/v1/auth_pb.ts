@@ -2,15 +2,15 @@
 // @generated from file auth/v1/auth.proto (package auth.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file auth/v1/auth.proto.
  */
 export const file_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEi7AEKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCUIICgZfaW1hZ2VKBAgIEBVSE2FpX2NvbnNlbnRfc2V0dGluZ3NSEWFjdGl2ZV9haV9jbGllbnRzUghyZXZpc2lvblIJdGVuYW50X2lkUhJkZWZhdWx0X2NvbXBhbnlfaWRSBmxvY2FsZSKTAgoHU2Vzc2lvbhIKCgJpZBgBIAEoCRISCgpleHBpcmVzX2F0GAMgASgJSgQIAhADSgQIBBAFSgQIBRAGSgQIBhAHSgQIBxAfUgV0b2tlblIHdXNlcl9pZFIKaXBfYWRkcmVzc1IKdXNlcl9hZ2VudFIKY29tcGFueV9pZFIGc2NvcGVzUgphY3Rvcl90eXBlUgljbGllbnRfaWRSDHNlc3Npb25fa2luZFINaXNzdWVkX2Zvcl9haVIPYmVjb21lX2FkbWluX2lkUhBvcmlnaW5hbF91c2VyX2lkUhBkZWxlZ2F0aW9uX3Njb3BlUglpc3N1ZWRfYXRSC2F1dGhfbWV0aG9kUg11c2VyX3JldmlzaW9uIscBCgdBY2NvdW50EgoKAmlkGAEgASgJEhIKCmFjY291bnRfaWQYAiABKAkSEwoLcHJvdmlkZXJfaWQYAyABKAkSDwoHdXNlcl9pZBgEIAEoCRIZCgxhY2Nlc3NfdG9rZW4YBSABKAlIAIgBARIaCg1yZWZyZXNoX3Rva2VuGAYgASgJSAGIAQESEgoFc2NvcGUYByABKAlIAogBAUIPCg1fYWNjZXNzX3Rva2VuQhAKDl9yZWZyZXNoX3Rva2VuQggKBl9zY29wZSItChRWZXJpZnlTZXNzaW9uUmVxdWVzdBIVCg1zZXNzaW9uX3Rva2VuGAEgASgJInYKFVZlcmlmeVNlc3Npb25SZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQESJgoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbkgBiAEBQgcKBV91c2VyQgoKCF9zZXNzaW9uIiEKDkdldFVzZXJSZXF1ZXN0Eg8KB3VzZXJfaWQYASABKAkiPAoPR2V0VXNlclJlc3BvbnNlEiAKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXJIAIgBAUIHCgVfdXNlciItChpGaW5kQWNjb3VudEJ5VXNlcklkUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIlEKG0ZpbmRBY2NvdW50QnlVc2VySWRSZXNwb25zZRImCgdhY2NvdW50GAEgASgLMhAuYXV0aC52MS5BY2NvdW50SACIAQFCCgoIX2FjY291bnQiJwoOU2lnbk91dFJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSIiCg9TaWduT3V0UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCI7ChRTZW5kTWFnaWNMaW5rUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIUCgxjYWxsYmFja191cmwYAiABKAkiKAoVU2VuZE1hZ2ljTGlua1Jlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiJwoWRmluZFVzZXJCeUVtYWlsUmVxdWVzdBINCgVlbWFpbBgBIAEoCSJEChdGaW5kVXNlckJ5RW1haWxSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiJgoTRmluZFVzZXJCeUlkUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIkEKFEZpbmRVc2VyQnlJZFJlc3BvbnNlEiAKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXJIAIgBAUIHCgVfdXNlciJzChFVcGRhdGVVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJEhEKBG5hbWUYAiABKAlIAIgBARISCgVpbWFnZRgDIAEoCUgBiAEBEhMKC2NsZWFyX2ltYWdlGAQgASgIQgcKBV9uYW1lQggKBl9pbWFnZSIxChJVcGRhdGVVc2VyUmVzcG9uc2USGwoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlciIkChFEZWxldGVVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIiUKEkRlbGV0ZVVzZXJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIMosDCgtBdXRoU2VydmljZRJOCg1WZXJpZnlTZXNzaW9uEh0uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVxdWVzdBoeLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEjwKB0dldFVzZXISFy5hdXRoLnYxLkdldFVzZXJSZXF1ZXN0GhguYXV0aC52MS5HZXRVc2VyUmVzcG9uc2USYAoTRmluZEFjY291bnRCeVVzZXJJZBIjLmF1dGgudjEuRmluZEFjY291bnRCeVVzZXJJZFJlcXVlc3QaJC5hdXRoLnYxLkZpbmRBY2NvdW50QnlVc2VySWRSZXNwb25zZRI8CgdTaWduT3V0EhcuYXV0aC52MS5TaWduT3V0UmVxdWVzdBoYLmF1dGgudjEuU2lnbk91dFJlc3BvbnNlEk4KDVNlbmRNYWdpY0xpbmsSHS5hdXRoLnYxLlNlbmRNYWdpY0xpbmtSZXF1ZXN0Gh4uYXV0aC52MS5TZW5kTWFnaWNMaW5rUmVzcG9uc2UyvgIKC1VzZXJTZXJ2aWNlElQKD0ZpbmRVc2VyQnlFbWFpbBIfLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVxdWVzdBogLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USSwoMRmluZFVzZXJCeUlkEhwuYXV0aC52MS5GaW5kVXNlckJ5SWRSZXF1ZXN0Gh0uYXV0aC52MS5GaW5kVXNlckJ5SWRSZXNwb25zZRJFCgpVcGRhdGVVc2VyEhouYXV0aC52MS5VcGRhdGVVc2VyUmVxdWVzdBobLmF1dGgudjEuVXBkYXRlVXNlclJlc3BvbnNlEkUKCkRlbGV0ZVVzZXISGi5hdXRoLnYxLkRlbGV0ZVVzZXJSZXF1ZXN0GhsuYXV0aC52MS5EZWxldGVVc2VyUmVzcG9uc2ViBnByb3RvMw");
+  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEi9AEKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBUIICgZfaW1hZ2VKBAgJEBVSE2FpX2NvbnNlbnRfc2V0dGluZ3NSEWFjdGl2ZV9haV9jbGllbnRzUgl0ZW5hbnRfaWRSEmRlZmF1bHRfY29tcGFueV9pZFIGbG9jYWxlIpsCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJSgQIAhADSgQIBBAFSgQIBRAGSgQIBhAHSgQICBAfUgV0b2tlblIHdXNlcl9pZFIKaXBfYWRkcmVzc1IKdXNlcl9hZ2VudFIKY29tcGFueV9pZFIGc2NvcGVzUgphY3Rvcl90eXBlUgljbGllbnRfaWRSDWlzc3VlZF9mb3JfYWlSD2JlY29tZV9hZG1pbl9pZFIQb3JpZ2luYWxfdXNlcl9pZFIQZGVsZWdhdGlvbl9zY29wZVIJaXNzdWVkX2F0UgthdXRoX21ldGhvZFINdXNlcl9yZXZpc2lvbiLHAQoHQWNjb3VudBIKCgJpZBgBIAEoCRISCgphY2NvdW50X2lkGAIgASgJEhMKC3Byb3ZpZGVyX2lkGAMgASgJEg8KB3VzZXJfaWQYBCABKAkSGQoMYWNjZXNzX3Rva2VuGAUgASgJSACIAQESGgoNcmVmcmVzaF90b2tlbhgGIAEoCUgBiAEBEhIKBXNjb3BlGAcgASgJSAKIAQFCDwoNX2FjY2Vzc190b2tlbkIQCg5fcmVmcmVzaF90b2tlbkIICgZfc2NvcGUiLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSJRCg9WZXJpZnlTZXNzaW9uT2sSGwoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlchIhCgdzZXNzaW9uGAIgASgLMhAuYXV0aC52MS5TZXNzaW9uIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIiEKDkdldFVzZXJSZXF1ZXN0Eg8KB3VzZXJfaWQYASABKAkiPAoPR2V0VXNlclJlc3BvbnNlEiAKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXJIAIgBAUIHCgVfdXNlciItChpGaW5kQWNjb3VudEJ5VXNlcklkUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIlEKG0ZpbmRBY2NvdW50QnlVc2VySWRSZXNwb25zZRImCgdhY2NvdW50GAEgASgLMhAuYXV0aC52MS5BY2NvdW50SACIAQFCCgoIX2FjY291bnQiJwoOU2lnbk91dFJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSIiCg9TaWduT3V0UmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCI7ChRTZW5kTWFnaWNMaW5rUmVxdWVzdBINCgVlbWFpbBgBIAEoCRIUCgxjYWxsYmFja191cmwYAiABKAkiKAoVU2VuZE1hZ2ljTGlua1Jlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiJwoWRmluZFVzZXJCeUVtYWlsUmVxdWVzdBINCgVlbWFpbBgBIAEoCSJEChdGaW5kVXNlckJ5RW1haWxSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiJgoTRmluZFVzZXJCeUlkUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIkEKFEZpbmRVc2VyQnlJZFJlc3BvbnNlEiAKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXJIAIgBAUIHCgVfdXNlciJzChFVcGRhdGVVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJEhEKBG5hbWUYAiABKAlIAIgBARISCgVpbWFnZRgDIAEoCUgBiAEBEhMKC2NsZWFyX2ltYWdlGAQgASgIQgcKBV9uYW1lQggKBl9pbWFnZSIxChJVcGRhdGVVc2VyUmVzcG9uc2USGwoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlciIkChFEZWxldGVVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIiUKEkRlbGV0ZVVzZXJSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIKswBCgZSZXN1bHQSFgoSUkVTVUxUX1VOU1BFQ0lGSUVEEAASDQoJUkVTVUxUX09LEAESHAoYUkVTVUxUX1NFU1NJT05fTk9UX0ZPVU5EEAISGgoWUkVTVUxUX1NFU1NJT05fRVhQSVJFRBADEhcKE1JFU1VMVF9VU0VSX0RFTEVURUQQBBIWChJSRVNVTFRfVVNFUl9MT0NLRUQQBRISCg5SRVNVTFRfUkVWT0tFRBAGEhwKGFJFU1VMVF9SRVZJU0lPTl9PVVREQVRFRBAHMosDCgtBdXRoU2VydmljZRJOCg1WZXJpZnlTZXNzaW9uEh0uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVxdWVzdBoeLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEjwKB0dldFVzZXISFy5hdXRoLnYxLkdldFVzZXJSZXF1ZXN0GhguYXV0aC52MS5HZXRVc2VyUmVzcG9uc2USYAoTRmluZEFjY291bnRCeVVzZXJJZBIjLmF1dGgudjEuRmluZEFjY291bnRCeVVzZXJJZFJlcXVlc3QaJC5hdXRoLnYxLkZpbmRBY2NvdW50QnlVc2VySWRSZXNwb25zZRI8CgdTaWduT3V0EhcuYXV0aC52MS5TaWduT3V0UmVxdWVzdBoYLmF1dGgudjEuU2lnbk91dFJlc3BvbnNlEk4KDVNlbmRNYWdpY0xpbmsSHS5hdXRoLnYxLlNlbmRNYWdpY0xpbmtSZXF1ZXN0Gh4uYXV0aC52MS5TZW5kTWFnaWNMaW5rUmVzcG9uc2UyvgIKC1VzZXJTZXJ2aWNlElQKD0ZpbmRVc2VyQnlFbWFpbBIfLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVxdWVzdBogLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USSwoMRmluZFVzZXJCeUlkEhwuYXV0aC52MS5GaW5kVXNlckJ5SWRSZXF1ZXN0Gh0uYXV0aC52MS5GaW5kVXNlckJ5SWRSZXNwb25zZRJFCgpVcGRhdGVVc2VyEhouYXV0aC52MS5VcGRhdGVVc2VyUmVxdWVzdBobLmF1dGgudjEuVXBkYXRlVXNlclJlc3BvbnNlEkUKCkRlbGV0ZVVzZXISGi5hdXRoLnYxLkRlbGV0ZVVzZXJSZXF1ZXN0GhsuYXV0aC52MS5EZWxldGVVc2VyUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * 共通メッセージ
@@ -52,6 +52,14 @@ export type User = Message<"auth.v1.User"> & {
    * @generated from field: string updated_at = 7;
    */
   updatedAt: string;
+
+  /**
+   * ADR-001 R1: secondaryStorage 経由で cookieCache に乗る revision 値。
+   * VerifySession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
+   *
+   * @generated from field: int32 revision = 8;
+   */
+  revision: number;
 };
 
 /**
@@ -74,6 +82,14 @@ export type Session = Message<"auth.v1.Session"> & {
    * @generated from field: string expires_at = 3;
    */
   expiresAt: string;
+
+  /**
+   * ADR-001 R7: "user" | "admin" | "system" | "assumed" (現状は "user" 固定)。
+   * Phase 3 以降で Become / system session 実装時に拡張。
+   *
+   * @generated from field: string session_kind = 7;
+   */
+  sessionKind: string;
 };
 
 /**
@@ -150,18 +166,67 @@ export const VerifySessionRequestSchema: GenMessage<VerifySessionRequest> = /*@_
   messageDesc(file_auth_v1_auth, 3);
 
 /**
- * @generated from message auth.v1.VerifySessionResponse
+ * ADR-001 R2: VerifySession の成功と失敗を proto の oneof で union 化。
+ * SDK 側で TypeScript の discriminated union として narrowing 可能。
+ *
+ * @generated from message auth.v1.VerifySessionOk
  */
-export type VerifySessionResponse = Message<"auth.v1.VerifySessionResponse"> & {
+export type VerifySessionOk = Message<"auth.v1.VerifySessionOk"> & {
   /**
-   * @generated from field: optional auth.v1.User user = 1;
+   * @generated from field: auth.v1.User user = 1;
    */
   user?: User;
 
   /**
-   * @generated from field: optional auth.v1.Session session = 2;
+   * @generated from field: auth.v1.Session session = 2;
    */
   session?: Session;
+};
+
+/**
+ * Describes the message auth.v1.VerifySessionOk.
+ * Use `create(VerifySessionOkSchema)` to create a new message.
+ */
+export const VerifySessionOkSchema: GenMessage<VerifySessionOk> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 4);
+
+/**
+ * @generated from message auth.v1.VerifySessionError
+ */
+export type VerifySessionError = Message<"auth.v1.VerifySessionError"> & {
+  /**
+   * @generated from field: auth.v1.Result reason = 1;
+   */
+  reason: Result;
+};
+
+/**
+ * Describes the message auth.v1.VerifySessionError.
+ * Use `create(VerifySessionErrorSchema)` to create a new message.
+ */
+export const VerifySessionErrorSchema: GenMessage<VerifySessionError> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 5);
+
+/**
+ * @generated from message auth.v1.VerifySessionResponse
+ */
+export type VerifySessionResponse = Message<"auth.v1.VerifySessionResponse"> & {
+  /**
+   * @generated from oneof auth.v1.VerifySessionResponse.outcome
+   */
+  outcome: {
+    /**
+     * @generated from field: auth.v1.VerifySessionOk ok = 1;
+     */
+    value: VerifySessionOk;
+    case: "ok";
+  } | {
+    /**
+     * @generated from field: auth.v1.VerifySessionError error = 2;
+     */
+    value: VerifySessionError;
+    case: "error";
+  } | { case: undefined; value?: undefined };
 };
 
 /**
@@ -169,7 +234,7 @@ export type VerifySessionResponse = Message<"auth.v1.VerifySessionResponse"> & {
  * Use `create(VerifySessionResponseSchema)` to create a new message.
  */
 export const VerifySessionResponseSchema: GenMessage<VerifySessionResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 4);
+  messageDesc(file_auth_v1_auth, 6);
 
 /**
  * @generated from message auth.v1.GetUserRequest
@@ -186,7 +251,7 @@ export type GetUserRequest = Message<"auth.v1.GetUserRequest"> & {
  * Use `create(GetUserRequestSchema)` to create a new message.
  */
 export const GetUserRequestSchema: GenMessage<GetUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 5);
+  messageDesc(file_auth_v1_auth, 7);
 
 /**
  * @generated from message auth.v1.GetUserResponse
@@ -203,7 +268,7 @@ export type GetUserResponse = Message<"auth.v1.GetUserResponse"> & {
  * Use `create(GetUserResponseSchema)` to create a new message.
  */
 export const GetUserResponseSchema: GenMessage<GetUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 6);
+  messageDesc(file_auth_v1_auth, 8);
 
 /**
  * @generated from message auth.v1.FindAccountByUserIdRequest
@@ -220,7 +285,7 @@ export type FindAccountByUserIdRequest = Message<"auth.v1.FindAccountByUserIdReq
  * Use `create(FindAccountByUserIdRequestSchema)` to create a new message.
  */
 export const FindAccountByUserIdRequestSchema: GenMessage<FindAccountByUserIdRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 7);
+  messageDesc(file_auth_v1_auth, 9);
 
 /**
  * @generated from message auth.v1.FindAccountByUserIdResponse
@@ -237,7 +302,7 @@ export type FindAccountByUserIdResponse = Message<"auth.v1.FindAccountByUserIdRe
  * Use `create(FindAccountByUserIdResponseSchema)` to create a new message.
  */
 export const FindAccountByUserIdResponseSchema: GenMessage<FindAccountByUserIdResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 8);
+  messageDesc(file_auth_v1_auth, 10);
 
 /**
  * @generated from message auth.v1.SignOutRequest
@@ -254,7 +319,7 @@ export type SignOutRequest = Message<"auth.v1.SignOutRequest"> & {
  * Use `create(SignOutRequestSchema)` to create a new message.
  */
 export const SignOutRequestSchema: GenMessage<SignOutRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 9);
+  messageDesc(file_auth_v1_auth, 11);
 
 /**
  * @generated from message auth.v1.SignOutResponse
@@ -271,7 +336,7 @@ export type SignOutResponse = Message<"auth.v1.SignOutResponse"> & {
  * Use `create(SignOutResponseSchema)` to create a new message.
  */
 export const SignOutResponseSchema: GenMessage<SignOutResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 10);
+  messageDesc(file_auth_v1_auth, 12);
 
 /**
  * @generated from message auth.v1.SendMagicLinkRequest
@@ -293,7 +358,7 @@ export type SendMagicLinkRequest = Message<"auth.v1.SendMagicLinkRequest"> & {
  * Use `create(SendMagicLinkRequestSchema)` to create a new message.
  */
 export const SendMagicLinkRequestSchema: GenMessage<SendMagicLinkRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 11);
+  messageDesc(file_auth_v1_auth, 13);
 
 /**
  * @generated from message auth.v1.SendMagicLinkResponse
@@ -310,7 +375,7 @@ export type SendMagicLinkResponse = Message<"auth.v1.SendMagicLinkResponse"> & {
  * Use `create(SendMagicLinkResponseSchema)` to create a new message.
  */
 export const SendMagicLinkResponseSchema: GenMessage<SendMagicLinkResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 12);
+  messageDesc(file_auth_v1_auth, 14);
 
 /**
  * UserService メッセージ
@@ -329,7 +394,7 @@ export type FindUserByEmailRequest = Message<"auth.v1.FindUserByEmailRequest"> &
  * Use `create(FindUserByEmailRequestSchema)` to create a new message.
  */
 export const FindUserByEmailRequestSchema: GenMessage<FindUserByEmailRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 13);
+  messageDesc(file_auth_v1_auth, 15);
 
 /**
  * @generated from message auth.v1.FindUserByEmailResponse
@@ -346,7 +411,7 @@ export type FindUserByEmailResponse = Message<"auth.v1.FindUserByEmailResponse">
  * Use `create(FindUserByEmailResponseSchema)` to create a new message.
  */
 export const FindUserByEmailResponseSchema: GenMessage<FindUserByEmailResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 14);
+  messageDesc(file_auth_v1_auth, 16);
 
 /**
  * @generated from message auth.v1.FindUserByIdRequest
@@ -363,7 +428,7 @@ export type FindUserByIdRequest = Message<"auth.v1.FindUserByIdRequest"> & {
  * Use `create(FindUserByIdRequestSchema)` to create a new message.
  */
 export const FindUserByIdRequestSchema: GenMessage<FindUserByIdRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 15);
+  messageDesc(file_auth_v1_auth, 17);
 
 /**
  * @generated from message auth.v1.FindUserByIdResponse
@@ -380,7 +445,7 @@ export type FindUserByIdResponse = Message<"auth.v1.FindUserByIdResponse"> & {
  * Use `create(FindUserByIdResponseSchema)` to create a new message.
  */
 export const FindUserByIdResponseSchema: GenMessage<FindUserByIdResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 16);
+  messageDesc(file_auth_v1_auth, 18);
 
 /**
  * @generated from message auth.v1.UpdateUserRequest
@@ -414,7 +479,7 @@ export type UpdateUserRequest = Message<"auth.v1.UpdateUserRequest"> & {
  * Use `create(UpdateUserRequestSchema)` to create a new message.
  */
 export const UpdateUserRequestSchema: GenMessage<UpdateUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 17);
+  messageDesc(file_auth_v1_auth, 19);
 
 /**
  * @generated from message auth.v1.UpdateUserResponse
@@ -431,7 +496,7 @@ export type UpdateUserResponse = Message<"auth.v1.UpdateUserResponse"> & {
  * Use `create(UpdateUserResponseSchema)` to create a new message.
  */
 export const UpdateUserResponseSchema: GenMessage<UpdateUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 18);
+  messageDesc(file_auth_v1_auth, 20);
 
 /**
  * @generated from message auth.v1.DeleteUserRequest
@@ -448,7 +513,7 @@ export type DeleteUserRequest = Message<"auth.v1.DeleteUserRequest"> & {
  * Use `create(DeleteUserRequestSchema)` to create a new message.
  */
 export const DeleteUserRequestSchema: GenMessage<DeleteUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 19);
+  messageDesc(file_auth_v1_auth, 21);
 
 /**
  * @generated from message auth.v1.DeleteUserResponse
@@ -465,7 +530,62 @@ export type DeleteUserResponse = Message<"auth.v1.DeleteUserResponse"> & {
  * Use `create(DeleteUserResponseSchema)` to create a new message.
  */
 export const DeleteUserResponseSchema: GenMessage<DeleteUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 20);
+  messageDesc(file_auth_v1_auth, 22);
+
+/**
+ * ADR-001 R2: VerifySession の失敗理由を表現する enum。
+ * SESSION_EXPIRED / USER_LOCKED / REVOKED は現状到達不能、Phase 3 で
+ * session.revoked_at / user lock 実装時に活性化する。
+ *
+ * @generated from enum auth.v1.Result
+ */
+export enum Result {
+  /**
+   * @generated from enum value: RESULT_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: RESULT_OK = 1;
+   */
+  OK = 1,
+
+  /**
+   * @generated from enum value: RESULT_SESSION_NOT_FOUND = 2;
+   */
+  SESSION_NOT_FOUND = 2,
+
+  /**
+   * @generated from enum value: RESULT_SESSION_EXPIRED = 3;
+   */
+  SESSION_EXPIRED = 3,
+
+  /**
+   * @generated from enum value: RESULT_USER_DELETED = 4;
+   */
+  USER_DELETED = 4,
+
+  /**
+   * @generated from enum value: RESULT_USER_LOCKED = 5;
+   */
+  USER_LOCKED = 5,
+
+  /**
+   * @generated from enum value: RESULT_REVOKED = 6;
+   */
+  REVOKED = 6,
+
+  /**
+   * @generated from enum value: RESULT_REVISION_OUTDATED = 7;
+   */
+  REVISION_OUTDATED = 7,
+}
+
+/**
+ * Describes the enum auth.v1.Result.
+ */
+export const ResultSchema: GenEnum<Result> = /*@__PURE__*/
+  enumDesc(file_auth_v1_auth, 0);
 
 /**
  * 認証（セッション管理、OAuth、Magic Link）
