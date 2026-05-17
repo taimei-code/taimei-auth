@@ -65,8 +65,9 @@ jobs:
       # ADR-001 Phase 2: proto wire 互換性を機械的に強制。
       # main ブランチを baseline として、本 PR の proto 変更が breaking でないことを CI で検証する。
       # 意図的な breaking が必要な場合は CHANGELOG 明記 + SDK major bump + 一時的に --against スキップで対応。
+      # GitHub Actions の shallow clone で main ref が無いため、remote URL 経由で参照する。
       - name: Buf breaking check
-        run: bunx @bufbuild/buf breaking --against '.git#branch=main'
+        run: bunx @bufbuild/buf breaking --against "https://github.com/${{ github.repository }}.git#branch=main"
 
       # drizzle/0000 + 0001 + drizzle/manual/0001 trigger を順次適用。
       # db/__tests__/user-revision.test.ts が trigger 挙動を検証するため必須。
