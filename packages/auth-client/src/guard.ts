@@ -18,7 +18,7 @@ type GuardOptions = {
   cache?: CacheFn;
 };
 
-// MECE C5: ExternalToken / InternalSession brand 型は本 module 内に閉じる。
+// ExternalToken / InternalSession brand 型は本 module 内に閉じる。
 // declare const symbol は dist/guard.d.ts に登場しないため consumer に漏出しない。
 declare const externalTokenBrand: unique symbol;
 declare const internalSessionBrand: unique symbol;
@@ -34,7 +34,7 @@ const asInternalSession = (data: SessionData): InternalSession => data as Intern
 export function createAuthGuard(options: GuardOptions) {
   const { client, getSessionToken, cache = identity } = options;
 
-  // ADR-001 R2: 戻り値は VerifyResult。consumer は `result.ok` で分岐する。
+  // 戻り値は VerifyResult。consumer は `result.ok` で分岐する。
   // RPC エラー (transport down 等) は Result.UNSPECIFIED を返し、consumer は再ログインに倒す。
   const getSession = cache(async (): Promise<VerifyResult> => {
     const raw = await getSessionToken();
@@ -44,7 +44,7 @@ export function createAuthGuard(options: GuardOptions) {
     const token: ExternalToken = asExternalToken(raw);
 
     // verifyResponse: RPC からの raw proto レスポンス。外側関数の戻り値型 `VerifyResult` と
-    // 名前が衝突しないよう response を用いる (MECE C5 brand 内部実装の可読性)。
+    // 名前が衝突しないよう response を用いる (brand 内部実装の可読性)。
     const verifyResponse = await client.authService
       .verifySession({ sessionToken: token.raw })
       .catch(() => null);
@@ -53,7 +53,7 @@ export function createAuthGuard(options: GuardOptions) {
       return { ok: false, reason: Result.UNSPECIFIED };
     }
 
-    // proto-es oneof は case: "ok" | "error" | undefined。default 経路は MECE I6 の
+    // proto-es oneof は case: "ok" | "error" | undefined。default 経路は
     // 「outcome 想定外」fallback (consumer は再ログインに倒す単一 fallback)。
     switch (verifyResponse.outcome.case) {
       case "error":

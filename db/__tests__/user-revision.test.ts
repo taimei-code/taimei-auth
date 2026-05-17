@@ -66,7 +66,7 @@ describe("user.revision DB trigger", () => {
     await db.delete(account).where(eq(account.id, accountId));
   });
 
-  test("[MECE C3] concurrent UPDATE bumps revision by 2 (Postgres row-level lock)", async () => {
+  test("concurrent UPDATE bumps revision by 2 (Postgres row-level lock)", async () => {
     const before = (await db.select().from(user).where(eq(user.id, testUserId)).limit(1))[0];
     if (!before) throw new Error("user not found");
     await Promise.all([
@@ -80,7 +80,7 @@ describe("user.revision DB trigger", () => {
     expect(after?.revision).toBe(before.revision + 2);
   });
 
-  test("[MECE N3] OAuth access_token UPDATE does NOT bump user.revision", async () => {
+  test("OAuth access_token UPDATE does NOT bump user.revision", async () => {
     const accountId = "test-oauth-account";
     await db.delete(account).where(eq(account.id, accountId));
     await db.insert(account).values({
@@ -106,7 +106,7 @@ describe("user.revision DB trigger", () => {
     await db.delete(account).where(eq(account.id, accountId));
   });
 
-  test("[MECE I4] account INSERT does NOT bump user.revision", async () => {
+  test("account INSERT does NOT bump user.revision", async () => {
     const before = (await db.select().from(user).where(eq(user.id, testUserId)).limit(1))[0];
     if (!before) throw new Error("user not found");
 

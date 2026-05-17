@@ -1,6 +1,6 @@
 # Migration Strategy
 
-ADR-001 R3 + Phase 2 で「実装不要、proto 設計で将来性を排除しないことだけ守る」とした Dual Read/Write の手順を、必要になった時のための playbook として残す。
+Dual Read/Write の手順を、必要になった時のための playbook として残す。SDK v1.0 contract 凍結後、proto に breaking change を入れる際の段階移行手順。
 
 ## いつ書くか / 発動条件
 
@@ -43,7 +43,7 @@ freee の authenticator gem `PekozRunner` パターンの縮小版を採用す�
 - v1 endpoint / proto / dual write code を削除
 - SDK の major 版を 1 つ進める
 
-## proto 互換性ルール (Phase 2 以降の運用)
+## proto 互換性ルール (v1.0 凍結後の運用)
 
 CI の `buf breaking --against '.git#branch=main'` で機械的に検証される項目:
 
@@ -73,6 +73,6 @@ CI の `buf breaking --against '.git#branch=main'` で機械的に検証され�
 
 ## 関連
 
-- ADR-001 R3 (本 doc の発動条件)
-- ADR-002 Phase 4 (別 IdP 移行時の参照)
+- 本 doc の発動条件は SDK 設計ノート (internal) の「Dual Read/Write は実装不要、proto 設計で将来性を排除しないことだけ守る」原則を起点とする
+- 別 IdP 移行時 (better-auth → 自前 IdP 等) はここに記載の段階移行を発動する
 - freee `authenticator` gem `PekozRunner` (出典、freee 内部リポ)

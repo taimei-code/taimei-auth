@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # ADR-001 R1 / Phase 1.5: db/__tests__/user-revision.test.ts が DB trigger を runtime で
-    # 検証するため、CI で postgres service を起動して migrate 適用後にテストを回す。
+    # db/__tests__/user-revision.test.ts が DB trigger を runtime で検証するため、
+    # CI で postgres service を起動して migrate 適用後にテストを回す。
     services:
       postgres:
         image: postgres:16.8-alpine3.21
@@ -62,7 +62,7 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      # ADR-001 Phase 2: proto wire 互換性を機械的に強制。
+      # proto wire 互換性を機械的に強制。
       # main ブランチを baseline として、本 PR の proto 変更が breaking でないことを CI で検証する。
       # 意図的な breaking が必要な場合は CHANGELOG 明記 + SDK major bump + 一時的に --against スキップで対応。
       # GitHub Actions の shallow clone で main ref が無いため、remote URL 経由で参照する。

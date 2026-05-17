@@ -1,6 +1,6 @@
--- ADR-001 R1: user.revision を name/email/email_verified/image の変更で自動 ++。
+-- user.revision を name/email/email_verified/image の変更で自動 ++。
 -- updated_at のみの no-op update では ++ しない (DISTINCT FROM ガード)。
--- drizzle-kit は trigger を管理しないため drizzle/manual/ に分離 (ADR-001 R1 + MECE I7)。
+-- drizzle-kit は trigger を管理しないため drizzle/manual/ に分離する。
 CREATE OR REPLACE FUNCTION bump_user_revision() RETURNS trigger AS $$
 BEGIN
   IF (OLD.name, OLD.email, OLD.email_verified, OLD.image)

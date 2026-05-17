@@ -1,7 +1,7 @@
 export { createAuthClient, createServiceKeyInterceptor, mapConnectError } from "./server";
 export { createAuthGuard } from "./guard";
 export type { SessionData, VerifyResult } from "./types";
-// ADR-001 R2: VerifyResult.reason の値域として consumer に Result enum を露出する
+// VerifyResult.reason の値域として consumer に Result enum を露出する
 export { Result } from "./gen/auth/v1/auth_pb";
 export {
   buildSessionCookieHeader,

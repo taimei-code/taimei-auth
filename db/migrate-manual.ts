@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { db } from "./client";
 import { sql } from "drizzle-orm";
 
-// ADR-001 R1 + MECE I7: drizzle-kit が管理できない PL/pgSQL trigger を別 dir に分離して適用する。
+// drizzle-kit が管理できない PL/pgSQL trigger を別 dir に分離して適用する。
 // drizzle/0001_user_revision.sql 等の auto-managed migration は drizzle-kit migrate が処理する。
 const manualDir = join(import.meta.dir, "..", "drizzle", "manual");
 

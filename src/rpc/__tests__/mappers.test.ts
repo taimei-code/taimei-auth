@@ -38,7 +38,7 @@ describe("toProtoUser", () => {
     expect(result.image).toBe("https://example.com/b.png");
   });
 
-  test("ADR-001 R1: revision を proto に乗せる", () => {
+  test("revision を proto に乗せる", () => {
     const result = toProtoUser({
       id: "u-3",
       name: "Carol",
@@ -54,7 +54,7 @@ describe("toProtoUser", () => {
 });
 
 describe("toProtoSession", () => {
-  test("ADR-001 R7: sessionKind は現状 'user' 固定", () => {
+  test("sessionKind は現状 'user' 固定", () => {
     const result = toProtoSession({ id: "s-1", expiresAt: new Date("2026-12-31T00:00:00Z") });
     expect(result).toEqual({
       id: "s-1",

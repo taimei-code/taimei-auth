@@ -54,7 +54,7 @@ export type User = Message<"auth.v1.User"> & {
   updatedAt: string;
 
   /**
-   * ADR-001 R1: secondaryStorage 経由で cookieCache に乗る revision 値。
+   * secondaryStorage 経由で cookieCache に乗る revision 値。
    * VerifySession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
    *
    * @generated from field: int32 revision = 8;
@@ -84,8 +84,8 @@ export type Session = Message<"auth.v1.Session"> & {
   expiresAt: string;
 
   /**
-   * ADR-001 R7: "user" | "admin" | "system" | "assumed" (現状は "user" 固定)。
-   * Phase 3 以降で Become / system session 実装時に拡張。
+   * "user" | "admin" | "system" | "assumed" (現状は "user" 固定)。
+   * 将来 Become / system session を実装した時点で拡張。
    *
    * @generated from field: string session_kind = 7;
    */
@@ -166,7 +166,7 @@ export const VerifySessionRequestSchema: GenMessage<VerifySessionRequest> = /*@_
   messageDesc(file_auth_v1_auth, 3);
 
 /**
- * ADR-001 R2: VerifySession の成功と失敗を proto の oneof で union 化。
+ * VerifySession の成功と失敗を proto の oneof で union 化。
  * SDK 側で TypeScript の discriminated union として narrowing 可能。
  *
  * @generated from message auth.v1.VerifySessionOk
@@ -533,9 +533,9 @@ export const DeleteUserResponseSchema: GenMessage<DeleteUserResponse> = /*@__PUR
   messageDesc(file_auth_v1_auth, 22);
 
 /**
- * ADR-001 R2: VerifySession の失敗理由を表現する enum。
- * SESSION_EXPIRED / USER_LOCKED / REVOKED は現状到達不能、Phase 3 で
- * session.revoked_at / user lock 実装時に活性化する。
+ * VerifySession の失敗理由を表現する enum。
+ * SESSION_EXPIRED / USER_LOCKED / REVOKED は現状到達不能、将来
+ * session.revoked_at / user lock を実装した時点で活性化する。
  *
  * @generated from enum auth.v1.Result
  */

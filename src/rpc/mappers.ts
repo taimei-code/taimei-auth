@@ -15,7 +15,7 @@ export function toProtoUser(userRow: UserRow) {
   };
 }
 
-// ADR-001 R7: session_kind は現状 "user" 固定。将来 enum 化を予定 (ADR-001 R7 を参照)。
+// session_kind は現状 "user" 固定。将来 enum 化を予定。
 // db/CLAUDE.md ルール 2 例外: session repository を作らない方針 (better-auth secondaryStorage の
 // stale 問題回避) のため、SessionRow 型を import せず better-auth Session 型から派生する。
 // better-auth の Session.session 型変更を compile-time に検出するため Pick で型固定。
@@ -29,9 +29,9 @@ export function toProtoSession(sessionRow: SessionRowLike) {
   };
 }
 
-// ADR-006: password / idToken / accessTokenExpiresAt 等は proto に乗せない (consumer は不要)。
-// 漏出するとセキュリティリスク (password hash leak) かつ ADR-006 D6 (SDK で trim 済の dead field)
-// に該当するため、明示的に whitelist mapping する。
+// password / idToken / accessTokenExpiresAt 等は proto に乗せない (consumer は不要)。
+// 漏出するとセキュリティリスク (password hash leak) で、かつ SDK で trim 済の dead field に
+// 該当するため、明示的に whitelist mapping する。
 export function toProtoAccount(accountRow: AccountRow) {
   return {
     id: accountRow.id,
