@@ -1,4 +1,4 @@
-import { pgTable, timestamp, text, uniqueIndex, index, boolean } from "drizzle-orm/pg-core";
+import { pgTable, timestamp, text, uniqueIndex, index, boolean, integer } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
 export const user = pgTable(
@@ -9,6 +9,7 @@ export const user = pgTable(
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
+    revision: integer("revision").notNull().default(0),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()

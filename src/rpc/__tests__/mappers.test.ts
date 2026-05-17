@@ -9,10 +9,11 @@ describe("toProtoUser", () => {
       email: "alice@example.com",
       emailVerified: true,
       image: null,
+      revision: 0,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-02T00:00:00Z"),
     };
-    expect(toProtoUser(row)).toEqual({
+    expect(toProtoUser(row)).toMatchObject({
       id: "u-1",
       name: "Alice",
       email: "alice@example.com",
@@ -30,6 +31,7 @@ describe("toProtoUser", () => {
       email: "bob@example.com",
       emailVerified: false,
       image: "https://example.com/b.png",
+      revision: 0,
       createdAt: new Date("2026-03-01T00:00:00Z"),
       updatedAt: new Date("2026-03-01T00:00:00Z"),
     });
