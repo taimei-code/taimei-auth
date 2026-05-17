@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.0 — 2026-05-17
+
+ADR-001 Phase 2 完了。proto contract を v1.0 として凍結し、`buf breaking` を CI で機械的に強制する。
+
+### Stable
+
+- proto `auth.v1.*` を v1.0 contract として凍結。以降の wire 互換性違反は CI (`buf breaking --against main`) で必ず block される
+- v0.6.0 で導入した `VerifyResult` / `Result` enum / `SessionData.session.kind` / brand 型境界 を契約として確定
+- consumer は v1.0.x をピン留めし、minor / patch では breaking が一切起きないことを期待してよい
+
+### Process changes
+
+- 今後 proto に breaking change を導入する場合、SDK の major 版を bump 必須 (例: v2.0.0)
+- 並行運用が必要なら ADR-002 Phase 3 で Dual Read/Write を検討 (`docs/migration-strategy.md` 参照)
+- minor / patch 版での proto 変更は backward-compatible なフィールド追加に限る (`buf breaking` が許容するもの)
+
+### Breaking changes
+
+なし (v0.6.0 で proto 形を確定済)。v1.0.0 は v0.6.x からの no-op bump。
+
 ## 0.6.0 — 2026-05-17
 
 ADR-001 Phase 1.5 + R5 実装。proto / SDK 型を最終形に揃え、v1.0 凍結前の最後の breaking 境界。
