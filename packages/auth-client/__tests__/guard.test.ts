@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createAuthGuard } from "../src/guard";
 import { Result } from "../src/gen/auth/v1/auth_pb";
 
-// ADR-001 R2: VerifyResult discriminated union 戻り型 (0.6.0 breaking)。
+// VerifyResult discriminated union 戻り型 (0.6.0 breaking)。
 // SDK は副作用なし。consumer framework 固有の制御フロー (redirect 等) は consumer 側 wrapper に委ねる。
 
 type VerifyArgs = { sessionToken: string };
@@ -56,7 +56,7 @@ describe("createAuthGuard.getSession", () => {
     expect(rpcCalled).toBe(false);
   });
 
-  test("G2 (AC#13): RPC throw → ok:false / UNSPECIFIED", async () => {
+  test("G2: RPC throw → ok:false / UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => {
         throw new Error("connection refused");
@@ -71,7 +71,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.UNSPECIFIED);
   });
 
-  test("G2b (AC#17): RPC が遅延後 reject (timeout 相当) → UNSPECIFIED", async () => {
+  test("G2b: RPC が遅延後 reject (timeout 相当) → UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(
         () => new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10)),

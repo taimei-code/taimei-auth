@@ -27,11 +27,11 @@ const buildError = (reason: Result) =>
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      // ADR-001 R1: auth.api.getSession 経由で secondaryStorage (Redis) の payload を取得し、
+      // auth.api.getSession 経由で secondaryStorage (Redis) の payload を取得し、
       // 含まれる user.revision と DB の最新値を比較する。
       // 注意: ここで参照する "cache" は cookieCache (cookie-side payload) ではなく
       // secondaryStorage (Redis 側 payload) — handler は session_data cookie を送らないため
-      // internalAdapter.findSession 経由で Redis を引く (MECE I2)。
+      // internalAdapter.findSession 経由で Redis を引く。
       const headers = new Headers();
       headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
 
@@ -46,7 +46,7 @@ export function registerAuthService(router: ConnectRouter) {
         return buildError(Result.USER_DELETED);
       }
 
-      // MECE C1: PR-A デプロイ瞬間に Redis 上の既存 session は revision フィールドを持たない。
+      // 本 migration の初回 deploy 瞬間、Redis 上の既存 session は revision フィールドを持たない。
       // undefined を「cache miss」として扱い整合判定を skip することで、一斉ログアウト loop を防ぐ。
       // 次回 session 発行時に additionalFields 経由で revision が cache に乗るため、
       // この経路は最大でも session.expiresAt 経過で自然消滅する。
@@ -55,7 +55,7 @@ export function registerAuthService(router: ConnectRouter) {
       // revision フィールド自体が存在しないため、optional として読む。
       const cachedRevision: number | undefined = result.user.revision;
       if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
-        // MECE I1: signOut 例外 (Redis 一時断 / signature mismatch 等) は握り、必ず REVISION_OUTDATED を返す。
+        // signOut 例外 (Redis 一時断 / signature mismatch 等) は握り、必ず REVISION_OUTDATED を返す。
         // consumer は再ログインに倒すので、ここで ConnectError を伝播させると UX が悪化する。
         await auth.api
           .signOut({ headers })

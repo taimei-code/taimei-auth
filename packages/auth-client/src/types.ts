@@ -2,7 +2,7 @@ import type { Result } from "./gen/auth/v1/auth_pb";
 
 // SDK が consumer に公開するセッション表現。IdP 内部表現 (token / userId / provider 種別等) を
 // 増やしてはならない。詳細: docs/adr/0006-sdk-encapsulation.md
-// ADR-001 R7: kind は現状 "user" 固定。将来 "admin" | "system" | "assumed" に拡張。
+// kind は現状 "user" 固定。将来 "admin" | "system" | "assumed" に拡張。
 export type SessionData = {
   user: {
     id: string;
@@ -20,6 +20,6 @@ export type SessionData = {
   };
 };
 
-// ADR-001 R2: VerifySession の戻り値を discriminated union で表現。
+// VerifySession の戻り値を discriminated union で表現。
 // consumer は `result.ok` で分岐し、失敗時は `result.reason` (Result enum) を見る。
 export type VerifyResult = { ok: true; data: SessionData } | { ok: false; reason: Result };

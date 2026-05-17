@@ -32,7 +32,7 @@ describe("VerifyResult discriminated union", () => {
   });
 });
 
-describe("MECE C5 / N4: brand types are not leaked to consumers", () => {
+describe("brand types are not leaked to consumers", () => {
   test("all dist/**/*.d.ts files do not contain brand type names", () => {
     const distDir = join(import.meta.dir, "..", "..", "dist");
     if (!existsSync(distDir)) {

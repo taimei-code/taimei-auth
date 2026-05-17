@@ -115,7 +115,7 @@ describe("verifySession outcome", () => {
     expect(res.outcome.value.session?.sessionKind).toBe("user");
   });
 
-  test("[MECE C1] cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
+  test("cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
     mockGetSession.mockResolvedValue({
       // legacy session payload (deploy 前に発行されて revision フィールドがない)
       user: { id: "u1" },
@@ -136,7 +136,7 @@ describe("verifySession outcome", () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  test("[MECE I1] signOut throws → still returns REVISION_OUTDATED", async () => {
+  test("signOut throws → still returns REVISION_OUTDATED", async () => {
     mockGetSession.mockResolvedValue({
       user: { id: "u1", revision: 3 },
       session: { id: "s1", expiresAt: new Date() },
