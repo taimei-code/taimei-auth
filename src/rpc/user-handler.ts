@@ -1,6 +1,8 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { UserService } from "../gen/auth/v1/auth_pb";
+import { runInTransaction } from "@/db/transaction";
+import { revokeAllSessionsForUser } from "@/db/repositories/session";
 import {
   deleteUser as deleteUserRepo,
   findUserByEmail as findUserByEmailRepo,
@@ -46,7 +48,12 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      const row = await deleteUserRepo(req.userId);
+      // revoke → cascade delete を同一 tx で atomic 実行。tx を repository に伝播することで
+      // 「revoke commit / user delete rollback」の不整合を防ぐ。
+      const row = await runInTransaction(async (tx) => {
+        await revokeAllSessionsForUser(req.userId, tx);
+        return deleteUserRepo(req.userId, tx);
+      });
       if (!row) {
         throw new ConnectError("User not found", Code.NotFound);
       }

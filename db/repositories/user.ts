@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { db } from "../client";
 import { user } from "../schema";
+import type { DbOrTx } from "../transaction";
 
 export type UserRow = typeof user.$inferSelect;
 // updateUser が動かしてよい列は handler 側 (proto UpdateUserRequest) で定めた name / image のみ。
@@ -34,9 +35,9 @@ export async function updateUser(id: string, updates: UserUpdates): Promise<User
     .then((rows) => rows.at(0));
 }
 
-export async function deleteUser(id: string): Promise<UserRow | undefined> {
+export async function deleteUser(id: string, txOrDb: DbOrTx = db): Promise<UserRow | undefined> {
   // session, account は db/schema.ts の onDelete: "cascade" で自動削除される。
-  return db
+  return txOrDb
     .delete(user)
     .where(eq(user.id, id))
     .returning()

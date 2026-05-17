@@ -91,6 +91,7 @@ services:
       # .env 経由でも上書き可能だが、両 compose で対称に hardcoded して「設定し忘れ → silent skip」
       # (index.ts の AUTH_SERVICE_KEY 未設定時パスに入る) を防ぐ。
       AUTH_SERVICE_KEY: local-dev-key
+      AUTH_SERVICE_KEY_PREVIOUS: ${AUTH_SERVICE_KEY_PREVIOUS:-}
     depends_on:
       auth-postgres:
         condition: service_healthy

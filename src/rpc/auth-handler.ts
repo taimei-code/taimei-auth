@@ -13,6 +13,7 @@ import {
 } from "../gen/auth/v1/auth_pb";
 import { auth } from "../auth";
 import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositories/account";
+import { findSessionRevokedAt } from "@/db/repositories/session";
 import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
 import { toProtoAccount, toProtoSession, toProtoUser } from "./mappers";
 
@@ -41,9 +42,17 @@ export function registerAuthService(router: ConnectRouter) {
         return buildError(Result.SESSION_NOT_FOUND);
       }
 
-      const dbUser = await findUserByIdRepo(result.user.id);
+      // VerifySession は cookieCache を bypass し DB の最新値を毎回読む (cookieCache stale 対策)。
+      // hot path のため user / session.revoked_at の 2 つの SELECT を Promise.all で 1 RTT に。
+      const [dbUser, revokedAt] = await Promise.all([
+        findUserByIdRepo(result.user.id),
+        findSessionRevokedAt(result.session.id),
+      ]);
       if (!dbUser) {
         return buildError(Result.USER_DELETED);
+      }
+      if (revokedAt !== null) {
+        return buildError(Result.REVOKED);
       }
 
       // 本 migration の初回 deploy 瞬間、Redis 上の既存 session は revision フィールドを持たない。

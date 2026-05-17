@@ -14,6 +14,8 @@ import { canaryToken } from "./handlers/canary-token";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
+import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
+import { getValidServiceKeys } from "./service-key";
 
 initSentry();
 import { pingDatabase } from "@/db/repositories/health";
@@ -41,12 +43,11 @@ app.use(
 
 app.use("/rpc/*", async (c, next) => {
   const serviceKey = c.req.header("X-Service-Key");
-  const expectedKey = process.env.AUTH_SERVICE_KEY;
+  const acceptedServiceKeys = getValidServiceKeys();
 
-  if (!expectedKey) {
-    // production 起動時の fail-fast は本 file 冒頭で実施済。
-    // ここに到達するのは dev / test 環境のみ (process.exit 後だと middleware は登録されない)。
-    // 二重防御として production だけは 503 を返す。
+  if (acceptedServiceKeys.length === 0) {
+    // production 起動時の fail-fast は line 25-28 (process.exit(1))。
+    // ここに到達するのは dev / test 環境のみ。二重防御として production だけ 503 を返す。
     if (process.env.APP_ENV === "production") {
       return c.json({ error: "Service Key not configured (production)" }, 503);
     }
@@ -56,7 +57,7 @@ app.use("/rpc/*", async (c, next) => {
     return next();
   }
 
-  if (serviceKey !== expectedKey) {
+  if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
     return c.json({ error: "Unauthorized: invalid service key" }, 401);
   }
 
@@ -102,6 +103,36 @@ const loginShortcut = buildLoginShortcut(async (headers) => {
 app.route("/", loginShortcut);
 
 app.route("/", canaryToken);
+
+// Magic Link 経路のみ IP + email の 2 軸で rate limit (5/IP/min + 3/email/min)。
+// better-auth 内蔵 rateLimit (auth.ts) は二重防御として残す。
+app.use(
+  "/api/auth/sign-in/magic-link",
+  createRateLimitMiddleware({
+    keyFn: (c) => {
+      const ip =
+        c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+        c.req.header("x-real-ip") ||
+        "unknown";
+      return magicLinkKey("ip", ip);
+    },
+    limit: 5,
+    windowSec: 60,
+  }),
+  createRateLimitMiddleware({
+    // POST body は middleware で消費すると後段 handler が読めなくなるため clone してから読む。
+    keyFn: async (c) => {
+      const body = await c.req.raw
+        .clone()
+        .json()
+        .catch(() => ({}) as Record<string, unknown>);
+      const email = typeof body?.email === "string" ? body.email : "unknown";
+      return magicLinkKey("email", email);
+    },
+    limit: 3,
+    windowSec: 60,
+  }),
+);
 
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);
