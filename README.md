@@ -124,6 +124,8 @@ docker compose exec auth-redis redis-cli
 2. `docker compose run --rm auth-service bun run db:generate` で `drizzle/NNNN_*.sql` を生成 (commit する)
 3. 次回 `docker compose up` 時に `auth-migrate` service が自動適用 (手動実行は `docker compose run --rm auth-migrate`)
 
+> **DB trigger は `drizzle/manual/` に分離**: PL/pgSQL trigger は drizzle-kit が管理しないため `drizzle/manual/*.sql` に置く。`auth-migrate` service が `bun run db:migrate` 後に `bun run db:migrate-manual` (db/migrate-manual.ts) を実行して順次 apply する。`bun run db:generate` の再生成で trigger SQL が消える事故を防ぐための分離 (ADR-001 R1)。
+
 ### Proto 変更フロー
 
 1. `proto/` 配下の `.proto` を編集
