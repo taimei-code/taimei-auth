@@ -21,11 +21,15 @@ if (files.length === 0) {
   process.exit(0);
 }
 
-for (const f of files) {
-  const content = readFileSync(join(manualDir, f), "utf-8");
-  console.log(`[migrate-manual] applying ${f}...`);
-  await db.execute(sql.raw(content));
-}
+// PostgreSQL の DDL は transaction 内で rollback 可能なため、複数 file の部分適用を防ぐ。
+// 将来 drizzle/manual/0002_*.sql が追加された時に「0001 成功 / 0002 失敗」で停止しないことを保証。
+await db.transaction(async (tx) => {
+  for (const f of files) {
+    const content = readFileSync(join(manualDir, f), "utf-8");
+    console.log(`[migrate-manual] applying ${f}...`);
+    await tx.execute(sql.raw(content));
+  }
+});
 
 console.log(`[migrate-manual] applied ${files.length} file(s).`);
 process.exit(0);
