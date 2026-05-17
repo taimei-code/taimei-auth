@@ -7,6 +7,10 @@ export type UserRow = typeof user.$inferSelect;
 // id / createdAt / email まで `Partial<UserInsert>` で広げると repository が更新キーを安全側に絞れない。
 type UserUpdates = Partial<Pick<typeof user.$inferInsert, "name" | "image">>;
 
+// deleteUser handler が db.transaction 内で revoke + delete を atomic 実行できるよう
+// tx を optional 引数で受ける (省略時は外側 db で実行)。
+type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 export async function findUserById(id: string): Promise<UserRow | undefined> {
   return db
     .select()
@@ -34,9 +38,9 @@ export async function updateUser(id: string, updates: UserUpdates): Promise<User
     .then((rows) => rows.at(0));
 }
 
-export async function deleteUser(id: string): Promise<UserRow | undefined> {
+export async function deleteUser(id: string, txOrDb: DbOrTx = db): Promise<UserRow | undefined> {
   // session, account は db/schema.ts の onDelete: "cascade" で自動削除される。
-  return db
+  return txOrDb
     .delete(user)
     .where(eq(user.id, id))
     .returning()

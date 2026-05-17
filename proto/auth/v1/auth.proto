@@ -19,8 +19,8 @@ service UserService {
 }
 
 // VerifySession の失敗理由を表現する enum。
-// SESSION_EXPIRED / USER_LOCKED / REVOKED は現状到達不能、将来
-// session.revoked_at / user lock を実装した時点で活性化する。
+// SESSION_EXPIRED / USER_LOCKED は現状到達不能、将来
+// session.expires_at による期限切れ判定 / user lock を実装した時点で活性化する。
 enum Result {
   RESULT_UNSPECIFIED = 0;
   RESULT_OK = 1;

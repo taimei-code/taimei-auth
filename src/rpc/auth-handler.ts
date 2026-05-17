@@ -13,6 +13,7 @@ import {
 } from "../gen/auth/v1/auth_pb";
 import { auth } from "../auth";
 import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositories/account";
+import { findSessionRevokedAt } from "@/db/repositories/session";
 import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
 import { toProtoAccount, toProtoSession, toProtoUser } from "./mappers";
 
@@ -44,6 +45,14 @@ export function registerAuthService(router: ConnectRouter) {
       const dbUser = await findUserByIdRepo(result.user.id);
       if (!dbUser) {
         return buildError(Result.USER_DELETED);
+      }
+
+      // session.revoked_at は better-auth 非管理列のため repository 経由で取得 (db/CLAUDE.md ルール 1/2)。
+      // VerifySession は cookieCache を bypass し DB の最新 revoked_at を毎回読む
+      // (user.revision と同パターン、cookieCache stale 対策)。
+      const revokedAt = await findSessionRevokedAt(result.session.id);
+      if (revokedAt && revokedAt <= new Date()) {
+        return buildError(Result.REVOKED);
       }
 
       // 本 migration の初回 deploy 瞬間、Redis 上の既存 session は revision フィールドを持たない。
