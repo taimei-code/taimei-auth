@@ -74,10 +74,7 @@ describe("createAuthGuard.getSession", () => {
   test("G2b (AC#17): RPC が遅延後 reject (timeout 相当) → UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(
-        () =>
-          new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("timeout")), 10),
-          ),
+        () => new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10)),
       ),
       getSessionToken: async () => "valid-token",
     });

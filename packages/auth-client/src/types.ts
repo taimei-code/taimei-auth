@@ -22,6 +22,4 @@ export type SessionData = {
 
 // ADR-001 R2: VerifySession の戻り値を discriminated union で表現。
 // consumer は `result.ok` で分岐し、失敗時は `result.reason` (Result enum) を見る。
-export type VerifyResult =
-  | { ok: true; data: SessionData }
-  | { ok: false; reason: Result };
+export type VerifyResult = { ok: true; data: SessionData } | { ok: false; reason: Result };

@@ -37,8 +37,9 @@ beforeEach(async () => {
       captured = impl;
     },
   };
-  // biome-ignore lint/suspicious/noExplicitAny: ConnectRouter type narrowing in test only
-  handlerModule.registerAuthService(fakeRouter as any);
+  handlerModule.registerAuthService(
+    fakeRouter as unknown as Parameters<typeof handlerModule.registerAuthService>[0],
+  );
   if (!captured.verifySession) throw new Error("handler not captured");
   verifySession = captured.verifySession;
 });

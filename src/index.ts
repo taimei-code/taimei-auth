@@ -51,7 +51,9 @@ app.use("/rpc/*", async (c, next) => {
     if (process.env.APP_ENV === "production") {
       return c.json({ error: "Service Key not configured (production)" }, 503);
     }
-    console.warn("AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).");
+    console.warn(
+      "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
+    );
     return next();
   }
 
