@@ -14,6 +14,7 @@ import { canaryToken } from "./handlers/canary-token";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
+import { createRateLimitMiddleware } from "./rate-limit";
 import { getValidServiceKeys } from "./service-key";
 
 initSentry();
@@ -103,6 +104,36 @@ const loginShortcut = buildLoginShortcut(async (headers) => {
 app.route("/", loginShortcut);
 
 app.route("/", canaryToken);
+
+// Magic Link 経路のみ IP + email の 2 軸で rate limit (5 req/IP/min + 3 req/email/min)。
+// better-auth 内蔵 rateLimit (auth.ts) は二重防御として残す。
+app.use(
+  "/api/auth/sign-in/magic-link",
+  createRateLimitMiddleware({
+    keyFn: (c) => {
+      const ip =
+        c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+        c.req.header("x-real-ip") ||
+        "unknown";
+      return `rate-limit:magic-link:ip:${ip}`;
+    },
+    limit: 5,
+    windowSec: 60,
+  }),
+  createRateLimitMiddleware({
+    // POST body は middleware で消費すると後段 handler が読めなくなるため clone してから読む。
+    keyFn: async (c) => {
+      const body = await c.req.raw
+        .clone()
+        .json()
+        .catch(() => ({}) as Record<string, unknown>);
+      const email = typeof body?.email === "string" ? body.email : "unknown";
+      return `rate-limit:magic-link:email:${email}`;
+    },
+    limit: 3,
+    windowSec: 60,
+  }),
+);
 
 app.on(["GET", "POST"], "/api/auth/**", (c) => {
   return auth.handler(c.req.raw);

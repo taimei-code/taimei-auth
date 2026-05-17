@@ -101,7 +101,9 @@ export const auth = betterAuth({
         }
       },
       expiresIn: 300,
-      rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : undefined,
+      // local: 1000 req/s 許可 (test の高速化)。
+      // production: Hono middleware (src/rate-limit.ts) と独立した二重防御として 10 req/min。
+      rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
     }),
   ],
 

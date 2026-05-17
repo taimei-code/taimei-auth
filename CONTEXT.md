@@ -80,6 +80,22 @@ _Avoid_: メールリンク
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
 
+**sign-out**:
+ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie 削除 + Redis cookieCache invalidate + Postgres `session` 行削除を伴う。
+_Avoid_: logout (英語混在を避ける), session 終了 (より広義)
+
+**session revoke**:
+better-auth lifecycle hook や admin 操作によって、user 自身の意思とは独立に **session** を強制無効化する操作。`session.revoked_at` 列に時刻を記録し、VerifySession が `RESULT_REVOKED` を返す状態にする。**sign-out** (ユーザー自発) と対比される。trigger は password change / account delete 等の security-sensitive operation。
+_Avoid_: invalidate (より広義), terminate, kill
+
+**audit log**:
+user の意図ある action (**sign-in** / **sign-out** / account delete 等) を append-only で記録する DB テーブル (`audit_log`)。**session revoke** などの内部 state change は記録対象外 (それは action の consequence として implicit に類推する)。forensic 用途を想定し、`session` cascade delete で失われる IP / userAgent も payload に persist する。
+_Avoid_: event log (より広義), activity log
+
+**audit event**:
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` の 3 種)。Phase 4 で credential change 系が実装された時に event_type を追加する。
+_Avoid_: log entry, audit record
+
 ## Relationships
 
 - **共通ログイン画面** ↔ **共通サインアップ画面**: 相互リンクで往復可能、`service_name` / `redirect_url` / `sign_up_url` は引き継がれる
