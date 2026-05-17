@@ -49,7 +49,10 @@ services:
       context: .
       args:
         APP_ENV: development
-    command: ["bun", "run", "db:migrate"]
+    # drizzle migrate (auto-managed) → manual trigger SQL (drizzle/manual/) の順に適用。
+    # trigger は drizzle-kit が管理しないため別 dir に置く (ADR-001 R1 + MECE I7)。
+    # psql client を image に入れず、drizzle-orm の sql.raw で実行する (db/migrate-manual.ts)。
+    command: ["sh", "-c", "bun run db:migrate && bun run db:migrate-manual"]
     environment:
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
     depends_on:

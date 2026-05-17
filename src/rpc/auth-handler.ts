@@ -1,41 +1,77 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import { Code, ConnectError } from "@connectrpc/connect";
+import { create } from "@bufbuild/protobuf";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
-import { AuthService } from "../gen/auth/v1/auth_pb";
+import {
+  AuthService,
+  Result,
+  SessionSchema,
+  UserSchema,
+  VerifySessionErrorSchema,
+  VerifySessionOkSchema,
+  VerifySessionResponseSchema,
+} from "../gen/auth/v1/auth_pb";
 import { auth } from "../auth";
 import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositories/account";
 import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
-import { toProtoAccount, toProtoUser } from "./mappers";
+import { toProtoAccount, toProtoSession, toProtoUser } from "./mappers";
+
+const buildError = (reason: Result) =>
+  create(VerifySessionResponseSchema, {
+    outcome: {
+      case: "error",
+      value: create(VerifySessionErrorSchema, { reason }),
+    },
+  });
 
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      // better-auth.api.getSession 経由で Redis cookieCache (auth.ts:106 maxAge 5 分) を温存する (token 直引きは cache bypass)。
-      // 戻り型 (image: string | null | undefined) は drizzle row (image: string | null) と微妙にずれるため mappers.ts は流用不可。
+      // ADR-001 R1: auth.api.getSession 経由で secondaryStorage (Redis) の payload を取得し、
+      // 含まれる user.revision と DB の最新値を比較する。
+      // 注意: ここで参照する "cache" は cookieCache (cookie-side payload) ではなく
+      // secondaryStorage (Redis 側 payload) — handler は session_data cookie を送らないため
+      // internalAdapter.findSession 経由で Redis を引く (MECE I2)。
       const headers = new Headers();
       headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
 
       const result = await auth.api.getSession({ headers });
 
       if (!result?.user || !result?.session) {
-        return { user: undefined, session: undefined };
+        return buildError(Result.SESSION_NOT_FOUND);
       }
 
-      return {
-        user: {
-          id: result.user.id,
-          name: result.user.name,
-          email: result.user.email,
-          emailVerified: result.user.emailVerified,
-          image: result.user.image ?? undefined,
-          createdAt: new Date(result.user.createdAt).toISOString(),
-          updatedAt: new Date(result.user.updatedAt).toISOString(),
+      const dbUser = await findUserByIdRepo(result.user.id);
+      if (!dbUser) {
+        return buildError(Result.USER_DELETED);
+      }
+
+      // MECE C1: PR-A デプロイ瞬間に Redis 上の既存 session は revision フィールドを持たない。
+      // undefined を「cache miss」として扱い整合判定を skip することで、一斉ログアウト loop を防ぐ。
+      // 次回 session 発行時に additionalFields 経由で revision が cache に乗るため、
+      // この経路は最大でも session.expiresAt 経過で自然消滅する。
+      // better-auth additionalFields.revision (auth.ts) で Session 型に revision: number が
+      // 自動付与されている。Redis 上の legacy session (PR-A デプロイ前発行) は payload に
+      // revision フィールド自体が存在しないため、optional として読む。
+      const cachedRevision: number | undefined = result.user.revision;
+      if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
+        // MECE I1: signOut 例外 (Redis 一時断 / signature mismatch 等) は握り、必ず REVISION_OUTDATED を返す。
+        // consumer は再ログインに倒すので、ここで ConnectError を伝播させると UX が悪化する。
+        await auth.api
+          .signOut({ headers })
+          .catch((e) => console.warn("signOut failed during revision mismatch", e));
+        return buildError(Result.REVISION_OUTDATED);
+      }
+
+      return create(VerifySessionResponseSchema, {
+        outcome: {
+          case: "ok",
+          value: create(VerifySessionOkSchema, {
+            user: create(UserSchema, toProtoUser(dbUser)),
+            session: create(SessionSchema, toProtoSession(result.session)),
+          }),
         },
-        session: {
-          id: result.session.id,
-          expiresAt: new Date(result.session.expiresAt).toISOString(),
-        },
-      };
+      });
     },
 
     async getUser(req) {

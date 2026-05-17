@@ -19,6 +19,13 @@ initSentry();
 import { db } from "@/db/client";
 import { sql } from "drizzle-orm";
 
+// MECE C4: production で AUTH_SERVICE_KEY 未設定なら起動拒否。
+// dev / test 環境では従来通り warn のみで通す (compose の local-dev-key を hardcoded する運用も維持)。
+if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
+  console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
+  process.exit(1);
+}
+
 const app = new Hono();
 
 const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
@@ -38,7 +45,15 @@ app.use("/rpc/*", async (c, next) => {
   const expectedKey = process.env.AUTH_SERVICE_KEY;
 
   if (!expectedKey) {
-    console.warn("AUTH_SERVICE_KEY is not configured. Skipping service auth.");
+    // MECE C4: production 起動時の fail-fast は本 file 冒頭で実施済。
+    // ここに到達するのは dev / test 環境のみ (process.exit 後だと middleware は登録されない)。
+    // 二重防御として production だけは 503 を返す。
+    if (process.env.APP_ENV === "production") {
+      return c.json({ error: "Service Key not configured (production)" }, 503);
+    }
+    console.warn(
+      "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
+    );
     return next();
   }
 

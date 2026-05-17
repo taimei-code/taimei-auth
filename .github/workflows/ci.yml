@@ -15,6 +15,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
+    # ADR-001 R1 / Phase 1.5: db/__tests__/user-revision.test.ts が DB trigger を runtime で
+    # 検証するため、CI で postgres service を起動して migrate 適用後にテストを回す。
+    services:
+      postgres:
+        image: postgres:16.8-alpine3.21
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/auth
+
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -41,6 +61,11 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      # drizzle/0000 + 0001 + drizzle/manual/0001 trigger を順次適用。
+      # db/__tests__/user-revision.test.ts が trigger 挙動を検証するため必須。
+      - name: Apply migrations
+        run: bun run db:migrate && bun run db:migrate-manual
 
       - name: Test
         run: bun test
