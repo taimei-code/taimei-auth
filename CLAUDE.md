@@ -4,45 +4,16 @@ Web UI / IdP / User・Account・Session DB を 1 サービスに同居させて�
 
 ローカル起動・compose 操作・スキーマ migration・Proto 生成のコマンド手順は [README.md](./README.md) を参照。本ファイルには境界ルールのみを記載し、How (コマンド) は README 側に集約する。
 
+## サブディレクトリ別ルール
+
+| 編集対象 | 参照する CLAUDE.md | 含むルール |
+|---|---|---|
+| `/db/` 配下 (drizzle / repository) | [`db/CLAUDE.md`](./db/CLAUDE.md) | ルール 1 (DB アクセスは `/db/` に閉じる) / ルール 2 (repository 経由) |
+| `/packages/auth-client/` 配下 (SDK 公開 API) | [`packages/auth-client/CLAUDE.md`](./packages/auth-client/CLAUDE.md) | ルール 7 (SDK は consumer framework に依存させない 5 層 audit) |
+
+subdirectory の CLAUDE.md は該当 dir 配下を編集するセッションで context-aware に load される。本ファイル (root) は repo 全体の境界ルール (3-6) を扱う。
+
 ---
-
-## ルール 1: DB アクセスは `/db/` 配下に閉じる
-
-drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/` `/web/` `/packages/` から `drizzle-orm` や `pg` を直接 import しない。
-
-- `/db/client.ts` … pg クライアント生成
-- `/db/schema.ts` … テーブル定義
-- `/db/repositories/<entity>.ts` … クエリ関数(ルール 2)
-
-`/db/` を別プロセスに剥がして RPC 越しに呼ぶ形にすることが将来の分離方法。`/db/` の外から drizzle に触らせない。
-
-## ルール 2: 認証ドメインのモデルは repository 経由でのみ触る
-
-`User` / `Session` / `Account` / `Verification` などのテーブルに対して、handler や RPC handler から `db.select()` / `db.insert()` を直接呼ばない。
-
-正しい形:
-
-```ts
-// /db/repositories/user.ts
-export async function findUserByEmail(email: string) { ... }
-export async function updateUserName(id: string, name: string) { ... }
-
-// /src/rpc/user-handler.ts
-import { findUserByEmail } from "../../db/repositories/user";
-```
-
-禁止:
-
-```ts
-// /src/rpc/user-handler.ts
-import { db } from "../../db/client";
-import { user } from "../../db/schema";
-const rows = await db.select().from(user).where(...);  // NG
-```
-
-剥がすときに置き換える対象を repository 関数に局所化する。better-auth の internal 利用(`/src/auth.ts`)は例外として schema に直接触ってよい。
-
-例外: `Session` / `User` の **削除・更新**は better-auth が `secondaryStorage` (Redis cookieCache, `src/auth.ts:106` `maxAge: 5*60`) と DB を二重保管するため、`db/repositories/<entity>.ts` を作って repository 経由にすると最大 5 分の窓で stale session が cookieCache hit で valid に見える。`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、cache invalidation を lifecycle hook に委ねる。`Session` repository を作らないのはこの理由。詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (D2)
 
 ## ルール 3: consumer app からは必ず `@taimei-code/auth-client` 経由で話す
 
