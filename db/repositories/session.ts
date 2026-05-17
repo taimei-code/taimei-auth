@@ -13,8 +13,11 @@ export async function revokeAllSessionsForUser(userId: string, txOrDb: DbOrTx = 
     .where(and(eq(session.userId, userId), isNull(session.revokedAt)));
 }
 
-export async function findSessionRevokedAt(sessionId: string): Promise<Date | null> {
-  const row = await db
+export async function findSessionRevokedAt(
+  sessionId: string,
+  txOrDb: DbOrTx = db,
+): Promise<Date | null> {
+  const row = await txOrDb
     .select({ revokedAt: session.revokedAt })
     .from(session)
     .where(eq(session.id, sessionId))

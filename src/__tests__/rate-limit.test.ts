@@ -35,10 +35,10 @@ describe("rate-limit middleware", () => {
 
   test("limit 1 で 2 req 目に 429", async () => {
     const app = buildApp("rate-limit:test:small-limit", 1);
-    const ok = await app.request("http://localhost/");
-    expect(ok.status).toBe(200);
-    const blocked = await app.request("http://localhost/");
-    expect(blocked.status).toBe(429);
+    const withinLimit = await app.request("http://localhost/");
+    expect(withinLimit.status).toBe(200);
+    const overLimit = await app.request("http://localhost/");
+    expect(overLimit.status).toBe(429);
   });
 
   test("異なる key は独立 (rate-limit:test:A は B の counter に影響しない)", async () => {

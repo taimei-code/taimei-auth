@@ -53,7 +53,7 @@ describe("session revoke repository", () => {
 
   test("revokeAllSessionsForUser is idempotent (re-running does not overwrite older revoked_at)", async () => {
     const first = await findSessionRevokedAt(testSessionA);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((resolve) => setTimeout(resolve, 20));
     await revokeAllSessionsForUser(testUserId);
     const second = await findSessionRevokedAt(testSessionA);
     expect(first?.getTime()).toBe(second?.getTime());

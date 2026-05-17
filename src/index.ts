@@ -43,12 +43,11 @@ app.use(
 
 app.use("/rpc/*", async (c, next) => {
   const serviceKey = c.req.header("X-Service-Key");
-  const validKeys = getValidServiceKeys();
+  const acceptedServiceKeys = getValidServiceKeys();
 
-  if (validKeys.length === 0) {
-    // production 起動時の fail-fast は本 file 冒頭で実施済。
-    // ここに到達するのは dev / test 環境のみ (process.exit 後だと middleware は登録されない)。
-    // 二重防御として production だけは 503 を返す。
+  if (acceptedServiceKeys.length === 0) {
+    // production 起動時の fail-fast は line 25-28 (process.exit(1))。
+    // ここに到達するのは dev / test 環境のみ。二重防御として production だけ 503 を返す。
     if (process.env.APP_ENV === "production") {
       return c.json({ error: "Service Key not configured (production)" }, 503);
     }
@@ -58,7 +57,7 @@ app.use("/rpc/*", async (c, next) => {
     return next();
   }
 
-  if (!serviceKey || !validKeys.includes(serviceKey)) {
+  if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
     return c.json({ error: "Unauthorized: invalid service key" }, 401);
   }
 

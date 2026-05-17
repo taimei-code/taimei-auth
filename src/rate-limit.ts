@@ -18,23 +18,23 @@ export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
 // EXPIRE を毎回呼ぶことで「最後の req から windowSec」semantic になる (固定 window ではない)
 // — Magic Link 5 分有効と比べて数十秒の差は本質影響なしとして許容。厳密固定 window が必要に
 // なれば Lua script で INCR 時に EXPIRE 条件分岐を移す。
-export function createRateLimitMiddleware(opts: RateLimitOptions): MiddlewareHandler {
+export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {
   return async (c, next) => {
-    const key = await opts.keyFn(c);
+    const key = await options.keyFn(c);
     const results = await redis
       .multi()
       .incr(key)
-      .expire(key, opts.windowSec)
+      .expire(key, options.windowSec)
       .ttl(key)
       .exec()
-      .catch((err) => {
-        Sentry.captureException(err, { tags: { component: "rate-limit" } });
+      .catch((error) => {
+        Sentry.captureException(error, { tags: { component: "rate-limit" } });
         return null;
       });
     if (!results) return next();
     const count = Number(results[0] ?? 0);
-    const ttl = Number(results[2] ?? opts.windowSec);
-    if (count > opts.limit) {
+    const ttl = Number(results[2] ?? options.windowSec);
+    if (count > options.limit) {
       return c.json({ error: "Too Many Requests" }, 429, {
         "Retry-After": String(Math.max(ttl, 1)),
       });
