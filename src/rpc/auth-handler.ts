@@ -51,7 +51,7 @@ export function registerAuthService(router: ConnectRouter) {
       if (!dbUser) {
         return buildError(Result.USER_DELETED);
       }
-      if (revokedAt && revokedAt <= new Date()) {
+      if (revokedAt !== null) {
         return buildError(Result.REVOKED);
       }
 

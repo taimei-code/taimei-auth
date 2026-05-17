@@ -13,6 +13,7 @@ export async function revokeAllSessionsForUser(userId: string, txOrDb: DbOrTx = 
     .where(and(eq(session.userId, userId), isNull(session.revokedAt)));
 }
 
+// 値が non-null なら revoke 済 (NOW() 書き込みのみ運用、予約 revoke は未実装)。
 export async function findSessionRevokedAt(
   sessionId: string,
   txOrDb: DbOrTx = db,
