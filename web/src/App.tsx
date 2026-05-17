@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { ErrorPage } from "./pages/Error";
+import { AuthLayout } from "./components/auth/AuthLayout";
 import { AccountLayout } from "./components/account/AccountLayout";
 import { AccountIndex } from "./pages/account/Index";
 import { Security } from "./pages/account/Security";
@@ -16,9 +17,11 @@ export const App = () => {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/auth" element={<SignIn />} />
-        <Route path="/auth/signup" element={<SignUp />} />
-        <Route path="/auth/error" element={<ErrorPage />} />
+        <Route path="/auth" element={<AuthLayout />}>
+          <Route index element={<SignIn />} />
+          <Route path="signup" element={<SignUp />} />
+          <Route path="error" element={<ErrorPage />} />
+        </Route>
 
         <Route
           path="/account"
