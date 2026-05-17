@@ -13,8 +13,10 @@ import {
 } from "../gen/auth/v1/auth_pb";
 import { auth } from "../auth";
 import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositories/account";
+import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findSessionRevokedAt } from "@/db/repositories/session";
 import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
+import { captureAuditLogError } from "../audit-error";
 import { toProtoAccount, toProtoSession, toProtoUser } from "./mappers";
 
 const buildError = (reason: Result) =>
@@ -97,12 +99,22 @@ export function registerAuthService(router: ConnectRouter) {
 
     async signOut(req) {
       // auth.api.signOut 経由で Redis cookieCache (auth.ts:106) と DB session を一括 invalidate する。
-      // repository 直叩きで DB だけ消すと cache 5 分の窓で session が valid に見える期間が生じる。
-      // better-auth は session 不在 / DB delete 失敗を内部で吸収して常に { success: true } を返すため、
-      // ここで catch すると意図しない例外 (signature mismatch / rate limit 等) も握り潰す。
       // 透過させて ConnectRPC adapter に Code.Unknown 化を委譲する方が consumer に正しく伝わる。
       const headers = new Headers();
       headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
+      // sign-out path は better-auth hooks.after では ctx.context.session が populate されない
+      // (1.6.9 仕様) ため、signOut 前に session lookup して user_id を取得する。
+      // IP / userAgent は RPC 経由のため request header から直接取れない (consumer 側で別 RPC field 化必要)。
+      // 本 PR では "unknown" 固定で記録、Phase 4 で proto SignOutRequest に追加検討。
+      const result = await auth.api.getSession({ headers }).catch(() => null);
+      const userId = result?.user?.id;
+      if (userId) {
+        appendAuditLog({
+          eventType: "sign_out",
+          userId,
+          payload: { ip: "unknown", userAgent: "unknown" },
+        }).catch((e) => captureAuditLogError("sign_out", e));
+      }
       await auth.api.signOut({ headers });
       return { success: true };
     },

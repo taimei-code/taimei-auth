@@ -6,6 +6,7 @@ import {
   index,
   boolean,
   integer,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -92,6 +93,23 @@ export const verification = pgTable(
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+// account_delete 後も log を残すため意図的に user_id に FK を付けない (cascade delete を回避)。
+// 詳細: CONTEXT.md 'audit log'
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: text("id").primaryKey().notNull(),
+    eventType: text("event_type").notNull(),
+    userId: text("user_id").notNull(),
+    payload: jsonb("payload").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("audit_log_user_id_idx").on(table.userId),
+    index("audit_log_created_at_idx").on(table.createdAt.desc()),
+  ],
 );
 
 export const userRelations = relations(user, ({ many }) => ({

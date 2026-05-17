@@ -2,6 +2,7 @@ import type { ConnectRouter } from "@connectrpc/connect";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { UserService } from "../gen/auth/v1/auth_pb";
 import { runInTransaction } from "@/db/transaction";
+import { appendAuditLog } from "@/db/repositories/audit-log";
 import { revokeAllSessionsForUser } from "@/db/repositories/session";
 import {
   deleteUser as deleteUserRepo,
@@ -48,9 +49,12 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      // revoke → cascade delete を同一 tx で atomic 実行。tx を repository に伝播することで
-      // 「revoke commit / user delete rollback」の不整合を防ぐ。
+      // 順序: audit → revoke → delete を同一 tx で atomic 実行。
+      // audit を先頭に置く理由: tx 失敗時に audit だけ残るのを防ぐ。
+      // account_delete audit は compliance 観点で必須のため失敗時 rethrow (sign-in / sign-out と異なる方針)。
+      // audit_log.user_id は FK なしのため (db/schema.ts) user cascade delete でも audit_log は残る。
       const row = await runInTransaction(async (tx) => {
+        await appendAuditLog({ eventType: "account_delete", userId: req.userId, payload: {} }, tx);
         await revokeAllSessionsForUser(req.userId, tx);
         return deleteUserRepo(req.userId, tx);
       });
