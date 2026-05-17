@@ -14,7 +14,7 @@ import { canaryToken } from "./handlers/canary-token";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
-import { createRateLimitMiddleware } from "./rate-limit";
+import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
 import { getValidServiceKeys } from "./service-key";
 
 initSentry();
@@ -105,7 +105,7 @@ app.route("/", loginShortcut);
 
 app.route("/", canaryToken);
 
-// Magic Link 経路のみ IP + email の 2 軸で rate limit (5 req/IP/min + 3 req/email/min)。
+// Magic Link 経路のみ IP + email の 2 軸で rate limit (5/IP/min + 3/email/min)。
 // better-auth 内蔵 rateLimit (auth.ts) は二重防御として残す。
 app.use(
   "/api/auth/sign-in/magic-link",
@@ -115,7 +115,7 @@ app.use(
         c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
         c.req.header("x-real-ip") ||
         "unknown";
-      return `rate-limit:magic-link:ip:${ip}`;
+      return magicLinkKey("ip", ip);
     },
     limit: 5,
     windowSec: 60,
@@ -128,7 +128,7 @@ app.use(
         .json()
         .catch(() => ({}) as Record<string, unknown>);
       const email = typeof body?.email === "string" ? body.email : "unknown";
-      return `rate-limit:magic-link:email:${email}`;
+      return magicLinkKey("email", email);
     },
     limit: 3,
     windowSec: 60,

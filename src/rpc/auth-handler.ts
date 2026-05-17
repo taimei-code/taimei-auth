@@ -42,15 +42,15 @@ export function registerAuthService(router: ConnectRouter) {
         return buildError(Result.SESSION_NOT_FOUND);
       }
 
-      const dbUser = await findUserByIdRepo(result.user.id);
+      // VerifySession は cookieCache を bypass し DB の最新値を毎回読む (cookieCache stale 対策)。
+      // hot path のため user / session.revoked_at の 2 つの SELECT を Promise.all で 1 RTT に。
+      const [dbUser, revokedAt] = await Promise.all([
+        findUserByIdRepo(result.user.id),
+        findSessionRevokedAt(result.session.id),
+      ]);
       if (!dbUser) {
         return buildError(Result.USER_DELETED);
       }
-
-      // session.revoked_at は better-auth 非管理列のため repository 経由で取得 (db/CLAUDE.md ルール 1/2)。
-      // VerifySession は cookieCache を bypass し DB の最新 revoked_at を毎回読む
-      // (user.revision と同パターン、cookieCache stale 対策)。
-      const revokedAt = await findSessionRevokedAt(result.session.id);
       if (revokedAt && revokedAt <= new Date()) {
         return buildError(Result.REVOKED);
       }

@@ -1,15 +1,12 @@
 import { eq } from "drizzle-orm";
 import { db } from "../client";
 import { user } from "../schema";
+import type { DbOrTx } from "../transaction";
 
 export type UserRow = typeof user.$inferSelect;
 // updateUser が動かしてよい列は handler 側 (proto UpdateUserRequest) で定めた name / image のみ。
 // id / createdAt / email まで `Partial<UserInsert>` で広げると repository が更新キーを安全側に絞れない。
 type UserUpdates = Partial<Pick<typeof user.$inferInsert, "name" | "image">>;
-
-// deleteUser handler が db.transaction 内で revoke + delete を atomic 実行できるよう
-// tx を optional 引数で受ける (省略時は外側 db で実行)。
-type DbOrTx = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function findUserById(id: string): Promise<UserRow | undefined> {
   return db

@@ -8,6 +8,9 @@ export type RateLimitOptions = {
   windowSec: number;
 };
 
+export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
+  `rate-limit:magic-link:${axis}:${id}`;
+
 // INCR + EXPIRE を MULTI で atomic 化。INCR 後 EXPIRE 設定までに crash すると
 // TTL なし counter が永続残留する問題を回避する。
 // Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。
@@ -25,7 +28,6 @@ export function createRateLimitMiddleware(opts: RateLimitOptions): MiddlewareHan
       .ttl(key)
       .exec()
       .catch((err) => {
-        console.warn(`[rate-limit] Redis error, fail-open: ${err}`);
         Sentry.captureException(err, { tags: { component: "rate-limit" } });
         return null;
       });
