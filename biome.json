@@ -63,7 +63,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/rpc/**", "!src/rpc/__tests__/**"],
+      "includes": ["src/**", "!src/**/__tests__/**", "!src/auth.ts"],
       "linter": {
         "rules": {
           "style": {
@@ -71,9 +71,9 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "drizzle-orm": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)",
-                  "@/db/schema": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)",
-                  "@/db/client": "src/rpc/* からは drizzle を直叩きせず db/repositories/* を経由すること (CLAUDE.md ルール 2 / ADR-006 D2)"
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1 / ADR-006 D2)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1 / ADR-006 D2)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1 / ADR-006 D2)。better-auth schema 利用の例外は src/auth.ts のみ"
                 }
               }
             }
