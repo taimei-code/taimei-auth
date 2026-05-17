@@ -10,8 +10,9 @@ import { sendWelcomeEmail } from "./email/send-welcome";
 import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
 import { isLocalEnvironment } from "./env";
 import MagicLinkEmail from "./email/magic-link";
+import { captureAuditLogError } from "./audit-error";
+import { getClientContext } from "./request-context";
 import { redisStorage } from "./redis";
-import { Sentry } from "./sentry";
 
 const NEW_USER_THRESHOLD_MS = 10000;
 
@@ -137,19 +138,22 @@ export const auth = betterAuth({
 
         // sign-out path は ctx.context.newSession を populate しないため (better-auth 1.6.9 仕様)、
         // sign-out audit は handler 側で取る。ここは sign-in 経路のみ通る。
-        const method = ctx.path.includes("/sign-in/magic-link") ? "magic_link" : "github";
-        const ip =
-          ctx.headers?.get("x-forwarded-for")?.split(",")[0].trim() ||
-          ctx.headers?.get("x-real-ip") ||
-          "unknown";
-        const userAgent = ctx.headers?.get("user-agent") || "unknown";
-        appendAuditLog({
-          eventType: "sign_in",
-          userId: newSession.user.id,
-          payload: { method, ip, userAgent },
-        }).catch((e) => {
-          Sentry.captureException(e, { tags: { component: "audit-log", event: "sign_in" } });
-        });
+        // 将来 provider 追加時に sign_in payload の method 型と分岐が乖離するのを防ぐため、
+        // 識別不能なら audit append 自体を skip (else 固定の "github" 誤判定を避ける)。
+        const method: "magic_link" | "github" | null =
+          ctx.path === "/sign-in/magic-link"
+            ? "magic_link"
+            : ctx.path?.startsWith("/callback/github")
+              ? "github"
+              : null;
+        if (method) {
+          const { ip, userAgent } = getClientContext(ctx.headers);
+          appendAuditLog({
+            eventType: "sign_in",
+            userId: newSession.user.id,
+            payload: { method, ip, userAgent },
+          }).catch((e) => captureAuditLogError("sign_in", e));
+        }
       }
     }),
   },

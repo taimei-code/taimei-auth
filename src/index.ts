@@ -15,6 +15,7 @@ import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
 import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
+import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
 
 initSentry();
@@ -109,13 +110,7 @@ app.route("/", canaryToken);
 app.use(
   "/api/auth/sign-in/magic-link",
   createRateLimitMiddleware({
-    keyFn: (c) => {
-      const ip =
-        c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
-        c.req.header("x-real-ip") ||
-        "unknown";
-      return magicLinkKey("ip", ip);
-    },
+    keyFn: (c) => magicLinkKey("ip", getClientContext(c.req.raw.headers).ip),
     limit: 5,
     windowSec: 60,
   }),

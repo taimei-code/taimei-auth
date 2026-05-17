@@ -16,7 +16,7 @@ import { findAccountByUserId as findAccountByUserIdRepo } from "@/db/repositorie
 import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findSessionRevokedAt } from "@/db/repositories/session";
 import { findUserById as findUserByIdRepo } from "@/db/repositories/user";
-import { Sentry } from "../sentry";
+import { captureAuditLogError } from "../audit-error";
 import { toProtoAccount, toProtoSession, toProtoUser } from "./mappers";
 
 const buildError = (reason: Result) =>
@@ -113,9 +113,7 @@ export function registerAuthService(router: ConnectRouter) {
           eventType: "sign_out",
           userId,
           payload: { ip: "unknown", userAgent: "unknown" },
-        }).catch((e) => {
-          Sentry.captureException(e, { tags: { component: "audit-log", event: "sign_out" } });
-        });
+        }).catch((e) => captureAuditLogError("sign_out", e));
       }
       await auth.api.signOut({ headers });
       return { success: true };
