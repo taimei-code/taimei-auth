@@ -14,6 +14,7 @@ import { canaryToken } from "./handlers/canary-token";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { initSentry } from "./sentry";
+import { getValidServiceKeys } from "./service-key";
 
 initSentry();
 import { pingDatabase } from "@/db/repositories/health";
@@ -41,9 +42,9 @@ app.use(
 
 app.use("/rpc/*", async (c, next) => {
   const serviceKey = c.req.header("X-Service-Key");
-  const expectedKey = process.env.AUTH_SERVICE_KEY;
+  const validKeys = getValidServiceKeys();
 
-  if (!expectedKey) {
+  if (validKeys.length === 0) {
     // production 起動時の fail-fast は本 file 冒頭で実施済。
     // ここに到達するのは dev / test 環境のみ (process.exit 後だと middleware は登録されない)。
     // 二重防御として production だけは 503 を返す。
@@ -56,7 +57,7 @@ app.use("/rpc/*", async (c, next) => {
     return next();
   }
 
-  if (serviceKey !== expectedKey) {
+  if (!serviceKey || !validKeys.includes(serviceKey)) {
     return c.json({ error: "Unauthorized: invalid service key" }, 401);
   }
 
