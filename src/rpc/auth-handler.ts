@@ -50,7 +50,10 @@ export function registerAuthService(router: ConnectRouter) {
       // undefined を「cache miss」として扱い整合判定を skip することで、一斉ログアウト loop を防ぐ。
       // 次回 session 発行時に additionalFields 経由で revision が cache に乗るため、
       // この経路は最大でも session.expiresAt 経過で自然消滅する。
-      const cachedRevision = (result.user as { revision?: number }).revision;
+      // better-auth additionalFields.revision (auth.ts) で Session 型に revision: number が
+      // 自動付与されている。Redis 上の legacy session (PR-A デプロイ前発行) は payload に
+      // revision フィールド自体が存在しないため、optional として読む。
+      const cachedRevision: number | undefined = result.user.revision;
       if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
         // MECE I1: signOut 例外 (Redis 一時断 / signature mismatch 等) は握り、必ず REVISION_OUTDATED を返す。
         // consumer は再ログインに倒すので、ここで ConnectError を伝播させると UX が悪化する。

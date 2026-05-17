@@ -51,38 +51,38 @@ export function createAuthGuard(options: GuardOptions) {
       return { ok: false, reason: Result.UNSPECIFIED };
     }
 
-    if (verifyResult.outcome.case === "error") {
-      return { ok: false, reason: verifyResult.outcome.value.reason };
-    }
-
-    if (verifyResult.outcome.case === "ok") {
-      const okValue = verifyResult.outcome.value;
-      const user = okValue.user;
-      const session = okValue.session;
-      if (!user || !session) {
-        return { ok: false, reason: Result.UNSPECIFIED };
+    // proto-es oneof は case: "ok" | "error" | undefined。default 経路は MECE I6 の
+    // 「outcome 想定外」fallback (consumer は再ログインに倒す単一 fallback)。
+    switch (verifyResult.outcome.case) {
+      case "error":
+        return { ok: false, reason: verifyResult.outcome.value.reason };
+      case "ok": {
+        const { user, session } = verifyResult.outcome.value;
+        if (!user || !session) {
+          return { ok: false, reason: Result.UNSPECIFIED };
+        }
+        // brand 型で internal-only な session 表現を作る。consumer には plain SessionData として返す。
+        const internal: InternalSession = asInternalSession({
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            emailVerified: user.emailVerified,
+            image: user.image,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          },
+          session: {
+            id: session.id,
+            expiresAt: session.expiresAt,
+            kind: "user",
+          },
+        });
+        return { ok: true, data: internal };
       }
-      // brand 型で internal-only な session 表現を作る。consumer には plain SessionData として返す。
-      const internal: InternalSession = asInternalSession({
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          emailVerified: user.emailVerified,
-          image: user.image,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        },
-        session: {
-          id: session.id,
-          expiresAt: session.expiresAt,
-          kind: "user",
-        },
-      });
-      return { ok: true, data: internal };
+      default:
+        return { ok: false, reason: Result.UNSPECIFIED };
     }
-
-    return { ok: false, reason: Result.UNSPECIFIED };
   });
 
   return { getSession };

@@ -15,6 +15,8 @@ export function toProtoUser(row: UserRow) {
 }
 
 // ADR-001 R7: session_kind は現状 "user" 固定。将来 "admin" | "system" | "assumed" に拡張。
+// db/CLAUDE.md ルール 2 例外: session repository を作らない方針 (better-auth secondaryStorage の
+// stale 問題回避) のため、SessionRow 型を import せず better-auth Session の最小サブセットで受ける。
 type SessionRowLike = { id: string; expiresAt: Date };
 
 export function toProtoSession(row: SessionRowLike) {
