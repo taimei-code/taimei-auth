@@ -8,7 +8,7 @@ Web UI / IdP / User・Account・Session DB を 1 サービスに同居させて�
 
 | 編集対象 | 参照する CLAUDE.md | 含むルール |
 |---|---|---|
-| `/db/` 配下 (drizzle / repository) | [`db/CLAUDE.md`](./db/CLAUDE.md) | ルール 1 (DB アクセスは `/db/` に閉じる) / ルール 2 (repository 経由) |
+| `/db/` 配下 (drizzle / repository) | [`db/CLAUDE.md`](./db/CLAUDE.md) | ルール 1 (DB アクセスは `/db/` に閉じる) / ルール 2 (repository 経由) / ルール 8 (drizzle 手書き SQL は `drizzle/manual/` に分離) |
 | `/packages/auth-client/` 配下 (SDK 公開 API) | [`packages/auth-client/CLAUDE.md`](./packages/auth-client/CLAUDE.md) | ルール 7 (SDK は consumer framework に依存させない 5 層 audit) |
 
 subdirectory の CLAUDE.md は該当 dir 配下を編集するセッションで context-aware に load される。本ファイル (root) は repo 全体の境界ルール (3-6) を扱う。
