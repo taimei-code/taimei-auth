@@ -48,14 +48,11 @@ describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
 
     const statuses: number[] = [];
     for (let i = 0; i < 10; i++) {
-      const res = await app.request(
-        "http://localhost/api/auth/sign-in/magic-link",
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
-        },
-      );
+      const res = await app.request("http://localhost/api/auth/sign-in/magic-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
+      });
       statuses.push(res.status);
     }
 
