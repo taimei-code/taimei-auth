@@ -29,7 +29,10 @@ if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
   process.exit(1);
 }
 
-const app = new Hono();
+// `app` は test (routes-integration.test.ts) から import するため named export する。
+// `default export` (= bun runtime 起動エントリ) と並行して、test 用に同じ Hono instance を
+// 取り出す目的。
+export const app = new Hono();
 
 const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
 
