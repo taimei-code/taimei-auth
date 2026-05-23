@@ -129,7 +129,10 @@ app.use(
   }),
 );
 
-app.on(["GET", "POST"], "/api/auth/**", (c) => {
+// Hono v4 の wildcard は `*` が末尾で multi-segment を catch する。
+// `/api/auth/**` は文字どおり `* が 2 つ` と解釈され、`/api/auth/sign-in/magic-link` 等の
+// nested path に match せず 404 を返していた。
+app.on(["GET", "POST"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
 
