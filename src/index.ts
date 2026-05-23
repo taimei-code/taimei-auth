@@ -17,6 +17,7 @@ import { initSentry } from "./sentry";
 import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
+import { isLocalEnvironment } from "./env";
 
 initSentry();
 import { pingDatabase } from "@/db/repositories/health";
@@ -105,13 +106,17 @@ app.route("/", loginShortcut);
 
 app.route("/", canaryToken);
 
-// Magic Link 経路のみ IP + email の 2 軸で rate limit (5/IP/min + 3/email/min)。
-// better-auth 内蔵 rateLimit (auth.ts) は二重防御として残す。
+// Magic Link 経路のみ IP + email の 2 軸で rate limit。
+// production: 5/IP/min + 3/email/min。
+// local (dev / e2e): 1000/IP/min + 1000/email/min (e2e の連続 signin で 429 を出さない)。
+// better-auth 内蔵 rateLimit (auth.ts) の `isLocalEnvironment() ? { window: 1, max: 1000 } : ...`
+// と同じ緩和方針で揃える。middleware ロジック自体は local でも通るためテストできる。
+const isLocal = isLocalEnvironment();
 app.use(
   "/api/auth/sign-in/magic-link",
   createRateLimitMiddleware({
     keyFn: (c) => magicLinkKey("ip", getClientContext(c.req.raw.headers).ip),
-    limit: 5,
+    limit: isLocal ? 1000 : 5,
     windowSec: 60,
   }),
   createRateLimitMiddleware({
@@ -124,7 +129,7 @@ app.use(
       const email = typeof body?.email === "string" ? body.email : "unknown";
       return magicLinkKey("email", email);
     },
-    limit: 3,
+    limit: isLocal ? 1000 : 3,
     windowSec: 60,
   }),
 );
