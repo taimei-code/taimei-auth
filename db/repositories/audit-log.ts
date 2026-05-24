@@ -21,6 +21,103 @@ export type AuditLogEntry =
       eventType: "account_delete";
       userId: string;
       payload: Record<string, never>;
+    }
+  | {
+      eventType: "company_created";
+      userId: string;
+      payload: {
+        company_id: string;
+        name: string;
+        org_code: "PERSONAL" | "CORPORATE";
+        created_by_user_id: string;
+      };
+    }
+  | {
+      eventType: "company_updated";
+      userId: string;
+      payload: {
+        company_id: string;
+        before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+        after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+      };
+    }
+  | {
+      eventType: "company_deleted";
+      userId: string;
+      payload: {
+        company_id: string;
+        name_at_deletion: string;
+        deleted_by_user_id: string;
+      };
+    }
+  | {
+      eventType: "invitation_sent";
+      userId: string;
+      payload: {
+        invitation_id: string;
+        company_id: string;
+        invited_email: string;
+        role: "OWNER" | "ADMIN" | "MEMBER";
+        invited_by_user_id: string;
+      };
+    }
+  | {
+      eventType: "invitation_accepted";
+      userId: string;
+      payload: {
+        invitation_id: string;
+        company_id: string;
+        accepted_by_user_id: string;
+        role: "OWNER" | "ADMIN" | "MEMBER";
+      };
+    }
+  | {
+      eventType: "invitation_revoked";
+      userId: string;
+      payload: {
+        invitation_id: string;
+        company_id: string;
+        revoked_by_user_id: string;
+      };
+    }
+  | {
+      eventType: "membership_removed";
+      userId: string;
+      payload: {
+        company_id: string;
+        removed_user_id: string;
+        removed_by_user_id: string;
+        role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+        was_self: boolean;
+      };
+    }
+  | {
+      eventType: "role_changed";
+      userId: string;
+      payload: {
+        company_id: string;
+        target_user_id: string;
+        before_role: "OWNER" | "ADMIN" | "MEMBER";
+        after_role: "OWNER" | "ADMIN" | "MEMBER";
+        changed_by_user_id: string;
+      };
+    }
+  | {
+      eventType: "ownership_transferred";
+      userId: string;
+      payload: {
+        company_id: string;
+        from_user_id: string;
+        to_user_id: string;
+      };
+    }
+  | {
+      eventType: "company_switched";
+      userId: string;
+      payload: {
+        from_company_id: string | null;
+        to_company_id: string;
+      };
     };
 
 export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db): Promise<void> {
@@ -31,3 +128,27 @@ export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db):
     payload: entry.payload,
   });
 }
+
+// 型安全な helper を export。call site が event_type / payload の整合性を string で組み立てる事故を防ぐ。
+export const recordCompanyCreated = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    name: string;
+    org_code: "PERSONAL" | "CORPORATE";
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "company_created",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        name: params.name,
+        org_code: params.org_code,
+        created_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );

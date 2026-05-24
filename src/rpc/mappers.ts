@@ -12,6 +12,8 @@ export function toProtoUser(userRow: UserRow) {
     createdAt: userRow.createdAt.toISOString(),
     updatedAt: userRow.updatedAt.toISOString(),
     revision: userRow.revision,
+    // proto field 名は default_company_id (ADR-009 PR-A1)、DB 列は last_used_company_id。
+    defaultCompanyId: userRow.lastUsedCompanyId ?? undefined,
   };
 }
 

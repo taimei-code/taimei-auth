@@ -1,0 +1,48 @@
+import { eq } from "drizzle-orm";
+import { nanoid } from "nanoid";
+import { db } from "../client";
+import { company } from "../schema";
+import type { DbOrTx } from "../transaction";
+
+// ADR-009: company.id は Stripe 流の `cmp_<24chars>` prefix で format 統一。
+// 観測性 (log / audit_log payload / error message) で entity type が直ちに判定可能になる。
+// TS = nanoid(24), SQL (backfill) = translate(encode(gen_random_bytes(18), 'base64'), '+/=', '-_') で alphabet/長さを揃える。
+export const generateCompanyId = (): string => `cmp_${nanoid(24)}`;
+
+export type CompanyRow = typeof company.$inferSelect;
+export type OrgCode = "PERSONAL" | "CORPORATE";
+export type CompanyActivationStatus = "ACTIVE" | "DELETED";
+
+export async function findCompanyById(
+  id: string,
+  txOrDb: DbOrTx = db,
+): Promise<CompanyRow | undefined> {
+  return txOrDb
+    .select()
+    .from(company)
+    .where(eq(company.id, id))
+    .limit(1)
+    .then((rows) => rows.at(0));
+}
+
+export async function insertCompany(
+  params: { id: string; name: string; orgCode: OrgCode },
+  txOrDb: DbOrTx = db,
+): Promise<CompanyRow> {
+  return txOrDb
+    .insert(company)
+    .values({
+      id: params.id,
+      name: params.name,
+      orgCode: params.orgCode,
+      activationStatus: "ACTIVE",
+    })
+    .returning()
+    .then((rows) => {
+      const row = rows.at(0);
+      if (!row) {
+        throw new Error("company INSERT returned no row");
+      }
+      return row;
+    });
+}
