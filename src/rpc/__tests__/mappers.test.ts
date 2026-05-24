@@ -10,6 +10,7 @@ describe("toProtoUser", () => {
       emailVerified: true,
       image: null,
       revision: 0,
+      lastUsedCompanyId: null,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-02T00:00:00Z"),
     };
@@ -21,6 +22,7 @@ describe("toProtoUser", () => {
       image: undefined,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
+      defaultCompanyId: undefined,
     });
   });
 
@@ -32,6 +34,7 @@ describe("toProtoUser", () => {
       emailVerified: false,
       image: "https://example.com/b.png",
       revision: 0,
+      lastUsedCompanyId: null,
       createdAt: new Date("2026-03-01T00:00:00Z"),
       updatedAt: new Date("2026-03-01T00:00:00Z"),
     });
@@ -46,10 +49,26 @@ describe("toProtoUser", () => {
       emailVerified: true,
       image: null,
       revision: 7,
+      lastUsedCompanyId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
     expect(result.revision).toBe(7);
+  });
+
+  test("lastUsedCompanyId が文字列なら defaultCompanyId proto field に流す", () => {
+    const result = toProtoUser({
+      id: "u-4",
+      name: "Dave",
+      email: "dave@example.com",
+      emailVerified: true,
+      image: null,
+      revision: 0,
+      lastUsedCompanyId: "cmp_abcdefghijklmnopqrstuvwx",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    expect(result.defaultCompanyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
   });
 });
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { db } from "../client";
-import { appendAuditLog } from "../repositories/audit-log";
+import { appendAuditLog, recordCompanyCreated } from "../repositories/audit-log";
 import { revokeAllSessionsForUser } from "../repositories/session";
 import { deleteUser as deleteUserRepo } from "../repositories/user";
 import { auditLog, session, user } from "../schema";
@@ -46,6 +46,23 @@ describe("audit log repository", () => {
     const rows = await db.select().from(auditLog).where(eq(auditLog.userId, testUserId));
     expect(rows[0]?.eventType).toBe("account_delete");
     expect(rows[0]?.payload).toEqual({});
+  });
+
+  test("recordCompanyCreated helper は event_type + payload 整合性を強制", async () => {
+    await recordCompanyCreated({
+      actor_user_id: testUserId,
+      company_id: "cmp_xxxxxxxxxxxxxxxxxxxxxxxx",
+      name: "テスト事業所",
+      org_code: "PERSONAL",
+    });
+    const rows = await db.select().from(auditLog).where(eq(auditLog.userId, testUserId));
+    expect(rows[0]?.eventType).toBe("company_created");
+    expect(rows[0]?.payload).toEqual({
+      company_id: "cmp_xxxxxxxxxxxxxxxxxxxxxxxx",
+      name: "テスト事業所",
+      org_code: "PERSONAL",
+      created_by_user_id: testUserId,
+    });
   });
 });
 
