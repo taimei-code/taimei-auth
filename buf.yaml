@@ -1,3 +1,12 @@
 version: v2
 modules:
   - path: proto
+breaking:
+  use:
+    - WIRE
+  # ADR-009: reserved field の解除 (= 過去予約した field 番号を活性化) を許可する。
+  # 今回は予約時と「同名・同型」(field 8 = company_id / field 12 = default_company_id) で再活性
+  # しており wire 互換は保たれる (旧 client は活性化された field を unknown field として skip)。
+  # 将来の再活性時は type 一致を別途確認する必要がある。
+  except:
+    - RESERVED_MESSAGE_NO_DELETE
