@@ -1,40 +1,15 @@
-import { useEffect, useState } from "react";
-
 import { authClient } from "@/lib/auth-client";
-import { listMyMemberships } from "@/lib/account-api";
+import { useCompanyContext } from "@/lib/company-context";
+import { roleLabelJa } from "@/lib/role-label";
 import { Separator } from "@/components/ui/separator";
 import { ProfileForm } from "@/components/account/ProfileForm";
 import { AvatarUploader } from "@/components/account/AvatarUploader";
 import { DangerZone } from "@/components/account/DangerZone";
 
-type CurrentCompany = {
-  name: string;
-  role: string;
-  orgCode: string;
-};
-
 export const AccountIndex = () => {
   const { data: session } = authClient.useSession();
   const user = session?.user;
-  const [currentCompany, setCurrentCompany] = useState<CurrentCompany | null>(null);
-
-  // Phase A は user が 1 事業所のみのため先頭 membership を表示。
-  // Phase C で session-scoped な current company 選択 (CompanySwitcher) に差し替える。
-  useEffect(() => {
-    if (!user) return;
-    listMyMemberships()
-      .then((memberships) => {
-        const target = memberships.at(0);
-        if (target) {
-          setCurrentCompany({
-            name: target.company_name,
-            role: target.role,
-            orgCode: target.company_org_code,
-          });
-        }
-      })
-      .catch((e) => console.error("failed to load memberships", e));
-  }, [user]);
+  const { currentMembership } = useCompanyContext();
 
   if (!user) {
     return null;
@@ -48,13 +23,13 @@ export const AccountIndex = () => {
       </div>
       <Separator className="my-6" />
 
-      {currentCompany && (
+      {currentMembership && (
         <div className="mb-8 rounded-md border border-border bg-muted/40 p-4 text-sm">
           <p className="font-medium text-foreground">現在の事業所</p>
           <p className="mt-1 text-muted-foreground">
-            {currentCompany.name} ({currentCompany.role})
+            {currentMembership.company_name} ({roleLabelJa(currentMembership.role)})
             <span className="ml-2 text-xs">
-              {currentCompany.orgCode === "PERSONAL" ? "個人事業主" : "法人"}
+              {currentMembership.company_org_code === "PERSONAL" ? "個人事業主" : "法人"}
             </span>
           </p>
         </div>

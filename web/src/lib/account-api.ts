@@ -37,13 +37,21 @@ export class AccountApiError extends Error {
   }
 }
 
-export async function listMyMemberships(): Promise<Membership[]> {
+export type CompanyState = {
+  current_company_id: string | null;
+  memberships: Membership[];
+};
+
+export async function getCompanyState(): Promise<CompanyState> {
   const res = await fetch("/api/account/memberships", { credentials: "include" });
   if (!res.ok) {
-    throw new AccountApiError(res.status, `listMemberships failed: ${res.status}`);
+    throw new AccountApiError(res.status, `getCompanyState failed: ${res.status}`);
   }
-  const json = (await res.json()) as { memberships: Membership[] };
-  return json.memberships;
+  return (await res.json()) as CompanyState;
+}
+
+export async function listMyMemberships(): Promise<Membership[]> {
+  return (await getCompanyState()).memberships;
 }
 
 export async function createCompany(params: {
@@ -133,4 +141,24 @@ export async function acceptInvitation(invitationToken: string): Promise<{ compa
   return postJson<{ company_id: string }>("/api/account/accept-invitation", {
     invitation_token: invitationToken,
   });
+}
+
+export async function setCurrentCompany(companyId: string): Promise<void> {
+  await postJson<{ ok: true }>("/api/account/current-company", { company_id: companyId });
+}
+
+export async function updateMemberRole(
+  companyId: string,
+  targetUserId: string,
+  role: CompanyRole,
+): Promise<void> {
+  await postJson<{ ok: true }>(`/api/account/companies/${companyId}/members/${targetUserId}/role`, {
+    role,
+  });
+}
+
+export async function removeMember(companyId: string, targetUserId: string): Promise<void> {
+  await postJson<{ ok: true }>(
+    `/api/account/companies/${companyId}/members/${targetUserId}/remove`,
+  );
 }
