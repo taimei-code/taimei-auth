@@ -55,6 +55,10 @@ export const auth = betterAuth({
       // 実際の ++ は drizzle/manual/0001_user_revision_triggers.sql の DB trigger に閉じる。
       // input: false により API 経由の client からは書き換え不能。
       revision: { type: "number", required: true, defaultValue: 0, input: false },
+      // ADR-009: user の現在事業所 (= last_used_company_id)。VerifySession が DB から fresh 読みして
+      // proto User.default_company_id 経由で SDK SessionData.companyId に公開する。
+      // input: false で API 経由の書き換えを封じ、更新は CreateCompany / SetCurrentCompany handler 経由のみ。
+      lastUsedCompanyId: { type: "string", required: false, input: false },
     },
   },
 

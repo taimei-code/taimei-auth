@@ -10,6 +10,7 @@ import { registerRoutes } from "./rpc/routes";
 import { buildProxyHeaders } from "./proxy-helpers";
 import { buildLoginShortcut } from "./handlers/login-shortcut";
 import { avatarUploadHandler } from "./handlers/avatar-upload";
+import { accountCompany } from "./handlers/account-company";
 import { canaryToken } from "./handlers/canary-token";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
@@ -145,6 +146,7 @@ app.on(["GET", "POST"], "/api/auth/*", (c) => {
 });
 
 app.post("/api/account/avatar/upload-token", avatarUploadHandler);
+app.route("/", accountCompany);
 
 const WEB_DIST = "./web/dist";
 const SPA_INDEX_HTML = `${WEB_DIST}/index.html`;

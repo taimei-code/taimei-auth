@@ -7,6 +7,14 @@ import type { DbOrTx, DbTx } from "../transaction";
 // ADR-009: Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
+// ADR-009: signup の CreateCompany で同 user の 2 tab 同時 submit を直列化する per-user 排他ロック。
+// user_id 単独の unique 制約は N:M (1 user が複数 company 所属) と衝突するため使えず、
+// transaction-scoped advisory lock + tx 内 re-check で TOCTOU を解消する。
+// hashtext(text) は int4 を返し pg_advisory_xact_lock(bigint) に暗黙 cast される。
+export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+}
+
 export type MembershipRow = typeof membership.$inferSelect;
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
 
