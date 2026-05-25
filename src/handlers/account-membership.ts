@@ -15,6 +15,7 @@ import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user"
 import {
   recordCompanySwitched,
   recordMembershipRemoved,
+  recordOwnershipTransferred,
   recordRoleChanged,
 } from "@/db/repositories/audit-log";
 
@@ -22,6 +23,7 @@ export const accountMembership = new Hono();
 
 const setCurrentCompanyBody = z.object({ company_id: z.string().min(1).max(64) });
 const updateRoleBody = z.object({ role: z.enum(["OWNER", "ADMIN", "MEMBER"]) });
+const transferOwnershipBody = z.object({ to_user_id: z.string().min(1).max(64) });
 
 function canManageMembers(role: string): boolean {
   return role === "OWNER" || role === "ADMIN";
@@ -173,3 +175,46 @@ accountMembership.post(
     return c.json({ ok: true });
   },
 );
+
+// POST オーナー委譲 (OWNER のみ)。target を OWNER 昇格 + actor を ADMIN 降格を 1 transaction で。
+// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (Q5)。actor は OWNER のまま
+// 委譲後に降格するため、委譲中に OWNER ゼロにはならない (lock guard 不要だが念のため包む)。
+accountMembership.post("/api/account/companies/:companyId/transfer-ownership", async (c) => {
+  const actorUserId = await getSessionActorId(c.req.raw.headers);
+  if (!actorUserId) return c.json({ error: "unauthorized" }, 401);
+  const companyId = c.req.param("companyId");
+
+  const parsed = transferOwnershipBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
+  const toUserId = parsed.data.to_user_id;
+  if (toUserId === actorUserId) return c.json({ error: "invalid_argument" }, 400);
+
+  const actorMembership = await findMembership(actorUserId, companyId);
+  if (!actorMembership || actorMembership.role !== "OWNER") {
+    return c.json({ error: "forbidden" }, 403);
+  }
+  const targetMembership = await findMembership(toUserId, companyId);
+  if (!targetMembership) return c.json({ error: "not_found" }, 404);
+  // 既に OWNER の相手への「委譲」は actor を無意味に降格し audit も誤解を生むため弾く。
+  if (targetMembership.role === "OWNER") {
+    return c.json({ error: "already_owner" }, 400);
+  }
+
+  await runInTransaction((tx) =>
+    withOwnerLockGuard(tx, companyId, async (tx2) => {
+      await updateMembershipRole(toUserId, companyId, "OWNER", tx2);
+      await updateMembershipRole(actorUserId, companyId, "ADMIN", tx2);
+      await recordOwnershipTransferred(
+        {
+          actor_user_id: actorUserId,
+          company_id: companyId,
+          from_user_id: actorUserId,
+          to_user_id: toUserId,
+        },
+        tx2,
+      );
+    }),
+  );
+
+  return c.json({ ok: true });
+});

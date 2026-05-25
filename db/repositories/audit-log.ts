@@ -290,3 +290,68 @@ export const recordCompanySwitched = (
     },
     txOrDb,
   );
+
+export const recordCompanyUpdated = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+    after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "company_updated",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        before: params.before,
+        after: params.after,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordCompanyDeleted = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    name_at_deletion: string;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "company_deleted",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        name_at_deletion: params.name_at_deletion,
+        deleted_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordOwnershipTransferred = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    from_user_id: string;
+    to_user_id: string;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "ownership_transferred",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        from_user_id: params.from_user_id,
+        to_user_id: params.to_user_id,
+      },
+    },
+    txOrDb,
+  );

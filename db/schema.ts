@@ -140,14 +140,16 @@ export const auditLog = pgTable(
 );
 
 // ADR-009: 1 user × 1 company の所属関係 1 行。N:M bridge。
-// 誤物理削除を防ぐため company / user 両方の FK は ON DELETE RESTRICT。
+// company_id は誤物理削除を防ぐため ON DELETE RESTRICT (company は soft delete のみ)。
+// user_id は account 削除時に所属解除する ON DELETE CASCADE (退会の事前 OWNER pre-check が
+// OWNER 不在 company を防ぐため、cascade しても課金責任者不在は発生しない: ADR-009 Q24)。
 export const membership = pgTable(
   "membership",
   {
     id: text("id").primaryKey().notNull(),
     userId: text("user_id")
       .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+      .references(() => user.id, { onDelete: "cascade" }),
     companyId: text("company_id")
       .notNull()
       .references(() => company.id, { onDelete: "restrict" }),
@@ -188,9 +190,11 @@ export const invitation = pgTable(
     // legacy alias / 派生値 (COALESCE(accepted_at, revoked_at)) を入れる窓口。
     // accept / revoke handler が status 更新と同 transaction で set する。
     usedAt: timestamp("used_at"),
+    // 招待者が退会したら、その人が出した invitation 行も道連れに削除する (audit_log に
+    // invitation_sent が残るため操作行の消失は許容)。NOT NULL のため SET NULL は不可。
     invitedByUserId: text("invited_by_user_id")
       .notNull()
-      .references(() => user.id, { onDelete: "restrict" }),
+      .references(() => user.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
