@@ -162,3 +162,20 @@ export async function removeMember(companyId: string, targetUserId: string): Pro
     `/api/account/companies/${companyId}/members/${targetUserId}/remove`,
   );
 }
+
+export async function updateCompany(
+  companyId: string,
+  params: { name: string; org_code: "PERSONAL" | "CORPORATE" },
+): Promise<void> {
+  await postJson<void>(`/api/account/companies/${companyId}`, params);
+}
+
+export async function deleteCompany(companyId: string): Promise<void> {
+  await postJson<{ ok: true }>(`/api/account/companies/${companyId}/delete`);
+}
+
+export async function transferOwnership(companyId: string, toUserId: string): Promise<void> {
+  await postJson<{ ok: true }>(`/api/account/companies/${companyId}/transfer-ownership`, {
+    to_user_id: toUserId,
+  });
+}
