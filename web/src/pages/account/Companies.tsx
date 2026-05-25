@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { roleLabelJa } from "@/lib/role-label";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
 
 export const Companies = () => {
   const { memberships, currentCompanyId, switchCompany, refresh } = useCompanyContext();
@@ -23,15 +24,19 @@ export const Companies = () => {
       .finally(() => setBusyId(null));
   };
 
+  // 唯一の OWNER で抜けられなかった (409) company。委譲導線を出すため記録する。
+  const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
+
   const handleLeave = (companyId: string) => {
     if (!userId || busyId) return;
     setBusyId(companyId);
     setMessage(null);
+    setSoleOwnerCompanyId(null);
     removeMember(companyId, userId)
       .then(() => refresh())
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
-          // 唯一の OWNER は抜けられない (409)。オーナー委譲・事業所削除はまだ未実装。
+          setSoleOwnerCompanyId(companyId);
           setMessage("唯一のオーナーは事業所から抜けられません。先にオーナーを委譲してください。");
         } else {
           setMessage("事業所から抜けられませんでした。");
@@ -83,14 +88,31 @@ export const Companies = () => {
                     切替
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleLeave(m.company_id)}
-                  disabled={busyId !== null}
-                >
-                  抜ける
-                </Button>
+                {soleOwnerCompanyId === m.company_id ? (
+                  <TransferOwnershipModal
+                    companyId={m.company_id}
+                    companyName={m.company_name}
+                    onTransferred={() => {
+                      setSoleOwnerCompanyId(null);
+                      setMessage(null);
+                      void refresh();
+                    }}
+                    trigger={
+                      <Button variant="outline" size="sm">
+                        オーナーを委譲
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleLeave(m.company_id)}
+                    disabled={busyId !== null}
+                  >
+                    抜ける
+                  </Button>
+                )}
               </div>
             </div>
           );

@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { User, ShieldCheck, Monitor, Plug, Users, Building2 } from "lucide-react";
+import { User, ShieldCheck, Monitor, Plug, Users, Building2, Settings2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { CompanyProvider } from "@/lib/company-context";
@@ -11,6 +11,7 @@ import { CompanySwitcher } from "@/components/account/CompanySwitcher";
 const companyNav = [
   { to: "/account/companies", icon: Building2, label: "所属事業所", end: false },
   { to: "/account/members", icon: Users, label: "メンバー", end: false },
+  { to: "/account/company-settings", icon: Settings2, label: "事業所設定", end: false },
 ] as const;
 
 const accountNav = [
