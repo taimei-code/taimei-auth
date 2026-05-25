@@ -62,3 +62,75 @@ export async function createCompany(params: {
   }
   return (await res.json()) as CreateCompanyResult;
 }
+
+export type CompanyRole = "OWNER" | "ADMIN" | "MEMBER";
+
+export type Member = {
+  membership_id: string;
+  user_id: string;
+  user_name: string;
+  user_email: string;
+  role: string;
+  joined_at: string;
+};
+
+export type PendingInvitation = {
+  id: string;
+  email: string;
+  role: string;
+  expires_at: string;
+  created_at: string;
+};
+
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new AccountApiError(res.status, `GET ${url} failed: ${res.status}`);
+  return (await res.json()) as T;
+}
+
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new AccountApiError(res.status, text || `POST ${url} failed: ${res.status}`);
+  }
+  // 204 / 空ボディでも壊れないよう text を経由して parse する (JSON でなければ undefined)。
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+export async function listMembers(companyId: string): Promise<Member[]> {
+  const json = await getJson<{ members: Member[] }>(`/api/account/companies/${companyId}/members`);
+  return json.members;
+}
+
+export async function listInvitations(companyId: string): Promise<PendingInvitation[]> {
+  const json = await getJson<{ invitations: PendingInvitation[] }>(
+    `/api/account/companies/${companyId}/invitations`,
+  );
+  return json.invitations;
+}
+
+export async function createInvitation(
+  companyId: string,
+  params: { email: string; role: CompanyRole },
+): Promise<{ reused: boolean }> {
+  return postJson<{ reused: boolean }>(`/api/account/companies/${companyId}/invitations`, params);
+}
+
+export async function revokeInvitation(companyId: string, invitationId: string): Promise<void> {
+  await postJson<{ ok: true }>(
+    `/api/account/companies/${companyId}/invitations/${invitationId}/revoke`,
+  );
+}
+
+export async function acceptInvitation(invitationToken: string): Promise<{ company_id: string }> {
+  return postJson<{ company_id: string }>("/api/account/accept-invitation", {
+    invitation_token: invitationToken,
+  });
+}

@@ -3,10 +3,12 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { SignUpCompany } from "./pages/SignUpCompany";
+import { SignUpAcceptInvitation } from "./pages/SignUpAcceptInvitation";
 import { ErrorPage } from "./pages/Error";
 import { AuthLayout } from "./components/auth/AuthLayout";
 import { AccountLayout } from "./components/account/AccountLayout";
 import { AccountIndex } from "./pages/account/Index";
+import { Members } from "./pages/account/Members";
 import { Security } from "./pages/account/Security";
 import { Sessions } from "./pages/account/Sessions";
 import { Connections } from "./pages/account/Connections";
@@ -22,6 +24,7 @@ export const App = () => {
           <Route index element={<SignIn />} />
           <Route path="signup" element={<SignUp />} />
           <Route path="signup/company" element={<SignUpCompany />} />
+          <Route path="signup/accept-invitation" element={<SignUpAcceptInvitation />} />
           <Route path="error" element={<ErrorPage />} />
         </Route>
 
@@ -34,6 +37,7 @@ export const App = () => {
           }
         >
           <Route index element={<AccountIndex />} />
+          <Route path="members" element={<Members />} />
           <Route path="security" element={<Security />} />
           <Route path="sessions" element={<Sessions />} />
           <Route path="connections" element={<Connections />} />

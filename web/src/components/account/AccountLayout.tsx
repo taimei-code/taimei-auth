@@ -1,11 +1,13 @@
 import { Outlet, NavLink } from "react-router-dom";
-import { User, ShieldCheck, Monitor, Plug } from "lucide-react";
+import { User, ShieldCheck, Monitor, Plug, Users } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/components/account/SignOutButton";
 
+// メンバー管理は ADR-009 で追加。事業所切替 (CompanySwitcher) / section 分割は Phase C。
 const navItems = [
   { to: "/account", icon: User, label: "プロフィール", end: true },
+  { to: "/account/members", icon: Users, label: "メンバー", end: false },
   { to: "/account/security", icon: ShieldCheck, label: "セキュリティ", end: false },
   { to: "/account/sessions", icon: Monitor, label: "セッション", end: false },
   { to: "/account/connections", icon: Plug, label: "連携アカウント", end: false },
