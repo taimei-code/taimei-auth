@@ -24,6 +24,18 @@ export function getMagicLinkFromEmail(): string {
   return process.env.AUTH_FROM_EMAIL_MAGIC_LINK || "onboarding@resend.dev";
 }
 
+export function getInvitationFromEmail(): string {
+  return process.env.AUTH_FROM_EMAIL_INVITATION || "onboarding@resend.dev";
+}
+
+export function getSupportEmail(): string {
+  return process.env.AUTH_SUPPORT_EMAIL || "support@taimei-code.com";
+}
+
+export function getAbuseInfoUrl(): string {
+  return process.env.AUTH_ABUSE_INFO_URL || "https://taimei-code.com/security";
+}
+
 export function getAppName(): string {
   return process.env.APP_NAME || "taimei";
 }
