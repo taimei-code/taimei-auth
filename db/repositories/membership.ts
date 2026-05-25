@@ -109,6 +109,35 @@ export async function insertMembership(
     });
 }
 
+// role 変更 (UpdateRole)。対象 (user, company) の membership.role を更新する。
+// OWNER 数が減る変更は呼び出し側で withOwnerLockGuard 内に包むこと。
+export async function updateMembershipRole(
+  userId: string,
+  companyId: string,
+  role: Role,
+  txOrDb: DbOrTx = db,
+): Promise<MembershipRow | undefined> {
+  return txOrDb
+    .update(membership)
+    .set({ role })
+    .where(and(eq(membership.userId, userId), eq(membership.companyId, companyId)))
+    .returning()
+    .then((rows) => rows.at(0));
+}
+
+// membership 削除 (退会 / 除名)。OWNER を減らす場合は withOwnerLockGuard 内で。
+export async function deleteMembership(
+  userId: string,
+  companyId: string,
+  txOrDb: DbOrTx = db,
+): Promise<MembershipRow | undefined> {
+  return txOrDb
+    .delete(membership)
+    .where(and(eq(membership.userId, userId), eq(membership.companyId, companyId)))
+    .returning()
+    .then((rows) => rows.at(0));
+}
+
 // ADR-009: OWNER ≥ 1 invariant をアプリ層で守る。
 // outer transaction を必須にして「OWNER 行 lock → 操作 → 再 count 検証」を atomic に。
 // 全 mutation 経路 (DeleteMembership / UpdateRole / TransferOwnership / DeleteUser) は必ずこれを経由する。

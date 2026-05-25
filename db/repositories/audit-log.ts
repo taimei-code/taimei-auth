@@ -221,3 +221,72 @@ export const recordInvitationRevoked = (
     },
     txOrDb,
   );
+
+export const recordRoleChanged = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    target_user_id: string;
+    before_role: "OWNER" | "ADMIN" | "MEMBER";
+    after_role: "OWNER" | "ADMIN" | "MEMBER";
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "role_changed",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        target_user_id: params.target_user_id,
+        before_role: params.before_role,
+        after_role: params.after_role,
+        changed_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordMembershipRemoved = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    removed_user_id: string;
+    role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "membership_removed",
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        removed_user_id: params.removed_user_id,
+        removed_by_user_id: params.actor_user_id,
+        role_at_removal: params.role_at_removal,
+        was_self: params.actor_user_id === params.removed_user_id,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordCompanySwitched = (
+  params: {
+    actor_user_id: string;
+    from_company_id: string | null;
+    to_company_id: string;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "company_switched",
+      userId: params.actor_user_id,
+      payload: {
+        from_company_id: params.from_company_id,
+        to_company_id: params.to_company_id,
+      },
+    },
+    txOrDb,
+  );
