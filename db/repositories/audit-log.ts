@@ -152,3 +152,72 @@ export const recordCompanyCreated = (
     },
     txOrDb,
   );
+
+export const recordInvitationSent = (
+  params: {
+    actor_user_id: string;
+    invitation_id: string;
+    company_id: string;
+    invited_email: string;
+    role: "OWNER" | "ADMIN" | "MEMBER";
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "invitation_sent",
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id: params.invitation_id,
+        company_id: params.company_id,
+        invited_email: params.invited_email,
+        role: params.role,
+        invited_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordInvitationAccepted = (
+  params: {
+    actor_user_id: string;
+    invitation_id: string;
+    company_id: string;
+    role: "OWNER" | "ADMIN" | "MEMBER";
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "invitation_accepted",
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id: params.invitation_id,
+        company_id: params.company_id,
+        accepted_by_user_id: params.actor_user_id,
+        role: params.role,
+      },
+    },
+    txOrDb,
+  );
+
+export const recordInvitationRevoked = (
+  params: {
+    actor_user_id: string;
+    invitation_id: string;
+    company_id: string;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "invitation_revoked",
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id: params.invitation_id,
+        company_id: params.company_id,
+        revoked_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );

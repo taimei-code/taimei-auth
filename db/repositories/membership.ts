@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { company, membership } from "../schema";
+import { company, membership, user } from "../schema";
 import type { DbOrTx, DbTx } from "../transaction";
 
 // ADR-009: Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
@@ -44,6 +44,34 @@ export async function findMembershipsByUserId(
     .from(membership)
     .innerJoin(company, eq(company.id, membership.companyId))
     .where(eq(membership.userId, userId));
+}
+
+export type MemberRow = {
+  membershipId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  role: string;
+  joinedAt: Date;
+};
+
+// 事業所のメンバー一覧 (membership × user join)。Members 画面の表示用。
+export async function findMembersByCompanyId(
+  companyId: string,
+  txOrDb: DbOrTx = db,
+): Promise<MemberRow[]> {
+  return txOrDb
+    .select({
+      membershipId: membership.id,
+      userId: membership.userId,
+      userName: user.name,
+      userEmail: user.email,
+      role: membership.role,
+      joinedAt: membership.joinedAt,
+    })
+    .from(membership)
+    .innerJoin(user, eq(user.id, membership.userId))
+    .where(eq(membership.companyId, companyId));
 }
 
 export async function findMembership(

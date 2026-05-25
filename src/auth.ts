@@ -7,6 +7,8 @@ import { db } from "@/db/client";
 import { appendAuditLog } from "@/db/repositories/audit-log";
 import * as schema from "@/db/schema";
 import { sendWelcomeEmail } from "./email/send-welcome";
+import { sendInvitationEmail } from "./email/send-invitation";
+import { resolveInvitationEmailContext } from "./invitation/resolve-email-context";
 import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
 import { isLocalEnvironment } from "./env";
 import MagicLinkEmail from "./email/magic-link";
@@ -81,6 +83,14 @@ export const auth = betterAuth({
   plugins: [
     magicLink({
       sendMagicLink: async ({ email, url }) => {
+        // ADR-009: callbackURL に invitation_token があれば、default ログインリンクではなく
+        // 事業所名 / 招待者を載せた招待メールを送る (1-click 受諾 + custom 文面の両立)。
+        const invitationContext = await resolveInvitationEmailContext(url);
+        if (invitationContext) {
+          await sendInvitationEmail({ inviteeEmail: email, url, ...invitationContext });
+          return;
+        }
+
         if (isLocalEnvironment()) {
           console.log(`[TEST] Magic Link for ${email}: ${url}`);
           return;
