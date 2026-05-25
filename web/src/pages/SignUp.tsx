@@ -38,9 +38,15 @@ export const SignUp = () => {
     return null;
   }
 
-  const { service_name, redirect_url, sign_up_url } = parseResult.data;
+  const { service_name, redirect_url, sign_up_url, invitation_token } = parseResult.data;
   const service = TAIMEI_SERVICES[service_name as ServiceName];
-  const callbackUrl = sign_up_url ?? redirect_url;
+  // ADR-009: 招待経由の signup では GitHub OAuth を隠す。invitation の strict email match は
+  // Magic Link 経路を前提とするため (GitHub アカウントの email が招待先と一致する保証がない)。
+  const isInvitation = invitation_token !== undefined;
+  // 招待経由は Magic Link click 後に accept-invitation へ着地させ membership を作る。
+  const callbackUrl = isInvitation
+    ? `${window.location.origin}/auth/signup/accept-invitation?invitation_token=${encodeURIComponent(invitation_token)}`
+    : (sign_up_url ?? redirect_url);
 
   const handleMagicLink = async (e: FormEvent) => {
     e.preventDefault();
@@ -123,25 +129,33 @@ export const SignUp = () => {
                 </Button>
               </form>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">または</span>
-                </div>
-              </div>
+              {isInvitation ? (
+                <p className="text-center text-xs text-muted-foreground">
+                  招待を受諾するには、招待されたメールアドレスで Magic Link をご利用ください。
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">または</span>
+                    </div>
+                  </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleGitHub}
-                disabled={submitting !== null}
-              >
-                {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
-                GitHub で登録
-              </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleGitHub}
+                    disabled={submitting !== null}
+                  >
+                    {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
+                    GitHub で登録
+                  </Button>
+                </>
+              )}
 
               <p className="text-center text-sm text-muted-foreground">
                 すでにアカウントをお持ちの方は{" "}
