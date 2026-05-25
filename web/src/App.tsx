@@ -8,6 +8,7 @@ import { ErrorPage } from "./pages/Error";
 import { AuthLayout } from "./components/auth/AuthLayout";
 import { AccountLayout } from "./components/account/AccountLayout";
 import { AccountIndex } from "./pages/account/Index";
+import { Companies } from "./pages/account/Companies";
 import { Members } from "./pages/account/Members";
 import { Security } from "./pages/account/Security";
 import { Sessions } from "./pages/account/Sessions";
@@ -37,6 +38,7 @@ export const App = () => {
           }
         >
           <Route index element={<AccountIndex />} />
+          <Route path="companies" element={<Companies />} />
           <Route path="members" element={<Members />} />
           <Route path="security" element={<Security />} />
           <Route path="sessions" element={<Sessions />} />

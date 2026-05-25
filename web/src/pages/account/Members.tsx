@@ -6,97 +6,125 @@ import {
   createInvitation,
   listInvitations,
   listMembers,
-  listMyMemberships,
+  removeMember,
   revokeInvitation,
+  updateMemberRole,
   type CompanyRole,
   type Member,
   type PendingInvitation,
 } from "@/lib/account-api";
+import { useCompanyContext } from "@/lib/company-context";
+import { authClient } from "@/lib/auth-client";
+import { roleLabelJa } from "@/lib/role-label";
+import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-type LoadState = "loading" | "ready" | "no-company" | "forbidden";
-
-const roleLabelJa = (role: string): string =>
-  role === "OWNER" ? "オーナー" : role === "ADMIN" ? "管理者" : "メンバー";
+type Notice = { kind: "success" | "error"; text: string };
 
 export const Members = () => {
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [canManage, setCanManage] = useState(false);
+  const { currentMembership, loading: companyLoading } = useCompanyContext();
+  const selfUserId = authClient.useSession().data?.user.id ?? null;
+  const companyId = currentMembership?.company_id ?? null;
+  const canManage = currentMembership?.role === "OWNER" || currentMembership?.role === "ADMIN";
+  const isOwner = currentMembership?.role === "OWNER";
+
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
-  const [state, setState] = useState<LoadState>("loading");
+  const [loading, setLoading] = useState(true);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<CompanyRole>("MEMBER");
   const [submitting, setSubmitting] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [busyUserId, setBusyUserId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
-  const refresh = useCallback(
-    (cid: string) =>
-      Promise.all([listMembers(cid), listInvitations(cid).catch(() => [])]).then(([m, inv]) => {
+  const refresh = useCallback((cid: string) => {
+    return Promise.all([listMembers(cid), listInvitations(cid).catch(() => [])]).then(
+      ([m, inv]) => {
         setMembers(m);
         setInvitations(inv);
-      }),
-    [],
-  );
+      },
+    );
+  }, []);
 
   useEffect(() => {
-    listMyMemberships()
-      .then((memberships) => {
-        const current = memberships.at(0);
-        if (!current) {
-          setState("no-company");
-          return null;
-        }
-        setCompanyId(current.company_id);
-        setCanManage(current.role === "OWNER" || current.role === "ADMIN");
-        return refresh(current.company_id).then(() => setState("ready"));
-      })
-      .catch((e) => {
-        // 取得失敗時に "ready" にすると companyId=null のまま form が表示され、送信が silent 失敗する。
-        // no-company 表示に倒して操作不能であることを明示する。
-        console.error("failed to load members", e);
-        setState("no-company");
-      });
-  }, [refresh]);
+    if (!companyId) {
+      if (!companyLoading) setLoading(false);
+      return;
+    }
+    setLoading(true);
+    refresh(companyId)
+      .catch((e) => console.error("failed to load members", e))
+      .finally(() => setLoading(false));
+  }, [companyId, companyLoading, refresh]);
 
   const handleInvite = (e: FormEvent) => {
     e.preventDefault();
     if (!companyId) return;
     setSubmitting(true);
-    setMessage(null);
+    setNotice(null);
     createInvitation(companyId, { email: inviteEmail.trim(), role: inviteRole })
       .then((res) => {
         setInviteEmail("");
-        setMessage(res.reused ? "既存の招待を再送しました" : "招待を送信しました");
+        setNotice({
+          kind: "success",
+          text: res.reused ? "既存の招待を再送しました" : "招待を送信しました",
+        });
         return refresh(companyId);
       })
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 429) {
-          setMessage("招待の送信回数が上限に達しました。時間をおいて再試行してください。");
+          setNotice({
+            kind: "error",
+            text: "招待の送信回数が上限に達しました。時間をおいて再試行してください。",
+          });
         } else if (err instanceof AccountApiError && err.status === 403) {
-          setMessage("招待する権限がありません。");
+          setNotice({ kind: "error", text: "招待する権限がありません。" });
         } else {
-          setMessage("招待の送信に失敗しました。");
+          setNotice({ kind: "error", text: "招待の送信に失敗しました。" });
         }
       })
       .finally(() => setSubmitting(false));
   };
 
-  const handleRevoke = (invitationId: string) => {
-    if (!companyId || revokingId) return;
-    setRevokingId(invitationId);
-    revokeInvitation(companyId, invitationId)
+  const handleRoleChange = (targetUserId: string, role: CompanyRole) => {
+    if (!companyId || busyUserId) return;
+    setBusyUserId(targetUserId);
+    setNotice(null);
+    updateMemberRole(companyId, targetUserId, role)
       .then(() => refresh(companyId))
-      .catch((e) => console.error("revoke failed", e))
-      .finally(() => setRevokingId(null));
+      .catch((err) => {
+        if (err instanceof AccountApiError && err.status === 409) {
+          setNotice({ kind: "error", text: "最後のオーナーを降格することはできません。" });
+        } else if (err instanceof AccountApiError && err.status === 403) {
+          setNotice({ kind: "error", text: "この役割変更を行う権限がありません。" });
+        } else {
+          setNotice({ kind: "error", text: "役割の変更に失敗しました。" });
+        }
+      })
+      .finally(() => setBusyUserId(null));
   };
 
-  if (state === "loading") {
+  const handleRemove = (targetUserId: string) => {
+    if (!companyId || busyUserId) return;
+    setBusyUserId(targetUserId);
+    setNotice(null);
+    removeMember(companyId, targetUserId)
+      .then(() => refresh(companyId))
+      .catch((err) => {
+        if (err instanceof AccountApiError && err.status === 409) {
+          setNotice({ kind: "error", text: "最後のオーナーは削除できません。" });
+        } else {
+          setNotice({ kind: "error", text: "メンバーの削除に失敗しました。" });
+        }
+      })
+      .finally(() => setBusyUserId(null));
+  };
+
+  if (companyLoading || loading) {
     return (
       <div className="flex min-h-[40svh] items-center justify-center">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -104,7 +132,7 @@ export const Members = () => {
     );
   }
 
-  if (state === "no-company") {
+  if (!companyId) {
     return <p className="text-sm text-muted-foreground">事業所が見つかりません。</p>;
   }
 
@@ -117,18 +145,55 @@ export const Members = () => {
       <Separator className="my-6" />
 
       <section aria-label="メンバー一覧" className="space-y-2">
-        {members.map((m) => (
-          <div
-            key={m.membership_id}
-            className="flex items-center justify-between rounded-md border border-border px-4 py-3 text-sm"
-          >
-            <div>
-              <p className="font-medium text-foreground">{m.user_name || m.user_email}</p>
-              <p className="text-xs text-muted-foreground">{m.user_email}</p>
+        {members.map((m) => {
+          const isSelf = m.user_id === selfUserId;
+          // OWNER のみが OWNER を操作可能。自分自身の役割は変更させない (誤操作防止)。
+          const canEditRole = canManage && !isSelf && (isOwner || m.role !== "OWNER");
+          return (
+            <div
+              key={m.membership_id}
+              className="flex items-center justify-between gap-3 rounded-md border border-border px-4 py-3 text-sm"
+            >
+              <div className="min-w-0">
+                <p className="truncate font-medium text-foreground">
+                  {m.user_name || m.user_email}
+                  {isSelf && <span className="ml-2 text-xs text-muted-foreground">(自分)</span>}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {canEditRole ? (
+                  <select
+                    aria-label={`${m.user_email} の役割`}
+                    value={m.role}
+                    disabled={busyUserId !== null}
+                    onChange={(e) => handleRoleChange(m.user_id, e.target.value as CompanyRole)}
+                    className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+                  >
+                    <option value="MEMBER">メンバー</option>
+                    <option value="ADMIN">管理者</option>
+                    {/* OWNER 昇格は OWNER のみ。ADMIN には選択肢を出さない */}
+                    {isOwner && <option value="OWNER">オーナー</option>}
+                  </select>
+                ) : (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {roleLabelJa(m.role)}
+                  </span>
+                )}
+                {canManage && !isSelf && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleRemove(m.user_id)}
+                    disabled={busyUserId !== null}
+                  >
+                    削除
+                  </Button>
+                )}
+              </div>
             </div>
-            <span className="text-xs font-medium text-muted-foreground">{roleLabelJa(m.role)}</span>
-          </div>
-        ))}
+          );
+        })}
       </section>
 
       {canManage && (
@@ -160,7 +225,7 @@ export const Members = () => {
                 >
                   <option value="MEMBER">メンバー</option>
                   <option value="ADMIN">管理者</option>
-                  <option value="OWNER">オーナー</option>
+                  {isOwner && <option value="OWNER">オーナー</option>}
                 </select>
               </div>
               <Button type="submit" disabled={submitting || inviteEmail.trim() === ""}>
@@ -168,7 +233,16 @@ export const Members = () => {
                 招待する
               </Button>
             </form>
-            {message && <p className="text-sm text-muted-foreground">{message}</p>}
+            {notice && (
+              <p
+                className={cn(
+                  "text-sm",
+                  notice.kind === "error" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {notice.text}
+              </p>
+            )}
           </section>
 
           {invitations.length > 0 && (
@@ -191,8 +265,11 @@ export const Members = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleRevoke(inv.id)}
-                      disabled={revokingId !== null}
+                      onClick={() => {
+                        revokeInvitation(companyId, inv.id)
+                          .then(() => refresh(companyId))
+                          .catch((e) => console.error("revoke failed", e));
+                      }}
                     >
                       取消
                     </Button>
