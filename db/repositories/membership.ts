@@ -167,3 +167,37 @@ export class OwnerInvariantViolation extends Error {
     this.name = "OwnerInvariantViolation";
   }
 }
+
+export type BlockingCompany = { companyId: string; companyName: string };
+
+// DeleteUser pre-check (Q24): user が唯一の OWNER である ACTIVE company を返す。
+// これらが残っている限り退会できない (退会すると OWNER ゼロの課金責任者不在 company が生まれるため)。
+// 解消するには TransferOwnership で委譲するか DeleteCompany で削除する。
+export async function findCompaniesBlockingUserDeletion(
+  userId: string,
+  txOrDb: DbOrTx = db,
+): Promise<BlockingCompany[]> {
+  const ownerCountByCompany = txOrDb
+    .select({
+      companyId: membership.companyId,
+      ownerCount: sql<number>`count(*)::int`.as("owner_count"),
+    })
+    .from(membership)
+    .where(eq(membership.role, "OWNER"))
+    .groupBy(membership.companyId)
+    .as("owner_counts");
+
+  return txOrDb
+    .select({ companyId: company.id, companyName: company.name })
+    .from(membership)
+    .innerJoin(company, eq(company.id, membership.companyId))
+    .innerJoin(ownerCountByCompany, eq(ownerCountByCompany.companyId, membership.companyId))
+    .where(
+      and(
+        eq(membership.userId, userId),
+        eq(membership.role, "OWNER"),
+        eq(company.activationStatus, "ACTIVE"),
+        eq(ownerCountByCompany.ownerCount, 1),
+      ),
+    );
+}

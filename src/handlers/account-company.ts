@@ -3,14 +3,26 @@ import { z } from "zod";
 
 import { getSessionActorId } from "./session-actor";
 import { runInTransaction } from "@/db/transaction";
-import { generateCompanyId, insertCompany, type OrgCode } from "@/db/repositories/company";
 import {
+  findCompanyById,
+  generateCompanyId,
+  insertCompany,
+  softDeleteCompany,
+  updateCompany,
+  type OrgCode,
+} from "@/db/repositories/company";
+import {
+  findMembership,
   findMembershipsByUserId,
   generateMembershipId,
   insertMembership,
   lockUserForCompanyCreation,
 } from "@/db/repositories/membership";
-import { recordCompanyCreated } from "@/db/repositories/audit-log";
+import {
+  recordCompanyCreated,
+  recordCompanyDeleted,
+  recordCompanyUpdated,
+} from "@/db/repositories/audit-log";
 import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user";
 
 // SPA から呼ばれる事業所操作。Connect RPC (/rpc/*) は X-Service-Key 必須で
@@ -19,6 +31,11 @@ import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user"
 export const accountCompany = new Hono();
 
 const createCompanyBody = z.object({
+  name: z.string().trim().min(1).max(100),
+  org_code: z.enum(["PERSONAL", "CORPORATE"]),
+});
+
+const updateCompanyBody = z.object({
   name: z.string().trim().min(1).max(100),
   org_code: z.enum(["PERSONAL", "CORPORATE"]),
 });
@@ -109,4 +126,76 @@ accountCompany.post("/api/account/companies", async (c) => {
       joined_at: membership.joinedAt.toISOString(),
     },
   });
+});
+
+// PATCH 相当: 事業所の name / org_code を編集 (OWNER のみ)。before/after diff を audit。
+accountCompany.post("/api/account/companies/:companyId", async (c) => {
+  const userId = await getSessionActorId(c.req.raw.headers);
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const companyId = c.req.param("companyId");
+
+  const actorMembership = await findMembership(userId, companyId);
+  if (!actorMembership || actorMembership.role !== "OWNER") {
+    return c.json({ error: "forbidden" }, 403);
+  }
+
+  const parsed = updateCompanyBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
+  const name = parsed.data.name.trim();
+  const orgCode = parsed.data.org_code as OrgCode;
+
+  // before の取得を tx 内で行い、audit の before/after diff が並行更新でずれないようにする。
+  const updated = await runInTransaction(async (tx) => {
+    const before = await findCompanyById(companyId, tx);
+    if (!before || before.activationStatus !== "ACTIVE") return null;
+    const row = await updateCompany(companyId, { name, orgCode }, tx);
+    if (!row) return null;
+    await recordCompanyUpdated(
+      {
+        actor_user_id: userId,
+        company_id: companyId,
+        before: { name: before.name, org_code: before.orgCode as OrgCode },
+        after: { name, org_code: orgCode },
+      },
+      tx,
+    );
+    return row;
+  });
+
+  if (!updated) return c.json({ error: "not_found" }, 404);
+  return c.json({
+    company: {
+      id: updated.id,
+      name: updated.name,
+      org_code: updated.orgCode,
+      activation_status: updated.activationStatus,
+    },
+  });
+});
+
+// 事業所の soft delete (OWNER のみ)。activation_status=DELETED にし membership / invitation は残す。
+// 削除した company を current にしていた user の last_used_company_id は次回 getCompanyState で
+// fallback されるため、ここでは触らない (membership は残るため active filter で自然に除外される)。
+accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
+  const userId = await getSessionActorId(c.req.raw.headers);
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const companyId = c.req.param("companyId");
+
+  const actorMembership = await findMembership(userId, companyId);
+  if (!actorMembership || actorMembership.role !== "OWNER") {
+    return c.json({ error: "forbidden" }, 403);
+  }
+
+  const deleted = await runInTransaction(async (tx) => {
+    const row = await softDeleteCompany(companyId, tx);
+    if (!row) return null;
+    await recordCompanyDeleted(
+      { actor_user_id: userId, company_id: companyId, name_at_deletion: row.name },
+      tx,
+    );
+    return row;
+  });
+
+  if (!deleted) return c.json({ error: "not_found_or_already_deleted" }, 404);
+  return c.json({ ok: true });
 });

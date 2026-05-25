@@ -1,10 +1,11 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, APIError } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { render } from "@react-email/components";
 import { db } from "@/db/client";
 import { appendAuditLog } from "@/db/repositories/audit-log";
+import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import * as schema from "@/db/schema";
 import { sendWelcomeEmail } from "./email/send-welcome";
 import { sendInvitationEmail } from "./email/send-invitation";
@@ -61,6 +62,21 @@ export const auth = betterAuth({
       // proto User.default_company_id 経由で SDK SessionData.companyId に公開する。
       // input: false で API 経由の書き換えを封じ、更新は CreateCompany / SetCurrentCompany handler 経由のみ。
       lastUsedCompanyId: { type: "string", required: false, input: false },
+    },
+    // ADR-009 Q24: SPA DangerZone (authClient.deleteUser) の経路。
+    // beforeDelete で「唯一の OWNER の ACTIVE 事業所が残っていないか」を検証し、
+    // 残っていれば APIError で退会を中断する (RPC DeleteUser handler と二重防御)。
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        const blocking = await findCompaniesBlockingUserDeletion(user.id);
+        if (blocking.length > 0) {
+          throw new APIError("PRECONDITION_FAILED", {
+            code: "OWNER_OF_ACTIVE_COMPANY",
+            message: `所有者として残っている事業所が ${blocking.length} 件あります。先に委譲または削除してください。`,
+          });
+        }
+      },
     },
   },
 
@@ -129,6 +145,13 @@ export const auth = betterAuth({
       enabled: true,
       maxAge: 5 * 60,
     },
+    // Magic Link / OAuth のみで password を持たず、delete-user 等の sensitive 操作で
+    // 再認証 (password 再入力) ができない。freshAge=0 で fresh セッション要求を無効化し、
+    // 退会が常に SESSION_NOT_FRESH で弾かれるのを防ぐ (DangerZone は再認証 step なしの設計)。
+    // freshAge=0 は全 sensitive 操作の fresh 保護を無効化するグローバル設定のため、将来
+    // emailAndPassword / changeEmail / changePassword を有効化する際は freshAge 再有効化を
+    // 検討すること (password 認証ありなら fresh 再認証が機能するため)。
+    freshAge: 0,
   },
 
   account: {

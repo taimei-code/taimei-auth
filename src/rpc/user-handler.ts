@@ -3,6 +3,7 @@ import { ConnectError, Code } from "@connectrpc/connect";
 import { UserService } from "../gen/auth/v1/auth_pb";
 import { runInTransaction } from "@/db/transaction";
 import { appendAuditLog } from "@/db/repositories/audit-log";
+import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import { revokeAllSessionsForUser } from "@/db/repositories/session";
 import {
   deleteUser as deleteUserRepo,
@@ -49,16 +50,27 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      // 順序: audit → revoke → delete を同一 tx で atomic 実行。
-      // audit を先頭に置く理由: tx 失敗時に audit だけ残るのを防ぐ。
-      // account_delete audit は compliance 観点で必須のため失敗時 rethrow (sign-in / sign-out と異なる方針)。
+      // ADR-009 Q24: user が唯一の OWNER の ACTIVE 事業所が残っていると退会不可。
+      // 退会すると課金責任者不在の事業所が生まれるため、先に委譲 / 削除を要求する。
+      // pre-check と delete を同一 tx に置き、check 後に actor が OWNER 昇格される race を避ける。
+      // 順序: pre-check → audit → revoke → delete。audit を delete 前に置くのは tx 失敗時に
+      // audit だけ残るのを防ぐため。account_delete audit は compliance 必須のため失敗時 rethrow。
       // audit_log.user_id は FK なしのため (db/schema.ts) user cascade delete でも audit_log は残る。
-      const row = await runInTransaction(async (tx) => {
+      const result = await runInTransaction(async (tx) => {
+        const blocking = await findCompaniesBlockingUserDeletion(req.userId, tx);
+        if (blocking.length > 0) return { blocked: blocking.length };
         await appendAuditLog({ eventType: "account_delete", userId: req.userId, payload: {} }, tx);
         await revokeAllSessionsForUser(req.userId, tx);
-        return deleteUserRepo(req.userId, tx);
+        const row = await deleteUserRepo(req.userId, tx);
+        return { row };
       });
-      if (!row) {
+      if ("blocked" in result) {
+        throw new ConnectError(
+          `cannot delete user: sole OWNER of ${result.blocked} active company(ies)`,
+          Code.FailedPrecondition,
+        );
+      }
+      if (!result.row) {
         throw new ConnectError("User not found", Code.NotFound);
       }
       return { success: true };

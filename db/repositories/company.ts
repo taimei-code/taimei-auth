@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { company } from "../schema";
@@ -45,4 +45,32 @@ export async function insertCompany(
       }
       return row;
     });
+}
+
+// name / org_code の更新 (UpdateCompany)。ACTIVE な company のみ対象。
+export async function updateCompany(
+  id: string,
+  updates: { name: string; orgCode: OrgCode },
+  txOrDb: DbOrTx = db,
+): Promise<CompanyRow | undefined> {
+  return txOrDb
+    .update(company)
+    .set({ name: updates.name, orgCode: updates.orgCode })
+    .where(and(eq(company.id, id), eq(company.activationStatus, "ACTIVE")))
+    .returning()
+    .then((rows) => rows.at(0));
+}
+
+// soft delete (DeleteCompany)。activation_status=DELETED + deleted_at をセット。
+// membership / invitation 行は残す (物理削除は本 ADR スコープ外)。ACTIVE のみ削除可能。
+export async function softDeleteCompany(
+  id: string,
+  txOrDb: DbOrTx = db,
+): Promise<CompanyRow | undefined> {
+  return txOrDb
+    .update(company)
+    .set({ activationStatus: "DELETED", deletedAt: new Date() })
+    .where(and(eq(company.id, id), eq(company.activationStatus, "ACTIVE")))
+    .returning()
+    .then((rows) => rows.at(0));
 }
