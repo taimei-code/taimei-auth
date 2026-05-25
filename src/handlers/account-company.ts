@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { auth } from "../auth";
+import { getSessionActorId } from "./session-actor";
 import { runInTransaction } from "@/db/transaction";
 import { generateCompanyId, insertCompany, type OrgCode } from "@/db/repositories/company";
 import {
@@ -11,7 +11,7 @@ import {
   lockUserForCompanyCreation,
 } from "@/db/repositories/membership";
 import { recordCompanyCreated } from "@/db/repositories/audit-log";
-import { updateUserLastUsedCompany } from "@/db/repositories/user";
+import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user";
 
 // SPA から呼ばれる事業所操作。Connect RPC (/rpc/*) は X-Service-Key 必須で
 // browser からは付与不能なため、同等処理を better-auth セッション cookie を信頼する
@@ -23,32 +23,38 @@ const createCompanyBody = z.object({
   org_code: z.enum(["PERSONAL", "CORPORATE"]),
 });
 
-async function requireSession(headers: Headers): Promise<string | null> {
-  const session = await auth.api.getSession({ headers }).catch(() => null);
-  return session?.user?.id ?? null;
-}
-
 accountCompany.get("/api/account/memberships", async (c) => {
-  const userId = await requireSession(c.req.raw.headers);
+  const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
 
-  const rows = await findMembershipsByUserId(userId);
+  const [rows, userRow] = await Promise.all([
+    findMembershipsByUserId(userId),
+    findUserById(userId),
+  ]);
+  const active = rows.filter((r) => r.companyActivationStatus === "ACTIVE");
+  // current_company_id は user.last_used_company_id。ただし当該 company が ACTIVE membership に
+  // 無い (削除済 / 未設定) 場合は先頭にフォールバックし SPA の「現在の事業所」表示を安定させる。
+  const lastUsed = userRow?.lastUsedCompanyId ?? null;
+  const currentCompanyId =
+    lastUsed && active.some((m) => m.companyId === lastUsed)
+      ? lastUsed
+      : (active.at(0)?.companyId ?? null);
+
   return c.json({
-    memberships: rows
-      .filter((r) => r.companyActivationStatus === "ACTIVE")
-      .map((row) => ({
-        id: row.id,
-        company_id: row.companyId,
-        company_name: row.companyName,
-        company_org_code: row.companyOrgCode,
-        role: row.role,
-        joined_at: row.joinedAt.toISOString(),
-      })),
+    current_company_id: currentCompanyId,
+    memberships: active.map((row) => ({
+      id: row.id,
+      company_id: row.companyId,
+      company_name: row.companyName,
+      company_org_code: row.companyOrgCode,
+      role: row.role,
+      joined_at: row.joinedAt.toISOString(),
+    })),
   });
 });
 
 accountCompany.post("/api/account/companies", async (c) => {
-  const userId = await requireSession(c.req.raw.headers);
+  const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
 
   const parsed = createCompanyBody.safeParse(await c.req.json().catch(() => null));
