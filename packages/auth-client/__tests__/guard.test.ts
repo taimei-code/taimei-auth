@@ -22,6 +22,7 @@ const validUser = {
   image: "https://example.com/a.png",
   createdAt: "2026-01-01T00:00:00Z",
   updatedAt: "2026-01-02T00:00:00Z",
+  defaultCompanyId: "cmp_abcdefghijklmnopqrstuvwx",
 };
 
 const validSession = {
@@ -125,8 +126,49 @@ describe("createAuthGuard.getSession", () => {
     expect(result.data.user.id).toBe("user-1");
     expect(result.data.session.id).toBe("sess-1");
     expect(result.data.session.kind).toBe("user");
-    // IdP 隠蔽: SessionData.session に余計なフィールドが乗らないこと
+    expect(result.data.companyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
+    // IdP 隠蔽: SessionData.session に余計なフィールドが乗らないこと (companyId は top-level に上げる)
     expect(Object.keys(result.data.session).sort()).toEqual(["expiresAt", "id", "kind"]);
+  });
+
+  test("G5b: user.defaultCompanyId も session.companyId も無ければ companyId は undefined", async () => {
+    const userWithoutCompany = {
+      id: "user-2",
+      name: "Bob",
+      email: "bob@example.com",
+      emailVerified: true,
+      image: undefined,
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-01-02T00:00:00Z",
+    };
+    const responseWithoutCompany = {
+      outcome: {
+        case: "ok" as const,
+        value: {
+          user: userWithoutCompany,
+          session: { id: "sess-2", expiresAt: "2026-12-31T00:00:00Z", sessionKind: "user" },
+        },
+      },
+    };
+    const guard = createAuthGuard({
+      client: makeClient(async () => responseWithoutCompany),
+      getSessionToken: async () => "valid-token",
+    });
+    const result = await guard.getSession();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.data.companyId).toBeUndefined();
+  });
+
+  test("G5c: session.companyId 不在でも user.defaultCompanyId があれば fallback して載せる", async () => {
+    const guard = createAuthGuard({
+      client: makeClient(async () => okResponse),
+      getSessionToken: async () => "valid-token",
+    });
+    const result = await guard.getSession();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+    expect(result.data.companyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
   });
 
   test("G6: cache 省略時も token 不在で SESSION_NOT_FOUND を返す", async () => {

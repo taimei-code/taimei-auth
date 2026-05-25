@@ -21,6 +21,8 @@ export function toProtoUser(userRow: UserRow) {
 // db/CLAUDE.md ルール 2 例外: session repository を作らない方針 (better-auth secondaryStorage の
 // stale 問題回避) のため、SessionRow 型を import せず better-auth Session 型から派生する。
 // better-auth の Session.session 型変更を compile-time に検出するため Pick で型固定。
+// Session.company_id (proto) は Phase C の事業所切替で Redis session payload から載せる。
+// Phase A の companyId は User.default_company_id 経由で公開するためここでは触らない。
 type SessionRowLike = Pick<Session["session"], "id" | "expiresAt">;
 
 export function toProtoSession(sessionRow: SessionRowLike) {

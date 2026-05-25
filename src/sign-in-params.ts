@@ -10,6 +10,9 @@ export const signInParamsSchema = z
     service_name: serviceNameSchema,
     redirect_url: z.string().min(1).max(2048),
     sign_up_url: z.string().min(1).max(2048).optional(),
+    // ADR-009 Phase B: 招待リンクから signup する時に query で運ばれる invitation token。
+    // Phase A 時点では string として通すだけで accept handler は Phase B で実装。
+    invitation_token: z.string().min(1).max(256).optional(),
   })
   .refine((data) => validateRedirectUrl(data.redirect_url, data.service_name), {
     path: ["redirect_url"],

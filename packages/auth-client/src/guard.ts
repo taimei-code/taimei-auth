@@ -79,6 +79,11 @@ export function createAuthGuard(options: GuardOptions) {
             expiresAt: session.expiresAt,
             kind: "user",
           },
+          // ADR-009: Phase A の companyId source は user.default_company_id (= last_used_company_id)。
+          // session.company_id は Phase C の事業所切替で使う想定だが、secondaryStorage 構成では
+          // session が Redis 管理で DB 列が空のため、Phase A では user 側の永続値を権威とする。
+          // undefined は consumer 側で「事業所未選択」(/auth/signup/company へ redirect) として扱う。
+          companyId: session.companyId ?? user.defaultCompanyId,
         });
         return { ok: true, data: internal };
       }
