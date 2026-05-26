@@ -1,6 +1,18 @@
 # Changelog
 
-## 1.0.0 — 2026-05-17
+## 1.1.0 — 2026-05-26
+
+ADR-009 の company 機能を SDK 公開 API に反映。proto field 追加のみで wire 互換は維持 (`buf breaking` 通過)。
+
+### Features
+
+- `SessionData.companyId?: string` を追加。`createAuthGuard(...).getSession()` の戻り値で参照できる (未選択時 `undefined`)
+- proto `Session.company_id` / `User.default_company_id` を unlock。`companyId` の source は `session.companyId ?? user.defaultCompanyId`
+- magic-link rate limit / session revoke / dual-key 対応 (内部実装、公開 API 変更なし)
+
+### Breaking changes
+
+なし。`SessionData` への optional field 追加のみ (additive)。v1.0.x からの後方互換 minor bump。
 
 proto contract を v1.0 として凍結し、`buf breaking` を CI で機械的に強制する。
 
