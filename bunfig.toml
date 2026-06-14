@@ -1,3 +1,37 @@
 [install]
 minimumReleaseAge = 604800
-minimumReleaseAgeExcludes = []
+# esbuild: GHSA-gv7w-rqvm-qjhr (HIGH) の修正版 0.28.1 が release 2 日で 7 日齢に満たないため除外。
+# esbuild は実体 binary を platform 別 @esbuild/<os>-<arch> の optionalDependencies で持ち、これらも
+# 同時 publish (2 日) で個別に block され lockfile から落ちる (CI frozen install で「@esbuild/linux-x64
+# could not be found」)。glob (@esbuild/*) は本キーで効かないため全 platform を明示列挙する
+# (lockfile を linux/mac/win いずれの frozen install でも解決可能に保つため全 platform 必要)。
+# build 専用 devDep / advisory は build 時 RCE。詳細: docs/adr/0009-supply-chain-hardening.md
+minimumReleaseAgeExcludes = [
+  "esbuild",
+  "@esbuild/aix-ppc64",
+  "@esbuild/android-arm",
+  "@esbuild/android-arm64",
+  "@esbuild/android-x64",
+  "@esbuild/darwin-arm64",
+  "@esbuild/darwin-x64",
+  "@esbuild/freebsd-arm64",
+  "@esbuild/freebsd-x64",
+  "@esbuild/linux-arm",
+  "@esbuild/linux-arm64",
+  "@esbuild/linux-ia32",
+  "@esbuild/linux-loong64",
+  "@esbuild/linux-mips64el",
+  "@esbuild/linux-ppc64",
+  "@esbuild/linux-riscv64",
+  "@esbuild/linux-s390x",
+  "@esbuild/linux-x64",
+  "@esbuild/netbsd-arm64",
+  "@esbuild/netbsd-x64",
+  "@esbuild/openbsd-arm64",
+  "@esbuild/openbsd-x64",
+  "@esbuild/openharmony-arm64",
+  "@esbuild/sunos-x64",
+  "@esbuild/win32-arm64",
+  "@esbuild/win32-ia32",
+  "@esbuild/win32-x64",
+]
