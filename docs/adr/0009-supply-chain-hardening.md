@@ -73,6 +73,16 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - `bun audit` の false positive で CI が壊れる場合は `--audit-level=critical` への緩和か `continue-on-error: true` で warn 化する判断を要する
 - **本 PR で audit step 導入と同時に既知 high 3 件を fix**: `drizzle-orm 0.44.4 → 0.45.2` (SQL injection via identifier escape; direct dep を minor bump), `defu → 6.1.7` (prototype pollution), `kysely → 0.28.17` (JSON-path traversal injection)。後者 2 件は better-auth/drizzle の transitive のため `package.json` の `overrides` で強制固定した。すべて `minimumReleaseAge = 7d` を満たす publish 日 (それぞれ 2026-03-27 / 2026-04-07 / 2026-05-03) のため bypass 不要
 
+### `minimumReleaseAgeExcludes` 初回 bypass (2026-06-14, esbuild)
+
+§H の「7 日待てない場合のみ ADR 改訂 + PR で明示追加」運用に基づく初の除外。
+
+- 対象: `esbuild` (transitive; `drizzle-kit › esbuild` / `vite › tsx › esbuild`)。advisory `GHSA-gv7w-rqvm-qjhr` (HIGH, esbuild `<0.28.1`, Deno module の binary integrity 欠如により `NPM_CONFIG_REGISTRY` 経由で build 時 RCE)
+- 経緯: 修正版 `0.28.1` が 2026-06-11 publish (= release 約 2 日) で 7 日齢に未達。`overrides` で `esbuild: 0.28.1` を固定しても `minimumReleaseAge` が install を block し、advisory は `bun audit --audit-level=high` の CI gate を落とす。よって `bunfig.toml` の `minimumReleaseAgeExcludes` に `esbuild` を追加し `overrides` 固定と併用して `0.28.1` に統一
+- 実体 binary も除外対象: esbuild は platform 別 `@esbuild/<os>-<arch>` の optionalDependencies で binary を持ち、これらも同時 publish で block されると lockfile から落ち CI frozen install が「@esbuild/linux-x64 could not be found」で失敗する。glob (`@esbuild/*`) は本キーで効かないため 26 platform を明示列挙する。また bun は既存 lockfile に対しては fresh な optional binary を再解決しないため、main の lockfile を起点に `bun install` し直して esbuild 一族のみ差し替える (他 package の不要 refresh を避ける)
+- リスク評価: esbuild は build 専用 devDep で本番 bundle に同梱されない。RCE は悪性 `NPM_CONFIG_REGISTRY` を要し攻撃面は限定的。`0.28.1` で auth-client build / vite build:web / drizzle-kit migrate / 全 test が green であることを確認済み
+- 後始末 (任意): `0.28.1` と binary 群が 7 日齢 (2026-06-18 以降) を超えたら除外を外しても resolve は維持される
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
