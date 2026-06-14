@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Loader2, Plus } from "lucide-react";
 
 import { AccountApiError, removeMember } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
@@ -8,6 +8,7 @@ import { roleLabelJa } from "@/lib/role-label";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
+import { AddCompanyDialog } from "@/components/account/AddCompanyDialog";
 
 export const Companies = () => {
   const { memberships, currentCompanyId, switchCompany, refresh } = useCompanyContext();
@@ -47,9 +48,20 @@ export const Companies = () => {
 
   return (
     <div>
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">所属事業所</h1>
-        <p className="mt-1 text-sm text-muted-foreground">所属する事業所の一覧と切り替え</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">所属事業所</h1>
+          <p className="mt-1 text-sm text-muted-foreground">所属する事業所の一覧と切り替え</p>
+        </div>
+        <AddCompanyDialog
+          onCreated={refresh}
+          trigger={
+            <Button size="sm" className="shrink-0">
+              <Plus className="size-4" aria-hidden="true" />
+              事業所を追加
+            </Button>
+          }
+        />
       </div>
       <Separator className="my-6" />
 

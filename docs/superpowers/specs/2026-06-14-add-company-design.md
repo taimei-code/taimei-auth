@@ -85,7 +85,7 @@ const createCompanyWithOwner = async (tx, userId: string, input: CreateInput) =>
 
 - 既存 `POST /api/account/companies`（signup）: `createSignupCompany` を呼び、`{ ok: false }` なら 409、成功なら従来どおり company + membership を返すよう refactor。
 - 新規 `POST /api/account/companies/add`: 認証 → `createCompanyBody`（既存 zod スキーマ再利用）で parse → `addCompany` → company + membership を返す。
-  - **`/:companyId` param route より前に登録**して衝突回避（Hono は静的セグメントを param より優先するが、明示的に順序も守る）。
+  - **`/:companyId` param route より前に登録必須**（spike 実測）。Hono 4.7 SmartRouter は静的セグメントを常には優先せず**登録順依存**で、`/add` を param route の後に置くと `/companies/add` が `:companyId="add"` として update handler に吸われ silent bug 化する。`account-company.ts` では signup route の直後・update route の前に配置している。
 
 ### クライアント API（`web/src/lib/account-api.ts`）
 

@@ -71,6 +71,25 @@ export async function createCompany(params: {
   return (await res.json()) as CreateCompanyResult;
 }
 
+// 既存 user が 2 つ目以降の事業所を追加する。createCompany (signup 専用 = 0 件ガード付き) と
+// 違い membership があっても作成でき、サーバが last_used を新事業所に更新する。
+export async function addCompany(params: {
+  name: string;
+  org_code: "PERSONAL" | "CORPORATE";
+}): Promise<CreateCompanyResult> {
+  const res = await fetch("/api/account/companies/add", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new AccountApiError(res.status, text || `addCompany failed: ${res.status}`);
+  }
+  return (await res.json()) as CreateCompanyResult;
+}
+
 export type CompanyRole = "OWNER" | "ADMIN" | "MEMBER";
 
 export type Member = {

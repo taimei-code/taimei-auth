@@ -5,25 +5,14 @@ import { getSessionActorId } from "./session-actor";
 import { runInTransaction } from "@/db/transaction";
 import {
   findCompanyById,
-  generateCompanyId,
-  insertCompany,
   softDeleteCompany,
   updateCompany,
   type OrgCode,
 } from "@/db/repositories/company";
-import {
-  findMembership,
-  findMembershipsByUserId,
-  generateMembershipId,
-  insertMembership,
-  lockUserForCompanyCreation,
-} from "@/db/repositories/membership";
-import {
-  recordCompanyCreated,
-  recordCompanyDeleted,
-  recordCompanyUpdated,
-} from "@/db/repositories/audit-log";
-import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user";
+import { findMembership, findMembershipsByUserId } from "@/db/repositories/membership";
+import { recordCompanyDeleted, recordCompanyUpdated } from "@/db/repositories/audit-log";
+import { findUserById } from "@/db/repositories/user";
+import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
 
 // SPA から呼ばれる事業所操作。Connect RPC (/rpc/*) は X-Service-Key 必須で
 // browser からは付与不能なため、同等処理を better-auth セッション cookie を信頼する
@@ -70,6 +59,24 @@ accountCompany.get("/api/account/memberships", async (c) => {
   });
 });
 
+// 作成系 (signup / add) の response は同形。HTTP shape は handler 層の責務なのでここで組む。
+const serializeCreatedCompany = ({ company, membership }: CreatedCompany) => ({
+  company: {
+    id: company.id,
+    name: company.name,
+    org_code: company.orgCode,
+    activation_status: company.activationStatus,
+    created_at: company.createdAt.toISOString(),
+  },
+  membership: {
+    id: membership.id,
+    role: membership.role,
+    company_id: membership.companyId,
+    joined_at: membership.joinedAt.toISOString(),
+  },
+});
+
+// signup フローの「最初の 1 事業所」作成。0 件ガード / 409 race 直列化は createSignupCompany が担う。
 accountCompany.post("/api/account/companies", async (c) => {
   const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
@@ -79,53 +86,34 @@ accountCompany.post("/api/account/companies", async (c) => {
     return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
   }
 
-  const companyId = generateCompanyId();
-  const membershipId = generateMembershipId();
-  const orgCode = parsed.data.org_code as OrgCode;
-  const name = parsed.data.name;
-
-  // 2 tab 同時 submit (signup 直後 membership 0 件) の race を直列化する。
-  // advisory lock で per-user 排他にした上で tx 内で再 check し、先着が membership を作っていれば
-  // 後着は null を返して 409。READ COMMITTED では tx 外 check + INSERT だけでは両方成功しうる (TOCTOU)。
-  const created = await runInTransaction(async (tx) => {
-    await lockUserForCompanyCreation(tx, userId);
-    const existing = await findMembershipsByUserId(userId, tx);
-    if (existing.length > 0) {
-      return null;
-    }
-    const newCompany = await insertCompany({ id: companyId, name, orgCode }, tx);
-    const newMembership = await insertMembership(
-      { id: membershipId, userId, companyId, role: "OWNER" },
-      tx,
-    );
-    await updateUserLastUsedCompany(userId, companyId, tx);
-    await recordCompanyCreated(
-      { actor_user_id: userId, company_id: companyId, name, org_code: orgCode },
-      tx,
-    );
-    return { company: newCompany, membership: newMembership };
+  const result = await createSignupCompany(userId, {
+    name: parsed.data.name,
+    orgCode: parsed.data.org_code as OrgCode,
   });
-
-  if (!created) {
+  if (!result.ok) {
     return c.json({ error: "already_exists" }, 409);
   }
-  const { company, membership } = created;
+  return c.json(serializeCreatedCompany(result));
+});
 
-  return c.json({
-    company: {
-      id: company.id,
-      name: company.name,
-      org_code: company.orgCode,
-      activation_status: company.activationStatus,
-      created_at: company.createdAt.toISOString(),
-    },
-    membership: {
-      id: membership.id,
-      role: membership.role,
-      company_id: membership.companyId,
-      joined_at: membership.joinedAt.toISOString(),
-    },
+// 既存 user が 2 つ目以降の事業所を追加する。membership 有無を問わず作成し OWNER になる。
+// ルート登録順の制約: この add route は下の `/:companyId` param route より「前」に置くこと。
+// Hono 4.7 SmartRouter は静的セグメントを常には優先せず登録順依存で、後ろに置くと
+// `/companies/add` が `:companyId="add"` として update handler に吸われる (spike 実測)。
+accountCompany.post("/api/account/companies/add", async (c) => {
+  const userId = await getSessionActorId(c.req.raw.headers);
+  if (!userId) return c.json({ error: "unauthorized" }, 401);
+
+  const parsed = createCompanyBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
+  }
+
+  const created = await addCompany(userId, {
+    name: parsed.data.name,
+    orgCode: parsed.data.org_code as OrgCode,
   });
+  return c.json(serializeCreatedCompany(created));
 });
 
 // PATCH 相当: 事業所の name / org_code を編集 (OWNER のみ)。before/after diff を audit。
