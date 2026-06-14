@@ -137,6 +137,21 @@ export async function markInvitationRevoked(
     .then((rows) => rows.at(0));
 }
 
+// ADR-0010: 事業所削除時に当該 company の PENDING 招待を一括 REVOKED 化する。revoked 行を返すので
+// 呼び出し側が invitation_revoked audit を残せる。soft-deleted company への招待受諾で membership が
+// 再生成され DELETED company に所属が復活するのを防ぐ (受諾側のガードと対で効かせる)。
+export async function revokePendingInvitationsOfCompany(
+  companyId: string,
+  txOrDb: DbOrTx = db,
+): Promise<InvitationRow[]> {
+  const now = new Date();
+  return txOrDb
+    .update(invitation)
+    .set({ status: "REVOKED", revokedAt: now, usedAt: now })
+    .where(and(eq(invitation.companyId, companyId), eq(invitation.status, "PENDING")))
+    .returning();
+}
+
 // invitation が accept 可能か (PENDING かつ未期限) を判定する述語。
 // expired は status 列ではなく expires_at から導出する (status は pending/accepted/revoked の 3 値のみ)。
 export function isAcceptable(row: InvitationRow): boolean {

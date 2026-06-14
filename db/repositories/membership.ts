@@ -46,6 +46,29 @@ export async function findMembershipsByUserId(
     .where(eq(membership.userId, userId));
 }
 
+// ADR-0010 D2: orphan 判定の述語。「所属している = ACTIVE company の membership 行が存在する」を
+// 唯一の基準にするため、status filter ではなく行 + ACTIVE join で数える。
+export async function countActiveMembershipsByUserId(
+  userId: string,
+  txOrDb: DbOrTx = db,
+): Promise<number> {
+  const rows = await txOrDb
+    .select({ count: sql<number>`count(*)::int` })
+    .from(membership)
+    .innerJoin(company, eq(company.id, membership.companyId))
+    .where(and(eq(membership.userId, userId), eq(company.activationStatus, "ACTIVE")));
+  return rows.at(0)?.count ?? 0;
+}
+
+// ADR-0010 D1: 事業所削除で当該 company の所属を物理削除する。削除行を返すので呼び出し側が
+// 元メンバーごとに orphan 判定 (deleteAccountIfOrphaned) を回せる。
+export async function removeMembershipsOfCompany(
+  companyId: string,
+  txOrDb: DbOrTx = db,
+): Promise<MembershipRow[]> {
+  return txOrDb.delete(membership).where(eq(membership.companyId, companyId)).returning();
+}
+
 export type MemberRow = {
   membershipId: string;
   userId: string;
