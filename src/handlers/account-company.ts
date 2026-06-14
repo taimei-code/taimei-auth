@@ -3,16 +3,12 @@ import { z } from "zod";
 
 import { getSessionActorId } from "./session-actor";
 import { runInTransaction } from "@/db/transaction";
-import {
-  findCompanyById,
-  softDeleteCompany,
-  updateCompany,
-  type OrgCode,
-} from "@/db/repositories/company";
+import { findCompanyById, updateCompany, type OrgCode } from "@/db/repositories/company";
 import { findMembership, findMembershipsByUserId } from "@/db/repositories/membership";
-import { recordCompanyDeleted, recordCompanyUpdated } from "@/db/repositories/audit-log";
+import { recordCompanyUpdated } from "@/db/repositories/audit-log";
 import { findUserById } from "@/db/repositories/user";
 import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
+import { deleteCompany } from "../company/delete";
 
 // SPA から呼ばれる事業所操作。Connect RPC (/rpc/*) は X-Service-Key 必須で
 // browser からは付与不能なため、同等処理を better-auth セッション cookie を信頼する
@@ -160,29 +156,20 @@ accountCompany.post("/api/account/companies/:companyId", async (c) => {
   });
 });
 
-// 事業所の soft delete (OWNER のみ)。activation_status=DELETED にし membership / invitation は残す。
-// 削除した company を current にしていた user の last_used_company_id は次回 getCompanyState で
-// fallback されるため、ここでは触らない (membership は残るため active filter で自然に除外される)。
+// 事業所削除 (OWNER のみ)。company は soft delete だが所属 (membership) は物理削除し、所属 0 件に
+// なった元メンバー (最後の事業所を消した OWNER 自身を含む) は連動でアカウント削除する。orchestration は
+// deleteCompany use-case (単一 tx)。設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
 accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
   const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
   const companyId = c.req.param("companyId");
 
-  const actorMembership = await findMembership(userId, companyId);
-  if (!actorMembership || actorMembership.role !== "OWNER") {
-    return c.json({ error: "forbidden" }, 403);
+  const result = await deleteCompany(userId, companyId);
+  if (!result.ok) {
+    return result.reason === "not_found"
+      ? c.json({ error: "not_found_or_already_deleted" }, 404)
+      : c.json({ error: "forbidden" }, 403);
   }
-
-  const deleted = await runInTransaction(async (tx) => {
-    const row = await softDeleteCompany(companyId, tx);
-    if (!row) return null;
-    await recordCompanyDeleted(
-      { actor_user_id: userId, company_id: companyId, name_at_deletion: row.name },
-      tx,
-    );
-    return row;
-  });
-
-  if (!deleted) return c.json({ error: "not_found_or_already_deleted" }, 404);
-  return c.json({ ok: true });
+  // account_deleted=true は actor 自身が orphan として消えたことを示す。client はログアウト遷移する (UX は後続 PR)。
+  return c.json({ ok: true, account_deleted: result.actorDeleted });
 });

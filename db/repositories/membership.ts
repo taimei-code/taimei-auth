@@ -15,6 +15,15 @@ export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Prom
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
+// ADR-0010 (BB-11): 事業所削除と member remove の異経路同時実行を直列化する。
+// withOwnerLockGuard と同じ OWNER 行を FOR UPDATE で取り、両経路が同じ行で contend するようにする。
+// DeleteCompany は全 membership を消すため OWNER≥1 の事後検証は不要 (= guard ではなく lock のみ)。
+export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
+  await tx.execute(
+    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
+  );
+}
+
 export type MembershipRow = typeof membership.$inferSelect;
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
 
