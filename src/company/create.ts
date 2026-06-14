@@ -31,6 +31,8 @@ export type SignupCompanyResult =
 // company + OWNER membership + last_used 更新 + audit を 1 tx で作る共有 primitive。
 // last_used を新 company に更新することで「作成 = 現在の事業所を新事業所へ切替」を実現する。
 // getCompanyState が current = last_used を返すため、client は作成後 refresh するだけで切り替わる。
+// audit は company_created のみ記録する: 作成が切替を含意するため、明示切替 (setCurrentCompany)
+// が出す company_switched は重複として省く。signup フローと同じ方針。
 async function createCompanyWithOwner(
   tx: DbTx,
   userId: string,
@@ -71,5 +73,8 @@ export const createSignupCompany = (
 
 // 既存 user が 2 つ目以降の事業所を追加する。membership 有無を問わず作成し OWNER になる。
 // signup と違い 0 件ガードは持たない (個人事業主 / 法人とも複数所有を許容 = 制限なし方針)。
+// 0 件ガードが無いので advisory lock も取らない: 同一 user の並行作成で last_used がどちらの
+// 新 company に落ち着くかは「最後の作成が勝つ」形で許容する (どちらも有効な所属。signup の
+// TOCTOU 直列化はガードを守るための仕組みで、ガードの無い add には不要)。
 export const addCompany = (userId: string, input: CreateCompanyInput): Promise<CreatedCompany> =>
   runInTransaction((tx) => createCompanyWithOwner(tx, userId, input));

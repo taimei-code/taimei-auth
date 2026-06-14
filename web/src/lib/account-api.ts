@@ -54,11 +54,14 @@ export async function listMyMemberships(): Promise<Membership[]> {
   return (await getCompanyState()).memberships;
 }
 
-export async function createCompany(params: {
-  name: string;
-  org_code: "PERSONAL" | "CORPORATE";
-}): Promise<CreateCompanyResult> {
-  const res = await fetch("/api/account/companies", {
+type CreateCompanyParams = { name: string; org_code: "PERSONAL" | "CORPORATE" };
+
+// 事業所作成は signup (0 件ガード付き) / 追加 (制限なし) で叩く endpoint だけ違い、成功 response は同形。
+async function postCompanyCreate(
+  path: string,
+  params: CreateCompanyParams,
+): Promise<CreateCompanyResult> {
+  const res = await fetch(path, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -71,24 +74,14 @@ export async function createCompany(params: {
   return (await res.json()) as CreateCompanyResult;
 }
 
-// 既存 user が 2 つ目以降の事業所を追加する。createCompany (signup 専用 = 0 件ガード付き) と
-// 違い membership があっても作成でき、サーバが last_used を新事業所に更新する。
-export async function addCompany(params: {
-  name: string;
-  org_code: "PERSONAL" | "CORPORATE";
-}): Promise<CreateCompanyResult> {
-  const res = await fetch("/api/account/companies/add", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new AccountApiError(res.status, text || `addCompany failed: ${res.status}`);
-  }
-  return (await res.json()) as CreateCompanyResult;
-}
+// signup フローで最初の事業所を作る (membership 0 件のときだけサーバが受理)。
+export const createCompany = (params: CreateCompanyParams): Promise<CreateCompanyResult> =>
+  postCompanyCreate("/api/account/companies", params);
+
+// 既存 user が 2 つ目以降の事業所を追加する。createCompany と違い membership があっても作成でき、
+// サーバが last_used を新事業所に更新する。
+export const addCompany = (params: CreateCompanyParams): Promise<CreateCompanyResult> =>
+  postCompanyCreate("/api/account/companies/add", params);
 
 export type CompanyRole = "OWNER" | "ADMIN" | "MEMBER";
 

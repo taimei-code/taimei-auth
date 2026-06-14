@@ -85,7 +85,7 @@ const createCompanyWithOwner = async (tx, userId: string, input: CreateInput) =>
 
 - 既存 `POST /api/account/companies`（signup）: `createSignupCompany` を呼び、`{ ok: false }` なら 409、成功なら従来どおり company + membership を返すよう refactor。
 - 新規 `POST /api/account/companies/add`: 認証 → `createCompanyBody`（既存 zod スキーマ再利用）で parse → `addCompany` → company + membership を返す。
-  - **`/:companyId` param route より前に登録必須**（spike 実測）。Hono 4.7 SmartRouter は静的セグメントを常には優先せず**登録順依存**で、`/add` を param route の後に置くと `/companies/add` が `:companyId="add"` として update handler に吸われ silent bug 化する。`account-company.ts` では signup route の直後・update route の前に配置している。
+  - **`/:companyId` param route より前に登録必須**（使い捨ての検証コードで実測）。Hono 4.7 SmartRouter は静的セグメントを常には優先せず**登録順依存**で、`/add` を param route の後に置くと `/companies/add` が `:companyId="add"` として update handler に吸われ silent bug 化する。`account-company.ts` では signup route の直後・update route の前に配置している。
 
 ### クライアント API（`web/src/lib/account-api.ts`）
 
@@ -122,15 +122,15 @@ const createCompanyWithOwner = async (tx, userId: string, input: CreateInput) =>
 - **handler test**: 新 `POST /api/account/companies/add` の成功パス / signup endpoint の 0 件ガード・409 が**温存されている回帰**
 - **UI（実ブラウザ chrome MCP）**: ダイアログ送信 → 一覧・サイドバー switcher に新事業所が current で出る
 
-## Prototype で先に検証する load-bearing assumption
+## 動かす前に検証する、実装の土台になる未検証の仮定
 
-1. add → refresh で「現在の事業所」が新事業所に切り替わり、サイドバー switcher と一覧に出る（実ブラウザ）
+1. add → refresh で「現在の事業所」が新事業所に切り替わり、サイドバーの事業所切替と一覧に出る（実ブラウザ）
 2. `POST /api/account/companies/add` が `/:companyId` param route と衝突せず正しく解決される
 3. 新規作成直後の OWNER membership で表示・後続操作（設定 / メンバー）が正常
-4. ダイアログ UX が Companies ページに馴染む
+4. ダイアログの使い勝手が Companies ページに馴染む
 
-## 可逆性 / blast radius
+## 戻しやすさ / 影響範囲
 
 - DB スキーマ変更なし（company / membership テーブルは既存）
-- 内部 account API への additive な新エンドポイント。auth-client SDK の公開契約は不変
-- → reversible・小 blast radius のため iterate-with-prototypes に適合
+- 内部 account API への追加のみ（既存を壊さない）の新エンドポイント。auth-client SDK の公開契約は不変
+- → 戻しやすく影響範囲も小さいため iterate-with-prototypes に適合

@@ -1,12 +1,18 @@
 # 事業所追加作成 — 単一正本 (ledger)
 
-iterate-with-prototypes の single source of truth。仮定 / TODO / 決定 / AC をここに集約する。
-設計: [2026-06-14-add-company-design.md](./2026-06-14-add-company-design.md)
+iterate-with-prototypes の唯一の正本。仮定 / TODO / 決定 / 受け入れ条件をここに集約する。
+設計（仕様判断の正本）: [2026-06-14-add-company-design.md](./2026-06-14-add-company-design.md)
+
+> 用語（iterate-with-prototypes を知らない読者向け）:
+> - **A1〜A4** = 検証対象の仮定の番号。
+> - **status の grounded / unverified / killed** = 実測で接地済み / 未検証 / 反証され棄却。
+> - **spike** = 本番に触れない使い捨ての検証コード。**Code-A** = 仕様を 100% 満たす「まず動く」実装。
+> - **code-first** = 机上設計を先に書かず、動くコードで設計を確かめてから設計書を起こす進め方。
 
 ## code-first 適用判定
 
-- 危険な未知 = feasibility（add の state 反映 / routing）/ UX（ダイアログ）/ 流用可否（既存 repository・getCompanyState）
-- blast radius 小: DB スキーマ変更なし・内部 account API への additive・auth-client SDK 公開契約不変 → Code-A を捨てやすい
+- 危険な未知 = 実現可能性（add の state 反映 / routing）/ 使い勝手（ダイアログ）/ 流用可否（既存 repository・getCompanyState）
+- 影響範囲が小さい: DB スキーマ変更なし・内部 account API への追加のみ・auth-client SDK 公開契約不変 → Code-A を捨てやすい
 - 戻しにくい決定（migration / 公開 API 契約）に未知なし
 - → **code-first 適合**
 
@@ -40,15 +46,16 @@ iterate-with-prototypes の single source of truth。仮定 / TODO / 決定 / AC
 
 ## 決定ログ
 
-- UI: 所属事業所ページにボタン + ダイアログ
-- 作成後: 新事業所に切替（サーバが tx 内で last_used 更新）
-- 個人事業主の重複: 制限なし
-- サーバ層: use-case 層 `src/company/create.ts` 新設、handler は HTTP 変換のみ（signup も移設）
-- **routing 制約（spike 実測）**: add endpoint `POST /api/account/companies/add` は `POST /api/account/companies/:companyId` より**前**に登録する。Hono 4.7 SmartRouter は静的を常には優先せず登録順依存で、後登録だと `:companyId="add"` として update handler に吸われる
+仕様判断（UI 配置 / 作成後の切替 / 個人事業主の重複 / サーバ層 / routing 制約）の正本は
+設計 doc の「確定した仕様判断」と「サーバ API」節。重複を避けここでは再掲しない。
+
+ledger 固有の経緯: routing 制約は使い捨ての検証コードで発見した（机上では Hono が静的を優先すると
+誤認していたが、実測で登録順依存と判明 → `/add` を `/:companyId` の前に登録）。
 
 ## TODO / status
 
-- [x] spike-1 で A1 + A2 接地（A1 source-trace grounded / A2 grounded 制約付き）
-- [ ] A1/A2 grounded 後 Code-A 実装（use-case / handler / client API / dialog / Companies ボタン / test）
-- [ ] step 3 リファクタ（/review-design）
-- [ ] step 4-6 doc 逆生成・磨き・PR 化
+- [x] 最初の検証で A1 + A2 を接地（A1 = 既存実証パスの再利用で接地 / A2 = 登録順の制約付きで接地）
+- [x] Code-A 実装（use-case / handler / client API / dialog / Companies ボタン / test）
+- [x] 実装後リファクタ・品質レビュー（reuse/simplification/efficiency/altitude/React/品質）
+- [x] live E2E で A1〜A4 を実ブラウザ接地、検証用事業所は原状回復
+- [ ] PR 化

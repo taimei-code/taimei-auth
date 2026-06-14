@@ -19,12 +19,9 @@ import { addCompany, createSignupCompany, type CreatedCompany } from "../company
 // Hono ルートとして提供する (handlers/avatar-upload.ts と同パターン)。
 export const accountCompany = new Hono();
 
-const createCompanyBody = z.object({
-  name: z.string().trim().min(1).max(100),
-  org_code: z.enum(["PERSONAL", "CORPORATE"]),
-});
-
-const updateCompanyBody = z.object({
+// 事業所の作成 (signup / add) / 編集で受け取る body は同形 (名前 + 事業形態)。1 箇所に集約して
+// max 長などの制約が route 間で silent にずれるのを防ぐ。
+const companyBody = z.object({
   name: z.string().trim().min(1).max(100),
   org_code: z.enum(["PERSONAL", "CORPORATE"]),
 });
@@ -81,7 +78,7 @@ accountCompany.post("/api/account/companies", async (c) => {
   const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
 
-  const parsed = createCompanyBody.safeParse(await c.req.json().catch(() => null));
+  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
   }
@@ -99,12 +96,14 @@ accountCompany.post("/api/account/companies", async (c) => {
 // 既存 user が 2 つ目以降の事業所を追加する。membership 有無を問わず作成し OWNER になる。
 // ルート登録順の制約: この add route は下の `/:companyId` param route より「前」に置くこと。
 // Hono 4.7 SmartRouter は静的セグメントを常には優先せず登録順依存で、後ろに置くと
-// `/companies/add` が `:companyId="add"` として update handler に吸われる (spike 実測)。
+// `/companies/add` が `:companyId="add"` として update handler に吸われる (使い捨ての検証コードで実測)。
+// 順序依存は「セグメント数が一致する static vs param」だけ。`/:companyId/delete` が `/:companyId`
+// の後ろでも安全なのはセグメント数が違い競合しないため (= `/add` だけがこの予防順序を要する)。
 accountCompany.post("/api/account/companies/add", async (c) => {
   const userId = await getSessionActorId(c.req.raw.headers);
   if (!userId) return c.json({ error: "unauthorized" }, 401);
 
-  const parsed = createCompanyBody.safeParse(await c.req.json().catch(() => null));
+  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
   }
@@ -127,7 +126,7 @@ accountCompany.post("/api/account/companies/:companyId", async (c) => {
     return c.json({ error: "forbidden" }, 403);
   }
 
-  const parsed = updateCompanyBody.safeParse(await c.req.json().catch(() => null));
+  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
   const name = parsed.data.name.trim();
   const orgCode = parsed.data.org_code as OrgCode;

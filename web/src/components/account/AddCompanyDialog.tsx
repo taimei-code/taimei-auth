@@ -22,8 +22,9 @@ type Props = {
   trigger: ReactNode;
 };
 
-// 既存 user が新しい事業所を追加するダイアログ。入力は事業所名 + 事業形態の 2 項目
-// (SignUpCompany の signup フォームと同形)。作成後は新事業所が現在の事業所になる。
+// 既存 user が新しい事業所を追加するダイアログ。入力項目は SignUpCompany と同じ 2 つ
+// (事業所名 + 事業形態)。既定は法人 (追加作成は法人が主のため signup の個人事業主とは別既定)。
+// 作成後は新事業所が現在の事業所になる。
 export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
