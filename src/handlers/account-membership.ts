@@ -5,7 +5,6 @@ import { getSessionActorId } from "./session-actor";
 import { runInTransaction } from "@/db/transaction";
 import {
   OwnerInvariantViolation,
-  deleteMembership,
   findMembership,
   updateMembershipRole,
   withOwnerLockGuard,
@@ -14,10 +13,10 @@ import {
 import { findUserById, updateUserLastUsedCompany } from "@/db/repositories/user";
 import {
   recordCompanySwitched,
-  recordMembershipRemoved,
   recordOwnershipTransferred,
   recordRoleChanged,
 } from "@/db/repositories/audit-log";
+import { removeMember } from "../membership/remove";
 
 export const accountMembership = new Hono();
 
@@ -123,7 +122,8 @@ accountMembership.post(
 );
 
 // POST メンバー削除 (除名 / 退会)。本人 (退会) または OWNER/ADMIN (除名) が可能。
-// OWNER を削除する場合は withOwnerLockGuard で「OWNER ≥ 1」を保証。
+// 認可は handler、mutation (membership 削除 + 所属 0 件なら account 連動削除 + OWNER≥1 保証) は
+// removeMember use-case が担う (ADR-0010 D2)。
 accountMembership.post(
   "/api/account/companies/:companyId/members/:targetUserId/remove",
   async (c) => {
@@ -149,30 +149,12 @@ accountMembership.post(
       return c.json({ error: "forbidden" }, 403);
     }
 
-    const apply = (tx: Parameters<Parameters<typeof runInTransaction>[0]>[0]) =>
-      deleteMembership(targetUserId, companyId, tx).then(() =>
-        recordMembershipRemoved(
-          {
-            actor_user_id: actorUserId,
-            company_id: companyId,
-            removed_user_id: targetUserId,
-            role_at_removal: targetRole,
-          },
-          tx,
-        ),
-      );
-
-    const removesOwner = targetRole === "OWNER";
-    const result = await runInTransaction((tx) =>
-      removesOwner ? withOwnerLockGuard(tx, companyId, apply) : apply(tx),
-    ).catch((e) => {
-      if (e instanceof OwnerInvariantViolation) return "owner_invariant";
-      throw e;
-    });
+    const result = await removeMember(actorUserId, targetUserId, companyId, targetRole);
     if (result === "owner_invariant") {
       return c.json({ error: "last_owner" }, 409);
     }
-    return c.json({ ok: true });
+    // 本人が最後の所属を退会した場合 account_deleted=true。client はログアウト遷移する (UX は後続 PR)。
+    return c.json({ ok: true, account_deleted: result.accountDeleted });
   },
 );
 
