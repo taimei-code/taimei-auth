@@ -44,7 +44,8 @@ curl http://localhost:3100/health
 # => {"status":"ok","checks":{"db":"ok","redis":"ok"}}
 ```
 
-ブラウザで <http://auth.taimei-code.local:3100/> にアクセスする (compose 版は cookie domain が `taimei-code.local` 固定のため、`localhost:3100` で開くと magic link の callbackURL が trusted origin 外になり **403 INVALID_CALLBACK_URL**。`/health` の到達確認は `localhost:3100` でも可だが、ログインは必ず `auth.taimei-code.local:3100` で開く)。session-aware な root ハンドラが状態に応じて振り分ける:
+ブラウザで以下にアクセスする
+http://auth.taimei-code.local:3100/
 
 - 未認証 → 共通ログイン画面 (`/auth/?service_name=accounts&redirect_url=http://auth.taimei-code.local:3100/account`) に 302。新規登録したい場合は画面下部の「新規登録」リンクから共通サインアップ画面へ
 - ログイン済 → `/account` に 302
