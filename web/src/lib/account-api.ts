@@ -169,10 +169,15 @@ export async function updateMemberRole(
   });
 }
 
-export async function removeMember(companyId: string, targetUserId: string): Promise<void> {
-  await postJson<{ ok: true }>(
+// account_deleted: 除名対象が他に所属を持たず orphan として連動削除されたか (ADR-0010 D2)。
+export async function removeMember(
+  companyId: string,
+  targetUserId: string,
+): Promise<{ accountDeleted: boolean }> {
+  const res = await postJson<{ ok: true; account_deleted: boolean }>(
     `/api/account/companies/${companyId}/members/${targetUserId}/remove`,
   );
+  return { accountDeleted: res.account_deleted };
 }
 
 export async function updateCompany(
@@ -182,8 +187,12 @@ export async function updateCompany(
   await postJson<void>(`/api/account/companies/${companyId}`, params);
 }
 
-export async function deleteCompany(companyId: string): Promise<void> {
-  await postJson<{ ok: true }>(`/api/account/companies/${companyId}/delete`);
+// account_deleted: 最後の事業所を削除して actor 自身が orphan として連動削除されたか (ADR-0010 D3)。
+export async function deleteCompany(companyId: string): Promise<{ accountDeleted: boolean }> {
+  const res = await postJson<{ ok: true; account_deleted: boolean }>(
+    `/api/account/companies/${companyId}/delete`,
+  );
+  return { accountDeleted: res.account_deleted };
 }
 
 export async function transferOwnership(companyId: string, toUserId: string): Promise<void> {

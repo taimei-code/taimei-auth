@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { AccountApiError, deleteCompany, updateCompany } from "@/lib/account-api";
+import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -23,9 +24,11 @@ type Notice = { kind: "success" | "error"; text: string };
 
 // 事業所設定 (OWNER のみ)。name / org_code 編集 + 事業所削除。
 export const CompanySettings = () => {
-  const { currentMembership, loading, refresh } = useCompanyContext();
+  const { currentMembership, memberships, loading, refresh } = useCompanyContext();
   const isOwner = currentMembership?.role === "OWNER";
   const companyId = currentMembership?.company_id ?? null;
+  // 最後の所属事業所を削除すると actor 自身が orphan として連動削除される (ADR-0010 D3)。
+  const isLastCompany = memberships.length <= 1;
 
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<"PERSONAL" | "CORPORATE">("PERSONAL");
@@ -80,8 +83,15 @@ export const CompanySettings = () => {
     setSubmitting(true);
     // 削除成功で即 redirect する (context の再 fetch は遷移先マウント時に走るため refresh を待たない。
     // refresh の瞬断で redirect が不達になり「削除済なのにエラー表示」になるのを防ぐ)。
+    // 最後の事業所削除では actor 自身が連動削除されるため、その時はログアウト先へ遷移する (ADR-0010 D3)。
     deleteCompany(companyId)
-      .then(() => window.location.replace("/account/companies"))
+      .then(({ accountDeleted }) => {
+        if (accountDeleted) {
+          redirectAfterAuthChange("deleteAccount");
+        } else {
+          window.location.replace("/account/companies");
+        }
+      })
       .catch(() => {
         setNotice({ kind: "error", text: "事業所の削除に失敗しました。" });
         setSubmitting(false);
@@ -174,6 +184,11 @@ export const CompanySettings = () => {
                   「{currentMembership?.company_name}」を削除します。この操作は元に戻せません。
                 </DialogDescription>
               </DialogHeader>
+              {isLastCompany && (
+                <p className="text-sm font-medium text-destructive">
+                  これは最後の所属事業所です。削除するとアカウントも閉じられ、ログアウトされます。
+                </p>
+              )}
               <DialogFooter>
                 <DialogClose asChild>
                   <Button variant="outline">キャンセル</Button>

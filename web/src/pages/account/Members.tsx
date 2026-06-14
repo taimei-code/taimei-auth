@@ -21,6 +21,16 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Notice = { kind: "success" | "error"; text: string };
 
@@ -113,7 +123,16 @@ export const Members = () => {
     setBusyUserId(targetUserId);
     setNotice(null);
     removeMember(companyId, targetUserId)
-      .then(() => refresh(companyId))
+      .then(({ accountDeleted }) =>
+        refresh(companyId).then(() =>
+          setNotice({
+            kind: "success",
+            text: accountDeleted
+              ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
+              : "メンバーを削除しました。",
+          }),
+        ),
+      )
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
           setNotice({ kind: "error", text: "最後のオーナーは削除できません。" });
@@ -181,14 +200,34 @@ export const Members = () => {
                   </span>
                 )}
                 {canManage && !isSelf && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleRemove(m.user_id)}
-                    disabled={busyUserId !== null}
-                  >
-                    削除
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
+                        削除
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>メンバーの削除</DialogTitle>
+                        <DialogDescription>
+                          {m.user_name || m.user_email} をこの事業所から削除します。このメンバーが
+                          他の事業所に所属していない場合、アカウントごと削除されます。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button variant="outline">キャンセル</Button>
+                        </DialogClose>
+                        <Button
+                          variant="destructive"
+                          onClick={() => handleRemove(m.user_id)}
+                          disabled={busyUserId !== null}
+                        >
+                          削除する
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 )}
               </div>
             </div>
