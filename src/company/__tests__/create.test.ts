@@ -3,6 +3,7 @@ import { and, eq, like } from "drizzle-orm";
 
 import { db } from "@/db/client";
 import { auditLog, company, membership, user } from "@/db/schema";
+import { softDeleteCompany } from "@/db/repositories/company";
 import { findMembershipsByUserId } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
 import { addCompany, createSignupCompany } from "../create";
@@ -78,6 +79,31 @@ describe("createSignupCompany", () => {
 
     const memberships = await findMembershipsByUserId(userId);
     expect(memberships.length).toBe(1);
+  });
+
+  // 所属事業所を全削除した user の再 signup。soft delete は company を DELETED にするが
+  // membership 行は残す (audit / invitation 保持のため) ので、0 件ガードを「全 membership」で
+  // 数えると残存 membership に弾かれ再作成できない (= /account ⇄ signup/company の redirect loop)。
+  // ガードは「ACTIVE company の membership」基準で数える、を本テストで固定する。
+  test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", async () => {
+    const userId = await seedUser("signup-after-delete");
+    const first = await createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    await softDeleteCompany(first.company.id);
+
+    const second = await createSignupCompany(userId, { name: "Second", orgCode: "CORPORATE" });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.membership.role).toBe("OWNER");
+    expect(second.company.activationStatus).toBe("ACTIVE");
+
+    const active = (await findMembershipsByUserId(userId)).filter(
+      (m) => m.companyActivationStatus === "ACTIVE",
+    );
+    expect(active.length).toBe(1);
+    expect(active.at(0)?.companyId).toBe(second.company.id);
   });
 });
 
