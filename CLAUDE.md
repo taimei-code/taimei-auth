@@ -2,7 +2,7 @@
 
 Web UI / IdP / User・Account・Session DB を 1 サービスに同居させている。将来的に identity DB レイヤを別プロセスに切り出せるよう、以下の境界を維持する。
 
-ローカル起動・compose 操作・スキーマ migration・Proto 生成のコマンド手順は [README.md](./README.md) を参照。本ファイルには境界ルールのみを記載し、How (コマンド) は README 側に集約する。
+ローカル起動・compose 操作・スキーマ migration・Proto 生成のコマンド手順は [README.md](./README.md) を参照。本ファイルには境界ルールと、過去に手戻りした既知の落とし穴を記載し、How (コマンド) は README 側に集約する。
 
 ## サブディレクトリ別ルール
 
@@ -63,3 +63,23 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages ./packages   # symlink target が必要
 ...
 ```
+
+---
+
+## 既知の落とし穴 (gotcha)
+
+境界ルールではないが、過去に手戻りした運用上の罠。
+
+### bun の `minimumReleaseAge` で blocked された依存を advisory 修正のため上げるとき
+
+- `bunfig.toml` の `minimumReleaseAgeExcludes` には**パッケージ本体だけでなく platform 別 optional binary (`@scope/<os>-<arch>`) も全て明示列挙**する。glob (`@esbuild/*`) は本キーで効かない。本体だけ除外すると binary が lockfile から落ち、CI の frozen install が「`@esbuild/linux-x64 could not be found`」で落ちる
+- `bun install --force` は既存 lockfile に fresh な optional binary を再解決して入れない。`rm -r node_modules bun.lock` の全再生成は range 内で 100+ package を refresh する (auth ライブラリ等の minor bump が混入)。**旧 binary を持つ lockfile を `git checkout main -- bun.lock` で起点に置いてから非 clean `bun install`** すると、当該 family のみ差し替わり他 package の不要 refresh を避けられる
+- bypass は [`docs/adr/0009-supply-chain-hardening.md`](./docs/adr/0009-supply-chain-hardening.md) §H の運用に従い ADR に記録する
+
+理由: esbuild 0.28.1 (GHSA-gv7w-rqvm-qjhr 修正) が release 2 日で、本体除外 → binary 欠落 → glob 無効 → `--force` 無効 → 全再生成は過大、と 6 手戻りした。最終解が main lockfile 起点の非 clean install による family 限定差し替え (詳細: PR #72)。
+
+### Hono で同 segment 数の static route と `:param` route が共存するとき
+
+- static route (`/api/account/companies/add`) を `:param` route (`/api/account/companies/:companyId`) より**前に登録**する。Hono 4.7 SmartRouter は静的優先ではなく**登録順依存**で、後に置くと static path が `:companyId="add"` として param handler に silent に吸われる
+
+理由: 机上で「静的優先」と誤 assume したが、使い捨て検証コードで実測したら登録順依存だった。段数が違う route (`/:companyId/delete`) は param と競合しない (詳細: `src/handlers/account-company.ts` のコメント / PR #72)。
