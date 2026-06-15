@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { user } from "../schema";
 import type { DbOrTx } from "../transaction";
@@ -59,6 +59,28 @@ export async function updateUserLastUsedCompany(
 // SDK は user.default_company_id (= last_used_company_id) を companyId の権威ソースにするため、
 // 削除 company を指す全 user を残存 ACTIVE membership (なければ NULL) に同一 tx で付け替える。
 // DeleteCompany フローでは当該 company の membership 物理削除後に呼ぶ前提 (= subquery が削除 company を選ばない)。
+// ADR-0010 D5: 登録途中放棄 (signup でアカウント作成後、一定時間 事業所を作らなかった 0 件アカウント) を
+// 回収する TTL sweep の候補抽出。D2 で通常の orphan は即削除されるため、残るのは新規 signup の放棄分のみ。
+export async function findAbandonedSignupUserIds(
+  olderThan: Date,
+  txOrDb: DbOrTx = db,
+): Promise<string[]> {
+  const rows = await txOrDb
+    .select({ id: user.id })
+    .from(user)
+    .where(
+      and(
+        lt(user.createdAt, olderThan),
+        sql`NOT EXISTS (
+          SELECT 1 FROM membership m
+          JOIN company c ON c.id = m.company_id
+          WHERE m.user_id = ${user.id} AND c.activation_status = 'ACTIVE'
+        )`,
+      ),
+    );
+  return rows.map((r) => r.id);
+}
+
 export async function reassignLastUsedCompanyForDeletedCompany(
   companyId: string,
   txOrDb: DbOrTx = db,
