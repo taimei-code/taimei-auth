@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate-manual": "bun run db/migrate-manual.ts",
+    "sweep:abandoned-signups": "bun run management/sweep-abandoned-signups.ts",
     "test": "bun test --concurrency=1",
     "lint": "biome check",
     "lint:fix": "biome check --write",
