@@ -78,6 +78,17 @@ export async function removeMembershipsOfCompany(
   return txOrDb.delete(membership).where(eq(membership.companyId, companyId)).returning();
 }
 
+// ADR-0010 PR-4 (backfill): D1 導入前に soft delete された company に残る ghost membership を
+// 持つ company id を引く。これらは D1 後なら存在しないはずの掃除対象。
+export async function findDeletedCompanyIdsWithMemberships(txOrDb: DbOrTx = db): Promise<string[]> {
+  const rows = await txOrDb
+    .selectDistinct({ companyId: membership.companyId })
+    .from(membership)
+    .innerJoin(company, eq(company.id, membership.companyId))
+    .where(eq(company.activationStatus, "DELETED"));
+  return rows.map((r) => r.companyId);
+}
+
 export type MemberRow = {
   membershipId: string;
   userId: string;
