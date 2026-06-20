@@ -83,6 +83,16 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - リスク評価: esbuild は build 専用 devDep で本番 bundle に同梱されない。RCE は悪性 `NPM_CONFIG_REGISTRY` を要し攻撃面は限定的。`0.28.1` で auth-client build / vite build:web / drizzle-kit migrate / 全 test が green であることを確認済み
 - 後始末 (任意): `0.28.1` と binary 群が 7 日齢 (2026-06-18 以降) を超えたら除外を外しても resolve は維持される
 
+### `minimumReleaseAgeExcludes` 2 回目 bypass (2026-06-20, undici) + hono / vite fix
+
+`bun audit` のライブ DB に新規 advisory 3 件 (hono / vite / undici) が出現し CI gate を落としたため対応。
+
+- **hono** `GHSA-88fw-hqm2-52qc` (HIGH, `<4.12.25`, CORS Middleware が origin=wildcard 時に credentials 付きで任意 Origin を反映) → direct dep を `^4.12.25` に minor bump。`4.12.25` (2026-06-09) は 7 日齢を満たし bypass 不要
+- **vite** `GHSA-fx2h-pf6j-xcff` (HIGH, `<=8.0.15`, Windows alternate path で `server.fs.deny` bypass) → build 専用 devDep を `^8.0.16` に。`8.0.16` (2026-06-01) は 7 日齢を満たし bypass 不要
+- **undici** `GHSA-vxpw-j846-p89q` (HIGH, WebSocket client の fragment count DoS) → `@vercel/blob` の transitive。`overrides` で `6.27.0` に固定。`6.27.0` (2026-06-15) は release 5 日で 7 日齢未達のため `minimumReleaseAgeExcludes` に `undici` を追加 (esbuild と同じ「security patch < 7 日」bypass)
+- リスク評価: undici advisory は WebSocket client のもので `@vercel/blob` は HTTP fetch 用途のため本アプリでは非該当。`6.27.0` で typecheck / lint / 全 test が green であることを確認済み
+- 後始末 (任意): `6.27.0` が 7 日齢 (2026-06-22 以降) を超えたら `undici` 除外を外しても resolve は維持される
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers

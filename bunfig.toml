@@ -6,7 +6,14 @@ minimumReleaseAge = 604800
 # could not be found」)。glob (@esbuild/*) は本キーで効かないため全 platform を明示列挙する
 # (lockfile を linux/mac/win いずれの frozen install でも解決可能に保つため全 platform 必要)。
 # build 専用 devDep / advisory は build 時 RCE。詳細: docs/adr/0009-supply-chain-hardening.md
+#
+# undici: GHSA-vxpw-j846-p89q (HIGH, WebSocket DoS) の修正版 6.27.0 が release 5 日で 7 日齢に
+# 満たないため除外。@vercel/blob の transitive で overrides により 6.27.0 に固定する。advisory は
+# WebSocket client のもので @vercel/blob は HTTP fetch 用途のため本アプリでは非該当だが、CI の
+# bun audit gate を通すため patched 版へ。esbuild と同じ「security patch < 7 日」の bypass。
+# 詳細: docs/adr/0009-supply-chain-hardening.md §H
 minimumReleaseAgeExcludes = [
+  "undici",
   "esbuild",
   "@esbuild/aix-ppc64",
   "@esbuild/android-arm",
