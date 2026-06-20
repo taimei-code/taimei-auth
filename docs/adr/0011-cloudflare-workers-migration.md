@@ -2,10 +2,11 @@
 
 ## Status
 
-Accepted — 実装は branch `feat/cloudflare-workers-migration` の**作業ツリーに存在 (未コミット)**。
-本番デプロイ前に閉じる項目は Consequences 参照。実機検証の観測値は
+Accepted — **本番稼働中** (`auth.taimei-code.com` / Cloudflare Workers + Hyperdrive·Neon + Upstash + Resend)。
+実機検証の観測値は
 [`0011-cloudflare-workers-migration.analysis.md`](./0011-cloudflare-workers-migration.analysis.md)
-(spike 台帳) に記録。本 ADR は決定と理由を担う。
+(spike 台帳) に記録。本 ADR は決定と理由を担う。デプロイで初めて踏んだバグは「本番デプロイで発見した
+workerd 固有 2 点」を参照。
 
 ## Context
 
@@ -94,6 +95,23 @@ Bun 専用 SDK 混入を防ぐ。Workers の `@sentry/cloudflare` 配線は未�
    で完走しない → `isBunRuntime() && isLocalEnvironment()` とし Workers では false (本番同様
    secondaryStorage)。Bun-local の e2e は postgres token 抽出を維持。
 
+### 本番デプロイで発見した workerd 固有 2 点
+
+spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2 件。
+
+4. **react-email render の lazy CJS init 未実行**: `render` の名前付き import も `import * as ReactEmail`
+   の namespace import も、esbuild は同じ未 init 参照 (`render2`) に畳み、workerd で
+   `render2 is not a function` になる (magic-link 送信が 500)。`await import("@react-email/components")`
+   の dynamic import で実行時に module init を強制して回避 (auth.ts / send-welcome.ts / send-invitation.ts)。
+   spike-4 の「namespace import で解決」は最小 spike バンドルでのみ成立し、better-auth 等を含む本実装
+   バンドルでは効かなかった。
+5. **vite base=/auth/ の static rewrite 欠落**: index.html は `/auth/assets/*` を参照するが、Workers
+   Static Assets は web/dist を `/` 直下に配信する。worker.ts の mountStatic で `/auth` を剥がして委譲
+   しないと `/auth/assets/*` が実在せず、not_found_handling=single-page-application が index.html (html)
+   を JS として返し SPA が SyntaxError で真っ白になる。Bun index.ts の serveStatic rewriteRequestPath
+   (/auth → '') と等価の処理が Workers entry に必要だった。spike-5 は /account deep link のみ検証し、
+   SPA エントリ /auth/ の rewrite を見落としていた。
+
 ## Why
 
 - **live binding で呼出側を無改修に保つ**: 移植の ripple を repository / handler に広げず、init の
@@ -127,8 +145,10 @@ Bun 専用 SDK 混入を防ぐ。Workers の `@sentry/cloudflare` 配線は未�
   interface 経由に。`AUTH_SERVICE_KEY` の production 未設定 fail-fast は entry 起動時の `process.exit`
   (`src/index.ts`) と `/rpc/*` の 503 (`src/app.ts`) の 2 段。`.gitignore` に `.dev.vars` /
   `.wrangler/` を追加 (dev secret と wrangler 一時物の除外)。
-- **本番固有の未確認/未了** (デプロイ前に閉じる): (1) 本番 Hyperdrive pool での tx pinning 再確認
-  (2) resend 実送信の疎通 (3) `@sentry/cloudflare` 配線 (4) 各無料枠の実数値。
+- **本番固有の未確認/未了**: (2) resend 実送信疎通 = Resend で `transactional.taimei-code.com` を検証し
+  `AUTH_FROM_EMAIL_*` を `noreply@transactional.taimei-code.com` に設定して**完了** (任意宛先に送信可)。
+  残: (1) 本番 Hyperdrive pool での tx pinning 再確認 (削除/除名経路) (3) `@sentry/cloudflare` 配線
+  (現状 console fallback) (4) 各無料枠の実数値。
 - **`storeInDatabase` の根因は未追跡**: workerd で DB verification 消費が hang する根因 (better-auth
   の DB token 消費の tx/query パターン) は本番非経路のため深追いせず。再評価トリガー = better-auth が
   Workers 対応の DB verification 版を出した時。

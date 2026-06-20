@@ -1,4 +1,3 @@
-import { render } from "@react-email/components";
 import { isLocalEnvironment } from "../env";
 import { getAppName, getAppUrl, getResendClient, getWelcomeFromEmail } from "./client";
 import WelcomeEmail from "./welcome";
@@ -15,6 +14,9 @@ export async function sendWelcomeEmail(email: string, userName?: string | null):
   const dashboardUrl = `${getAppUrl()}/dashboard`;
 
   const emailComponent = WelcomeEmail({ appName, userName, dashboardUrl });
+  // render は dynamic import で実行時 init を強制 (workerd バンドルの lazy CJS init 回避)。
+  // 詳細: docs/adr/0011-cloudflare-workers-migration.md
+  const { render } = await import("@react-email/components");
   const html = await render(emailComponent);
   const text = await render(emailComponent, { plainText: true });
 

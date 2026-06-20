@@ -37,10 +37,21 @@ function bootstrap(env: Env): Hono {
   initAuth();
   app = buildApp({
     mountStatic: (a) => {
-      // 共有ルートに該当しない path は Workers Static Assets へ委譲。
-      // SPA deep link (/auth/*, /account/*) は not_found_handling: single-page-application で
-      // index.html にフォールバックする。
-      a.all("*", (c) => (c.env as Env).ASSETS.fetch(c.req.raw));
+      a.all("*", (c) => {
+        const env = c.env as Env;
+        const url = new URL(c.req.url);
+        // vite base=/auth/ のため index.html は /auth/assets/* を参照する。Workers Static Assets は
+        // web/dist を / 直下に配信するので、/auth プレフィックスを剥がして委譲する (Bun index.ts の
+        // serveStatic rewriteRequestPath と同じ)。剥がさないと /auth/assets/* が実在せず
+        // not_found_handling=single-page-application が index.html (html) を JS として返し画面が
+        // 真っ白になる。詳細: docs/adr/0002-spa-routing-and-static-assets.md
+        if (url.pathname.startsWith("/auth/")) {
+          url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
+          return env.ASSETS.fetch(new Request(url, c.req.raw));
+        }
+        // /account/* 等の deep link は実ファイル無し → SPA fallback で index.html。
+        return env.ASSETS.fetch(c.req.raw);
+      });
     },
   });
   return app;

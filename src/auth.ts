@@ -2,7 +2,6 @@ import { betterAuth, APIError } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
-import { render } from "@react-email/components";
 import { db } from "@/db/client";
 import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
@@ -125,6 +124,10 @@ function buildAuth() {
           const appName = getAppName();
 
           const emailComponent = MagicLinkEmail({ url, appName });
+          // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
+          // undefined ("render2 is not a function") になる。dynamic import で実行時に module
+          // init を強制する。詳細: docs/adr/0011-cloudflare-workers-migration.md
+          const { render } = await import("@react-email/components");
           const html = await render(emailComponent);
           const text = await render(emailComponent, { plainText: true });
 
