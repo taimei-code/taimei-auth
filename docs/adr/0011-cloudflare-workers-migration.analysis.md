@@ -96,6 +96,9 @@ status: **unverified / grounded / killed** の 3 値のみ。grounded は ground
   - **resend SDK が workerd で instantiate 成功** (`emails.send` が関数として存在、fetch ベースで Node API 非依存の見込み)。実送信は未検証 (要 API キー)。
   - **重要な移植注意**: `import { render } from "@react-email/components"` の**名前付き import は workerd の esbuild バンドルで `render2 is not a function` で失敗**。`import * as ReactEmail` の namespace アクセスで解決。Bun では名前付き import が通る (= workerd バンドル固有の CJS/ESM interop 問題)。移植時は namespace import か、解決を bundle で検証する。
 - 残 (既知の swap、spike 不要): `@sentry/bun` は名前どおり Bun 専用 → `@sentry/cloudflare` へ差し替え。resend の実送信は本番キーで疎通確認。
+- **本番訂正 (2026-06-21)**: namespace import は better-auth 等を含む本実装バンドルでは esbuild が
+  未 init 参照に畳み `render2 is not a function` のまま (本番 magic-link 500)。dynamic import
+  (`await import`) で実行時 init を強制して解決。spike の「namespace import で解決」は最小 spike 限定だった。
 
 ### spike-5 (前提 E) — 2026-06-20 — verdict: **grounded**
 
@@ -107,6 +110,10 @@ status: **unverified / grounded / killed** の 3 値のみ。grounded は ground
   - `/api/ping` → `{"from":"worker"}` (worker ルートが SPA fallback に吸われず共存)
   - `/auth/canary-token/abc` → 204 (worker ルート動作)
 - 結論: `Bun.file` の spa-fallback は Workers Static Assets (`single-page-application` mode) で置換でき、worker ルートと共存する。canary token は単なる GET ルート (Sentry 通知 + 204) で静的配信と独立、移植は自明。
+- **本番訂正 (2026-06-21)**: 本 spike は `/account` deep link のみ検証し、vite `base=/auth/` の SPA
+  エントリ `/auth/` の static rewrite を見落とした。index.html が `/auth/assets/*` を参照するため
+  worker.ts に `/auth` プレフィックス除去 (Bun の rewriteRequestPath 相当) が必要で、未対応だと
+  `/auth/assets/*` が index.html (html) を JS として返し本番で画面真っ白になった。
 
 ---
 
