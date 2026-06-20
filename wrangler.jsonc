@@ -1,0 +1,32 @@
+{
+  // Cloudflare Workers 設定。設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+  // 本番では hyperdrive.id を実 Hyperdrive config id に、vars を本番値に、
+  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN) は `wrangler secret put` で注入する。
+  // ローカルは localConnectionString + .dev.vars (gitignore 済) を使う。
+  "name": "taimei-auth",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./web/dist",
+    "binding": "ASSETS",
+    // worker を常に先に走らせ (/ の loginShortcut 等が静的 index.html に吸われないように)、
+    // worker が該当しない path を env.ASSETS.fetch へ委譲する。deep link は SPA fallback。
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://postgres:password@127.0.0.1:5435/auth"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "development",
+    "APP_NAME": "taimei",
+    "AUTH_SERVICE_URL": "http://auth.taimei-code.local:8799",
+    "AUTH_COOKIE_DOMAIN": "taimei-code.local",
+    "AUTH_TRUSTED_ORIGINS": "http://app.taimei-code.local:3001,http://auth.taimei-code.local:8799"
+  }
+}

@@ -1,4 +1,4 @@
-import { redis } from "../redis";
+import { incrementRateWindow } from "../redis";
 import { Sentry } from "../sentry";
 
 // ADR-009: company 単位の invitation rate limit。既存 Magic Link rate limit と独立した二重防御。
@@ -13,18 +13,12 @@ function hourlyLimit(): number {
 // 上限内なら true、超過なら false を返す。
 export async function incrInvitationRate(companyId: string): Promise<boolean> {
   const key = `invitation_rate:${companyId}:${currentHourBucket()}`;
-  const results = await redis
-    .multi()
-    .incr(key)
-    .expire(key, 3600)
-    .exec()
-    .catch((error) => {
-      Sentry.captureException(error, { tags: { component: "invitation-rate-limit" } });
-      return null;
-    });
-  if (!results) return true; // fail-open
-  const count = Number(results[0] ?? 0);
-  return count <= hourlyLimit();
+  const result = await incrementRateWindow(key, 3600).catch((error) => {
+    Sentry.captureException(error, { tags: { component: "invitation-rate-limit" } });
+    return null;
+  });
+  if (!result) return true; // fail-open
+  return result.count <= hourlyLimit();
 }
 
 function currentHourBucket(): string {
