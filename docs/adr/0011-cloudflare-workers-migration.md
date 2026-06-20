@@ -82,7 +82,8 @@ Bun は `serveStatic` + `Bun.file` SPA fallback、Workers は `env.ASSETS.fetch`
 
 `src/sentry.ts` は SDK 非依存の facade で、entry が backend を注入する (`src/sentry-bun.ts` が
 `@sentry/bun`)。handler が import する facade に SDK 依存を持たせないことで Workers バンドルへの
-Bun 専用 SDK 混入を防ぐ。Workers の `@sentry/cloudflare` 配線は未了 (現状 console fallback)。
+Bun 専用 SDK 混入を防ぐ。Workers は `src/sentry-cloudflare.ts` が `@sentry/cloudflare` backend を
+注入し、`worker.ts` の export default を `Sentry.withSentry` でラップする (SENTRY_DSN 未設定時は console fallback)。
 
 ### workerd 固有の 3 点 (実機検証で発見・修正)
 
@@ -134,6 +135,7 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
 | E | DB を Neon HTTP ドライバ | interactive tx 非対応。Hyperdrive/neon-serverless が必要 | — |
 | F | rate-limit を Cloudflare KV | 結果整合でカウンタがずれる。atomic INCR 不可 | 強整合が要らない用途のみ |
 | G | Bun を捨て Workers 専用 | テスト/compose/fallback を失う。dual の方が安全 | Workers 運用が安定し Bun 維持コストが上回った時 |
+| H | DB を Cloudflare ネイティブ Postgres | 2026-06 時点で非存在。Cloudflare の Postgres 窓口は Hyperdrive (接続層) と PlanetScale 提携 ($5/月〜・無料枠なし) のみ。D1 は SQLite。$0 を破るうえ接続層は結局 Hyperdrive で Neon と同じ | Cloudflare が無料枠付きの自社 Postgres を出した時 (blog.cloudflare.com の tag/postgres を監視) |
 
 ## Consequences
 
@@ -145,10 +147,12 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
   interface 経由に。`AUTH_SERVICE_KEY` の production 未設定 fail-fast は entry 起動時の `process.exit`
   (`src/index.ts`) と `/rpc/*` の 503 (`src/app.ts`) の 2 段。`.gitignore` に `.dev.vars` /
   `.wrangler/` を追加 (dev secret と wrangler 一時物の除外)。
-- **本番固有の未確認/未了**: (2) resend 実送信疎通 = Resend で `transactional.taimei-code.com` を検証し
-  `AUTH_FROM_EMAIL_*` を `noreply@transactional.taimei-code.com` に設定して**完了** (任意宛先に送信可)。
-  残: (1) 本番 Hyperdrive pool での tx pinning 再確認 (削除/除名経路) (3) `@sentry/cloudflare` 配線
-  (現状 console fallback) (4) 各無料枠の実数値。
+- **本番固有の未確認/未了**: (1) 本番 Hyperdrive pool での tx pinning = `pg_advisory_xact_lock` +
+  `SELECT FOR UPDATE` の 2 並列 tx が直列化することを本番 remote Hyperdrive で実機確認し**完了**
+  (lost update なし、`A:enter,A:exit,B:enter,B:exit`)。(2) resend 実送信疎通 = Resend で
+  `transactional.taimei-code.com` 検証 + `AUTH_FROM_EMAIL_*` 設定で**完了**。(3) `@sentry/cloudflare`
+  配線 = `Sentry.withSentry` + backend 注入で**完了** (SENTRY_DSN 設定で有効化)。残: (4) 各無料枠の
+  実数値 (Neon 0.5GB/100 compute-h 等、launch 後の実トラフィックで再確認)。
 - **`storeInDatabase` の根因は未追跡**: workerd で DB verification 消費が hang する根因 (better-auth
   の DB token 消費の tx/query パターン) は本番非経路のため深追いせず。再評価トリガー = better-auth が
   Workers 対応の DB verification 版を出した時。
