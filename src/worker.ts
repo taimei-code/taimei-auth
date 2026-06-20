@@ -11,10 +11,14 @@ import { initAuth } from "./auth";
 import { initRedis } from "./redis";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
+import * as Sentry from "@sentry/cloudflare";
+import { initCloudflareSentry } from "./sentry-cloudflare";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
   ASSETS: { fetch: (req: Request) => Promise<Response> };
+  SENTRY_DSN?: string;
+  APP_ENV?: string;
   [key: string]: unknown;
 };
 
@@ -32,6 +36,7 @@ function bootstrap(env: Env): Hono {
   for (const [k, v] of Object.entries(env)) {
     if (typeof v === "string") process.env[k] = v;
   }
+  initCloudflareSentry(env.SENTRY_DSN);
   initDb(env.HYPERDRIVE.connectionString);
   initRedis();
   initAuth();
@@ -57,7 +62,7 @@ function bootstrap(env: Env): Hono {
   return app;
 }
 
-export default {
+const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
     // 背景タスク (audit / welcome email) を ctx.waitUntil に束縛する (background.ts 参照)。
@@ -67,3 +72,16 @@ export default {
     );
   },
 };
+
+// @sentry/cloudflare は withSentry で fetch をラップし、リクエストスコープで Sentry client を
+// 初期化する。DSN は env (secret) から読み、未設定時は no-op (facade は console fallback のまま)。
+// handler が throw した未捕捉例外はここで自動的に Sentry へ送られる。
+// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+export default Sentry.withSentry(
+  (env: Env) => ({
+    dsn: env.SENTRY_DSN,
+    environment: env.APP_ENV ?? "production",
+    tracesSampleRate: 0.1,
+  }),
+  handler,
+);
