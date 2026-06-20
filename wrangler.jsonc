@@ -18,15 +18,25 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "00000000000000000000000000000000",
+      "id": "1c0d32b60a144a3cabc729bd83484276",
       "localConnectionString": "postgres://postgres:password@127.0.0.1:5435/auth"
     }
   ],
   "vars": {
-    "APP_ENV": "development",
+    "APP_ENV": "production",
     "APP_NAME": "taimei",
-    "AUTH_SERVICE_URL": "http://auth.taimei-code.local:8799",
-    "AUTH_COOKIE_DOMAIN": "taimei-code.local",
-    "AUTH_TRUSTED_ORIGINS": "http://app.taimei-code.local:3001,http://auth.taimei-code.local:8799"
-  }
+    "AUTH_SERVICE_URL": "https://auth.taimei-code.com",
+    "AUTH_COOKIE_DOMAIN": "taimei-code.com",
+    "AUTH_TRUSTED_ORIGINS": "https://www.taimei-code.com,https://auth.taimei-code.com",
+    // from は Resend 検証済みドメイン (transactional.taimei-code.com) のアドレスにする。
+    // 未設定だと client.ts の default onboarding@resend.dev になり、Resend テストモードで
+    // アカウント所有者宛にしか送れず任意ユーザーへの magic-link が 403 になる。
+    "AUTH_FROM_EMAIL_MAGIC_LINK": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_WELCOME": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_INVITATION": "noreply@transactional.taimei-code.com"
+  },
+  // 本番ドメイン。custom_domain:true で Cloudflare が auth.taimei-code.com の DNS レコードと
+  // TLS 証明書を管理し Worker に紐付ける。cross-subdomain cookie (.taimei-code.com) のため
+  // workers.dev でなくこのホストで配信する必要がある (ADR-0004 / ADR-0011)。
+  "routes": [{ "pattern": "auth.taimei-code.com", "custom_domain": true }]
 }
