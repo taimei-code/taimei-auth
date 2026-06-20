@@ -1,5 +1,11 @@
 # ADR-0001: ConnectRPC は Hono 経由で Content-Length 付き再送する
 
+## Status
+
+Superseded by [ADR-0011](./0011-cloudflare-workers-migration.md) — RPC を `node:http` proxy から
+fetch ハンドラ直配信 (`createConnectRouter` + `createFetchHandler`) に変えたため、本 ADR の
+content-length 再送 (`proxy-helpers.ts`) は不要になり削除した。
+
 ## Context
 
 **auth ホスト** (CONTEXT.md) は Bun runtime 上の Hono server を主としつつ、`/rpc/*` のみ ConnectRPC を扱う。`@connectrpc/connect-node` の `connectNodeAdapter` は Node.js の `http.Server` 前提で書かれており、Bun 標準の Web API (`Request`/`Response` ベース) と直接結線できない。Hono と ConnectRPC を 1 ポートで共存させたい。

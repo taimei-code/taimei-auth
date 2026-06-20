@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from "hono";
-import { redis } from "./redis";
+import { incrementRateWindow } from "./redis";
 import { Sentry } from "./sentry";
 
 export type RateLimitOptions = {
@@ -20,19 +20,12 @@ export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
 export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {
   return async (c, next) => {
     const key = await options.keyFn(c);
-    const results = await redis
-      .multi()
-      .incr(key)
-      .expire(key, options.windowSec)
-      .ttl(key)
-      .exec()
-      .catch((error) => {
-        Sentry.captureException(error, { tags: { component: "rate-limit" } });
-        return null;
-      });
-    if (!results) return next();
-    const count = Number(results[0] ?? 0);
-    const ttl = Number(results[2] ?? options.windowSec);
+    const result = await incrementRateWindow(key, options.windowSec).catch((error) => {
+      Sentry.captureException(error, { tags: { component: "rate-limit" } });
+      return null;
+    });
+    if (!result) return next();
+    const { count, ttl } = result;
     if (count > options.limit) {
       return c.json({ error: "Too Many Requests" }, 429, {
         "Retry-After": String(Math.max(ttl, 1)),
