@@ -83,3 +83,19 @@ COPY --from=deps /app/packages ./packages   # symlink target が必要
 - static route (`/api/account/companies/add`) を `:param` route (`/api/account/companies/:companyId`) より**前に登録**する。Hono 4.7 SmartRouter は静的優先ではなく**登録順依存**で、後に置くと static path が `:companyId="add"` として param handler に silent に吸われる
 
 理由: 机上で「静的優先」と誤 assume したが、使い捨て検証コードで実測したら登録順依存だった。段数が違う route (`/:companyId/delete`) は param と競合しない (詳細: `src/handlers/account-company.ts` のコメント / PR #72)。
+
+### Workers (workerd) で per-request しか持てないリソースを isolate 横断で使い回さない
+
+- `pg.Pool` 等の常駐 TCP 接続を module singleton にして request をまたいで再利用すると、workerd は別 request の I/O コンテキストで開いた socket を再利用できず、query が resolve も reject もせず **"Worker hung"** (HTTP 500) になる。throw でないため `withSentry` も捕捉せず **Sentry にも飛ばない**(症状が「Sentry にイベントが来ない」に見える)
+- 対策: Cloudflare 公式どおり fetch ごとにリソースを生成し `ctx.waitUntil(resource.close())` で閉じる。drizzle のように単一 client を共有する層は、client は module ロード時に 1 度だけ構築し、中の Pool だけを `AsyncLocalStorage` で per-request に差し替える (詳細: `db/client.ts` の `RoutingPool` / `docs/adr/0011-cloudflare-workers-migration.md` / PR #91)
+- 間欠的に出る (warm isolate が前 request のアイドル接続を掴んだ時だけ) ため、`/health` 等 DB を踏む endpoint の連打 or `wrangler tail` の `outcome:exception` で再現・観測する
+
+理由: 「Sentry にイベントが飛ばない」調査から入ったが、真因は singleton `pg.Pool` の cross-request 再利用による hung だった。env (`SENTRY_DSN` 等) からは原因が出ず、`wrangler tail` の hung 例外と本番 `/health` 連打 (7-8/8 が 500) で確定した (詳細: PR #91)。
+
+### workerd 固有挙動の検証は `wrangler dev --remote` を使う (`versions upload` は preview URL が出ない)
+
+- 上記のような workerd 固有の挙動 (cross-request I/O 制約等) は local の `wrangler dev` / miniflare では再現しないため、実 workerd + 実バインディング (Hyperdrive 等) で検証する必要がある
+- 本 worker は `custom_domain` 運用 (workers.dev subdomain 無効) のため、`wrangler versions upload` で 0% version を上げても **preview URL が払い出されない** (`wrangler versions view` でも出ない)。検証用 endpoint が得られず詰む
+- 代わりに `wrangler dev --remote` を使う: working-tree のコードをエッジでエフェメラル実行し (version 履歴に残らない)、`localhost` 経由で実 Hyperdrive 等を叩ける。本番トラフィックは無影響。`/health` 連打等で fix を実測する
+
+理由: 修正の実機検証で `wrangler versions upload` を実行したが preview URL が出ず (custom_domain で workers.dev preview 無効)、`wrangler dev --remote` に切替えて実 workerd 上で `/health` 30/30 hung 0 を確認できた (詳細: PR #91)。
