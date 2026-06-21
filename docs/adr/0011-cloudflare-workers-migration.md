@@ -11,7 +11,7 @@ workerd 固有 2 点」を参照。
 ## Context
 
 taimei-auth を $0 でホスティングしたい (taimei 本体は Vercel 据え置き、課金はドメインのみ許容)。
-consumer (taimei, `www.taimei-code.com`) との session Cookie 共有は cookie domain `.taimei-code.com`
+consumer (taimei, `app.taimei-code.com`) との session Cookie 共有は cookie domain `.taimei-code.com`
 で発行されるためホストが別でも成立する (ADR-0004) ので、auth を `auth.taimei-code.com` 相当の別ホスト
 に置ける。
 
