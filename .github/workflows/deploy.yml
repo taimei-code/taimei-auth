@@ -1,0 +1,84 @@
+name: Deploy
+
+# main の CI (lint / typecheck / test) が green になったら本番 Cloudflare Workers にデプロイする。
+# workflow_run で CI 成功を gate にすることで「赤い main」をデプロイしない。
+# 手順: build (auth-client SDK + web assets) -> migration (drizzle/*.sql があれば) -> wrangler deploy。
+# migration を deploy より先に行い、新コードが未 migrate の DB に当たらないようにする
+# (compose の auth-migrate -> auth-service と同じ順序: docker-compose.yml)。
+#
+# 必要な repo secret:
+#   - CLOUDFLARE_API_TOKEN  : Workers Scripts:Edit 権限の API token (wrangler deploy 用)
+#   - CLOUDFLARE_ACCOUNT_ID : 対象アカウント ID (token が複数アカウントに紐づく場合に必須)
+#   - DATABASE_URL          : 本番 Neon の「直接接続」文字列 (Hyperdrive 経由ではなく direct。DDL 用)
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  # CI を介さず main の現在 HEAD を手動デプロイする緊急用。
+  workflow_dispatch:
+
+# GITHUB_TOKEN は使わない (deploy は CLOUDFLARE_API_TOKEN、migration は DATABASE_URL)。最小権限に絞る。
+permissions:
+  contents: read
+
+# 同時デプロイを直列化し migration / deploy の競合を防ぐ。進行中は cancel せず待たせる。
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # workflow_run 経由は CI 成功時のみ実行。workflow_dispatch は常に実行。
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # workflow_run のときは CI が検証した commit を、それ以外 (workflow_dispatch) は default ref を取る。
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3"
+
+      # --ignore-scripts: install lifecycle 経由の任意コード実行を封じる (ADR-0009 C / ci.yml と同一)。
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      # wrangler が bundle する worker は @taimei-code/auth-client を dist 経由で解決するため先に build
+      # (CLAUDE.md ルール 6 / Dockerfile deps stage と同じ理由)。
+      - name: Build auth-client SDK
+        working-directory: packages/auth-client
+        run: bun run build
+
+      # wrangler.jsonc の assets.directory = ./web/dist。SPA を先に build しておく。
+      - name: Build web SPA
+        run: bun run build:web
+
+      # drizzle/*.sql が存在する場合のみ migration を適用する。
+      # drizzle-kit migrate は __drizzle_migrations 追跡で idempotent (pending のみ適用) なので、
+      # 毎デプロイ実行しても新規 migration だけが当たる。
+      # db:migrate (auto-managed) -> db:migrate-manual (drizzle/manual/ trigger) の順 (CI / compose と同一)。
+      - name: Apply migrations (drizzle/*.sql があれば)
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if ls drizzle/*.sql >/dev/null 2>&1; then
+            echo "migration files found -> applying (db:migrate + db:migrate-manual)"
+            bun run db:migrate
+            bun run db:migrate-manual
+          else
+            echo "no migration files under drizzle/ -> skip"
+          fi
+
+      # vars は wrangler.jsonc、secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN) は
+      # 事前に wrangler secret put 済み。deploy は API token (+ account id) のみ必要。
+      - name: Deploy to Cloudflare Workers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bunx wrangler deploy
