@@ -58,3 +58,15 @@ PL/pgSQL trigger / VIEW / FUNCTION / custom DDL など、`db/schema.ts` のス�
 新規 trigger SQL を追加する場合は `drizzle/manual/NNNN_*.sql` を 1 ファイルずつ append し、host で `drizzle-kit migrate` や `psql` で手動適用せず compose 再起動で `auth-migrate` を経由させる (root CLAUDE.md ルール 4 と整合)。
 
 詳細: `~/.claude/plans/taimei/ADR-001-auth-separation.md` Phase 1.5 retrospective (R1 user.revision DB trigger の導入経緯)。
+
+---
+
+## 既知の落とし穴 (gotcha)
+
+### `db/client.ts` の Pool を「最適化のため」singleton 化しない
+
+workerd は別 request の I/O コンテキストで開いた socket を再利用できないため、`pg.Pool` を module singleton にして request 横断で使い回すと query がハングする ("Worker hung")。`db` は単一インスタンスのまま、中の Pool だけを `AsyncLocalStorage` 経由で per-request に差し替える現行設計を崩さないこと (詳細は root CLAUDE.md「既知の落とし穴」/ PR #91)。
+
+### drizzle に渡す Pool 代替クラスは `extends Pool` にする
+
+`RoutingPool` のように drizzle へ渡す Pool の差し替えクラスは duck-typing や `Object.setPrototypeOf` でなく `extends Pool` にする。drizzle node-postgres の transaction は `this.client instanceof Pool` で pool 判定し、満たさないと `connect()` で接続を pin せず BEGIN/COMMIT が別接続に散って advisory lock / `FOR UPDATE` の atomicity が壊れる。`extends` なら instanceof が自然に成立し、`as unknown as Pool` の object cast も不要になる (詳細: `db/client.ts` の `RoutingPool` / PR #91)。
