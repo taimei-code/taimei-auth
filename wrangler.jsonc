@@ -27,7 +27,7 @@
     "APP_NAME": "taimei",
     "AUTH_SERVICE_URL": "https://auth.taimei-code.com",
     "AUTH_COOKIE_DOMAIN": "taimei-code.com",
-    "AUTH_TRUSTED_ORIGINS": "https://www.taimei-code.com,https://auth.taimei-code.com",
+    "AUTH_TRUSTED_ORIGINS": "https://app.taimei-code.com,https://auth.taimei-code.com",
     // from は Resend 検証済みドメイン (transactional.taimei-code.com) のアドレスにする。
     // 未設定だと client.ts の default onboarding@resend.dev になり、Resend テストモードで
     // アカウント所有者宛にしか送れず任意ユーザーへの magic-link が 403 になる。
