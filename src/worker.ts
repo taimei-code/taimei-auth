@@ -3,10 +3,10 @@
 // (2) 静的配信 = Workers Static Assets (env.ASSETS) のみ。
 // 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
 import type { Hono } from "hono";
-// Workers の composition root が runtime bootstrap で initDb を呼ぶ (Bun の index.ts は module ロード時
-// auto-init のため不要、ADR-0011)。drizzle-orm / @/db/schema の直 import は worker.ts でも禁止のまま。
-// biome-ignore lint/style/noRestrictedImports: 上記のとおり Workers bootstrap での initDb のみ許可
-import { initDb } from "@/db/client";
+// Workers は request ごとに実 Pool を供給する (理由は db/client.ts / ADR-0011)。
+// drizzle-orm / @/db/schema の直 import は worker.ts でも禁止のまま。
+// biome-ignore lint/style/noRestrictedImports: 上記のとおり Workers の per-request pool 供給のみ許可
+import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
 import { initRedis } from "./redis";
 import { buildApp } from "./app";
@@ -27,9 +27,10 @@ type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
 // isolate ごとに 1 度だけ bootstrap し、構築済み app を返す (app 非 null が「init 済み」フラグを兼ねる)。
 let app: Hono | null = null;
 
-// 順序は load-bearing: env→process.env コピー → initDb → initRedis → initAuth → buildApp。
-// initAuth の buildAuth が db / redisStorage を、buildApp が process.env (AUTH_TRUSTED_ORIGINS 等) を
-// 読むため、この順序でしか正しく組み上がらない。
+// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → buildApp。
+// initAuth の buildAuth が db (= module ロード時構築済みの routing db) / redisStorage を、
+// buildApp が process.env (AUTH_TRUSTED_ORIGINS 等) を読むため、この順序でしか正しく組み上がらない。
+// DB の実 Pool は bootstrap で作らず fetch ごとに runWithRequestPool で供給する (理由は db/client.ts)。
 function bootstrap(env: Env): Hono {
   if (app) return app;
   // 文字列 vars/secrets を process.env に写し、既存の process.env.* 参照を Workers でも有効化する。
@@ -37,7 +38,6 @@ function bootstrap(env: Env): Hono {
     if (typeof v === "string") process.env[k] = v;
   }
   initCloudflareSentry(env.SENTRY_DSN);
-  initDb(env.HYPERDRIVE.connectionString);
   initRedis();
   initAuth();
   app = buildApp({
@@ -65,11 +65,23 @@ function bootstrap(env: Env): Hono {
 const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
-    // 背景タスク (audit / welcome email) を ctx.waitUntil に束縛する (background.ts 参照)。
-    return withWaitUntil(
-      (promise) => ctx.waitUntil(promise),
-      () => app.fetch(req, env, ctx as never),
-    );
+    // request ごとに実 Pool を作り ALS に載せる。background task (audit log) も同 ALS 内で起動するため
+    // 同じ request pool を掴む。Pool は全 background task の完走を待ってから閉じる (早く閉じると
+    // ctx.waitUntil 中の DB 書き込みが壊れた接続を掴み再び "hung" になる)。runBackground 登録分を集め、
+    // finally で (= response を返す前に) settle 待ち + pool.end() を 1 本の waitUntil に登録する。
+    const backgroundPromises: Promise<unknown>[] = [];
+    return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
+      try {
+        return await withWaitUntil(
+          (promise) => {
+            backgroundPromises.push(promise);
+          },
+          () => app.fetch(req, env, ctx as never),
+        );
+      } finally {
+        ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));
+      }
+    });
   },
 };
 
