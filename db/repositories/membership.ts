@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { company, membership, user } from "../schema";
+import { company, membership, type Role, user } from "../schema";
 import type { DbOrTx, DbTx } from "../transaction";
 
 // ADR-009: Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
@@ -25,7 +25,7 @@ export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string)
 }
 
 export type MembershipRow = typeof membership.$inferSelect;
-export type Role = "OWNER" | "ADMIN" | "MEMBER";
+export type { Role };
 
 export type MembershipWithCompany = MembershipRow & {
   companyName: string;

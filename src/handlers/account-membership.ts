@@ -86,7 +86,7 @@ accountMembership.post(
     const targetMembership = await findMembership(targetUserId, companyId);
     if (!targetMembership) return c.json({ error: "not_found" }, 404);
 
-    const beforeRole = targetMembership.role as Role;
+    const beforeRole = targetMembership.role;
     if (!canChangeRole(membershipResult.membership.role, beforeRole, nextRole)) {
       return c.json({ error: "forbidden" }, 403);
     }
@@ -146,7 +146,7 @@ accountMembership.post(
     const targetMembership = await findMembership(targetUserId, companyId);
     if (!targetMembership) return c.json({ error: "not_found" }, 404);
 
-    const targetRole = targetMembership.role as Role;
+    const targetRole = targetMembership.role;
     if (!canRemoveTarget(actorRole, isSelf, targetRole)) {
       return c.json({ error: "forbidden" }, 403);
     }
