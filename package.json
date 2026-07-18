@@ -37,7 +37,7 @@
     "@taimei-code/auth-client": "workspace:*",
     "@upstash/redis": "^1.38.0",
     "@vercel/blob": "^2.3.3",
-    "better-auth": "^1.4.3",
+    "better-auth": "^1.6.23",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
