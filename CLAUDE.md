@@ -99,3 +99,11 @@ COPY --from=deps /app/packages ./packages   # symlink target が必要
 - 代わりに `wrangler dev --remote` を使う: working-tree のコードをエッジでエフェメラル実行し (version 履歴に残らない)、`localhost` 経由で実 Hyperdrive 等を叩ける。本番トラフィックは無影響。`/health` 連打等で fix を実測する
 
 理由: 修正の実機検証で `wrangler versions upload` を実行したが preview URL が出ず (custom_domain で workers.dev preview 無効)、`wrangler dev --remote` に切替えて実 workerd 上で `/health` 30/30 hung 0 を確認できた (詳細: PR #91)。
+
+### TypeScript 7 (native compiler) へ更新するとき
+
+- TS7 は **`node_modules/@types` の自動 include を廃止**した。`types` 未指定の tsconfig を新規追加すると `bun:test` / `Bun` / `import.meta.dir` 等の ambient 型が消えて TS2304 で fail する。tsconfig に `"types": ["bun"]` を明示する (root と `packages/auth-client` の `tsconfig.json` が実例)
+- `baseUrl` は TS7 で**削除済みオプション** (TS5102 エラー)。`paths` は TS 4.1 以降 tsconfig ファイル位置基準で解決されるため、`baseUrl: "."` は単純削除で解決結果は変わらない
+- 型を解決できない side-effect import (`import "./index.css"` 等) を TS 5.x は黙認していたが TS7 は **TS2882 でエラー化**する。vite 配下は `web/src/vite-env.d.ts` の `/// <reference types="vite/client" />` (create-vite 標準 scaffold) で解決する
+
+理由: 5.9.2 → 7.0.2 更新時に typecheck が上記 3 種で fail した。特に自動 include 廃止は「package.json に @types 系が書いてあっても効かない」挙動変更で、最小再現により TS 5.9.2 では exit 0 / 7.0.2 のみ fail であることを実測して確定した。今後 `types` 未指定の tsconfig を追加すると同じ罠を踏む。
