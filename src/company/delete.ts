@@ -10,7 +10,6 @@ import {
   findMembership,
   lockOwnerMembershipsOfCompany,
   removeMembershipsOfCompany,
-  type Role,
 } from "@/db/repositories/membership";
 import { reassignLastUsedCompanyForDeletedCompany } from "@/db/repositories/user";
 import { runInTransaction } from "@/db/transaction";
@@ -61,7 +60,7 @@ export const deleteCompany = (
           actor_user_id: actorUserId,
           company_id: companyId,
           removed_user_id: m.userId,
-          role_at_removal: m.role as Role,
+          role_at_removal: m.role,
         },
         tx,
       );

@@ -222,7 +222,7 @@ accountInvitation.post("/api/account/accept-invitation", async (c) => {
         id: generateMembershipId(),
         userId: actor.id,
         companyId: invitation.companyId,
-        role: invitation.role as Role,
+        role: invitation.role,
       },
       tx,
     );
@@ -231,7 +231,7 @@ accountInvitation.post("/api/account/accept-invitation", async (c) => {
         actor_user_id: actor.id,
         invitation_id: invitation.id,
         company_id: invitation.companyId,
-        role: invitation.role as "OWNER" | "ADMIN" | "MEMBER",
+        role: invitation.role,
       },
       tx,
     );

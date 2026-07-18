@@ -10,6 +10,9 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
+// ADR-009: membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
+export type Role = "OWNER" | "ADMIN" | "MEMBER";
+
 // ADR-009: 事業所 (課金単位)。詳細: CONTEXT.md '事業所 / company'
 // user / session / membership / invitation が参照するため declaration を先頭に置く。
 export const company = pgTable("company", {
@@ -154,7 +157,7 @@ export const membership = pgTable(
       .notNull()
       .references(() => company.id, { onDelete: "restrict" }),
     // 'OWNER' | 'ADMIN' | 'MEMBER' (CONTEXT.md 'role')
-    role: text("role").notNull(),
+    role: text("role").$type<Role>().notNull(),
     joinedAt: timestamp("joined_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -180,7 +183,7 @@ export const invitation = pgTable(
       .references(() => company.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
     // 招待時に付与する role (= 受諾後の membership.role に become)
-    role: text("role").notNull(),
+    role: text("role").$type<Role>().notNull(),
     token: text("token").notNull().unique(),
     expiresAt: timestamp("expires_at").notNull(),
     // 'PENDING' | 'ACCEPTED' | 'REVOKED' (NC3 結論: used_at 1 列多重化を避ける)

@@ -12,12 +12,10 @@ type Forbidden = { ok: false; error: "forbidden"; status: 403 };
 
 export type ActorResult = { ok: true; actor: Actor } | Unauthorized;
 
-export type MembershipOnlyResult =
-  | { ok: true; membership: MembershipRow & { role: Role } }
-  | Forbidden;
+export type MembershipOnlyResult = { ok: true; membership: MembershipRow } | Forbidden;
 
 export type MembershipGuardResult =
-  | { ok: true; actor: Actor; membership: MembershipRow & { role: Role } }
+  | { ok: true; actor: Actor; membership: MembershipRow }
   | Unauthorized
   | Forbidden;
 
@@ -86,9 +84,7 @@ export function createMembershipGuard(deps: {
     companyId: string,
     minRole?: Role,
   ): Promise<MembershipOnlyResult> => {
-    const membership = (await deps.findMembership(actor.id, companyId)) as
-      | (MembershipRow & { role: Role })
-      | undefined;
+    const membership = await deps.findMembership(actor.id, companyId);
     if (!membership) return { ok: false, error: "forbidden", status: 403 };
     // 未知 role は fail-closed で 403 に倒す (isAtLeast が own-property 判定で未知 role を false に落とす)。
     if (minRole && !isAtLeast(membership.role, minRole)) {

@@ -1,7 +1,7 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { invitation } from "../schema";
+import { invitation, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
 
 // ADR-009: Stripe 流 prefix `inv_<24chars>` で entity type を log / audit_log 上で即判定可能に。
@@ -12,7 +12,7 @@ export const generateInvitationToken = (): string => nanoid(32);
 
 export type InvitationRow = typeof invitation.$inferSelect;
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
-export type Role = "OWNER" | "ADMIN" | "MEMBER";
+export type { Role };
 
 export async function findInvitationByToken(
   token: string,
