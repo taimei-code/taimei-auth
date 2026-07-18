@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { Role } from "@/db/repositories/membership";
-import { canAttemptRemoval, canChangeRole, canRemoveTarget, isAtLeast } from "../policy";
+import {
+  canAttemptRemoval,
+  canChangeRole,
+  canInviteRole,
+  canRemoveTarget,
+  isAtLeast,
+} from "../policy";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
 
@@ -38,6 +44,18 @@ describe("canChangeRole", () => {
           expect(canChangeRole(actor, before, next)).toBe(expected);
         });
       }
+    }
+  }
+});
+
+describe("canInviteRole", () => {
+  // role=OWNER の招待は OWNER のみ、それ以外 (ADMIN/MEMBER 招待) は所属権限内で発行可 (不変)。
+  for (const actor of ROLES) {
+    for (const invited of ROLES) {
+      const expected = invited === "OWNER" ? actor === "OWNER" : true;
+      test(`actor=${actor} invited=${invited} → ${expected}`, () => {
+        expect(canInviteRole(actor, invited)).toBe(expected);
+      });
     }
   }
 });
