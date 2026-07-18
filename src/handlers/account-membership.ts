@@ -1,7 +1,14 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { getSessionActorId } from "./session-actor";
+import {
+  canAttemptRemoval,
+  canChangeRole,
+  canRemoveTarget,
+  requireActor,
+  requireMembership,
+  requireMembershipOf,
+} from "../membership/guard";
 import { runInTransaction } from "@/db/transaction";
 import {
   OwnerInvariantViolation,
@@ -24,15 +31,12 @@ const setCurrentCompanyBody = z.object({ company_id: z.string().min(1).max(64) }
 const updateRoleBody = z.object({ role: z.enum(["OWNER", "ADMIN", "MEMBER"]) });
 const transferOwnershipBody = z.object({ to_user_id: z.string().min(1).max(64) });
 
-function canManageMembers(role: string): boolean {
-  return role === "OWNER" || role === "ADMIN";
-}
-
 // POST 事業所切替。target の active membership を持つことを verify し user.last_used_company_id を更新。
 // secondaryStorage 構成では session 列でなく user.last_used_company_id が SDK companyId の source。
 accountMembership.post("/api/account/current-company", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const userId = actorResult.actor.id;
 
   const parsed = setCurrentCompanyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
@@ -66,8 +70,9 @@ accountMembership.post("/api/account/current-company", async (c) => {
 accountMembership.post(
   "/api/account/companies/:companyId/members/:targetUserId/role",
   async (c) => {
-    const actorUserId = await getSessionActorId(c.req.raw.headers);
-    if (!actorUserId) return c.json({ error: "unauthorized" }, 401);
+    const actorResult = await requireActor(c.req.raw.headers);
+    if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+    const actorUserId = actorResult.actor.id;
     const companyId = c.req.param("companyId");
     const targetUserId = c.req.param("targetUserId");
 
@@ -75,17 +80,14 @@ accountMembership.post(
     if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
     const nextRole = parsed.data.role as Role;
 
-    const actorMembership = await findMembership(actorUserId, companyId);
-    if (!actorMembership || !canManageMembers(actorMembership.role)) {
-      return c.json({ error: "forbidden" }, 403);
-    }
+    const membershipResult = await requireMembershipOf(actorResult.actor, companyId, "ADMIN");
+    if (!membershipResult.ok)
+      return c.json({ error: membershipResult.error }, membershipResult.status);
     const targetMembership = await findMembership(targetUserId, companyId);
     if (!targetMembership) return c.json({ error: "not_found" }, 404);
 
     const beforeRole = targetMembership.role as Role;
-    // ADMIN は OWNER を操作できず、OWNER 昇格も承認できない (OWNER のみ可)。
-    const touchesOwner = beforeRole === "OWNER" || nextRole === "OWNER";
-    if (touchesOwner && actorMembership.role !== "OWNER") {
+    if (!canChangeRole(membershipResult.membership.role, beforeRole, nextRole)) {
       return c.json({ error: "forbidden" }, 403);
     }
     if (beforeRole === nextRole) {
@@ -127,16 +129,17 @@ accountMembership.post(
 accountMembership.post(
   "/api/account/companies/:companyId/members/:targetUserId/remove",
   async (c) => {
-    const actorUserId = await getSessionActorId(c.req.raw.headers);
-    if (!actorUserId) return c.json({ error: "unauthorized" }, 401);
     const companyId = c.req.param("companyId");
     const targetUserId = c.req.param("targetUserId");
 
-    const actorMembership = await findMembership(actorUserId, companyId);
-    if (!actorMembership) return c.json({ error: "forbidden" }, 403);
+    const membershipResult = await requireMembership(c.req.raw.headers, companyId);
+    if (!membershipResult.ok)
+      return c.json({ error: membershipResult.error }, membershipResult.status);
+    const actorUserId = membershipResult.actor.id;
+    const actorRole = membershipResult.membership.role;
 
     const isSelf = actorUserId === targetUserId;
-    if (!isSelf && !canManageMembers(actorMembership.role)) {
+    if (!canAttemptRemoval(actorRole, isSelf)) {
       return c.json({ error: "forbidden" }, 403);
     }
 
@@ -144,8 +147,7 @@ accountMembership.post(
     if (!targetMembership) return c.json({ error: "not_found" }, 404);
 
     const targetRole = targetMembership.role as Role;
-    // ADMIN は OWNER を除名できない (OWNER 同士 / 本人退会は可)。
-    if (targetRole === "OWNER" && !isSelf && actorMembership.role !== "OWNER") {
+    if (!canRemoveTarget(actorRole, isSelf, targetRole)) {
       return c.json({ error: "forbidden" }, 403);
     }
 
@@ -162,8 +164,9 @@ accountMembership.post(
 // 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (Q5)。actor は OWNER のまま
 // 委譲後に降格するため、委譲中に OWNER ゼロにはならない (lock guard 不要だが念のため包む)。
 accountMembership.post("/api/account/companies/:companyId/transfer-ownership", async (c) => {
-  const actorUserId = await getSessionActorId(c.req.raw.headers);
-  if (!actorUserId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const actorUserId = actorResult.actor.id;
   const companyId = c.req.param("companyId");
 
   const parsed = transferOwnershipBody.safeParse(await c.req.json().catch(() => null));
@@ -171,10 +174,9 @@ accountMembership.post("/api/account/companies/:companyId/transfer-ownership", a
   const toUserId = parsed.data.to_user_id;
   if (toUserId === actorUserId) return c.json({ error: "invalid_argument" }, 400);
 
-  const actorMembership = await findMembership(actorUserId, companyId);
-  if (!actorMembership || actorMembership.role !== "OWNER") {
-    return c.json({ error: "forbidden" }, 403);
-  }
+  const membershipResult = await requireMembershipOf(actorResult.actor, companyId, "OWNER");
+  if (!membershipResult.ok)
+    return c.json({ error: membershipResult.error }, membershipResult.status);
   const targetMembership = await findMembership(toUserId, companyId);
   if (!targetMembership) return c.json({ error: "not_found" }, 404);
   // 既に OWNER の相手への「委譲」は actor を無意味に降格し audit も誤解を生むため弾く。
