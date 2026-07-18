@@ -28,6 +28,14 @@ export type AppOptions = {
   mountStatic: (app: Hono) => void;
 };
 
+// account router 群の登録を 1 箇所に集約する。認可 smoke (account-routes-auth.test.ts) が同じ helper で
+// アプリを組むことで、router の追加漏れ (guard 未通過 route の混入) を CI で検知できる。
+export function mountAccountRoutes(app: Hono): void {
+  app.route("/", accountCompany);
+  app.route("/", accountInvitation);
+  app.route("/", accountMembership);
+}
+
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
 
@@ -124,9 +132,7 @@ export function buildApp(options: AppOptions): Hono {
   });
 
   app.post("/api/account/avatar/upload-token", avatarUploadHandler);
-  app.route("/", accountCompany);
-  app.route("/", accountInvitation);
-  app.route("/", accountMembership);
+  mountAccountRoutes(app);
 
   // session-aware redirect を静的配信より前に登録する。詳細: docs/adr/0002-spa-routing-and-static-assets.md
   app.use("/auth/*", authEntryRedirect);

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { auth } from "../auth";
-import { getSessionActor, getSessionActorId } from "./session-actor";
+import { requireActor, requireMembership } from "../membership/guard";
 import { getAppUrl } from "../email/client";
 import { runInTransaction } from "@/db/transaction";
 import {
@@ -43,19 +43,12 @@ const acceptInvitationBody = z.object({
   invitation_token: z.string().min(1).max(256),
 });
 
-// OWNER / ADMIN のみメンバー管理可能 (MEMBER は不可)。
-function canManageMembers(role: string): boolean {
-  return role === "OWNER" || role === "ADMIN";
-}
-
 // GET メンバー一覧 (所属メンバーなら誰でも閲覧可)
 accountInvitation.get("/api/account/companies/:companyId/members", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
   const companyId = c.req.param("companyId");
-
-  const actorMembership = await findMembership(userId, companyId);
-  if (!actorMembership) return c.json({ error: "forbidden" }, 403);
+  const membershipResult = await requireMembership(c.req.raw.headers, companyId);
+  if (!membershipResult.ok)
+    return c.json({ error: membershipResult.error }, membershipResult.status);
 
   const members = await findMembersByCompanyId(companyId);
   return c.json({
@@ -72,14 +65,10 @@ accountInvitation.get("/api/account/companies/:companyId/members", async (c) => 
 
 // GET 招待中 (PENDING) 一覧 (OWNER / ADMIN のみ)
 accountInvitation.get("/api/account/companies/:companyId/invitations", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
   const companyId = c.req.param("companyId");
-
-  const actorMembership = await findMembership(userId, companyId);
-  if (!actorMembership || !canManageMembers(actorMembership.role)) {
-    return c.json({ error: "forbidden" }, 403);
-  }
+  const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
+  if (!membershipResult.ok)
+    return c.json({ error: membershipResult.error }, membershipResult.status);
 
   const invitations = await listPendingInvitations(companyId);
   return c.json({
@@ -95,14 +84,11 @@ accountInvitation.get("/api/account/companies/:companyId/invitations", async (c)
 
 // POST 招待作成 (OWNER / ADMIN のみ)
 accountInvitation.post("/api/account/companies/:companyId/invitations", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
   const companyId = c.req.param("companyId");
-
-  const actorMembership = await findMembership(userId, companyId);
-  if (!actorMembership || !canManageMembers(actorMembership.role)) {
-    return c.json({ error: "forbidden" }, 403);
-  }
+  const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
+  if (!membershipResult.ok)
+    return c.json({ error: membershipResult.error }, membershipResult.status);
+  const userId = membershipResult.actor.id;
 
   const parsed = createInvitationBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
@@ -173,15 +159,12 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
 accountInvitation.post(
   "/api/account/companies/:companyId/invitations/:invitationId/revoke",
   async (c) => {
-    const userId = await getSessionActorId(c.req.raw.headers);
-    if (!userId) return c.json({ error: "unauthorized" }, 401);
     const companyId = c.req.param("companyId");
     const invitationId = c.req.param("invitationId");
-
-    const actorMembership = await findMembership(userId, companyId);
-    if (!actorMembership || !canManageMembers(actorMembership.role)) {
-      return c.json({ error: "forbidden" }, 403);
-    }
+    const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
+    if (!membershipResult.ok)
+      return c.json({ error: membershipResult.error }, membershipResult.status);
+    const userId = membershipResult.actor.id;
 
     const revoked = await runInTransaction(async (tx) => {
       const row = await markInvitationRevoked(invitationId, companyId, tx);
@@ -200,8 +183,9 @@ accountInvitation.post(
 
 // POST 招待受諾。strict email match (invitation.email === session.email) で token 盗難に対する phishing 防御。
 accountInvitation.post("/api/account/accept-invitation", async (c) => {
-  const actor = await getSessionActor(c.req.raw.headers);
-  if (!actor) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const actor = actorResult.actor;
 
   const parsed = acceptInvitationBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {

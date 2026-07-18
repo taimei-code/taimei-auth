@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { getSessionActorId } from "./session-actor";
+import { requireActor, requireMembership } from "../membership/guard";
 import { runInTransaction } from "@/db/transaction";
 import { findCompanyById, updateCompany, type OrgCode } from "@/db/repositories/company";
-import { findMembership, findMembershipsByUserId } from "@/db/repositories/membership";
+import { findMembershipsByUserId } from "@/db/repositories/membership";
 import { recordCompanyUpdated } from "@/db/repositories/audit-log";
 import { findUserById } from "@/db/repositories/user";
 import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
@@ -23,8 +23,9 @@ const companyBody = z.object({
 });
 
 accountCompany.get("/api/account/memberships", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const userId = actorResult.actor.id;
 
   const [rows, userRow] = await Promise.all([
     findMembershipsByUserId(userId),
@@ -71,8 +72,9 @@ const serializeCreatedCompany = ({ company, membership }: CreatedCompany) => ({
 
 // signup フローの「最初の 1 事業所」作成。0 件ガード / 409 race 直列化は createSignupCompany が担う。
 accountCompany.post("/api/account/companies", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const userId = actorResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
@@ -96,8 +98,9 @@ accountCompany.post("/api/account/companies", async (c) => {
 // 順序依存は「セグメント数が一致する static vs param」だけ。`/:companyId/delete` が `/:companyId`
 // の後ろでも安全なのはセグメント数が違い競合しないため (= `/add` だけがこの予防順序を要する)。
 accountCompany.post("/api/account/companies/add", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const userId = actorResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
@@ -113,14 +116,11 @@ accountCompany.post("/api/account/companies/add", async (c) => {
 
 // PATCH 相当: 事業所の name / org_code を編集 (OWNER のみ)。before/after diff を audit。
 accountCompany.post("/api/account/companies/:companyId", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
   const companyId = c.req.param("companyId");
-
-  const actorMembership = await findMembership(userId, companyId);
-  if (!actorMembership || actorMembership.role !== "OWNER") {
-    return c.json({ error: "forbidden" }, 403);
-  }
+  const membershipResult = await requireMembership(c.req.raw.headers, companyId, "OWNER");
+  if (!membershipResult.ok)
+    return c.json({ error: membershipResult.error }, membershipResult.status);
+  const userId = membershipResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
@@ -160,8 +160,9 @@ accountCompany.post("/api/account/companies/:companyId", async (c) => {
 // なった元メンバー (最後の事業所を消した OWNER 自身を含む) は連動でアカウント削除する。orchestration は
 // deleteCompany use-case (単一 tx)。設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
 accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
-  const userId = await getSessionActorId(c.req.raw.headers);
-  if (!userId) return c.json({ error: "unauthorized" }, 401);
+  const actorResult = await requireActor(c.req.raw.headers);
+  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  const userId = actorResult.actor.id;
   const companyId = c.req.param("companyId");
 
   const result = await deleteCompany(userId, companyId);

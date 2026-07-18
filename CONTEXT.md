@@ -124,6 +124,10 @@ _Avoid_: logout (英語混在を避ける), session 終了 (より広義)
 better-auth lifecycle hook や admin 操作によって、user 自身の意思とは独立に **session** を強制無効化する操作。`session.revoked_at` 列に時刻を記録し、VerifySession が `RESULT_REVOKED` を返す状態にする。**sign-out** (ユーザー自発) と対比される。trigger は password change / account delete 等の security-sensitive operation。
 _Avoid_: invalidate (より広義), terminate, kill
 
+**membership guard**:
+**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。
+_Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)
+
 **audit log**:
 user の意図ある action (**sign-in** / **sign-out** / account delete 等) を append-only で記録する DB テーブル (`audit_log`)。**session revoke** などの内部 state change は記録対象外 (それは action の consequence として implicit に類推する)。forensic 用途を想定し、`session` cascade delete で失われる IP / userAgent も payload に persist する。
 _Avoid_: event log (より広義), activity log
