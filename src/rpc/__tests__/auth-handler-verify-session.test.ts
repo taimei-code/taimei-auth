@@ -1,5 +1,16 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import { findAccountByUserId } from "@/db/repositories/account";
+import { findUserById } from "@/db/repositories/user";
+import { auth } from "../../auth";
 import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
+
+// bun の mock.module はプロセス全体に効き、mock.restore() でも実装は戻らない。mock 適用前の
+// 実 module をここで捕捉し、afterAll で貼り直して後続テストファイルへの mock 漏れを防ぐ。
+const realModules = {
+  auth: { auth },
+  userRepository: { findUserById },
+  accountRepository: { findAccountByUserId },
+};
 
 const mockGetSession = mock();
 const mockSignOut = mock();
@@ -46,6 +57,12 @@ beforeEach(async () => {
 
 afterEach(() => {
   mock.restore();
+});
+
+afterAll(() => {
+  mock.module("../../auth", () => realModules.auth);
+  mock.module("@/db/repositories/user", () => realModules.userRepository);
+  mock.module("@/db/repositories/account", () => realModules.accountRepository);
 });
 
 describe("verifySession outcome", () => {
