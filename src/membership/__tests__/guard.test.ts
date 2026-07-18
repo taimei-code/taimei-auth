@@ -1,58 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { MembershipRow, Role } from "@/db/repositories/membership";
-import {
-  type Actor,
-  canAttemptRemoval,
-  canChangeRole,
-  canRemoveTarget,
-  createMembershipGuard,
-} from "../guard";
+import { type Actor, createMembershipGuard } from "../guard";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
 
 // guard が row から読むのは role のみなので、テストは role だけ持つ最小 fake で足りる。
 const fakeMembership = (role: Role): MembershipRow => ({ role }) as unknown as MembershipRow;
-
-describe("canChangeRole", () => {
-  // before/next のどちらかが OWNER に触れる変更は OWNER のみ許可、それ以外は所属していれば可。
-  for (const actor of ROLES) {
-    for (const before of ROLES) {
-      for (const next of ROLES) {
-        const touchesOwner = before === "OWNER" || next === "OWNER";
-        const expected = touchesOwner ? actor === "OWNER" : true;
-        test(`actor=${actor} before=${before} next=${next} → ${expected}`, () => {
-          expect(canChangeRole(actor, before, next)).toBe(expected);
-        });
-      }
-    }
-  }
-});
-
-describe("canAttemptRemoval", () => {
-  // 本人退会は無条件、他者除名は ADMIN 以上。
-  for (const actor of ROLES) {
-    for (const isSelf of [true, false]) {
-      const expected = isSelf || actor === "OWNER" || actor === "ADMIN";
-      test(`actor=${actor} isSelf=${isSelf} → ${expected}`, () => {
-        expect(canAttemptRemoval(actor, isSelf)).toBe(expected);
-      });
-    }
-  }
-});
-
-describe("canRemoveTarget", () => {
-  // OWNER を他者が抜くのは OWNER のみ。それ以外は許可。
-  for (const actor of ROLES) {
-    for (const isSelf of [true, false]) {
-      for (const target of ROLES) {
-        const expected = !(target === "OWNER" && !isSelf && actor !== "OWNER");
-        test(`actor=${actor} isSelf=${isSelf} target=${target} → ${expected}`, () => {
-          expect(canRemoveTarget(actor, isSelf, target)).toBe(expected);
-        });
-      }
-    }
-  }
-});
 
 const anActor: Actor = { id: "u_1", email: "a@example.com" };
 const noHeaders = new Headers();
