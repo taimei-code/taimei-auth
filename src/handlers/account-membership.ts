@@ -1,14 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import {
-  canAttemptRemoval,
-  canChangeRole,
-  canRemoveTarget,
-  requireActor,
-  requireMembership,
-  requireMembershipOf,
-} from "../membership/guard";
+import { requireActor, requireMembership, requireMembershipOf } from "../membership/guard";
+import { canAttemptRemoval, canChangeRole, canRemoveTarget } from "../membership/policy";
 import { runInTransaction } from "@/db/transaction";
 import {
   OwnerInvariantViolation,
