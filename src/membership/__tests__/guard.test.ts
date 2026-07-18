@@ -136,13 +136,13 @@ describe("requireMembership (requireActor + requireMembershipOf の合成)", () 
     expect((await requireMembership(noHeaders, "co_1", "ADMIN")).ok).toBe(false);
   });
 
-  test("認証済・minRole 充足 → ok + actor + membership", async () => {
+  test("認証済・minRole 充足 → ok + actor + role", async () => {
     const { requireMembership } = buildGuard({ actor: anActor, membershipRole: "ADMIN" });
     const result = await requireMembership(noHeaders, "co_1", "ADMIN");
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.actor).toEqual(anActor);
-      expect(result.membership.role).toBe("ADMIN");
+      expect(result.role).toBe("ADMIN");
     }
   });
 });

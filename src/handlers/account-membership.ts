@@ -81,7 +81,7 @@ accountMembership.post(
     if (!targetMembership) return c.json({ error: "not_found" }, 404);
 
     const beforeRole = targetMembership.role;
-    if (!canChangeRole(membershipResult.membership.role, beforeRole, nextRole)) {
+    if (!canChangeRole(membershipResult.role, beforeRole, nextRole)) {
       return c.json({ error: "forbidden" }, 403);
     }
     if (beforeRole === nextRole) {
@@ -130,7 +130,7 @@ accountMembership.post(
     if (!membershipResult.ok)
       return c.json({ error: membershipResult.error }, membershipResult.status);
     const actorUserId = membershipResult.actor.id;
-    const actorRole = membershipResult.membership.role;
+    const actorRole = membershipResult.role;
 
     const isSelf = actorUserId === targetUserId;
     if (!canAttemptRemoval(actorRole, isSelf)) {

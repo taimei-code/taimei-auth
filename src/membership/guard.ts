@@ -1,6 +1,6 @@
 import { auth } from "../auth";
 import { isAtLeast } from "./policy";
-import { findMembership, type MembershipRow, type Role } from "@/db/repositories/membership";
+import { findMembership, type Role } from "@/db/repositories/membership";
 
 // SPA 向け Hono ルートの認可入口 (I/O 層)。session→membership→role→403 を解決し、handler が
 // `if (!r.ok) return c.json({ error: r.error }, r.status)` の 2 行で HTTP に写像できる Result を返す。
@@ -14,10 +14,10 @@ type Forbidden = { ok: false; error: "forbidden"; status: 403 };
 
 export type ActorResult = { ok: true; actor: Actor } | Unauthorized;
 
-export type MembershipOnlyResult = { ok: true; membership: MembershipRow } | Forbidden;
+export type MembershipOnlyResult = { ok: true; role: Role } | Forbidden;
 
 export type MembershipGuardResult =
-  | { ok: true; actor: Actor; membership: MembershipRow }
+  | { ok: true; actor: Actor; role: Role }
   | Unauthorized
   | Forbidden;
 
@@ -56,7 +56,7 @@ export function createMembershipGuard(deps: {
     if (minRole && !isAtLeast(membership.role, minRole)) {
       return { ok: false, error: "forbidden", status: 403 };
     }
-    return { ok: true, membership };
+    return { ok: true, role: membership.role };
   };
 
   const requireMembership = async (
@@ -68,7 +68,7 @@ export function createMembershipGuard(deps: {
     if (!actorResult.ok) return actorResult;
     const membershipResult = await requireMembershipOf(actorResult.actor, companyId, minRole);
     if (!membershipResult.ok) return membershipResult;
-    return { ok: true, actor: actorResult.actor, membership: membershipResult.membership };
+    return { ok: true, actor: actorResult.actor, role: membershipResult.role };
   };
 
   return { requireActor, requireMembershipOf, requireMembership };
