@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { auth } from "../auth";
 import { requireActor, requireMembership } from "../membership/guard";
+import { canInviteRole } from "../membership/policy";
 import { getAppUrl } from "../email/client";
 import { runInTransaction } from "@/db/transaction";
 import {
@@ -93,6 +94,9 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
   const parsed = createInvitationBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
     return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
+  }
+  if (!canInviteRole(membershipResult.role, parsed.data.role)) {
+    return c.json({ error: "forbidden" }, 403);
   }
   const email = parsed.data.email.toLowerCase();
   const role = parsed.data.role as Role;

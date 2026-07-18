@@ -26,6 +26,14 @@ export function canChangeRole(actorRole: Role, beforeRole: Role, nextRole: Role)
   return touchesOwner ? actorRole === "OWNER" : true;
 }
 
+// 招待できる role の可否: role=OWNER の招待は OWNER のみ発行可能、それ以外は所属権限内で発行可。
+// canChangeRole が role 変更経路で「OWNER に触れる変更は OWNER のみ」を強制するのと同じ policy を
+// 招待経路にも適用し、ADMIN が invitation 経由で新規 OWNER を mint する回避路 (accept 時に
+// transfer-ownership / canChangeRole の OWNER ガードを迂回) を塞ぐ (Issue #104)。
+export function canInviteRole(actorRole: Role, invitedRole: Role): boolean {
+  return invitedRole === "OWNER" ? actorRole === "OWNER" : true;
+}
+
 // target 取得前の除名資格判定。本人退会は無条件、他者除名は ADMIN 以上。
 export function canAttemptRemoval(actorRole: Role, isSelf: boolean): boolean {
   return isSelf || isAtLeast(actorRole, "ADMIN");
