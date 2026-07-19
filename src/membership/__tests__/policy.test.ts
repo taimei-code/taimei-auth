@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { Role } from "@/db/repositories/membership";
 import {
+  canAcceptInvitedRole,
   canAttemptRemoval,
   canChangeRole,
   canInviteRole,
@@ -84,4 +85,38 @@ describe("canRemoveTarget", () => {
       }
     }
   }
+});
+
+describe("canAcceptInvitedRole", () => {
+  // QA-M-06 3×3 の全 (invitedRole, inviterCurrentRole) — OWNER 招待は inviter OWNER のみ true、
+  // それ以外の invitedRole は inviter role を問わず true。
+  for (const invited of ROLES) {
+    for (const inviter of ROLES) {
+      const expected = invited === "OWNER" ? inviter === "OWNER" : true;
+      test(`invited=${invited} inviter=${inviter} → ${expected}`, () => {
+        expect(canAcceptInvitedRole(invited, inviter)).toBe(expected);
+      });
+    }
+  }
+
+  // QA-M-06 招待者 membership 行が存在しない (除名済 / 退会) — OWNER 招待だけ false に倒し、
+  // ADMIN/MEMBER 招待は招待者退会の正規ケースを壊さないよう true のまま。
+  test("inviter null で invited=OWNER → false (fail-closed)", () => {
+    expect(canAcceptInvitedRole("OWNER", null)).toBe(false);
+  });
+  test("inviter null で invited=ADMIN/MEMBER → true (招待者退会の正規ケース)", () => {
+    expect(canAcceptInvitedRole("ADMIN", null)).toBe(true);
+    expect(canAcceptInvitedRole("MEMBER", null)).toBe(true);
+  });
+
+  // QA-D-03 未知の invitedRole (直接 INSERT された unknown 文字列) は Object.hasOwn で fail-closed。
+  test("invited=想定外 role 文字列 → false", () => {
+    expect(canAcceptInvitedRole("SUPERVISOR", "OWNER")).toBe(false);
+    expect(canAcceptInvitedRole("", "OWNER")).toBe(false);
+  });
+
+  // prototype チェーン上のキー名が role 判定を素通しさせないこと。
+  test("invited=toString → false (prototype pollution 予防)", () => {
+    expect(canAcceptInvitedRole("toString", "OWNER")).toBe(false);
+  });
 });
