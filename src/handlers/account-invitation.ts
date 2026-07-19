@@ -2,34 +2,27 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { auth } from "../auth";
-import { requireActor, requireMembership } from "../membership/guard";
-import { canInviteRole } from "../membership/policy";
+import {
+  guardErrorResponse,
+  requireInvitationAccept,
+  requireInvite,
+  requireMembership,
+} from "../membership/guard";
 import { getAppUrl } from "../email/client";
 import { runInTransaction } from "@/db/transaction";
 import {
-  findMembership,
-  findMembersByCompanyId,
-  generateMembershipId,
-  insertMembership,
-  type Role,
-} from "@/db/repositories/membership";
-import {
   findActivePendingInvitation,
-  findInvitationByToken,
   generateInvitationId,
   generateInvitationToken,
   insertInvitation,
-  isAcceptable,
   listPendingInvitations,
-  markInvitationAccepted,
   markInvitationRevoked,
 } from "@/db/repositories/invitation";
-import {
-  recordInvitationAccepted,
-  recordInvitationRevoked,
-  recordInvitationSent,
-} from "@/db/repositories/audit-log";
+import { findMembersByCompanyId, type Role } from "@/db/repositories/membership";
+import { recordInvitationRevoked, recordInvitationSent } from "@/db/repositories/audit-log";
 import { incrInvitationRate } from "../invitation/rate-limit";
+import { acceptInvitation } from "../invitation/accept";
+import { parseZodBody } from "./parse-body";
 
 export const accountInvitation = new Hono();
 
@@ -48,8 +41,7 @@ const acceptInvitationBody = z.object({
 accountInvitation.get("/api/account/companies/:companyId/members", async (c) => {
   const companyId = c.req.param("companyId");
   const membershipResult = await requireMembership(c.req.raw.headers, companyId);
-  if (!membershipResult.ok)
-    return c.json({ error: membershipResult.error }, membershipResult.status);
+  if (!membershipResult.ok) return guardErrorResponse(membershipResult);
 
   const members = await findMembersByCompanyId(companyId);
   return c.json({
@@ -68,8 +60,7 @@ accountInvitation.get("/api/account/companies/:companyId/members", async (c) => 
 accountInvitation.get("/api/account/companies/:companyId/invitations", async (c) => {
   const companyId = c.req.param("companyId");
   const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
-  if (!membershipResult.ok)
-    return c.json({ error: membershipResult.error }, membershipResult.status);
+  if (!membershipResult.ok) return guardErrorResponse(membershipResult);
 
   const invitations = await listPendingInvitations(companyId);
   return c.json({
@@ -83,23 +74,21 @@ accountInvitation.get("/api/account/companies/:companyId/invitations", async (c)
   });
 });
 
-// POST 招待作成 (OWNER / ADMIN のみ)
+// POST 招待作成 (OWNER / ADMIN のみ、canInviteRole で OWNER 招待は OWNER のみ)。
+// 判定順は requireInvite entry に集約 (401 → 403 ADMIN → 400 with details → 403 canInviteRole)。
 accountInvitation.post("/api/account/companies/:companyId/invitations", async (c) => {
   const companyId = c.req.param("companyId");
-  const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
-  if (!membershipResult.ok)
-    return c.json({ error: membershipResult.error }, membershipResult.status);
-  const userId = membershipResult.actor.id;
-
-  const parsed = createInvitationBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) {
-    return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
-  }
-  if (!canInviteRole(membershipResult.role, parsed.data.role)) {
-    return c.json({ error: "forbidden" }, 403);
-  }
-  const email = parsed.data.email.toLowerCase();
-  const role = parsed.data.role as Role;
+  const guardResult = await requireInvite({
+    headers: c.req.raw.headers,
+    companyId,
+    parseBody: parseZodBody(c, createInvitationBody, {
+      withDetails: true,
+      transform: (d) => ({ email: d.email.toLowerCase(), role: d.role as Role }),
+    }),
+  });
+  if (!guardResult.ok) return guardErrorResponse(guardResult);
+  const { actor, email, role } = guardResult;
+  const userId = actor.id;
 
   // idempotency check を rate limit より先に行う: 既存 PENDING への再送 (リマインド) は
   // 新規招待ではないため rate counter を消費しない。
@@ -166,8 +155,7 @@ accountInvitation.post(
     const companyId = c.req.param("companyId");
     const invitationId = c.req.param("invitationId");
     const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
-    if (!membershipResult.ok)
-      return c.json({ error: membershipResult.error }, membershipResult.status);
+    if (!membershipResult.ok) return guardErrorResponse(membershipResult);
     const userId = membershipResult.actor.id;
 
     const revoked = await runInTransaction(async (tx) => {
@@ -186,62 +174,32 @@ accountInvitation.post(
 );
 
 // POST 招待受諾。strict email match (invitation.email === session.email) で token 盗難に対する phishing 防御。
+// entry (requireInvitationAccept) が 401→400→404 (token)→403 (email_mismatch)→reused 短絡→410 の
+// 判定を担い、accept mutation (PENDING guard / OWNER 招待の招待者再検証 / membership INSERT / audit)
+// は acceptInvitation use-case が tx 所有で行う。
 accountInvitation.post("/api/account/accept-invitation", async (c) => {
-  const actorResult = await requireActor(c.req.raw.headers);
-  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
-  const actor = actorResult.actor;
+  const guardResult = await requireInvitationAccept({
+    headers: c.req.raw.headers,
+    parseBody: parseZodBody(c, acceptInvitationBody, {
+      transform: (d) => ({ token: d.invitation_token }),
+    }),
+  });
+  if (!guardResult.ok) return guardErrorResponse(guardResult);
 
-  const parsed = acceptInvitationBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) {
-    return c.json({ error: "invalid_argument" }, 400);
+  if (guardResult.mode === "reused") {
+    return c.json({
+      ok: true,
+      company_id: guardResult.companyId,
+      reused: true,
+    });
   }
 
-  const invitation = await findInvitationByToken(parsed.data.invitation_token);
-  if (!invitation) return c.json({ error: "not_found" }, 404);
-
-  // email strict match (case-insensitive)。不一致は 403 (token 盗難で別人が accept するのを防ぐ)。
-  if (invitation.email.toLowerCase() !== actor.email.toLowerCase()) {
-    return c.json({ error: "email_mismatch" }, 403);
-  }
-
-  // 既に同 (user, company) の membership があれば最終状態は達成済 = idempotent success。
-  // invitation は PENDING のままでも再 mark せず終える (初回 accept 時に audit 記録済)。
-  const already = await findMembership(actor.id, invitation.companyId);
-  if (already) {
-    return c.json({ ok: true, company_id: invitation.companyId, reused: true });
-  }
-
-  if (!isAcceptable(invitation)) {
-    // PENDING でない (accepted/revoked) or 期限切れ → 410 Gone
+  const result = await acceptInvitation({
+    actor: guardResult.actor,
+    invitation: guardResult.invitation,
+  });
+  if (!result.ok) {
     return c.json({ error: "expired_or_used" }, 410);
   }
-
-  // mark accepted (PENDING-guard) → membership INSERT → audit を 1 tx で atomic に。
-  // markInvitationAccepted が 0 件更新なら別経路で既に accept/revoke 済 (race) → 410。
-  const result = await runInTransaction(async (tx) => {
-    const accepted = await markInvitationAccepted(invitation.id, tx);
-    if (!accepted) return null;
-    await insertMembership(
-      {
-        id: generateMembershipId(),
-        userId: actor.id,
-        companyId: invitation.companyId,
-        role: invitation.role,
-      },
-      tx,
-    );
-    await recordInvitationAccepted(
-      {
-        actor_user_id: actor.id,
-        invitation_id: invitation.id,
-        company_id: invitation.companyId,
-        role: invitation.role,
-      },
-      tx,
-    );
-    return accepted;
-  });
-
-  if (!result) return c.json({ error: "expired_or_used" }, 410);
-  return c.json({ ok: true, company_id: invitation.companyId });
+  return c.json({ ok: true, company_id: result.companyId });
 });
