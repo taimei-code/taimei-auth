@@ -1,0 +1,7 @@
+{
+  "status": 410,
+  "contentType": "application/json",
+  "body": {
+    "error": "expired_or_used"
+  }
+}

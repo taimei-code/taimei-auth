@@ -1,0 +1,16 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "members": [
+      {
+        "membership_id": "__MEMBERSHIP_ID__",
+        "user_id": "__USER_ID__",
+        "user_name": "User mem-owner",
+        "user_email": "__EMAIL__",
+        "role": "OWNER",
+        "joined_at": "__TIMESTAMP__"
+      }
+    ]
+  }
+}

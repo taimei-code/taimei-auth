@@ -1,0 +1,13 @@
+{
+  "status": 400,
+  "contentType": "application/json",
+  "body": {
+    "error": "invalid_argument",
+    "details": {
+      "formErrors": [],
+      "fieldErrors": {
+        "email": ["Invalid email address"]
+      }
+    }
+  }
+}

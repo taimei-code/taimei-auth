@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { requireActor, requireMembership } from "../membership/guard";
+import { guardErrorResponse, requireActor, requireMembership } from "../membership/guard";
 import { runInTransaction } from "@/db/transaction";
 import { findCompanyById, updateCompany, type OrgCode } from "@/db/repositories/company";
 import { findMembershipsByUserId } from "@/db/repositories/membership";
@@ -24,7 +24,7 @@ const companyBody = z.object({
 
 accountCompany.get("/api/account/memberships", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
-  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
   const [rows, userRow] = await Promise.all([
@@ -73,7 +73,7 @@ const serializeCreatedCompany = ({ company, membership }: CreatedCompany) => ({
 // signup フローの「最初の 1 事業所」作成。0 件ガード / 409 race 直列化は createSignupCompany が担う。
 accountCompany.post("/api/account/companies", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
-  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
@@ -99,7 +99,7 @@ accountCompany.post("/api/account/companies", async (c) => {
 // の後ろでも安全なのはセグメント数が違い競合しないため (= `/add` だけがこの予防順序を要する)。
 accountCompany.post("/api/account/companies/add", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
-  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
@@ -118,8 +118,7 @@ accountCompany.post("/api/account/companies/add", async (c) => {
 accountCompany.post("/api/account/companies/:companyId", async (c) => {
   const companyId = c.req.param("companyId");
   const membershipResult = await requireMembership(c.req.raw.headers, companyId, "OWNER");
-  if (!membershipResult.ok)
-    return c.json({ error: membershipResult.error }, membershipResult.status);
+  if (!membershipResult.ok) return guardErrorResponse(membershipResult);
   const userId = membershipResult.actor.id;
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
@@ -159,9 +158,10 @@ accountCompany.post("/api/account/companies/:companyId", async (c) => {
 // 事業所削除 (OWNER のみ)。company は soft delete だが所属 (membership) は物理削除し、所属 0 件に
 // なった元メンバー (最後の事業所を消した OWNER 自身を含む) は連動でアカウント削除する。orchestration は
 // deleteCompany use-case (単一 tx)。設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
+// 現状維持 route (認可が use-case tx 内融合、レイヤ地図上の正位置)。ADR-0012 (C) 参照。
 accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
-  if (!actorResult.ok) return c.json({ error: actorResult.error }, actorResult.status);
+  if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
   const companyId = c.req.param("companyId");
 

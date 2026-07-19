@@ -130,6 +130,27 @@ export async function findMembership(
     .then((rows) => rows.at(0));
 }
 
+// FOR SHARE で 1 行を掴んだまま role のみ返す。invitation accept tx が「招待者は今 OWNER か」を
+// 再検証する用途 (accept use-case) 向けで、並行 UPDATE (role 降格) と直列化する。DbOrTx=db を
+// default にしないのは autocommit だと FOR SHARE lock が statement 終了で解放され、accept tx の
+// 残り step (insertMembership 等) commit までの窓が silent に消えて TOCTOU が復活するため。
+// 呼び出し側は runInTransaction の tx を必ず渡すこと。role は DB text 列の生値なので `string`。
+// 未知の role が入っていた場合の判定は呼び出し側の policy 述語 (canAcceptInvitedRole) が
+// Object.hasOwn で fail-closed に倒す。詳細: docs/adr/0012-layered-architecture.md
+export async function lockMembershipForShare(
+  tx: DbTx,
+  userId: string,
+  companyId: string,
+): Promise<{ role: string } | undefined> {
+  return tx
+    .select({ role: membership.role })
+    .from(membership)
+    .where(and(eq(membership.userId, userId), eq(membership.companyId, companyId)))
+    .limit(1)
+    .for("share")
+    .then((rows) => rows.at(0));
+}
+
 export async function insertMembership(
   params: { id: string; userId: string; companyId: string; role: Role },
   txOrDb: DbOrTx = db,

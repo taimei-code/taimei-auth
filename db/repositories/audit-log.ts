@@ -81,6 +81,20 @@ export type AuditLogEntry =
       };
     }
   | {
+      eventType: "invitation_accept_rejected";
+      userId: string;
+      payload: {
+        invitation_id: string;
+        company_id: string;
+        invited_by_user_id: string;
+        // attempted_role / inviter_current_role は DB `role` 列 (text) の生値なので `string`。
+        // 未知文字列も含めて監査ログの解析に必要なため union に絞らず、事実を正直に持つ。
+        attempted_role: string;
+        inviter_current_role: string | null;
+        reason: string;
+      };
+    }
+  | {
       eventType: "membership_removed";
       userId: string;
       payload: {
@@ -217,6 +231,39 @@ export const recordInvitationRevoked = (
         invitation_id: params.invitation_id,
         company_id: params.company_id,
         revoked_by_user_id: params.actor_user_id,
+      },
+    },
+    txOrDb,
+  );
+
+// 招待受諾で防御 (accept 内 OWNER mint 再検証 / unknown role fail-closed / 招待者行不在) が
+// 発火したことを記録する。accept tx が rollback された後に別 tx で同期実行し、DB 書込みの前に
+// 同 payload を console.warn で emit することで isolate crash 時にも wrangler tail に痕跡を残す。
+// payload key set は監視 query の互換維持のため固定 (email 等 PII は含めない — invitation_id
+// から辿れるため露出面を作らない)。運用契約: docs/adr/0012-layered-architecture.md
+export const recordInvitationAcceptRejected = (
+  params: {
+    actor_user_id: string;
+    invitation_id: string;
+    company_id: string;
+    invited_by_user_id: string;
+    attempted_role: string;
+    inviter_current_role: string | null;
+    reason: string;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "invitation_accept_rejected",
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id: params.invitation_id,
+        company_id: params.company_id,
+        invited_by_user_id: params.invited_by_user_id,
+        attempted_role: params.attempted_role,
+        inviter_current_role: params.inviter_current_role,
+        reason: params.reason,
       },
     },
     txOrDb,

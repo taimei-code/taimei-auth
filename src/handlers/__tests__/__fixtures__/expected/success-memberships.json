@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "current_company_id": "__COMPANY_ID__",
+    "memberships": [
+      {
+        "id": "__MEMBERSHIP_ID__",
+        "company_id": "__COMPANY_ID__",
+        "company_name": "mig-test-co-mem-list",
+        "company_org_code": "PERSONAL",
+        "role": "OWNER",
+        "joined_at": "__TIMESTAMP__"
+      }
+    ]
+  }
+}

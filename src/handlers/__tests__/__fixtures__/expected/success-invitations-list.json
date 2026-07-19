@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "invitations": [
+      {
+        "id": "__INVITATION_ID__",
+        "email": "mig-test-invitee@example.com",
+        "role": "MEMBER",
+        "expires_at": "__TIMESTAMP__",
+        "created_at": "__TIMESTAMP__"
+      }
+    ]
+  }
+}

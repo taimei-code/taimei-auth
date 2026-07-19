@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "company": {
+      "id": "__COMPANY_ID__",
+      "name": "mig-test-signup-created",
+      "org_code": "CORPORATE",
+      "activation_status": "ACTIVE",
+      "created_at": "__TIMESTAMP__"
+    },
+    "membership": {
+      "id": "__MEMBERSHIP_ID__",
+      "role": "OWNER",
+      "company_id": "__COMPANY_ID__",
+      "joined_at": "__TIMESTAMP__"
+    }
+  }
+}

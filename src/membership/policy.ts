@@ -14,7 +14,10 @@ export function isAtLeast(role: string, minRole: Role): boolean {
 }
 
 // role が Role 値集合に属するかの判定。未知 role の target を保守側に倒す policy 用。
-function isKnownRole(role: string): role is Role {
+// export しているのは accept use-case が **判定本体は述語に委ねたまま**、拒否 reason ラベル
+// (unknown_invited_role vs inviter_not_owner_or_missing) を audit payload に分ける用途で
+// isKnownRole の結果を "reason 命名の材料" として参照するため。判定の SSOT は述語のまま。
+export function isKnownRole(role: string): role is Role {
   return Object.hasOwn(ROLE_LEVEL, role);
 }
 
@@ -44,4 +47,22 @@ export function canAttemptRemoval(actorRole: Role, isSelf: boolean): boolean {
 export function canRemoveTarget(actorRole: Role, isSelf: boolean, targetRole: Role): boolean {
   const targetIsOwnerLike = !isKnownRole(targetRole) || targetRole === "OWNER";
   return !(targetIsOwnerLike && !isSelf && actorRole !== "OWNER");
+}
+
+// 招待受諾時の OWNER mint 再検証。invitation.role === "OWNER" の accept は、招待者が accept 時点で
+// 現役 OWNER である場合のみ通す (ADMIN 降格 / 除名後の招待者からの mint を塞ぐ)。呼び出し側は
+// OWNER 招待のとき lock+fetch した inviter role (無ければ null) を、OWNER 招待以外のとき null を
+// 渡す形にし、この述語を 1 回だけ呼ぶ (accept use-case)。判定分岐:
+//   (a) invitedRole が未知 → false (isKnownRole 経由 fail-closed、prototype 汚染 role 名も含む)
+//   (b) invitedRole !== "OWNER" → true (ADMIN/MEMBER 招待は inviter 状態に依存しない — 招待者退会の
+//       正規ケースを壊さない設計判断、ADR-0012 参照)
+//   (c) invitedRole === "OWNER" → inviterCurrentRole === "OWNER" のときだけ true (未知の inviter
+//       role string や null は "OWNER" と等値でないため自然に false に落ち、追加分岐不要)
+export function canAcceptInvitedRole(
+  invitedRole: string,
+  inviterCurrentRole: string | null,
+): boolean {
+  if (!isKnownRole(invitedRole)) return false;
+  if (invitedRole !== "OWNER") return true;
+  return inviterCurrentRole === "OWNER";
 }

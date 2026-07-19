@@ -1,0 +1,12 @@
+{
+  "status": 200,
+  "contentType": "application/json",
+  "body": {
+    "company": {
+      "id": "__COMPANY_ID__",
+      "name": "mig-test-upd-renamed",
+      "org_code": "CORPORATE",
+      "activation_status": "ACTIVE"
+    }
+  }
+}
