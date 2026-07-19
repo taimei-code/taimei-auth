@@ -125,7 +125,7 @@ better-auth lifecycle hook や admin 操作によって、user 自身の意思�
 _Avoid_: invalidate (より広義), terminate, kill
 
 **membership guard**:
-**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。
+**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は `if (!r.ok) return guardErrorResponse(r)` の 1 行で HTTP に写像する。詳細: ADR-0012。
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)
 
 **audit log**:
@@ -133,7 +133,7 @@ user の意図ある action (**sign-in** / **sign-out** / account delete 等) �
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` の 3 種)。Phase 4 で credential change 系が実装された時に event_type を追加する。
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012。Phase 4 で credential change 系が実装された時に event_type を追加する。
 _Avoid_: log entry, audit record
 
 ## Relationships
