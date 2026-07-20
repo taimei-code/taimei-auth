@@ -1,9 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
 import { findInvitationById } from "@/db/repositories/invitation";
-import { auditLog } from "@/db/schema";
-import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { revokeInvitation } from "../revoke";
 
 // invitation/revoke use-case (src/invitation/revoke.ts) の DB 統合テスト。
@@ -12,14 +9,6 @@ import { revokeInvitation } from "../revoke";
 
 const P = "revinv-test-";
 const { cleanup, seedUser, seedCompany, seedMembership, seedInvitation } = createSeedHelpers(P);
-
-async function auditRows(userId: string, eventType: string) {
-  return db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-    .orderBy(asc(auditLog.createdAt));
-}
 
 describe("revokeInvitation", () => {
   beforeEach(cleanup);
@@ -45,7 +34,7 @@ describe("revokeInvitation", () => {
     const persisted = await findInvitationById(inv.id);
     expect(persisted?.status).toBe("REVOKED");
 
-    const audits = await auditRows(owner.id, "invitation_revoked");
+    const audits = await auditRowsFor(owner.id, "invitation_revoked");
     expect(audits.length).toBe(1);
     expect(audits[0]?.payload).toEqual({
       invitation_id: inv.id,
@@ -65,7 +54,7 @@ describe("revokeInvitation", () => {
       invitationId: `${P}inv-nonexistent`,
     });
     expect(result).toEqual({ ok: false, reason: "not_found_or_not_pending" });
-    expect((await auditRows(owner.id, "invitation_revoked")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
   });
 
   test("既に REVOKED / ACCEPTED の invitation を再 revoke → not_found_or_not_pending (状態遷移防御)", async () => {
@@ -86,7 +75,7 @@ describe("revokeInvitation", () => {
       invitationId: inv.id,
     });
     expect(result).toEqual({ ok: false, reason: "not_found_or_not_pending" });
-    expect((await auditRows(owner.id, "invitation_revoked")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
   });
 
   test("別 company の invitationId (companyId mismatch) → not_found_or_not_pending", async () => {
@@ -112,6 +101,6 @@ describe("revokeInvitation", () => {
     // 元の invitation は影響なし (PENDING のまま)。
     const persisted = await findInvitationById(inv.id);
     expect(persisted?.status).toBe("PENDING");
-    expect((await auditRows(owner.id, "invitation_revoked")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
   });
 });

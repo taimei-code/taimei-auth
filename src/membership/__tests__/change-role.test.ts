@@ -1,9 +1,7 @@
 import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { findMembership } from "@/db/repositories/membership";
-import { auditLog } from "@/db/schema";
-import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { changeRole } from "../change-role";
 
 // change-role use-case (src/membership/change-role.ts) の DB 統合テスト。
@@ -14,14 +12,6 @@ import { changeRole } from "../change-role";
 
 const P = "chrole-test-";
 const { cleanup, seedUser, seedCompany, seedMembership } = createSeedHelpers(P);
-
-async function auditRows(userId: string, eventType: string) {
-  return db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-    .orderBy(asc(auditLog.createdAt));
-}
 
 describe("changeRole", () => {
   beforeEach(cleanup);
@@ -44,7 +34,7 @@ describe("changeRole", () => {
     expect(result).toEqual({ ok: true });
     expect((await findMembership(target.id, co))?.role).toBe("ADMIN");
 
-    const audits = await auditRows(owner.id, "role_changed");
+    const audits = await auditRowsFor(owner.id, "role_changed");
     expect(audits.length).toBe(1);
     expect(audits[0]?.payload).toEqual({
       company_id: co,
@@ -78,7 +68,7 @@ describe("changeRole", () => {
       txSpy.mockRestore();
     }
     expect((await findMembership(target.id, co))?.role).toBe("MEMBER");
-    expect((await auditRows(owner.id, "role_changed")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
 
   test("QA-E-01 唯一の OWNER を降格 → last_owner Result / membership 無変更 / audit 発火なし", async () => {
@@ -95,7 +85,7 @@ describe("changeRole", () => {
     });
     expect(result).toEqual({ ok: false, reason: "last_owner" });
     expect((await findMembership(owner.id, co))?.role).toBe("OWNER");
-    expect((await auditRows(owner.id, "role_changed")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
 
   test("QA-E-06 target 不在 (updateMembershipRow が 0 件更新) → not_found Result / audit 発火なし", async () => {
@@ -111,7 +101,7 @@ describe("changeRole", () => {
       nextRole: "ADMIN",
     });
     expect(result).toEqual({ ok: false, reason: "not_found" });
-    expect((await auditRows(owner.id, "role_changed")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
 
   test("QA-E-09 / QA-E-11 last_owner reject → audit 非発火 (rollback 契約)", async () => {
@@ -130,7 +120,7 @@ describe("changeRole", () => {
       nextRole: "ADMIN",
     });
     expect(result.ok).toBe(false);
-    expect((await auditRows(owner.id, "role_changed")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
 
   test("QA-H-12 mutation → audit の発火順 pin (audit createdAt が UPDATE 完了後)", async () => {
@@ -152,7 +142,7 @@ describe("changeRole", () => {
     });
     expect(result.ok).toBe(true);
     const finalRole = (await findMembership(target.id, co))?.role;
-    const audits = await auditRows(owner.id, "role_changed");
+    const audits = await auditRowsFor(owner.id, "role_changed");
     expect(audits.length).toBe(1);
     const payload = audits[0]?.payload as Record<string, unknown>;
     expect(payload.after_role).toBe(finalRole);

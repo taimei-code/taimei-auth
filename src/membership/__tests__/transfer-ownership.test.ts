@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { findMembership } from "@/db/repositories/membership";
-import { auditLog, membership } from "@/db/schema";
-import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { membership } from "@/db/schema";
+import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { transferOwnership } from "../transfer-ownership";
 
 // transfer-ownership use-case (src/membership/transfer-ownership.ts) の DB 統合テスト。
@@ -12,14 +12,6 @@ import { transferOwnership } from "../transfer-ownership";
 
 const P = "trans-test-";
 const { cleanup, seedUser, seedCompany, seedMembership } = createSeedHelpers(P);
-
-async function auditRows(userId: string, eventType: string) {
-  return db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-    .orderBy(asc(auditLog.createdAt));
-}
 
 describe("transferOwnership", () => {
   beforeEach(cleanup);
@@ -41,7 +33,7 @@ describe("transferOwnership", () => {
     expect((await findMembership(admin.id, co))?.role).toBe("OWNER");
     expect((await findMembership(owner.id, co))?.role).toBe("ADMIN");
 
-    const audits = await auditRows(owner.id, "ownership_transferred");
+    const audits = await auditRowsFor(owner.id, "ownership_transferred");
     expect(audits.length).toBe(1);
     expect(audits[0]?.payload).toEqual({
       company_id: co,
@@ -120,7 +112,7 @@ describe("transferOwnership", () => {
       companyId: co,
     });
     expect(result.ok).toBe(true);
-    const audits = await auditRows(owner.id, "ownership_transferred");
+    const audits = await auditRowsFor(owner.id, "ownership_transferred");
     const finalOwnerId = (await findMembership(to.id, co))?.role === "OWNER" ? to.id : null;
     const payload = audits[0]?.payload as Record<string, unknown>;
     expect(payload.to_user_id).toBe(finalOwnerId);

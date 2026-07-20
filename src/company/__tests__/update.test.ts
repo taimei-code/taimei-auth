@@ -1,9 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
 import { findCompanyById, softDeleteCompany } from "@/db/repositories/company";
-import { auditLog } from "@/db/schema";
-import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { updateCompanyInfo } from "../update";
 
 // company/update use-case (src/company/update.ts) の DB 統合テスト。
@@ -12,14 +9,6 @@ import { updateCompanyInfo } from "../update";
 
 const P = "coupd-test-";
 const { cleanup, seedUser, seedCompany, seedMembership } = createSeedHelpers(P);
-
-async function auditRows(userId: string, eventType: string) {
-  return db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-    .orderBy(asc(auditLog.createdAt));
-}
 
 describe("updateCompanyInfo", () => {
   beforeEach(cleanup);
@@ -46,7 +35,7 @@ describe("updateCompanyInfo", () => {
     expect(after?.name).toBe(`${P}renamed`);
     expect(after?.orgCode).toBe("CORPORATE");
 
-    const audits = await auditRows(owner.id, "company_updated");
+    const audits = await auditRowsFor(owner.id, "company_updated");
     expect(audits.length).toBe(1);
     expect(audits[0]?.payload).toEqual({
       company_id: co,
@@ -72,7 +61,7 @@ describe("updateCompanyInfo", () => {
     const after = await findCompanyById(co);
     expect(after?.name).toBe(`${P}co-d06`);
     expect(after?.activationStatus).toBe("DELETED");
-    expect((await auditRows(owner.id, "company_updated")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "company_updated")).length).toBe(0);
   });
 
   test("QA-E-11 not_found 経路の rollback → mutation なし + audit 非発火", async () => {
@@ -87,7 +76,7 @@ describe("updateCompanyInfo", () => {
       input: { name: `${P}renamed`, orgCode: "CORPORATE" },
     });
     expect(result).toEqual({ ok: false, reason: "not_found" });
-    expect((await auditRows(owner.id, "company_updated")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "company_updated")).length).toBe(0);
   });
 
   test("QA-H-12 mutation → audit 発火順 pin (audit.payload.after が UPDATE 完了後の DB state と一致)", async () => {
@@ -106,7 +95,7 @@ describe("updateCompanyInfo", () => {
     expect(result.ok).toBe(true);
 
     const after = await findCompanyById(co);
-    const payload = (await auditRows(owner.id, "company_updated"))[0]?.payload as Record<
+    const payload = (await auditRowsFor(owner.id, "company_updated"))[0]?.payload as Record<
       string,
       unknown
     >;

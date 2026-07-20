@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { auth } from "../../auth";
 import { db } from "@/db/client";
 import { findActivePendingInvitation } from "@/db/repositories/invitation";
-import { auditLog, invitation as invitationTable } from "@/db/schema";
+import { invitation as invitationTable } from "@/db/schema";
 import {
+  auditRowsFor,
   buildTestApp,
   cleanupTestData,
   restoreActor,
@@ -26,14 +27,6 @@ import { createInvitation } from "../create";
 // 認可 (OWNER/ADMIN + canInviteRole) は Guard 層 (requireInvite) の責務。
 // seed/cleanup は helpers.ts の default (TEST_PREFIX) を使う: handler HTTP テストが同 prefix を
 // 前提にしており、cleanup も TEST_PREFIX を対象にしているため合わせる。
-
-async function auditRows(userId: string, eventType: string) {
-  return db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-    .orderBy(asc(auditLog.createdAt));
-}
 
 async function invitationRowsByEmail(companyId: string, email: string) {
   return db
@@ -93,7 +86,7 @@ describe("createInvitation (use-case)", () => {
     expect(rows.length).toBe(1);
     expect(rows[0]?.status).toBe("PENDING");
 
-    const audits = await auditRows(owner.id, "invitation_sent");
+    const audits = await auditRowsFor(owner.id, "invitation_sent");
     expect(audits.length).toBe(1);
     expect(audits[0]?.payload).toEqual({
       invitation_id: rows[0]?.id,
@@ -132,7 +125,7 @@ describe("createInvitation (use-case)", () => {
     expect(result.invitation.id).toBe(existing.id);
     expect(after - before).toBe(0);
     // reused 経路では invitation_sent audit を新たに emit しない (「新規招待ではないため」)。
-    expect((await auditRows(owner.id, "invitation_sent")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "invitation_sent")).length).toBe(0);
   });
 
   test("QA-E-02 rate 上限到達 → rate_limited Result / invitation 作成なし / audit 発火なし", async () => {
@@ -154,7 +147,7 @@ describe("createInvitation (use-case)", () => {
     });
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
     expect((await invitationRowsByEmail(co, email)).length).toBe(0);
-    expect((await auditRows(owner.id, "invitation_sent")).length).toBe(0);
+    expect((await auditRowsFor(owner.id, "invitation_sent")).length).toBe(0);
   });
 
   test("QA-M-02 rate 上限中でも既存 PENDING 宛の再送 → reused=true (idempotency > rate 順序)", async () => {
@@ -240,7 +233,7 @@ describe("createInvitation (use-case)", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const persisted = await findActivePendingInvitation(co, email);
-    const audit = (await auditRows(owner.id, "invitation_sent"))[0];
+    const audit = (await auditRowsFor(owner.id, "invitation_sent"))[0];
     const payload = audit?.payload as Record<string, unknown>;
     expect(payload.invitation_id).toBe(persisted?.id);
     expect(payload.invitation_id).toBe(result.invitation.id);
