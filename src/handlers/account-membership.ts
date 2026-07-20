@@ -139,7 +139,7 @@ accountMembership.post(
     const { actor, targetRole } = guardResult;
 
     const result = await removeMember(actor.id, targetUserId, companyId, targetRole);
-    if (result === "owner_invariant") {
+    if (!result.ok) {
       return c.json({ error: "last_owner" }, 409);
     }
     // 本人が最後の所属を退会した場合 account_deleted=true。client はログアウト遷移する (UX は後続 PR)。
