@@ -1,4 +1,4 @@
-import { and, eq, like } from "drizzle-orm";
+import { and, asc, eq, like } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "@/db/client";
 import { generateCompanyId, insertCompany, type OrgCode } from "@/db/repositories/company";
@@ -193,4 +193,18 @@ export async function membershipRoleOf(
     .from(membership)
     .where(and(eq(membership.userId, userId), eq(membership.companyId, companyId)));
   return rows.at(0)?.role as Role | undefined;
+}
+
+// use-case DB 統合テスト全体で共有する audit 行取得。userId + eventType で絞り込み createdAt 昇順で
+// 返す。「mutation → audit の発火順 pin」「rollback 経路で audit 非発火」等の contract を各テストで
+// 統一的に検証するため、6 test file にコピペされていたローカル定義をここに集約する。
+export function auditRowsFor(
+  userId: string,
+  eventType: string,
+): Promise<(typeof auditLog.$inferSelect)[]> {
+  return db
+    .select()
+    .from(auditLog)
+    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
+    .orderBy(asc(auditLog.createdAt));
 }

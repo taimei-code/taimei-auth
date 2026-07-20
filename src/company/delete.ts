@@ -16,7 +16,7 @@ import { runInTransaction } from "@/db/transaction";
 
 export type DeleteCompanyResult =
   | { ok: true; actorDeleted: boolean }
-  | { ok: false; reason: "forbidden" | "not_found" };
+  | { ok: false; reason: "forbidden" | "not_found_or_already_deleted" };
 
 // ADR-0010 D1/D3: 事業所削除の use-case。company は soft delete、所属 (membership) は物理削除し、
 // 所属 0 件になった元メンバー (= 最後の事業所を消した OWNER 自身を含む) は連動でアカウント削除する。
@@ -28,7 +28,7 @@ export const deleteCompany = (
 ): Promise<DeleteCompanyResult> =>
   runInTransaction(async (tx) => {
     const company = await findCompanyById(companyId, tx);
-    if (!company) return { ok: false, reason: "not_found" };
+    if (!company) return { ok: false, reason: "not_found_or_already_deleted" };
     // 既に削除済みなら冪等成功 (membership も orphan も処理済み)。再削除で二重 audit しない。
     if (company.activationStatus !== "ACTIVE") return { ok: true, actorDeleted: false };
 

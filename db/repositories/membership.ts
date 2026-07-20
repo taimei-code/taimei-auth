@@ -232,6 +232,19 @@ export class OwnerInvariantViolation extends Error {
   }
 }
 
+// withOwnerLockGuard を跨いだ use-case (change-role / transfer-ownership / remove) が同形で
+// 使う「OwnerInvariantViolation を Result の last_owner reason に写像し、他 error は再 throw」の
+// catch 節を 1 箇所に閉じる。3 箇所コピペしていると片方の catch だけ error class の import を
+// 忘れて silent に 500 化する regression が起きやすいため、helper 側で fail-closed に。
+export function catchOwnerInvariant<T>(
+  p: Promise<T>,
+): Promise<T | { ok: false; reason: "last_owner" }> {
+  return p.catch((e: unknown) => {
+    if (e instanceof OwnerInvariantViolation) return { ok: false, reason: "last_owner" } as const;
+    throw e;
+  });
+}
+
 export type BlockingCompany = { companyId: string; companyName: string };
 
 // DeleteUser pre-check (Q24): user が唯一の OWNER である ACTIVE company を返す。

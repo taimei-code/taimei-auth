@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { type GuardErrorResult, guardErrorResponse } from "../guard";
+import {
+  type GuardErrorResult,
+  type GuardReason,
+  guardErrorResponse,
+  reasonToGuardError,
+} from "../guard";
 
 // guardErrorResponse は Web 標準 Response で組む。Hono `c.json` と Content-Type を合わせ
 // (application/json, charset なし) migrated route の byte-invariant を守る。
@@ -64,5 +69,39 @@ describe("guardErrorResponse", () => {
       const body = await res.json();
       expect(body).toEqual({ error: entry.error });
     }
+  });
+
+  // QA-H-06 / QA-E-07: reasonToGuardError の 7 literal 網羅性を type gate + runtime で保証する。
+  // Record<GuardReason, GuardErrorResult> の compile 網羅性は typecheck が担い、literal ↔ status
+  // の対応表を runtime でも pin することで、Record 誤更新 (typo / 誤 key) の regression を検知する。
+  test("QA-H-06 / QA-E-07 reasonToGuardError は全 GuardReason literal を対応 GuardErrorResult に写像する", () => {
+    const cases = [
+      { reason: "forbidden", error: "forbidden", status: 403 },
+      { reason: "not_found", error: "not_found", status: 404 },
+      { reason: "last_owner", error: "last_owner", status: 409 },
+      { reason: "already_exists", error: "already_exists", status: 409 },
+      { reason: "not_found_or_not_pending", error: "not_found_or_not_pending", status: 404 },
+      {
+        reason: "not_found_or_already_deleted",
+        error: "not_found_or_already_deleted",
+        status: 404,
+      },
+      { reason: "rate_limited", error: "rate_limited", status: 429 },
+      { reason: "expired_or_used", error: "expired_or_used", status: 410 },
+    ] as const satisfies ReadonlyArray<{
+      reason: GuardReason;
+      error: GuardErrorResult["error"];
+      status: GuardErrorResult["status"];
+    }>;
+    for (const { reason, error, status } of cases) {
+      const mapped = reasonToGuardError(reason);
+      expect(mapped.ok).toBe(false);
+      expect(mapped.error).toBe(error);
+      expect(mapped.status).toBe(status);
+    }
+    // 網羅性: cases は上記 8 literal を 1:1 で列挙する。GuardReason に新 literal を足したら
+    // ここも足すこと (typecheck が cases の Array<{reason: GuardReason,...}> を強制し、
+    // Record 側の網羅性欠落と対で fail-closed する)。
+    expect(cases.length).toBe(8);
   });
 });

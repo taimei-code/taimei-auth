@@ -63,12 +63,12 @@ describe("removeMember", () => {
 
     const result = await removeMember(ownerId, memberId, companyId, "MEMBER");
 
-    expect(result).toEqual({ accountDeleted: true });
+    expect(result).toEqual({ ok: true, accountDeleted: true });
     expect(await membershipExists(memberId, companyId)).toBe(false);
     expect(await userExists(memberId)).toBe(false);
   });
 
-  test("他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", async () => {
+  test("QA-D-03 他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", async () => {
     const ownerId = await seedUser("multi-owner");
     const memberId = await seedUser("multi-member");
     const target = await seedCompany("multi-target");
@@ -79,20 +79,20 @@ describe("removeMember", () => {
 
     const result = await removeMember(ownerId, memberId, target, "MEMBER");
 
-    expect(result).toEqual({ accountDeleted: false });
+    expect(result).toEqual({ ok: true, accountDeleted: false });
     expect(await membershipExists(memberId, target)).toBe(false);
     expect(await membershipExists(memberId, other)).toBe(true);
     expect(await userExists(memberId)).toBe(true);
   });
 
-  test("最後の OWNER の除名は owner_invariant で reject、membership も account も無変更", async () => {
+  test("最後の OWNER の除名は last_owner で reject、membership も account も無変更", async () => {
     const ownerId = await seedUser("last-owner");
     const companyId = await seedCompany("last");
     await join(ownerId, companyId, "OWNER");
 
     const result = await removeMember(ownerId, ownerId, companyId, "OWNER");
 
-    expect(result).toBe("owner_invariant");
+    expect(result).toEqual({ ok: false, reason: "last_owner" });
     expect(await membershipExists(ownerId, companyId)).toBe(true);
     expect(await userExists(ownerId)).toBe(true);
   });
@@ -106,7 +106,7 @@ describe("removeMember", () => {
 
     const result = await removeMember(memberId, memberId, companyId, "MEMBER");
 
-    expect(result).toEqual({ accountDeleted: true });
+    expect(result).toEqual({ ok: true, accountDeleted: true });
     expect(await userExists(memberId)).toBe(false);
   });
 });

@@ -177,10 +177,10 @@ describe("deleteCompany", () => {
     expect(await membershipCount(companyId)).toBe(2);
   });
 
-  test("存在しない companyId は not_found", async () => {
+  test("存在しない companyId は not_found_or_already_deleted", async () => {
     const ownerId = await seedUser("nf");
     const result = await deleteCompany(ownerId, "cmp_does_not_exist");
-    expect(result).toEqual({ ok: false, reason: "not_found" });
+    expect(result).toEqual({ ok: false, reason: "not_found_or_already_deleted" });
   });
 
   test("既に削除済みの事業所への再削除は冪等 (ok / actorDeleted false)", async () => {
