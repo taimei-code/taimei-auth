@@ -1,6 +1,6 @@
 import { recordRoleChanged } from "@/db/repositories/audit-log";
 import {
-  OwnerInvariantViolation,
+  catchOwnerInvariant,
   type Role,
   updateMembershipRole,
   withOwnerLockGuard,
@@ -49,10 +49,7 @@ export const changeRole = (params: {
   };
 
   const demotesOwner = beforeRole === "OWNER" && nextRole !== "OWNER";
-  return runInTransaction((tx) =>
-    demotesOwner ? withOwnerLockGuard(tx, companyId, apply) : apply(tx),
-  ).catch((e: unknown) => {
-    if (e instanceof OwnerInvariantViolation) return { ok: false, reason: "last_owner" } as const;
-    throw e;
-  });
+  return catchOwnerInvariant(
+    runInTransaction((tx) => (demotesOwner ? withOwnerLockGuard(tx, companyId, apply) : apply(tx))),
+  );
 };

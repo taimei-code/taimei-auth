@@ -81,6 +81,11 @@ describe("guardErrorResponse", () => {
       { reason: "last_owner", error: "last_owner", status: 409 },
       { reason: "already_exists", error: "already_exists", status: 409 },
       { reason: "not_found_or_not_pending", error: "not_found_or_not_pending", status: 404 },
+      {
+        reason: "not_found_or_already_deleted",
+        error: "not_found_or_already_deleted",
+        status: 404,
+      },
       { reason: "rate_limited", error: "rate_limited", status: 429 },
       { reason: "expired_or_used", error: "expired_or_used", status: 410 },
     ] as const satisfies ReadonlyArray<{
@@ -94,9 +99,9 @@ describe("guardErrorResponse", () => {
       expect(mapped.error).toBe(error);
       expect(mapped.status).toBe(status);
     }
-    // 網羅性: cases は上記 7 literal を 1:1 で列挙する。GuardReason に新 literal を足したら
+    // 網羅性: cases は上記 8 literal を 1:1 で列挙する。GuardReason に新 literal を足したら
     // ここも足すこと (typecheck が cases の Array<{reason: GuardReason,...}> を強制し、
     // Record 側の網羅性欠落と対で fail-closed する)。
-    expect(cases.length).toBe(7);
+    expect(cases.length).toBe(8);
   });
 });

@@ -1,7 +1,7 @@
 import { recordMembershipRemoved } from "@/db/repositories/audit-log";
 import {
+  catchOwnerInvariant,
   deleteMembership,
-  OwnerInvariantViolation,
   type Role,
   withOwnerLockGuard,
 } from "@/db/repositories/membership";
@@ -22,22 +22,21 @@ export const removeMember = (
   companyId: string,
   targetRole: Role,
 ): Promise<RemoveMemberResult> =>
-  runInTransaction((tx) => {
-    const apply = async (t: DbTx): Promise<{ ok: true; accountDeleted: boolean }> => {
-      await deleteMembership(targetUserId, companyId, t);
-      await recordMembershipRemoved(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          removed_user_id: targetUserId,
-          role_at_removal: targetRole,
-        },
-        t,
-      );
-      return { ok: true, accountDeleted: await deleteAccountIfOrphaned(targetUserId, t) };
-    };
-    return targetRole === "OWNER" ? withOwnerLockGuard(tx, companyId, apply) : apply(tx);
-  }).catch((e: unknown) => {
-    if (e instanceof OwnerInvariantViolation) return { ok: false, reason: "last_owner" } as const;
-    throw e;
-  });
+  catchOwnerInvariant(
+    runInTransaction((tx) => {
+      const apply = async (t: DbTx): Promise<{ ok: true; accountDeleted: boolean }> => {
+        await deleteMembership(targetUserId, companyId, t);
+        await recordMembershipRemoved(
+          {
+            actor_user_id: actorUserId,
+            company_id: companyId,
+            removed_user_id: targetUserId,
+            role_at_removal: targetRole,
+          },
+          t,
+        );
+        return { ok: true, accountDeleted: await deleteAccountIfOrphaned(targetUserId, t) };
+      };
+      return targetRole === "OWNER" ? withOwnerLockGuard(tx, companyId, apply) : apply(tx);
+    }),
+  );

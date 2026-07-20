@@ -1,6 +1,6 @@
 import { recordOwnershipTransferred } from "@/db/repositories/audit-log";
 import {
-  OwnerInvariantViolation,
+  catchOwnerInvariant,
   updateMembershipRole,
   withOwnerLockGuard,
 } from "@/db/repositories/membership";
@@ -22,24 +22,21 @@ export const transferOwnership = (params: {
   companyId: string;
 }): Promise<TransferOwnershipResult> => {
   const { actorUserId, toUserId, companyId } = params;
-  return runInTransaction((tx) =>
-    withOwnerLockGuard(tx, companyId, async (tx2) => {
-      await updateMembershipRole(toUserId, companyId, "OWNER", tx2);
-      await updateMembershipRole(actorUserId, companyId, "ADMIN", tx2);
-      await recordOwnershipTransferred(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          from_user_id: actorUserId,
-          to_user_id: toUserId,
-        },
-        tx2,
-      );
-    }),
-  )
-    .then((): TransferOwnershipResult => ({ ok: true }))
-    .catch((e: unknown) => {
-      if (e instanceof OwnerInvariantViolation) return { ok: false, reason: "last_owner" } as const;
-      throw e;
-    });
+  return catchOwnerInvariant(
+    runInTransaction((tx) =>
+      withOwnerLockGuard(tx, companyId, async (tx2) => {
+        await updateMembershipRole(toUserId, companyId, "OWNER", tx2);
+        await updateMembershipRole(actorUserId, companyId, "ADMIN", tx2);
+        await recordOwnershipTransferred(
+          {
+            actor_user_id: actorUserId,
+            company_id: companyId,
+            from_user_id: actorUserId,
+            to_user_id: toUserId,
+          },
+          tx2,
+        );
+      }),
+    ).then((): TransferOwnershipResult => ({ ok: true })),
+  );
 };

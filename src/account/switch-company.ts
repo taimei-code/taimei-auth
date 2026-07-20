@@ -28,8 +28,8 @@ export const switchCompany = async (params: {
   }
 
   const switched = await runInTransaction(async (tx) => {
-    const target = await findMembership(actorUserId, targetCompanyId, tx);
-    if (!target) return false;
+    const targetMembership = await findMembership(actorUserId, targetCompanyId, tx);
+    if (!targetMembership) return false;
     await updateUserLastUsedCompany(actorUserId, targetCompanyId, tx);
     await recordCompanySwitched(
       {

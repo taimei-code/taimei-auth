@@ -81,20 +81,20 @@ accountCompany.post("/api/account/companies", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) {
+  const parsed = await parseZodBody(c, companyBody, {
+    withDetails: true,
+    transform: (d) => ({ name: d.name, orgCode: d.org_code as OrgCode }),
+  })();
+  if (!parsed.ok) {
     return guardErrorResponse({
       ok: false,
       error: "invalid_argument",
       status: 400,
-      details: parsed.error.flatten(),
+      details: parsed.details,
     });
   }
 
-  const result = await createSignupCompany(userId, {
-    name: parsed.data.name,
-    orgCode: parsed.data.org_code as OrgCode,
-  });
+  const result = await createSignupCompany(userId, parsed.data);
   if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   return c.json(serializeCreatedCompany(result));
 });
@@ -110,20 +110,20 @@ accountCompany.post("/api/account/companies/add", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) {
+  const parsed = await parseZodBody(c, companyBody, {
+    withDetails: true,
+    transform: (d) => ({ name: d.name, orgCode: d.org_code as OrgCode }),
+  })();
+  if (!parsed.ok) {
     return guardErrorResponse({
       ok: false,
       error: "invalid_argument",
       status: 400,
-      details: parsed.error.flatten(),
+      details: parsed.details,
     });
   }
 
-  const created = await addCompany(userId, {
-    name: parsed.data.name,
-    orgCode: parsed.data.org_code as OrgCode,
-  });
+  const created = await addCompany(userId, parsed.data);
   return c.json(serializeCreatedCompany(created));
 });
 
@@ -168,13 +168,7 @@ accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
   const companyId = c.req.param("companyId");
 
   const result = await deleteCompany(userId, companyId);
-  if (!result.ok) {
-    // deleteCompany use-case は not_found を返すが HTTP 側は既存 SPA 互換のため
-    // not_found_or_already_deleted 文字列を出す (「未存在」と「削除済み」を区別しない現行契約)。
-    return result.reason === "not_found"
-      ? guardErrorResponse({ ok: false, error: "not_found_or_already_deleted", status: 404 })
-      : guardErrorResponse(reasonToGuardError("forbidden"));
-  }
+  if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   // account_deleted=true は actor 自身が orphan として消えたことを示す。client はログアウト遷移する (UX は後続 PR)。
   return c.json({ ok: true, account_deleted: result.actorDeleted });
 });

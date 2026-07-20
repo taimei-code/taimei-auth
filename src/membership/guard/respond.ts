@@ -33,6 +33,7 @@ export type GuardReason =
   | "last_owner"
   | "already_exists"
   | "not_found_or_not_pending"
+  | "not_found_or_already_deleted"
   | "rate_limited"
   | "expired_or_used";
 
@@ -42,6 +43,11 @@ const REASON_TO_ERROR: Record<GuardReason, GuardErrorResult> = {
   last_owner: { ok: false, error: "last_owner", status: 409 },
   already_exists: { ok: false, error: "already_exists", status: 409 },
   not_found_or_not_pending: { ok: false, error: "not_found_or_not_pending", status: 404 },
+  not_found_or_already_deleted: {
+    ok: false,
+    error: "not_found_or_already_deleted",
+    status: 404,
+  },
   rate_limited: { ok: false, error: "rate_limited", status: 429 },
   expired_or_used: { ok: false, error: "expired_or_used", status: 410 },
 };
