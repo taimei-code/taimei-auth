@@ -27,8 +27,8 @@ export const requireActor = guard.requireActor;
 export const requireMembership = guard.requireMembership;
 export const requireMembershipOf = guard.requireMembershipOf;
 
-export { guardErrorResponse } from "./respond";
-export type { GuardErrorResult } from "./respond";
+export { guardErrorResponse, reasonToGuardError } from "./respond";
+export type { GuardErrorResult, GuardReason } from "./respond";
 
 export {
   makeRequireRoleChange,
