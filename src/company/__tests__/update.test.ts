@@ -89,4 +89,28 @@ describe("updateCompanyInfo", () => {
     expect(result).toEqual({ ok: false, reason: "not_found" });
     expect((await auditRows(owner.id, "company_updated")).length).toBe(0);
   });
+
+  test("QA-H-12 mutation → audit 発火順 pin (audit.payload.after が UPDATE 完了後の DB state と一致)", async () => {
+    // ADR-0012 の invariant: mutation を audit の前に同 tx で emit する。UPDATE 完了後の
+    // company 行 (findCompanyById の返す name / org_code) と audit.after が一致することで、
+    // 順序が逆 (audit を先に写像 → UPDATE で変更) の regression を検知する。
+    const owner = await seedUser("owner-order");
+    const co = await seedCompany("h12", "PERSONAL");
+    await seedMembership(owner.id, co, "OWNER");
+
+    const result = await updateCompanyInfo({
+      actorUserId: owner.id,
+      companyId: co,
+      input: { name: `${P}h12-renamed`, orgCode: "CORPORATE" },
+    });
+    expect(result.ok).toBe(true);
+
+    const after = await findCompanyById(co);
+    const payload = (await auditRows(owner.id, "company_updated"))[0]?.payload as Record<
+      string,
+      unknown
+    >;
+    expect((payload.after as Record<string, unknown>).name).toBe(after?.name);
+    expect((payload.after as Record<string, unknown>).org_code).toBe(after?.orgCode);
+  });
 });
