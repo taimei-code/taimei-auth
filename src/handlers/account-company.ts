@@ -1,14 +1,19 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import { guardErrorResponse, requireActor, requireMembership } from "../membership/guard";
-import { runInTransaction } from "@/db/transaction";
-import { findCompanyById, updateCompany, type OrgCode } from "@/db/repositories/company";
+import type { OrgCode } from "@/db/repositories/company";
 import { findMembershipsByUserId } from "@/db/repositories/membership";
-import { recordCompanyUpdated } from "@/db/repositories/audit-log";
 import { findUserById } from "@/db/repositories/user";
 import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
+import { updateCompanyInfo } from "../company/update";
+import {
+  guardErrorResponse,
+  reasonToGuardError,
+  requireActor,
+  requireMembership,
+} from "../membership/guard";
+import { parseZodBody } from "./parse-body";
 
 // SPA から呼ばれる事業所操作。Connect RPC (/rpc/*) は X-Service-Key 必須で
 // browser からは付与不能なため、同等処理を better-auth セッション cookie を信頼する
@@ -78,16 +83,19 @@ accountCompany.post("/api/account/companies", async (c) => {
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
-    return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
+    return guardErrorResponse({
+      ok: false,
+      error: "invalid_argument",
+      status: 400,
+      details: parsed.error.flatten(),
+    });
   }
 
   const result = await createSignupCompany(userId, {
     name: parsed.data.name,
     orgCode: parsed.data.org_code as OrgCode,
   });
-  if (!result.ok) {
-    return c.json({ error: "already_exists" }, 409);
-  }
+  if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   return c.json(serializeCreatedCompany(result));
 });
 
@@ -104,7 +112,12 @@ accountCompany.post("/api/account/companies/add", async (c) => {
 
   const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) {
-    return c.json({ error: "invalid_argument", details: parsed.error.flatten() }, 400);
+    return guardErrorResponse({
+      ok: false,
+      error: "invalid_argument",
+      status: 400,
+      details: parsed.error.flatten(),
+    });
   }
 
   const created = await addCompany(userId, {
@@ -114,43 +127,32 @@ accountCompany.post("/api/account/companies/add", async (c) => {
   return c.json(serializeCreatedCompany(created));
 });
 
-// PATCH 相当: 事業所の name / org_code を編集 (OWNER のみ)。before/after diff を audit。
+// PATCH 相当: 事業所の name / org_code を編集 (OWNER のみ)。before/after diff の audit と tx 所有は
+// updateCompanyInfo use-case。
 accountCompany.post("/api/account/companies/:companyId", async (c) => {
   const companyId = c.req.param("companyId");
   const membershipResult = await requireMembership(c.req.raw.headers, companyId, "OWNER");
   if (!membershipResult.ok) return guardErrorResponse(membershipResult);
-  const userId = membershipResult.actor.id;
 
-  const parsed = companyBody.safeParse(await c.req.json().catch(() => null));
-  if (!parsed.success) return c.json({ error: "invalid_argument" }, 400);
-  const name = parsed.data.name.trim();
-  const orgCode = parsed.data.org_code as OrgCode;
+  const parsed = await parseZodBody(c, companyBody, {
+    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
+  })();
+  if (!parsed.ok) {
+    return guardErrorResponse({ ok: false, error: "invalid_argument", status: 400 });
+  }
 
-  // before の取得を tx 内で行い、audit の before/after diff が並行更新でずれないようにする。
-  const updated = await runInTransaction(async (tx) => {
-    const before = await findCompanyById(companyId, tx);
-    if (!before || before.activationStatus !== "ACTIVE") return null;
-    const row = await updateCompany(companyId, { name, orgCode }, tx);
-    if (!row) return null;
-    await recordCompanyUpdated(
-      {
-        actor_user_id: userId,
-        company_id: companyId,
-        before: { name: before.name, org_code: before.orgCode as OrgCode },
-        after: { name, org_code: orgCode },
-      },
-      tx,
-    );
-    return row;
+  const result = await updateCompanyInfo({
+    actorUserId: membershipResult.actor.id,
+    companyId,
+    input: parsed.data,
   });
-
-  if (!updated) return c.json({ error: "not_found" }, 404);
+  if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   return c.json({
     company: {
-      id: updated.id,
-      name: updated.name,
-      org_code: updated.orgCode,
-      activation_status: updated.activationStatus,
+      id: result.company.id,
+      name: result.company.name,
+      org_code: result.company.orgCode,
+      activation_status: result.company.activationStatus,
     },
   });
 });
@@ -167,9 +169,11 @@ accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
 
   const result = await deleteCompany(userId, companyId);
   if (!result.ok) {
+    // deleteCompany use-case は not_found を返すが HTTP 側は既存 SPA 互換のため
+    // not_found_or_already_deleted 文字列を出す (「未存在」と「削除済み」を区別しない現行契約)。
     return result.reason === "not_found"
-      ? c.json({ error: "not_found_or_already_deleted" }, 404)
-      : c.json({ error: "forbidden" }, 403);
+      ? guardErrorResponse({ ok: false, error: "not_found_or_already_deleted", status: 404 })
+      : guardErrorResponse(reasonToGuardError("forbidden"));
   }
   // account_deleted=true は actor 自身が orphan として消えたことを示す。client はログアウト遷移する (UX は後続 PR)。
   return c.json({ ok: true, account_deleted: result.actorDeleted });

@@ -1,32 +1,23 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
+import { listPendingInvitations } from "@/db/repositories/invitation";
+import { findMembersByCompanyId, type Role } from "@/db/repositories/membership";
 import { auth } from "../auth";
+import { getAppUrl } from "../email/client";
+import { acceptInvitation } from "../invitation/accept";
+import { createInvitation } from "../invitation/create";
+import { revokeInvitation } from "../invitation/revoke";
 import {
   guardErrorResponse,
+  reasonToGuardError,
   requireInvitationAccept,
   requireInvite,
   requireMembership,
 } from "../membership/guard";
-import { getAppUrl } from "../email/client";
-import { runInTransaction } from "@/db/transaction";
-import {
-  findActivePendingInvitation,
-  generateInvitationId,
-  generateInvitationToken,
-  insertInvitation,
-  listPendingInvitations,
-  markInvitationRevoked,
-} from "@/db/repositories/invitation";
-import { findMembersByCompanyId, type Role } from "@/db/repositories/membership";
-import { recordInvitationRevoked, recordInvitationSent } from "@/db/repositories/audit-log";
-import { incrInvitationRate } from "../invitation/rate-limit";
-import { acceptInvitation } from "../invitation/accept";
 import { parseZodBody } from "./parse-body";
 
 export const accountInvitation = new Hono();
-
-const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // ADR-009: invitation は 24h 有効
 
 const createInvitationBody = z.object({
   email: z.string().email().max(320),
@@ -76,6 +67,8 @@ accountInvitation.get("/api/account/companies/:companyId/invitations", async (c)
 
 // POST 招待作成 (OWNER / ADMIN のみ、canInviteRole で OWNER 招待は OWNER のみ)。
 // 判定順は requireInvite entry に集約 (401 → 403 ADMIN → 400 with details → 403 canInviteRole)。
+// idempotency (既存 PENDING 再送) / rate-limit / insert + audit は createInvitation use-case が所有。
+// magic-link 送信は handler が post-commit で行う (accept 側と対称、DB 失敗時は無送信)。
 accountInvitation.post("/api/account/companies/:companyId/invitations", async (c) => {
   const companyId = c.req.param("companyId");
   const guardResult = await requireInvite({
@@ -88,45 +81,15 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
   });
   if (!guardResult.ok) return guardErrorResponse(guardResult);
   const { actor, email, role } = guardResult;
-  const userId = actor.id;
 
-  // idempotency check を rate limit より先に行う: 既存 PENDING への再送 (リマインド) は
-  // 新規招待ではないため rate counter を消費しない。
-  const existing = await findActivePendingInvitation(companyId, email);
-
-  let invitationRow = existing;
-  if (!invitationRow) {
-    // 新規招待のみ rate limit を消費 (env tunable、Magic Link rate limit と二重防御)。
-    const withinLimit = await incrInvitationRate(companyId);
-    if (!withinLimit) {
-      return c.json({ error: "rate_limited" }, 429);
-    }
-    invitationRow = await runInTransaction(async (tx) => {
-      const row = await insertInvitation(
-        {
-          id: generateInvitationId(),
-          companyId,
-          email,
-          role,
-          token: generateInvitationToken(),
-          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-          invitedByUserId: userId,
-        },
-        tx,
-      );
-      await recordInvitationSent(
-        {
-          actor_user_id: userId,
-          invitation_id: row.id,
-          company_id: companyId,
-          invited_email: email,
-          role,
-        },
-        tx,
-      );
-      return row;
-    });
-  }
+  const result = await createInvitation({
+    actorUserId: actor.id,
+    companyId,
+    email,
+    role,
+  });
+  if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
+  const invitationRow = result.invitation;
 
   // commit 後にメール送信 (DB INSERT 成功してから送る、失敗時は無送信)。
   // signInMagicLink が magic link を発行 → sendMagicLink が invitation_token を検出して招待メールに分岐。
@@ -144,11 +107,11 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
       role: invitationRow.role,
       expires_at: invitationRow.expiresAt.toISOString(),
     },
-    reused: existing !== undefined,
+    reused: result.reused,
   });
 });
 
-// POST 招待取消 (OWNER / ADMIN のみ)
+// POST 招待取消 (OWNER / ADMIN のみ)。tx / audit は revokeInvitation use-case が所有。
 accountInvitation.post(
   "/api/account/companies/:companyId/invitations/:invitationId/revoke",
   async (c) => {
@@ -156,19 +119,13 @@ accountInvitation.post(
     const invitationId = c.req.param("invitationId");
     const membershipResult = await requireMembership(c.req.raw.headers, companyId, "ADMIN");
     if (!membershipResult.ok) return guardErrorResponse(membershipResult);
-    const userId = membershipResult.actor.id;
 
-    const revoked = await runInTransaction(async (tx) => {
-      const row = await markInvitationRevoked(invitationId, companyId, tx);
-      if (!row) return null;
-      await recordInvitationRevoked(
-        { actor_user_id: userId, invitation_id: row.id, company_id: companyId },
-        tx,
-      );
-      return row;
+    const result = await revokeInvitation({
+      actorUserId: membershipResult.actor.id,
+      companyId,
+      invitationId,
     });
-
-    if (!revoked) return c.json({ error: "not_found_or_not_pending" }, 404);
+    if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
     return c.json({ ok: true });
   },
 );
@@ -198,8 +155,6 @@ accountInvitation.post("/api/account/accept-invitation", async (c) => {
     actor: guardResult.actor,
     invitation: guardResult.invitation,
   });
-  if (!result.ok) {
-    return c.json({ error: "expired_or_used" }, 410);
-  }
+  if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   return c.json({ ok: true, company_id: result.companyId });
 });
