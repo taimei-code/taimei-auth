@@ -83,7 +83,7 @@ accountCompany.post("/api/account/companies", async (c) => {
 
   const parsed = await parseZodBody(c, companyBody, {
     withDetails: true,
-    transform: (d) => ({ name: d.name, orgCode: d.org_code as OrgCode }),
+    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
   })();
   if (!parsed.ok) {
     return guardErrorResponse({
@@ -112,7 +112,7 @@ accountCompany.post("/api/account/companies/add", async (c) => {
 
   const parsed = await parseZodBody(c, companyBody, {
     withDetails: true,
-    transform: (d) => ({ name: d.name, orgCode: d.org_code as OrgCode }),
+    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
   })();
   if (!parsed.ok) {
     return guardErrorResponse({
