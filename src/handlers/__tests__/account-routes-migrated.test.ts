@@ -869,3 +869,26 @@ describe("account routes migration snapshot", () => {
     });
   });
 });
+
+// server 側 auth-entry-redirect と SPA page guard (SignUpCompany) は同じ「ACTIVE membership の
+// 有無」を別実装で判定する 2 者契約 (#74 redirect loop はこの不一致で再発する)。server 側は
+// auth-entry-redirect.test.ts が固定するため、ここでは SPA が読む GET /api/account/memberships が
+// DELETED company を返さないことを対で固定する。
+describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 者契約 pin)", () => {
+  beforeEach(cleanupTestData);
+
+  test("DELETED company のみ所属する user には memberships が空配列で返る", async () => {
+    const { company } = await import("@/db/schema");
+    const actor = await seedUser("mem-deleted-only");
+    const co = await seedCompany("mem-deleted-only");
+    await seedMembership(actor.id, co, "OWNER");
+    await db.update(company).set({ activationStatus: "DELETED" }).where(eq(company.id, co));
+    stubActor(actor);
+
+    const actual = await invoke(buildTestApp(), "GET", "/api/account/memberships");
+
+    expect(actual.status).toBe(200);
+    expect(actual.body).toEqual({ current_company_id: null, memberships: [] });
+    restoreActor();
+  });
+});

@@ -51,6 +51,12 @@ export function restoreActor(): void {
   currentActor = null;
 }
 
+// auth-entry-redirect は getSession の前段で getSessionCookie(headers) を通すため、
+// stubActor だけでは cookie 不在の早期 next() に落ちて「pass-through が正解」のテストが
+// 理由を問わず緑になる。session 分岐を検証するテストは必ずこの header を付与し、
+// 「cookie 無し」のケースと分岐理由を分離する (cookie 名は local 環境の非 Secure 版)。
+export const SESSION_COOKIE_HEADER = { cookie: "better-auth.session_token=stub-session" };
+
 export type SeededUser = { id: string; email: string };
 
 export type SeededInvitation = { id: string; token: string };
