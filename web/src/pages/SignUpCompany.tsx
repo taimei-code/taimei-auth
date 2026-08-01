@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
+import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { authClient } from "@/lib/auth-client";
 import { AccountApiError, createCompany, listMyMemberships } from "@/lib/account-api";
+import { redirectToSignIn } from "@/lib/auth-redirect";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { Button } from "@/components/ui/button";
 import {
@@ -45,10 +47,7 @@ export const SignUpCompany = () => {
       .getSession()
       .then(({ data }) => {
         if (!data?.session) {
-          const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-          window.location.replace(
-            `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(returnTo)}`,
-          );
+          redirectToSignIn();
           return null;
         }
         return listMyMemberships();
@@ -86,11 +85,7 @@ export const SignUpCompany = () => {
   };
 
   if (status === "loading" || status === "already-has-company") {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (

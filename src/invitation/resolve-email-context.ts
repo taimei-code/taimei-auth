@@ -33,7 +33,7 @@ export async function resolveInvitationEmailContext(
     companyName: company.name,
     inviterName: inviter?.name ?? "",
     inviterEmail: inviter?.email ?? "",
-    roleLabel: roleLabel(invitation.role as "OWNER" | "ADMIN" | "MEMBER"),
+    roleLabel: roleLabel(invitation.role),
   };
 }
 

@@ -1,8 +1,8 @@
 import { deleteAccountIfOrphaned } from "../account/orphan";
 import {
   recordCompanyDeleted,
-  recordInvitationRevoked,
-  recordMembershipRemoved,
+  recordInvitationsRevoked,
+  recordMembershipsRemoved,
 } from "@/db/repositories/audit-log";
 import { findCompanyById, softDeleteCompany } from "@/db/repositories/company";
 import { revokePendingInvitationsOfCompany } from "@/db/repositories/invitation";
@@ -46,25 +46,24 @@ export const deleteCompany = (
     }
 
     const revokedInvitations = await revokePendingInvitationsOfCompany(companyId, tx);
-    for (const inv of revokedInvitations) {
-      await recordInvitationRevoked(
-        { actor_user_id: actorUserId, invitation_id: inv.id, company_id: companyId },
-        tx,
-      );
-    }
+    await recordInvitationsRevoked(
+      {
+        actor_user_id: actorUserId,
+        company_id: companyId,
+        invitation_ids: revokedInvitations.map((inv) => inv.id),
+      },
+      tx,
+    );
 
     const removed = await removeMembershipsOfCompany(companyId, tx);
-    for (const m of removed) {
-      await recordMembershipRemoved(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          removed_user_id: m.userId,
-          role_at_removal: m.role,
-        },
-        tx,
-      );
-    }
+    await recordMembershipsRemoved(
+      {
+        actor_user_id: actorUserId,
+        company_id: companyId,
+        removed: removed.map((m) => ({ user_id: m.userId, role_at_removal: m.role })),
+      },
+      tx,
+    );
 
     // 削除 company を last_used に握る生存メンバーを残存所属へ付け替えてから orphan を消す。
     await reassignLastUsedCompanyForDeletedCompany(companyId, tx);

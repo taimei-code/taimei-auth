@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
 
+import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { authClient } from "@/lib/auth-client";
 import { AccountApiError, acceptInvitation } from "@/lib/account-api";
+import { redirectToSignIn } from "@/lib/auth-redirect";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Status = "processing" | "error";
@@ -29,10 +30,7 @@ export const SignUpAcceptInvitation = () => {
       .getSession()
       .then(({ data }) => {
         if (!data?.session) {
-          const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-          window.location.replace(
-            `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(returnTo)}`,
-          );
+          redirectToSignIn();
           return null;
         }
         return acceptInvitation(invitationToken);
@@ -58,11 +56,7 @@ export const SignUpAcceptInvitation = () => {
   }, [invitationToken]);
 
   if (status === "processing") {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (

@@ -136,15 +136,36 @@ export type AuditLogEntry =
     };
 
 export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db): Promise<void> {
-  await txOrDb.insert(auditLog).values({
-    id: randomUUID(),
-    eventType: entry.eventType,
-    userId: entry.userId,
-    payload: entry.payload,
-  });
+  await appendAuditLogs([entry], txOrDb);
+}
+
+// N 件を 1 statement で書く。DeleteCompany のように FOR UPDATE lock 保持中の tx 内で
+// メンバー数ぶんの INSERT を発行すると lock 時間が round trip × N で伸びるため、batch を正とする。
+// created_at は tx 内で now() が transaction timestamp に固定されるため単発 INSERT と同値。
+export async function appendAuditLogs(
+  entries: AuditLogEntry[],
+  txOrDb: DbOrTx = db,
+): Promise<void> {
+  if (entries.length === 0) return;
+  await txOrDb.insert(auditLog).values(
+    entries.map((entry) => ({
+      id: randomUUID(),
+      eventType: entry.eventType,
+      userId: entry.userId,
+      payload: entry.payload,
+    })),
+  );
 }
 
 // 型安全な helper を export。call site が event_type / payload の整合性を string で組み立てる事故を防ぐ。
+
+// account_delete は payload なし (削除対象は user_id 列で表現)。
+export const recordAccountDeleted = (
+  params: { user_id: string },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog({ eventType: "account_delete", userId: params.user_id, payload: {} }, txOrDb);
+
 export const recordCompanyCreated = (
   params: {
     actor_user_id: string;
@@ -316,6 +337,52 @@ export const recordMembershipRemoved = (
         was_self: params.actor_user_id === params.removed_user_id,
       },
     },
+    txOrDb,
+  );
+
+// DeleteCompany が失効させた PENDING 招待 N 件の batch 版。payload 規則は recordInvitationRevoked と同一。
+export const recordInvitationsRevoked = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    invitation_ids: string[];
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLogs(
+    params.invitation_ids.map((invitation_id) => ({
+      eventType: "invitation_revoked" as const,
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id,
+        company_id: params.company_id,
+        revoked_by_user_id: params.actor_user_id,
+      },
+    })),
+    txOrDb,
+  );
+
+// DeleteCompany が物理削除した membership N 件の batch 版。payload 規則は recordMembershipRemoved と同一。
+export const recordMembershipsRemoved = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    removed: Array<{ user_id: string; role_at_removal: Role }>;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLogs(
+    params.removed.map((m) => ({
+      eventType: "membership_removed" as const,
+      userId: params.actor_user_id,
+      payload: {
+        company_id: params.company_id,
+        removed_user_id: m.user_id,
+        removed_by_user_id: params.actor_user_id,
+        role_at_removal: m.role_at_removal,
+        was_self: params.actor_user_id === m.user_id,
+      },
+    })),
     txOrDb,
   );
 
