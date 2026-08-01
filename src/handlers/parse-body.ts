@@ -1,6 +1,16 @@
 import type { Context } from "hono";
-import type { z } from "zod";
+import { z } from "zod";
+import type { Role } from "@/db/repositories/membership";
 import type { ParseBodyCallback } from "../membership/guard";
+
+// role を body で受ける 2 route (role 変更 / 招待作成) が同じ値集合を受理するための共有 schema。
+// 片方だけ新 role を受理する非対称を防ぐ。値集合の SSOT は db/schema.ts の Role
+// (satisfies が Role に無い値の混入を型エラーで検出する)。
+export const roleBodySchema = z.enum([
+  "OWNER",
+  "ADMIN",
+  "MEMBER",
+] as const satisfies readonly Role[]);
 
 // Transport 層で「c.req.json() + zod safeParse」を entry の parseBody callback に接続する adapter。
 // 4 route (account-invitation / account-membership) が同形の 3〜5 行を書いていたのを 1 箇所に閉じる。

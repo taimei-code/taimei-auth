@@ -7,7 +7,7 @@ const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
 // guard が row から読むのは role のみなので、テストは role だけ持つ最小 fake で足りる。
 const fakeMembership = (role: Role): MembershipRow => ({ role }) as unknown as MembershipRow;
 
-const anActor: Actor = { id: "u_1", email: "a@example.com" };
+const anActor: Actor = { id: "u_1", email: "a@example.com", lastUsedCompanyId: null };
 const noHeaders = new Headers();
 
 const buildGuard = (opts: { actor?: Actor | null; membershipRole?: Role | null }) =>

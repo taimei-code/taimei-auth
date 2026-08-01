@@ -16,7 +16,7 @@ import {
 // 既存 guard.test.ts が同一 factory で覆っており、こちらでは 5 operation entry の
 // step 順序 (401 → 400 → 403 → 404 → 403/... の相対順) と fail-closed 契約に絞る。
 
-const anActor: Actor = { id: "u_1", email: "a@example.com" };
+const anActor: Actor = { id: "u_1", email: "a@example.com", lastUsedCompanyId: null };
 const noHeaders = new Headers();
 
 const fakeMembership = (

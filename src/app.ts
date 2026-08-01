@@ -15,7 +15,7 @@ import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
-import { isLocalEnvironment } from "./env";
+import { getTrustedOrigins, isLocalEnvironment } from "./env";
 
 // Bun entry (index.ts) と Workers entry (worker.ts) が共有する Hono アプリ定義。
 // runtime 固有なのは「静的配信」のみ (Bun = serveStatic+Bun.file / Workers = env.ASSETS) で、
@@ -39,7 +39,7 @@ export function mountAccountRoutes(app: Hono): void {
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
 
-  const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
+  const allowedOrigins = getTrustedOrigins();
   app.use(
     "*",
     cors({

@@ -73,7 +73,11 @@
                 "paths": {
                   "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
                   "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "@/db/repositories/session": {
+                    "importNames": ["revokeAllSessionsForUser"],
+                    "message": "revoked_at 記帳だけでは secondaryStorage (Redis) の session 実体が失効しない。src/account/revoke-sessions.ts の revokeUserSessions を経由すること (唯一の窓口は biome-ignore で個別に許可)"
+                  }
                 }
               }
             }

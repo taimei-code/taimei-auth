@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
 
-import type { Role } from "@/db/repositories/membership";
 import { switchCompany } from "../account/switch-company";
 import {
   guardErrorResponse,
@@ -14,12 +13,12 @@ import {
 import { changeRole } from "../membership/change-role";
 import { removeMember } from "../membership/remove";
 import { transferOwnership } from "../membership/transfer-ownership";
-import { parseZodBody } from "./parse-body";
+import { parseZodBody, roleBodySchema } from "./parse-body";
 
 export const accountMembership = new Hono();
 
 const setCurrentCompanyBody = z.object({ company_id: z.string().min(1).max(64) });
-const updateRoleBody = z.object({ role: z.enum(["OWNER", "ADMIN", "MEMBER"]) });
+const updateRoleBody = z.object({ role: roleBodySchema });
 const transferOwnershipBody = z.object({ to_user_id: z.string().min(1).max(64) });
 
 // POST 事業所切替。target の active membership を持つことを switchCompany use-case が tx 内で再検証し
@@ -38,6 +37,7 @@ accountMembership.post("/api/account/current-company", async (c) => {
 
   const result = await switchCompany({
     actorUserId: actorResult.actor.id,
+    fromCompanyId: actorResult.actor.lastUsedCompanyId,
     targetCompanyId: parsed.data.targetCompanyId,
   });
   if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
@@ -58,7 +58,7 @@ accountMembership.post(
       companyId,
       targetUserId,
       parseBody: parseZodBody(c, updateRoleBody, {
-        transform: (d) => ({ nextRole: d.role as Role }),
+        transform: (d) => ({ nextRole: d.role }),
       }),
     });
     if (!guardResult.ok) return guardErrorResponse(guardResult);

@@ -54,11 +54,6 @@ export async function updateUserLastUsedCompany(
   await txOrDb.update(user).set({ lastUsedCompanyId: companyId }).where(eq(user.id, userId));
 }
 
-// ADR-0010 (設計レビュー DA Critique 1): 事業所を soft delete (UPDATE) するため
-// last_used_company_id の `ON DELETE SET NULL` が発火せず、削除 company を指す dangling 参照が残る。
-// SDK は user.default_company_id (= last_used_company_id) を companyId の権威ソースにするため、
-// 削除 company を指す全 user を残存 ACTIVE membership (なければ NULL) に同一 tx で付け替える。
-// DeleteCompany フローでは当該 company の membership 物理削除後に呼ぶ前提 (= subquery が削除 company を選ばない)。
 // ADR-0010 D5: 登録途中放棄 (signup でアカウント作成後、一定時間 事業所を作らなかった 0 件アカウント) を
 // 回収する TTL sweep の候補抽出。D2 で通常の orphan は即削除されるため、残るのは新規 signup の放棄分のみ。
 export async function findAbandonedSignupUserIds(
@@ -81,6 +76,11 @@ export async function findAbandonedSignupUserIds(
   return rows.map((r) => r.id);
 }
 
+// ADR-0010 (設計レビュー DA Critique 1): 事業所を soft delete (UPDATE) するため
+// last_used_company_id の `ON DELETE SET NULL` が発火せず、削除 company を指す dangling 参照が残る。
+// SDK は user.default_company_id (= last_used_company_id) を companyId の権威ソースにするため、
+// 削除 company を指す全 user を残存 ACTIVE membership (なければ NULL) に同一 tx で付け替える。
+// DeleteCompany フローでは当該 company の membership 物理削除後に呼ぶ前提 (= subquery が削除 company を選ばない)。
 export async function reassignLastUsedCompanyForDeletedCompany(
   companyId: string,
   txOrDb: DbOrTx = db,

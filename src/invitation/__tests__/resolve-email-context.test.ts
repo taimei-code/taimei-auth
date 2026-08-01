@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { acceptInvitationPath } from "../accept-path";
 import { resolveInvitationEmailContext } from "../resolve-email-context";
 
 // magic link URL の callbackURL に invitation_token が載っていれば招待メール文脈
@@ -12,8 +13,7 @@ const helpers = createSeedHelpers(P);
 const magicLinkUrl = (callbackURL: string) =>
   `http://auth.taimei-code.local:3100/api/auth/magic-link/verify?token=tok-123&callbackURL=${encodeURIComponent(callbackURL)}`;
 
-const inviteCallback = (token: string) =>
-  `/auth/signup/accept-invitation?invitation_token=${encodeURIComponent(token)}`;
+const inviteCallback = acceptInvitationPath;
 
 describe("resolveInvitationEmailContext", () => {
   beforeEach(helpers.cleanup);

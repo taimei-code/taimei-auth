@@ -6,7 +6,10 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "paths": {
       "@/*": ["./src/*"],
-      "@core/*": ["../src/*"]
+      // 2 つ目の "./src/*" は bun test (repo root cwd) 用 fallback。bun は nested tsconfig の
+      // paths を cwd 基準で解決するため、tsconfig 位置基準の "../src/*" だけだと web 配下の
+      // @core import が bun test で落ちる (tsc / vite は 1 つ目で解決し影響なし)
+      "@core/*": ["../src/*", "./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]

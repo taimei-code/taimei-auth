@@ -12,7 +12,8 @@
     "types": ["bun"],
     "jsx": "react-jsx",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@core/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "db/**/*.ts", "management/**/*.ts"],

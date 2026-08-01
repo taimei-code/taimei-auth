@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../client";
-import { auditLog } from "../schema";
+import { auditLog, type Role } from "../schema";
+import type { OrgCode } from "./company";
 import type { DbOrTx } from "../transaction";
 
 // user の意図ある action のみを記録する (session revoke 等の internal state change は記録対象外)。
@@ -28,7 +29,7 @@ export type AuditLogEntry =
       payload: {
         company_id: string;
         name: string;
-        org_code: "PERSONAL" | "CORPORATE";
+        org_code: OrgCode;
         created_by_user_id: string;
       };
     }
@@ -37,8 +38,8 @@ export type AuditLogEntry =
       userId: string;
       payload: {
         company_id: string;
-        before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
-        after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+        before: { name: string; org_code: OrgCode };
+        after: { name: string; org_code: OrgCode };
       };
     }
   | {
@@ -57,7 +58,7 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         invited_email: string;
-        role: "OWNER" | "ADMIN" | "MEMBER";
+        role: Role;
         invited_by_user_id: string;
       };
     }
@@ -68,7 +69,7 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         accepted_by_user_id: string;
-        role: "OWNER" | "ADMIN" | "MEMBER";
+        role: Role;
       };
     }
   | {
@@ -101,7 +102,7 @@ export type AuditLogEntry =
         company_id: string;
         removed_user_id: string;
         removed_by_user_id: string;
-        role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+        role_at_removal: Role;
         was_self: boolean;
       };
     }
@@ -111,8 +112,8 @@ export type AuditLogEntry =
       payload: {
         company_id: string;
         target_user_id: string;
-        before_role: "OWNER" | "ADMIN" | "MEMBER";
-        after_role: "OWNER" | "ADMIN" | "MEMBER";
+        before_role: Role;
+        after_role: Role;
         changed_by_user_id: string;
       };
     }
@@ -149,7 +150,7 @@ export const recordCompanyCreated = (
     actor_user_id: string;
     company_id: string;
     name: string;
-    org_code: "PERSONAL" | "CORPORATE";
+    org_code: OrgCode;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -173,7 +174,7 @@ export const recordInvitationSent = (
     invitation_id: string;
     company_id: string;
     invited_email: string;
-    role: "OWNER" | "ADMIN" | "MEMBER";
+    role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -197,7 +198,7 @@ export const recordInvitationAccepted = (
     actor_user_id: string;
     invitation_id: string;
     company_id: string;
-    role: "OWNER" | "ADMIN" | "MEMBER";
+    role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -274,8 +275,8 @@ export const recordRoleChanged = (
     actor_user_id: string;
     company_id: string;
     target_user_id: string;
-    before_role: "OWNER" | "ADMIN" | "MEMBER";
-    after_role: "OWNER" | "ADMIN" | "MEMBER";
+    before_role: Role;
+    after_role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -299,7 +300,7 @@ export const recordMembershipRemoved = (
     actor_user_id: string;
     company_id: string;
     removed_user_id: string;
-    role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+    role_at_removal: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -342,8 +343,8 @@ export const recordCompanyUpdated = (
   params: {
     actor_user_id: string;
     company_id: string;
-    before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
-    after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+    before: { name: string; org_code: OrgCode };
+    after: { name: string; org_code: OrgCode };
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>

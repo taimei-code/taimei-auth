@@ -8,11 +8,10 @@ import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership"
 import * as schema from "@/db/schema";
 import { sendWelcomeEmail } from "./email/send-welcome";
 import { sendInvitationEmail } from "./email/send-invitation";
+import { sendMagicLinkEmail } from "./email/send-magic-link";
 import { resolveInvitationEmailContext } from "./invitation/resolve-email-context";
-import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
-import { isBunRuntime, isLocalEnvironment } from "./env";
-import MagicLinkEmail from "./email/magic-link";
+import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
 import { captureAuditLogError } from "./audit-error";
 import { getClientContext } from "./request-context";
 import { redisStorage } from "./redis";
@@ -47,7 +46,7 @@ function buildAuth() {
       crossSubDomainCookies: resolveCrossSubDomainCookies(authCookieDomain),
     },
 
-    trustedOrigins: (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean),
+    trustedOrigins: getTrustedOrigins(),
 
     database: drizzleAdapter(db, {
       provider: "pg",
@@ -110,36 +109,7 @@ function buildAuth() {
             await sendInvitationEmail({ inviteeEmail: email, url, ...invitationContext });
             return;
           }
-
-          if (isLocalEnvironment()) {
-            console.log(`[TEST] Magic Link for ${email}: ${url}`);
-            return;
-          }
-
-          const resend = getResendClient();
-          const fromEmail = getMagicLinkFromEmail();
-          const appName = getAppName();
-
-          const emailComponent = MagicLinkEmail({ url, appName });
-          // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
-          // undefined ("render2 is not a function") になる。dynamic import で実行時に module
-          // init を強制する。詳細: docs/adr/0011-cloudflare-workers-migration.md
-          const { render } = await import("@react-email/components");
-          const html = await render(emailComponent);
-          const text = await render(emailComponent, { plainText: true });
-
-          const { error } = await resend.emails.send({
-            from: fromEmail,
-            to: email,
-            subject: `${appName} へのログインリンク`,
-            html,
-            text,
-          });
-
-          if (error) {
-            console.error("Failed to send magic link email:", error);
-            throw new Error(`Email sending failed: ${error.message}`);
-          }
+          await sendMagicLinkEmail(email, url);
         },
         expiresIn: 300,
         // local: 1000 req/s 許可 (test の高速化)。

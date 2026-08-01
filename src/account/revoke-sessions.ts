@@ -1,4 +1,5 @@
 import { auth } from "../auth";
+// biome-ignore lint/style/noRestrictedImports: revokeUserSessions が唯一の正規窓口 (下記コメント参照)
 import { revokeAllSessionsForUser } from "@/db/repositories/session";
 import type { DbTx } from "@/db/transaction";
 
