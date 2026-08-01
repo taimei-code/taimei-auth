@@ -93,6 +93,18 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - リスク評価: undici advisory は WebSocket client のもので `@vercel/blob` は HTTP fetch 用途のため本アプリでは非該当。`6.27.0` で typecheck / lint / 全 test が green であることを確認済み
 - 後始末 (任意): `6.27.0` が 7 日齢 (2026-06-22 以降) を超えたら `undici` 除外を外しても resolve は維持される
 
+### audit gate 対応 3 回目 (2026-08-01, brace-expansion / postcss / react-router / sharp) + 初の `--ignore`
+
+`bun audit` のライブ DB に新規 high advisory 4 家系が出現し CI gate を落としたため対応。全 fix version が 7 日齢を満たし `minimumReleaseAgeExcludes` 追加は不要。代わりに patch 版が存在しない advisory 1 件へ audit の `--ignore` を初導入した。
+
+- **brace-expansion** `GHSA-mh99-v99m-4gvg` / `GHSA-3jxr-9vmj-r5cp` (HIGH, `>=4.0.0 <5.0.8`, 展開長無制限 / 連続 `{}` の指数時間展開による DoS) → `@sentry/bun › … › minimatch` の transitive。`bun update` は transitive を direct dep に昇格させてしまうため、`bun.lock` の該当 entry を registry の実 metadata (deps + integrity) で `5.0.8` に in-place 差し替え。`5.0.8` (2026-07-24) は 7 日齢を満たす
+- **postcss** `GHSA-r28c-9q8g-f849` (HIGH, `<=8.5.17`, sourceMappingURL 経由の path traversal で任意 .map 読出) → direct devDep を `^8.5.23` に bump。lockfile に残る scoped entry (`tailwindcss/postcss` / `vite/postcss`) も同版へ in-place 統一。`8.5.23` (2026-07-25) は 7 日齢を満たす
+- **sharp** `GHSA-f88m-g3jw-g9cj` (HIGH, `<0.35.0`, libvips 継承 CVE 群) → `wrangler › miniflare` の transitive で miniflare が `0.34.5` を exact pin するため `overrides` で `0.35.3` (2026-07-01) に固定。dev tool (miniflare) 専用で本番 bundle に同梱されない
+- **react-router** `GHSA-chx6-hx7r-mcp5` (HIGH, route matching の非効率による DoS) → direct dep を `^7.18.1` に minor bump。`7.18.1` (2026-06-29) は 7 日齢を満たす
+- **react-router** `GHSA-qwww-vcr4-c8h2` (HIGH, `>=7.12.0 <8.3.0`, RSC Mode の CSRF bypass) は **patched が `8.3.0` (major) のみで 7.x backport が無い**。本リポは declarative SPA router のみで RSC Mode / server action を使わず advisory 非該当のため、major 昇格はせず CI の audit step に `--ignore=GHSA-qwww-vcr4-c8h2` を付けて明示 accept する (bun audit 1.3+ の advisory 単位 ignore)。react-router を v8 に上げるか 7.x backport が出た時点でこの ignore を外すこと
+- リスク評価: いずれも DoS / dev-tool / 非該当経路で本番実行面への影響は限定的。typecheck / lint / 全 test green を確認済み
+- 教訓: lockfile の広範 entry 削除 + 非 clean `bun install` は better-auth 等の無関係 minor bump を誘発する (CLAUDE.md gotcha の再確認)。transitive の family 限定更新は「main lockfile 起点 + 対象 entry の in-place 差し替え + `bun install --frozen-lockfile` で検証」で行う
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
