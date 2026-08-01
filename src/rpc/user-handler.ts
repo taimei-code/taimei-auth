@@ -4,13 +4,13 @@ import { UserService } from "../gen/auth/v1/auth_pb";
 import { runInTransaction } from "@/db/transaction";
 import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
-import { revokeAllSessionsForUser } from "@/db/repositories/session";
 import {
   deleteUser as deleteUserRepo,
   findUserByEmail as findUserByEmailRepo,
   findUserById as findUserByIdRepo,
   updateUser as updateUserRepo,
 } from "@/db/repositories/user";
+import { revokeUserSessions } from "../account/revoke-sessions";
 import { toProtoUser } from "./mappers";
 
 export function registerUserService(router: ConnectRouter) {
@@ -60,7 +60,7 @@ export function registerUserService(router: ConnectRouter) {
         const blocking = await findCompaniesBlockingUserDeletion(req.userId, tx);
         if (blocking.length > 0) return { blocked: blocking.length };
         await appendAuditLog({ eventType: "account_delete", userId: req.userId, payload: {} }, tx);
-        await revokeAllSessionsForUser(req.userId, tx);
+        await revokeUserSessions(req.userId, tx);
         const row = await deleteUserRepo(req.userId, tx);
         return { row };
       });
