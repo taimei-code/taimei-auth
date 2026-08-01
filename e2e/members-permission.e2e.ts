@@ -30,6 +30,6 @@ test("OWNER role には管理操作が表示される (出し分けの対照)", 
   await expect(page.getByRole("heading", { name: "メンバー", exact: true })).toBeVisible();
 
   await expect(page.getByRole("region", { name: "メンバーを招待" })).toBeVisible();
-  // 自分以外 (E2E Member) の行には役割変更 select が出る
-  await expect(page.getByRole("combobox", { name: /の役割$/ })).toHaveCount(1);
+  // 自分以外 (E2E Member) の行には役割変更 select が出る (件数はメンバー構成に依存させない)
+  await expect(page.getByRole("combobox", { name: "e2e-member@example.com の役割" })).toBeVisible();
 });
