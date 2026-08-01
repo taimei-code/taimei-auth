@@ -30,6 +30,10 @@ subdirectory の build 設定 (`web/tailwind.config.ts` / `web/postcss.config.js
 
 詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → #35)。
 
+## 手動回帰 QA
+
+自動化不能な回帰ケース (cross-subdomain Cookie 実ドメイン / GitHub OAuth 実連携 / workerd 実機 / Resend 実メール / magic link 期限切れ) は [`docs/qa/manual-regression.md`](./docs/qa/manual-regression.md) に QA-MR-* として台帳化している。**該当領域を触る PR のマージ前に、各ケースの「契機」に一致するものを実施する** (本番デプロイ後スモークは QA-MR-01 / QA-MR-03)。ブラウザ実機の認証動線は `bun run test:e2e` (playwright) で自動化済み。
+
 ## 既知の落とし穴 (gotcha)
 
 ### bun `minimumReleaseAge` で blocked された依存の advisory 更新
