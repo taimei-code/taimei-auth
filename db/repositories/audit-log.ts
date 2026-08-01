@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../client";
-import { auditLog } from "../schema";
+import { auditLog, type Role } from "../schema";
+import type { OrgCode } from "./company";
 import type { DbOrTx } from "../transaction";
 
 // user の意図ある action のみを記録する (session revoke 等の internal state change は記録対象外)。
@@ -28,7 +29,7 @@ export type AuditLogEntry =
       payload: {
         company_id: string;
         name: string;
-        org_code: "PERSONAL" | "CORPORATE";
+        org_code: OrgCode;
         created_by_user_id: string;
       };
     }
@@ -37,8 +38,8 @@ export type AuditLogEntry =
       userId: string;
       payload: {
         company_id: string;
-        before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
-        after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+        before: { name: string; org_code: OrgCode };
+        after: { name: string; org_code: OrgCode };
       };
     }
   | {
@@ -57,7 +58,7 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         invited_email: string;
-        role: "OWNER" | "ADMIN" | "MEMBER";
+        role: Role;
         invited_by_user_id: string;
       };
     }
@@ -68,7 +69,7 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         accepted_by_user_id: string;
-        role: "OWNER" | "ADMIN" | "MEMBER";
+        role: Role;
       };
     }
   | {
@@ -101,7 +102,7 @@ export type AuditLogEntry =
         company_id: string;
         removed_user_id: string;
         removed_by_user_id: string;
-        role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+        role_at_removal: Role;
         was_self: boolean;
       };
     }
@@ -111,8 +112,8 @@ export type AuditLogEntry =
       payload: {
         company_id: string;
         target_user_id: string;
-        before_role: "OWNER" | "ADMIN" | "MEMBER";
-        after_role: "OWNER" | "ADMIN" | "MEMBER";
+        before_role: Role;
+        after_role: Role;
         changed_by_user_id: string;
       };
     }
@@ -135,21 +136,42 @@ export type AuditLogEntry =
     };
 
 export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db): Promise<void> {
-  await txOrDb.insert(auditLog).values({
-    id: randomUUID(),
-    eventType: entry.eventType,
-    userId: entry.userId,
-    payload: entry.payload,
-  });
+  await appendAuditLogs([entry], txOrDb);
+}
+
+// N 件を 1 statement で書く。DeleteCompany のように FOR UPDATE lock 保持中の tx 内で
+// メンバー数ぶんの INSERT を発行すると lock 時間が round trip × N で伸びるため、batch を正とする。
+// created_at は tx 内で now() が transaction timestamp に固定されるため単発 INSERT と同値。
+export async function appendAuditLogs(
+  entries: AuditLogEntry[],
+  txOrDb: DbOrTx = db,
+): Promise<void> {
+  if (entries.length === 0) return;
+  await txOrDb.insert(auditLog).values(
+    entries.map((entry) => ({
+      id: randomUUID(),
+      eventType: entry.eventType,
+      userId: entry.userId,
+      payload: entry.payload,
+    })),
+  );
 }
 
 // 型安全な helper を export。call site が event_type / payload の整合性を string で組み立てる事故を防ぐ。
+
+// account_delete は payload なし (削除対象は user_id 列で表現)。
+export const recordAccountDeleted = (
+  params: { user_id: string },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog({ eventType: "account_delete", userId: params.user_id, payload: {} }, txOrDb);
+
 export const recordCompanyCreated = (
   params: {
     actor_user_id: string;
     company_id: string;
     name: string;
-    org_code: "PERSONAL" | "CORPORATE";
+    org_code: OrgCode;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -173,7 +195,7 @@ export const recordInvitationSent = (
     invitation_id: string;
     company_id: string;
     invited_email: string;
-    role: "OWNER" | "ADMIN" | "MEMBER";
+    role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -197,7 +219,7 @@ export const recordInvitationAccepted = (
     actor_user_id: string;
     invitation_id: string;
     company_id: string;
-    role: "OWNER" | "ADMIN" | "MEMBER";
+    role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -215,6 +237,7 @@ export const recordInvitationAccepted = (
     txOrDb,
   );
 
+// payload 導出規則の実装は batch 版 (recordInvitationsRevoked) に一本化し、単数版は委譲する。
 export const recordInvitationRevoked = (
   params: {
     actor_user_id: string;
@@ -223,15 +246,11 @@ export const recordInvitationRevoked = (
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
-  appendAuditLog(
+  recordInvitationsRevoked(
     {
-      eventType: "invitation_revoked",
-      userId: params.actor_user_id,
-      payload: {
-        invitation_id: params.invitation_id,
-        company_id: params.company_id,
-        revoked_by_user_id: params.actor_user_id,
-      },
+      actor_user_id: params.actor_user_id,
+      company_id: params.company_id,
+      invitation_ids: [params.invitation_id],
     },
     txOrDb,
   );
@@ -274,8 +293,8 @@ export const recordRoleChanged = (
     actor_user_id: string;
     company_id: string;
     target_user_id: string;
-    before_role: "OWNER" | "ADMIN" | "MEMBER";
-    after_role: "OWNER" | "ADMIN" | "MEMBER";
+    before_role: Role;
+    after_role: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
@@ -294,27 +313,68 @@ export const recordRoleChanged = (
     txOrDb,
   );
 
+// payload 導出規則の実装は batch 版 (recordMembershipsRemoved) に一本化し、単数版は委譲する。
 export const recordMembershipRemoved = (
   params: {
     actor_user_id: string;
     company_id: string;
     removed_user_id: string;
-    role_at_removal: "OWNER" | "ADMIN" | "MEMBER";
+    role_at_removal: Role;
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
-  appendAuditLog(
+  recordMembershipsRemoved(
     {
-      eventType: "membership_removed",
+      actor_user_id: params.actor_user_id,
+      company_id: params.company_id,
+      removed: [{ user_id: params.removed_user_id, role_at_removal: params.role_at_removal }],
+    },
+    txOrDb,
+  );
+
+// DeleteCompany が失効させた PENDING 招待 N 件の batch 版。
+export const recordInvitationsRevoked = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    invitation_ids: string[];
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLogs(
+    params.invitation_ids.map((invitation_id) => ({
+      eventType: "invitation_revoked" as const,
+      userId: params.actor_user_id,
+      payload: {
+        invitation_id,
+        company_id: params.company_id,
+        revoked_by_user_id: params.actor_user_id,
+      },
+    })),
+    txOrDb,
+  );
+
+// DeleteCompany が物理削除した membership N 件の batch 版。
+export const recordMembershipsRemoved = (
+  params: {
+    actor_user_id: string;
+    company_id: string;
+    removed: Array<{ user_id: string; role_at_removal: Role }>;
+  },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLogs(
+    params.removed.map((m) => ({
+      eventType: "membership_removed" as const,
       userId: params.actor_user_id,
       payload: {
         company_id: params.company_id,
-        removed_user_id: params.removed_user_id,
+        removed_user_id: m.user_id,
         removed_by_user_id: params.actor_user_id,
-        role_at_removal: params.role_at_removal,
-        was_self: params.actor_user_id === params.removed_user_id,
+        role_at_removal: m.role_at_removal,
+        was_self: params.actor_user_id === m.user_id,
       },
-    },
+    })),
     txOrDb,
   );
 
@@ -342,8 +402,8 @@ export const recordCompanyUpdated = (
   params: {
     actor_user_id: string;
     company_id: string;
-    before: { name: string; org_code: "PERSONAL" | "CORPORATE" };
-    after: { name: string; org_code: "PERSONAL" | "CORPORATE" };
+    before: { name: string; org_code: OrgCode };
+    after: { name: string; org_code: OrgCode };
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>

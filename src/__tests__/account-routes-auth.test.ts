@@ -15,6 +15,7 @@ const buildApp = () => {
 const app = buildApp();
 
 const routes: { method: "GET" | "POST"; path: string }[] = [
+  { method: "POST", path: "/api/account/avatar/upload-token" },
   { method: "GET", path: "/api/account/memberships" },
   { method: "POST", path: "/api/account/companies" },
   { method: "POST", path: "/api/account/companies/add" },

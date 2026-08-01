@@ -4,7 +4,7 @@ import { Check, Loader2, Plus } from "lucide-react";
 import { AccountApiError, removeMember } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-import { roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
@@ -84,8 +84,7 @@ export const Companies = () => {
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {roleLabelJa(m.role)} ・{" "}
-                  {m.company_org_code === "PERSONAL" ? "個人事業主" : "法人"}
+                  {roleLabelJa(m.role)} ・ {orgCodeLabelJa(m.company_org_code)}
                 </p>
               </div>
               <div className="flex items-center gap-2">

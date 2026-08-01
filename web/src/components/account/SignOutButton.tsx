@@ -3,24 +3,24 @@ import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 
-export const SignOutButton = () => {
-  const signOutAndRedirect = () => {
-    authClient
-      .signOut()
-      .then(({ error }) => {
-        // 失敗時に redirect すると server session が残ったまま SessionGuard 再 mount で再ログイン判定になり
-        // リダイレクトループに入る。失敗ケースは redirect せずユーザーに留まらせる
-        if (error) {
-          console.error("signOut failed:", error);
-          return;
-        }
-        redirectAfterAuthChange("signOut");
-      })
-      .catch((error: unknown) => {
+const signOutAndRedirect = () => {
+  authClient
+    .signOut()
+    .then(({ error }) => {
+      // 失敗時に redirect すると server session が残ったまま SessionGuard 再 mount で再ログイン判定になり
+      // リダイレクトループに入る。失敗ケースは redirect せずユーザーに留まらせる
+      if (error) {
         console.error("signOut failed:", error);
-      });
-  };
+        return;
+      }
+      redirectAfterAuthChange("signOut");
+    })
+    .catch((error: unknown) => {
+      console.error("signOut failed:", error);
+    });
+};
 
+export const SignOutButton = () => {
   return (
     <button
       type="button"

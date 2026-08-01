@@ -1,12 +1,10 @@
-import { useMemo, useState, type FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Mail, Github, Loader2 } from "lucide-react";
+import { Mail, Loader2 } from "lucide-react";
 
-import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
-import { signInParamsSchema } from "@core/sign-in-params";
-import { authClient } from "@/lib/auth-client";
-import { buildSignParams, invitationAcceptCallbackUrl } from "@/lib/sign-params";
+import { buildSignParams } from "@/lib/sign-params";
+import { useSignPage } from "@/lib/use-sign-page";
 import { CanaryTokens } from "@/components/CanaryTokens";
+import { SocialSignInSection } from "@/components/auth/SocialSignInSection";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,77 +17,34 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+// 状態機械 (params 解析 / 招待分岐 / 送信) は useSignPage、SNS 区画は SocialSignInSection を
+// SignUp と共有する (ADR-0007: 画面のみ分離)。
 export const SignIn = () => {
   const [searchParams] = useSearchParams();
-  const [email, setEmail] = useState("");
-  const [magicLinkSent, setMagicLinkSent] = useState(false);
-  const [submitting, setSubmitting] = useState<"magic-link" | "github" | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const sign = useSignPage({ githubErrorFallback: "GitHub ログインに失敗しました" });
 
-  const parseResult = useMemo(
-    () => signInParamsSchema.safeParse(Object.fromEntries(searchParams)),
-    [searchParams],
-  );
-
-  if (!parseResult.success) {
+  if (!sign.valid) {
     window.location.replace("/auth/error?reason=invalid_redirect_url");
     return null;
   }
-
-  const { service_name, redirect_url, invitation_token } = parseResult.data;
-  const service = TAIMEI_SERVICES[service_name as ServiceName];
-  // 招待経由 (相互リンクで SignUp から移ってきた場合を含む) の分岐理由は SignUp.tsx の同分岐と同じ:
-  // 着地先は accept-invitation、GitHub は strict email match が Magic Link 前提のため隠す (ADR-009)
-  const isInvitation = invitation_token !== undefined;
-  const callbackUrl =
-    invitation_token !== undefined ? invitationAcceptCallbackUrl(invitation_token) : redirect_url;
-
-  const handleMagicLink = async (e: FormEvent) => {
-    e.preventDefault();
-    setSubmitting("magic-link");
-    setErrorMessage(null);
-    const { error } = await authClient.signIn.magicLink({
-      email,
-      callbackURL: callbackUrl,
-    });
-    setSubmitting(null);
-    if (error) {
-      setErrorMessage(error.message ?? "Magic Link の送信に失敗しました");
-      return;
-    }
-    setMagicLinkSent(true);
-  };
-
-  const handleGitHub = async () => {
-    setSubmitting("github");
-    setErrorMessage(null);
-    const { error } = await authClient.signIn.social({
-      provider: "github",
-      callbackURL: callbackUrl,
-    });
-    if (error) {
-      setSubmitting(null);
-      setErrorMessage(error.message ?? "GitHub ログインに失敗しました");
-    }
-  };
 
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
       <CanaryTokens />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>{service.name} にログイン</CardTitle>
+          <CardTitle>{sign.serviceDisplayName} にログイン</CardTitle>
           <CardDescription>Magic Link または GitHub アカウントでログイン</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {magicLinkSent ? (
+          {sign.magicLinkSent ? (
             <p className="text-sm text-muted-foreground">
-              <strong className="font-medium text-foreground">{email}</strong> に Magic Link
+              <strong className="font-medium text-foreground">{sign.email}</strong> に Magic Link
               を送信しました。メール内のリンクをクリックしてログインを完了してください。
             </p>
           ) : (
             <>
-              <form onSubmit={handleMagicLink} className="space-y-3">
+              <form onSubmit={sign.handleMagicLink} className="space-y-3">
                 <div className="space-y-2">
                   <Label htmlFor="email">メールアドレス</Label>
                   <Input
@@ -97,48 +52,32 @@ export const SignIn = () => {
                     type="email"
                     required
                     placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={submitting !== null}
+                    value={sign.email}
+                    onChange={(e) => sign.setEmail(e.target.value)}
+                    disabled={sign.submitting !== null}
                   />
                 </div>
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={submitting !== null || email === ""}
+                  disabled={sign.submitting !== null || sign.email === ""}
                 >
-                  {submitting === "magic-link" ? <Loader2 className="animate-spin" /> : <Mail />}
+                  {sign.submitting === "magic-link" ? (
+                    <Loader2 className="animate-spin" />
+                  ) : (
+                    <Mail />
+                  )}
                   Magic Link を送信
                 </Button>
               </form>
 
-              {isInvitation ? (
-                <p className="text-center text-xs text-muted-foreground">
-                  招待を受諾するには、招待されたメールアドレスで Magic Link をご利用ください。
-                </p>
-              ) : (
-                <>
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-card px-2 text-muted-foreground">または</span>
-                    </div>
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={handleGitHub}
-                    disabled={submitting !== null}
-                  >
-                    {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
-                    GitHub でログイン
-                  </Button>
-                </>
-              )}
+              <SocialSignInSection
+                isInvitation={sign.isInvitation}
+                disabled={sign.submitting !== null}
+                submittingGitHub={sign.submitting === "github"}
+                label="GitHub でログイン"
+                onGitHub={sign.handleGitHub}
+              />
 
               <p className="text-center text-sm text-muted-foreground">
                 アカウントをお持ちでない方は{" "}
@@ -152,7 +91,7 @@ export const SignIn = () => {
             </>
           )}
 
-          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
+          {sign.errorMessage && <p className="text-sm text-destructive">{sign.errorMessage}</p>}
         </CardContent>
         <CardFooter className="text-xs text-muted-foreground">
           URL が auth.taimei-code.com であることを確認してください

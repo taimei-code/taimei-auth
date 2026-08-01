@@ -14,6 +14,7 @@ import { Members } from "./pages/account/Members";
 import { Security } from "./pages/account/Security";
 import { Sessions } from "./pages/account/Sessions";
 import { Connections } from "./pages/account/Connections";
+import { CompanyProvider } from "./lib/company-context";
 import { SessionGuard } from "./lib/session-guard";
 
 // /auth/* と /account/* を 1 SPA で扱う。Vite base="/auth/" は asset URL prefix のみで Router path とは独立。
@@ -30,12 +31,16 @@ export const App = () => {
           <Route path="error" element={<ErrorPage />} />
         </Route>
 
+        {/* CompanyProvider を SessionGuard の外に置き、guard の認証判定と layout 配下の
+            事業所 state が同じ 1 回の memberships fetch を共有する (二重 fetch 防止)。 */}
         <Route
           path="/account"
           element={
-            <SessionGuard>
-              <AccountLayout />
-            </SessionGuard>
+            <CompanyProvider>
+              <SessionGuard>
+                <AccountLayout />
+              </SessionGuard>
+            </CompanyProvider>
           }
         >
           <Route index element={<AccountIndex />} />

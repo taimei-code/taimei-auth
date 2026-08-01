@@ -10,7 +10,12 @@ import { findUserById } from "@/db/repositories/user";
 // 別 file に置き、この core が共通の generic entry (requireActor / requireMembershipOf /
 // requireMembership) と Result 型を提供する。
 
-export type Actor = { id: string; email: string };
+// lastUsedCompanyId を載せるのは、getActor が fail-closed 判定で user 行を毎 request 読んで
+// いるため。列を捨てると handler / use-case が同じ行をもう 1 度 SELECT する羽目になる
+// (GET /api/account/memberships は SPA の全 /account ページで呼ばれる最頻 endpoint)。
+// Actor は認証 identity の抽象であり user 行の projection ではない — 列の追加は
+// 「hot path の再 SELECT を消す」場合に限り、表示用途 (name / image 等) では足さないこと。
+export type Actor = { id: string; email: string; lastUsedCompanyId: string | null };
 
 export type Unauthorized = { ok: false; error: "unauthorized"; status: 401 };
 export type Forbidden = { ok: false; error: "forbidden"; status: 403 };
@@ -24,7 +29,7 @@ export type InvalidArgument = {
 
 export type ActorResult = { ok: true; actor: Actor } | Unauthorized;
 
-export type MembershipOnlyResult = { ok: true; role: Role } | Forbidden;
+type MembershipOnlyResult = { ok: true; role: Role } | Forbidden;
 
 // operation 単位 entry の parseBody callback 契約。zod schema は Transport 側 (handler) に残し、
 // callback が {ok:true, data} | {ok:false, details?} で返す。details は「invalid_argument に details
@@ -119,7 +124,9 @@ export const guard: MembershipGuard = createMembershipGuard({
     // VerifySession の USER_DELETED (src/rpc/auth-handler.ts) と同じく DB の user 存在で
     // fail-closed する。DB 断で読めない場合も requireActor の catch が 401 に倒す。
     const dbUser = await findUserById(session.user.id);
-    return dbUser ? { id: dbUser.id, email: dbUser.email } : null;
+    return dbUser
+      ? { id: dbUser.id, email: dbUser.email, lastUsedCompanyId: dbUser.lastUsedCompanyId }
+      : null;
   },
   findMembership,
 });

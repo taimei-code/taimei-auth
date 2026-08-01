@@ -1,35 +1,20 @@
 import { useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 
 // Magic Link / OAuth ユーザーは password を持たず better-auth 側で session ごと完全削除されるため、再認証 step は挟まない
 export const DangerZone = () => {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const deleteAccount = async () => {
-    setDeleting(true);
     setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
-      setDeleting(false);
-      // エラー文言は dialog の背面 (本セクション内) に描画され、Radix が背面を aria-hidden に
-      // するため dialog を開いたままだと利用者に届かない。先に閉じてから表示する。
-      setDialogOpen(false);
+      // 表示は dialog の外 (本セクション内)。ConfirmDestructiveDialog が完了後に閉じるので利用者に届く。
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }
@@ -53,31 +38,18 @@ export const DangerZone = () => {
             </p>
           ) : null}
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
+        <ConfirmDestructiveDialog
+          trigger={
             <Button variant="destructive">
               <Trash2 className="size-4" aria-hidden="true" />
               退会する
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>退会の確認</DialogTitle>
-              <DialogDescription>
-                本当にアカウントを削除しますか? この操作は取り消せません。
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">キャンセル</Button>
-              </DialogClose>
-              <Button variant="destructive" onClick={deleteAccount} disabled={deleting}>
-                {deleting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-                退会を確定する
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          }
+          title="退会の確認"
+          description="本当にアカウントを削除しますか? この操作は取り消せません。"
+          confirmLabel="退会を確定する"
+          onConfirm={deleteAccount}
+        />
       </div>
     </section>
   );

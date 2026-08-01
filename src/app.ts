@@ -6,7 +6,7 @@ import { pingDatabase } from "@/db/repositories/health";
 import { pingRedis } from "./redis";
 import { handleRpc } from "./rpc/fetch-handler";
 import { buildLoginShortcut } from "./handlers/login-shortcut";
-import { avatarUploadHandler } from "./handlers/avatar-upload";
+import { accountAvatar } from "./handlers/avatar-upload";
 import { accountCompany } from "./handlers/account-company";
 import { accountInvitation } from "./handlers/account-invitation";
 import { accountMembership } from "./handlers/account-membership";
@@ -15,7 +15,7 @@ import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
-import { isLocalEnvironment } from "./env";
+import { getTrustedOrigins, isLocalEnvironment } from "./env";
 
 // Bun entry (index.ts) と Workers entry (worker.ts) が共有する Hono アプリ定義。
 // runtime 固有なのは「静的配信」のみ (Bun = serveStatic+Bun.file / Workers = env.ASSETS) で、
@@ -31,6 +31,7 @@ export type AppOptions = {
 // account router 群の登録を 1 箇所に集約する。認可 smoke (account-routes-auth.test.ts) が同じ helper で
 // アプリを組むことで、router の追加漏れ (guard 未通過 route の混入) を CI で検知できる。
 export function mountAccountRoutes(app: Hono): void {
+  app.route("/", accountAvatar);
   app.route("/", accountCompany);
   app.route("/", accountInvitation);
   app.route("/", accountMembership);
@@ -39,7 +40,7 @@ export function mountAccountRoutes(app: Hono): void {
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
 
-  const allowedOrigins = (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean);
+  const allowedOrigins = getTrustedOrigins();
   app.use(
     "*",
     cors({
@@ -145,7 +146,6 @@ export function buildApp(options: AppOptions): Hono {
     );
   });
 
-  app.post("/api/account/avatar/upload-token", avatarUploadHandler);
   mountAccountRoutes(app);
 
   // session-aware redirect を静的配信より前に登録する。詳細: docs/adr/0002-spa-routing-and-static-assets.md

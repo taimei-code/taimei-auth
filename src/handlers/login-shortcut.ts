@@ -1,15 +1,22 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
+import { buildAuthLoginUrl } from "@taimei-code/auth-client";
 
 import { Sentry } from "../sentry";
 
 // 未知のクエリは破棄し、allowlist 経由のみ /auth/ に渡す (パラメータ汚染防止)
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
 
+// ログイン URL の組み立ては SDK の buildAuthLoginUrl に委ねる (キー名 typo / 順序の揺らぎを
+// consumer と host で同じ 1 箇所に集約)。error の転記だけが本 handler 固有。
 const buildLoginRedirect = (url: URL): URL => {
-  const target = new URL(`${url.origin}/auth/`);
-  target.searchParams.set("service_name", "accounts");
-  target.searchParams.set("redirect_url", `${url.origin}/account`);
+  const target = new URL(
+    buildAuthLoginUrl({
+      authBaseUrl: url.origin,
+      service: "accounts",
+      returnTo: `${url.origin}/account`,
+    }),
+  );
 
   for (const key of PASSTHROUGH_QUERY_KEYS) {
     const value = url.searchParams.get(key);

@@ -1,9 +1,8 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 
 import type { OrgCode } from "@/db/repositories/company";
 import { findMembershipsByUserId } from "@/db/repositories/membership";
-import { findUserById } from "@/db/repositories/user";
 import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
 import { updateCompanyInfo } from "../company/update";
@@ -12,6 +11,7 @@ import {
   reasonToGuardError,
   requireActor,
   requireMembership,
+  resolveParseBody,
 } from "../membership/guard";
 import { parseZodBody } from "./parse-body";
 
@@ -27,19 +27,27 @@ const companyBody = z.object({
   org_code: z.enum(["PERSONAL", "CORPORATE"]),
 });
 
+// parse 失敗 → 400 の写像は guard 層の resolveParseBody に集約 (他 route と同じ shape を保つ)。
+// details は「signup 作成 / add」のみ付与し、編集 route は省略する現行契約を withDetails が持つ。
+const parseCompanyBody = (c: Context, options: { withDetails?: boolean } = {}) =>
+  resolveParseBody(
+    parseZodBody(c, companyBody, {
+      ...options,
+      transform: (d) => ({ name: d.name, orgCode: d.org_code as OrgCode }),
+    }),
+  );
+
 accountCompany.get("/api/account/memberships", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const [rows, userRow] = await Promise.all([
-    findMembershipsByUserId(userId),
-    findUserById(userId),
-  ]);
+  const rows = await findMembershipsByUserId(userId);
   const active = rows.filter((r) => r.companyActivationStatus === "ACTIVE");
-  // current_company_id は user.last_used_company_id。ただし当該 company が ACTIVE membership に
-  // 無い (削除済 / 未設定) 場合は先頭にフォールバックし SPA の「現在の事業所」表示を安定させる。
-  const lastUsed = userRow?.lastUsedCompanyId ?? null;
+  // current_company_id は user.last_used_company_id (guard が読んだ user 行から受け取る)。
+  // 当該 company が ACTIVE membership に無い (削除済 / 未設定) 場合は先頭にフォールバックし
+  // SPA の「現在の事業所」表示を安定させる。
+  const lastUsed = actorResult.actor.lastUsedCompanyId;
   const currentCompanyId =
     lastUsed && active.some((m) => m.companyId === lastUsed)
       ? lastUsed
@@ -81,18 +89,8 @@ accountCompany.post("/api/account/companies", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const parsed = await parseZodBody(c, companyBody, {
-    withDetails: true,
-    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
-  })();
-  if (!parsed.ok) {
-    return guardErrorResponse({
-      ok: false,
-      error: "invalid_argument",
-      status: 400,
-      details: parsed.details,
-    });
-  }
+  const parsed = await parseCompanyBody(c, { withDetails: true });
+  if (!parsed.ok) return guardErrorResponse(parsed);
 
   const result = await createSignupCompany(userId, parsed.data);
   if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
@@ -110,18 +108,8 @@ accountCompany.post("/api/account/companies/add", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const parsed = await parseZodBody(c, companyBody, {
-    withDetails: true,
-    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
-  })();
-  if (!parsed.ok) {
-    return guardErrorResponse({
-      ok: false,
-      error: "invalid_argument",
-      status: 400,
-      details: parsed.details,
-    });
-  }
+  const parsed = await parseCompanyBody(c, { withDetails: true });
+  if (!parsed.ok) return guardErrorResponse(parsed);
 
   const created = await addCompany(userId, parsed.data);
   return c.json(serializeCreatedCompany(created));
@@ -134,12 +122,8 @@ accountCompany.post("/api/account/companies/:companyId", async (c) => {
   const membershipResult = await requireMembership(c.req.raw.headers, companyId, "OWNER");
   if (!membershipResult.ok) return guardErrorResponse(membershipResult);
 
-  const parsed = await parseZodBody(c, companyBody, {
-    transform: (d) => ({ name: d.name.trim(), orgCode: d.org_code as OrgCode }),
-  })();
-  if (!parsed.ok) {
-    return guardErrorResponse({ ok: false, error: "invalid_argument", status: 400 });
-  }
+  const parsed = await parseCompanyBody(c);
+  if (!parsed.ok) return guardErrorResponse(parsed);
 
   const result = await updateCompanyInfo({
     actorUserId: membershipResult.actor.id,

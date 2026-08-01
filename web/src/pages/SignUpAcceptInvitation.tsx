@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Loader2 } from "lucide-react";
 
+import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { authClient } from "@/lib/auth-client";
-import { AccountApiError, acceptInvitation } from "@/lib/account-api";
+import { acceptInvitation, describeAccountApiError } from "@/lib/account-api";
+import { redirectToSignIn } from "@/lib/auth-redirect";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Status = "processing" | "error";
@@ -29,10 +30,7 @@ export const SignUpAcceptInvitation = () => {
       .getSession()
       .then(({ data }) => {
         if (!data?.session) {
-          const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-          window.location.replace(
-            `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(returnTo)}`,
-          );
+          redirectToSignIn();
           return null;
         }
         return acceptInvitation(invitationToken);
@@ -43,26 +41,19 @@ export const SignUpAcceptInvitation = () => {
       })
       .catch((err) => {
         setStatus("error");
-        if (err instanceof AccountApiError && err.status === 403) {
-          setErrorMessage(
-            "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
-          );
-        } else if (err instanceof AccountApiError && err.status === 410) {
-          setErrorMessage("この招待は期限切れか、既に使用されています。");
-        } else if (err instanceof AccountApiError && err.status === 404) {
-          setErrorMessage("招待が見つかりません。");
-        } else {
-          setErrorMessage("招待の受諾に失敗しました。");
-        }
+        setErrorMessage(
+          describeAccountApiError(err, {
+            403: "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
+            410: "この招待は期限切れか、既に使用されています。",
+            404: "招待が見つかりません。",
+            fallback: "招待の受諾に失敗しました。",
+          }),
+        );
       });
   }, [invitationToken]);
 
   if (status === "processing") {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (

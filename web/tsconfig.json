@@ -6,7 +6,12 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "paths": {
       "@/*": ["./src/*"],
-      "@core/*": ["../src/*"]
+      // 2 entry あるのは resolver ごとに基準 dir が違うため。tsc は tsconfig 位置基準で
+      // 1 つ目 (web/src/ = miss) → 2 つ目 (repo の src/ = hit)。bun test は cwd (repo root)
+      // 基準で 1 つ目 (repo の src/ = hit)。"../src/*" を先頭に置くと bun が repo の親
+      // ディレクトリを探しに行き、兄弟 repo の src/ に誤解決しうるため "./src/*" を先頭にする。
+      // vite は vite.config.ts の resolve.alias で解決するため本設定の影響を受けない
+      "@core/*": ["./src/*", "../src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]

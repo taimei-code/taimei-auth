@@ -210,9 +210,9 @@ export async function withOwnerLockGuard<T>(
   companyId: string,
   fn: (tx: DbTx) => Promise<T>,
 ): Promise<T> {
-  await tx.execute(
-    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
-  );
+  // DeleteCompany 経路 (lockOwnerMembershipsOfCompany) と同じ OWNER 行で contend させるため
+  // lock 文を共有する。WHERE 条件が片方だけ変わると直列化が silent に外れる。
+  await lockOwnerMembershipsOfCompany(tx, companyId);
   const result = await fn(tx);
   const remaining = await tx
     .select({ count: sql<number>`count(*)::int` })

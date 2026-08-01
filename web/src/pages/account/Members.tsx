@@ -2,8 +2,8 @@ import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import {
-  AccountApiError,
   createInvitation,
+  describeAccountApiError,
   listInvitations,
   listMembers,
   removeMember,
@@ -15,24 +15,13 @@ import {
 } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-import { roleLabelJa } from "@/lib/role-label";
-import { cn } from "@/lib/utils";
+import { roleLabelJa } from "@/lib/labels";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
+import { Notice, type NoticeValue } from "@/components/Notice";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-
-type Notice = { kind: "success" | "error"; text: string };
 
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCompanyContext();
@@ -49,7 +38,7 @@ export const Members = () => {
   const [inviteRole, setInviteRole] = useState<CompanyRole>("MEMBER");
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notice, setNotice] = useState<NoticeValue | null>(null);
 
   const refresh = useCallback((cid: string) => {
     return Promise.all([listMembers(cid), listInvitations(cid).catch(() => [])]).then(
@@ -86,16 +75,14 @@ export const Members = () => {
         return refresh(companyId);
       })
       .catch((err) => {
-        if (err instanceof AccountApiError && err.status === 429) {
-          setNotice({
-            kind: "error",
-            text: "招待の送信回数が上限に達しました。時間をおいて再試行してください。",
-          });
-        } else if (err instanceof AccountApiError && err.status === 403) {
-          setNotice({ kind: "error", text: "招待する権限がありません。" });
-        } else {
-          setNotice({ kind: "error", text: "招待の送信に失敗しました。" });
-        }
+        setNotice({
+          kind: "error",
+          text: describeAccountApiError(err, {
+            429: "招待の送信回数が上限に達しました。時間をおいて再試行してください。",
+            403: "招待する権限がありません。",
+            fallback: "招待の送信に失敗しました。",
+          }),
+        });
       })
       .finally(() => setSubmitting(false));
   };
@@ -107,22 +94,24 @@ export const Members = () => {
     updateMemberRole(companyId, targetUserId, role)
       .then(() => refresh(companyId))
       .catch((err) => {
-        if (err instanceof AccountApiError && err.status === 409) {
-          setNotice({ kind: "error", text: "最後のオーナーを降格することはできません。" });
-        } else if (err instanceof AccountApiError && err.status === 403) {
-          setNotice({ kind: "error", text: "この役割変更を行う権限がありません。" });
-        } else {
-          setNotice({ kind: "error", text: "役割の変更に失敗しました。" });
-        }
+        setNotice({
+          kind: "error",
+          text: describeAccountApiError(err, {
+            409: "最後のオーナーを降格することはできません。",
+            403: "この役割変更を行う権限がありません。",
+            fallback: "役割の変更に失敗しました。",
+          }),
+        });
       })
       .finally(() => setBusyUserId(null));
   };
 
-  const handleRemove = (targetUserId: string) => {
-    if (!companyId || busyUserId) return;
+  // ConfirmDestructiveDialog の onConfirm 契約: promise を返し、失敗の通知はここで notice に載せる。
+  const handleRemove = (targetUserId: string): Promise<void> => {
+    if (!companyId || busyUserId) return Promise.resolve();
     setBusyUserId(targetUserId);
     setNotice(null);
-    removeMember(companyId, targetUserId)
+    return removeMember(companyId, targetUserId)
       .then(({ accountDeleted }) =>
         refresh(companyId).then(() =>
           setNotice({
@@ -134,11 +123,13 @@ export const Members = () => {
         ),
       )
       .catch((err) => {
-        if (err instanceof AccountApiError && err.status === 409) {
-          setNotice({ kind: "error", text: "最後のオーナーは削除できません。" });
-        } else {
-          setNotice({ kind: "error", text: "メンバーの削除に失敗しました。" });
-        }
+        setNotice({
+          kind: "error",
+          text: describeAccountApiError(err, {
+            409: "最後のオーナーは削除できません。",
+            fallback: "メンバーの削除に失敗しました。",
+          }),
+        });
       })
       .finally(() => setBusyUserId(null));
   };
@@ -200,34 +191,17 @@ export const Members = () => {
                   </span>
                 )}
                 {canManage && !isSelf && (
-                  <Dialog>
-                    <DialogTrigger asChild>
+                  <ConfirmDestructiveDialog
+                    trigger={
                       <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
                         削除
                       </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>メンバーの削除</DialogTitle>
-                        <DialogDescription>
-                          {m.user_name || m.user_email} をこの事業所から削除します。このメンバーが
-                          他の事業所に所属していない場合、アカウントごと削除されます。
-                        </DialogDescription>
-                      </DialogHeader>
-                      <DialogFooter>
-                        <DialogClose asChild>
-                          <Button variant="outline">キャンセル</Button>
-                        </DialogClose>
-                        <Button
-                          variant="destructive"
-                          onClick={() => handleRemove(m.user_id)}
-                          disabled={busyUserId !== null}
-                        >
-                          削除する
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
+                    }
+                    title="メンバーの削除"
+                    description={`${m.user_name || m.user_email} をこの事業所から削除します。このメンバーが他の事業所に所属していない場合、アカウントごと削除されます。`}
+                    confirmLabel="削除する"
+                    onConfirm={() => handleRemove(m.user_id)}
+                  />
                 )}
               </div>
             </div>
@@ -272,16 +246,7 @@ export const Members = () => {
                 招待する
               </Button>
             </form>
-            {notice && (
-              <p
-                className={cn(
-                  "text-sm",
-                  notice.kind === "error" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {notice.text}
-              </p>
-            )}
+            <Notice value={notice} />
           </section>
 
           {invitations.length > 0 && (

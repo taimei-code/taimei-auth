@@ -2,15 +2,13 @@ import type { ConnectRouter } from "@connectrpc/connect";
 import { ConnectError, Code } from "@connectrpc/connect";
 import { UserService } from "../gen/auth/v1/auth_pb";
 import { runInTransaction } from "@/db/transaction";
-import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import {
-  deleteUser as deleteUserRepo,
   findUserByEmail as findUserByEmailRepo,
   findUserById as findUserByIdRepo,
   updateUser as updateUserRepo,
 } from "@/db/repositories/user";
-import { revokeUserSessions } from "../account/revoke-sessions";
+import { deleteAccount } from "../account/delete-account";
 import { toProtoUser } from "./mappers";
 
 export function registerUserService(router: ConnectRouter) {
@@ -53,15 +51,11 @@ export function registerUserService(router: ConnectRouter) {
       // ADR-009 Q24: user が唯一の OWNER の ACTIVE 事業所が残っていると退会不可。
       // 退会すると課金責任者不在の事業所が生まれるため、先に委譲 / 削除を要求する。
       // pre-check と delete を同一 tx に置き、check 後に actor が OWNER 昇格される race を避ける。
-      // 順序: pre-check → audit → revoke → delete。audit を delete 前に置くのは tx 失敗時に
-      // audit だけ残るのを防ぐため。account_delete audit は compliance 必須のため失敗時 rethrow。
-      // audit_log.user_id は FK なしのため (db/schema.ts) user cascade delete でも audit_log は残る。
+      // 削除手順 (audit → session 失効 → 物理削除) と順序根拠は src/account/delete-account.ts に集約。
       const result = await runInTransaction(async (tx) => {
         const blocking = await findCompaniesBlockingUserDeletion(req.userId, tx);
         if (blocking.length > 0) return { blocked: blocking.length };
-        await appendAuditLog({ eventType: "account_delete", userId: req.userId, payload: {} }, tx);
-        await revokeUserSessions(req.userId, tx);
-        const row = await deleteUserRepo(req.userId, tx);
+        const row = await deleteAccount(req.userId, tx);
         return { row };
       });
       if ("blocked" in result) {

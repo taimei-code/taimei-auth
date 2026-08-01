@@ -37,6 +37,20 @@ export class AccountApiError extends Error {
   }
 }
 
+// HTTP status → 画面文言の解決。instanceof + status 分岐の連鎖が画面ごとに散ると、サーバが
+// 新しい status を返し始めた時の取りこぼしに気づけないため、判定をここに閉じる。文言そのものは
+// 画面固有 (同じ 409 でも操作によって意味が違う) なので呼び出し側が渡す。
+export function describeAccountApiError(
+  err: unknown,
+  messages: Partial<Record<number, string>> & { fallback: string },
+): string {
+  if (err instanceof AccountApiError) {
+    const specific = messages[err.status];
+    if (specific !== undefined) return specific;
+  }
+  return messages.fallback;
+}
+
 export type CompanyState = {
   current_company_id: string | null;
   memberships: Membership[];
@@ -54,36 +68,23 @@ export async function listMyMemberships(): Promise<Membership[]> {
   return (await getCompanyState()).memberships;
 }
 
-type CreateCompanyParams = { name: string; org_code: "PERSONAL" | "CORPORATE" };
+type CreateCompanyParams = { name: string; org_code: OrgCode };
 
 // 事業所作成は signup (0 件ガード付き) / 追加 (制限なし) で叩く endpoint だけ違い、成功 response は同形。
-async function postCompanyCreate(
-  path: string,
-  params: CreateCompanyParams,
-): Promise<CreateCompanyResult> {
-  const res = await fetch(path, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new AccountApiError(res.status, text || `createCompany failed: ${res.status}`);
-  }
-  return (await res.json()) as CreateCompanyResult;
-}
 
 // signup フローで最初の事業所を作る (membership 0 件のときだけサーバが受理)。
 export const createCompany = (params: CreateCompanyParams): Promise<CreateCompanyResult> =>
-  postCompanyCreate("/api/account/companies", params);
+  postJson<CreateCompanyResult>("/api/account/companies", params);
 
 // 既存 user が 2 つ目以降の事業所を追加する。createCompany と違い membership があっても作成でき、
 // サーバが last_used を新事業所に更新する。
 export const addCompany = (params: CreateCompanyParams): Promise<CreateCompanyResult> =>
-  postCompanyCreate("/api/account/companies/add", params);
+  postJson<CreateCompanyResult>("/api/account/companies/add", params);
 
 export type CompanyRole = "OWNER" | "ADMIN" | "MEMBER";
+
+// wire 上の事業形態。server 側の正本は db/repositories/company.ts の OrgCode (API contract の写し)。
+export type OrgCode = "PERSONAL" | "CORPORATE";
 
 export type Member = {
   membership_id: string;
@@ -182,7 +183,7 @@ export async function removeMember(
 
 export async function updateCompany(
   companyId: string,
-  params: { name: string; org_code: "PERSONAL" | "CORPORATE" },
+  params: { name: string; org_code: OrgCode },
 ): Promise<void> {
   await postJson<void>(`/api/account/companies/${companyId}`, params);
 }

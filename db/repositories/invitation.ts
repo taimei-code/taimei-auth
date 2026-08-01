@@ -11,7 +11,6 @@ export const generateInvitationId = (): string => `inv_${nanoid(24)}`;
 export const generateInvitationToken = (): string => nanoid(32);
 
 export type InvitationRow = typeof invitation.$inferSelect;
-export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
 export type { Role };
 
 export async function findInvitationByToken(

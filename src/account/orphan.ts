@@ -1,24 +1,14 @@
-import { appendAuditLog } from "@/db/repositories/audit-log";
 import { countActiveMembershipsByUserId } from "@/db/repositories/membership";
-import { deleteUser } from "@/db/repositories/user";
 import type { DbTx } from "@/db/transaction";
-import { revokeUserSessions } from "./revoke-sessions";
+import { deleteAccount } from "./delete-account";
 
 // ADR-0010 D2: 「所属 0 件アカウント (orphan) は存在不可」という不変条件を 1 箇所に集約する共有プリミティブ。
 // membership が減る全経路 (DeleteCompany / 退会 / 除名 / TTL sweep) がこの 1 関数を直後に通すことで、
 // 呼び出し側ごとに orphan 判定を書き忘れて不変条件が破れるのを防ぐ。
 // 設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
-//
-// 削除は退会 (src/rpc/user-handler.ts deleteUser) と同じく audit → session 失効 → 物理削除の順。
-// session 失効は better-auth cookieCache (最大 5 分) を即時無効化しない既知制約を退会と同様に受容する
-// (db/CLAUDE.md ルール 2 例外)。cookieCache 窓内の削除済み user は membership guard の
-// user 存在チェック (src/membership/guard/core.ts) が 401 に倒す。
-// tx 失敗時は audit も含め全 rollback される (同一 tx。Redis 側の失効のみ rollback 対象外 =
-// revoke-sessions.ts 参照)。
+// 削除手順そのもの (audit → session 失効 → 物理削除) と順序根拠は delete-account.ts に集約。
 export async function deleteAccountIfOrphaned(userId: string, tx: DbTx): Promise<boolean> {
   if ((await countActiveMembershipsByUserId(userId, tx)) > 0) return false;
-  await appendAuditLog({ eventType: "account_delete", userId, payload: {} }, tx);
-  await revokeUserSessions(userId, tx);
-  await deleteUser(userId, tx);
+  await deleteAccount(userId, tx);
   return true;
 }

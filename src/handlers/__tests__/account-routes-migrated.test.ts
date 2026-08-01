@@ -20,7 +20,6 @@ import {
   stubActor,
   TEST_PREFIX,
   type NormalizedResponse,
-  type StubActor,
 } from "./helpers";
 
 // account handler 群の HTTP response (status / body / Content-Type) が Guard 層完成の refactor で
@@ -732,7 +731,6 @@ describe("account routes migration snapshot", () => {
       // 確認する。auth.api.getSession を同期 throw に差し替える。
       const { auth } = await import("../../auth");
       const original = auth.api.getSession;
-      // biome-ignore lint/suspicious/noExplicitAny: test-only monkey-patch
       auth.api.getSession = (() => {
         throw new Error("sync throw simulating expired session lookup");
       }) as any;

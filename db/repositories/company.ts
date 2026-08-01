@@ -11,7 +11,6 @@ export const generateCompanyId = (): string => `cmp_${nanoid(24)}`;
 
 export type CompanyRow = typeof company.$inferSelect;
 export type OrgCode = "PERSONAL" | "CORPORATE";
-export type CompanyActivationStatus = "ACTIVE" | "DELETED";
 
 export async function findCompanyById(
   id: string,

@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { listPendingInvitations } from "@/db/repositories/invitation";
-import { findMembersByCompanyId, type Role } from "@/db/repositories/membership";
+import { findMembersByCompanyId } from "@/db/repositories/membership";
 import { auth } from "../auth";
+import { runBackground } from "../background";
 import { getAppUrl } from "../email/client";
 import { acceptInvitation } from "../invitation/accept";
+import { acceptInvitationPath } from "../invitation/accept-path";
 import { createInvitation } from "../invitation/create";
 import { revokeInvitation } from "../invitation/revoke";
 import {
@@ -15,13 +17,13 @@ import {
   requireInvite,
   requireMembership,
 } from "../membership/guard";
-import { parseZodBody } from "./parse-body";
+import { parseZodBody, roleBodySchema } from "./parse-body";
 
 export const accountInvitation = new Hono();
 
 const createInvitationBody = z.object({
-  email: z.string().email().max(320),
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+  email: z.email().max(320),
+  role: roleBodySchema,
 });
 
 const acceptInvitationBody = z.object({
@@ -76,7 +78,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
     companyId,
     parseBody: parseZodBody(c, createInvitationBody, {
       withDetails: true,
-      transform: (d) => ({ email: d.email.toLowerCase(), role: d.role as Role }),
+      transform: (d) => ({ email: d.email.toLowerCase(), role: d.role }),
     }),
   });
   if (!guardResult.ok) return guardErrorResponse(guardResult);
@@ -93,12 +95,16 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
 
   // commit 後にメール送信 (DB INSERT 成功してから送る、失敗時は無送信)。
   // signInMagicLink が magic link を発行 → sendMagicLink が invitation_token を検出して招待メールに分岐。
-  const callbackURL = `${getAppUrl()}/auth/signup/accept-invitation?invitation_token=${invitationRow.token}`;
-  await auth.api
-    .signInMagicLink({ body: { email, callbackURL }, headers: new Headers() })
-    .catch((e) => {
-      console.error("failed to send invitation magic link", e);
-    });
+  // 送信結果は response に載せない (失敗はログのみ) ため、Resend の応答を待たず background に
+  // 逃がして 200 を即返す (Workers は ctx.waitUntil で完走保証、src/background.ts 参照)。
+  const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token)}`;
+  runBackground(
+    auth.api
+      .signInMagicLink({ body: { email, callbackURL }, headers: new Headers() })
+      .catch((e) => {
+        console.error("failed to send invitation magic link", e);
+      }),
+  );
 
   return c.json({
     invitation: {

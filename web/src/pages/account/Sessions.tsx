@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
+import { useAsyncLoad } from "@/lib/use-async-load";
+import { AsyncSection } from "@/components/account/AsyncSection";
 import { Separator } from "@/components/ui/separator";
-import { LoadingRow } from "@/components/account/LoadingRow";
 
 type SessionList = Awaited<ReturnType<typeof authClient.listSessions>>["data"];
 type SessionItem = NonNullable<SessionList>[number];
@@ -15,19 +15,14 @@ const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
 });
 
 export const Sessions = () => {
-  const [sessions, setSessions] = useState<SessionList | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    authClient
-      .listSessions()
-      .then(({ data }) => setSessions(data))
-      .catch((error: unknown) => {
-        setErrorMessage(error instanceof Error ? error.message : "セッションの取得に失敗しました");
-      })
-      .finally(() => setLoading(false));
-  }, []);
+  const {
+    data: sessions,
+    loading,
+    errorMessage,
+  } = useAsyncLoad(
+    () => authClient.listSessions().then(({ data }) => data),
+    "セッションの取得に失敗しました",
+  );
 
   return (
     <div>
@@ -37,15 +32,14 @@ export const Sessions = () => {
       </div>
       <Separator className="my-6" />
 
-      {loading ? (
-        <LoadingRow />
-      ) : errorMessage ? (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage}
-        </p>
-      ) : sessions && sessions.length > 0 ? (
+      <AsyncSection
+        loading={loading}
+        errorMessage={errorMessage}
+        isEmpty={!sessions || sessions.length === 0}
+        emptyText="アクティブなセッションはありません。"
+      >
         <ul className="divide-y">
-          {sessions.map((session: SessionItem) => (
+          {sessions?.map((session: SessionItem) => (
             <li key={session.id} className="flex items-start gap-4 py-4">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
                 <Monitor className="size-5 text-muted-foreground" aria-hidden="true" />
@@ -62,9 +56,7 @@ export const Sessions = () => {
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="text-sm text-muted-foreground">アクティブなセッションはありません。</p>
-      )}
+      </AsyncSection>
 
       <p className="mt-6 text-xs text-muted-foreground">
         個別 revoke / 全デバイスログアウトは Phase 4 で実装予定。

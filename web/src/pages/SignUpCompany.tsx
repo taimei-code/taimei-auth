@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
+import { FullScreenLoader } from "@/components/FullScreenLoader";
+import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { authClient } from "@/lib/auth-client";
-import { AccountApiError, createCompany, listMyMemberships } from "@/lib/account-api";
+import { AccountApiError, createCompany, listMyMemberships, type OrgCode } from "@/lib/account-api";
+import { redirectToSignIn } from "@/lib/auth-redirect";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +30,7 @@ export const SignUpCompany = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<"PERSONAL" | "CORPORATE">("PERSONAL");
+  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [status, setStatus] = useState<GuardStatus>("loading");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -45,10 +48,7 @@ export const SignUpCompany = () => {
       .getSession()
       .then(({ data }) => {
         if (!data?.session) {
-          const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-          window.location.replace(
-            `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(returnTo)}`,
-          );
+          redirectToSignIn();
           return null;
         }
         return listMyMemberships();
@@ -86,11 +86,7 @@ export const SignUpCompany = () => {
   };
 
   if (status === "loading" || status === "already-has-company") {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <FullScreenLoader />;
   }
 
   return (
@@ -118,31 +114,12 @@ export const SignUpCompany = () => {
                 法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)
               </p>
             </div>
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">事業形態</legend>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="org_code"
-                  value="PERSONAL"
-                  checked={orgCode === "PERSONAL"}
-                  onChange={() => setOrgCode("PERSONAL")}
-                  disabled={submitting}
-                />
-                個人事業主
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="org_code"
-                  value="CORPORATE"
-                  checked={orgCode === "CORPORATE"}
-                  onChange={() => setOrgCode("CORPORATE")}
-                  disabled={submitting}
-                />
-                法人
-              </label>
-            </fieldset>
+            <OrgCodeField
+              value={orgCode}
+              onChange={setOrgCode}
+              disabled={submitting}
+              name="org_code"
+            />
             <Button type="submit" className="w-full" disabled={submitting || name.trim() === ""}>
               {submitting ? <Loader2 className="animate-spin" /> : null}
               事業所を作成
@@ -157,7 +134,10 @@ export const SignUpCompany = () => {
       <button
         type="button"
         onClick={() => {
-          void authClient.signOut().then(() => navigate("/auth"));
+          authClient
+            .signOut()
+            .then(() => navigate("/auth"))
+            .catch((e) => console.error("signOut failed:", e));
         }}
         className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >

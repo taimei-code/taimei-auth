@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 
 import { useCompanyContext } from "@/lib/company-context";
-import { roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 
 // sidebar 上部の事業所ピッカー。複数所属時に native select で切替 (DropdownMenu 依存を避ける)。
 // 1 事業所のみなら read-only 表示。
@@ -12,7 +12,7 @@ export const CompanySwitcher = () => {
 
   if (!currentMembership) return null;
 
-  const orgLabel = currentMembership.company_org_code === "PERSONAL" ? "個人事業主" : "法人";
+  const orgLabel = orgCodeLabelJa(currentMembership.company_org_code);
 
   return (
     <div className="mb-3 rounded-md border border-border bg-muted/40 p-3">

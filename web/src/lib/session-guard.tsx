@@ -1,55 +1,34 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
 
-import { authClient } from "@/lib/auth-client";
-import { listMyMemberships } from "@/lib/account-api";
+import { FullScreenLoader } from "@/components/FullScreenLoader";
+import { redirectToCompanySignup, redirectToSignIn } from "@/lib/auth-redirect";
+import { useCompanyContext } from "@/lib/company-context";
 
-type Status = "loading" | "authenticated";
-
+// /account 配下の入口ガード。認証判定は CompanyProvider の memberships fetch (401 = 未認証) に
+// 相乗りし、getSession → memberships の直列 2 round trip を作らない。
+// - 未認証 (401) → 共通ログインへ full reload 遷移 (mount 済み画面に副作用を残さない)
+// - membership 0 件 → signup/company へ (ADR-009: 事業所未確定は /account 操作を許可しない。
+//   session.user の lastUsedCompanyId は better-auth cookieCache (5min) に乗るため CreateCompany
+//   直後は stale=null になりループする。DB を引く membership API を権威ソースにする)
+// - 401 以外の取得失敗 → guard を通過させ、各 page 側で再取得に委ねる (誤遮断を避ける)
 export const SessionGuard = ({ children }: { children: ReactNode }) => {
-  const [status, setStatus] = useState<Status>("loading");
+  const { loading, unauthorized, loadFailed, memberships } = useCompanyContext();
+  const needsCompanySignup = !loadFailed && memberships.length === 0;
 
   useEffect(() => {
-    const redirectTo = (path: string) => {
-      const returnTo = `${window.location.origin}${window.location.pathname}${window.location.search}`;
-      window.location.replace(
-        `${path}?service_name=accounts&redirect_url=${encodeURIComponent(returnTo)}`,
-      );
-    };
+    if (loading) return;
+    if (unauthorized) {
+      redirectToSignIn();
+      return;
+    }
+    if (needsCompanySignup) {
+      redirectToCompanySignup();
+    }
+  }, [loading, unauthorized, needsCompanySignup]);
 
-    authClient
-      .getSession()
-      .then(({ data }) => {
-        if (!data?.session) {
-          redirectTo("/auth/");
-          return null;
-        }
-        // ADR-009: 「事業所未確定」(membership 0 件) は /account 操作を許可せず signup/company へ誘導。
-        // session.user の lastUsedCompanyId は better-auth cookieCache (5min) に乗るため、
-        // CreateCompany 直後は stale=null になりループする。DB を引く membership API を権威ソースにする。
-        return listMyMemberships();
-      })
-      .then((memberships) => {
-        if (memberships === null) return; // 未認証で既に redirect 済
-        if (memberships.length === 0) {
-          redirectTo("/auth/signup/company");
-          return;
-        }
-        setStatus("authenticated");
-      })
-      .catch((e) => {
-        // membership 取得失敗は guard を通過させ、各 page 側で再取得に委ねる (誤遮断を避ける)。
-        console.error("membership check failed in SessionGuard", e);
-        setStatus("authenticated");
-      });
-  }, []);
-
-  if (status === "loading") {
-    return (
-      <div className="flex min-h-svh items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+  // redirect 発火後も unmount まで loader を出し続ける (children の一瞬の描画を防ぐ)。
+  if (loading || unauthorized || needsCompanySignup) {
+    return <FullScreenLoader />;
   }
 
   return <>{children}</>;

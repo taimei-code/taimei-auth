@@ -1,6 +1,6 @@
 import { authClient } from "@/lib/auth-client";
 import { useCompanyContext } from "@/lib/company-context";
-import { roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 import { Separator } from "@/components/ui/separator";
 import { ProfileForm } from "@/components/account/ProfileForm";
 import { AvatarUploader } from "@/components/account/AvatarUploader";
@@ -29,7 +29,7 @@ export const AccountIndex = () => {
           <p className="mt-1 text-muted-foreground">
             {currentMembership.company_name} ({roleLabelJa(currentMembership.role)})
             <span className="ml-2 text-xs">
-              {currentMembership.company_org_code === "PERSONAL" ? "個人事業主" : "法人"}
+              {orgCodeLabelJa(currentMembership.company_org_code)}
             </span>
           </p>
         </div>
