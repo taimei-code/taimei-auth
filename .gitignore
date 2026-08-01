@@ -6,3 +6,5 @@ dist/
 .llm/
 .dev.vars
 .wrangler/
+test-results/
+playwright-report/
