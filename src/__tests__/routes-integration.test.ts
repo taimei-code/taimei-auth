@@ -62,3 +62,41 @@ describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
     expect(rateLimited.length).toBe(0);
   });
 });
+
+describe("Magic Link の user enumeration 防止 (ADR-0007)", () => {
+  test("未登録 email と登録済 email で status と body 形状が一致する", async () => {
+    // 「未登録なので送れません」を返すと攻撃者にメールアドレスの登録有無を教えてしまうため、
+    // 応答は常に同一でなければならない。rate-limit 窓 (IP 軸) を消費しすぎないよう 2 送信に留める。
+    const { db } = await import("@/db/client");
+    const { user } = await import("@/db/schema");
+    const { like } = await import("drizzle-orm");
+    const P = "enum-test-";
+    await db.delete(user).where(like(user.id, `${P}%`));
+    await db.insert(user).values({
+      id: `${P}registered`,
+      name: "Enum Registered",
+      email: `${P}registered@example.com`,
+      emailVerified: true,
+    });
+
+    const send = (email: string) =>
+      app.request("http://localhost/api/auth/sign-in/magic-link", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+
+    const registered = await send(`${P}registered@example.com`);
+    const unregistered = await send(`${P}unregistered@example.com`);
+
+    expect(registered.status).toBe(unregistered.status);
+    const registeredBody = await registered.json();
+    const unregisteredBody = await unregistered.json();
+    expect(Object.keys(registeredBody as object).sort()).toEqual(
+      Object.keys(unregisteredBody as object).sort(),
+    );
+    expect(registeredBody).toEqual(unregisteredBody);
+
+    await db.delete(user).where(like(user.id, `${P}%`));
+  });
+});

@@ -91,3 +91,62 @@ jobs:
 
       - name: Test
         run: bun test
+
+  # ブラウザ実機の認証動線スモーク (magic link 着地 / SessionGuard / 役割別 UI)。
+  # check job と分離する理由: playwright の browser install (~100MB) と build:web を
+  # 伴い、失敗時に unit/integration の結果と切り分けたいため。
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16.8-alpine3.21
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://postgres:password@localhost:5432/auth
+      REDIS_URL: redis://localhost:6379
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Build auth-client SDK
+        working-directory: packages/auth-client
+        run: bun run build
+
+      - name: Install Playwright browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: Apply migrations
+        run: bun run db:migrate && bun run db:migrate-manual
+
+      # webServer (playwright.config.ts) が build:web と seed を実行してから server を起動する
+      - name: E2E test
+        run: bun run test:e2e

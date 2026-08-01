@@ -10,6 +10,7 @@ import { sendWelcomeEmail } from "./email/send-welcome";
 import { sendInvitationEmail } from "./email/send-invitation";
 import { resolveInvitationEmailContext } from "./invitation/resolve-email-context";
 import { getAppName, getMagicLinkFromEmail, getResendClient } from "./email/client";
+import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { isBunRuntime, isLocalEnvironment } from "./env";
 import MagicLinkEmail from "./email/magic-link";
 import { captureAuditLogError } from "./audit-error";
@@ -43,11 +44,7 @@ function buildAuth() {
 
     advanced: {
       useSecureCookies: !isLocalEnvironment(),
-      // 判定基準は AUTH_COOKIE_DOMAIN 値そのもの (APP_ENV 非依存)。詳細: docs/adr/0004-cross-subdomain-cookie-rule.md
-      crossSubDomainCookies: {
-        enabled: !!authCookieDomain && authCookieDomain !== "localhost",
-        domain: authCookieDomain || "taimei-code.com",
-      },
+      crossSubDomainCookies: resolveCrossSubDomainCookies(authCookieDomain),
     },
 
     trustedOrigins: (process.env.AUTH_TRUSTED_ORIGINS || "").split(",").filter(Boolean),
