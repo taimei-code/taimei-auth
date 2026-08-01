@@ -76,7 +76,7 @@ export async function findAbandonedSignupUserIds(
   return rows.map((r) => r.id);
 }
 
-// ADR-0010 (設計レビュー DA Critique 1): 事業所を soft delete (UPDATE) するため
+// ADR-0010: 事業所を soft delete (UPDATE) するため
 // last_used_company_id の `ON DELETE SET NULL` が発火せず、削除 company を指す dangling 参照が残る。
 // SDK は user.default_company_id (= last_used_company_id) を companyId の権威ソースにするため、
 // 削除 company を指す全 user を残存 ACTIVE membership (なければ NULL) に同一 tx で付け替える。

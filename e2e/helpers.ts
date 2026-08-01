@@ -19,7 +19,7 @@ export const authEntryUrl = (opts: { invitationToken?: string } = {}): string =>
   return url.toString();
 };
 
-// local 環境はメールを送らず console に verify URL を出す (src/auth.ts / send-invitation.ts)。
+// local 環境はメールを送らず console に verify URL を出す (src/email/send-magic-link.ts / send-invitation.ts)。
 // 通常ログインは `[TEST] Magic Link for <email>: <url>`、招待文脈は
 // `[TEST] Invitation email for <email>: <url>` と行が分かれるため両方を拾う。
 export const magicLinkFor = async (email: string): Promise<string> => {
