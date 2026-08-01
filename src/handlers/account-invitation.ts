@@ -22,7 +22,7 @@ import { parseZodBody, roleBodySchema } from "./parse-body";
 export const accountInvitation = new Hono();
 
 const createInvitationBody = z.object({
-  email: z.string().email().max(320),
+  email: z.email().max(320),
   role: roleBodySchema,
 });
 

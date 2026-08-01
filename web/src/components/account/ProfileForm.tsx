@@ -17,17 +17,21 @@ export const ProfileForm = ({ initialName, email }: Props) => {
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<{ kind: "error" | "saved"; text: string } | null>(null);
 
-  const saveProfile = async (event: FormEvent) => {
+  const saveProfile = (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
     setStatus(null);
-    const { error } = await authClient.updateUser({ name });
-    setSubmitting(false);
-    setStatus(
-      error
-        ? { kind: "error", text: error.message ?? "保存に失敗しました" }
-        : { kind: "saved", text: "保存しました" },
-    );
+    authClient
+      .updateUser({ name })
+      .then(({ error }) =>
+        setStatus(
+          error
+            ? { kind: "error", text: error.message ?? "保存に失敗しました" }
+            : { kind: "saved", text: "保存しました" },
+        ),
+      )
+      .catch(() => setStatus({ kind: "error", text: "保存に失敗しました" }))
+      .finally(() => setSubmitting(false));
   };
 
   return (

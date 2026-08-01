@@ -17,8 +17,10 @@ export async function renderAndSendEmail(params: {
   // undefined ("render2 is not a function") になる。dynamic import で実行時に module
   // init を強制する。詳細: docs/adr/0011-cloudflare-workers-migration.md
   const { render } = await import("@react-email/components");
-  const html = await render(params.component);
-  const text = await render(params.component, { plainText: true });
+  const [html, text] = await Promise.all([
+    render(params.component),
+    render(params.component, { plainText: true }),
+  ]);
 
   const { error } = await getResendClient().emails.send({
     from: params.from,

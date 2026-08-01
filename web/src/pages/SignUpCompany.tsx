@@ -134,7 +134,10 @@ export const SignUpCompany = () => {
       <button
         type="button"
         onClick={() => {
-          void authClient.signOut().then(() => navigate("/auth"));
+          authClient
+            .signOut()
+            .then(() => navigate("/auth"))
+            .catch((e) => console.error("signOut failed:", e));
         }}
         className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >
