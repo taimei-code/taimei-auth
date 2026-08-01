@@ -58,8 +58,12 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
+      # GHSA-qwww-vcr4-c8h2 (react-router RSC Mode CSRF) は patched が 8.3.0 (major) のみで
+      # 7.x backport が無く、本リポは declarative SPA router のみ (RSC Mode 不使用) のため非該当として
+      # advisory 単位で明示 accept する。v8 昇格または 7.x backport 登場で外す。
+      # 詳細: docs/adr/0009-supply-chain-hardening.md「audit gate 対応 3 回目」
       - name: Audit dependencies
-        run: bun audit --audit-level=high
+        run: bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2
 
       # taimei-auth (root) が `@taimei-code/auth-client` を workspace dep として import するため、
       # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (ADR-006 D3 dogfooding)。
