@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Mail, Loader2 } from "lucide-react";
 
 import { buildSignParams } from "@/lib/sign-params";
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 // 状態機械 (params 解析 / 招待分岐 / 送信) は useSignPage、SNS 区画は SocialSignInSection を
 // SignUp と共有する (ADR-0007: 画面のみ分離)。
 export const SignIn = () => {
+  const [searchParams] = useSearchParams();
   const sign = useSignPage({ githubErrorFallback: "GitHub ログインに失敗しました" });
 
   if (!sign.valid) {
@@ -72,7 +73,8 @@ export const SignIn = () => {
 
               <SocialSignInSection
                 isInvitation={sign.isInvitation}
-                submitting={sign.submitting}
+                disabled={sign.submitting !== null}
+                submittingGitHub={sign.submitting === "github"}
                 label="GitHub でログイン"
                 onGitHub={sign.handleGitHub}
               />
@@ -80,7 +82,7 @@ export const SignIn = () => {
               <p className="text-center text-sm text-muted-foreground">
                 アカウントをお持ちでない方は{" "}
                 <Link
-                  to={`/auth/signup?${buildSignParams(sign.searchParams)}`}
+                  to={`/auth/signup?${buildSignParams(searchParams)}`}
                   className="rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   新規登録

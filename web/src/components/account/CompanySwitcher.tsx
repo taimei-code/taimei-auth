@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 
 import { useCompanyContext } from "@/lib/company-context";
-import { orgCodeLabelJa, roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 
 // sidebar 上部の事業所ピッカー。複数所属時に native select で切替 (DropdownMenu 依存を避ける)。
 // 1 事業所のみなら read-only 表示。

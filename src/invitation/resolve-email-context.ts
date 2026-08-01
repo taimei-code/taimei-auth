@@ -1,7 +1,7 @@
 import { findCompanyById } from "@/db/repositories/company";
 import { findInvitationByToken } from "@/db/repositories/invitation";
 import { findUserById } from "@/db/repositories/user";
-import { roleLabel } from "../email/send-invitation";
+import { roleLabelJa } from "../membership/role-label";
 
 export type InvitationEmailContext = {
   companyName: string;
@@ -33,7 +33,8 @@ export async function resolveInvitationEmailContext(
     companyName: company.name,
     inviterName: inviter?.name ?? "",
     inviterEmail: inviter?.email ?? "",
-    roleLabel: roleLabel(invitation.role),
+    // 招待メールでは未知 role を「メンバー」に倒す (SPA は素の値を出す — 用途別 fallback)。
+    roleLabel: roleLabelJa(invitation.role, "メンバー"),
   };
 }
 

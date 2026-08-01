@@ -68,7 +68,7 @@ export async function listMyMemberships(): Promise<Membership[]> {
   return (await getCompanyState()).memberships;
 }
 
-type CreateCompanyParams = { name: string; org_code: "PERSONAL" | "CORPORATE" };
+type CreateCompanyParams = { name: string; org_code: OrgCode };
 
 // 事業所作成は signup (0 件ガード付き) / 追加 (制限なし) で叩く endpoint だけ違い、成功 response は同形。
 
@@ -82,6 +82,9 @@ export const addCompany = (params: CreateCompanyParams): Promise<CreateCompanyRe
   postJson<CreateCompanyResult>("/api/account/companies/add", params);
 
 export type CompanyRole = "OWNER" | "ADMIN" | "MEMBER";
+
+// wire 上の事業形態。server 側の正本は db/repositories/company.ts の OrgCode (API contract の写し)。
+export type OrgCode = "PERSONAL" | "CORPORATE";
 
 export type Member = {
   membership_id: string;
@@ -180,7 +183,7 @@ export async function removeMember(
 
 export async function updateCompany(
   companyId: string,
-  params: { name: string; org_code: "PERSONAL" | "CORPORATE" },
+  params: { name: string; org_code: OrgCode },
 ): Promise<void> {
   await postJson<void>(`/api/account/companies/${companyId}`, params);
 }

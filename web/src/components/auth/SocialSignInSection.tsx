@@ -1,20 +1,22 @@
 import { Github, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import type { SignSubmitting } from "@/lib/use-sign-page";
 
 // Magic Link フォーム下の SNS ログイン区画。招待経由では GitHub を隠して案内文に差し替える —
 // invitation の strict email match は Magic Link 経路を前提とし、GitHub アカウントの email が
 // 招待先と一致する保証がないため (ADR-009)。SignIn / SignUp 両ページで共有し、招待分岐の
-// 変更が片ページだけに入るのを防ぐ。
+// 変更が片ページだけに入るのを防ぐ。boolean 2 つで受けるのは useSignPage の状態表現に
+// 依存させないため (表示部品はどの送信手段が走っているかの内部型を知らなくてよい)。
 export const SocialSignInSection = ({
   isInvitation,
-  submitting,
+  disabled,
+  submittingGitHub,
   label,
   onGitHub,
 }: {
   isInvitation: boolean;
-  submitting: SignSubmitting;
+  disabled: boolean;
+  submittingGitHub: boolean;
   label: string;
   onGitHub: () => void;
 }) => {
@@ -42,9 +44,9 @@ export const SocialSignInSection = ({
         variant="outline"
         className="w-full"
         onClick={onGitHub}
-        disabled={submitting !== null}
+        disabled={disabled}
       >
-        {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
+        {submittingGitHub ? <Loader2 className="animate-spin" /> : <Github />}
         {label}
       </Button>
     </>

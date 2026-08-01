@@ -1,6 +1,5 @@
-import { orgCodeLabelJa } from "@/lib/role-label";
-
-type OrgCode = "PERSONAL" | "CORPORATE";
+import type { OrgCode } from "@/lib/account-api";
+import { orgCodeLabelJa } from "@/lib/labels";
 
 // 事業形態 (個人事業主 / 法人) の radio fieldset。signup / 事業所追加 / 事業所設定の 3 画面が
 // 同一 markup を保ち、第 3 の事業形態を足す時の追随を 1 箇所にする。

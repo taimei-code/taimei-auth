@@ -4,7 +4,7 @@ import { Trash2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { Button } from "@/components/ui/button";
-import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 
 // Magic Link / OAuth ユーザーは password を持たず better-auth 側で session ごと完全削除されるため、再認証 step は挟まない
 export const DangerZone = () => {
@@ -14,7 +14,7 @@ export const DangerZone = () => {
     setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
-      // 表示は dialog の外 (本セクション内)。ConfirmActionDialog が完了後に閉じるので利用者に届く。
+      // 表示は dialog の外 (本セクション内)。ConfirmDestructiveDialog が完了後に閉じるので利用者に届く。
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }
@@ -38,7 +38,7 @@ export const DangerZone = () => {
             </p>
           ) : null}
         </div>
-        <ConfirmActionDialog
+        <ConfirmDestructiveDialog
           trigger={
             <Button variant="destructive">
               <Trash2 className="size-4" aria-hidden="true" />

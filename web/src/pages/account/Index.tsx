@@ -1,6 +1,6 @@
 import { authClient } from "@/lib/auth-client";
 import { useCompanyContext } from "@/lib/company-context";
-import { orgCodeLabelJa, roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 import { Separator } from "@/components/ui/separator";
 import { ProfileForm } from "@/components/account/ProfileForm";
 import { AvatarUploader } from "@/components/account/AvatarUploader";

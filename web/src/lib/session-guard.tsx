@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from "react";
 
 import { FullScreenLoader } from "@/components/FullScreenLoader";
-import { redirectToSignIn } from "@/lib/auth-redirect";
+import { redirectToCompanySignup, redirectToSignIn } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 
 // /account 配下の入口ガード。認証判定は CompanyProvider の memberships fetch (401 = 未認証) に
@@ -22,7 +22,7 @@ export const SessionGuard = ({ children }: { children: ReactNode }) => {
       return;
     }
     if (needsCompanySignup) {
-      redirectToSignIn("/auth/signup/company");
+      redirectToCompanySignup();
     }
   }, [loading, unauthorized, needsCompanySignup]);
 

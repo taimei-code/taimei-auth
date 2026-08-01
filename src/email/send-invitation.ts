@@ -1,5 +1,4 @@
 import { isLocalEnvironment } from "../env";
-import { ROLE_LABELS_JA } from "../membership/role-label";
 import {
   getAbuseInfoUrl,
   getAppName,
@@ -48,12 +47,4 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
     }),
     kind: "invitation",
   });
-}
-
-// invitation.role は DB text の生値が届くため、未知値 (prototype 上のキー名含む) は
-// Object.hasOwn で弾き「メンバー」に倒す (現行挙動の踏襲。SPA 側は素の値を返す — role-label.ts 参照)。
-export function roleLabel(role: string): string {
-  return Object.hasOwn(ROLE_LABELS_JA, role)
-    ? ROLE_LABELS_JA[role as keyof typeof ROLE_LABELS_JA]
-    : "メンバー";
 }

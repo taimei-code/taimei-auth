@@ -13,6 +13,8 @@ import { findUserById } from "@/db/repositories/user";
 // lastUsedCompanyId を載せるのは、getActor が fail-closed 判定で user 行を毎 request 読んで
 // いるため。列を捨てると handler / use-case が同じ行をもう 1 度 SELECT する羽目になる
 // (GET /api/account/memberships は SPA の全 /account ページで呼ばれる最頻 endpoint)。
+// Actor は認証 identity の抽象であり user 行の projection ではない — 列の追加は
+// 「hot path の再 SELECT を消す」場合に限り、表示用途 (name / image 等) では足さないこと。
 export type Actor = { id: string; email: string; lastUsedCompanyId: string | null };
 
 export type Unauthorized = { ok: false; error: "unauthorized"; status: 401 };

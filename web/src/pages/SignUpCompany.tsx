@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { authClient } from "@/lib/auth-client";
-import { AccountApiError, createCompany, listMyMemberships } from "@/lib/account-api";
+import { AccountApiError, createCompany, listMyMemberships, type OrgCode } from "@/lib/account-api";
 import { redirectToSignIn } from "@/lib/auth-redirect";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ export const SignUpCompany = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<"PERSONAL" | "CORPORATE">("PERSONAL");
+  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [status, setStatus] = useState<GuardStatus>("loading");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);

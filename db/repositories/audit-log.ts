@@ -237,6 +237,7 @@ export const recordInvitationAccepted = (
     txOrDb,
   );
 
+// payload 導出規則の実装は batch 版 (recordInvitationsRevoked) に一本化し、単数版は委譲する。
 export const recordInvitationRevoked = (
   params: {
     actor_user_id: string;
@@ -245,15 +246,11 @@ export const recordInvitationRevoked = (
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
-  appendAuditLog(
+  recordInvitationsRevoked(
     {
-      eventType: "invitation_revoked",
-      userId: params.actor_user_id,
-      payload: {
-        invitation_id: params.invitation_id,
-        company_id: params.company_id,
-        revoked_by_user_id: params.actor_user_id,
-      },
+      actor_user_id: params.actor_user_id,
+      company_id: params.company_id,
+      invitation_ids: [params.invitation_id],
     },
     txOrDb,
   );
@@ -316,6 +313,7 @@ export const recordRoleChanged = (
     txOrDb,
   );
 
+// payload 導出規則の実装は batch 版 (recordMembershipsRemoved) に一本化し、単数版は委譲する。
 export const recordMembershipRemoved = (
   params: {
     actor_user_id: string;
@@ -325,22 +323,16 @@ export const recordMembershipRemoved = (
   },
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
-  appendAuditLog(
+  recordMembershipsRemoved(
     {
-      eventType: "membership_removed",
-      userId: params.actor_user_id,
-      payload: {
-        company_id: params.company_id,
-        removed_user_id: params.removed_user_id,
-        removed_by_user_id: params.actor_user_id,
-        role_at_removal: params.role_at_removal,
-        was_self: params.actor_user_id === params.removed_user_id,
-      },
+      actor_user_id: params.actor_user_id,
+      company_id: params.company_id,
+      removed: [{ user_id: params.removed_user_id, role_at_removal: params.role_at_removal }],
     },
     txOrDb,
   );
 
-// DeleteCompany が失効させた PENDING 招待 N 件の batch 版。payload 規則は recordInvitationRevoked と同一。
+// DeleteCompany が失効させた PENDING 招待 N 件の batch 版。
 export const recordInvitationsRevoked = (
   params: {
     actor_user_id: string;
@@ -362,7 +354,7 @@ export const recordInvitationsRevoked = (
     txOrDb,
   );
 
-// DeleteCompany が物理削除した membership N 件の batch 版。payload 規則は recordMembershipRemoved と同一。
+// DeleteCompany が物理削除した membership N 件の batch 版。
 export const recordMembershipsRemoved = (
   params: {
     actor_user_id: string;

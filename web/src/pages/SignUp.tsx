@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Mail, Loader2 } from "lucide-react";
 
 import { buildSignParams } from "@/lib/sign-params";
@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 // SignIn と同じ signIn.magicLink を呼ぶ (画面のみ分離)。詳細: docs/adr/0007-signin-signup-unified-api.md
 // 状態機械 (params 解析 / 招待分岐 / 送信) は useSignPage、SNS 区画は SocialSignInSection を共有する。
 export const SignUp = () => {
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState("");
   const sign = useSignPage({
     preferSignUpUrl: true,
@@ -89,7 +90,8 @@ export const SignUp = () => {
 
               <SocialSignInSection
                 isInvitation={sign.isInvitation}
-                submitting={sign.submitting}
+                disabled={sign.submitting !== null}
+                submittingGitHub={sign.submitting === "github"}
                 label="GitHub で登録"
                 onGitHub={sign.handleGitHub}
               />
@@ -97,7 +99,7 @@ export const SignUp = () => {
               <p className="text-center text-sm text-muted-foreground">
                 すでにアカウントをお持ちの方は{" "}
                 <Link
-                  to={`/auth?${buildSignParams(sign.searchParams)}`}
+                  to={`/auth?${buildSignParams(searchParams)}`}
                   className="rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   ログイン

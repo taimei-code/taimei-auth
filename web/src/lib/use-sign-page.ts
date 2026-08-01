@@ -6,7 +6,7 @@ import { signInParamsSchema } from "@core/sign-in-params";
 import { authClient } from "@/lib/auth-client";
 import { invitationAcceptCallbackUrl } from "@/lib/sign-params";
 
-export type SignSubmitting = "magic-link" | "github" | null;
+type SignSubmitting = "magic-link" | "github" | null;
 
 // SignIn / SignUp が共有する画面状態機械。ADR-0007 の「画面のみ分離」を保ったまま、
 // params 解析 → 招待分岐 → magic link / GitHub 送信の実装を 1 箇所にする (片画面だけ直して
@@ -73,7 +73,6 @@ export function useSignPage(options: {
   };
 
   return {
-    searchParams,
     // false のときページは /auth/error へ replace して null を返す (handler 群は呼ばれない前提)
     valid: parseResult.success,
     serviceDisplayName: parseResult.success

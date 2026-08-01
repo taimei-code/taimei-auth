@@ -17,7 +17,7 @@ import {
 // ここに閉じる。エラー文言の表示は呼び出し側の notice 領域 (dialog の外) が担う — Radix は
 // 開いている dialog の背面を aria-hidden にするため、閉じる前に背面へ描画したエラーは利用者に
 // 届かない。個別ダイアログごとに同じ穴が開いた (退会 / 事業所削除 / メンバー削除) ため一般化した。
-export const ConfirmActionDialog = ({
+export const ConfirmDestructiveDialog = ({
   trigger,
   title,
   description,

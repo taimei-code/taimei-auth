@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
-import { AccountApiError, addCompany } from "@/lib/account-api";
+import { AccountApiError, addCompany, type OrgCode } from "@/lib/account-api";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +29,7 @@ type Props = {
 export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<"PERSONAL" | "CORPORATE">("CORPORATE");
+  const [orgCode, setOrgCode] = useState<OrgCode>("CORPORATE");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

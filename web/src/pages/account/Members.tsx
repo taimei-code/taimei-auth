@@ -15,8 +15,8 @@ import {
 } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-import { roleLabelJa } from "@/lib/role-label";
-import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
+import { roleLabelJa } from "@/lib/labels";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { Notice, type NoticeValue } from "@/components/Notice";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -106,7 +106,7 @@ export const Members = () => {
       .finally(() => setBusyUserId(null));
   };
 
-  // ConfirmActionDialog の onConfirm 契約: promise を返し、失敗の通知はここで notice に載せる。
+  // ConfirmDestructiveDialog の onConfirm 契約: promise を返し、失敗の通知はここで notice に載せる。
   const handleRemove = (targetUserId: string): Promise<void> => {
     if (!companyId || busyUserId) return Promise.resolve();
     setBusyUserId(targetUserId);
@@ -191,7 +191,7 @@ export const Members = () => {
                   </span>
                 )}
                 {canManage && !isSelf && (
-                  <ConfirmActionDialog
+                  <ConfirmDestructiveDialog
                     trigger={
                       <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
                         削除

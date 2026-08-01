@@ -1,10 +1,15 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { deleteCompany, describeAccountApiError, updateCompany } from "@/lib/account-api";
+import {
+  deleteCompany,
+  describeAccountApiError,
+  updateCompany,
+  type OrgCode,
+} from "@/lib/account-api";
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
-import { ConfirmActionDialog } from "@/components/ConfirmActionDialog";
+import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { Notice, type NoticeValue } from "@/components/Notice";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Separator } from "@/components/ui/separator";
@@ -21,7 +26,7 @@ export const CompanySettings = () => {
   const isLastCompany = memberships.length <= 1;
 
   const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<"PERSONAL" | "CORPORATE">("PERSONAL");
+  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<NoticeValue | null>(null);
 
@@ -124,7 +129,7 @@ export const CompanySettings = () => {
           <p className="text-sm text-muted-foreground">
             削除すると、この事業所はメンバーの一覧から外れます。
           </p>
-          <ConfirmActionDialog
+          <ConfirmDestructiveDialog
             trigger={
               <Button variant="destructive" disabled={submitting}>
                 削除する
@@ -140,7 +145,7 @@ export const CompanySettings = () => {
                 これは最後の所属事業所です。削除するとアカウントも閉じられ、ログアウトされます。
               </p>
             )}
-          </ConfirmActionDialog>
+          </ConfirmDestructiveDialog>
         </div>
       </section>
     </div>

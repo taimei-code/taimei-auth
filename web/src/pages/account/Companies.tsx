@@ -4,7 +4,7 @@ import { Check, Loader2, Plus } from "lucide-react";
 import { AccountApiError, removeMember } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-import { orgCodeLabelJa, roleLabelJa } from "@/lib/role-label";
+import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
