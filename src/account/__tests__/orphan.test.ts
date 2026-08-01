@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, like } from "drizzle-orm";
 import { db } from "@/db/client";
 import { generateCompanyId, insertCompany, softDeleteCompany } from "@/db/repositories/company";
@@ -6,6 +6,7 @@ import { generateMembershipId, insertMembership } from "@/db/repositories/member
 import { findUserById } from "@/db/repositories/user";
 import { auditLog, company, membership, session, user } from "@/db/schema";
 import { runInTransaction } from "@/db/transaction";
+import { connectRedis, redis } from "../../redis";
 import { deleteAccountIfOrphaned } from "../orphan";
 
 const P = "orphan-test-";
@@ -16,6 +17,13 @@ async function cleanup() {
   await db.delete(membership).where(like(membership.userId, `${P}%`));
   await db.delete(company).where(like(company.name, `${P}%`));
   await db.delete(user).where(like(user.id, `${P}%`));
+  await redis.del([
+    `${P}rtok-1`,
+    `${P}rtok-2`,
+    `active-sessions-${P}u-redis`,
+    `${P}rtok-kept`,
+    `active-sessions-${P}u-rkept`,
+  ]);
 }
 
 async function seedUser(suffix: string): Promise<string> {
@@ -38,6 +46,19 @@ async function seedCompany(suffix: string): Promise<string> {
   return id;
 }
 
+// better-auth secondaryStorage の実保存形状を再現する: session 実体は token 文字列キー、
+// user の生存 session 一覧は active-sessions-{userId} (deleteUserSessions が読む索引)。
+async function seedRedisSessions(userId: string, tokens: string[]): Promise<void> {
+  const expiresAt = Date.now() + 86_400_000;
+  for (const token of tokens) {
+    await redis.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
+  }
+  await redis.set(
+    `active-sessions-${userId}`,
+    JSON.stringify(tokens.map((token) => ({ token, expiresAt }))),
+  );
+}
+
 async function countAccountDeleteAudit(userId: string): Promise<number> {
   const rows = await db
     .select()
@@ -47,6 +68,7 @@ async function countAccountDeleteAudit(userId: string): Promise<number> {
 }
 
 describe("deleteAccountIfOrphaned", () => {
+  beforeAll(connectRedis);
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -90,5 +112,34 @@ describe("deleteAccountIfOrphaned", () => {
     const userId = `${P}u-absent`;
     const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
     expect(deleted).toBe(true);
+  });
+
+  // secondaryStorage 構成では session の実体は Redis のみ (Postgres session テーブルは常に空)。
+  // DB 側の revoke だけでは削除済み user の session が生き残り、その cookie で事業所作成を叩くと
+  // membership insert が FK 違反 500 になる実障害があった。orphan 削除は Redis 側も purge すること。
+  test("orphan 削除は secondaryStorage (Redis) の session 実体と索引も purge する", async () => {
+    const userId = await seedUser("redis");
+    const tokens = [`${P}rtok-1`, `${P}rtok-2`];
+    await seedRedisSessions(userId, tokens);
+
+    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+
+    expect(deleted).toBe(true);
+    expect(await redis.get(`${P}rtok-1`)).toBeNull();
+    expect(await redis.get(`${P}rtok-2`)).toBeNull();
+    expect(await redis.get(`active-sessions-${userId}`)).toBeNull();
+  });
+
+  test("membership が残り削除しない場合は Redis session に触れない", async () => {
+    const userId = await seedUser("rkept");
+    const companyId = await seedCompany("rkept");
+    await insertMembership({ id: generateMembershipId(), userId, companyId, role: "OWNER" });
+    await seedRedisSessions(userId, [`${P}rtok-kept`]);
+
+    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+
+    expect(deleted).toBe(false);
+    expect(await redis.get(`${P}rtok-kept`)).not.toBeNull();
+    expect(await redis.get(`active-sessions-${userId}`)).not.toBeNull();
   });
 });
