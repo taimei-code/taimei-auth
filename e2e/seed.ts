@@ -2,6 +2,7 @@ import { inArray, like } from "drizzle-orm";
 import { db } from "@/db/client";
 import { auditLog, company, user } from "@/db/schema";
 import { generateCompanyId, insertCompany } from "@/db/repositories/company";
+import { generateInvitationId, insertInvitation } from "@/db/repositories/invitation";
 import { generateMembershipId, insertMembership, type Role } from "@/db/repositories/membership";
 
 // e2e spec が前提にする固定ユーザーと事業所を冪等に作り直す。
@@ -54,6 +55,18 @@ await seedMembership(memberUserId, mainCompanyId, "MEMBER");
 const dangerUserId = await seedUser("danger", "E2E Danger");
 const dangerCompanyId = await seedCompany("danger");
 await seedMembership(dangerUserId, dangerCompanyId, "OWNER");
+
+// invitation-flow 用: e2e-invitee 宛の PENDING 招待 (invitee の user 行はまだ無い。
+// 招待行は invitedByUserId の FK cascade で毎回の user 掃除と一緒に消え、ここで作り直す)
+await insertInvitation({
+  id: generateInvitationId(),
+  companyId: mainCompanyId,
+  email: "e2e-invitee@example.com",
+  role: "MEMBER",
+  token: "e2e-invitation-token",
+  expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+  invitedByUserId: signinUserId,
+});
 
 console.log("[e2e-seed] done");
 process.exit(0);

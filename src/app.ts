@@ -84,12 +84,26 @@ export function buildApp(options: AppOptions): Hono {
     return result !== null;
   });
   app.route("/", loginShortcut);
+
+  const isLocal = isLocalEnvironment();
+
+  // canary は無認証で Sentry captureMessage を直叩きする endpoint のため、連打による
+  // Sentry quota 枯渇 (= 攻撃検知チャネル自体の盲目化) を IP 単位で抑える。
+  // 正規の発火は攻撃者が canary を踏んだ瞬間のみで頻度は稀なため 10/IP/min で十分。
+  // local の緩和は magic-link rate limit と同方針。
+  app.use(
+    "/auth/canary-token/*",
+    createRateLimitMiddleware({
+      keyFn: (c) => `rate-limit:canary:ip:${getClientContext(c.req.raw.headers).ip}`,
+      limit: isLocal ? 1000 : 10,
+      windowSec: 60,
+    }),
+  );
   app.route("/", canaryToken);
 
   // Magic Link 経路のみ IP + email の 2 軸で rate limit。
   // production: 5/IP/min + 3/email/min。local (dev / e2e): 1000/IP/min + 1000/email/min。
   // better-auth 内蔵 rateLimit (auth.ts) と同じ緩和方針で揃える。
-  const isLocal = isLocalEnvironment();
   app.use(
     "/api/auth/sign-in/magic-link",
     createRateLimitMiddleware({

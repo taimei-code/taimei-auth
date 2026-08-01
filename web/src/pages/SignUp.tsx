@@ -5,7 +5,7 @@ import { Mail, Github, Loader2 } from "lucide-react";
 import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { authClient } from "@/lib/auth-client";
-import { buildSignParams } from "@/lib/sign-params";
+import { buildSignParams, invitationAcceptCallbackUrl } from "@/lib/sign-params";
 import { CanaryTokens } from "@/components/CanaryTokens";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,10 +43,10 @@ export const SignUp = () => {
   // ADR-009: 招待経由の signup では GitHub OAuth を隠す。invitation の strict email match は
   // Magic Link 経路を前提とするため (GitHub アカウントの email が招待先と一致する保証がない)。
   const isInvitation = invitation_token !== undefined;
-  // 招待経由は Magic Link click 後に accept-invitation へ着地させ membership を作る。
-  const callbackUrl = isInvitation
-    ? `${window.location.origin}/auth/signup/accept-invitation?invitation_token=${encodeURIComponent(invitation_token)}`
-    : (sign_up_url ?? redirect_url);
+  const callbackUrl =
+    invitation_token !== undefined
+      ? invitationAcceptCallbackUrl(invitation_token)
+      : (sign_up_url ?? redirect_url);
 
   const handleMagicLink = async (e: FormEvent) => {
     e.preventDefault();
