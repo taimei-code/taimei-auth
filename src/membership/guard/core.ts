@@ -1,6 +1,7 @@
 import { auth } from "../../auth";
 import { isAtLeast } from "../policy";
 import { findMembership, type Role } from "@/db/repositories/membership";
+import { findUserById } from "@/db/repositories/user";
 
 // SPA 向け Hono ルートの認可入口 (I/O 層) のコア。session→membership→role→403 を解決し、
 // handler が `if (!r.ok) return guardErrorResponse(r)` の 1 行で HTTP に写像できる Result を返す。
@@ -112,7 +113,13 @@ export const guard: MembershipGuard = createMembershipGuard({
   // fail-closed (getSession 失敗時の 401 倒し) は requireActor 側に集約している。
   getActor: async (headers) => {
     const session = await auth.api.getSession({ headers });
-    return session?.user?.id ? { id: session.user.id, email: session.user.email } : null;
+    if (!session?.user?.id) return null;
+    // better-auth cookieCache (最大 5 分) は user 行の削除後も session を返し続ける。
+    // 削除済み user を actor として通すと membership insert 等が FK 違反 500 になるため、
+    // VerifySession の USER_DELETED (src/rpc/auth-handler.ts) と同じく DB の user 存在で
+    // fail-closed する。DB 断で読めない場合も requireActor の catch が 401 に倒す。
+    const dbUser = await findUserById(session.user.id);
+    return dbUser ? { id: dbUser.id, email: dbUser.email } : null;
   },
   findMembership,
 });
