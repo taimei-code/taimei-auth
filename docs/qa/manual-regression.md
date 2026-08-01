@@ -7,7 +7,7 @@
 - **担当**: 該当 PR の作者 (デプロイ後スモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
 
-自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため本台帳の対象外。
+自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / 招待受諾 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため本台帳の対象外。
 
 ---
 

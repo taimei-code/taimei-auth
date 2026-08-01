@@ -7,16 +7,20 @@ import { expect, type Page } from "@playwright/test";
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
 const BASE_URL = "http://localhost:3110";
 
-// local 環境の sendMagicLink は console に `[TEST] Magic Link for <email>: <url>` を出す
-// (src/auth.ts)。メール送信を実際に行わないため、e2e はこの行から verify URL を拾う。
+// local 環境はメールを送らず console に verify URL を出す (src/auth.ts / send-invitation.ts)。
+// 通常ログインは `[TEST] Magic Link for <email>: <url>`、招待文脈は
+// `[TEST] Invitation email for <email>: <url>` と行が分かれるため両方を拾う。
 export const magicLinkFor = async (email: string): Promise<string> => {
-  const marker = `[TEST] Magic Link for ${email}: `;
+  const markers = [`[TEST] Magic Link for ${email}: `, `[TEST] Invitation email for ${email}: `];
   for (let attempt = 0; attempt < 50; attempt++) {
     const line = readFileSync(SERVER_LOG, "utf8")
       .split("\n")
-      .filter((l) => l.includes(marker))
+      .filter((l) => markers.some((m) => l.includes(m)))
       .at(-1);
-    if (line) return line.slice(line.indexOf(marker) + marker.length).trim();
+    if (line) {
+      const marker = markers.find((m) => line.includes(m)) as string;
+      return line.slice(line.indexOf(marker) + marker.length).trim();
+    }
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
   throw new Error(`magic link for ${email} not found in ${SERVER_LOG}`);

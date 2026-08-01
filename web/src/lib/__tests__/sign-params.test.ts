@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { buildSignParams } from "../sign-params";
+import { afterEach, describe, expect, test } from "bun:test";
+import { buildSignParams, invitationAcceptCallbackUrl } from "../sign-params";
 
 describe("buildSignParams", () => {
   test("allowlist キー (service_name / redirect_url / sign_up_url) を保持する", () => {
@@ -29,14 +29,14 @@ describe("buildSignParams", () => {
     expect(out.get("service_name")).toBe("accounts");
   });
 
-  test("invitation_token も落ちる (現状仕様の pin — SignIn/SignUp 相互リンクで token が消える点は既知の懸念)", () => {
+  test("invitation_token を保持する (SignIn/SignUp 相互リンクで招待受諾フローから脱落させない)", () => {
     const input = new URLSearchParams({
       service_name: "accounts",
       redirect_url: "http://localhost/account",
       invitation_token: "inv-abc",
     });
 
-    expect(new URLSearchParams(buildSignParams(input)).has("invitation_token")).toBe(false);
+    expect(new URLSearchParams(buildSignParams(input)).get("invitation_token")).toBe("inv-abc");
   });
 
   test("同名キー重複時は最初の値を採用する (server 側 Object.fromEntries は最後を採る非対称の pin)", () => {
@@ -54,5 +54,23 @@ describe("buildSignParams", () => {
     const out = new URLSearchParams(buildSignParams(input));
     expect(out.has("redirect_url")).toBe(false);
     expect(out.toString()).toBe("service_name=accounts");
+  });
+});
+
+describe("invitationAcceptCallbackUrl", () => {
+  const originalWindow = globalThis.window;
+
+  afterEach(() => {
+    globalThis.window = originalWindow;
+  });
+
+  test("origin 起点の accept-invitation URL に token を encode して載せる", () => {
+    globalThis.window = {
+      location: { origin: "http://auth.taimei-code.local:3100" },
+    } as unknown as typeof globalThis.window;
+
+    expect(invitationAcceptCallbackUrl("inv/+abc")).toBe(
+      "http://auth.taimei-code.local:3100/auth/signup/accept-invitation?invitation_token=inv%2F%2Babc",
+    );
   });
 });

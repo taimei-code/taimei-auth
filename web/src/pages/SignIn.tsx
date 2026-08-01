@@ -5,7 +5,7 @@ import { Mail, Github, Loader2 } from "lucide-react";
 import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { authClient } from "@/lib/auth-client";
-import { buildSignParams } from "@/lib/sign-params";
+import { buildSignParams, invitationAcceptCallbackUrl } from "@/lib/sign-params";
 import { CanaryTokens } from "@/components/CanaryTokens";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,8 +36,13 @@ export const SignIn = () => {
     return null;
   }
 
-  const { service_name, redirect_url } = parseResult.data;
+  const { service_name, redirect_url, invitation_token } = parseResult.data;
   const service = TAIMEI_SERVICES[service_name as ServiceName];
+  // 招待経由 (相互リンクで SignUp から移ってきた場合を含む) の分岐理由は SignUp.tsx の同分岐と同じ:
+  // 着地先は accept-invitation、GitHub は strict email match が Magic Link 前提のため隠す (ADR-009)
+  const isInvitation = invitation_token !== undefined;
+  const callbackUrl =
+    invitation_token !== undefined ? invitationAcceptCallbackUrl(invitation_token) : redirect_url;
 
   const handleMagicLink = async (e: FormEvent) => {
     e.preventDefault();
@@ -45,7 +50,7 @@ export const SignIn = () => {
     setErrorMessage(null);
     const { error } = await authClient.signIn.magicLink({
       email,
-      callbackURL: redirect_url,
+      callbackURL: callbackUrl,
     });
     setSubmitting(null);
     if (error) {
@@ -60,7 +65,7 @@ export const SignIn = () => {
     setErrorMessage(null);
     const { error } = await authClient.signIn.social({
       provider: "github",
-      callbackURL: redirect_url,
+      callbackURL: callbackUrl,
     });
     if (error) {
       setSubmitting(null);
@@ -107,25 +112,33 @@ export const SignIn = () => {
                 </Button>
               </form>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">または</span>
-                </div>
-              </div>
+              {isInvitation ? (
+                <p className="text-center text-xs text-muted-foreground">
+                  招待を受諾するには、招待されたメールアドレスで Magic Link をご利用ください。
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">または</span>
+                    </div>
+                  </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={handleGitHub}
-                disabled={submitting !== null}
-              >
-                {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
-                GitHub でログイン
-              </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleGitHub}
+                    disabled={submitting !== null}
+                  >
+                    {submitting === "github" ? <Loader2 className="animate-spin" /> : <Github />}
+                    GitHub でログイン
+                  </Button>
+                </>
+              )}
 
               <p className="text-center text-sm text-muted-foreground">
                 アカウントをお持ちでない方は{" "}
