@@ -17,14 +17,19 @@ import {
 
 // Magic Link / OAuth ユーザーは password を持たず better-auth 側で session ごと完全削除されるため、再認証 step は挟まない
 export const DangerZone = () => {
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const deleteAccount = async () => {
     setDeleting(true);
+    setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
       setDeleting(false);
+      // エラー文言は dialog の背面 (本セクション内) に描画され、Radix が背面を aria-hidden に
+      // するため dialog を開いたままだと利用者に届かない。先に閉じてから表示する。
+      setDialogOpen(false);
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }
@@ -48,7 +53,7 @@ export const DangerZone = () => {
             </p>
           ) : null}
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button variant="destructive">
               <Trash2 className="size-4" aria-hidden="true" />
