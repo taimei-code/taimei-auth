@@ -2,6 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
 import { AccountApiError, addCompany } from "@/lib/account-api";
+import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -87,31 +88,13 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
               法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)
             </p>
           </div>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">事業形態</legend>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="add-org-code"
-                value="CORPORATE"
-                checked={orgCode === "CORPORATE"}
-                onChange={() => setOrgCode("CORPORATE")}
-                disabled={submitting}
-              />
-              法人
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="add-org-code"
-                value="PERSONAL"
-                checked={orgCode === "PERSONAL"}
-                onChange={() => setOrgCode("PERSONAL")}
-                disabled={submitting}
-              />
-              個人事業主
-            </label>
-          </fieldset>
+          <OrgCodeField
+            value={orgCode}
+            onChange={setOrgCode}
+            disabled={submitting}
+            name="add-org-code"
+            order={["CORPORATE", "PERSONAL"]}
+          />
           {error && <p className="text-sm text-destructive">{error}</p>}
           <DialogFooter>
             <Button type="submit" disabled={submitting || name.trim() === ""}>

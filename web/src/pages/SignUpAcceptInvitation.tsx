@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 
 import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { authClient } from "@/lib/auth-client";
-import { AccountApiError, acceptInvitation } from "@/lib/account-api";
+import { acceptInvitation, describeAccountApiError } from "@/lib/account-api";
 import { redirectToSignIn } from "@/lib/auth-redirect";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -41,17 +41,14 @@ export const SignUpAcceptInvitation = () => {
       })
       .catch((err) => {
         setStatus("error");
-        if (err instanceof AccountApiError && err.status === 403) {
-          setErrorMessage(
-            "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
-          );
-        } else if (err instanceof AccountApiError && err.status === 410) {
-          setErrorMessage("この招待は期限切れか、既に使用されています。");
-        } else if (err instanceof AccountApiError && err.status === 404) {
-          setErrorMessage("招待が見つかりません。");
-        } else {
-          setErrorMessage("招待の受諾に失敗しました。");
-        }
+        setErrorMessage(
+          describeAccountApiError(err, {
+            403: "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
+            410: "この招待は期限切れか、既に使用されています。",
+            404: "招待が見つかりません。",
+            fallback: "招待の受諾に失敗しました。",
+          }),
+        );
       });
   }, [invitationToken]);
 

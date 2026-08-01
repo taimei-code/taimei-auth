@@ -37,6 +37,20 @@ export class AccountApiError extends Error {
   }
 }
 
+// HTTP status → 画面文言の解決。instanceof + status 分岐の連鎖が画面ごとに散ると、サーバが
+// 新しい status を返し始めた時の取りこぼしに気づけないため、判定をここに閉じる。文言そのものは
+// 画面固有 (同じ 409 でも操作によって意味が違う) なので呼び出し側が渡す。
+export function describeAccountApiError(
+  err: unknown,
+  messages: Partial<Record<number, string>> & { fallback: string },
+): string {
+  if (err instanceof AccountApiError) {
+    const specific = messages[err.status];
+    if (specific !== undefined) return specific;
+  }
+  return messages.fallback;
+}
+
 export type CompanyState = {
   current_company_id: string | null;
   memberships: Membership[];

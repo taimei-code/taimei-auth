@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { FullScreenLoader } from "@/components/FullScreenLoader";
+import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { authClient } from "@/lib/auth-client";
 import { AccountApiError, createCompany, listMyMemberships } from "@/lib/account-api";
 import { redirectToSignIn } from "@/lib/auth-redirect";
@@ -113,31 +114,12 @@ export const SignUpCompany = () => {
                 法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)
               </p>
             </div>
-            <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">事業形態</legend>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="org_code"
-                  value="PERSONAL"
-                  checked={orgCode === "PERSONAL"}
-                  onChange={() => setOrgCode("PERSONAL")}
-                  disabled={submitting}
-                />
-                個人事業主
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="radio"
-                  name="org_code"
-                  value="CORPORATE"
-                  checked={orgCode === "CORPORATE"}
-                  onChange={() => setOrgCode("CORPORATE")}
-                  disabled={submitting}
-                />
-                法人
-              </label>
-            </fieldset>
+            <OrgCodeField
+              value={orgCode}
+              onChange={setOrgCode}
+              disabled={submitting}
+              name="org_code"
+            />
             <Button type="submit" className="w-full" disabled={submitting || name.trim() === ""}>
               {submitting ? <Loader2 className="animate-spin" /> : null}
               事業所を作成

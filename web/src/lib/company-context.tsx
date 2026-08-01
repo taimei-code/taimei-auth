@@ -8,10 +8,21 @@ import {
   type ReactNode,
 } from "react";
 
-import { getCompanyState, setCurrentCompany, type Membership } from "@/lib/account-api";
+import {
+  AccountApiError,
+  getCompanyState,
+  setCurrentCompany,
+  type Membership,
+} from "@/lib/account-api";
 
 type CompanyContextValue = {
   loading: boolean;
+  // 初回ロードが 401 で失敗 = 未認証。SessionGuard がログイン画面へ倒すために参照する
+  // (memberships fetch 自体が認証を要求するため、別途 getSession を呼ぶ round trip を作らない)。
+  unauthorized: boolean;
+  // 初回ロードが 401 以外で失敗 (一時的なネットワーク断等)。SessionGuard はこの場合
+  // 「membership 0 件 → signup 誘導」と誤判定せず guard を通過させる (誤遮断を避ける)。
+  loadFailed: boolean;
   memberships: Membership[];
   currentCompanyId: string | null;
   currentMembership: Membership | null;
@@ -28,6 +39,8 @@ export const CompanyProvider = ({ children }: { children: ReactNode }) => {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unauthorized, setUnauthorized] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const refresh = useCallback(async () => {
     const state = await getCompanyState();
@@ -37,7 +50,14 @@ export const CompanyProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     refresh()
-      .catch((e) => console.error("failed to load company state", e))
+      .catch((e) => {
+        if (e instanceof AccountApiError && e.status === 401) {
+          setUnauthorized(true);
+          return;
+        }
+        console.error("failed to load company state", e);
+        setLoadFailed(true);
+      })
       .finally(() => setLoading(false));
   }, [refresh]);
 
@@ -54,13 +74,15 @@ export const CompanyProvider = ({ children }: { children: ReactNode }) => {
       memberships.find((m) => m.company_id === currentCompanyId) ?? memberships.at(0) ?? null;
     return {
       loading,
+      unauthorized,
+      loadFailed,
       memberships,
       currentCompanyId,
       currentMembership,
       refresh,
       switchCompany,
     };
-  }, [loading, memberships, currentCompanyId, refresh, switchCompany]);
+  }, [loading, unauthorized, loadFailed, memberships, currentCompanyId, refresh, switchCompany]);
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
 };
