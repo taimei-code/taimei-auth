@@ -16,7 +16,7 @@ import {
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { roleLabelJa } from "@/lib/labels";
-import { isKnownRole } from "@core/membership/policy";
+import { isAtLeast, requiresOwnerProtection } from "@core/membership/policy";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { Notice, type NoticeValue } from "@/components/Notice";
 import { Separator } from "@/components/ui/separator";
@@ -28,7 +28,7 @@ export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCompanyContext();
   const selfUserId = authClient.useSession().data?.user.id ?? null;
   const companyId = currentMembership?.company_id ?? null;
-  const canManage = currentMembership?.role === "OWNER" || currentMembership?.role === "ADMIN";
+  const canManage = isAtLeast(currentMembership?.role ?? "", "ADMIN");
   const isOwner = currentMembership?.role === "OWNER";
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -158,11 +158,9 @@ export const Members = () => {
       <section aria-label="メンバー一覧" className="space-y-2">
         {members.map((m) => {
           const isSelf = m.user_id === selfUserId;
-          // OWNER のみが OWNER を操作 (役割変更・削除) 可能。自分自身は操作させない (誤操作防止)。
-          // 未知 role の target は server policy (canChangeRole / canRemoveTarget) と同じく
-          // OWNER 相当に倒す (role 列は text で型保証がないため fail-closed)。
-          const targetIsOwnerLike = !isKnownRole(m.role) || m.role === "OWNER";
-          const canOperateMember = canManage && !isSelf && (isOwner || !targetIsOwnerLike);
+          // 自分自身は操作 (役割変更・削除) の対象に出さない (誤操作防止)
+          const canOperateThisMember =
+            canManage && !isSelf && (isOwner || !requiresOwnerProtection(m.role));
           return (
             <div
               key={m.membership_id}
@@ -176,7 +174,7 @@ export const Members = () => {
                 <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {canOperateMember ? (
+                {canOperateThisMember ? (
                   <select
                     aria-label={`${m.user_email} の役割`}
                     value={m.role}
@@ -194,7 +192,7 @@ export const Members = () => {
                     {roleLabelJa(m.role)}
                   </span>
                 )}
-                {canOperateMember && (
+                {canOperateThisMember && (
                   <ConfirmDestructiveDialog
                     trigger={
                       <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
