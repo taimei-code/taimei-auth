@@ -16,6 +16,8 @@ drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/
 
 `src/rpc/*` 配下からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (ADR-006 D2)。
 
+例外: `e2e/fixtures.ts` の DB 接触は e2e fixture 再生成に限り許可する (spec からは `e2e/seed.ts` の子プロセス経由でのみ呼ぶ。`biome.json` の e2e override が spec からの直接 import を block する)。
+
 ## ルール 2: 認証ドメインのモデルは repository 経由でのみ触る
 
 `User` / `Session` / `Account` / `Verification` などのテーブルに対して、handler や RPC handler から `db.select()` / `db.insert()` を直接呼ばない。

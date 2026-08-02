@@ -78,7 +78,34 @@
                     "importNames": ["revokeAllSessionsForUser"],
                     "message": "revoked_at 記帳だけでは secondaryStorage (Redis) の session 実体が失効しない。src/account/revoke-sessions.ts の revokeUserSessions を経由すること (唯一の窓口は biome-ignore で個別に許可)"
                   }
-                }
+                },
+                "patterns": [
+                  {
+                    "group": ["**/redis"],
+                    "importNamePattern": "getRedis",
+                    "message": "getRedis はテストの key 直接操作専用の生 client accessor。production は redisStorage / incrementRateWindow の interface 越しに使うこと (src/redis.ts の役割コメント参照)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["e2e/**", "!e2e/fixtures.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/db/**", "**/db/**", "drizzle-orm", "drizzle-orm/**", "pg"],
+                    "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md ルール 1 の例外)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
+                  }
+                ]
               }
             }
           }
