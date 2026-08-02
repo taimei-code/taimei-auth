@@ -30,6 +30,24 @@ subdirectory の build 設定 (`web/tailwind.config.ts` / `web/postcss.config.js
 
 詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → #35)。
 
+## ルール 9: ドメイン用語・設計判断の SSOT は CONTEXT.md / docs/adr/
+
+plan / 設計メモは恒久保存しない運用のため、後から辿るべきドメイン知識・設計判断の永続化先は次の 2 箇所に限る:
+
+- [`CONTEXT.md`](./CONTEXT.md) — ドメイン用語集 (ubiquitous language)。canonical 用語の定義 + _Avoid_ 語 (使わない同義語)、用語間の Relationships、解消済みの用語曖昧さを記録する。glossary 専用 — 実装詳細・仕様・作業メモは書かない
+- [`docs/adr/`](./docs/adr/) — 構造的な設計判断の記録 (Architecture Decision Record)。`NNNN-<slug>.md` の連番。`NNNN-*.analysis.md` は対応 ADR の AC / MECE 分析成果物で、ADR 本文と対で読む
+
+### 参照 (設計・実装・レビュー・文書生成の前に自動で行う)
+
+- コード識別子・UI 文言・PR 説明・コメントの用語は CONTEXT.md の canonical 用語に合わせ、_Avoid_ 語を使わない
+- 既存領域 (redirect 検証 / cookie / canary / membership guard / SDK 境界 / workerd 等) を変更する時は該当 ADR を先に読む。コード内コメントや本ファイルの `詳細: docs/adr/NNNN-*.md` 参照が入口
+
+### 更新 (該当する変化が起きたターンで、指示を待たず行う)
+
+- 新しいドメイン用語が確定した / 既存用語との衝突・曖昧さが解消した → CONTEXT.md を既存フォーマット (定義 + _Avoid_ + `詳細: ADR-NNN`) で更新する。domain-modeling スキルが使える環境ではスキル経由で行う
+- 「巻き戻し困難 × 文脈なしでは不可解 × 実トレードオフの結果」を全て満たす判断をした → `docs/adr/` に連番 ADR を追加する。3 条件のどれかを欠くなら ADR にしない
+- 同じ設計判断の Why 説明が 3+ 箇所のコメント・文書に散りそうになったら、ADR / CONTEXT.md に集約して各所は参照 1 行に留める
+
 ## 手動回帰 QA
 
 自動化不能な回帰ケース (cross-subdomain Cookie 実ドメイン / GitHub OAuth 実連携 / workerd 実機 / Resend 実メール / magic link 期限切れ) は [`docs/qa/manual-regression.md`](./docs/qa/manual-regression.md) に QA-MR-* として台帳化している。**該当領域を触る PR のマージ前に、各ケースの「契機」に一致するものを実施する** (本番デプロイ後スモークは QA-MR-01 / QA-MR-03)。ブラウザ実機の認証動線は `bun run test:e2e` (playwright) で自動化済み。
