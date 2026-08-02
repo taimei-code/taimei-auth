@@ -25,6 +25,7 @@ export const CompanySwitcher = () => {
         <div className="mt-1.5 flex items-center gap-2">
           <NativeSelect
             aria-label="事業所を切り替え"
+            title={currentMembership.company_name}
             value={currentMembership.company_id}
             disabled={switching}
             onChange={(e) => {
@@ -35,7 +36,7 @@ export const CompanySwitcher = () => {
                 .catch((err) => console.error("switch company failed", err))
                 .finally(() => setSwitching(false));
             }}
-            className="h-8 pl-2 font-medium"
+            className="h-8 py-1 pl-2 font-medium"
           >
             {memberships.map((m) => (
               <option key={m.company_id} value={m.company_id}>
