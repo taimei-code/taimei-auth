@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithMagicLink } from "./helpers";
+import { expectSignInLanding, signInWithMagicLink } from "./helpers";
 
 // 最後の事業所削除はアカウント連動削除 (ADR-0010 D3) になり、削除後はログイン画面へ着地する。
 // 着地先が params 無しの素の /auth だと SignIn の必須検証 (signInParamsSchema) に落ちて
@@ -16,6 +16,5 @@ test("最後の事業所削除はアカウントごと削除され、ログイ�
   await expect(dialog.getByText("これは最後の所属事業所です")).toBeVisible();
   await dialog.getByRole("button", { name: "削除する" }).click();
 
-  await expect(page).toHaveURL(/\/auth\?service_name=accounts/);
-  await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
+  await expectSignInLanding(page);
 });

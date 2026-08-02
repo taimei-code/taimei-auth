@@ -38,6 +38,14 @@ export const magicLinkFor = async (email: string): Promise<string> => {
   throw new Error(`magic link for ${email} not found in ${SERVER_LOG}`);
 };
 
+// アカウント連動削除 (ADR-0010) 後の着地契約。着地 URL の query キー名は
+// web/src/lib/auth-redirect.ts の signInLandingUrl が正本のため、spec ごとに regex を
+// 手書きすると正本変更時に一部 spec だけ古い契約で通り続ける。ここに集約する。
+export const expectSignInLanding = async (page: Page): Promise<void> => {
+  await expect(page).toHaveURL(/\/auth\?service_name=accounts/);
+  await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
+};
+
 export const signInWithMagicLink = async (page: Page, email: string): Promise<void> => {
   await page.goto(authEntryUrl());
   await page.getByPlaceholder("you@example.com").fill(email);

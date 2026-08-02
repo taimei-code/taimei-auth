@@ -46,7 +46,7 @@ export const Sessions = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium" translate="no">
-                  {session.userAgent ?? "Unknown device"}
+                  {session.userAgent || "Unknown device"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   IP: <span translate="no">{session.ipAddress || "—"}</span> ・ 期限:{" "}

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { signInWithMagicLink } from "./helpers";
+import { expectSignInLanding, signInWithMagicLink } from "./helpers";
 
 // 最後の所属事業所から「抜ける」は退会と同じアカウント連動削除になる (ADR-0010 D2)。
 // 削除成功後にそのまま membership refresh へ進むと 401 を拾って
@@ -15,6 +15,5 @@ test("最後の所属事業所から抜けるとアカウントごと削除さ�
   await page.goto("/account/companies");
   await page.getByRole("button", { name: "抜ける" }).click();
 
-  await expect(page).toHaveURL(/\/auth\?service_name=accounts/);
-  await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
+  await expectSignInLanding(page);
 });

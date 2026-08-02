@@ -1,6 +1,7 @@
 import { Github } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
+import { providerLabel } from "@/lib/labels";
 import { useAsyncLoad } from "@/lib/use-async-load";
 import { AsyncSection } from "@/components/account/AsyncSection";
 import { Separator } from "@/components/ui/separator";
@@ -46,7 +47,7 @@ export const Connections = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium capitalize" translate="no">
-                  {account.providerId === "github" ? "GitHub" : account.providerId}
+                  {providerLabel(account.providerId)}
                 </p>
                 <p className="truncate text-sm text-muted-foreground" translate="no">
                   {account.accountId}

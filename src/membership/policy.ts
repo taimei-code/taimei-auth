@@ -1,4 +1,7 @@
-import type { Role } from "@/db/repositories/membership";
+// 相対 import なのは、web が @core alias 経由で本 file を読む際に "@/db/..." だと web 側の
+// "@/" alias (web/src/) で誤解決するため (role-label.ts と同じ制約)。type-only import は
+// build で消え web bundle に db は入らない。
+import type { Role } from "../../db/repositories/membership";
 
 // membership guard の role 判定を担う純粋関数群。I/O は持たない (guard.ts から分離、cohesion 改善のため)。
 

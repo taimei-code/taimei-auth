@@ -5,17 +5,14 @@ const items = [
   {
     title: "Passkey",
     description: "指紋・顔認証・PIN でログインできます",
-    status: "実装予定",
   },
   {
     title: "パスワード変更",
     description: "メール + 現パスワードで新しいパスワードに更新できます",
-    status: "実装予定",
   },
   {
     title: "多要素認証 (MFA)",
     description: "TOTP / 認証アプリでログイン時に追加の確認コードを要求します",
-    status: "実装予定",
   },
 ] as const;
 
@@ -36,7 +33,7 @@ export const Security = () => {
               <p className="mt-1 text-sm text-muted-foreground">{item.description}</p>
             </div>
             <Badge variant="secondary" className="shrink-0">
-              {item.status}
+              実装予定
             </Badge>
           </li>
         ))}

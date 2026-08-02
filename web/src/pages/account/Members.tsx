@@ -16,6 +16,7 @@ import {
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { roleLabelJa } from "@/lib/labels";
+import { isKnownRole } from "@core/membership/policy";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { Notice, type NoticeValue } from "@/components/Notice";
 import { Separator } from "@/components/ui/separator";
@@ -158,7 +159,10 @@ export const Members = () => {
         {members.map((m) => {
           const isSelf = m.user_id === selfUserId;
           // OWNER のみが OWNER を操作 (役割変更・削除) 可能。自分自身は操作させない (誤操作防止)。
-          const canOperateMember = canManage && !isSelf && (isOwner || m.role !== "OWNER");
+          // 未知 role の target は server policy (canChangeRole / canRemoveTarget) と同じく
+          // OWNER 相当に倒す (role 列は text で型保証がないため fail-closed)。
+          const targetIsOwnerLike = !isKnownRole(m.role) || m.role === "OWNER";
+          const canOperateMember = canManage && !isSelf && (isOwner || !targetIsOwnerLike);
           return (
             <div
               key={m.membership_id}
