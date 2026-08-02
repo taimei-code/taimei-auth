@@ -1,11 +1,9 @@
-// 相対 import なのは、web が @core alias 経由で本 file を読む際に "@/db/..." だと web 側の
-// "@/" alias (web/src/) で誤解決するため (role-label.ts と同じ制約)。type-only import は
-// build で消え web bundle に db は入らない。
+// 相対 import なのは web の "@/" alias との誤解決を避けるため (詳細: role-label.ts の同制約)
 import type { Role } from "../../db/repositories/membership";
 
 // membership guard の role 判定を担う純粋関数群。I/O は持たない (guard.ts から分離、cohesion 改善のため)。
-// web が @core alias 経由で UI の出し分けにも使う共有実装のため、この file に runtime 依存
-// (db / resend 等) を足さないこと (role-label.ts と同じ制約)。
+// web も @core alias 経由で UI の出し分けに使う共有実装。runtime import の禁止は
+// src/__tests__/web-shared-core-runtime-free.test.ts が CI で固定する。
 
 // OWNER > ADMIN > MEMBER の全順序。minRole 比較を「以上」で書けるようにする。export しないのは
 // 直接 index lookup を外へ漏らすと未知 role の素通しを再現するため。判定は isAtLeast に閉じる。
