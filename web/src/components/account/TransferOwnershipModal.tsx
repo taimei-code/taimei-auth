@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 
 import { listMembers, transferOwnership, type Member } from "@/lib/account-api";
 import { authClient } from "@/lib/auth-client";
+import { memberLabel } from "@/lib/labels";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -85,7 +86,7 @@ export const TransferOwnershipModal = ({
                 key={m.membership_id}
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
               >
-                <span>{m.user_name || m.user_email}</span>
+                <span>{memberLabel(m)}</span>
                 <Button
                   size="sm"
                   onClick={() => handleTransfer(m.user_id)}

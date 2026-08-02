@@ -2,7 +2,7 @@ import { type FormEvent, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { cn } from "@/lib/utils";
+import { Notice, type NoticeValue } from "@/components/Notice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ type Props = {
 export const ProfileForm = ({ initialName, email }: Props) => {
   const [name, setName] = useState(initialName);
   const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState<{ kind: "error" | "saved"; text: string } | null>(null);
+  const [status, setStatus] = useState<NoticeValue | null>(null);
 
   const saveProfile = (event: FormEvent) => {
     event.preventDefault();
@@ -27,7 +27,7 @@ export const ProfileForm = ({ initialName, email }: Props) => {
         setStatus(
           error
             ? { kind: "error", text: error.message ?? "保存に失敗しました" }
-            : { kind: "saved", text: "保存しました" },
+            : { kind: "success", text: "保存しました" },
         ),
       )
       .catch(() => setStatus({ kind: "error", text: "保存に失敗しました" }))
@@ -62,16 +62,7 @@ export const ProfileForm = ({ initialName, email }: Props) => {
           {submitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
           {submitting ? "保存中…" : "保存"}
         </Button>
-        <p
-          role="status"
-          aria-live="polite"
-          className={cn(
-            "text-sm",
-            status?.kind === "error" ? "text-destructive" : "text-muted-foreground",
-          )}
-        >
-          {status?.text ?? ""}
-        </p>
+        <Notice value={status} />
       </div>
     </form>
   );
