@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { expectSignInLanding, signInWithMagicLink } from "./helpers";
+import { expectSignInLanding, reseedFixture, signInWithMagicLink } from "./helpers";
+
+// leaver は本テストがアカウントごと消費する (消費型 fixture)
+test.beforeEach(() => reseedFixture("leave"));
 
 // 最後の所属事業所から「抜ける」は退会と同じアカウント連動削除になる (ADR-0010 D2)。
 // 削除成功後にそのまま membership refresh へ進むと 401 を拾って

@@ -1,5 +1,8 @@
 import { expect, test } from "@playwright/test";
-import { authEntryUrl, magicLinkFor } from "./helpers";
+import { authEntryUrl, magicLinkFor, reseedFixture } from "./helpers";
+
+// PENDING 招待は受諾で ACCEPTED に落ちる (消費型 fixture)
+test.beforeEach(() => reseedFixture("invitation"));
 
 // 招待リンクを未ログインで開くと SignIn 画面に着地する。この画面からの magic link 送信でも
 // accept-invitation へ着地して membership が作られること (invitation_token が SignIn 経路で
