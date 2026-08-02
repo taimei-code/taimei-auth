@@ -3,6 +3,7 @@ import { Building2, Loader2 } from "lucide-react";
 
 import { useCompanyContext } from "@/lib/company-context";
 import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
+import { NativeSelect } from "@/components/ui/native-select";
 
 // sidebar 上部の事業所ピッカー。複数所属時に native select で切替 (DropdownMenu 依存を避ける)。
 // 1 事業所のみなら read-only 表示。
@@ -22,7 +23,7 @@ export const CompanySwitcher = () => {
       </div>
       {memberships.length > 1 ? (
         <div className="mt-1.5 flex items-center gap-2">
-          <select
+          <NativeSelect
             aria-label="事業所を切り替え"
             value={currentMembership.company_id}
             disabled={switching}
@@ -34,14 +35,14 @@ export const CompanySwitcher = () => {
                 .catch((err) => console.error("switch company failed", err))
                 .finally(() => setSwitching(false));
             }}
-            className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm font-medium"
+            className="h-8 pl-2 font-medium"
           >
             {memberships.map((m) => (
               <option key={m.company_id} value={m.company_id}>
                 {m.company_name}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {switching && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
         </div>
       ) : (

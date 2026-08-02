@@ -23,6 +23,7 @@ import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCompanyContext();
@@ -176,18 +177,18 @@ export const Members = () => {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {canOperateThisMember ? (
-                    <select
+                    <NativeSelect
                       aria-label={`${m.user_email} の役割`}
                       value={m.role}
                       disabled={busyUserId !== null}
                       onChange={(e) => handleRoleChange(m.user_id, e.target.value as CompanyRole)}
-                      className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+                      className="h-9 w-28 text-sm"
                     >
                       <option value="MEMBER">メンバー</option>
                       <option value="ADMIN">管理者</option>
                       {/* OWNER 昇格は OWNER のみ。ADMIN には選択肢を出さない */}
                       {isOwner && <option value="OWNER">オーナー</option>}
-                    </select>
+                    </NativeSelect>
                   ) : (
                     <span className="text-xs font-medium text-muted-foreground">
                       {roleLabelJa(m.role)}
@@ -233,17 +234,17 @@ export const Members = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="invite-role">役割</Label>
-                <select
+                <NativeSelect
                   id="invite-role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value as CompanyRole)}
                   disabled={submitting}
-                  className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                  className="sm:w-36"
                 >
                   <option value="MEMBER">メンバー</option>
                   <option value="ADMIN">管理者</option>
                   {isOwner && <option value="OWNER">オーナー</option>}
-                </select>
+                </NativeSelect>
               </div>
               <Button type="submit" disabled={submitting || inviteEmail.trim() === ""}>
                 {submitting ? <Loader2 className="animate-spin" /> : null}
