@@ -1,5 +1,7 @@
 // SessionGuard は初回 mount のみで session を再評価するため、navigate ではなく full reload で副作用を断つ
-export type AuthRedirectTarget = "signOut" | "deleteAccount";
+// 呼び出し側は「何が起きたか」だけを渡し、着地先の解決はこのモジュールに閉じる
+// (deleteAccount = 退会・最終事業所削除・最終所属離脱のアカウント連動削除を含む)。
+export type AuthChange = "signOut" | "deleteAccount";
 
 // アカウント削除 (退会・最後の事業所削除) 直後にログイン画面へ着地させる URL。
 // better-auth cookieCache (最大 5 分) は server 側の session 失効に追随しないため、entry redirect
@@ -10,8 +12,8 @@ export type AuthRedirectTarget = "signOut" | "deleteAccount";
 export const signInLandingUrl = () =>
   `/auth?service_name=accounts&redirect_url=${encodeURIComponent(`${window.location.origin}/account`)}`;
 
-export const redirectAfterAuthChange = (target: AuthRedirectTarget) => {
-  window.location.href = target === "signOut" ? "/" : signInLandingUrl();
+export const redirectAfterAuthChange = (change: AuthChange) => {
+  window.location.href = change === "signOut" ? "/" : signInLandingUrl();
 };
 
 // 現在地を redirect_url に載せて auth 系画面へ full reload 遷移する共通機構。SPA 内の

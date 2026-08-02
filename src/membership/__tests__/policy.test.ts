@@ -7,9 +7,30 @@ import {
   canInviteRole,
   canRemoveTarget,
   isAtLeast,
+  requiresOwnerProtection,
 } from "../policy";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
+
+describe("requiresOwnerProtection", () => {
+  // OWNER 保護判定の共有式 (server 述語と web の出し分けが同居)。既知 role は OWNER のみ true。
+  test("OWNER → true", () => {
+    expect(requiresOwnerProtection("OWNER")).toBe(true);
+  });
+  for (const role of ["ADMIN", "MEMBER"]) {
+    test(`${role} → false`, () => {
+      expect(requiresOwnerProtection(role)).toBe(false);
+    });
+  }
+
+  // 未知 role は保護対象に含める (fail-closed)。prototype 上のキー名も素通しさせない。
+  test("想定外 role 文字列 → true (fail-closed)", () => {
+    expect(requiresOwnerProtection("SUPERVISOR")).toBe(true);
+  });
+  test("prototype チェーン上のキー名 → true (fail-closed)", () => {
+    expect(requiresOwnerProtection("constructor")).toBe(true);
+  });
+});
 
 describe("isAtLeast", () => {
   // OWNER > ADMIN > MEMBER の全順序で「以上」判定が成り立つ。

@@ -46,10 +46,10 @@ export const Sessions = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium" translate="no">
-                  {session.userAgent ?? "Unknown device"}
+                  {session.userAgent || "Unknown device"}
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  IP: <span translate="no">{session.ipAddress ?? "—"}</span> ・ 期限:{" "}
+                  IP: <span translate="no">{session.ipAddress || "—"}</span> ・ 期限:{" "}
                   {dateFormatter.format(new Date(session.expiresAt))}
                 </p>
               </div>
@@ -59,7 +59,7 @@ export const Sessions = () => {
       </AsyncSection>
 
       <p className="mt-6 text-xs text-muted-foreground">
-        個別 revoke / 全デバイスログアウトは Phase 4 で実装予定。
+        セッションの個別ログアウト / 全デバイスからの一括ログアウトは実装予定です。
       </p>
     </div>
   );
