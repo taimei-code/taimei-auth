@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
@@ -6,6 +7,17 @@ import { expect, type Page } from "@playwright/test";
 // (import.meta.url は playwright の CJS transpile と衝突する)
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
 export const BASE_URL = "http://localhost:3110";
+
+// 消費型 fixture (spec 実行がアカウントごと消費する) を spec ごとに作り直し、CI retry と
+// ローカル再実行 (reuseExistingServer で seed が走らない) に耐性を持たせる。
+// DB 接触を spec プロセスへ持ち込まないため子プロセスで実行する — spec 側に pg Pool を
+// 開くと閉じる手段が無く playwright runner が hang する。exit code 非 0 は execFileSync が
+// throw するため、seed 側のガード・不整合はそのまま spec の失敗として表面化する。
+// name の有効値の正本は fixtures.ts の consumableFixtures (値 import は DB を spec プロセスへ
+// 持ち込むため、型も共有せず文字列 union をここで再宣言する)。
+export const reseedFixture = (name: "leave" | "delete" | "invitation"): void => {
+  execFileSync("bun", ["run", join(process.cwd(), "e2e", "seed.ts"), name], { stdio: "inherit" });
+};
 
 // 共通ログイン画面の入口 URL。query の組立てを spec ごとに手書きすると service_name /
 // redirect_url のキー名変更時に一部 spec だけ別 URL を叩くため、ここに集約する。
