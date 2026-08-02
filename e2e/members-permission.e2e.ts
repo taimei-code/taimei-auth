@@ -49,16 +49,16 @@ test("ADMIN role は OWNER を操作できない (役割 select・削除ボタ�
   // OWNER 昇格の選択肢は OWNER のみに出る
   await expect(memberRoleSelect.getByRole("option", { name: "オーナー" })).toHaveCount(0);
 
-  // OWNER (E2E SignIn) の行は操作不可: 役割 select が無く、削除ボタンも出ない
+  // OWNER (E2E SignIn) の行は操作不可: 役割 select が無く、削除ボタンも出ない。
+  // toHaveCount(1) の行存在確認は維持する — 空 locator は toHaveCount(0) 系 assertion を
+  // 素通しさせる (行が取れていないだけでも green になる) ため。
   const list = page.getByRole("region", { name: "メンバー一覧" });
-  const rowFor = (email: string) => list.locator("> div").filter({ hasText: email });
-  const ownerRow = rowFor("e2e-signin@example.com");
+  const ownerRow = list.getByRole("listitem").filter({ hasText: "e2e-signin@example.com" });
   await expect(ownerRow).toHaveCount(1);
   await expect(ownerRow.getByRole("combobox")).toHaveCount(0);
   await expect(ownerRow.getByRole("button", { name: "削除" })).toHaveCount(0);
 
   // 対照: 非 OWNER (E2E Member) の行には削除ボタンが出る
-  await expect(
-    rowFor("e2e-member@example.com").getByRole("button", { name: "削除" }),
-  ).toBeVisible();
+  const memberRow = list.getByRole("listitem").filter({ hasText: "e2e-member@example.com" });
+  await expect(memberRow.getByRole("button", { name: "削除" })).toBeVisible();
 });
