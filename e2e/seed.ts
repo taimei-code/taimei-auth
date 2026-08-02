@@ -47,12 +47,19 @@ const seedMembership = async (userId: string, companyId: string, role: Role): Pr
   await insertMembership({ id: generateMembershipId(), userId, companyId, role });
 };
 
-// sign-in flow + members 画面用: OWNER と MEMBER が同居する事業所
+// sign-in flow + members 画面用: OWNER / ADMIN / MEMBER が同居する事業所
 const signinUserId = await seedUser("signin", "E2E SignIn");
 const memberUserId = await seedUser("member", "E2E Member");
+const adminUserId = await seedUser("admin", "E2E Admin");
 const mainCompanyId = await seedCompany("main");
 await seedMembership(signinUserId, mainCompanyId, "OWNER");
 await seedMembership(memberUserId, mainCompanyId, "MEMBER");
+await seedMembership(adminUserId, mainCompanyId, "ADMIN");
+
+// company-leave flow 用: OWNER が別にいる事業所だけに所属する MEMBER
+// (最後の所属から抜けると orphan としてアカウント連動削除される状態)
+const leaverUserId = await seedUser("leaver", "E2E Leaver");
+await seedMembership(leaverUserId, mainCompanyId, "MEMBER");
 
 // danger-zone 用: 唯一の OWNER (退会が PRECONDITION_FAILED で弾かれる状態)
 const dangerUserId = await seedUser("danger", "E2E Danger");

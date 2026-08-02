@@ -5,17 +5,17 @@ const items = [
   {
     title: "Passkey",
     description: "指紋・顔認証・PIN でログインできます",
-    status: "PR11 で実装予定",
+    status: "実装予定",
   },
   {
     title: "パスワード変更",
     description: "メール + 現パスワードで新しいパスワードに更新できます",
-    status: "Phase 4 で実装予定",
+    status: "実装予定",
   },
   {
     title: "多要素認証 (MFA)",
     description: "TOTP / 認証アプリでログイン時に追加の確認コードを要求します",
-    status: "Phase 4 で実装予定",
+    status: "実装予定",
   },
 ] as const;
 

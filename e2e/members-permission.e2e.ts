@@ -33,3 +33,30 @@ test("OWNER role には管理操作が表示される (出し分けの対照)", 
   // 自分以外 (E2E Member) の行には役割変更 select が出る (件数はメンバー構成に依存させない)
   await expect(page.getByRole("combobox", { name: "e2e-member@example.com の役割" })).toBeVisible();
 });
+
+test("ADMIN role は OWNER を操作できない (役割 select・削除ボタン・オーナー昇格が出ない)", async ({
+  page,
+}) => {
+  await signInWithMagicLink(page, "e2e-admin@example.com");
+  await page.goto("/account/members");
+  await expect(page.getByRole("heading", { name: "メンバー", exact: true })).toBeVisible();
+
+  // ADMIN も招待と非 OWNER の役割変更はできる
+  await expect(page.getByRole("region", { name: "メンバーを招待" })).toBeVisible();
+  const memberRoleSelect = page.getByRole("combobox", { name: "e2e-member@example.com の役割" });
+  await expect(memberRoleSelect).toBeVisible();
+
+  // OWNER 昇格の選択肢は OWNER のみに出る
+  await expect(memberRoleSelect.getByRole("option", { name: "オーナー" })).toHaveCount(0);
+
+  // OWNER (E2E SignIn) の行は操作不可: 役割 select が無く、削除ボタンも出ない
+  const list = page.getByRole("region", { name: "メンバー一覧" });
+  const ownerRow = list.locator("> div").filter({ hasText: "e2e-signin@example.com" });
+  await expect(ownerRow).toHaveCount(1);
+  await expect(ownerRow.getByRole("combobox")).toHaveCount(0);
+  await expect(ownerRow.getByRole("button", { name: "削除" })).toHaveCount(0);
+
+  // 対照: 非 OWNER (E2E Member) の行には削除ボタンが出る
+  const memberRow = list.locator("> div").filter({ hasText: "e2e-member@example.com" });
+  await expect(memberRow.getByRole("button", { name: "削除" })).toBeVisible();
+});

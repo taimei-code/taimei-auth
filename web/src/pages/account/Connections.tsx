@@ -46,7 +46,7 @@ export const Connections = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-medium capitalize" translate="no">
-                  {account.providerId}
+                  {account.providerId === "github" ? "GitHub" : account.providerId}
                 </p>
                 <p className="truncate text-sm text-muted-foreground" translate="no">
                   {account.accountId}
@@ -57,7 +57,7 @@ export const Connections = () => {
         </ul>
       </AsyncSection>
 
-      <p className="mt-6 text-xs text-muted-foreground">追加 / 解除は Phase 4 で実装予定。</p>
+      <p className="mt-6 text-xs text-muted-foreground">連携の追加 / 解除は実装予定です。</p>
     </div>
   );
 };

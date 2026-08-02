@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Loader2, Plus } from "lucide-react";
 
 import { AccountApiError, removeMember } from "@/lib/account-api";
+import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
@@ -34,7 +35,9 @@ export const Companies = () => {
     setMessage(null);
     setSoleOwnerCompanyId(null);
     removeMember(companyId, userId)
-      .then(() => refresh())
+      .then(({ accountDeleted }) =>
+        accountDeleted ? redirectAfterAuthChange("deleteAccount") : refresh(),
+      )
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
           setSoleOwnerCompanyId(companyId);

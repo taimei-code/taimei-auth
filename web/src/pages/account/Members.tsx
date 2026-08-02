@@ -157,8 +157,8 @@ export const Members = () => {
       <section aria-label="メンバー一覧" className="space-y-2">
         {members.map((m) => {
           const isSelf = m.user_id === selfUserId;
-          // OWNER のみが OWNER を操作可能。自分自身の役割は変更させない (誤操作防止)。
-          const canEditRole = canManage && !isSelf && (isOwner || m.role !== "OWNER");
+          // OWNER のみが OWNER を操作 (役割変更・削除) 可能。自分自身は操作させない (誤操作防止)。
+          const canOperateMember = canManage && !isSelf && (isOwner || m.role !== "OWNER");
           return (
             <div
               key={m.membership_id}
@@ -172,7 +172,7 @@ export const Members = () => {
                 <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {canEditRole ? (
+                {canOperateMember ? (
                   <select
                     aria-label={`${m.user_email} の役割`}
                     value={m.role}
@@ -190,7 +190,7 @@ export const Members = () => {
                     {roleLabelJa(m.role)}
                   </span>
                 )}
-                {canManage && !isSelf && (
+                {canOperateMember && (
                   <ConfirmDestructiveDialog
                     trigger={
                       <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
