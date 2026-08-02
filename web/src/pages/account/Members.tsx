@@ -15,7 +15,7 @@ import {
 } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
-import { roleLabelJa } from "@/lib/labels";
+import { memberLabel, roleLabelJa } from "@/lib/labels";
 import { isAtLeast, requiresOwnerProtection } from "@core/membership/policy";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
 import { Notice, type NoticeValue } from "@/components/Notice";
@@ -40,7 +40,9 @@ export const Members = () => {
   const [inviteRole, setInviteRole] = useState<CompanyRole>("MEMBER");
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<NoticeValue | null>(null);
+  // 通知は発生源の近くに出す: 一覧操作 (役割変更・削除) はメンバー一覧の直上、招待は招待フォームの下
+  const [listNotice, setListNotice] = useState<NoticeValue | null>(null);
+  const [inviteNotice, setInviteNotice] = useState<NoticeValue | null>(null);
 
   const refresh = useCallback((cid: string) => {
     return Promise.all([listMembers(cid), listInvitations(cid).catch(() => [])]).then(
@@ -66,18 +68,18 @@ export const Members = () => {
     e.preventDefault();
     if (!companyId) return;
     setSubmitting(true);
-    setNotice(null);
+    setInviteNotice(null);
     createInvitation(companyId, { email: inviteEmail.trim(), role: inviteRole })
       .then((res) => {
         setInviteEmail("");
-        setNotice({
+        setInviteNotice({
           kind: "success",
-          text: res.reused ? "既存の招待を再送しました" : "招待を送信しました",
+          text: res.reused ? "既存の招待を再送しました。" : "招待を送信しました。",
         });
         return refresh(companyId);
       })
       .catch((err) => {
-        setNotice({
+        setInviteNotice({
           kind: "error",
           text: describeAccountApiError(err, {
             429: "招待の送信回数が上限に達しました。時間をおいて再試行してください。",
@@ -89,14 +91,31 @@ export const Members = () => {
       .finally(() => setSubmitting(false));
   };
 
-  const handleRoleChange = (targetUserId: string, role: CompanyRole) => {
+  const handleRoleChange = (target: Member, role: CompanyRole) => {
     if (!companyId || busyUserId) return;
-    setBusyUserId(targetUserId);
-    setNotice(null);
-    updateMemberRole(companyId, targetUserId, role)
-      .then(() => refresh(companyId))
+    const targetLabel = memberLabel(target);
+    setBusyUserId(target.user_id);
+    setListNotice(null);
+    updateMemberRole(companyId, target.user_id, role)
+      .then(() =>
+        // 一覧再取得 (GET) の失敗を下の catch に流さない: あちらの文言表は変更 API 専用で、
+        // 変更成功後の再取得失敗に「権限がありません」等の嘘の失敗理由が出るため
+        refresh(companyId)
+          .then(() =>
+            setListNotice({
+              kind: "success",
+              text: `${targetLabel} の役割を${roleLabelJa(role)}に変更しました。`,
+            }),
+          )
+          .catch(() =>
+            setListNotice({
+              kind: "error",
+              text: "役割を変更しましたが、一覧の更新に失敗しました。ページを再読み込みしてください。",
+            }),
+          ),
+      )
       .catch((err) => {
-        setNotice({
+        setListNotice({
           kind: "error",
           text: describeAccountApiError(err, {
             409: "最後のオーナーを降格することはできません。",
@@ -112,20 +131,27 @@ export const Members = () => {
   const handleRemove = (targetUserId: string): Promise<void> => {
     if (!companyId || busyUserId) return Promise.resolve();
     setBusyUserId(targetUserId);
-    setNotice(null);
+    setListNotice(null);
     return removeMember(companyId, targetUserId)
       .then(({ accountDeleted }) =>
-        refresh(companyId).then(() =>
-          setNotice({
-            kind: "success",
-            text: accountDeleted
-              ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
-              : "メンバーを削除しました。",
-          }),
-        ),
+        refresh(companyId)
+          .then(() =>
+            setListNotice({
+              kind: "success",
+              text: accountDeleted
+                ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
+                : "メンバーを削除しました。",
+            }),
+          )
+          .catch(() =>
+            setListNotice({
+              kind: "error",
+              text: "メンバーを削除しましたが、一覧の更新に失敗しました。ページを再読み込みしてください。",
+            }),
+          ),
       )
       .catch((err) => {
-        setNotice({
+        setListNotice({
           kind: "error",
           text: describeAccountApiError(err, {
             409: "最後のオーナーは削除できません。",
@@ -156,6 +182,13 @@ export const Members = () => {
       </div>
       <Separator className="my-6" />
 
+      {/* 一覧の landmark の外に置く: 通知にメンバー名が入るため、region 内に混ぜると
+          一覧セクション内のテキスト検索 (e2e の getByText 等) と競合する */}
+      {listNotice && (
+        <div className="mb-4">
+          <Notice value={listNotice} />
+        </div>
+      )}
       <section aria-label="メンバー一覧">
         <ul className="space-y-2">
           {members.map((m) => {
@@ -170,18 +203,21 @@ export const Members = () => {
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-foreground">
-                    {m.user_name || m.user_email}
+                    {memberLabel(m)}
                     {isSelf && <span className="ml-2 text-xs text-muted-foreground">(自分)</span>}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {busyUserId === m.user_id && (
+                    <Loader2 aria-hidden className="size-4 animate-spin text-muted-foreground" />
+                  )}
                   {canOperateThisMember ? (
                     <NativeSelect
                       aria-label={`${m.user_email} の役割`}
                       value={m.role}
                       disabled={busyUserId !== null}
-                      onChange={(e) => handleRoleChange(m.user_id, e.target.value as CompanyRole)}
+                      onChange={(e) => handleRoleChange(m, e.target.value as CompanyRole)}
                       className="h-9 w-28 text-sm"
                     >
                       <option value="MEMBER">メンバー</option>
@@ -202,7 +238,7 @@ export const Members = () => {
                         </Button>
                       }
                       title="メンバーの削除"
-                      description={`${m.user_name || m.user_email} をこの事業所から削除します。このメンバーが他の事業所に所属していない場合、アカウントごと削除されます。`}
+                      description={`${memberLabel(m)} をこの事業所から削除します。このメンバーが他の事業所に所属していない場合、アカウントごと削除されます。`}
                       confirmLabel="削除する"
                       onConfirm={() => handleRemove(m.user_id)}
                     />
@@ -251,7 +287,7 @@ export const Members = () => {
                 招待する
               </Button>
             </form>
-            <Notice value={notice} />
+            <Notice value={inviteNotice} />
           </section>
 
           {invitations.length > 0 && (
