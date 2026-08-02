@@ -89,6 +89,11 @@ jobs:
       - name: Apply migrations
         run: bun run db:migrate && bun run db:migrate-manual
 
+      # redis 接続 lifecycle の cold 経路 (未接続のまま adapter 呼び出し) はフル実行では
+      # 辞書順で先行するファイルの接続に隠れて通ってしまうため、単独実行で退行を検出する
+      - name: Test (redis lifecycle subset)
+        run: bun test src/__tests__/redis-lifecycle.test.ts
+
       - name: Test
         run: bun test
 
