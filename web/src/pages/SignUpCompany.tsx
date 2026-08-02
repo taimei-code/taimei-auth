@@ -6,7 +6,7 @@ import { FullScreenLoader } from "@/components/FullScreenLoader";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { authClient } from "@/lib/auth-client";
 import { AccountApiError, createCompany, listMyMemberships, type OrgCode } from "@/lib/account-api";
-import { redirectToSignIn } from "@/lib/auth-redirect";
+import { redirectToSignIn, signInLandingUrl } from "@/lib/auth-redirect";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,7 +136,7 @@ export const SignUpCompany = () => {
         onClick={() => {
           authClient
             .signOut()
-            .then(() => navigate("/auth"))
+            .then(() => navigate(signInLandingUrl()))
             .catch((e) => console.error("signOut failed:", e));
         }}
         className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
