@@ -34,10 +34,18 @@ export const Companies = () => {
     setBusyId(companyId);
     setMessage(null);
     setSoleOwnerCompanyId(null);
+    let redirecting = false;
     removeMember(companyId, userId)
-      .then(({ accountDeleted }) =>
-        accountDeleted ? redirectAfterAuthChange("deleteAccount") : refresh(),
-      )
+      .then(({ accountDeleted }) => {
+        if (accountDeleted) {
+          // 遷移完了まで busy を維持する (解除すると遷移までの間に再クリックでき、
+          // 2 回目の 401 が「抜けられませんでした」と誤表示されるため)
+          redirecting = true;
+          redirectAfterAuthChange("deleteAccount");
+          return;
+        }
+        return refresh();
+      })
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
           setSoleOwnerCompanyId(companyId);
@@ -46,7 +54,9 @@ export const Companies = () => {
           setMessage("事業所から抜けられませんでした。");
         }
       })
-      .finally(() => setBusyId(null));
+      .finally(() => {
+        if (!redirecting) setBusyId(null);
+      });
   };
 
   return (
@@ -122,7 +132,7 @@ export const Companies = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleLeave(m.company_id)}
-                    disabled={busyId !== null}
+                    disabled={busyId !== null || !userId}
                   >
                     抜ける
                   </Button>
