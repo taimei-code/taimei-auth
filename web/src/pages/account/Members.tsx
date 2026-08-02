@@ -155,60 +155,62 @@ export const Members = () => {
       </div>
       <Separator className="my-6" />
 
-      <section aria-label="メンバー一覧" className="space-y-2">
-        {members.map((m) => {
-          const isSelf = m.user_id === selfUserId;
-          // 自分自身は操作 (役割変更・削除) の対象に出さない (誤操作防止)
-          const canOperateThisMember =
-            canManage && !isSelf && (isOwner || !requiresOwnerProtection(m.role));
-          return (
-            <div
-              key={m.membership_id}
-              className="flex items-center justify-between gap-3 rounded-md border border-border px-4 py-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-foreground">
-                  {m.user_name || m.user_email}
-                  {isSelf && <span className="ml-2 text-xs text-muted-foreground">(自分)</span>}
-                </p>
-                <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {canOperateThisMember ? (
-                  <select
-                    aria-label={`${m.user_email} の役割`}
-                    value={m.role}
-                    disabled={busyUserId !== null}
-                    onChange={(e) => handleRoleChange(m.user_id, e.target.value as CompanyRole)}
-                    className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
-                  >
-                    <option value="MEMBER">メンバー</option>
-                    <option value="ADMIN">管理者</option>
-                    {/* OWNER 昇格は OWNER のみ。ADMIN には選択肢を出さない */}
-                    {isOwner && <option value="OWNER">オーナー</option>}
-                  </select>
-                ) : (
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {roleLabelJa(m.role)}
-                  </span>
-                )}
-                {canOperateThisMember && (
-                  <ConfirmDestructiveDialog
-                    trigger={
-                      <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
-                        削除
-                      </Button>
-                    }
-                    title="メンバーの削除"
-                    description={`${m.user_name || m.user_email} をこの事業所から削除します。このメンバーが他の事業所に所属していない場合、アカウントごと削除されます。`}
-                    confirmLabel="削除する"
-                    onConfirm={() => handleRemove(m.user_id)}
-                  />
-                )}
-              </div>
-            </div>
-          );
-        })}
+      <section aria-label="メンバー一覧">
+        <ul className="space-y-2">
+          {members.map((m) => {
+            const isSelf = m.user_id === selfUserId;
+            // 自分自身は操作 (役割変更・削除) の対象に出さない (誤操作防止)
+            const canOperateThisMember =
+              canManage && !isSelf && (isOwner || !requiresOwnerProtection(m.role));
+            return (
+              <li
+                key={m.membership_id}
+                className="flex items-center justify-between gap-3 rounded-md border border-border px-4 py-3 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-foreground">
+                    {m.user_name || m.user_email}
+                    {isSelf && <span className="ml-2 text-xs text-muted-foreground">(自分)</span>}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">{m.user_email}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {canOperateThisMember ? (
+                    <select
+                      aria-label={`${m.user_email} の役割`}
+                      value={m.role}
+                      disabled={busyUserId !== null}
+                      onChange={(e) => handleRoleChange(m.user_id, e.target.value as CompanyRole)}
+                      className="h-8 rounded-md border border-input bg-transparent px-2 text-xs"
+                    >
+                      <option value="MEMBER">メンバー</option>
+                      <option value="ADMIN">管理者</option>
+                      {/* OWNER 昇格は OWNER のみ。ADMIN には選択肢を出さない */}
+                      {isOwner && <option value="OWNER">オーナー</option>}
+                    </select>
+                  ) : (
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {roleLabelJa(m.role)}
+                    </span>
+                  )}
+                  {canOperateThisMember && (
+                    <ConfirmDestructiveDialog
+                      trigger={
+                        <Button variant="ghost" size="sm" disabled={busyUserId !== null}>
+                          削除
+                        </Button>
+                      }
+                      title="メンバーの削除"
+                      description={`${m.user_name || m.user_email} をこの事業所から削除します。このメンバーが他の事業所に所属していない場合、アカウントごと削除されます。`}
+                      confirmLabel="削除する"
+                      onConfirm={() => handleRemove(m.user_id)}
+                    />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       </section>
 
       {canManage && (

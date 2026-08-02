@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { auth } from "../../auth";
 import { db } from "@/db/client";
@@ -16,7 +16,7 @@ import {
   stubActor,
   TEST_PREFIX,
 } from "../../handlers/__tests__/helpers";
-import { connectRedis, redis } from "../../redis";
+import { getRedis } from "../../redis";
 import { createInvitation } from "../create";
 
 // invitation/create use-case (src/invitation/create.ts) の DB 統合 + handler HTTP テスト。
@@ -38,6 +38,7 @@ async function invitationRowsByEmail(companyId: string, email: string) {
 // invitation_rate:<companyId>:<hourBucket> の hit 数を返す。key 未生成なら 0。
 // hour bucket をまたぐ現象は test 内では発生しないため decode の複雑さは避ける。
 async function rateCount(companyId: string): Promise<number> {
+  const redis = await getRedis();
   const keys = await redis.keys(`invitation_rate:${companyId}:*`);
   if (keys.length === 0) return 0;
   const vals = await Promise.all(keys.map((k) => redis.get(k)));
@@ -46,14 +47,12 @@ async function rateCount(companyId: string): Promise<number> {
 
 // key を消して bucket を先入れ状態にする helper (rate 上限テストで手動 pre-set する場合に使う)。
 async function clearRateKey(companyId: string): Promise<void> {
+  const redis = await getRedis();
   const keys = await redis.keys(`invitation_rate:${companyId}:*`);
   if (keys.length) await redis.del(keys);
 }
 
 describe("createInvitation (use-case)", () => {
-  beforeAll(async () => {
-    await connectRedis();
-  });
   beforeEach(async () => {
     await cleanupTestData();
   });
@@ -137,6 +136,7 @@ describe("createInvitation (use-case)", () => {
 
     // INVITATION_HOURLY_LIMIT_PER_COMPANY のデフォルトは 50。bucket に 50 hit を pre-set して超過状態を作る。
     const bucket = new Date().toISOString().slice(0, 13);
+    const redis = await getRedis();
     await redis.set(`invitation_rate:${co}:${bucket}`, "50", { EX: 3600 });
 
     const result = await createInvitation({
@@ -165,6 +165,7 @@ describe("createInvitation (use-case)", () => {
     });
     await clearRateKey(co);
     const bucket = new Date().toISOString().slice(0, 13);
+    const redis = await getRedis();
     await redis.set(`invitation_rate:${co}:${bucket}`, "999", { EX: 3600 });
 
     const result = await createInvitation({
@@ -241,9 +242,6 @@ describe("createInvitation (use-case)", () => {
 });
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
-  beforeAll(async () => {
-    await connectRedis();
-  });
   beforeEach(async () => {
     restoreActor();
     await cleanupTestData();

@@ -1,10 +1,5 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { app } from "../index";
-import { connectRedis } from "../redis";
-
-beforeAll(async () => {
-  await connectRedis();
-});
 
 // ADR-008 retrospective で発覚した 2 件の隠れバグを再発防止する integration test。
 //

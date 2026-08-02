@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,7 +6,6 @@ import { and, eq } from "drizzle-orm";
 import type { Hono } from "hono";
 import { db } from "@/db/client";
 import { auditLog, invitation, membership } from "@/db/schema";
-import { connectRedis } from "../../redis";
 import {
   buildTestApp,
   cleanupTestData,
@@ -92,12 +91,6 @@ function assertMatchesFixture(
 }
 
 describe("account routes migration snapshot", () => {
-  // 招待作成 route が内部で auth.api.signInMagicLink を呼び、better-auth の secondaryStorage
-  // が Redis 経由の SET を発火する。redis の接続を張らないと Client closed の noisy error が
-  // 出る (handler の .catch で握り潰しているので test は pass するが log が汚い)。
-  beforeAll(async () => {
-    await connectRedis();
-  });
   beforeEach(async () => {
     restoreActor();
     await cleanupTestData();

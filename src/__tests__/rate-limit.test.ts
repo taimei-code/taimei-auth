@@ -1,11 +1,7 @@
-import { beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { createRateLimitMiddleware } from "../rate-limit";
-import { connectRedis, redis } from "../redis";
-
-beforeAll(async () => {
-  await connectRedis();
-});
+import { getRedis } from "../redis";
 
 const buildApp = (key: string, limit: number, windowSec = 60) => {
   const app = new Hono();
@@ -16,6 +12,7 @@ const buildApp = (key: string, limit: number, windowSec = 60) => {
 
 describe("rate-limit middleware", () => {
   beforeEach(async () => {
+    const redis = await getRedis();
     const keys = await redis.keys("rate-limit:test:*");
     if (keys.length > 0) await redis.del(keys);
   });

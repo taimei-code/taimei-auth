@@ -16,6 +16,13 @@
       "@core/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "db/**/*.ts", "management/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "db/**/*.ts",
+    "management/**/*.ts",
+    "e2e/**/*.ts",
+    "playwright.config.ts"
+  ],
   "exclude": ["node_modules", "dist", "packages"]
 }

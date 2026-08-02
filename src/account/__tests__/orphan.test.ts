@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, like } from "drizzle-orm";
 import { db } from "@/db/client";
 import { generateCompanyId, insertCompany, softDeleteCompany } from "@/db/repositories/company";
@@ -6,7 +6,7 @@ import { generateMembershipId, insertMembership } from "@/db/repositories/member
 import { findUserById } from "@/db/repositories/user";
 import { auditLog, company, membership, session, user } from "@/db/schema";
 import { runInTransaction } from "@/db/transaction";
-import { connectRedis, redis } from "../../redis";
+import { getRedis } from "../../redis";
 import { deleteAccountIfOrphaned } from "../orphan";
 
 const P = "orphan-test-";
@@ -17,6 +17,7 @@ async function cleanup() {
   await db.delete(membership).where(like(membership.userId, `${P}%`));
   await db.delete(company).where(like(company.name, `${P}%`));
   await db.delete(user).where(like(user.id, `${P}%`));
+  const redis = await getRedis();
   await redis.del([
     `${P}rtok-1`,
     `${P}rtok-2`,
@@ -49,6 +50,7 @@ async function seedCompany(suffix: string): Promise<string> {
 // better-auth secondaryStorage の実保存形状を再現する: session 実体は token 文字列キー、
 // user の生存 session 一覧は active-sessions-{userId} (deleteUserSessions が読む索引)。
 async function seedRedisSessions(userId: string, tokens: string[]): Promise<void> {
+  const redis = await getRedis();
   const expiresAt = Date.now() + 86_400_000;
   for (const token of tokens) {
     await redis.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
@@ -68,7 +70,6 @@ async function countAccountDeleteAudit(userId: string): Promise<number> {
 }
 
 describe("deleteAccountIfOrphaned", () => {
-  beforeAll(connectRedis);
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -124,6 +125,7 @@ describe("deleteAccountIfOrphaned", () => {
 
     const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
 
+    const redis = await getRedis();
     expect(deleted).toBe(true);
     expect(await redis.get(`${P}rtok-1`)).toBeNull();
     expect(await redis.get(`${P}rtok-2`)).toBeNull();
@@ -138,6 +140,7 @@ describe("deleteAccountIfOrphaned", () => {
 
     const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
 
+    const redis = await getRedis();
     expect(deleted).toBe(false);
     expect(await redis.get(`${P}rtok-kept`)).not.toBeNull();
     expect(await redis.get(`active-sessions-${userId}`)).not.toBeNull();

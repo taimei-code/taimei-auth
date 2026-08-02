@@ -1,7 +1,6 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { createRateLimitMiddleware } from "../../rate-limit";
-import { connectRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
 import { canaryToken } from "../canary-token";
 
@@ -83,10 +82,6 @@ describe("canary token endpoint", () => {
 });
 
 describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
-  beforeAll(async () => {
-    await connectRedis();
-  });
-
   beforeEach(() => {
     captured = [];
     setSentryBackend(spyBackend);
