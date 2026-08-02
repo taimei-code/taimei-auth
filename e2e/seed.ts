@@ -21,6 +21,9 @@ if (staleIds.length > 0) {
   await db.delete(auditLog).where(inArray(auditLog.userId, staleIds));
   await db.delete(user).where(inArray(user.id, staleIds));
 }
+// company-delete flow が消した seed user は user 行が残らず staleIds に入らないため、
+// その audit だけ固定 id prefix で回収する
+await db.delete(auditLog).where(like(auditLog.userId, "e2e-u-%"));
 await db.delete(company).where(like(company.name, COMPANY_LIKE));
 
 const seedUser = async (suffix: string, name: string): Promise<string> => {
@@ -55,6 +58,11 @@ await seedMembership(memberUserId, mainCompanyId, "MEMBER");
 const dangerUserId = await seedUser("danger", "E2E Danger");
 const dangerCompanyId = await seedCompany("danger");
 await seedMembership(dangerUserId, dangerCompanyId, "OWNER");
+
+// company-delete flow 用: 唯一 OWNER + 単一事業所 (最後の事業所削除でアカウント連動削除される状態)
+const deleteUserId = await seedUser("delete", "E2E Delete");
+const deleteCompanyId = await seedCompany("delete");
+await seedMembership(deleteUserId, deleteCompanyId, "OWNER");
 
 // invitation-flow 用: e2e-invitee 宛の PENDING 招待 (invitee の user 行はまだ無い。
 // 招待行は invitedByUserId の FK cascade で毎回の user 掃除と一緒に消え、ここで作り直す)
