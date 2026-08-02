@@ -23,8 +23,10 @@ export let redisStorage: RedisStorage;
 // INCR + EXPIRE + TTL を 1 往復 MULTI で atomic 化し、backend (node-redis / Upstash) は隠蔽する。
 export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
 export let pingRedis: () => Promise<boolean>;
-// node-redis の生クライアント (Bun / テストの key 操作用)。Workers では未代入 (= 参照しない)。
-export let redis: RedisClientType;
+// テストの key 直接操作専用の生 client accessor。接続保証込みで返すため、呼び出し順の儀式は不要。
+// production は redisStorage / incrementRateWindow の interface 越しに使うこと (biome の
+// noRestrictedImports がテスト以外からの import を拒否する)。
+export let getRedis: () => Promise<RedisClientType>;
 
 // Workers: Upstash REST。automaticDeserialization:false で raw string 契約に合わせる
 // (better-auth は JSON 文字列を保存するため auto-parse は二重処理になる。詳細: ADR-0011)。
@@ -53,30 +55,61 @@ function initUpstash(url: string, token: string): void {
       .ping()
       .then(() => true)
       .catch(() => false);
+  getRedis = async () => {
+    throw new Error(
+      "getRedis は node-redis 専用 accessor。Workers (Upstash REST) では利用できない",
+    );
+  };
 }
 
 // Bun / Node: node-redis (compose redis / テスト / CLI script)。
 function initNodeRedis(redisUrl: string): void {
   const c = createClient({ url: redisUrl }) as RedisClientType;
   c.on("error", (err) => console.error("Redis error:", err));
-  redis = c;
+
+  // 接続の入口はここ 1 つ (単一所有)。open 済み client への再 connect() は node-redis が必ず
+  // reject するため、boot・adapter・テストが各自 connect を持つと相互に壊し合う。memo は
+  // in-flight の connect だけを保持し決着で破棄する — 成功や失敗を持ち越すと「client が閉じた
+  // 後も即 resolve」「一過性の接続失敗の引きずり」がプロセス寿命続く。切断からの復旧は
+  // node-redis 内蔵 reconnectStrategy の責務で、ここでは担わない。
+  // adapter も getRedis もこの取得口を通る — メソッド追加時に接続保証を書き忘れる余地を残さない。
+  let connecting: Promise<unknown> | undefined;
+  const connectedClient = async (): Promise<RedisClientType> => {
+    // isOpen は connect() 開始で同期的に true になるため、それだけを見ると並行呼び出しの
+    // 2 人目が未 ready の client を受け取る。in-flight の connect は全員が await する。
+    if (!c.isOpen) {
+      connecting ??= c.connect().finally(() => {
+        connecting = undefined;
+      });
+    }
+    if (connecting !== undefined) await connecting;
+    return c;
+  };
+
+  getRedis = connectedClient;
   redisStorage = {
-    get: (key) => c.get(key),
+    get: async (key) => (await connectedClient()).get(key),
     set: async (key, value, ttl) => {
-      if (ttl) await c.set(key, value, { EX: ttl });
-      else await c.set(key, value);
+      const redis = await connectedClient();
+      if (ttl) await redis.set(key, value, { EX: ttl });
+      else await redis.set(key, value);
     },
     delete: async (key) => {
-      await c.del(key);
+      await (await connectedClient()).del(key);
     },
   };
   incrementRateWindow = async (key, windowSec) => {
-    const res = await c.multi().incr(key).expire(key, windowSec).ttl(key).exec();
+    const redis = await connectedClient();
+    const res = await redis.multi().incr(key).expire(key, windowSec).ttl(key).exec();
     return { count: Number(res?.[0] ?? 0), ttl: Number(res?.[2] ?? windowSec) };
   };
+  // 決して reject しない boolean 契約。/health はこれを try/catch なしで待ち、redis 断を
+  // 503 degraded として返す設計のため、接続保証の失敗も false に畳む (reject が漏れると 500 に化ける)。
+  // 注意: redis 断で接続が確立も失敗もしない間は resolve しない (既定 reconnectStrategy が
+  // 無限リトライ)。打ち切りは呼び出し側が担う (src/index.ts の boot race が実例)。
   pingRedis = () =>
-    c
-      .ping()
+    connectedClient()
+      .then((redis) => redis.ping())
       .then(() => true)
       .catch(() => false);
 }
@@ -92,12 +125,6 @@ export function initRedis(): void {
     return;
   }
   initNodeRedis(process.env.REDIS_URL ?? "redis://localhost:6379");
-}
-
-export async function connectRedis(): Promise<void> {
-  // Upstash REST はコネクションレス。node-redis (redis) のみ接続が要る。
-  // Workers では redis 未代入のため no-op。
-  if (redis && !redis.isOpen) await redis.connect();
 }
 
 // Bun / Node (compose / テスト / CLI): module ロード時に自動 init。
