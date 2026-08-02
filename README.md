@@ -63,7 +63,11 @@ URL を別タブで開くと `/account` に遷移する。**初回登録 (所属
 - **事業所** … 上部の事業所切替 (CompanySwitcher) / 所属事業所 / メンバー / 事業所設定。事業所の作成・編集・削除 (soft delete) ・オーナー委譲・メンバーの role 変更 / 除名をここから操作する
 - **アカウント** … プロフィール / セキュリティ / セッション / 連携アカウント。プロフィール編集 / アバター変更 / 退会 / ログアウトをここから操作する
 
-既存ユーザーを別の事業所へ招待する場合は「メンバー」から招待リンク (Resend メール / 1-click magic link) を発行する。受け取った側は `/auth/signup/accept-invitation` で当該事業所に MEMBER として join する。
+既存ユーザーを別の事業所へ招待する場合は「メンバー」から招待リンク (Resend メール / 1-click magic link) を発行する。受け取った側は `/auth/signup/accept-invitation` で当該事業所に MEMBER として join する。招待メールもローカルでは実送信されず、Magic Link と同様にサーバ log に URL が出る (magic link 部分は 5 分で失効。失効時は同じメールアドレスへ再招待すると PENDING 招待が再利用され新しい URL が発行される):
+
+```
+[TEST] Invitation email for invitee@example.com: http://auth.taimei-code.local:3100/api/auth/magic-link/verify?token=...&callbackURL=...accept-invitation...
+```
 
 ## compose での環境操作
 
