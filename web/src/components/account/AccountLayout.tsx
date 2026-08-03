@@ -2,6 +2,7 @@ import { Outlet, NavLink } from "react-router-dom";
 import { User, ShieldCheck, Monitor, Plug, Users, Building2, Settings2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/notify";
 import { SignOutButton } from "@/components/account/SignOutButton";
 import { CompanySwitcher } from "@/components/account/CompanySwitcher";
 
@@ -64,6 +65,10 @@ export const AccountLayout = () => {
           <Outlet />
         </div>
       </main>
+
+      {/* toast を使うのは /account 配下のみ。/auth (サインイン初期表示) に sonner を配らないよう
+          App でなくここにマウントする (chunk 分離は components/notify.tsx 参照) */}
+      <Toaster />
     </div>
   );
 };
