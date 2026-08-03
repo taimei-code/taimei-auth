@@ -2,7 +2,7 @@ import { type FormEvent, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { Notice, type NoticeValue } from "@/components/Notice";
+import { notifyError, notifySuccess } from "@/components/notify";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,22 +15,18 @@ type Props = {
 export const ProfileForm = ({ initialName, email }: Props) => {
   const [name, setName] = useState(initialName);
   const [submitting, setSubmitting] = useState(false);
-  const [status, setStatus] = useState<NoticeValue | null>(null);
 
   const saveProfile = (event: FormEvent) => {
     event.preventDefault();
     setSubmitting(true);
-    setStatus(null);
     authClient
       .updateUser({ name })
       .then(({ error }) =>
-        setStatus(
-          error
-            ? { kind: "error", text: error.message ?? "保存に失敗しました" }
-            : { kind: "success", text: "保存しました" },
-        ),
+        error
+          ? notifyError(error.message ?? "保存に失敗しました。")
+          : notifySuccess("保存しました。"),
       )
-      .catch(() => setStatus({ kind: "error", text: "保存に失敗しました" }))
+      .catch(() => notifyError("保存に失敗しました。"))
       .finally(() => setSubmitting(false));
   };
 
@@ -57,13 +53,10 @@ export const ProfileForm = ({ initialName, email }: Props) => {
         </p>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" disabled={submitting}>
-          {submitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          {submitting ? "保存中…" : "保存"}
-        </Button>
-        <Notice value={status} />
-      </div>
+      <Button type="submit" disabled={submitting}>
+        {submitting && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+        {submitting ? "保存中…" : "保存"}
+      </Button>
     </form>
   );
 };

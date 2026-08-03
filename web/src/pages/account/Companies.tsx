@@ -6,6 +6,7 @@ import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
+import { notifyError } from "@/components/notify";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
@@ -14,7 +15,6 @@ import { AddCompanyDialog } from "@/components/account/AddCompanyDialog";
 export const Companies = () => {
   const { memberships, currentCompanyId, switchCompany, refresh } = useCompanyContext();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const userId = authClient.useSession().data?.user.id ?? null;
 
@@ -32,7 +32,6 @@ export const Companies = () => {
   const handleLeave = (companyId: string) => {
     if (!userId || busyId) return;
     setBusyId(companyId);
-    setMessage(null);
     setSoleOwnerCompanyId(null);
     let redirecting = false;
     removeMember(companyId, userId)
@@ -48,10 +47,11 @@ export const Companies = () => {
       })
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
+          // toast にしない: このエラーは「オーナーを委譲」ボタンの出現理由の説明として
+          // 導線と一緒に画面へ残り続ける必要がある (components/notify.tsx の経路規則)
           setSoleOwnerCompanyId(companyId);
-          setMessage("唯一のオーナーは事業所から抜けられません。先にオーナーを委譲してください。");
         } else {
-          setMessage("事業所から抜けられませんでした。");
+          notifyError("事業所から抜けられませんでした。");
         }
       })
       .finally(() => {
@@ -118,7 +118,6 @@ export const Companies = () => {
                     companyName={m.company_name}
                     onTransferred={() => {
                       setSoleOwnerCompanyId(null);
-                      setMessage(null);
                       void refresh();
                     }}
                     trigger={
@@ -143,7 +142,11 @@ export const Companies = () => {
         })}
       </div>
 
-      {message && <p className="mt-4 text-sm text-destructive">{message}</p>}
+      {soleOwnerCompanyId && (
+        <p role="alert" className="mt-4 text-sm text-destructive">
+          唯一のオーナーは事業所から抜けられません。先にオーナーを委譲してください。
+        </p>
+      )}
     </div>
   );
 };

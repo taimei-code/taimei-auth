@@ -14,7 +14,8 @@ export const DangerZone = () => {
     setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
-      // 表示は dialog の外 (本セクション内)。ConfirmDestructiveDialog が完了後に閉じるので利用者に届く。
+      // toast にせず本セクション内の inline に固定する: 退会失敗は role=alert の即時読み上げを
+      // 保ちたい失敗で、e2e (danger-zone.e2e.ts) も alert role を契約にしている (components/notify.tsx の経路規則)
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }
