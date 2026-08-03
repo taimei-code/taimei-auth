@@ -14,9 +14,8 @@ import {
 } from "@/components/ui/dialog";
 
 // 破壊的操作の確認ダイアログ。open state の所有・実行中 disable・完了/失敗時に閉じる までを
-// ここに閉じる。エラー文言の表示は呼び出し側の notice 領域 (dialog の外) が担う — Radix は
-// 開いている dialog の背面を aria-hidden にするため、閉じる前に背面へ描画したエラーは利用者に
-// 届かない。個別ダイアログごとに同じ穴が開いた (退会 / 事業所削除 / メンバー削除) ため一般化した。
+// ここに閉じる。結果の通知は呼び出し側が dialog の外で行う (背面 aria-hidden 下の読み上げ制約を
+// 含む通知経路の規則は components/notify.tsx のコメントが正本)。
 export const ConfirmDestructiveDialog = ({
   trigger,
   title,
@@ -31,8 +30,7 @@ export const ConfirmDestructiveDialog = ({
   description: ReactNode;
   confirmLabel: string;
   confirmIcon?: ReactNode;
-  // resolve / reject いずれでも dialog は閉じる。失敗の通知は呼び出し側が自身の catch で
-  // notice state に載せること (ここでは表示しない)。
+  // resolve / reject いずれでも dialog は閉じる。失敗の通知は呼び出し側が自身の catch で出す
   onConfirm: () => Promise<unknown>;
   // description 下に挟む追加の警告等
   children?: ReactNode;
