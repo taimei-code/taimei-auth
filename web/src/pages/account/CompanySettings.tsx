@@ -10,7 +10,7 @@ import {
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
-import { Notice, type NoticeValue } from "@/components/Notice";
+import { notifyError, notifySuccess } from "@/components/notify";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -28,7 +28,6 @@ export const CompanySettings = () => {
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [submitting, setSubmitting] = useState(false);
-  const [notice, setNotice] = useState<NoticeValue | null>(null);
 
   // form 初期値の流し込みは「対象 company が変わった時のみ」。company_id を依存にすることで、
   // 保存後の refresh で currentMembership 参照が差し替わっても編集中の入力を上書きしない。
@@ -58,18 +57,16 @@ export const CompanySettings = () => {
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    setNotice(null);
     updateCompany(companyId, { name: name.trim(), org_code: orgCode })
       .then(() => refresh())
-      .then(() => setNotice({ kind: "success", text: "事業所情報を更新しました" }))
+      .then(() => notifySuccess("事業所情報を更新しました。"))
       .catch((err) => {
-        setNotice({
-          kind: "error",
-          text: describeAccountApiError(err, {
+        notifyError(
+          describeAccountApiError(err, {
             403: "編集する権限がありません。",
             fallback: "更新に失敗しました。",
           }),
-        });
+        );
       })
       .finally(() => setSubmitting(false));
   };
@@ -86,8 +83,13 @@ export const CompanySettings = () => {
           window.location.replace("/account/companies");
         }
       })
-      .catch(() => {
-        setNotice({ kind: "error", text: "事業所の削除に失敗しました。" });
+      .catch((err) => {
+        notifyError(
+          describeAccountApiError(err, {
+            403: "削除する権限がありません。",
+            fallback: "事業所の削除に失敗しました。",
+          }),
+        );
       });
 
   return (
@@ -116,7 +118,6 @@ export const CompanySettings = () => {
           {submitting ? <Loader2 className="animate-spin" /> : null}
           保存
         </Button>
-        <Notice value={notice} />
       </form>
 
       <Separator className="my-10" />
