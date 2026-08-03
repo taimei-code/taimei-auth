@@ -51,6 +51,7 @@
     "react-router-dom": "^7.18.1",
     "redis": "^5.11.0",
     "resend": "^6.6.0",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^4.4.3"
