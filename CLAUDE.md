@@ -70,6 +70,10 @@ static route (`/api/account/companies/add`) を `:param` route (`/api/account/co
 - 対策は fetch ごとに生成し `ctx.waitUntil(resource.close())`。drizzle のような共有 client 層は client を module ロード時に 1 度だけ構築し、中の Pool のみ `AsyncLocalStorage` で per-request に差し替える (`db/client.ts` の `RoutingPool` / [`docs/adr/0011-cloudflare-workers-migration.md`](./docs/adr/0011-cloudflare-workers-migration.md) / PR #91)
 - warm isolate が前 request のアイドル接続を掴んだ時のみ間欠再現する。DB を踏む endpoint (`/health` 等) の連打か `wrangler tail` の `outcome:exception` で観測する
 
+### compose watch は `web/` を sync しない
+
+`auth-service` の `develop.watch` は `./src` と `./db` の sync (+ `package.json` で rebuild) のみで、`web/` は image に焼き込まれる (volume mount も無し)。`web/` の変更をブラウザで確認する前に `docker compose up --build -d auth-service` で rebuild する — 「server が up」と「server が working tree を配信している」は別 (旧 build のまま QA すると修正前のコードを検証してしまう)。DB / Redis は維持されるためログインセッションは残る (経緯: PR #126)。
+
 ### workerd 固有挙動の実機検証は `wrangler dev --remote`
 
 cross-request I/O 制約等は local の `wrangler dev` / miniflare では再現しない。本 worker は custom_domain 運用 (workers.dev subdomain 無効) のため `wrangler versions upload` では preview URL が払い出されず、検証 endpoint を得られない。`wrangler dev --remote` なら working-tree のコードを実 workerd + 実バインディング (Hyperdrive 等) でエフェメラル実行できる。本番トラフィックは無影響 (経緯: PR #91)。
