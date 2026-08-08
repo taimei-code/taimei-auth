@@ -4,6 +4,7 @@ import { auditLog, company, invitation, user } from "@/db/schema";
 import { generateCompanyId, insertCompany } from "@/db/repositories/company";
 import { generateInvitationId, insertInvitation } from "@/db/repositories/invitation";
 import { generateMembershipId, insertMembership, type Role } from "@/db/repositories/membership";
+import { updateUserLastUsedCompany } from "@/db/repositories/user";
 
 // e2e spec が前提にする固定ユーザー・事業所 (fixture) の作成・削除を担う唯一のモジュール。
 // db/CLAUDE.md ルール 1 の例外はこのファイルの fixture 再生成に限る。spec からの直接 import は
@@ -66,7 +67,7 @@ const seedMembership = async (userId: string, companyId: string, role: Role): Pr
 //   restrict のため user → company の順で消す
 async function removeFixtureRows(rows: {
   userSuffixes: string[];
-  companySuffix?: string;
+  companySuffixes?: string[];
 }): Promise<void> {
   const existing = await db
     .select({ id: user.id })
@@ -79,8 +80,10 @@ async function removeFixtureRows(rows: {
     await db.delete(auditLog).where(inArray(auditLog.userId, userIds));
     await db.delete(user).where(inArray(user.id, userIds));
   }
-  if (rows.companySuffix !== undefined) {
-    await db.delete(company).where(eq(company.name, fixtureCompanyName(rows.companySuffix)));
+  if (rows.companySuffixes !== undefined) {
+    await db
+      .delete(company)
+      .where(inArray(company.name, rows.companySuffixes.map(fixtureCompanyName)));
   }
 }
 
@@ -93,7 +96,7 @@ async function ensureFixture(spec: FixtureSpec): Promise<void> {
   assertLocalDatabase();
   await removeFixtureRows({
     userSuffixes: spec.members.map((m) => m.suffix),
-    companySuffix: spec.company,
+    companySuffixes: [spec.company],
   });
   const companyId = await seedCompany(spec.company);
   for (const m of spec.members) {
@@ -142,6 +145,28 @@ const DELETE_FIXTURE: FixtureSpec = {
   company: "delete",
   members: [{ suffix: "delete", name: "E2E Delete", role: "OWNER" }],
 };
+
+// company-delete flow 用 (消費型): 2 事業所の OWNER を兼ねる 1 user。片方を削除しても所属が残る
+// ため、アカウント連動削除でなく所属事業所一覧への遷移で終わる。1 fixture = 1 事業所の
+// FixtureSpec では 1 user の複数所属を表現できないため個別に組む。
+// current 側を last_used_company_id で固定するのは、未設定だと handler が membership の先頭
+// (SQL の行順は不定) へフォールバックし、spec 側でどちらが削除対象か決まらないため。
+const DELETE_MULTI_USER = "delete-multi";
+const DELETE_MULTI_CURRENT_COMPANY = "delete-multi-current";
+const DELETE_MULTI_OTHER_COMPANY = "delete-multi-other";
+
+async function ensureDeleteMultiFixture(): Promise<void> {
+  assertLocalDatabase();
+  await removeFixtureRows({
+    userSuffixes: [DELETE_MULTI_USER],
+    companySuffixes: [DELETE_MULTI_CURRENT_COMPANY, DELETE_MULTI_OTHER_COMPANY],
+  });
+  const userId = await seedUser(DELETE_MULTI_USER, "E2E DeleteMulti");
+  const currentCompanyId = await seedCompany(DELETE_MULTI_CURRENT_COMPANY);
+  await seedMembership(userId, currentCompanyId, "OWNER");
+  await seedMembership(userId, await seedCompany(DELETE_MULTI_OTHER_COMPANY), "OWNER");
+  await updateUserLastUsedCompany(userId, currentCompanyId);
+}
 
 // invitation-flow 用 (消費型): e2e-invitee 宛の PENDING 招待。受諾すると招待行は ACCEPTED に
 // 落ち、invitee は signup で main のメンバーになるため、作り直しは invitee ユーザーの削除
@@ -193,6 +218,7 @@ async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserI
 export const consumableFixtures = new Map<string, () => Promise<void>>([
   ["leave", () => ensureFixture(LEAVE_FIXTURE)],
   ["delete", () => ensureFixture(DELETE_FIXTURE)],
+  ["delete-multi", ensureDeleteMultiFixture],
   ["invitation", ensureInvitationFixture],
 ]);
 
@@ -218,5 +244,6 @@ export async function resetAllFixtures(): Promise<void> {
   await ensureFixture(LEAVE_FIXTURE);
   await ensureFixture(DANGER_FIXTURE);
   await ensureFixture(DELETE_FIXTURE);
+  await ensureDeleteMultiFixture();
   await ensureInvitationFixture();
 }

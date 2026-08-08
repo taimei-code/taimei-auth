@@ -10,6 +10,8 @@ import { lazy, Suspense, type ComponentProps, type ComponentType } from "react";
 //   state 層に依存すると /auth/* に sonner を配らない分離が崩れる)
 // 制約 (sonner / ブラウザ由来。この記述が正本 — 他所からは参照 1 行に留める):
 // - 遷移 (location.replace / redirect) を伴う操作の成功通知は document ごと消えるため toast では届かない
+//   ただし Toaster の mount 先 (AccountLayout) を unmount しない SPA 遷移 (react-router navigate) なら
+//   document が生き残るため遷移後の通知は届く — その場合は notifyAfterRefresh を使う
 // - sonner は per-toast の role=alert (assertive) を持たず、error も polite 読み上げになる。
 //   即時性の代わりに長い duration + closeButton で対処を読み終えるまで残す
 // - 開いている Radix dialog の背面 (aria-hidden) への toast 挿入は読み上げられない。移行前の

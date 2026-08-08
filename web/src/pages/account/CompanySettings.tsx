@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import {
@@ -21,13 +22,13 @@ import { Label } from "@/components/ui/label";
 export const CompanySettings = () => {
   const { currentMembership, memberships, loading, refresh } = useCompanyContext();
   const isOwner = currentMembership?.role === "OWNER";
-  const companyId = currentMembership?.company_id ?? null;
   // 最後の所属事業所を削除すると actor 自身が orphan として連動削除される (ADR-0010 D3)。
   const isLastCompany = memberships.length <= 1;
 
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
 
   // form 初期値の流し込みは「対象 company が変わった時のみ」。company_id を依存にすることで、
   // 保存後の refresh で currentMembership 参照が差し替わっても編集中の入力を上書きしない。
@@ -48,11 +49,14 @@ export const CompanySettings = () => {
     );
   }
 
-  if (!companyId || !isOwner) {
+  if (!currentMembership || !isOwner) {
     return (
       <p className="text-sm text-muted-foreground">事業所設定の編集はオーナーのみ可能です。</p>
     );
   }
+
+  const companyId = currentMembership.company_id;
+  const companyName = currentMembership.company_name;
 
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
@@ -75,17 +79,23 @@ export const CompanySettings = () => {
       .finally(() => setSubmitting(false));
   };
 
-  // 削除成功で即 redirect する (context の再 fetch は遷移先マウント時に走るため refresh を待たない。
-  // refresh の瞬断で redirect が不達になり「削除済なのにエラー表示」になるのを防ぐ)。
-  // 最後の事業所削除では actor 自身が連動削除されるため、その時はログアウト先へ遷移する (ADR-0010 D3)。
+  // 削除後は一覧へ SPA 遷移してから notifyAfterRefresh で通知する (Companies の handleLeave と同じ形)。
+  // 遷移を refresh の成否に依存させず「削除済なのにエラー表示」を防ぐ (失敗は「表示が古い」文言で吸収)。
+  // 通知と refresh が遷移後も生きるのは Toaster (AccountLayout) と CompanyProvider が page より上位に
+  // ある App.tsx の route 構成が前提 (通知経路の正本: components/notify.tsx 冒頭)。
+  // 最後の事業所削除は actor 自身の連動削除 = AuthChange のため full reload で抜ける (ADR-0010 D3)。
   const handleDelete = () =>
     deleteCompany(companyId)
       .then(({ accountDeleted }) => {
         if (accountDeleted) {
           redirectAfterAuthChange("deleteAccount");
-        } else {
-          window.location.replace("/account/companies");
+          return;
         }
+        navigate("/account/companies");
+        return notifyAfterRefresh(refresh, {
+          done: `「${companyName}」を削除しました。`,
+          staleShort: "事業所を削除しました",
+        });
       })
       .catch((err) => {
         notifyError(
@@ -141,7 +151,7 @@ export const CompanySettings = () => {
               </Button>
             }
             title="事業所削除の確認"
-            description={`「${currentMembership?.company_name}」を削除します。この操作は元に戻せません。`}
+            description={`「${companyName}」を削除します。この操作は元に戻せません。`}
             confirmLabel="削除する"
             onConfirm={handleDelete}
           >

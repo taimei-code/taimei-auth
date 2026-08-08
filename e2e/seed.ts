@@ -2,9 +2,10 @@ import { consumableFixtures, resetAllFixtures } from "./fixtures";
 
 // e2e fixture 再生成の entrypoint。
 // - 引数なし: 全 fixture の冪等再作成 (サーバ起動前に start-server.sh が実行)
-// - 引数あり: 消費型 fixture (spec 実行が消費する) 1 種だけを作り直す。消費型 spec の
-//   beforeEach が retry 耐性のために子プロセスで呼ぶ (helpers.ts の reseedFixture)。
-//   指定できる名前の正本は fixtures.ts の consumableFixtures
+// - 引数あり: 消費型 fixture (spec 実行が消費する) 1 種だけを作り直す。消費型 spec が retry 耐性の
+//   ために test ごと子プロセスで呼ぶ (helpers.ts の reseedFixture。test ごとに使う fixture が違う
+//   spec は beforeEach でなく各 test の冒頭で呼ぶ)。指定できる名前の正本は fixtures.ts の
+//   consumableFixtures
 const fixtureName = process.argv[2];
 if (fixtureName === undefined) {
   await resetAllFixtures();
