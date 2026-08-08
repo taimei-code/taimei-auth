@@ -12,7 +12,14 @@ minimumReleaseAge = 604800
 # WebSocket client のもので @vercel/blob は HTTP fetch 用途のため本アプリでは非該当だが、CI の
 # bun audit gate を通すため patched 版へ。esbuild と同じ「security patch < 7 日」の bypass。
 # 詳細: docs/adr/0009-supply-chain-hardening.md §H
+#
+# nanoid: GHSA-28wg-ghj8-5hjv / GHSA-2v37-7h3g-55p8 (HIGH, 非 secure / custom generator が不正な
+# size で無限ループ) の 3.x 系修正版 3.3.17 が release 5 日で 7 日齢に満たないため除外。postcss の
+# transitive (5.x 系の direct dep 側は 5.1.16 で 7 日齢を満たすため bypass 不要)。nanoid は pure JS
+# で platform 別 optionalDependencies を持たないため esbuild と違い 1 entry で足りる。
+# 詳細: docs/adr/0009-supply-chain-hardening.md §H
 minimumReleaseAgeExcludes = [
+  "nanoid",
   "undici",
   "esbuild",
   "@esbuild/aix-ppc64",

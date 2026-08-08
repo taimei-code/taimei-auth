@@ -7,7 +7,6 @@ import {
   listInvitations,
   listMembers,
   removeMember,
-  revokeInvitation,
   updateMemberRole,
   type CompanyRole,
   type Member,
@@ -18,7 +17,8 @@ import { authClient } from "@/lib/auth-client";
 import { memberLabel, roleLabelJa } from "@/lib/labels";
 import { isAtLeast, requiresOwnerProtection } from "@core/membership/policy";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
-import { notifyError, notifySuccess } from "@/components/notify";
+import { PendingInvitations } from "@/components/account/PendingInvitations";
+import { notifyAfterRefresh, notifyError } from "@/components/notify";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,14 +41,15 @@ export const Members = () => {
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  const refresh = useCallback((cid: string) => {
-    return Promise.all([listMembers(cid), listInvitations(cid).catch(() => [])]).then(
-      ([m, inv]) => {
-        setMembers(m);
-        setInvitations(inv);
-      },
-    );
-  }, []);
+  // 2 つの一覧は個別に反映する (片方が転んでも取得済みの側は捨てない)。招待一覧は
+  // ADMIN 未満だと server が 403 を返すため、権限が無ければ最初から叩かない
+  const refresh = useCallback(() => {
+    if (!companyId) return Promise.resolve();
+    return Promise.all([
+      listMembers(companyId).then(setMembers),
+      (canManage ? listInvitations(companyId) : Promise.resolve([])).then(setInvitations),
+    ]);
+  }, [companyId, canManage]);
 
   useEffect(() => {
     if (!companyId) {
@@ -56,7 +57,10 @@ export const Members = () => {
       return;
     }
     setLoading(true);
-    refresh(companyId)
+    // 取得失敗時に前の事業所の行が残ると別事業所の一覧に混ざる (残留行への操作は誤 POST) ため先に空にする
+    setMembers([]);
+    setInvitations([]);
+    refresh()
       .catch((e) => console.error("failed to load members", e))
       .finally(() => setLoading(false));
   }, [companyId, companyLoading, refresh]);
@@ -68,8 +72,10 @@ export const Members = () => {
     createInvitation(companyId, { email: inviteEmail.trim(), role: inviteRole })
       .then((res) => {
         setInviteEmail("");
-        notifySuccess(res.reused ? "既存の招待を再送しました。" : "招待を送信しました。");
-        return refresh(companyId);
+        return notifyAfterRefresh(refresh, {
+          done: res.reused ? "既存の招待を再送しました。" : "招待を送信しました。",
+          staleShort: res.reused ? "既存の招待を再送しました" : "招待を送信しました",
+        });
       })
       .catch((err) => {
         notifyError(
@@ -83,25 +89,16 @@ export const Members = () => {
       .finally(() => setSubmitting(false));
   };
 
-  // mutation 成功後の一覧再取得と結果通知。再取得 (GET) の失敗を mutation 側の catch
-  // (変更 API 専用の文言表) に流すと「権限がありません」等の嘘の失敗理由が出るため、
-  // ここで「成功したが一覧が古い」専用の文言に落とす
-  const refreshThenNotify = (cid: string, doneText: string, staleListText: string) =>
-    refresh(cid)
-      .then(() => notifySuccess(doneText))
-      .catch(() => notifyError(staleListText));
-
   const handleRoleChange = (target: Member, role: CompanyRole) => {
     if (!companyId || busyUserId) return;
     const targetLabel = memberLabel(target);
     setBusyUserId(target.user_id);
     updateMemberRole(companyId, target.user_id, role)
       .then(() =>
-        refreshThenNotify(
-          companyId,
-          `${targetLabel} の役割を${roleLabelJa(role)}に変更しました。`,
-          "役割を変更しましたが、一覧の更新に失敗しました。ページを再読み込みしてください。",
-        ),
+        notifyAfterRefresh(refresh, {
+          done: `${targetLabel} の役割を${roleLabelJa(role)}に変更しました。`,
+          staleShort: "役割を変更しました",
+        }),
       )
       .catch((err) => {
         notifyError(
@@ -121,13 +118,14 @@ export const Members = () => {
     setBusyUserId(targetUserId);
     return removeMember(companyId, targetUserId)
       .then(({ accountDeleted }) =>
-        refreshThenNotify(
-          companyId,
-          accountDeleted
+        notifyAfterRefresh(refresh, {
+          done: accountDeleted
             ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
             : "メンバーを削除しました。",
-          "メンバーを削除しましたが、一覧の更新に失敗しました。ページを再読み込みしてください。",
-        ),
+          staleShort: accountDeleted
+            ? "メンバーとアカウントを削除しました"
+            : "メンバーを削除しました",
+        }),
       )
       .catch((err) => {
         notifyError(
@@ -263,34 +261,11 @@ export const Members = () => {
           {invitations.length > 0 && (
             <>
               <Separator className="my-8" />
-              <section aria-label="招待中" className="space-y-2">
-                <h2 className="text-sm font-medium text-foreground">招待中</h2>
-                {invitations.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="flex items-center justify-between rounded-md border border-dashed border-border px-4 py-3 text-sm"
-                  >
-                    <div>
-                      <p className="font-medium text-foreground">{inv.email}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {roleLabelJa(inv.role)} / 期限{" "}
-                        {new Date(inv.expires_at).toLocaleString("ja-JP")}
-                      </p>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        revokeInvitation(companyId, inv.id)
-                          .then(() => refresh(companyId))
-                          .catch((e) => console.error("revoke failed", e));
-                      }}
-                    >
-                      取消
-                    </Button>
-                  </div>
-                ))}
-              </section>
+              <PendingInvitations
+                companyId={companyId}
+                invitations={invitations}
+                onChanged={refresh}
+              />
             </>
           )}
         </>

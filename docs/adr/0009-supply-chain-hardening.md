@@ -105,6 +105,17 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - リスク評価: いずれも DoS / dev-tool / 非該当経路で本番実行面への影響は限定的。typecheck / lint / 全 test green を確認済み
 - 教訓: lockfile の広範 entry 削除 + 非 clean `bun install` は better-auth 等の無関係 minor bump を誘発する (CLAUDE.md gotcha の再確認)。transitive の family 限定更新は「main lockfile 起点 + 対象 entry の in-place 差し替え + `bun install --frozen-lockfile` で検証」で行う
 
+### audit gate 対応 4 回目 (2026-08-08, nanoid / brace-expansion) + 3 回目の `minimumReleaseAgeExcludes` bypass
+
+`bun audit` のライブ DB に新規 high advisory 4 件 (nanoid 3 件 / brace-expansion 1 件) が出現し CI gate を落としたため対応。feature branch の diff とは無関係な依存側の変化。
+
+- **nanoid** `GHSA-28wg-ghj8-5hjv` (HIGH, `<3.3.16` / `>=4.0.0 <5.1.16`, 非 secure generator が負の size で無限ループ) と `GHSA-2v37-7h3g-55p8` (HIGH, `<3.3.17` / `>=4.0.0 <5.1.6`, custom generator が size=0 で無限ループ) → direct dep の 5.x 系は `bun.lock` を `5.1.16` に in-place 差し替え (`package.json` の range `^5.1.11` は満たすため据え置き)。`5.1.16` (2026-06-24) は 7 日齢を満たす
+- **nanoid 3.x (postcss transitive)** → 同じ手順で `3.3.17` に in-place 差し替え。`3.3.17` (2026-08-03) は release 5 日で 7 日齢に未達のため `bunfig.toml` の `minimumReleaseAgeExcludes` に `nanoid` を追加 (esbuild / undici と同じ「security patch < 7 日」bypass)。nanoid は pure JS で platform 別 optionalDependencies を持たないため、esbuild と違い 1 entry で足りる。あわせて postcss の宣言 (`nanoid: ^3.3.16`) を満たさないまま残っていた `3.3.12` の不整合も解消した
+- **brace-expansion** `GHSA-rgw5-rvv9-x895` (HIGH, `>=4.0.0 <5.0.9`, 中間配列の無制限確保による DoS。3 回目対応で入れた `GHSA-mh99-v99m-4gvg` 緩和の bypass) → `@sentry/bun › … › minimatch` の transitive を `5.0.9` に in-place 差し替え。`5.0.9` (2026-07-30) は 7 日齢を満たし bypass 不要
+- リスク評価: nanoid の 2 件はいずれも「不正な size 引数で generator が停止しない」性質で、呼び出し側が size を制御できる経路が前提。本リポの利用箇所は `db/repositories/` の 3 つ (`generateCompanyId` / `generateMembershipId` / `generateInvitationId` / `generateInvitationToken`) がすべて secure generator を literal size (24 / 32) で呼ぶのみで、user 入力が size に届く経路は無い。postcss 側も内部固定長利用のため非該当。brace-expansion も dev 依存の glob 経路の DoS で本番実行面には出ない
+- 手順は 3 回目の教訓どおり: `bun update` を使わず (transitive を direct dep に昇格させるため) registry の実 metadata (version / integrity / dependencies) で `bun.lock` を in-place 差し替え → 非 clean `bun install` で当該 3 family のみが差し替わることを確認 → `bun install --frozen-lockfile` (CI parity) と typecheck / lint / 全 test の green を確認
+- 後始末 (任意): `3.3.17` が 7 日齢 (2026-08-10 以降) を超えたら `nanoid` 除外を外しても resolve は維持される
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers

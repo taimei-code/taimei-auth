@@ -10,7 +10,7 @@ import {
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { ConfirmDestructiveDialog } from "@/components/ConfirmDestructiveDialog";
-import { notifyError, notifySuccess } from "@/components/notify";
+import { notifyAfterRefresh, notifyError } from "@/components/notify";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -58,8 +58,12 @@ export const CompanySettings = () => {
     e.preventDefault();
     setSubmitting(true);
     updateCompany(companyId, { name: name.trim(), org_code: orgCode })
-      .then(() => refresh())
-      .then(() => notifySuccess("事業所情報を更新しました。"))
+      .then(() =>
+        notifyAfterRefresh(refresh, {
+          done: "事業所情報を更新しました。",
+          staleShort: "事業所情報を更新しました",
+        }),
+      )
       .catch((err) => {
         notifyError(
           describeAccountApiError(err, {

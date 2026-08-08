@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 
+import { setCurrentCompany } from "@/lib/account-api";
 import { useCompanyContext } from "@/lib/company-context";
 import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
+import { notifyAfterRefresh, notifyError } from "@/components/notify";
 import { NativeSelect } from "@/components/ui/native-select";
 
 // sidebar 上部の事業所ピッカー。複数所属時に native select で切替 (DropdownMenu 依存を避ける)。
 // 1 事業所のみなら read-only 表示。
 export const CompanySwitcher = () => {
-  const { memberships, currentMembership, switchCompany } = useCompanyContext();
+  const { memberships, currentMembership, refresh } = useCompanyContext();
   const [switching, setSwitching] = useState(false);
 
   if (!currentMembership) return null;
@@ -32,8 +34,9 @@ export const CompanySwitcher = () => {
               const next = e.target.value;
               if (next === currentMembership.company_id) return;
               setSwitching(true);
-              switchCompany(next)
-                .catch((err) => console.error("switch company failed", err))
+              setCurrentCompany(next)
+                .then(() => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }))
+                .catch(() => notifyError("事業所を切り替えられませんでした。"))
                 .finally(() => setSwitching(false));
             }}
             className="h-8 py-1 pl-2 font-medium"
@@ -44,7 +47,9 @@ export const CompanySwitcher = () => {
               </option>
             ))}
           </NativeSelect>
-          {switching && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+          {switching && (
+            <Loader2 aria-hidden className="size-4 animate-spin text-muted-foreground" />
+          )}
         </div>
       ) : (
         <p className="mt-1 text-sm font-medium text-foreground">{currentMembership.company_name}</p>

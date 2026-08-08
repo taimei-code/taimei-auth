@@ -1,7 +1,8 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
-import { AccountApiError, addCompany, type OrgCode } from "@/lib/account-api";
+import { addCompany, type OrgCode } from "@/lib/account-api";
+import { notifyAfterRefresh } from "@/components/notify";
 import { OrgCodeField } from "@/components/account/OrgCodeField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ import {
 type Props = {
   // 作成成功後に呼ぶ。呼び出し側で company state を refresh する想定
   // (サーバが last_used を新事業所へ更新済みなので refresh だけで「現在の事業所」が切り替わる)。
-  onCreated: () => void | Promise<void>;
+  onCreated: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
@@ -39,25 +40,31 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     setError(null);
   };
 
+  // 送信中は閉じない (二重 submit / state 不整合を防ぐ)。作成後は dialog を先に閉じるが、
+  // サーバ側に作成の dedupe が無いため submitting 解除は chain 全体の finally に置いたままにする
+  // (成功枝に移すと閉じてから再取得が終わるまでの間に再送信でき、事業所が 2 つできる)
   const handleOpenChange = (next: boolean) => {
-    if (submitting) return; // 送信中は閉じない (二重 submit / state 不整合を防ぐ)
+    if (submitting) return;
     if (!next) reset();
     setOpen(next);
   };
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    const trimmedName = name.trim();
     setSubmitting(true);
     setError(null);
-    addCompany({ name: name.trim(), org_code: orgCode })
-      .then(async () => {
-        await onCreated();
+    addCompany({ name: trimmedName, org_code: orgCode })
+      .then(() => {
         reset();
         setOpen(false);
+        return notifyAfterRefresh(onCreated, {
+          done: `「${trimmedName}」を作成し、現在の事業所に切り替えました。`,
+          staleShort: "事業所を作成しました",
+        });
       })
-      .catch((err) => {
-        setError(err instanceof AccountApiError ? err.message : "事業所の作成に失敗しました。");
-      })
+      // dialog 内 inline は作成 POST 自体の失敗だけを受け持つ (再取得の失敗は上で通知済み)
+      .catch(() => setError("事業所の作成に失敗しました。"))
       .finally(() => setSubmitting(false));
   };
 
