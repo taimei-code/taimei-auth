@@ -17,6 +17,8 @@ import { lazy, Suspense, type ComponentProps, type ComponentType } from "react";
 
 type ToasterComponent = ComponentType<ComponentProps<typeof import("sonner").Toaster>>;
 
+let toasterUnavailable = false;
+
 // sonner は静的 import しない: import 時に CSS 14.9KB を注入し JS +9.3KB gzip が entry chunk に
 // 乗るため、toast を使わない /auth/* (サインイン初期表示) に配らないよう動的 import で分離する。
 // chunk 取得失敗 (デプロイ直後の旧 chunk 消失等) では通知を諦めて描画を続ける。Suspense へ
@@ -26,6 +28,7 @@ const SonnerToaster = lazy<ToasterComponent>(() =>
   import("sonner")
     .then((m) => ({ default: m.Toaster }))
     .catch((e) => {
+      toasterUnavailable = true;
       console.error("toaster chunk load failed", e);
       return { default: () => null };
     }),
@@ -52,14 +55,24 @@ export const Toaster = () => (
 
 // duration は library default に委ねず明示する (依存更新で通知の寿命が silent に変わるのを防ぐ)。
 // 呼び出し側は通知を唯一の痕跡として console.error を持たないため、sonner 自体を読めなかった
-// 場合の痕跡はこの 2 箇所の catch で担保する (ブラウザ側に error reporting は無い)
+// 場合の痕跡はこの 2 箇所の catch で担保する (ブラウザ側に error reporting は無い)。
+// toasterUnavailable の先読みは「import は成功するが Toaster が死んでいる」穴を塞ぐ: mount 時に
+// chunk 取得が転ぶと lazy は以後 null 固定になり、toast は表示先の無い store に積まれて無反応になる
 export const notifySuccess = (text: string): void => {
+  if (toasterUnavailable) {
+    console.error(text);
+    return;
+  }
   void import("sonner")
     .then(({ toast }) => toast.success(text, { duration: 4_000 }))
     .catch((e) => console.error(text, e));
 };
 
 export const notifyError = (text: string): void => {
+  if (toasterUnavailable) {
+    console.error(text);
+    return;
+  }
   void import("sonner")
     .then(({ toast }) => toast.error(text, { duration: 10_000, closeButton: true }))
     .catch((e) => console.error(text, e));

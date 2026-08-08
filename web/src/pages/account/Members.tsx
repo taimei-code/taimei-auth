@@ -122,7 +122,9 @@ export const Members = () => {
           done: accountDeleted
             ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
             : "メンバーを削除しました。",
-          staleShort: "メンバーを削除しました",
+          staleShort: accountDeleted
+            ? "メンバーとアカウントを削除しました"
+            : "メンバーを削除しました",
         }),
       )
       .catch((err) => {
