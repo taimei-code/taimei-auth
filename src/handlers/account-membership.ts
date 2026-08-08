@@ -44,7 +44,7 @@ accountMembership.post("/api/account/current-company", async (c) => {
   return c.json({ ok: true, company_id: result.companyId });
 });
 
-// POST role 変更。RBAC: OWNER は全 role 設定可、ADMIN は MEMBER↔ADMIN のみ (OWNER 昇格 / OWNER 操作は不可)。
+// POST role 変更。role 階層: OWNER は全 role 設定可、ADMIN は MEMBER↔ADMIN のみ (OWNER 昇格 / OWNER 操作は不可)。
 // OWNER を降格する変更の OWNER≥1 保証 / no-op 短絡 / audit は changeRole use-case が持つ。
 // entry (requireRoleChange) が 401→400→403 (ADMIN)→404→403 (canChangeRole) を担う。
 accountMembership.post(
@@ -101,7 +101,7 @@ accountMembership.post(
 );
 
 // POST オーナー委譲 (OWNER のみ)。target を OWNER 昇格 + actor を ADMIN 降格を 1 transaction で。
-// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (Q5)。use-case (transferOwnership) が
+// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (ADR-009 Q5)。use-case (transferOwnership) が
 // withOwnerLockGuard 内で mutation + audit を所有する。
 // entry (requireTransferOwnership) が 401→400 (parse + self)→403 (OWNER)→404→400 (already_owner) を担う。
 accountMembership.post("/api/account/companies/:companyId/transfer-ownership", async (c) => {

@@ -21,6 +21,7 @@ export type RateWindowResult = { count: number; ttl: number };
 export let redisStorage: RedisStorage;
 // key を windowSec の window で 1 hit 分 INCR し、現在カウントと TTL を返す rate-limit プリミティブ。
 // INCR + EXPIRE + TTL を 1 往復 MULTI で atomic 化し、backend (node-redis / Upstash) は隠蔽する。
+// atomic 化は必須 — INCR 後 EXPIRE 設定までに crash すると TTL なし counter が永続残留する。
 export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
 export let pingRedis: () => Promise<boolean>;
 // テストの key 直接操作専用の生 client accessor。接続保証込みで返すため、呼び出し順の儀式は不要。

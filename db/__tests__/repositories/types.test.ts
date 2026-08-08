@@ -22,6 +22,6 @@ type _t4 = Assert<IsExact<Awaited<ReturnType<typeof deleteUser>>, UserRow | unde
 type _t5 = Assert<IsExact<Awaited<ReturnType<typeof findAccountByUserId>>, AccountRow | undefined>>;
 
 test("repository return types are Promise<T | undefined> (compile-time assertion)", () => {
-  // 上記 type _t1-_t6 で型レベル assert 完結。tsc が通れば test 通過扱い。
+  // 上記 type _t1-_t5 で型レベル assert 完結。tsc が通れば test 通過扱い。
   expect(true).toBe(true);
 });

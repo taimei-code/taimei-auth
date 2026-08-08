@@ -42,20 +42,20 @@ accountCompany.get("/api/account/memberships", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
   const userId = actorResult.actor.id;
 
-  const rows = await findMembershipsByUserId(userId);
-  const active = rows.filter((r) => r.companyActivationStatus === "ACTIVE");
+  const memberships = await findMembershipsByUserId(userId);
+  const activeMemberships = memberships.filter((m) => m.companyActivationStatus === "ACTIVE");
   // current_company_id は user.last_used_company_id (guard が読んだ user 行から受け取る)。
   // 当該 company が ACTIVE membership に無い (削除済 / 未設定) 場合は先頭にフォールバックし
   // SPA の「現在の事業所」表示を安定させる。
-  const lastUsed = actorResult.actor.lastUsedCompanyId;
+  const lastUsedCompanyId = actorResult.actor.lastUsedCompanyId;
   const currentCompanyId =
-    lastUsed && active.some((m) => m.companyId === lastUsed)
-      ? lastUsed
-      : (active.at(0)?.companyId ?? null);
+    lastUsedCompanyId && activeMemberships.some((m) => m.companyId === lastUsedCompanyId)
+      ? lastUsedCompanyId
+      : (activeMemberships.at(0)?.companyId ?? null);
 
   return c.json({
     current_company_id: currentCompanyId,
-    memberships: active.map((row) => ({
+    memberships: activeMemberships.map((row) => ({
       id: row.id,
       company_id: row.companyId,
       company_name: row.companyName,

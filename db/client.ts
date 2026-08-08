@@ -18,9 +18,7 @@ type Db = NodePgDatabase<typeof schema>;
 const requestPoolStore = new AsyncLocalStorage<Pool>();
 let singletonPool: Pool | undefined;
 
-// Workers: ALS の request pool を返す。Bun/Node: singletonPool にフォールバック。
-// どちらも未設定なら初期化呼び忘れとして throw する。
-function currentPool(): Pool {
+function requireCurrentPool(): Pool {
   const pool = requestPoolStore.getStore() ?? singletonPool;
   if (!pool) {
     throw new Error(
@@ -34,16 +32,15 @@ function currentPool(): Pool {
 // drizzle は transaction 時に `this.client instanceof Pool` で pool 判定し、pool なら connect() で 1 接続を
 // pin する (drizzle-orm 0.45 node-postgres session.cjs:216、実機確認済み)。満たさないと BEGIN/COMMIT が
 // 別接続に散り advisory lock / FOR UPDATE の atomicity が壊れる。Pool を extends することで instanceof を
-// 自然に満たし (object 全体の cast 不要)、query / connect だけ currentPool() への委譲で上書きする
-// (このインスタンス自身は実接続を持たない)。委譲関数の `as Pool[...]` は引数を 1:1 転送するだけの局所 cast。
+// 自然に満たし (object 全体の cast 不要)、query / connect だけ requireCurrentPool() への委譲で上書き
+// する (このインスタンス自身は実接続を持たない)。委譲関数の `as Pool[...]` は引数を 1:1 転送する局所 cast。
 class RoutingPool extends Pool {
   override query = ((...args: Parameters<Pool["query"]>) =>
-    currentPool().query(...args)) as Pool["query"];
+    requireCurrentPool().query(...args)) as Pool["query"];
   override connect = ((...args: Parameters<Pool["connect"]>) =>
-    currentPool().connect(...args)) as Pool["connect"];
+    requireCurrentPool().connect(...args)) as Pool["connect"];
 }
 
-// repository 群 / transaction.ts / better-auth drizzleAdapter が import する単一インスタンス。
 export const db: Db = drizzle(new RoutingPool(), { schema });
 
 // Bun / Node: connectionString から singleton pool を 1 度だけ構築する。

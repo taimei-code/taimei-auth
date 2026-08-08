@@ -24,9 +24,9 @@ export const transferOwnership = (params: {
   const { actorUserId, toUserId, companyId } = params;
   return catchOwnerInvariant(
     runInTransaction((tx) =>
-      withOwnerLockGuard(tx, companyId, async (tx2) => {
-        await updateMembershipRole(toUserId, companyId, "OWNER", tx2);
-        await updateMembershipRole(actorUserId, companyId, "ADMIN", tx2);
+      withOwnerLockGuard(tx, companyId, async (ownerLockedTx) => {
+        await updateMembershipRole(toUserId, companyId, "OWNER", ownerLockedTx);
+        await updateMembershipRole(actorUserId, companyId, "ADMIN", ownerLockedTx);
         await recordOwnershipTransferred(
           {
             actor_user_id: actorUserId,
@@ -34,7 +34,7 @@ export const transferOwnership = (params: {
             from_user_id: actorUserId,
             to_user_id: toUserId,
           },
-          tx2,
+          ownerLockedTx,
         );
       }),
     ).then((): TransferOwnershipResult => ({ ok: true })),

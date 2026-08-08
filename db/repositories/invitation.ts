@@ -37,7 +37,7 @@ export async function findInvitationById(
     .then((rows) => rows.at(0));
 }
 
-// 同 (company_id, email) の有効な (PENDING かつ未期限) 招待。重複招待の idempotency 判定に使う。
+// 重複招待の idempotency 判定に使う。
 // email は handler 側で lowercase 済だが、migration 前データに大文字が残る可能性に備え lower() 比較で robust に。
 export async function findActivePendingInvitation(
   companyId: string,
@@ -101,7 +101,7 @@ export async function insertInvitation(
     });
 }
 
-// accept 時: status=ACCEPTED + accepted_at/used_at を set。既に PENDING でない行は 0 件更新 (= 二重 accept 防御)。
+// 既に PENDING でない行は 0 件更新 (= 二重 accept 防御)。
 export async function markInvitationAccepted(
   id: string,
   txOrDb: DbOrTx = db,
@@ -115,7 +115,7 @@ export async function markInvitationAccepted(
     .then((rows) => rows.at(0));
 }
 
-// revoke 時: status=REVOKED + revoked_at/used_at を set。PENDING のみ revoke 可能。
+// PENDING のみ revoke 可能 (それ以外は 0 件更新)。
 export async function markInvitationRevoked(
   id: string,
   companyId: string,
@@ -151,8 +151,7 @@ export async function revokePendingInvitationsOfCompany(
     .returning();
 }
 
-// invitation が accept 可能か (PENDING かつ未期限) を判定する述語。
-// expired は status 列ではなく expires_at から導出する (status は pending/accepted/revoked の 3 値のみ)。
+// expired は status 列ではなく expires_at から導出する (status は PENDING/ACCEPTED/REVOKED の 3 値のみ)。
 export function isAcceptable(row: InvitationRow): boolean {
   return row.status === "PENDING" && row.expiresAt.getTime() > Date.now();
 }

@@ -17,7 +17,6 @@ const WEB_DIST = "./web/dist";
 const spaFallback = buildSpaFallbackHandler(`${WEB_DIST}/index.html`);
 
 // `app` は test (routes-integration.test.ts) から import するため named export する。
-// 共有ルートは buildApp、Bun 固有の静的配信 (serveStatic + Bun.file SPA fallback) のみ mountStatic で渡す。
 export const app = buildApp({
   mountStatic: (app) => {
     app.use(
@@ -32,16 +31,18 @@ export const app = buildApp({
   },
 });
 
+// compose / CI は healthcheck で redis 先行起動済みのため通常は数十 ms で返る。
+const REDIS_BOOT_TIMEOUT_MS = 10_000;
+
 // session 実体 (secondaryStorage) と rate-limit が Redis 前提のため、疎通不能なら
 // 「起動はしたが認証できない」プロセスを作らず boot で止める。
 // race による打ち切りが必須 — pingRedis は redis 断のとき resolve しない (node-redis の
 // 既定 reconnectStrategy が無限リトライし connect() が settle しないため)。
-// 10s: compose / CI は healthcheck で redis 先行起動済みのため通常は数十 ms で返る。
-const reachable = await Promise.race([
+const redisReachable = await Promise.race([
   pingRedis(),
-  new Promise<false>((resolve) => setTimeout(() => resolve(false), 10_000)),
+  new Promise<false>((resolve) => setTimeout(() => resolve(false), REDIS_BOOT_TIMEOUT_MS)),
 ]);
-if (!reachable) {
+if (!redisReachable) {
   console.error("FATAL: Redis is unreachable at boot.");
   process.exit(1);
 }

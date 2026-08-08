@@ -35,8 +35,8 @@ export async function updateUser(id: string, updates: UserUpdates): Promise<User
     .then((rows) => rows.at(0));
 }
 
+// session / account 行は db/schema.ts の onDelete: "cascade" で道連れに削除される。
 export async function deleteUser(id: string, txOrDb: DbOrTx = db): Promise<UserRow | undefined> {
-  // session, account は db/schema.ts の onDelete: "cascade" で自動削除される。
   return txOrDb
     .delete(user)
     .where(eq(user.id, id))

@@ -28,12 +28,12 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
   const appName = getAppName();
   // 件名は SMTP ヘッダに入るため CR/LF を含む user 入力 (inviter/company 名) を sanitize し
   // ヘッダインジェクションを防ぐ。
-  const subjectInviter = sanitizeDisplayText(params.inviterName);
-  const subjectCompany = sanitizeDisplayText(params.companyName);
+  const headerSafeInviterName = sanitizeDisplayText(params.inviterName);
+  const headerSafeCompanyName = sanitizeDisplayText(params.companyName);
   await renderAndSendEmail({
     from: getInvitationFromEmail(),
     to: params.inviteeEmail,
-    subject: `[${appName}] ${subjectInviter} さんから「${subjectCompany}」への招待`,
+    subject: `[${appName}] ${headerSafeInviterName} さんから「${headerSafeCompanyName}」への招待`,
     component: InvitationEmail({
       url: params.url,
       appName,

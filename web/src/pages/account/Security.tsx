@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
-const items = [
+const plannedSecurityFeatures = [
   {
     title: "Passkey",
     description: "指紋・顔認証・PIN でログインできます",
@@ -26,7 +26,7 @@ export const Security = () => {
       <Separator className="my-6" />
 
       <ul className="divide-y">
-        {items.map((item) => (
+        {plannedSecurityFeatures.map((item) => (
           <li key={item.title} className="flex items-start justify-between gap-4 py-5">
             <div>
               <p className="font-medium">{item.title}</p>

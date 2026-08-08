@@ -9,7 +9,7 @@ type SessionList = Awaited<ReturnType<typeof authClient.listSessions>>["data"];
 type SessionItem = NonNullable<SessionList>[number];
 
 // 端末ごとに 1 回だけ作って再利用 (per-render の new Intl.DateTimeFormat 生成を回避)。
-const dateFormatter = new Intl.DateTimeFormat("ja-JP", {
+const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
   dateStyle: "medium",
   timeStyle: "short",
 });
@@ -50,7 +50,7 @@ export const Sessions = () => {
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   IP: <span translate="no">{session.ipAddress || "—"}</span> ・ 期限:{" "}
-                  {dateFormatter.format(new Date(session.expiresAt))}
+                  {expiresAtFormatter.format(new Date(session.expiresAt))}
                 </p>
               </div>
             </li>

@@ -98,7 +98,6 @@ export type MemberRow = {
   joinedAt: Date;
 };
 
-// 事業所のメンバー一覧 (membership × user join)。Members 画面の表示用。
 export async function findMembersByCompanyId(
   companyId: string,
   txOrDb: DbOrTx = db,
@@ -173,7 +172,6 @@ export async function insertMembership(
     });
 }
 
-// role 変更 (UpdateRole)。対象 (user, company) の membership.role を更新する。
 // OWNER 数が減る変更は呼び出し側で withOwnerLockGuard 内に包むこと。
 export async function updateMembershipRole(
   userId: string,
@@ -189,7 +187,7 @@ export async function updateMembershipRole(
     .then((rows) => rows.at(0));
 }
 
-// membership 削除 (退会 / 除名)。OWNER を減らす場合は withOwnerLockGuard 内で。
+// OWNER を減らす削除 (退会 / 除名) は withOwnerLockGuard 内で行うこと。
 export async function deleteMembership(
   userId: string,
   companyId: string,

@@ -74,7 +74,7 @@ export function useSignPage(options: {
 
   return {
     // false のときページは /auth/error へ replace して null を返す (handler 群は呼ばれない前提)
-    valid: parseResult.success,
+    paramsValid: parseResult.success,
     serviceDisplayName: parseResult.success
       ? TAIMEI_SERVICES[parseResult.data.service_name as ServiceName].name
       : "",

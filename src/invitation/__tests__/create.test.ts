@@ -151,7 +151,7 @@ describe("createInvitation (use-case)", () => {
   });
 
   test("QA-M-02 rate 上限中でも既存 PENDING 宛の再送 → reused=true (idempotency > rate 順序)", async () => {
-    // 設計決定 3 の逐次 semantic: idempotency check (tx 外) → 新規のみ rate 消費 (tx 外) → tx。
+    // 逐次 semantic: idempotency check (tx 外) → 新規のみ rate 消費 (tx 外) → tx。
     // idempotency check が rate 消費より先にあるため、既存 PENDING があれば rate 上限でも 200 reused。
     const owner = await seedUser("m02b-owner");
     const co = await seedCompany("m02b");

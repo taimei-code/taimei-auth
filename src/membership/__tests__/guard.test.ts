@@ -148,7 +148,7 @@ describe("requireMembership (requireActor + requireMembershipOf の合成)", () 
 
   // QA-R-05: findMembership の throw は伝播させ 500 になる (fail-closed 対象は session 解決のみ、
   // I/O 失敗は正しく 500 に上げる)。この不変条件は identity DB を将来 RPC 化して findMembership が
-  // RPC になった時にも守るべき境界のため、guard.ts 側で pin する。
+  // RPC になった時にも守るべき境界のため、guard/core.ts 側で pin する。
   test("QA-R-05 findMembership の throw は捕捉せず伝播する (fail-closed の対象は session 解決のみ)", async () => {
     const { requireMembership } = createMembershipGuard({
       getActor: async () => anActor,

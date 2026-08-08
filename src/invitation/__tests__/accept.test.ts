@@ -128,7 +128,7 @@ describe("acceptInvitation", () => {
     if (!invitationRow) throw new Error("seed failed");
 
     // Bun 1.3 の spy.mockRestore() は call history もクリアするため、warn call の検証は
-    // mockRestore 前に済ませてから spy を戻す (spy-test2.ts で挙動確認済み)。
+    // mockRestore 前に済ませてから spy を戻す (実測: PR #109)。
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     let warnCalls: unknown[][] = [];
     let acceptResult: Awaited<ReturnType<typeof acceptInvitation>>;

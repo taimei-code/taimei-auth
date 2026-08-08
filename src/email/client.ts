@@ -10,8 +10,7 @@ export async function renderAndSendEmail(params: {
   to: string;
   subject: string;
   component: ReactElement;
-  // console.error の識別ラベル (例: "magic link")
-  kind: string;
+  kind: "magic link" | "welcome" | "invitation";
 }): Promise<void> {
   // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
   // undefined ("render2 is not a function") になる。dynamic import で実行時に module

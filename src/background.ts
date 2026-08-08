@@ -15,12 +15,11 @@ export function withWaitUntil<T>(waitUntil: WaitUntil, fn: () => T): T {
   return waitUntilStore.run(waitUntil, fn);
 }
 
-// 背景タスクを登録する。promise は呼出側で生成・.catch 済みの前提。
-// Workers では waitUntil に渡して完走を保証、Bun/Node では fire-and-forget のまま。
+// promise は呼出側で生成・.catch 済みの前提。
+// Workers: ctx.waitUntil で response 後も完走を保証する。
+// Bun/Node: store 無し → fire-and-forget (best-effort。process 終了時は取りこぼしうるが、
+// 監査ログ等は critical path ではないため許容)。
 export function runBackground(promise: Promise<unknown>): void {
   const waitUntil = waitUntilStore.getStore();
-  // Workers: ctx.waitUntil で response 後も完走を保証する。
-  // Bun/Node: store 無し → fire-and-forget (best-effort。process 終了時は取りこぼしうるが、
-  // 監査ログ等は critical path ではないため許容。呼出側で .catch 済み)。
   if (waitUntil) waitUntil(promise);
 }

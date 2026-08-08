@@ -42,13 +42,13 @@ export class AccountApiError extends Error {
 // 画面固有 (同じ 409 でも操作によって意味が違う) なので呼び出し側が渡す。
 export function describeAccountApiError(
   err: unknown,
-  messages: Partial<Record<number, string>> & { fallback: string },
+  messagesByStatus: Partial<Record<number, string>> & { fallback: string },
 ): string {
   if (err instanceof AccountApiError) {
-    const specific = messages[err.status];
+    const specific = messagesByStatus[err.status];
     if (specific !== undefined) return specific;
   }
-  return messages.fallback;
+  return messagesByStatus.fallback;
 }
 
 export type CompanyState = {
@@ -69,8 +69,6 @@ export async function listMyMemberships(): Promise<Membership[]> {
 }
 
 type CreateCompanyParams = { name: string; org_code: OrgCode };
-
-// 事業所作成は signup (0 件ガード付き) / 追加 (制限なし) で叩く endpoint だけ違い、成功 response は同形。
 
 // signup フローで最初の事業所を作る (membership 0 件のときだけサーバが受理)。
 export const createCompany = (params: CreateCompanyParams): Promise<CreateCompanyResult> =>
