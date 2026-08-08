@@ -1,19 +1,14 @@
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 
-import {
-  AccountApiError,
-  getCompanyState,
-  setCurrentCompany,
-  type Membership,
-} from "@/lib/account-api";
+import { AccountApiError, getCompanyState, type Membership } from "@/lib/account-api";
 
 type CompanyContextValue = {
   loading: boolean;
@@ -27,14 +22,13 @@ type CompanyContextValue = {
   currentCompanyId: string | null;
   currentMembership: Membership | null;
   refresh: () => Promise<void>;
-  switchCompany: (companyId: string) => Promise<void>;
 };
 
 const CompanyContext = createContext<CompanyContextValue | null>(null);
 
-// /account 配下で現在の事業所 + 所属一覧を共有する。事業所切替は user.last_used_company_id を
-// 更新して state を再 fetch するだけ。window.location.reload は使わない (reload は入力中の
-// 未保存フォームを消失させるため)。
+// /account 配下で現在の事業所 + 所属一覧を共有する。事業所切替は呼び出し側が
+// setCurrentCompany (user.last_used_company_id の更新) → refresh の 2 段で行う。
+// window.location.reload は使わない (reload は入力中の未保存フォームを消失させるため)。
 export const CompanyProvider = ({ children }: { children: ReactNode }) => {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
@@ -61,14 +55,6 @@ export const CompanyProvider = ({ children }: { children: ReactNode }) => {
       .finally(() => setLoading(false));
   }, [refresh]);
 
-  const switchCompany = useCallback(
-    async (companyId: string) => {
-      await setCurrentCompany(companyId);
-      await refresh();
-    },
-    [refresh],
-  );
-
   const value = useMemo<CompanyContextValue>(() => {
     const currentMembership =
       memberships.find((m) => m.company_id === currentCompanyId) ?? memberships.at(0) ?? null;
@@ -80,15 +66,14 @@ export const CompanyProvider = ({ children }: { children: ReactNode }) => {
       currentCompanyId,
       currentMembership,
       refresh,
-      switchCompany,
     };
-  }, [loading, unauthorized, loadFailed, memberships, currentCompanyId, refresh, switchCompany]);
+  }, [loading, unauthorized, loadFailed, memberships, currentCompanyId, refresh]);
 
-  return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;
+  return <CompanyContext value={value}>{children}</CompanyContext>;
 };
 
 export const useCompanyContext = (): CompanyContextValue => {
-  const ctx = useContext(CompanyContext);
+  const ctx = use(CompanyContext);
   if (!ctx) {
     throw new Error("useCompanyContext must be used within CompanyProvider");
   }
