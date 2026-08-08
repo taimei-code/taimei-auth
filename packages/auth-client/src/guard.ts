@@ -1,10 +1,10 @@
 import type { createAuthClient } from "./server";
 import type { SessionData, VerifyResult } from "./types";
-import { Result } from "./gen/auth/v1/auth_pb";
+import { Result, type VerifySessionResponse } from "./gen/auth/v1/auth_pb";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
 
-// React.cache 互換シグネチャを `any` を使わず Args/R の dual generic で表現する。
+// react を import せず React.cache をそのまま注入できる形。詳細: packages/auth-client/CLAUDE.md ルール 7 (層 1)
 type CacheFn = <Args extends readonly unknown[], R>(
   fn: (...args: Args) => R,
 ) => (...args: Args) => R;
@@ -12,14 +12,13 @@ type CacheFn = <Args extends readonly unknown[], R>(
 type GuardOptions = {
   client: AuthClient;
   getSessionToken: () => Promise<string | undefined>;
-  // Next.js consumer は React.cache を注入することで 1 request 内 dedup を得る。
-  // 省略時は dedup 無し。Hono / Express 等で同 request 内多重呼出する場合は consumer 側で
-  // memoize するか cache を注入する。
+  // 1 request 内の多重呼出を dedup する memoize 関数 (Next.js consumer は React.cache を渡す)。
+  // 省略時は dedup 無しで毎回 VerifySession RPC が飛ぶ。
   cache?: CacheFn;
 };
 
-// ExternalToken / InternalSession brand 型は本 module 内に閉じる。
-// declare const symbol は dist/guard.d.ts に登場しないため consumer に漏出しない。
+// brand 型は本 module 内に閉じる: `declare const` の unique symbol は dist/guard.d.ts に出力されず
+// consumer に漏出しない (回帰は __tests__/verify-result.test.ts で検出する)。
 declare const externalTokenBrand: unique symbol;
 declare const internalSessionBrand: unique symbol;
 
@@ -31,11 +30,47 @@ const identity: CacheFn = (fn) => fn;
 const asExternalToken = (raw: string): ExternalToken => ({ raw }) as ExternalToken;
 const asInternalSession = (data: SessionData): InternalSession => data as InternalSession;
 
+// proto-es の oneof case は "ok" | "error" | undefined。case 欠損と user / session 欠損は
+// Result.UNSPECIFIED に倒す (fail-closed)。
+const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
+  switch (response.outcome.case) {
+    case "error":
+      return { ok: false, reason: response.outcome.value.reason };
+    case "ok": {
+      const { user, session } = response.outcome.value;
+      if (!user || !session) {
+        return { ok: false, reason: Result.UNSPECIFIED };
+      }
+      const internal: InternalSession = asInternalSession({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          emailVerified: user.emailVerified,
+          image: user.image,
+          createdAt: user.createdAt,
+          updatedAt: user.updatedAt,
+        },
+        session: {
+          id: session.id,
+          expiresAt: session.expiresAt,
+          kind: "user",
+        },
+        // session.companyId は事業所切替 (ADR-009 Phase C) 用で、secondaryStorage 構成では
+        // session が Redis 管理のため常に空。現状は user 側の永続値 (last_used_company_id) が権威。
+        companyId: session.companyId ?? user.defaultCompanyId,
+      });
+      return { ok: true, data: internal };
+    }
+    default:
+      return { ok: false, reason: Result.UNSPECIFIED };
+  }
+};
+
 export function createAuthGuard(options: GuardOptions) {
   const { client, getSessionToken, cache = identity } = options;
 
-  // 戻り値は VerifyResult。consumer は `result.ok` で分岐する。
-  // RPC エラー (transport down 等) は Result.UNSPECIFIED を返し、consumer は再ログインに倒す。
+  // RPC 失敗 (transport down 等) も Result.UNSPECIFIED を返す。consumer は UNSPECIFIED を再ログインに倒す。
   const getSession = cache(async (): Promise<VerifyResult> => {
     const raw = await getSessionToken();
     if (!raw) {
@@ -43,53 +78,14 @@ export function createAuthGuard(options: GuardOptions) {
     }
     const token: ExternalToken = asExternalToken(raw);
 
-    // verifyResponse: RPC からの raw proto レスポンス。外側関数の戻り値型 `VerifyResult` と
-    // 名前が衝突しないよう response を用いる (brand 内部実装の可読性)。
-    const verifyResponse = await client.authService
+    const response = await client.authService
       .verifySession({ sessionToken: token.raw })
       .catch(() => null);
-
-    if (!verifyResponse) {
+    if (!response) {
       return { ok: false, reason: Result.UNSPECIFIED };
     }
 
-    // proto-es oneof は case: "ok" | "error" | undefined。default 経路は
-    // 「outcome 想定外」fallback (consumer は再ログインに倒す単一 fallback)。
-    switch (verifyResponse.outcome.case) {
-      case "error":
-        return { ok: false, reason: verifyResponse.outcome.value.reason };
-      case "ok": {
-        const { user, session } = verifyResponse.outcome.value;
-        if (!user || !session) {
-          return { ok: false, reason: Result.UNSPECIFIED };
-        }
-        // brand 型で internal-only な session 表現を作る。consumer には plain SessionData として返す。
-        const internal: InternalSession = asInternalSession({
-          user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            emailVerified: user.emailVerified,
-            image: user.image,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-          },
-          session: {
-            id: session.id,
-            expiresAt: session.expiresAt,
-            kind: "user",
-          },
-          // ADR-009: Phase A の companyId source は user.default_company_id (= last_used_company_id)。
-          // session.company_id は Phase C の事業所切替で使う想定だが、secondaryStorage 構成では
-          // session が Redis 管理で DB 列が空のため、Phase A では user 側の永続値を権威とする。
-          // undefined は consumer 側で「事業所未選択」(/auth/signup/company へ redirect) として扱う。
-          companyId: session.companyId ?? user.defaultCompanyId,
-        });
-        return { ok: true, data: internal };
-      }
-      default:
-        return { ok: false, reason: Result.UNSPECIFIED };
-    }
+    return toVerifyResult(response);
   });
 
   return { getSession };

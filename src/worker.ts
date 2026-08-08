@@ -43,7 +43,7 @@ function bootstrap(env: Env): Hono {
   app = buildApp({
     mountStatic: (a) => {
       a.all("*", (c) => {
-        const env = c.env as Env;
+        const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
         // vite base=/auth/ のため index.html は /auth/assets/* を参照する。Workers Static Assets は
         // web/dist を / 直下に配信するので、/auth プレフィックスを剥がして委譲する (Bun index.ts の
@@ -52,10 +52,10 @@ function bootstrap(env: Env): Hono {
         // 真っ白になる。詳細: docs/adr/0002-spa-routing-and-static-assets.md
         if (url.pathname.startsWith("/auth/")) {
           url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
-          return env.ASSETS.fetch(new Request(url, c.req.raw));
+          return requestEnv.ASSETS.fetch(new Request(url, c.req.raw));
         }
         // /account/* 等の deep link は実ファイル無し → SPA fallback で index.html。
-        return env.ASSETS.fetch(c.req.raw);
+        return requestEnv.ASSETS.fetch(c.req.raw);
       });
     },
   });

@@ -64,13 +64,14 @@ export const createSignupCompany = (
 ): Promise<SignupCompanyResult> =>
   runInTransaction(async (tx) => {
     await lockUserForCompanyCreation(tx, userId);
-    // 「所属事業所を持たない user か」の判定は ACTIVE company の membership のみで行う。
-    // soft delete は company を DELETED にしても membership 行は残す (audit/invitation 保持) ため、
-    // 全 membership で数えると「全削除した user」が残存 membership に弾かれ、再 signup が
-    // /account ⇄ signup/company の redirect loop に陥る。SPA / 一覧 API と同じ ACTIVE 基準に揃える。
-    const existing = await findMembershipsByUserId(userId, tx);
-    const activeExisting = existing.filter((m) => m.companyActivationStatus === "ACTIVE");
-    if (activeExisting.length > 0) {
+    // ACTIVE 基準で数えるのは、soft delete が company を DELETED にしても membership 行を残す
+    // (audit/invitation 保持) ため。全 membership で数えると「全削除した user」が残存 membership に
+    // 弾かれ、再 signup が /account ⇄ signup/company の redirect loop に陥る。SPA / 一覧 API と同基準。
+    const memberships = await findMembershipsByUserId(userId, tx);
+    const alreadyBelongsToActiveCompany = memberships.some(
+      (m) => m.companyActivationStatus === "ACTIVE",
+    );
+    if (alreadyBelongsToActiveCompany) {
       return { ok: false, reason: "already_exists" };
     }
     return { ok: true, ...(await createCompanyWithOwner(tx, userId, input)) };

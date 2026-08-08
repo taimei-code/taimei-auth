@@ -32,12 +32,12 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("CORPORATE");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const reset = () => {
     setName("");
     setOrgCode("CORPORATE");
-    setError(null);
+    setErrorMessage(null);
   };
 
   // 送信中は閉じない (二重 submit / state 不整合を防ぐ)。作成後は dialog を先に閉じるが、
@@ -53,7 +53,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     e.preventDefault();
     const trimmedName = name.trim();
     setSubmitting(true);
-    setError(null);
+    setErrorMessage(null);
     addCompany({ name: trimmedName, org_code: orgCode })
       .then(() => {
         reset();
@@ -64,7 +64,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
         });
       })
       // dialog 内 inline は作成 POST 自体の失敗だけを受け持つ (再取得の失敗は上で通知済み)
-      .catch(() => setError("事業所の作成に失敗しました。"))
+      .catch(() => setErrorMessage("事業所の作成に失敗しました。"))
       .finally(() => setSubmitting(false));
   };
 
@@ -102,7 +102,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
             name="add-org-code"
             order={["CORPORATE", "PERSONAL"]}
           />
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
           <DialogFooter>
             <Button type="submit" disabled={submitting || name.trim() === ""}>
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}

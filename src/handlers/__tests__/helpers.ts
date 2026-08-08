@@ -28,7 +28,7 @@ export type StubActor = { id: string; email: string } | null;
 let originalGetSession: typeof auth.api.getSession | null = null;
 let currentActor: StubActor = null;
 
-// getSession を stub して guard.ts の getActor が任意の actor を返すようにする。
+// getSession を stub して guard/core.ts の getActor が任意の actor を返すようにする。
 // module ロード時に requireActor は `auth.api.getSession` の値を closure captured せず、
 // call 時に auth.api.getSession を lookup する ((headers) => auth.api.getSession({ headers }))
 // ため実行時に patched 版が読まれる。

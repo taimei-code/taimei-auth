@@ -8,7 +8,7 @@ import {
   type Role,
 } from "@/db/repositories/invitation";
 import { runInTransaction } from "@/db/transaction";
-import { incrInvitationRate } from "./rate-limit";
+import { tryConsumeInvitationQuota } from "./rate-limit";
 
 // ADR-0012 (Use-case 層): 招待作成手続 (idempotency + rate-limit + INSERT + audit)。
 // 手順は現行 handler と厳密に一致: idempotency 読取 (tx 外) → 新規のみ rate-limit 消費 (tx 外)
@@ -39,7 +39,7 @@ export const createInvitation = async (params: {
     return { ok: true, invitation: existing, reused: true };
   }
 
-  const withinLimit = await incrInvitationRate(companyId);
+  const withinLimit = await tryConsumeInvitationQuota(companyId);
   if (!withinLimit) {
     return { ok: false, reason: "rate_limited" };
   }

@@ -11,8 +11,6 @@ export type RateLimitOptions = {
 export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
   `rate-limit:magic-link:${axis}:${id}`;
 
-// INCR + EXPIRE を MULTI で atomic 化。INCR 後 EXPIRE 設定までに crash すると
-// TTL なし counter が永続残留する問題を回避する。
 // Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。Sentry capture で可観測性確保。
 // EXPIRE を毎回呼ぶことで「最後の req から windowSec」semantic になる (固定 window ではない)
 // — Magic Link 5 分有効と比べて数十秒の差は本質影響なしとして許容。厳密固定 window が必要に

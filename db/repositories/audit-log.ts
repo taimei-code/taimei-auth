@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "../client";
-import { auditLog, type Role } from "../schema";
-import type { OrgCode } from "./company";
+import { auditLog, type OrgCode, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
 
 // user の意図ある action のみを記録する (session revoke 等の internal state change は記録対象外)。
@@ -237,7 +236,6 @@ export const recordInvitationAccepted = (
     txOrDb,
   );
 
-// payload 導出規則の実装は batch 版 (recordInvitationsRevoked) に一本化し、単数版は委譲する。
 export const recordInvitationRevoked = (
   params: {
     actor_user_id: string;
@@ -313,7 +311,6 @@ export const recordRoleChanged = (
     txOrDb,
   );
 
-// payload 導出規則の実装は batch 版 (recordMembershipsRemoved) に一本化し、単数版は委譲する。
 export const recordMembershipRemoved = (
   params: {
     actor_user_id: string;
@@ -332,7 +329,6 @@ export const recordMembershipRemoved = (
     txOrDb,
   );
 
-// DeleteCompany が失効させた PENDING 招待 N 件の batch 版。
 export const recordInvitationsRevoked = (
   params: {
     actor_user_id: string;
@@ -354,7 +350,6 @@ export const recordInvitationsRevoked = (
     txOrDb,
   );
 
-// DeleteCompany が物理削除した membership N 件の batch 版。
 export const recordMembershipsRemoved = (
   params: {
     actor_user_id: string;

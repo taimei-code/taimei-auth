@@ -37,9 +37,9 @@ export default function InvitationEmail({
   supportEmail = "support@taimei-code.com",
   abuseUrl = "https://taimei-code.com/security",
 }: InvitationEmailProps) {
-  const safeCompany = sanitizeDisplayText(companyName);
-  const safeInviter = sanitizeDisplayText(inviterName);
-  const safeInviterEmail = sanitizeDisplayText(inviterEmail);
+  const displaySafeCompanyName = sanitizeDisplayText(companyName);
+  const displaySafeInviterName = sanitizeDisplayText(inviterName);
+  const displaySafeInviterEmail = sanitizeDisplayText(inviterEmail);
 
   return (
     <Html lang="ja">
@@ -51,7 +51,7 @@ export default function InvitationEmail({
         </style>
       </Head>
       <Preview>
-        {safeInviter} さんから「{safeCompany}」への招待
+        {displaySafeInviterName} さんから「{displaySafeCompanyName}」への招待
       </Preview>
       <Tailwind>
         <Body className="mx-auto bg-white font-sans">
@@ -67,8 +67,8 @@ export default function InvitationEmail({
                 className="mt-4 text-center text-base leading-relaxed"
                 style={{ color: "#737373" }}
               >
-                {safeInviter} さん ({safeInviterEmail}) から
-                <br />「{safeCompany}」への参加 ({roleLabel}) に招待されています。
+                {displaySafeInviterName} さん ({displaySafeInviterEmail}) から
+                <br />「{displaySafeCompanyName}」への参加 ({roleLabel}) に招待されています。
               </Text>
             </Section>
 

@@ -75,9 +75,9 @@ describe("switchCompany", () => {
   });
 
   test("QA-E-05 tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden", async () => {
-    // 設計決定 4: switch-company の tx 内で findMembership を再取得し、tx 外 pre-check と
-    // 更新の間で除名 (別 tx の deleteMembership) が入った場合 forbidden を返す。tx 外 pre-check
-    // のみに退化すると無効な company_id が last_used に silent 書き込みされる。
+    // tx 内で findMembership を再取得し、tx 外 pre-check と更新の間で除名 (別 tx の
+    // deleteMembership) が入った場合 forbidden を返す。tx 外 pre-check のみに退化すると
+    // 無効な company_id が last_used に silent 書き込みされる。
     const co1 = await seedCompany("toctou-a");
     const co2 = await seedCompany("toctou-b");
     const u = await seedUser("toctou", { lastUsedCompanyId: co1 });

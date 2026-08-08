@@ -15,7 +15,8 @@ export const validateRedirectUrl = (redirectUrl: string, service: ServiceName): 
     return false;
   }
 
-  if (url.username !== "" || url.password !== "") {
+  const hasEmbeddedCredentials = url.username !== "" || url.password !== "";
+  if (hasEmbeddedCredentials) {
     return false;
   }
 

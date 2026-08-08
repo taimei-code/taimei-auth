@@ -11,8 +11,7 @@ export const signInParamsObjectSchema = z.object({
   service_name: serviceNameSchema,
   redirect_url: z.string().min(1).max(2048),
   sign_up_url: z.string().min(1).max(2048).optional(),
-  // ADR-009 Phase B: 招待リンクから signup する時に query で運ばれる invitation token。
-  // Phase A 時点では string として通すだけで accept handler は Phase B で実装。
+  // 招待リンクからの signup 経路で運ばれるだけで、受諾は /api/account/accept-invitation が担う。
   invitation_token: z.string().min(1).max(256).optional(),
 });
 

@@ -6,7 +6,6 @@ import { Toaster } from "@/components/notify";
 import { SignOutButton } from "@/components/account/SignOutButton";
 import { CompanySwitcher } from "@/components/account/CompanySwitcher";
 
-// 事業所セクション (CompanySwitcher + 所属事業所 / メンバー) と アカウントセクションの 2 区分。
 // mobile 対応 (Sheet 等) は未実装で、現時点は固定 sidebar の最小構成。
 const companyNav = [
   { to: "/account/companies", icon: Building2, label: "所属事業所", end: false },

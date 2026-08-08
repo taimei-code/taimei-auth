@@ -13,6 +13,7 @@ import {
   generateMembershipId,
   insertMembership,
   removeMembershipsOfCompany,
+  type Role,
 } from "../repositories/membership";
 import { findUserById, reassignLastUsedCompanyForDeletedCompany } from "../repositories/user";
 import { company, invitation, membership, user } from "../schema";
@@ -46,11 +47,7 @@ async function seedCompany(suffix: string): Promise<string> {
   return id;
 }
 
-async function join(
-  userId: string,
-  companyId: string,
-  role: "OWNER" | "ADMIN" | "MEMBER" = "OWNER",
-) {
+async function join(userId: string, companyId: string, role: Role = "OWNER") {
   await insertMembership({ id: generateMembershipId(), userId, companyId, role });
 }
 

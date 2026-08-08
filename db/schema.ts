@@ -13,15 +13,22 @@ import { relations } from "drizzle-orm";
 // ADR-009: membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
 
+// ADR-009: company / audit_log payload が共有する org_code 値集合の SSOT。CONTEXT.md 'org_code'
+export type OrgCode = "PERSONAL" | "CORPORATE";
+
+// ADR-009: 事業所のライフサイクル状態。CONTEXT.md 'activation_status'
+export type ActivationStatus = "ACTIVE" | "DELETED";
+
+// used_at 1 列に 3 状態を多重化せず、独立した status 列で表す。
+export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
+
 // ADR-009: 事業所 (課金単位)。詳細: CONTEXT.md '事業所 / company'
 // user / session / membership / invitation が参照するため declaration を先頭に置く。
 export const company = pgTable("company", {
   id: text("id").primaryKey().notNull(),
   name: text("name").notNull(),
-  // 'PERSONAL' (個人事業主) | 'CORPORATE' (法人)
-  orgCode: text("org_code").notNull(),
-  // 'ACTIVE' | 'DELETED'。物理削除は本 ADR スコープ外 (CONTEXT.md 'activation_status')。
-  activationStatus: text("activation_status").notNull().default("ACTIVE"),
+  orgCode: text("org_code").$type<OrgCode>().notNull(),
+  activationStatus: text("activation_status").$type<ActivationStatus>().notNull().default("ACTIVE"),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
@@ -156,7 +163,6 @@ export const membership = pgTable(
     companyId: text("company_id")
       .notNull()
       .references(() => company.id, { onDelete: "restrict" }),
-    // 'OWNER' | 'ADMIN' | 'MEMBER' (CONTEXT.md 'role')
     role: text("role").$type<Role>().notNull(),
     joinedAt: timestamp("joined_at").defaultNow().notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -186,8 +192,7 @@ export const invitation = pgTable(
     role: text("role").$type<Role>().notNull(),
     token: text("token").notNull().unique(),
     expiresAt: timestamp("expires_at").notNull(),
-    // 'PENDING' | 'ACCEPTED' | 'REVOKED' (NC3 結論: used_at 1 列多重化を避ける)
-    status: text("status").notNull().default("PENDING"),
+    status: text("status").$type<InvitationStatus>().notNull().default("PENDING"),
     acceptedAt: timestamp("accepted_at"),
     revokedAt: timestamp("revoked_at"),
     // legacy alias / 派生値 (COALESCE(accepted_at, revoked_at)) を入れる窓口。

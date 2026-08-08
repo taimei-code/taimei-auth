@@ -42,7 +42,7 @@ function extractInvitationToken(magicLinkUrl: string): string | null {
   // magicLinkUrl 例: https://auth.../api/auth/magic-link/verify?token=...&callbackURL=<encoded>
   const callback = safeParseUrl(magicLinkUrl)?.searchParams.get("callbackURL");
   if (!callback) return null;
-  // callbackURL は相対 / 絶対どちらもあり得るため dummy base で parse
+  // callbackURL は相対 / 絶対どちらもあり得る。
   const parsed = safeParseUrl(callback);
   if (!parsed) return null;
   // javascript: 等の非 http(s) スキーム callbackURL は invitation 文脈として扱わない (不正値を無視)。
@@ -50,7 +50,9 @@ function extractInvitationToken(magicLinkUrl: string): string | null {
   return parsed.searchParams.get("invitation_token");
 }
 
+const RELATIVE_URL_BASE = "http://localhost";
+
 function safeParseUrl(value: string): URL | null {
   // URL.canParse で事前判定し synchronous throw (try-catch) を避ける。
-  return URL.canParse(value, "http://localhost") ? new URL(value, "http://localhost") : null;
+  return URL.canParse(value, RELATIVE_URL_BASE) ? new URL(value, RELATIVE_URL_BASE) : null;
 }

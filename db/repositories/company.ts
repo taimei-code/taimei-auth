@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { company } from "../schema";
+import { company, type OrgCode } from "../schema";
 import type { DbOrTx } from "../transaction";
 
 // ADR-009: company.id は Stripe 流の `cmp_<24chars>` prefix で format 統一。
@@ -10,7 +10,7 @@ import type { DbOrTx } from "../transaction";
 export const generateCompanyId = (): string => `cmp_${nanoid(24)}`;
 
 export type CompanyRow = typeof company.$inferSelect;
-export type OrgCode = "PERSONAL" | "CORPORATE";
+export type { OrgCode };
 
 export async function findCompanyById(
   id: string,
@@ -46,7 +46,7 @@ export async function insertCompany(
     });
 }
 
-// name / org_code の更新 (UpdateCompany)。ACTIVE な company のみ対象。
+// ACTIVE な company のみ更新対象。
 export async function updateCompany(
   id: string,
   updates: { name: string; orgCode: OrgCode },
@@ -60,7 +60,6 @@ export async function updateCompany(
     .then((rows) => rows.at(0));
 }
 
-// soft delete (DeleteCompany)。activation_status=DELETED + deleted_at をセット。
 // membership / invitation 行は残す (物理削除は本 ADR スコープ外)。ACTIVE のみ削除可能。
 export async function softDeleteCompany(
   id: string,

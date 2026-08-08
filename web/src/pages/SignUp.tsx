@@ -28,7 +28,7 @@ export const SignUp = () => {
     githubErrorFallback: "GitHub サインアップに失敗しました",
   });
 
-  if (!sign.valid) {
+  if (!sign.paramsValid) {
     window.location.replace("/auth/error?reason=invalid_redirect_url");
     return null;
   }

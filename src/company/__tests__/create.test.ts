@@ -81,10 +81,9 @@ describe("createSignupCompany", () => {
     expect(memberships.length).toBe(1);
   });
 
-  // 所属事業所を全削除した user の再 signup。soft delete は company を DELETED にするが
-  // membership 行は残す (audit / invitation 保持のため) ので、0 件ガードを「全 membership」で
-  // 数えると残存 membership に弾かれ再作成できない (= /account ⇄ signup/company の redirect loop)。
-  // ガードは「ACTIVE company の membership」基準で数える、を本テストで固定する。
+  // 0 件ガードが ACTIVE 基準であること (根拠: src/company/create.ts) を固定する。
+  // 全 membership 基準に退化すると、全削除した user の再 signup が残存 membership に弾かれ
+  // /account ⇄ signup/company の redirect loop に陥る。
   test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", async () => {
     const userId = await seedUser("signup-after-delete");
     const first = await createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" });

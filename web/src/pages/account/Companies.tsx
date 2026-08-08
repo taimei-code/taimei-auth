@@ -19,28 +19,28 @@ import { AddCompanyDialog } from "@/components/account/AddCompanyDialog";
 
 export const Companies = () => {
   const { memberships, currentCompanyId, refresh } = useCompanyContext();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyCompanyId, setBusyCompanyId] = useState<string | null>(null);
 
-  const userId = authClient.useSession().data?.user.id ?? null;
+  const selfUserId = authClient.useSession().data?.user.id ?? null;
 
   const handleSwitch = (companyId: string) => {
-    if (busyId) return;
-    setBusyId(companyId);
+    if (busyCompanyId) return;
+    setBusyCompanyId(companyId);
     setCurrentCompany(companyId)
       .then(() => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }))
       .catch(() => notifyError("事業所を切り替えられませんでした。"))
-      .finally(() => setBusyId(null));
+      .finally(() => setBusyCompanyId(null));
   };
 
   // 唯一の OWNER で抜けられなかった (409) company。委譲導線を出すため記録する。
   const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
 
   const handleLeave = (m: Membership) => {
-    if (!userId || busyId) return;
-    setBusyId(m.company_id);
+    if (!selfUserId || busyCompanyId) return;
+    setBusyCompanyId(m.company_id);
     setSoleOwnerCompanyId(null);
     let redirecting = false;
-    removeMember(m.company_id, userId)
+    removeMember(m.company_id, selfUserId)
       .then(({ accountDeleted }) => {
         if (accountDeleted) {
           // 遷移完了まで busy を維持する (解除すると遷移までの間に再クリックでき、
@@ -64,7 +64,7 @@ export const Companies = () => {
         }
       })
       .finally(() => {
-        if (!redirecting) setBusyId(null);
+        if (!redirecting) setBusyCompanyId(null);
       });
   };
 
@@ -115,9 +115,11 @@ export const Companies = () => {
                     variant="outline"
                     size="sm"
                     onClick={() => handleSwitch(m.company_id)}
-                    disabled={busyId !== null}
+                    disabled={busyCompanyId !== null}
                   >
-                    {busyId === m.company_id ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {busyCompanyId === m.company_id ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : null}
                     切替
                   </Button>
                 )}
@@ -140,7 +142,7 @@ export const Companies = () => {
                     variant="ghost"
                     size="sm"
                     onClick={() => handleLeave(m)}
-                    disabled={busyId !== null || !userId}
+                    disabled={busyCompanyId !== null || !selfUserId}
                   >
                     抜ける
                   </Button>

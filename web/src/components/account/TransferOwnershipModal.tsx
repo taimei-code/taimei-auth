@@ -34,25 +34,25 @@ export const TransferOwnershipModal = ({
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const selfId = authClient.useSession().data?.user.id ?? null;
+  const selfUserId = authClient.useSession().data?.user.id ?? null;
 
   useEffect(() => {
-    // selfId 未確定 (session fetch 中) で開くと自分自身が委譲対象に混ざるため、確定まで待つ。
-    if (!open || !selfId) return;
+    // selfUserId 未確定 (session fetch 中) で開くと自分自身が委譲対象に混ざるため、確定まで待つ。
+    if (!open || !selfUserId) return;
     setLoading(true);
-    setError(null);
+    setErrorMessage(null);
     listMembers(companyId)
-      .then((m) => setMembers(m.filter((x) => x.user_id !== selfId)))
-      .catch(() => setError("メンバーの取得に失敗しました。"))
+      .then((m) => setMembers(m.filter((x) => x.user_id !== selfUserId)))
+      .catch(() => setErrorMessage("メンバーの取得に失敗しました。"))
       .finally(() => setLoading(false));
-  }, [open, companyId, selfId]);
+  }, [open, companyId, selfUserId]);
 
   const handleTransfer = (to: Member) => {
     if (busyUserId) return;
     setBusyUserId(to.user_id);
-    setError(null);
+    setErrorMessage(null);
     transferOwnership(companyId, to.user_id)
       .then(() => {
         setOpen(false);
@@ -61,7 +61,7 @@ export const TransferOwnershipModal = ({
           staleShort: "オーナーを委譲しました",
         });
       })
-      .catch(() => setError("オーナー委譲に失敗しました。"))
+      .catch(() => setErrorMessage("オーナー委譲に失敗しました。"))
       .finally(() => setBusyUserId(null));
   };
 
@@ -99,7 +99,7 @@ export const TransferOwnershipModal = ({
             ))}
           </div>
         )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {errorMessage && <p className="text-sm text-destructive">{errorMessage}</p>}
       </DialogContent>
     </Dialog>
   );

@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { getSessionCookie } from "better-auth/cookies";
 import { auth } from "./auth";
@@ -23,19 +23,42 @@ import { getTrustedOrigins, isLocalEnvironment } from "./env";
 // connect-node の内部 http proxy は使わない (ADR-0011)。
 // 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
 export type AppOptions = {
-  // 共有ルートをすべて登録した後に、静的配信ルート (+ SPA fallback / catch-all) を登録する。
-  // 静的配信は runtime 固有のため呼び出し側 entry が渡す。
+  // catch-all (SPA fallback) を含むため、共有ルートをすべて登録した後に呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
-// account router 群の登録を 1 箇所に集約する。認可 smoke (account-routes-auth.test.ts) が同じ helper で
-// アプリを組むことで、router の追加漏れ (guard 未通過 route の混入) を CI で検知できる。
+// 認可 smoke (account-routes-auth.test.ts) が同じ helper でアプリを組むことで、
+// router の追加漏れ (guard 未通過 route の混入) を CI で検知できる。
 export function mountAccountRoutes(app: Hono): void {
   app.route("/", accountAvatar);
   app.route("/", accountCompany);
   app.route("/", accountInvitation);
   app.route("/", accountMembership);
 }
+
+// local (dev / e2e) は同一 key への連続アクセスが常態のため、production limit だと自テストが 429 を
+// 踏む。better-auth 内蔵 rateLimit (auth.ts) と同じ緩和方針。
+const LOCAL_RELAXED_LIMIT = 1000;
+
+const requireServiceKey: MiddlewareHandler = async (c, next) => {
+  const serviceKey = c.req.header("X-Service-Key");
+  const acceptedServiceKeys = getValidServiceKeys();
+  if (acceptedServiceKeys.length === 0) {
+    // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。
+    // ここに到達するのは dev / test のみ。二重防御として production だけ 503 を返す。
+    if (process.env.APP_ENV === "production") {
+      return c.json({ error: "Service Key not configured (production)" }, 503);
+    }
+    console.warn(
+      "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
+    );
+    return next();
+  }
+  if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
+    return c.json({ error: "Unauthorized: invalid service key" }, 401);
+  }
+  return next();
+};
 
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
@@ -51,26 +74,7 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  // ConnectRPC の X-Service-Key 検証。
-  app.use("/rpc/*", async (c, next) => {
-    const serviceKey = c.req.header("X-Service-Key");
-    const acceptedServiceKeys = getValidServiceKeys();
-    if (acceptedServiceKeys.length === 0) {
-      // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。
-      // ここに到達するのは dev / test のみ。二重防御として production だけ 503 を返す。
-      if (process.env.APP_ENV === "production") {
-        return c.json({ error: "Service Key not configured (production)" }, 503);
-      }
-      console.warn(
-        "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
-      );
-      return next();
-    }
-    if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
-      return c.json({ error: "Unauthorized: invalid service key" }, 401);
-    }
-    return next();
-  });
+  app.use("/rpc/*", requireServiceKey);
 
   // RPC は fetch ハンドラ直配信。マッチしなければ後段へは渡さず 404。
   app.all(
@@ -91,25 +95,22 @@ export function buildApp(options: AppOptions): Hono {
   // canary は無認証で Sentry captureMessage を直叩きする endpoint のため、連打による
   // Sentry quota 枯渇 (= 攻撃検知チャネル自体の盲目化) を IP 単位で抑える。
   // 正規の発火は攻撃者が canary を踏んだ瞬間のみで頻度は稀なため 10/IP/min で十分。
-  // local の緩和は magic-link rate limit と同方針。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
       keyFn: (c) => `rate-limit:canary:ip:${getClientContext(c.req.raw.headers).ip}`,
-      limit: isLocal ? 1000 : 10,
+      limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
       windowSec: 60,
     }),
   );
   app.route("/", canaryToken);
 
-  // Magic Link 経路のみ IP + email の 2 軸で rate limit。
-  // production: 5/IP/min + 3/email/min。local (dev / e2e): 1000/IP/min + 1000/email/min。
-  // better-auth 内蔵 rateLimit (auth.ts) と同じ緩和方針で揃える。
+  // Magic Link 経路のみ IP + email の 2 軸で rate limit (production: 5/IP/min + 3/email/min)。
   app.use(
     "/api/auth/sign-in/magic-link",
     createRateLimitMiddleware({
       keyFn: (c) => magicLinkKey("ip", getClientContext(c.req.raw.headers).ip),
-      limit: isLocal ? 1000 : 5,
+      limit: isLocal ? LOCAL_RELAXED_LIMIT : 5,
       windowSec: 60,
     }),
     createRateLimitMiddleware({
@@ -123,7 +124,7 @@ export function buildApp(options: AppOptions): Hono {
         const email = typeof body?.email === "string" ? body.email : "unknown";
         return magicLinkKey("email", email);
       },
-      limit: isLocal ? 1000 : 3,
+      limit: isLocal ? LOCAL_RELAXED_LIMIT : 3,
       windowSec: 60,
     }),
   );
@@ -159,7 +160,6 @@ export function buildApp(options: AppOptions): Hono {
     return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
   });
 
-  // 静的配信 (+ SPA fallback / catch-all) は runtime 固有。最後に登録する。
   options.mountStatic(app);
 
   return app;
