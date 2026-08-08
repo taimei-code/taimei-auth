@@ -1,19 +1,24 @@
 import { useState } from "react";
 import { Check, Loader2, Plus } from "lucide-react";
 
-import { AccountApiError, removeMember } from "@/lib/account-api";
+import {
+  AccountApiError,
+  removeMember,
+  setCurrentCompany,
+  type Membership,
+} from "@/lib/account-api";
 import { redirectAfterAuthChange } from "@/lib/auth-redirect";
 import { useCompanyContext } from "@/lib/company-context";
 import { authClient } from "@/lib/auth-client";
 import { orgCodeLabelJa, roleLabelJa } from "@/lib/labels";
-import { notifyError } from "@/components/notify";
+import { notifyAfterRefresh, notifyError } from "@/components/notify";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { TransferOwnershipModal } from "@/components/account/TransferOwnershipModal";
 import { AddCompanyDialog } from "@/components/account/AddCompanyDialog";
 
 export const Companies = () => {
-  const { memberships, currentCompanyId, switchCompany, refresh } = useCompanyContext();
+  const { memberships, currentCompanyId, refresh } = useCompanyContext();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const userId = authClient.useSession().data?.user.id ?? null;
@@ -21,20 +26,21 @@ export const Companies = () => {
   const handleSwitch = (companyId: string) => {
     if (busyId) return;
     setBusyId(companyId);
-    switchCompany(companyId)
-      .catch((e) => console.error("switch failed", e))
+    setCurrentCompany(companyId)
+      .then(() => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }))
+      .catch(() => notifyError("事業所を切り替えられませんでした。"))
       .finally(() => setBusyId(null));
   };
 
   // 唯一の OWNER で抜けられなかった (409) company。委譲導線を出すため記録する。
   const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
 
-  const handleLeave = (companyId: string) => {
+  const handleLeave = (m: Membership) => {
     if (!userId || busyId) return;
-    setBusyId(companyId);
+    setBusyId(m.company_id);
     setSoleOwnerCompanyId(null);
     let redirecting = false;
-    removeMember(companyId, userId)
+    removeMember(m.company_id, userId)
       .then(({ accountDeleted }) => {
         if (accountDeleted) {
           // 遷移完了まで busy を維持する (解除すると遷移までの間に再クリックでき、
@@ -43,13 +49,16 @@ export const Companies = () => {
           redirectAfterAuthChange("deleteAccount");
           return;
         }
-        return refresh();
+        return notifyAfterRefresh(refresh, {
+          done: `「${m.company_name}」から抜けました。`,
+          staleShort: "事業所から抜けました",
+        });
       })
       .catch((err) => {
         if (err instanceof AccountApiError && err.status === 409) {
           // toast にしない: このエラーは「オーナーを委譲」ボタンの出現理由の説明として
           // 導線と一緒に画面へ残り続ける必要がある (components/notify.tsx の経路規則)
-          setSoleOwnerCompanyId(companyId);
+          setSoleOwnerCompanyId(m.company_id);
         } else {
           notifyError("事業所から抜けられませんでした。");
         }
@@ -118,7 +127,7 @@ export const Companies = () => {
                     companyName={m.company_name}
                     onTransferred={() => {
                       setSoleOwnerCompanyId(null);
-                      void refresh();
+                      return refresh();
                     }}
                     trigger={
                       <Button variant="outline" size="sm">
@@ -130,7 +139,7 @@ export const Companies = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleLeave(m.company_id)}
+                    onClick={() => handleLeave(m)}
                     disabled={busyId !== null || !userId}
                   >
                     抜ける

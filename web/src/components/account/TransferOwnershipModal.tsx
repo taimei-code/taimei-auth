@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { listMembers, transferOwnership, type Member } from "@/lib/account-api";
 import { authClient } from "@/lib/auth-client";
 import { memberLabel } from "@/lib/labels";
+import { notifyAfterRefresh } from "@/components/notify";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +18,7 @@ import {
 type Props = {
   companyId: string;
   companyName: string;
-  onTransferred: () => void;
+  onTransferred: () => Promise<unknown>;
   trigger: React.ReactNode;
 };
 
@@ -48,14 +49,17 @@ export const TransferOwnershipModal = ({
       .finally(() => setLoading(false));
   }, [open, companyId, selfId]);
 
-  const handleTransfer = (toUserId: string) => {
+  const handleTransfer = (to: Member) => {
     if (busyUserId) return;
-    setBusyUserId(toUserId);
+    setBusyUserId(to.user_id);
     setError(null);
-    transferOwnership(companyId, toUserId)
+    transferOwnership(companyId, to.user_id)
       .then(() => {
         setOpen(false);
-        onTransferred();
+        return notifyAfterRefresh(onTransferred, {
+          done: `${memberLabel(to)} にオーナーを委譲しました。`,
+          staleShort: "オーナーを委譲しました",
+        });
       })
       .catch(() => setError("オーナー委譲に失敗しました。"))
       .finally(() => setBusyUserId(null));
@@ -87,11 +91,7 @@ export const TransferOwnershipModal = ({
                 className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
               >
                 <span>{memberLabel(m)}</span>
-                <Button
-                  size="sm"
-                  onClick={() => handleTransfer(m.user_id)}
-                  disabled={busyUserId !== null}
-                >
+                <Button size="sm" onClick={() => handleTransfer(m)} disabled={busyUserId !== null}>
                   {busyUserId === m.user_id ? <Loader2 className="size-4 animate-spin" /> : null}
                   委譲
                 </Button>
