@@ -1,5 +1,5 @@
 import { Sentry } from "../sentry";
-import { asPreSessionHeaders, consumeChallenge, readChallenge } from "./challenge-store";
+import { asPreSessionHeaders, openChallenge } from "./challenge-store";
 import { CHALLENGE_EXPIRED, failure, type MfaFailure } from "./error-mapping";
 import { mergeForwardedCookies, verifyMfaCode, type MfaCodeKind } from "./gateway";
 import { validateChallengeRedirect } from "./redirect-guard";
@@ -26,8 +26,8 @@ export async function completeChallenge(
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },
 ): Promise<CompleteChallengeResult> {
-  const challenge = await readChallenge(headers);
-  if (!challenge.pending) return failure(CHALLENGE_EXPIRED);
+  const challenge = await openChallenge(headers);
+  if (!challenge) return failure(CHALLENGE_EXPIRED);
 
   const verified = await verifyMfaCode(await asPreSessionHeaders(headers), input);
   if (!verified.ok) return verified;
@@ -36,7 +36,7 @@ export async function completeChallenge(
   // 発行済みで、例外にすると Set-Cookie が転送されず「チャレンジは使い切ったのにセッションも無い」
   // 袋小路になる。cookie 失効指示は verified.headers 側にも載り、補助キーは 600 秒 TTL で自然に
   // 消えるため、消し漏れは残留ごみに留まる。
-  const cleared = await consumeChallenge(headers).catch((error: unknown) => {
+  const cleared = await challenge.consume().catch((error: unknown) => {
     Sentry.captureException(error, { tags: { component: "mfa-complete-challenge" } });
     return new Headers();
   });

@@ -42,7 +42,7 @@ type ChallengeIssuingContext = {
     secret: string;
     createAuthCookie(
       name: string,
-      overrides?: { maxAge?: number },
+      overrides?: ChallengeCookieOverrides,
     ): { name: string; attributes: unknown };
     internalAdapter: {
       createVerificationValue(data: {
@@ -65,13 +65,29 @@ type ChallengeCookieAttributes = {
 
 const newChallengeId = (): string => `2fa-${generateRandomString(20)}`;
 const attemptsKey = (challengeId: string): string => `2fa-attempts-${challengeId}`;
-const redirectKey = (challengeId: string): string => `mfa-redirect-${challengeId}`;
-const methodKey = (challengeId: string): string => `mfa-method-${challengeId}`;
+const detailKey = (challengeId: string): string => `mfa-detail-${challengeId}`;
 
-// 本番の secondaryStorage は Upstash REST (1 write = 1 HTTP、リトライ無し) で、4 本の write は
+type ChallengeDetail = { redirectUrl: string; method: ChallengeMethod };
+
+type ChallengeCookieOverrides = { maxAge?: number; domain?: string | undefined };
+
+// チャレンジ画面も API も auth ホストに閉じ、consumer app へ渡るのは通過後のセッション cookie
+// だけ。crossSubDomainCookies が全 auth cookie に付ける Domain を打ち消して host-only にし、
+// 第二要素の材料を全 subdomain へ配らない (プラグインの読み出しは cookie 名だけなので無影響)。
+const HOST_ONLY_CHALLENGE_COOKIE: ChallengeCookieOverrides = {
+  maxAge: CHALLENGE_TTL_SECONDS,
+  domain: undefined,
+};
+
+// 本番の secondaryStorage は Upstash REST (1 write = 1 HTTP、リトライ無し) で、write は
 // 非トランザクショナル。書き込み順を「補助キー → attempts → 最後に完了マーカー」に固定し、
 // マーカー (challengeId 自体をキーとする値) の存在をチャレンジ成立の単一判定にすることで、
 // 途中で失敗しても「未成立」に縮退させる (部分成立でユーザーが座礁しない)。
+//
+// 遷移先と一次認証手段は 1 本の JSON に畳んで write を 3 本に抑える。マーカーへ相乗りさせて
+// 2 本にはできない — その value をプラグインが userId そのものとして findUserById /
+// createSession に渡し `consumed.value !== user.id` で突き合わせるため
+// (better-auth 1.6.23 dist/plugins/two-factor/verify-two-factor.mjs)。attempts も同様に必須。
 export async function issueChallenge(
   ctx: ChallengeIssuingContext,
   challenge: { userId: string; redirectUrl: string; method: ChallengeMethod },
@@ -79,15 +95,14 @@ export async function issueChallenge(
   const challengeId = newChallengeId();
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000);
   const { internalAdapter, secret, createAuthCookie } = ctx.context;
+  const detail: ChallengeDetail = {
+    redirectUrl: challenge.redirectUrl,
+    method: challenge.method,
+  };
 
   await internalAdapter.createVerificationValue({
-    value: challenge.redirectUrl,
-    identifier: redirectKey(challengeId),
-    expiresAt,
-  });
-  await internalAdapter.createVerificationValue({
-    value: challenge.method,
-    identifier: methodKey(challengeId),
+    value: JSON.stringify(detail),
+    identifier: detailKey(challengeId),
     expiresAt,
   });
   await internalAdapter.createVerificationValue({
@@ -101,25 +116,40 @@ export async function issueChallenge(
     expiresAt,
   });
 
-  const cookie = createAuthCookie(TWO_FACTOR_COOKIE_NAME, { maxAge: CHALLENGE_TTL_SECONDS });
+  const cookie = createAuthCookie(TWO_FACTOR_COOKIE_NAME, HOST_ONLY_CHALLENGE_COOKIE);
   await ctx.setSignedCookie(cookie.name, challengeId, secret, cookie.attributes);
 }
 
-// userId / email を絶対に返さないこと。この結果は未認証のブラウザに露出する
-// (GET /api/mfa/challenge は requireActor を通らない)。
-export async function readChallenge(headers: Headers): Promise<ChallengeState> {
+// 成立中のチャレンジへのハンドル。userId / email を絶対に持たせないこと — 読み出し結果は
+// 未認証のブラウザに露出する (GET /api/mfa/challenge は requireActor を通らない)。
+export type OpenChallenge = {
+  redirectUrl: string | undefined;
+  method: ChallengeMethod | undefined;
+  consume(): Promise<Headers>;
+};
+
+// cookie の署名検証は crypto.subtle を 2 回 (importKey + verify) 叩き、通過経路は読み出しと
+// 後始末の両方を必ず通る。解決結果をハンドルに載せて共有し、1 リクエストで 1 度だけ払う。
+export async function openChallenge(headers: Headers): Promise<OpenChallenge | null> {
   const authContext = await getAuthContext();
   const challengeId = await resolveChallengeId(headers, authContext);
-  if (!challengeId) return { pending: false };
+  if (!challengeId) return null;
 
   const marker = await authContext.internalAdapter.findVerificationValue(challengeId);
-  if (!isUnexpired(marker)) return { pending: false };
+  if (!isUnexpired(marker)) return null;
 
-  const [redirectUrl, method] = await Promise.all([
-    readValue(authContext, redirectKey(challengeId)),
-    readValue(authContext, methodKey(challengeId)),
-  ]);
-  return { pending: true, redirectUrl, method: CHALLENGE_METHODS.find((m) => m === method) };
+  const detail = parseDetail(await readValue(authContext, detailKey(challengeId)));
+  return {
+    redirectUrl: detail?.redirectUrl,
+    method: detail?.method,
+    consume: () => consumeResolved(authContext, challengeId),
+  };
+}
+
+export async function readChallenge(headers: Headers): Promise<ChallengeState> {
+  const open = await openChallenge(headers);
+  if (!open) return { pending: false };
+  return { pending: true, redirectUrl: open.redirectUrl, method: open.method };
 }
 
 // 一次認証手段だけを引く。完了マーカーの生存を要求しないのは、チャレンジ成功を観測する
@@ -128,23 +158,34 @@ export async function readChallengeMethod(headers: Headers): Promise<ChallengeMe
   const authContext = await getAuthContext();
   const challengeId = await resolveChallengeId(headers, authContext);
   if (!challengeId) return undefined;
-  const method = await readValue(authContext, methodKey(challengeId));
-  return CHALLENGE_METHODS.find((m) => m === method);
+  return parseDetail(await readValue(authContext, detailKey(challengeId)))?.method;
 }
 
 // 検証成功後の後始末。完了マーカーと attempts はプラグインが消費するが、補助キーは
 // 誰も消さないため自前で消す。返す Headers の Set-Cookie は handler が転送する。
-export async function consumeChallenge(headers: Headers): Promise<Headers> {
-  const authContext = await getAuthContext();
-  const challengeId = await resolveChallengeId(headers, authContext);
-  if (challengeId) {
-    await authContext.internalAdapter.deleteVerificationByIdentifier(redirectKey(challengeId));
-    await authContext.internalAdapter.deleteVerificationByIdentifier(methodKey(challengeId));
-  }
-  const cookie = authContext.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
+async function consumeResolved(authContext: AuthContext, challengeId: string): Promise<Headers> {
+  await authContext.internalAdapter.deleteVerificationByIdentifier(detailKey(challengeId));
+  const cookie = authContext.createAuthCookie(TWO_FACTOR_COOKIE_NAME, HOST_ONLY_CHALLENGE_COOKIE);
   const cleared = new Headers();
   cleared.append("set-cookie", serializeClearedCookie(cookie.name, cookie.attributes));
   return cleared;
+}
+
+// 詳細が壊れていても (旧形式の残留・発行途中の失敗) チャレンジ自体の成立は取り消さない。
+// 成立判定はマーカー 1 本が持ち、読めない遷移先は redirect-guard が既定に倒す。
+function parseDetail(raw: string | undefined): ChallengeDetail | undefined {
+  if (!raw) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+  if (typeof parsed !== "object" || parsed === null) return undefined;
+  const { redirectUrl, method } = parsed as Record<string, unknown>;
+  if (typeof redirectUrl !== "string") return undefined;
+  const known = CHALLENGE_METHODS.find((candidate) => candidate === method);
+  return known ? { redirectUrl, method: known } : undefined;
 }
 
 // チャレンジ検証へ渡す前にセッション cookie を落とし、「一次認証は済んだがセッションはまだ無い」
@@ -221,8 +262,9 @@ function readCookie(headers: Headers, name: string): string | null {
 // 出典: better-call 1.3.7 の dist/crypto.mjs (makeSignature) と dist/context.mjs
 // (getSignedCookie)。better-auth の署名付き cookie は better-call の scheme で、HMAC-SHA-256 を
 // **パディング付き標準 base64** で載せる。better-auth 自身が trust device token 等に使う
-// createHMAC("SHA-256", "base64urlnopad") とも hono の getSignedCookie とも非互換なので、
-// どちらかで検証しようとすると常に false になる。
+// createHMAC("SHA-256", "base64urlnopad") とは非互換で、それで検証すると常に false になる。
+// hono の getSignedCookie は同一 scheme で署名としては互換だが、Hono の Context を要求するため
+// 生の Headers を扱う本経路には載らない (詳細: docs/adr/0013-mfa-totp-challenge.md)。
 const COOKIE_SIGNATURE_ALGORITHM = { name: "HMAC", hash: "SHA-256" } as const;
 
 // 署名の形 (標準 base64 の 32 byte = 44 文字、末尾 "=") を先に見るのは better-call と同じ順序。
