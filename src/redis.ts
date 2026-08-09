@@ -12,6 +12,9 @@ export interface RedisStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl?: number): Promise<void>;
   delete(key: string): Promise<void>;
+  // better-auth の single-use verification value の消費口。未実装だと get→delete の 2 往復に
+  // fallback し、isolate を跨ぐ (workerd) 並行 request が同じ値を 2 回消費できてしまう。
+  getAndDelete(key: string): Promise<string | null>;
 }
 
 // rate-limit window の状態: 現在の hit カウントと window 残り TTL (Retry-After 算出用)。
@@ -42,6 +45,7 @@ function initUpstash(url: string, token: string): void {
     delete: async (key) => {
       await r.del(key);
     },
+    getAndDelete: async (key) => (await r.getdel<string>(key)) ?? null,
   };
   incrementRateWindow = async (key, windowSec) => {
     const res = (await r.multi().incr(key).expire(key, windowSec).ttl(key).exec()) as [
@@ -98,6 +102,7 @@ function initNodeRedis(redisUrl: string): void {
     delete: async (key) => {
       await (await connectedClient()).del(key);
     },
+    getAndDelete: async (key) => (await connectedClient()).getDel(key),
   };
   incrementRateWindow = async (key, windowSec) => {
     const redis = await connectedClient();

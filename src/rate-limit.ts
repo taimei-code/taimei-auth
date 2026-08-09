@@ -1,3 +1,5 @@
+import { createHash } from "@better-auth/utils/hash";
+import { getSessionCookie } from "better-auth/cookies";
 import type { Context, MiddlewareHandler } from "hono";
 import { incrementRateWindow } from "./redis";
 import { Sentry } from "./sentry";
@@ -10,6 +12,17 @@ export type RateLimitOptions = {
 
 export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
   `rate-limit:magic-link:${axis}:${id}`;
+
+// MFA の状態変更 (enroll / activate / disable) を数える軸。セッションあり経路にプラグインの試行制限が
+// 継承されない (根拠は src/mfa/disable.ts) ため、誤コード連投の歯止めはここだけ。軸を IP でなく
+// セッションに取るのは、cookie を盗んだ攻撃者が IP を変えても同じ枠に載せるため。token をそのまま
+// キー名にしないのは、キー名が Redis 上に残る有効な認証情報になってしまうから。
+export async function mfaAttemptKey(headers: Headers, fallbackIp: string): Promise<string> {
+  const sessionToken = getSessionCookie(headers);
+  if (!sessionToken) return `rate-limit:mfa-attempt:ip:${fallbackIp}`;
+  const sessionDigest = await createHash("SHA-256", "hex").digest(sessionToken);
+  return `rate-limit:mfa-attempt:session:${sessionDigest}`;
+}
 
 // Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。Sentry capture で可観測性確保。
 // EXPIRE を毎回呼ぶことで「最後の req から windowSec」semantic になる (固定 window ではない)

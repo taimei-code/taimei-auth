@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { Role } from "@/db/repositories/membership";
 import type { ParseBodyCallback } from "../membership/guard";
+import type { MfaCodeKind } from "../mfa/gateway";
 
 // role を body で受ける 2 route (role 変更 / 招待作成) が同じ値集合を受理するための共有 schema。
 // 片方だけ新 role を受理する非対称を防ぐ。値集合の SSOT は db/schema.ts の Role
@@ -11,6 +12,16 @@ export const roleBodySchema = z.enum([
   "ADMIN",
   "MEMBER",
 ] as const satisfies readonly Role[]);
+
+// 桁数を縛らないのは、TOTP (6 桁) とリカバリーコードで書式が異なるうえ、書式判定を Transport が
+// 持つと誤入力が invalid_argument になり SPA の invalid_code 文言分岐から外れるため。正否は
+// gateway 越しのプラグインが決める。string 固定は先頭 0 の保持 (`012345` は 12345 でない)。
+export const mfaCodeSchema = z.string().min(1).max(64);
+
+export const mfaCodeKindSchema = z.enum([
+  "totp",
+  "recovery_code",
+] as const satisfies readonly MfaCodeKind[]);
 
 type ParseZodBodyOptions<S extends z.ZodTypeAny, Out> = {
   withDetails?: boolean;

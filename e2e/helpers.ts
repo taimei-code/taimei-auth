@@ -15,7 +15,9 @@ export const BASE_URL = "http://localhost:3110";
 // throw するため、seed 側のガード・不整合はそのまま spec の失敗として表面化する。
 // name の有効値の正本は fixtures.ts の consumableFixtures (値 import は DB を spec プロセスへ
 // 持ち込むため、型も共有せず文字列 union をここで再宣言する)。
-export const reseedFixture = (name: "leave" | "delete" | "delete-multi" | "invitation"): void => {
+export const reseedFixture = (
+  name: "leave" | "delete" | "delete-multi" | "invitation" | "mfa",
+): void => {
   execFileSync("bun", ["run", join(process.cwd(), "e2e", "seed.ts"), name], { stdio: "inherit" });
 };
 

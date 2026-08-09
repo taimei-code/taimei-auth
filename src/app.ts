@@ -10,9 +10,11 @@ import { accountAvatar } from "./handlers/avatar-upload";
 import { accountCompany } from "./handlers/account-company";
 import { accountInvitation } from "./handlers/account-invitation";
 import { accountMembership } from "./handlers/account-membership";
+import { accountMfa } from "./handlers/account-mfa";
 import { canaryToken } from "./handlers/canary-token";
+import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
-import { createRateLimitMiddleware, magicLinkKey } from "./rate-limit";
+import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
 import { getTrustedOrigins, isLocalEnvironment } from "./env";
@@ -34,6 +36,7 @@ export function mountAccountRoutes(app: Hono): void {
   app.route("/", accountCompany);
   app.route("/", accountInvitation);
   app.route("/", accountMembership);
+  app.route("/", accountMfa);
 }
 
 // local (dev / e2e) は同一 key への連続アクセスが常態のため、production limit だと自テストが 429 を
@@ -105,6 +108,19 @@ export function buildApp(options: AppOptions): Hono {
   );
   app.route("/", canaryToken);
 
+  // プラグインの試行制限はチャレンジ単位 (5 回で破棄) とアカウント単位 (10 回で 15 分ロック) しか
+  // 数えず、チャレンジを取り直しながら別アカウントを順に試す形は素通りする。その穴を IP 軸で塞ぐ。
+  // 正規利用は 600 秒のチャレンジ 1 本につき数回の打ち直しで収まる。
+  app.use(
+    "/api/mfa/challenge/verify",
+    createRateLimitMiddleware({
+      keyFn: (c) => `rate-limit:mfa-challenge:ip:${getClientContext(c.req.raw.headers).ip}`,
+      limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
+      windowSec: 60,
+    }),
+  );
+  app.route("/", mfaChallenge);
+
   // Magic Link 経路のみ IP + email の 2 軸で rate limit (production: 5/IP/min + 3/email/min)。
   app.use(
     "/api/auth/sign-in/magic-link",
@@ -146,6 +162,18 @@ export function buildApp(options: AppOptions): Hono {
       }),
     );
   });
+
+  // MFA 状態変更 3 route の試行制限 (数える軸の理由は rate-limit.ts の mfaAttemptKey)。wildcard に
+  // しないのは Hono の "/api/account/mfa/*" が前置 path 自身 (GET /api/account/mfa) にも match する
+  // ため (実測) — 状態参照まで枠に入れると、連投で枠を使い切った直後に画面表示まで 429 になる。
+  const mfaAttemptRateLimit = createRateLimitMiddleware({
+    keyFn: (c) => mfaAttemptKey(c.req.raw.headers, getClientContext(c.req.raw.headers).ip),
+    limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
+    windowSec: 60,
+  });
+  app.use("/api/account/mfa/enroll", mfaAttemptRateLimit);
+  app.use("/api/account/mfa/activate", mfaAttemptRateLimit);
+  app.use("/api/account/mfa/disable", mfaAttemptRateLimit);
 
   mountAccountRoutes(app);
 

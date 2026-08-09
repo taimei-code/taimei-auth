@@ -168,6 +168,15 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   await updateUserLastUsedCompany(userId, currentCompanyId);
 }
 
+// mfa-flow 用 (消費型): 単一 OWNER。認証アプリの secret は enroll のたびに変わり事前 seed
+// できないため、fixture は「MFA 未設定の user」までを用意し、有効化は spec が実行中に行う。
+// test ごとに作り直すのは、有効化済みの user を次の test が掴むと enroll が 409 で落ちるため
+// (main に置かず専用事業所へ隔離するのは leave / delete と同じ規約)。
+const MFA_FIXTURE: FixtureSpec = {
+  company: "mfa",
+  members: [{ suffix: "mfa", name: "E2E Mfa", role: "OWNER" }],
+};
+
 // invitation-flow 用 (消費型): e2e-invitee 宛の PENDING 招待。受諾すると招待行は ACCEPTED に
 // 落ち、invitee は signup で main のメンバーになるため、作り直しは invitee ユーザーの削除
 // (membership も cascade で消える) と PENDING 行の再作成の両方を含む。
@@ -220,6 +229,7 @@ export const consumableFixtures = new Map<string, () => Promise<void>>([
   ["delete", () => ensureFixture(DELETE_FIXTURE)],
   ["delete-multi", ensureDeleteMultiFixture],
   ["invitation", ensureInvitationFixture],
+  ["mfa", () => ensureFixture(MFA_FIXTURE)],
 ]);
 
 // e2e- prefix の全 fixture を冪等に作り直す (サーバ起動前の全体 seed 専用)。
@@ -245,5 +255,6 @@ export async function resetAllFixtures(): Promise<void> {
   await ensureFixture(DANGER_FIXTURE);
   await ensureFixture(DELETE_FIXTURE);
   await ensureDeleteMultiFixture();
+  await ensureFixture(MFA_FIXTURE);
   await ensureInvitationFixture();
 }

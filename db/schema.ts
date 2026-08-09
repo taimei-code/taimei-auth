@@ -46,6 +46,8 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
     revision: integer("revision").notNull().default(0),
+    // MFA チャレンジ要否の唯一の判定源 (不変条件は twoFactor テーブル定義に記載)。
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     // ADR-009: 新規 session 確立時の default 候補事業所 (proto User.default_company_id 対応)。
     // 削除済 company を参照しないよう ON DELETE SET NULL。
     lastUsedCompanyId: text("last_used_company_id").references(() => company.id, {
@@ -130,6 +132,34 @@ export const verification = pgTable(
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+// better-auth twoFactor プラグイン規定のスキーマ (node_modules/better-auth/dist/plugins/
+// two-factor/schema.mjs と 1:1)。自前コードが読まない列も、削るとプラグイン側のロック機構が
+// silent に死ぬか毎回 500 になるため落とさない。export 名の camelCase は必須 — drizzle adapter が
+// schema["twoFactor"] で引くため、snake_case にすると起動時に BetterAuthError で落ちる。
+// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified
+// (プラグインが verify-totp 成功時に両者を同時に更新する)。
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey().notNull(),
+    // 実体は AUTH_SECRET 由来の鍵による可逆暗号。列名に反して平文では読めない。
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    // ADR-0010 の物理削除ライフサイクルに乗せ、退会時に道連れで消す。
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true).notNull(),
+    // プラグインが SQL の +1 で更新するため、NULL を許すと加算結果が NULL になりロックが発火しない。
+    failedVerificationCount: integer("failed_verification_count").default(0).notNull(),
+    lockedUntil: timestamp("locked_until"),
+  },
+  (table) => [
+    index("two_factor_secret_idx").on(table.secret),
+    index("two_factor_user_id_idx").on(table.userId),
+  ],
 );
 
 // account_delete 後も log を残すため意図的に user_id に FK を付けない (cascade delete を回避)。
