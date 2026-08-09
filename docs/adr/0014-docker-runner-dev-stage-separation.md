@@ -22,9 +22,10 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
 
 設計を制約した実測事実:
 
-- **taimei 側 e2e は target 指定なしで本 Dockerfile を build し、`bunx drizzle-kit migrate` を
-  実行する** (`docker-compose.e2e.yml` の `e2e-auth-service`)。既定 target (= 最終 stage) が
-  pruned image になると、マージ後に他 repo の CI で初めて壊れる
+- **taimei 側 e2e は本 Dockerfile を build し、`bunx drizzle-kit migrate` を実行する**
+  (`docker-compose.e2e.yml` の `e2e-auth-service`)。taimei #533 で `target: dev` を pin 済みだが、
+  位置契約 (既定 target = 最終 stage = dev) は pin を持たない consumer への defense-in-depth として
+  維持する (検証は下記 Consequences)
 - README の codegen 動線 (`db:generate` / `generate`) は drizzle-kit / @bufbuild/buf という
   devDependencies の binary を前提にする
 - `bun install --frozen-lockfile --ignore-scripts --production` は**既存の full node_modules を
@@ -44,10 +45,23 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
    (`src/**` / `db/**` / `management/**`) に 13 件 + connect-node の `noRestrictedImports` を追加して
    分類を import 時点で強制する。`react` / `react-dom` は src/email の server 実行時
    描画で必要なため dependencies に残す (理由の詳細コメント: `src/email/client.ts`)
-2. **prod-deps stage** (`FROM base` + `--production` install) を新設し、runner の node_modules と
-   packages/ をその成果物に揃える。deps stage は web build が devDependencies (vite / tailwind 等) を
-   要するため full install のまま残す。deps から重ねるのは build 産物の
-   `packages/auth-client/dist` のみ (1 つの install tree に統一する)
+2. **install stage は manifests を起点に deps / prod-deps へ分岐する**。`manifests` は manifest
+   だけ (`package.json` / `bun.lock` / workspace package の `package.json`) を COPY する薄い stage で、
+   install layer の cache key を source 編集から切り離す — workspace package を増やす時にここへ
+   COPY を 1 行足す必要があるのはこのため (Docker の glob COPY は path を flatten するので 1 dir ずつ
+   明示する)。足し忘れは deps stage の `bun install --frozen-lockfile` が落として気づけるが、
+   メッセージは 2 通りに分かれる (bun 1.3.5 で実測)。root が `workspace:*` で依存する通常の
+   workspace package では `error: Workspace dependency "<name>" not found` — bun.lock が正なのに
+   これで落ちたら manifests stage の COPY 漏れと読む (CLAUDE.md ルール 6 の gotcha と同じ文言)。
+   root が依存していない workspace package の場合だけ
+   `error: lockfile had changes, but lockfile is frozen` になる。
+   `deps` は manifests から full install した**後に** source を COPY して auth-client を
+   build する (handler が dist 経由で型解決するため build は必須。COPY を install の前に置くと SDK の
+   1 行編集で install layer が毎回無効化される)。**prod-deps** は同じ manifests から
+   `--production` install する独立 stage で、runner の node_modules と packages/ をその成果物に
+   揃える。deps stage は web build が devDependencies (vite / tailwind 等) を要するため full install
+   のまま残す。deps から重ねるのは build 産物の `packages/auth-client/dist` のみ
+   (1 つの install tree に統一する)
 3. **既定 target (最終 stage) は full-toolchain の dev stage** (`FROM web-build` + `COPY . .`) を
    維持する — taimei 側 e2e との cross-repo 契約。本番相当の pruned runner は compose の
    auth-service が `target: runner` で常時消費し、「server コードが devDependencies を import する
@@ -62,8 +76,20 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
 - runner image 1.03GB → 392MB (node_modules 874MB → 231MB)。dev / auth-migrate は従来どおり
   1.03GB で、ローカルの build 時間・ディスクは実質不変
 - advisory 対応時の影響判定が package.json の dependencies セクションだけで即答可能になる
-- 検証手順は CLAUDE.md ルール 6 (`docker build .` と `docker build --target runner .` の 2 本 +
-  compose 起動)
+- 2 つの契約 (既定 target = dev / runner = 本番相当) の検証は機械化した: CI の `docker` job
+  (build 4 本 + 既定 build と `--target dev` build の image ID 一致 assert + `scripts/docker-smoke.sh`
+  の dev / runner 2 モード) と config-invariant test `src/__tests__/dependency-classification.test.ts`
+  (依存分類の同期 + Dockerfile 静的 invariant — 最後の `FROM ... AS <name>` が dev であること等)。
+  ローカルで同じ assert を回すには、先に `scripts/docker-smoke.sh seed` で sentinel / canary を build context に
+  作って image を build してから `scripts/docker-smoke.sh <dev|runner> <image>` (seed 無しだと不在 assert が空検証になる)
+- deploy.yml は CI workflow の **run-level conclusion** を gate にしているため、本番 deploy
+  (migration 含む) が docker job の成否 — ひいては base image pull / GitHub Actions cache の可用性 —
+  にも従属するようになった。CI が赤いとき deploy は failure ではなく **skipped** になり、通知が出ない。
+  そのため「main に merge したのに本番へ出ていない」の検知手段は CI failure の GitHub 標準通知。
+  緊急時の escape hatch は deploy.yml の `workflow_dispatch` (CI の conclusion に依存せず起動する)
+- 上記の従属は「本番成果物が docker image になった」という意味ではない — runner image の consumer は
+  ローカル compose の auth-service と management スクリプト実行のみで、本番は `wrangler deploy`
+  (workerd, ADR-0011)。docker job は deploy の前提条件であって供給元ではない
 - 当初案 (packages/ を deps から取る) は 2 つの install の bun store 混成と dangling symlink
   (auth-client の devDependency `typescript`) を生んだため棄却した (→ Decision 2)。runner の
   dangling symlink はゼロ

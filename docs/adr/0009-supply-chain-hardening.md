@@ -10,7 +10,8 @@
 
 - `@tanstack/*` は `better-auth` の optionalPeer に名前があるだけで node_modules に不在
 - IoC (`~/Library/LaunchAgents/com.user.gh-token-monitor.plist`, `~/.config/systemd/user/gh-token-monitor.service`, `tanstack_runner.js` / `router_runtime.js` / `setup.mjs`) **すべて陰性**
-- `pull_request_target` / `actions/cache` / public npm publish 経路 **いずれも未使用**
+- `pull_request_target` / `actions/cache` / public npm publish 経路 **いずれも未使用** (診断時点。その後 CI の docker job が buildx の `type=gha` (GitHub Actions cache backend) で image layer を cache するようになったため、cache 経路のみ現在は「未使用」ではない。詳細: ADR-0014)
+  - この差分は **認識済み・受容** とする: gha cache の書き込みは同一 workflow run の `GITHUB_TOKEN` に閉じており、GitHub の cache isolation により PR (fork / branch を問わず) からの cache write は base branch の cache を汚染できない。あわせて docker job 自体の `permissions` を `contents: read` に絞った
 - `publish-auth-client.yml` は GitHub Packages (org 内) 向けで public npm registry には publish しない
 
 即時侵害リスクはないが、「悪性 version が publish されてから yank されるまでの数時間の窓」を将来の同種攻撃から塞ぐため、preventive な多重防御を導入する。直近事例 (axios 4h / Solana web3.js 5h / ua-parser-js 4h / 今回の TanStack も 6 分間隔で 2 wave) はいずれも 7 日以内に yank されており、cooldown ベースの対策が圧倒的にコスト効率が高い。
@@ -28,6 +29,8 @@ Bun 1.3+ で対応済み (本リポは `bun-version: "1.3"`)。既に `bun.lock`
 `actions/checkout` / `oven-sh/setup-bun` / `actions/setup-node` の version 指定を tag pin から **commit SHA pin + 末尾コメントの version 注釈** に変更する。tag は moving reference であり、再リンクされれば検知できずに悪性 version を実行する。
 
 更新は `.github/dependabot.yml` の `package-ecosystem: "github-actions"` に委ね、Dependabot が SHA pin を維持したまま update PR を出す。`package-ecosystem: "npm"` も同時に有効化し、本リポ全体の依存更新を Dependabot に集約する。
+
+機械検証: `src/__tests__/dependency-classification.test.ts` (全 workflow の `uses:` SHA pin を assert)
 
 ### B. CI に lockfile audit step を追加 + 既存 high fix
 
@@ -126,6 +129,9 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 
 ### F. `bun.lock` 差分の CODEOWNERS 必須レビュー化
 H (`minimumReleaseAge`) で lockfile 経由侵害の主要窓を塞ぐため、bun.lock 専用 reviewer の上乗せ効果が薄い。
+
+### G. base image `oven/bun:1.3` の digest pin
+Actions は §A で SHA pin する一方、Dockerfile の base image は minor tag 止まり (patch は moving) という非対称がある。これを承知のうえで当面 pin しない。patch drift で repo 無変更のまま docker job が赤くなった場合は原因を都度切り分ける運用とし、頻発するようなら digest pin へ切り替える。
 
 ## Appendix: Mini Shai-Hulud worm IoC 手動検査手順
 

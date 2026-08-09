@@ -24,12 +24,12 @@ subdirectory の build 設定 (`web/tailwind.config.ts` / `web/postcss.config.js
 
 ## ルール 6: workspace dep を追加・変更したら Dockerfile も検証する
 
-`workspace:*` 依存を追加・変更したら `docker build .` (既定 target = dev) と `docker build --target runner .` を 1 回ずつ通す。root での typecheck / lint / test / CI は workspace 構造を持つため通り、別 build context (例: taimei 側 e2e の `context: '../taimei-auth'`) で初めて `Workspace dependency not found` が顕在化する。既定 target を dev に保つのも同 e2e が target 指定なしで build するため。Dockerfile 側の要件:
+`workspace:*` 依存を追加・変更したら Dockerfile 側の対応が要る。root での typecheck / lint / test は workspace 構造を持つため通り、別 build context (例: taimei 側 e2e の `context: '../taimei-auth'`) で初めて `Workspace dependency not found` が顕在化する。位置契約 (dev = 最終 stage) も維持する。
 
-- deps stage / prod-deps stage: 両方に `COPY packages ./packages` (`bun install` の workspace 解決に必須)。deps 側はさらに `cd packages/auth-client && bun run build` (handler が dist 経由で型解決するため)
-- runner stage: node_modules / packages は prod-deps 由来 (devDependencies 抜き) で揃え、auth-client の dist のみ deps から重ねる (node_modules 内 symlink の target)
+- workspace package を追加したら `manifests` stage に COPY を 1 行足す (glob COPY は flatten するため 1 dir ずつ明示)
+- 契約の検証は CI の docker job が全 PR で行う。ローカル事前確認は `docker build .` / `docker build --target runner .` + `scripts/docker-smoke.sh` (任意)
 
-詳細: [`docs/adr/0014-docker-runner-dev-stage-separation.md`](./docs/adr/0014-docker-runner-dev-stage-separation.md) / `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → #35)。
+stage 構成 (manifests / deps / prod-deps / runner) と位置契約の Why・consumer 側の pin 状況・検証内容は [`docs/adr/0014-docker-runner-dev-stage-separation.md`](./docs/adr/0014-docker-runner-dev-stage-separation.md) (PR #34 → #35)。
 
 ## ルール 9: ドメイン用語・設計判断の SSOT は CONTEXT.md / docs/adr/
 

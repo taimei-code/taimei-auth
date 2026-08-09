@@ -1,8 +1,8 @@
 # 手動回帰 QA (QA-MR-*)
 
-自動化できない (実ブラウザ + 実ドメイン / 外部サービス実連携 / 実 workerd が必要な) 回帰ケースの台帳。
+自動化できない (実ブラウザ + 実ドメイン / 外部サービス実連携 / 実 workerd / 別 repo の build context が必要な) 回帰ケースの台帳。
 
-- **ID 体系**: `QA-MR-*` は本ドキュメント専用。`QA-D/E/H/M/R-*` は自動テスト名に埋め込まれた既存体系 (例: `src/handlers/__tests__/account-routes-migrated.test.ts`) で、別物。重なる領域は相互参照する
+- **ID 体系**: `QA-MR-*` は本ドキュメント専用。`QA-D/E/H/I/M/R-*` は自動テスト名に埋め込まれた既存体系 (例: `src/handlers/__tests__/account-routes-migrated.test.ts`) で、別物。重なる領域は相互参照する
 - **実行契機**: 各ケースの「契機」列のイベントが起きる PR のマージ前。加えて本番デプロイ後スモークとして QA-MR-01 / QA-MR-03 を実施する
 - **担当**: 該当 PR の作者 (デプロイ後スモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
@@ -91,3 +91,13 @@
   2. 認証アプリからコードをコピーし、入力欄に貼り付けて送信する
   3. リカバリーコード入力に切り替え、同様に貼り付けて送信する
 - **期待結果**: 6 桁入力欄で数字キーボードが開く。OS が OTP 自動入力の候補を出した場合はタップだけで 6 桁が入る。貼り付け時に全角数字や空白が混ざっても半角詰めに正規化されて通り、`invalid_code` にならない。リカバリーコード入力に切り替えると 6 桁前提の入力制限が外れ、コードをそのまま入力・貼り付けできる
+
+## QA-MR-09: consumer repo (taimei) からの cross-repo build と起動
+
+- **契機**: Dockerfile の stage 構成 / `packages` COPY 方式を変える PR
+- **前提**: consumer repo `~/mydev/taimei` を clone 済み。port 3100 が競合するため本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **unpinned な main** を clone するため、マージした時点で全 taimei branch に即波及する (= 実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発 probe までで、dev image を server として長時間 boot する経路はこのケースだけがカバーする
+- **手順**:
+  1. `cd ~/mydev/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
+  2. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
+  3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
+- **期待結果**: build が `Workspace dependency not found` 等で落ちず、`bunx drizzle-kit migrate` が完走して `/health` が 200 を返す
