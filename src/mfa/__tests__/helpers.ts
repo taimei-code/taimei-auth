@@ -12,6 +12,7 @@ import { getRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
 import { activate } from "../activate";
 import { issueChallenge, type ChallengeMethod } from "../challenge-store";
+import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
 import { enroll } from "../enroll";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
@@ -190,6 +191,11 @@ export async function enableMfaFor(user: { id: string; email: string }): Promise
   const rotatedToken = await sessionTokenFromForwarded(activated.forwardedHeaders);
   if (!rotatedToken) throw new Error("activate did not forward a session cookie");
 
+  // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
+  // DB の行削除だけでは前回実行ぶんが積み上がり、誤コードを 1 回試すテストが 5 回目の実行から
+  // locked に化ける。「有効化直後は枠が空」を fixture 側で保証する。
+  await resetDisableAttempts(user.id);
+
   return {
     actor: actorOf(user, { twoFactorEnabled: true }),
     secret,
@@ -202,6 +208,8 @@ export type IssuedChallenge = {
   challengeId: string;
   cookieName: string;
   cookieMaxAgeSeconds: number | undefined;
+  /** issueChallenge が createAuthCookie へ渡した上書き。cookie の作用域を assert するため。 */
+  cookieOverrides: Record<string, unknown> | undefined;
   issuedAt: number;
   /** チャレンジ cookie だけを載せた (セッション cookie を持たない) リクエスト headers。 */
   headers: Headers;
@@ -217,13 +225,17 @@ export async function issueTestChallenge(challenge: {
 }): Promise<IssuedChallenge> {
   const authContext = await auth.$context;
   let captured: { name: string; value: string; maxAge: number | undefined } | undefined;
+  let capturedOverrides: Record<string, unknown> | undefined;
 
   const issuedAt = Date.now();
   await issueChallenge(
     {
       context: {
         secret: authContext.secret,
-        createAuthCookie: (name, overrides) => authContext.createAuthCookie(name, overrides),
+        createAuthCookie: (name, overrides) => {
+          capturedOverrides = overrides as Record<string, unknown> | undefined;
+          return authContext.createAuthCookie(name, overrides);
+        },
         internalAdapter: authContext.internalAdapter,
       },
       setSignedCookie: async (name, value, _secret, options) => {
@@ -239,6 +251,7 @@ export async function issueTestChallenge(challenge: {
     challengeId: captured.value,
     cookieName: captured.name,
     cookieMaxAgeSeconds: captured.maxAge,
+    cookieOverrides: capturedOverrides,
     issuedAt,
     headers: requestHeaders({ [captured.name]: await signCookieValue(captured.value) }),
   };
@@ -299,6 +312,21 @@ export async function findVerification(
 export async function deleteVerification(identifier: string): Promise<void> {
   const { internalAdapter } = await auth.$context;
   await internalAdapter.deleteVerificationByIdentifier(identifier);
+}
+
+// redis の TTL が「キーが存在しない」を表す値。枠が消えたことの観測に使う。
+export const ATTEMPT_BUDGET_ABSENT = -2;
+
+export async function attemptBudgetTtlSeconds(userId: string): Promise<number> {
+  const redis = await getRedis();
+  return redis.ttl(disableAttemptsKey(userId));
+}
+
+// INCR できない値を置いて storage 障害を起こす。counter を握り潰す mock ではなく実際に
+// 失敗する Redis 操作を通すことで、fail-closed が production と同じ経路で確かめられる。
+export async function poisonAttemptBudget(userId: string): Promise<void> {
+  const redis = await getRedis();
+  await redis.set(disableAttemptsKey(userId), "not-a-number", { EX: 60 });
 }
 
 // revoke の実効性は DB では観測できない (secondaryStorage 構成では session 行が存在しない)。

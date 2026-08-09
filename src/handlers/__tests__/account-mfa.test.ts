@@ -23,6 +23,10 @@ const { cleanup, seedUser } = createSeedHelpers(P);
 // 観測できない (緩和は開発体験のためで、枠の設計値ではない)。
 const MFA_ATTEMPT_LIMIT = 10;
 
+// src/mfa/disable-attempt-budget.ts の MAX_ATTEMPTS と同値。環境で緩和されないアカウント単位の
+// 上限で、session 軸の rate limit より先に効く。
+const DISABLE_ATTEMPT_LIMIT = 5;
+
 const buildApp = (): Hono => {
   const app = new Hono();
   app.use(
@@ -71,26 +75,28 @@ describe("account MFA API", () => {
     expect(victim.actor.twoFactorEnabled).toBe(true);
   });
 
-  test("QA-M-09 disable 連投 → 429", async () => {
+  test("QA-M-09 disable 誤コード連投 → アカウント単位でロックアウト", async () => {
     const user = await seedUser("m09");
     const enabled = await enableMfaFor(user);
     const app = buildApp();
 
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt < MFA_ATTEMPT_LIMIT + 1; attempt++) {
+    const attempts: { status: number; body: unknown }[] = [];
+    for (let attempt = 0; attempt < DISABLE_ATTEMPT_LIMIT + 1; attempt++) {
       const res = await postDisable(app, enabled.session.headers, {
         code: await wrongTotpCode(enabled.secret),
         kind: "totp",
       });
-      statuses.push(res.status);
+      attempts.push({ status: res.status, body: await res.json() });
     }
 
-    // セッションあり経路にはプラグインの試行制限が継承されないため、誤コード連投を止めるのは
-    // この rate limit だけ。枠を使い切るまでは 400 で、超えた分が 429 になる。
-    expect(statuses.slice(0, MFA_ATTEMPT_LIMIT)).toEqual(
-      Array(MFA_ATTEMPT_LIMIT).fill(400) as number[],
+    // 枠を使い切るまでは 400、超えた分は use-case のロックアウトで 429。session 軸の rate limit
+    // (10/min) より先に効くのは、cookie を盗んだ攻撃者がセッションを取り直しても枠が戻らない
+    // user 軸で数えているため。同じ 429 でも SPA は body の error で待ち時間を書き分けるので、
+    // 枠の出どころまで固定する。
+    expect(attempts.slice(0, DISABLE_ATTEMPT_LIMIT).map((attempt) => attempt.status)).toEqual(
+      Array(DISABLE_ATTEMPT_LIMIT).fill(400) as number[],
     );
-    expect(statuses.at(-1)).toBe(429);
+    expect(attempts.at(-1)).toEqual({ status: 429, body: { error: "locked" } });
 
     expect((await findUserById(user.id))?.twoFactorEnabled).toBe(true);
     expect(await countTwoFactorRows(user.id)).toBe(1);
