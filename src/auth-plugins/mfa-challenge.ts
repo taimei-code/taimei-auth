@@ -23,11 +23,17 @@ import {
 
 const MFA_CHALLENGE_PAGE = "/auth/mfa";
 
-let killSwitchReported = false;
+// 止めたまま気づかないことを防ぐ通知なので、止めている間は鳴り続ける必要がある。1 回きりの
+// フラグだと isolate 常駐の warm 実行が初回以降ずっと黙り、放置が長い定常状態で信号が消える。
+// 6 時間はオンコール交代を必ず 1 回またぐ粒度 (詳細: docs/adr/0013-mfa-totp-challenge.md)。
+export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-function reportKillSwitchOnce(): void {
-  if (killSwitchReported) return;
-  killSwitchReported = true;
+let killSwitchReportedAt = 0;
+
+function reportKillSwitchPeriodically(): void {
+  const now = Date.now();
+  if (now - killSwitchReportedAt < KILL_SWITCH_REPORT_INTERVAL_MS) return;
+  killSwitchReportedAt = now;
   Sentry.captureMessage("mfa: challenge enforcement disabled by kill switch", {
     level: "warning",
     tags: { component: "mfa-challenge" },
@@ -61,7 +67,7 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   if (!issuedSession) return;
 
   if (!isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED)) {
-    reportKillSwitchOnce();
+    reportKillSwitchPeriodically();
     return;
   }
   if (!requiresMfaChallenge(asMfaPolicyUser(issuedSession.user))) return;

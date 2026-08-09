@@ -13,7 +13,7 @@ import {
   loginWithMagicLink,
   requestMagicLink,
 } from "../../mfa/__tests__/helpers";
-import { mfaChallenge } from "../mfa-challenge";
+import { KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
 
 // チャレンジ強制プラグイン (src/auth-plugins/mfa-challenge.ts) の統合テスト。
 // magic link は実 HTTP 経路で駆動する。OAuth (/callback/:id) は GitHub の資格情報が無いと
@@ -170,11 +170,13 @@ describe("チャレンジ強制プラグイン", () => {
     }
   });
 
-  test("QA-D-11 kill switch off → warning 1 回", async () => {
+  test("QA-D-11 kill switch off → warning は再通知間隔ごとに 1 回", async () => {
     const user = await seedUser("d11");
-    await enableMfaFor(user);
+    const enabled = await enableMfaFor(user);
     const original = process.env.MFA_CHALLENGE_ENABLED;
     process.env.MFA_CHALLENGE_ENABLED = "false";
+    const killSwitchWarnings = () =>
+      sentry.messages.filter((capture) => capture.context?.tags?.component === "mfa-challenge");
 
     try {
       const first = await loginWithMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
@@ -188,14 +190,27 @@ describe("チャレンジ強制プラグイン", () => {
         expect(await issuedSessionCookieCount(login.response.headers)).toBe(1);
       }
       // 停止中である事実は届けたいが、全ログインで警告を出すとノイズで埋もれる。
-      const killSwitchWarnings = sentry.messages.filter(
-        (capture) => capture.context?.tags?.component === "mfa-challenge",
-      );
-      expect(killSwitchWarnings.length).toBe(1);
-      expect(killSwitchWarnings[0]?.message).toBe(
+      expect(killSwitchWarnings().length).toBe(1);
+      expect(killSwitchWarnings()[0]?.message).toBe(
         "mfa: challenge enforcement disabled by kill switch",
       );
-      expect(killSwitchWarnings[0]?.context?.level).toBe("warning");
+      expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
+
+      // 間隔を跨いだら鳴り直す。1 回きりだと常駐 isolate が初回以降ずっと黙り、放置が長いほど
+      // 信号が消える。時計を進めて安全なのは kill switch 判定が介入より前で return するからで、
+      // 判定を後ろへ動かすとこの mock がチャレンジ状態の期限計算を壊す。
+      const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
+      const clock = spyOn(Date, "now").mockReturnValue(afterInterval);
+      try {
+        await runOAuthCallbackHook({
+          session: { token: enabled.session.token },
+          user: { id: user.id, twoFactorEnabled: true },
+        });
+      } finally {
+        clock.mockRestore();
+      }
+
+      expect(killSwitchWarnings().length).toBe(2);
     } finally {
       if (original === undefined) delete process.env.MFA_CHALLENGE_ENABLED;
       else process.env.MFA_CHALLENGE_ENABLED = original;
