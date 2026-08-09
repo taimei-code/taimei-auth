@@ -155,3 +155,166 @@ jobs:
       # webServer (playwright.config.ts) が build:web と seed を実行してから server を起動する
       - name: E2E test
         run: bun run test:e2e
+
+  # ADR-0014 の 2 契約 (既定 build target = full toolchain の dev / runner = 本番相当) の機械検証。
+  # CI に docker build が無いと契約違反が merge 後に consumer repo の CI で初めて顕在化するため、
+  # 本 repo の PR 時点で落とす。本 job の失敗は本番 deploy も止める (deploy 従属の詳細と緊急時の
+  # escape hatch も下記 ADR)。
+  # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
+  docker:
+    runs-on: ubuntu-latest
+    # bun.lock 変更時 = install が必ず cold を最悪ケースに置く (RUN --mount=type=cache の中身は
+    # gha cache に保存されないため、layer miss 時ほど cache が効かない)。
+    timeout-minutes: 15
+
+    # 本 job は checkout と image build しかしないため read で足りる (ADR-0009 の threat model)。
+    permissions:
+      contents: read
+
+    # docker-smoke.sh が末尾に echo する実行 assert 件数の期待値。mode typo 等で assert 0 件のまま
+    # 緑になる vacuous green を遮断する。更新が要るのは script の assert を増減したときと、
+    # runner 側の probe 対象が image の中身から導出されるもの (packages/auth-client/package.json の
+    # exports キー / `management/*.ts` の本数) を増減したとき — 後者は script 無変更でも件数が動く。
+    env:
+      EXPECTED_DEV_ASSERTS: "16"
+      EXPECTED_RUNNER_ASSERTS: "25"
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # 一覧と「なぜ seed が要るか」の SSOT は scripts/docker-smoke.sh (同 script が不在を assert する
+      # ので、seed 側をここに書くと assert 対象と seed 対象が silent にズレる)。
+      - name: Create sentinels and leak canaries
+        run: bash scripts/docker-smoke.sh seed
+
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # 全 build 共通の理由:
+      # - build-push-action + load: true — buildx の docker-container driver は build 結果を local
+      #   image store に載せないため、明示しないと後続の docker run / image inspect が全て空振りする
+      #   (ローカルの docker driver では自動 load されるため再現しない差)。gha cache の runtime token
+      #   注入も本 action が担うので素の docker build は使わない (image を消費しない --target dev
+      #   build だけは例外 — 理由は当該 step のコメント)。
+      # - context: . — 省略すると Git context が使われ、gitignored な sentinel が build に入らず
+      #   不在 assert が vacuous に戻る。
+      # - provenance / sbom: false — attestation が付くと image ID が分岐し、下の位置契約
+      #   (dev = 最終 stage) assert が壊れる。
+      # - cache: 既定 build と --target dev build は同一 scope を共有する (供給元の無い scope を
+      #   cache-from すると最も高価な既定 build が毎回 cold になる)。cache-to は dev build 1 本のみ。
+      - name: Build (既定 target)
+        id: build-default
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          load: true
+          tags: smoke-dev
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=dev
+
+      # 本 build の image は誰も消費しない (使うのは下の位置契約 assert が読む imageid 出力だけ) ため
+      # local image store への load を省く。1GB 級の export/import が丸ごと消えて job が ~20-35s 短縮する。
+      - name: Build (--target dev)
+        id: build-dev
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: dev
+          outputs: type=image,push=false
+          tags: smoke-dev-explicit
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=dev
+          cache-to: type=gha,scope=dev,mode=min
+
+      # runner は prod-deps を COPY --from でしか参照しないため、既定の mode=min では prod-deps の
+      # install layer が export されず毎回再 install になる。よって別 scope + mode=max。
+      - name: Build (--target runner)
+        id: build-runner
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: runner
+          load: true
+          tags: smoke-runner
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=runner
+          cache-to: type=gha,scope=runner,mode=max
+
+      # ARG APP_ENV は stage スコープのため stage 再構成で silent に落ち、失敗が「ローカルログインと
+      # consumer repo の e2e だけ壊れる」cross-context 型になる。web-build 層以外は cache hot でほぼ無料。
+      - name: Build (--target dev / APP_ENV=development)
+        id: build-dev-devenv
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          target: dev
+          build-args: APP_ENV=development
+          load: true
+          tags: smoke-dev-devenv
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=dev
+
+      - name: Assert 既定 target == dev stage
+        run: |
+          default_id='${{ steps.build-default.outputs.imageid }}'
+          dev_id='${{ steps.build-dev.outputs.imageid }}'
+          echo "既定 build: $default_id"
+          echo "--target dev: $dev_id"
+          # 空文字同士は「一致」になるため、比較の前に両方が取れていることを確かめる
+          # (action の出力名変更や build 失敗の握り潰しで assert が vacuous に成立するのを防ぐ)。
+          if [ -z "$default_id" ] || [ -z "$dev_id" ]; then
+            echo "::error::image ID を取得できなかった (既定=${default_id:-none} / --target dev=${dev_id:-none})。build step の outputs.imageid を確認する。"
+            exit 1
+          fi
+          if [ "$default_id" != "$dev_id" ]; then
+            echo "::error::位置契約違反: dev must be the final stage. 既定 build と --target dev の image ID が一致しない。Dockerfile 末尾の stage が dev 以外になっていないか確認する (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
+            exit 1
+          fi
+
+      # web/vite.config.ts の define が process.env.APP_ENV を bundle に畳み込むため、src/services.ts の
+      # isLocalEnvironment() は minify 後に真偽値リテラルへ定数畳み込みされる (文字列 "development" は
+      # 畳み込みで消えるので grep できない)。marker が形を変えたらこの 2 行を再導出する — 実測は
+      # 1 行で取れる:
+      #   docker run --rm <img> sh -c 'grep -oE "=\![01],[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
+      - name: Assert APP_ENV=development が SPA bundle に反映されている
+        run: |
+          # identifier class に 0-9 を含める: minify 後の識別子は 1 文字使い切ると数字を含む名前
+          # (a1, b2 …) に進むため、digit 無しの class では bundle 内容が同じでも空振りする。
+          docker run --rm --network none -w /app smoke-dev-devenv \
+            sh -c 'grep -qE "=\!0,[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
+          # 対照: 既定 build (APP_ENV=production) では同じ位置が =!1 になる (marker の非 vacuous 性)
+          docker run --rm --network none -w /app smoke-dev \
+            sh -c 'grep -qE "=\!1,[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
+
+      # dev / runner は mode と期待件数が違うだけなので 1 step + 関数にまとめる
+      # (2 step に分けると片方だけ件数突合を直す drift が起きる)。
+      - name: Smoke (dev / runner image)
+        run: |
+          status=0
+          smoke() {
+            smoke_mode="$1"
+            smoke_image="$2"
+            smoke_expected="$3"
+            smoke_status=0
+            output=$(bash scripts/docker-smoke.sh "$smoke_mode" "$smoke_image") || smoke_status=$?
+            echo "$output"
+            # 契約違反があるときは件数突合より先に FAIL 行を出す。逆順だと、assert を増やした PR で
+            # 件数不一致 error が先に出て「本当に壊れている契約」が annotation から消える。
+            if [ "$smoke_status" -ne 0 ]; then
+              printf '%s\n' "$output" | sed -n 's/^FAIL: /::error::docker-smoke.sh '"$smoke_mode"': /p'
+              echo "::error::docker-smoke.sh $smoke_mode が失敗した (exit=$smoke_status)。上の FAIL 行が契約違反の内訳 (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
+              return "$smoke_status"
+            fi
+            count=$(printf '%s\n' "$output" | sed -n 's/^asserts executed: //p')
+            if [ "$count" != "$smoke_expected" ]; then
+              echo "::error::docker-smoke.sh $smoke_mode の実行 assert 件数が期待値と不一致 (実行=${count:-none} / 期待=$smoke_expected)。script の assert 増減、または runner 側の probe 対象増減 (packages/auth-client/package.json の exports キー / management/*.ts) に合わせて本 job の EXPECTED_DEV_ASSERTS / EXPECTED_RUNNER_ASSERTS を更新する。"
+              return 1
+            fi
+            return 0
+          }
+          smoke dev smoke-dev "$EXPECTED_DEV_ASSERTS" || status=1
+          smoke runner smoke-runner "$EXPECTED_RUNNER_ASSERTS" || status=1
+          exit "$status"

@@ -114,6 +114,10 @@ services:
           target: /app/db
         - action: rebuild
           path: package.json
+        # advisory 対応では bun.lock だけが変わるため、package.json の trigger では rebuild が
+        # 発火せず、古い依存のまま QA してしまう。
+        - action: rebuild
+          path: bun.lock
     networks:
       taimei-network:
         aliases:
