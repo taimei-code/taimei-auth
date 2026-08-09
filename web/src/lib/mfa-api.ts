@@ -30,6 +30,7 @@ export type MfaErrorCode =
   | "challenge_expired"
   | "locked"
   | "already_enabled"
+  | "not_enabled"
   | "invalid_argument"
   | "unauthorized"
   | "not_found"
@@ -41,6 +42,7 @@ const WIRE_ERROR_CODES: ReadonlySet<string> = new Set([
   "challenge_expired",
   "locked",
   "already_enabled",
+  "not_enabled",
   "invalid_argument",
   "unauthorized",
   "not_found",

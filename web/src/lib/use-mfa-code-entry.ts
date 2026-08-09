@@ -32,6 +32,7 @@ const MESSAGE_BY_ERROR_CODE: Record<MfaErrorCode, string> = {
   locked: "試行回数の上限に達しました。15 分ほど経ってからやり直してください。",
   rate_limited: "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
   already_enabled: "多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。",
+  not_enabled: "多要素認証 (MFA) は有効になっていません。ページを再読み込みしてください。",
   invalid_argument: "コードの形式が正しくありません。",
   unauthorized: "ログイン状態が確認できませんでした。もう一度ログインしてください。",
   not_found: GENERIC_MESSAGE,
