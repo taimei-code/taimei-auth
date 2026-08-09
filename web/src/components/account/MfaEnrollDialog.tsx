@@ -129,15 +129,21 @@ type Props = {
 export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
+  // better-auth の `/two-factor/enable` は呼ぶたび既存行を削除して新しい secret で作り直す。開くたび
+  // enroll すると、QR を読ませた後に一度閉じただけで認証アプリが無効な secret を握り、以後どのコードも
+  // 「コードが正しくありません」になる (画面に原因は出ない)。保持してもログアウト・アカウント切替は
+  // full reload (lib/auth-redirect.ts) なので、他ユーザーへは渡らない。
+  const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
 
   const entry = useMfaCodeEntry({
     inputId: CODE_INPUT_ID,
     submit: ({ code }) => {
       if (state.step !== "verify") return Promise.resolve();
       const { recovery_codes } = state.enrollment;
-      return activateMfa(code).then(() =>
-        setState({ step: "recoveryCodes", recoveryCodes: recovery_codes }),
-      );
+      return activateMfa(code).then(() => {
+        setResumableEnrollment(null);
+        setState({ step: "recoveryCodes", recoveryCodes: recovery_codes });
+      });
     },
   });
 
@@ -148,11 +154,18 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
     if (entry.submitting) return;
 
     if (next) {
-      setState({ step: "starting" });
       entry.reset();
       setOpen(true);
+      if (resumableEnrollment !== null) {
+        setState({ step: "scan", enrollment: resumableEnrollment });
+        return;
+      }
+      setState({ step: "starting" });
       enrollMfa()
-        .then((enrollment) => setState({ step: "scan", enrollment }))
+        .then((enrollment) => {
+          setResumableEnrollment(enrollment);
+          setState({ step: "scan", enrollment });
+        })
         .catch((error: unknown) =>
           setState({
             step: "failed",
@@ -165,8 +178,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
     }
 
     setOpen(false);
-    // 有効化が確定した後に閉じた時だけ再取得する。検証前に離脱した場合はまだ無効のままで、
-    // 放置された未検証の登録は次回の enroll が上書きする。
+    // 有効化が確定した後に閉じた時だけ再取得する。検証前に離脱した場合はまだ無効のまま。
     if (state.step === "recoveryCodes") {
       void notifyAfterRefresh(onEnabled, {
         done: "多要素認証 (MFA) を有効にしました。",
