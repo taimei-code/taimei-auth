@@ -7,10 +7,6 @@ const plannedSecurityFeatures = [
     description: "指紋・顔認証・PIN でログインできます",
   },
   {
-    title: "パスワード変更",
-    description: "メール + 現パスワードで新しいパスワードに更新できます",
-  },
-  {
     title: "多要素認証 (MFA)",
     description: "TOTP / 認証アプリでログイン時に追加の確認コードを要求します",
   },
