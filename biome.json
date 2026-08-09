@@ -63,6 +63,40 @@
   },
   "overrides": [
     {
+      "includes": ["src/**", "db/**", "management/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@radix-ui/*",
+                      "class-variance-authority",
+                      "clsx",
+                      "lucide-react",
+                      "qrcode",
+                      "react-router-dom",
+                      "sonner",
+                      "tailwind-merge",
+                      "tailwindcss-animate"
+                    ],
+                    "message": "web 専用 devDependency のため server runtime (runner image) に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+                  },
+                  {
+                    "group": ["@connectrpc/connect-node"],
+                    "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/**", "!src/**/__tests__/**", "!src/auth.ts"],
       "linter": {
         "rules": {
@@ -84,6 +118,24 @@
                     "group": ["**/redis"],
                     "importNamePattern": "getRedis",
                     "message": "getRedis はテストの key 直接操作専用の生 client accessor。production は redisStorage / incrementRateWindow の interface 越しに使うこと (src/redis.ts の役割コメント参照)"
+                  },
+                  {
+                    "group": [
+                      "@radix-ui/*",
+                      "class-variance-authority",
+                      "clsx",
+                      "lucide-react",
+                      "qrcode",
+                      "react-router-dom",
+                      "sonner",
+                      "tailwind-merge",
+                      "tailwindcss-animate"
+                    ],
+                    "message": "web 専用 devDependency のため server runtime (runner image) に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+                  },
+                  {
+                    "group": ["@connectrpc/connect-node"],
+                    "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
                   }
                 ]
               }

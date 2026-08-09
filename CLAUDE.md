@@ -16,6 +16,7 @@ Web UI / IdP / User・Account・Session DB を 1 サービスに同居させて�
 - migration SQL は `db/schema.ts` 編集 → `db:generate` の生成物 (`drizzle/NNNN_*.sql`) のみ commit。host で `drizzle-kit migrate` を直接叩くと `auth-migrate` service との適用 order が崩れる
 - Proto 生成物 `src/gen/` は `generate` script の出力のみ commit (手動編集禁止)
 - ホスト側に bun / postgres / redis を直接入れるのは option (README 参照)。原則 compose で完結させる
+- 例外: codegen (`db:generate` / `generate`) は生成物を working tree へ書き出すため host の bun で実行する (詳細: README「compose での環境操作」/ ADR-0014)
 
 ## ルール 5: build 設定の path 解決は CWD 非依存にする
 
@@ -23,12 +24,12 @@ subdirectory の build 設定 (`web/tailwind.config.ts` / `web/postcss.config.js
 
 ## ルール 6: workspace dep を追加・変更したら Dockerfile も検証する
 
-`workspace:*` 依存を追加・変更したら `docker build .` を 1 回通す。root での typecheck / lint / test / CI は workspace 構造を持つため通り、別 build context (例: taimei 側 e2e の `context: '../taimei-auth'`) で初めて `Workspace dependency not found` が顕在化する。Dockerfile 側の要件:
+`workspace:*` 依存を追加・変更したら `docker build .` (既定 target = dev) と `docker build --target runner .` を 1 回ずつ通す。root での typecheck / lint / test / CI は workspace 構造を持つため通り、別 build context (例: taimei 側 e2e の `context: '../taimei-auth'`) で初めて `Workspace dependency not found` が顕在化する。既定 target を dev に保つのも同 e2e が target 指定なしで build するため。Dockerfile 側の要件:
 
-- deps stage: `COPY packages ./packages` (`bun install` の workspace 解決に必須) + `cd packages/auth-client && bun run build` (handler が dist 経由で型解決するため)
-- runner stage: `COPY --from=deps /app/packages ./packages` (node_modules 内 symlink の target)
+- deps stage / prod-deps stage: 両方に `COPY packages ./packages` (`bun install` の workspace 解決に必須)。deps 側はさらに `cd packages/auth-client && bun run build` (handler が dist 経由で型解決するため)
+- runner stage: node_modules / packages は prod-deps 由来 (devDependencies 抜き) で揃え、auth-client の dist のみ deps から重ねる (node_modules 内 symlink の target)
 
-詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → #35)。
+詳細: [`docs/adr/0014-docker-runner-dev-stage-separation.md`](./docs/adr/0014-docker-runner-dev-stage-separation.md) / `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (PR #34 → #35)。
 
 ## ルール 9: ドメイン用語・設計判断の SSOT は CONTEXT.md / docs/adr/
 

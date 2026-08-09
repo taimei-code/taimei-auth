@@ -15,6 +15,8 @@ export async function renderAndSendEmail(params: {
   // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
   // undefined ("render2 is not a function") になる。dynamic import で実行時に module
   // init を強制する。詳細: docs/adr/0011-cloudflare-workers-migration.md
+  // この render は実行時に react/jsx-runtime と react-dom/server を引く。src からの直 import が
+  // 型のみでも react / react-dom は devDependencies へ移さない (runner のメール送信だけが壊れる)。
   const { render } = await import("@react-email/components");
   const [html, text] = await Promise.all([
     render(params.component),

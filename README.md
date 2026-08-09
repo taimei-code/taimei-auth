@@ -73,16 +73,18 @@ URL を別タブで開くと `/account` に遷移する。**初回登録 (所属
 
 ## compose での環境操作
 
+codegen (`db:generate` / `generate`) は生成物を working tree へ書き出して commit する作業のため、**host の bun で実行する**。DB には接続しないので postgres / redis は不要 — `bun install` さえ済んでいれば動く。auth-service は本番相当の runner stage (devDependencies 抜き) で動くため、drizzle-kit / buf / biome / tsc などの dev ツールはコンテナ内に無い (実行すると exit 127)。host に bun を入れずに dev ツールを使いたい場合は full toolchain の auth-migrate (dev stage) を使う (`docker compose run --rm auth-migrate bun run lint` 等。生成物を伴わないコマンドに限る)。設計判断は [ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md) を参照。
+
 ### スキーマ変更フロー
 
 1. `db/schema.ts` を編集
-2. `docker compose run --rm auth-service bun run db:generate` で `drizzle/NNNN_*.sql` を生成 (commit する)
+2. host で `bun run db:generate` を実行し `drizzle/NNNN_*.sql` を生成 (commit する)
 3. 次回 `docker compose up` 時に `auth-migrate` service が自動適用 (手動実行は `docker compose run --rm auth-migrate`)
 
 ### Proto 変更フロー
 
 1. `proto/` 配下の `.proto` を編集
-2. `docker compose run --rm auth-service bun run generate` で `src/gen/` を再生成し、同 script が `packages/auth-client/src/gen/` へ自動コピー (両方 commit する)
+2. host で `bun run generate` を実行し `src/gen/` を再生成、同 script が `packages/auth-client/src/gen/` へ自動コピー (両方 commit する)
 3. CI の `Buf breaking check` step が `main` を baseline に wire 互換性違反を検出する。意図的な breaking が必要な場合は SDK の major 版を bump し、CHANGELOG に migration 例を追記すること
 4. 別 IdP 移行や proto v2 切替で並行運用が必要になった時は `docs/migration-strategy.md` の Dual Read/Write 段階移行 playbook を発動する
 
