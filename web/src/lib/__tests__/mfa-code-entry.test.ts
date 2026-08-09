@@ -62,6 +62,7 @@ const ALL_ERROR_CODES: MfaErrorCode[] = [
   "locked",
   "rate_limited",
   "already_enabled",
+  "not_enabled",
   "invalid_argument",
   "unauthorized",
   "not_found",

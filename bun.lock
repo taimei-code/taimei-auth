@@ -5,7 +5,6 @@
     "": {
       "name": "taimei-auth",
       "dependencies": {
-        "@better-auth/utils": "0.4.2",
         "@bufbuild/protobuf": "^2.11.0",
         "@connectrpc/connect": "^2.1.1",
         "@connectrpc/connect-node": "^2.1.1",
@@ -40,6 +39,7 @@
         "zod": "^4.4.3",
       },
       "devDependencies": {
+        "@better-auth/utils": "0.4.2",
         "@biomejs/biome": "^2.4.14",
         "@bufbuild/buf": "^1.66.1",
         "@bufbuild/protoc-gen-es": "^2.11.0",

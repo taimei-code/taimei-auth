@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { guard } from "../../membership/guard";
 import { activate } from "../activate";
 import { enroll } from "../enroll";
+import { clearTwoFactorEnabled } from "../gateway";
 import {
   actorOf,
   countLiveSessions,
@@ -128,6 +130,26 @@ describe("activate", () => {
 
     expect(result).toEqual({ ok: false, error: "already_enabled", status: 409 });
     // 通知メールは handler が result.notifyEmail を受けて送るため、2 通目は失敗を返すことで止まる。
+    expect(await auditRowsFor(user.id, "mfa_enabled")).toHaveLength(1);
+    expect(await countLiveSessions([otherDevice.token])).toBe(1);
+  });
+
+  test("中断した無効化 (フラグのみ false) からの activate → already_enabled", async () => {
+    const user = await seedUser("halfdisabled");
+    const enabled = await enableMfaFor(user);
+    await clearTwoFactorEnabled(user.id);
+    const otherDevice = await createSessionFor(user.id);
+
+    const result = await activate({
+      actor: actorOf(user),
+      headers: enabled.session.headers,
+      code: await totpCode(enabled.secret),
+    });
+
+    // 拒否の実効は「409 を返した」ではなく、MFA が実際には掛かっていないのに有効化の通知と
+    // audit だけが増える状態を作らないこと。フラグ・audit・他セッションの 3 点で突き合わせる。
+    expect(result).toEqual({ ok: false, error: "already_enabled", status: 409 });
+    expect((await findUserById(user.id))?.twoFactorEnabled).toBe(false);
     expect(await auditRowsFor(user.id, "mfa_enabled")).toHaveLength(1);
     expect(await countLiveSessions([otherDevice.token])).toBe(1);
   });

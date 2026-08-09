@@ -64,7 +64,16 @@ server 側にのみ twoFactor プラグイン (`allowPasswordless: true` / `skip
 
 - 署名付き cookie `two_factor` (maxAge 600 秒)、その中の識別子 `2fa-<random20>`
 - verification value のキー形式 (`2fa-<id>` → userId / `2fa-attempts-2fa-<id>` → 試行回数)
-- cookie 署名 scheme (`createHMAC("SHA-256", "base64urlnopad")`。`hono/cookie` の `getSignedCookie` とは非互換)
+- cookie 署名 scheme — better-call 1.3.7 (`dist/crypto.mjs` の `makeSignature`) の HMAC-SHA-256 を
+  **パディング付き標準 base64** で載せる形式 (`btoa` 出力。32 byte = 44 文字、末尾 `=`)。better-call の
+  `getSignedCookie` は検証前に「44 文字かつ末尾 `=`」で足切りする
+
+  再実装で取り違えやすいのが **`createHMAC("SHA-256", "base64urlnopad")`** で、これで検証すると上の
+  足切りに掛かって**常に false になる**。にもかかわらず同じ better-auth の中に実在する scheme で、
+  **信頼済みデバイスのトークン** (`plugins/two-factor/`) と **cookie cache** (`cookies/index.mjs`) は
+  そちらを使っている — 「better-auth の署名」で一括りにできない。一方 `hono/cookie` の
+  `getSignedCookie` は better-call と同一 scheme (実装も同内容) で**署名としては互換**であり、
+  使っていないのは Hono の `Context` を要求して生の `Headers` を扱う本経路に載らないため
 
 封じ込め構造:
 
@@ -165,8 +174,20 @@ Magic Link 再送など) も本件では実装しない。
   テスト + 依存更新時の手順で PR 時点に検知を寄せているが、検知は「落ちる」ことであって自動修復ではない。
 - **緊急停止スイッチが必要になった**: 上記の drift や想定外の障害に対し、deploy の rollback なしで
   チャレンジ強制を止められるよう `MFA_CHALLENGE_ENABLED` を持つ。fail-safe 既定 (明示的な `"false"`
-  のみ off、未設定 / 空文字 / 不正値は on) とし、off で動作している間は Sentry に warning を 1 回出す
-  (「止めたまま気づかない」を防ぐ)。
+  のみ off、未設定 / 空文字 / 不正値は on) とし、off で動作している間は Sentry に warning を 6 時間おきに
+  出し続ける (「止めたまま気づかない」を防ぐ)。1 回きりにしないのは、通知済みフラグが isolate 常駐の
+  module state になるため — warm isolate は初回以降ずっと黙り、放置が長い定常状態でちょうど信号が
+  消える。逆に cold isolate が並んで同じ窓に複数出るぶんは、同一 message の Sentry 側集約に委ねる。
+- **無効化の試行上限だけ fail-closed に倒す**: プラグインの試行カウントとアカウントロックは sign-in
+  経路でしか動かず、セッションあり経路の `disable` には継承されない。session cookie を盗んだ攻撃者に
+  よる 6 桁の総当たりを止めるのは `src/mfa/disable-attempt-budget.ts` のアカウント単位カウンタ
+  (5 回 / 15 分、TTL は試行のたびに引き直すスライディング窓) だけである。計数は
+  `incrementRateWindow` の MULTI (INCR + EXPIRE + TTL を 1 往復) に載せて atomic にし、
+  並行リクエストで加算を取りこぼさない。軸をセッションでなくアカウントに取るのは、cookie を
+  盗んだ攻撃者がセッションを取り直すたびに枠を得るのを防ぐため。汎用の `createRateLimitMiddleware` は
+  availability 優先で Redis 障害時に fail-open するが、**このカウンタは数えられない時に必ず拒否する**
+  — 逆に倒すと Redis を落とすだけで第二要素の総当たり防御が消えるため。代償として、Redis 障害中は
+  MFA の無効化が全ユーザーで不能になる (救済は `management/disable-user-mfa.ts`)。
 - **運用救済スクリプトが恒久的な運用資産になる**: `management/disable-user-mfa.ts` は、認証アプリと
   リカバリーコードを両方失ったユーザーの唯一の救済経路であり、上記 4 の鍵差し替え手順と 5 の締め出し
   復旧も同じスクリプトに依存する。削除・退避してはならない。

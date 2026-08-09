@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { createCookieGetter } from "better-auth/cookies";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { asPreSessionHeaders, consumeChallenge, readChallenge } from "../challenge-store";
+import { asPreSessionHeaders, openChallenge, readChallenge } from "../challenge-store";
 import {
   challengeAndSessionHeaders,
   cleanupIssuedChallenges,
@@ -38,7 +39,9 @@ describe("challenge-store", () => {
     });
 
     const identifiers = await findChallengeIdentifiers(challenge.challengeId);
-    expect(identifiers.length).toBe(4);
+    // 完了マーカー / 試行カウンタ / 補助情報の 3 本。マーカーと試行カウンタはプラグインの
+    // 契約で本数が決まっており、畳めるのは補助情報だけ (根拠は challenge-store.ts)。
+    expect(identifiers.length).toBe(3);
 
     const cookieMaxAge = challenge.cookieMaxAgeSeconds;
     expect(typeof cookieMaxAge).toBe("number");
@@ -53,6 +56,47 @@ describe("challenge-store", () => {
       );
       expect(ttlSeconds).toBe(cookieMaxAge as number);
     }
+  });
+
+  test("チャレンジ cookie は cross-subdomain Domain を継がない (セッション cookie は継ぐ)", async () => {
+    const user = await seedUser("hostonly");
+    const challenge = await issueTestChallenge({
+      userId: user.id,
+      redirectUrl: "/account",
+      method: "magic_link",
+    });
+
+    // test 環境は AUTH_COOKIE_DOMAIN 未設定で Domain がそもそも付かず、実インスタンス経由では
+    // 配布範囲を検知できない。本番と同じ構成を better-auth 自身の cookie getter に組ませて確定させる。
+    const createCookie = createCookieGetter({
+      baseURL: "https://auth.taimei-code.com",
+      advanced: {
+        useSecureCookies: true,
+        crossSubDomainCookies: { enabled: true, domain: "taimei-code.com" },
+      },
+    } as never);
+
+    const challengeAttributes = createCookie("two_factor", challenge.cookieOverrides).attributes;
+    expect(challengeAttributes.domain).toBeUndefined();
+
+    // セッション cookie の subdomain 共有は ADR-0004 の意図的な決定。巻き添えで外していない。
+    expect(createCookie("session_token", { maxAge: 60 }).attributes.domain).toBe("taimei-code.com");
+  });
+
+  test("失効指示の Set-Cookie にも Domain が乗らない", async () => {
+    const user = await seedUser("clearscope");
+    const challenge = await issueTestChallenge({
+      userId: user.id,
+      redirectUrl: "/account",
+      method: "magic_link",
+    });
+
+    const open = await openChallenge(challenge.headers);
+    if (!open) throw new Error("issued challenge did not open");
+    const cleared = (await open.consume()).getSetCookie();
+
+    // 発行と失効で作用域がずれると、通過後もブラウザにチャレンジ cookie が残る。
+    expect(cleared[0]).not.toContain("Domain=");
   });
 
   test("発行したチャレンジは redirect 先と一次認証手段つきで読み戻せる", async () => {
@@ -84,7 +128,7 @@ describe("challenge-store", () => {
     expect(state).toEqual({ pending: false });
   });
 
-  test("consumeChallenge は自前の補助キーだけを消し、失効指示の cookie を返す", async () => {
+  test("consume は自前の補助キーだけを消し、失効指示の cookie を返す", async () => {
     const user = await seedUser("consume");
     const challenge = await issueTestChallenge({
       userId: user.id,
@@ -92,7 +136,9 @@ describe("challenge-store", () => {
       method: "magic_link",
     });
 
-    const cleared = await consumeChallenge(challenge.headers);
+    const open = await openChallenge(challenge.headers);
+    if (!open) throw new Error("issued challenge did not open");
+    const cleared = await open.consume();
 
     // 完了マーカーと試行カウンタはプラグインが消費するため、ここで消すと二重消費になる。
     const remaining = await findChallengeIdentifiers(challenge.challengeId);

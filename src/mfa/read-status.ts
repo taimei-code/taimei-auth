@@ -17,8 +17,14 @@ export type MfaStatus = { enabled: boolean; recoveryCodesRemaining: number };
 // 落ちる復帰不能状態になる。不変条件を「常に成り立つ」と仮定せず、状態を読むこの経路で検出して
 // 観測に載せる (復帰は disable か management/disable-user-mfa.ts)。
 export async function readStatus(actor: Actor): Promise<MfaStatus> {
+  // enabled は actor から同期に決まるので、2 本の問い合わせ (DB の行 + プラグインの残数) は
+  // 互いを待つ理由が無い。残数の取得を有効時のみにするのは、行が無い前提の失敗を gateway 側で
+  // 毎回観測しないため (この短絡が gateway の「有効ユーザーに限る」契約の実装)。
   const enabled = requiresMfaChallenge(actor);
-  const verificationState = await findTwoFactorVerificationState(actor.id);
+  const [verificationState, recoveryCodesRemaining] = await Promise.all([
+    findTwoFactorVerificationState(actor.id),
+    enabled ? countRemainingRecoveryCodes(actor) : 0,
+  ]);
 
   if (enabled && !verificationState?.verified) {
     Sentry.captureMessage("mfa: enabled flag without verified two factor row", {
@@ -28,10 +34,5 @@ export async function readStatus(actor: Actor): Promise<MfaStatus> {
     });
   }
 
-  // 残数の取得は有効時のみ。未設定ユーザーにも問い合わせると、行が無い前提の失敗を
-  // gateway 側で毎回観測してしまう (この短絡が gateway の「有効ユーザーに限る」契約の実装)。
-  return {
-    enabled,
-    recoveryCodesRemaining: enabled ? await countRemainingRecoveryCodes(actor) : 0,
-  };
+  return { enabled, recoveryCodesRemaining };
 }

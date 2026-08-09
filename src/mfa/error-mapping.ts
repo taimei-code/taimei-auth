@@ -10,6 +10,7 @@ export type MfaErrorCode =
   | "challenge_expired"
   | "locked"
   | "already_enabled"
+  | "not_enabled"
   | "not_found";
 
 // { error, status } の形は guard 層 (src/membership/guard/core.ts の Unauthorized 等) と同形。
@@ -24,7 +25,7 @@ export type MfaFailure = { ok: false } & MfaError;
 export const failure = (error: MfaError): MfaFailure => ({ ok: false, ...error });
 
 const INVALID_CODE: MfaError = { error: "invalid_code", status: 400 };
-const LOCKED: MfaError = { error: "locked", status: 429 };
+export const LOCKED: MfaError = { error: "locked", status: 429 };
 
 // cookie 無し / 署名改ざん / 期限切れ / 未知の失敗が全てここへ集まる。呼び出し側からは
 // 区別できないままにする (どの段階で落ちたかを未認証のブラウザに教えない)。
@@ -32,6 +33,7 @@ export const CHALLENGE_EXPIRED: MfaError = { error: "challenge_expired", status:
 
 // 検証以外の失敗。プラグイン由来ではなく use-case が自分の不変条件から返す。
 export const ALREADY_ENABLED: MfaError = { error: "already_enabled", status: 409 };
+export const NOT_ENABLED: MfaError = { error: "not_enabled", status: 409 };
 export const USER_NOT_FOUND: MfaError = { error: "not_found", status: 404 };
 
 type PluginErrorCode = keyof typeof TWO_FACTOR_ERROR_CODES;

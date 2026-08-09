@@ -1,4 +1,3 @@
-import { createHash } from "@better-auth/utils/hash";
 import { getSessionCookie } from "better-auth/cookies";
 import type { Context, MiddlewareHandler } from "hono";
 import { incrementRateWindow } from "./redis";
@@ -20,8 +19,14 @@ export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
 export async function mfaAttemptKey(headers: Headers, fallbackIp: string): Promise<string> {
   const sessionToken = getSessionCookie(headers);
   if (!sessionToken) return `rate-limit:mfa-attempt:ip:${fallbackIp}`;
-  const sessionDigest = await createHash("SHA-256", "hex").digest(sessionToken);
-  return `rate-limit:mfa-attempt:session:${sessionDigest}`;
+  return `rate-limit:mfa-attempt:session:${await sha256Hex(sessionToken)}`;
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 // Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。Sentry capture で可観測性確保。
