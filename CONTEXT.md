@@ -112,6 +112,22 @@ _Avoid_: app
 メールアドレス宛に送られるワンタイムリンク。クリックで `/api/auth/magic-link/verify?token=...` にアクセスし、token verify + session 確立 + `callbackURL` への 302 が完結する。better-auth の magicLinkClient 機能。
 _Avoid_: メールリンク
 
+**多要素認証 (MFA)**:
+知識・所持・生体のうち 2 つ以上の要素で本人性を確認する仕組み。taimei-auth では認証アプリ (**TOTP**) を第二要素として提供し、一次認証 (**Magic Link** / GitHub OAuth) の成功後に **MFA チャレンジ** を要求する。user 単位の任意設定で、**事業所** による強制は持たない。有効化・無効化はいずれも本人へ通知メールを送る。詳細: ADR-0013。
+_Avoid_: 2FA / 二要素認証 (要素数を 2 に固定する語。第二要素が増えた時に破綻する), twoFactor (better-auth のプラグイン名・テーブル名・API 用語)
+
+**TOTP**:
+認証アプリが共有 secret と現在時刻から 30 秒ごとに生成する 6 桁のワンタイムコード (RFC 6238)。taimei-auth が提供する唯一の第二要素で、登録は QR コード (`otpauth://` URI) の読み取りまたは secret の手入力で行う。secret は `AUTH_SECRET` を鍵として暗号化保管されるため、鍵のローテーションが登録済みユーザー全員のロックアウトに直結する (制約と手順は ADR-0013)。詳細: ADR-0013。
+_Avoid_: OTP / ワンタイムパスワード (メール OTP・SMS OTP を含む広義語。いずれも提供しない), 認証コード (**Magic Link** の token と紛らわしい)
+
+**MFA チャレンジ**:
+一次認証は成功したが第二要素が未検証、という中間状態そのもの。署名付き cookie (`two_factor`) + secondaryStorage 上の verification value 群 + 有効期限 600 秒の 3 点で 1 チャレンジを構成し、cookie が持つ challengeId で識別する。発行時点で一次認証が作った **session** は破棄されるため、チャレンジ保留中の user は consumer app からは未認証に見える。通過手段は **TOTP** コードまたは **リカバリーコード**。詳細: ADR-0013。
+_Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の一つに過ぎない), pending session (session は存在しないため誤り)
+
+**リカバリーコード**:
+認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**多要素認証 (MFA)** の有効化時に一度だけ表示し、以後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0013。
+_Avoid_: バックアップコード (better-auth の `backupCodes` は API 名・列名としてのみ使う), 復旧コード, 緊急コード
+
 **session**:
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
@@ -133,7 +149,7 @@ user の意図ある action (**sign-in** / **sign-out** / account delete 等) �
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012。Phase 4 で credential change 系が実装された時に event_type を追加する。
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012。Phase 4 で credential change 系が実装された時に event_type を追加する。
 _Avoid_: log entry, audit record
 
 ## Relationships
@@ -144,6 +160,9 @@ _Avoid_: log entry, audit record
 - **TAIMEI_SERVICES** ⊃ **service_name** ∈ {`taimei`, `accounts`}
 - **redirect_url** / **sign_up_url**: 必ず `TAIMEI_SERVICES[service_name].allowedHostPattern` の host を満たす必要がある
 - 1 つの **session** は複数の **共通ログイン画面** 訪問にまたがって有効 (Cookie で識別)
+- **多要素認証 (MFA)** を有効にした user の一次認証 (**Magic Link** / GitHub OAuth) 成功は、**session** でなく **MFA チャレンジ** を生む。**session** はチャレンジ通過時に初めて確立される
+- **MFA チャレンジ** の通過手段は **TOTP** コードか **リカバリーコード** の 2 つ。どちらも同一チャレンジに対して単回のみ有効
+- **多要素認証 (MFA)** の有効化 / 無効化は、操作した **session** 以外を **session revoke** する
 
 ## Example dialogue
 
@@ -160,3 +179,4 @@ _Avoid_: log entry, audit record
 - 初期は「Layer A」「Layer B」と順序ラベルで server / client を区別していたが、内容を示さない抽象表現だったため廃止 — server 側は **auth ホスト**、client 側は **共通画面 SPA** に canonical 化
 - 「callbackURL」は better-auth API の引数名としてはそのまま使うが、設計議論では **redirect_url** を使う — better-auth 内部では callbackURL、外部 (URL クエリ) では redirect_url
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
+- 「twoFactor」「backupCodes」「`2fa-*`」は better-auth のテーブル名・列名・API 名・cookie 内識別子としてはそのまま使うが、設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 「callbackURL」↔ **redirect_url** と同じ運用 (借用語は境界の内側だけ、外向きの語彙は canonical 用語)

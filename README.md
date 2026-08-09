@@ -61,7 +61,9 @@ URL を別タブで開くと `/account` に遷移する。**初回登録 (所属
 `/account` は GitHub Settings 風の 2 区分 sidebar:
 
 - **事業所** … 上部の事業所切替 (CompanySwitcher) / 所属事業所 / メンバー / 事業所設定。事業所の作成・編集・削除 (soft delete) ・オーナー委譲・メンバーの role 変更 / 除名をここから操作する
-- **アカウント** … プロフィール / セキュリティ / セッション / 連携アカウント。プロフィール編集 / アバター変更 / 退会 / ログアウトをここから操作する
+- **アカウント** … プロフィール / セキュリティ / セッション / 連携アカウント。プロフィール編集 / アバター変更 / 多要素認証 (MFA) の有効化・無効化 / 退会 / ログアウトをここから操作する
+
+`/account/security` から認証アプリ (TOTP) を登録すると、以後のログインは Magic Link / GitHub OAuth のどちらでも、一次認証のあとに 6 桁コードの入力画面 (`/auth/mfa`) を挟む。認証アプリを失った場合は、有効化時に一度だけ表示されるリカバリーコードで通過する。設計判断は [ADR-0013](./docs/adr/0013-mfa-totp-challenge.md) を参照。
 
 既存ユーザーを別の事業所へ招待する場合は「メンバー」から招待リンク (Resend メール / 1-click magic link) を発行する。受け取った側は `/auth/signup/accept-invitation` で当該事業所に MEMBER として join する。招待メールもローカルでは実送信されず、Magic Link と同様にサーバ log に URL が出る (magic link 部分は 5 分で失効。失効時は同じメールアドレスへ再招待すると PENDING 招待が再利用され新しい URL が発行される):
 
@@ -98,11 +100,50 @@ Cookie 署名検証 (`AUTH_SECRET`) と RPC 認証 (`AUTH_SERVICE_KEY`) は taim
 
 ---
 
+## 運用
+
+### 管理スクリプト (`management/`)
+
+DB に直接つなぐ one-shot / 定期スクリプト。compose 環境では `docker compose run --rm auth-service bun run management/<script>.ts` で実行する。
+
+| スクリプト | 用途 |
+|---|---|
+| `sweep-abandoned-signups.ts` | 登録途中放棄アカウントの定期 sweep (dry-run → `--execute` の 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
+| `backfill-orphan-cleanup.ts` | ghost membership と orphan アカウントの one-shot 掃除 (同 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
+| `disable-user-mfa.ts` | 多要素認証 (MFA) のロックアウト救済。userId 指定で当該ユーザーの MFA を強制的に無効化する |
+
+```bash
+bun run management/disable-user-mfa.ts <userId>
+```
+
+認証アプリとリカバリーコードを両方失ったユーザーには**自力で復帰する手段がない** (ログインはチャレンジ通過が必須、再登録は MFA 有効中は拒否、無効化は有効なコードの入力が必要)。このスクリプトがロックアウトからの唯一の出口で、実行すると当該ユーザーの `two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event の記録 + 本人への通知メール送信が行われる。
+
+### MFA チャレンジの緊急停止 (`MFA_CHALLENGE_ENABLED`)
+
+better-auth の更新でチャレンジが機能しなくなった場合など、deploy の rollback なしにチャレンジ強制だけを止めるための env。
+
+- `MFA_CHALLENGE_ENABLED=false` … チャレンジを発火させず一次認証だけでログインさせる (= MFA を実質的に無効化する)
+- 未設定 / 空文字 / それ以外の値 … すべて有効。明示的な `false` 以外は保護が外れない側に倒す
+
+off で動作している間は Sentry に warning が 1 回出る (止めたまま気づかない状態を作らないため)。復旧したら必ず戻す。
+
+### `AUTH_SECRET` のローテーション制約
+
+`AUTH_SECRET` は cookie 署名鍵であると同時に、MFA 登録済みユーザーの TOTP secret とリカバリーコードの暗号鍵を兼ねる。**MFA 登録済みユーザーが 1 人でもいる状態で差し替えると、全員が自力復帰不能なロックアウトに陥る**。差し替えが避けられない場合の手順 (全員を `disable-user-mfa.ts` で無効化してから差し替える) と、この制約を採った理由は [ADR-0013](./docs/adr/0013-mfa-totp-challenge.md) を参照。
+
+`AUTH_SERVICE_KEY` の緊急 rotation 手順は [`docs/runbook/service-key-rotation.md`](./docs/runbook/service-key-rotation.md) にある。
+
+### 手動回帰 QA
+
+自動化できない回帰ケース (実ドメインでの cookie 共有 / GitHub OAuth 実連携 / workerd 実機 / 実メール / 実機の認証アプリ) は [`docs/qa/manual-regression.md`](./docs/qa/manual-regression.md) に台帳化している。該当領域を触る PR のマージ前に実施する。
+
+---
+
 ## スコープ外 (現状未対応)
 
 - GitHub OAuth — env 設定 + GitHub App 側で `http://localhost:3100/api/auth/callback/github` を Authorization callback URL に登録が必要
 - Resend 経由のメール送信 — local では console.log で代替
-- Passkey / MFA — `/account/security` に枠だけあり、本番デプロイ後の拡張機能フェーズで実装予定
+- Passkey — `/account/security` に枠だけあり、本番デプロイ後の拡張機能フェーズで実装予定
 - セッション個別 revoke / 連携アカウント追加・解除 — `/account/sessions` `/account/connections` に閲覧 UI のみ、変更操作は本番デプロイ後の拡張機能フェーズで実装予定
 - 事業所の課金 (Stripe) / 物理削除 (GDPR hard delete) / GUEST・VIEWER role — ADR-009 Phase E+ として本番運用後の trigger 待ち (現状は soft delete + OWNER / MEMBER の 2 role)
 

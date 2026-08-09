@@ -17,6 +17,20 @@ export type AuditLogEntry =
       userId: string;
       payload: { ip: string; userAgent: string };
     }
+  // secret / リカバリーコード / 残数は載せない (監査ログ閲覧を second factor の漏洩経路にしない)。
+  // ip が null を取るのは、運用救済スクリプト (management/disable-user-mfa.ts) にはリクエストが
+  // 無く、"unknown" のような偽の値を入れると「本人操作だが IP 不明」と区別できなくなるため。
+  // その経路は userAgent に実行元スクリプト名を入れて操作主体を示す。
+  | {
+      eventType: "mfa_enabled";
+      userId: string;
+      payload: { ip: string | null; userAgent: string };
+    }
+  | {
+      eventType: "mfa_disabled";
+      userId: string;
+      payload: { ip: string | null; userAgent: string };
+    }
   | {
       eventType: "account_delete";
       userId: string;
@@ -164,6 +178,32 @@ export const recordAccountDeleted = (
   txOrDb: DbOrTx = db,
 ): Promise<void> =>
   appendAuditLog({ eventType: "account_delete", userId: params.user_id, payload: {} }, txOrDb);
+
+export const recordMfaEnabled = (
+  params: { user_id: string; ip: string | null; userAgent: string },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "mfa_enabled",
+      userId: params.user_id,
+      payload: { ip: params.ip, userAgent: params.userAgent },
+    },
+    txOrDb,
+  );
+
+export const recordMfaDisabled = (
+  params: { user_id: string; ip: string | null; userAgent: string },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "mfa_disabled",
+      userId: params.user_id,
+      payload: { ip: params.ip, userAgent: params.userAgent },
+    },
+    txOrDb,
+  );
 
 export const recordCompanyCreated = (
   params: {

@@ -15,7 +15,14 @@ import { findUserById } from "@/db/repositories/user";
 // (GET /api/account/memberships は SPA の全 /account ページで呼ばれる最頻 endpoint)。
 // Actor は認証 identity の抽象であり user 行の projection ではない — 列の追加は
 // 「hot path の再 SELECT を消す」場合に限り、表示用途 (name / image 等) では足さないこと。
-export type Actor = { id: string; email: string; lastUsedCompanyId: string | null };
+// twoFactorEnabled はこの規律の例外ではなく、表示ではなく認可判定の入力として載せている:
+// MFA の再登録を 409 で拒む前提条件と、MFA 状態参照の可否がこの値を述語に通して決まる。
+export type Actor = {
+  id: string;
+  email: string;
+  lastUsedCompanyId: string | null;
+  twoFactorEnabled: boolean;
+};
 
 export type Unauthorized = { ok: false; error: "unauthorized"; status: 401 };
 export type Forbidden = { ok: false; error: "forbidden"; status: 403 };
@@ -125,7 +132,12 @@ export const guard: MembershipGuard = createMembershipGuard({
     // fail-closed する。DB 断で読めない場合も requireActor の catch が 401 に倒す。
     const dbUser = await findUserById(session.user.id);
     return dbUser
-      ? { id: dbUser.id, email: dbUser.email, lastUsedCompanyId: dbUser.lastUsedCompanyId }
+      ? {
+          id: dbUser.id,
+          email: dbUser.email,
+          lastUsedCompanyId: dbUser.lastUsedCompanyId,
+          twoFactorEnabled: dbUser.twoFactorEnabled,
+        }
       : null;
   },
   findMembership,

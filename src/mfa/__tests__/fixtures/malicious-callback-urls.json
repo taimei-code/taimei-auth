@@ -1,0 +1,88 @@
+[
+  { "name": "正規 相対 path: ルート", "url": "/", "expected": true },
+  { "name": "正規 相対 path: /account", "url": "/account", "expected": true },
+  { "name": "正規 相対 path: 多階層", "url": "/account/security", "expected": true },
+  {
+    "name": "正規 相対 path: query 付き (招待受諾)",
+    "url": "/auth/signup/company?invitation_token=abc-123",
+    "expected": true
+  },
+  {
+    "name": "正規 絶対 URL: trusted origin",
+    "url": "https://app.taimei-code.com/dashboard",
+    "expected": true
+  },
+  {
+    "name": "正規 絶対 URL: 大文字 host は URL parser が小文字化",
+    "url": "https://APP.TAIMEI-CODE.COM/dashboard",
+    "expected": true
+  },
+  { "name": "プロトコル相対 //", "url": "//evil.com/", "expected": false },
+  { "name": "バックスラッシュ /\\evil.com", "url": "/\\evil.com", "expected": false },
+  { "name": "バックスラッシュ 2 連 /\\\\evil.com", "url": "/\\\\evil.com", "expected": false },
+  { "name": "encode 済み slash /%2fevil.com", "url": "/%2fevil.com", "expected": false },
+  { "name": "encode 済み slash 大文字 /%2Fevil.com", "url": "/%2Fevil.com", "expected": false },
+  { "name": "encode 済み backslash /%5cevil.com", "url": "/%5cevil.com", "expected": false },
+  { "name": "encode 済み backslash 大文字 /%5Cevil.com", "url": "/%5Cevil.com", "expected": false },
+  { "name": "CRLF 混入 path", "url": "/account\r\nSet-Cookie: a=b", "expected": false },
+  { "name": "空白混入 path", "url": "/account /evil", "expected": false },
+  { "name": "tab 混入 path", "url": "/account\t/evil", "expected": false },
+  { "name": "相対 path に fragment", "url": "/account#frag", "expected": false },
+  {
+    "name": "相対 path に query + fragment",
+    "url": "/account?next=%2F&x=1#frag",
+    "expected": false
+  },
+  {
+    "name": "絶対 URL に fragment (trusted origin でも拒否)",
+    "url": "https://app.taimei-code.com/#token=xxx",
+    "expected": false
+  },
+  { "name": "trusted 外 origin", "url": "https://evil.com/", "expected": false },
+  {
+    "name": "subdomain prefix 攻撃",
+    "url": "https://evil-app.taimei-code.com/",
+    "expected": false
+  },
+  {
+    "name": "subdomain suffix 攻撃 (.evil.com を後置)",
+    "url": "https://app.taimei-code.com.evil.com/",
+    "expected": false
+  },
+  { "name": "apex への転落", "url": "https://taimei-code.com/", "expected": false },
+  {
+    "name": "userinfo 攻撃 (host=evil.com)",
+    "url": "https://app.taimei-code.com@evil.com/",
+    "expected": false
+  },
+  {
+    "name": "userinfo (password 付き, host は trusted)",
+    "url": "https://user:pass@app.taimei-code.com/",
+    "expected": false
+  },
+  {
+    "name": "Cyrillic homograph (a=U+0430)",
+    "url": "https://аpp.taimei-code.com/",
+    "expected": false
+  },
+  {
+    "name": "punycode 偽装 (xn--)",
+    "url": "https://xn--app-2eb.taimei-code.com/",
+    "expected": false
+  },
+  { "name": "port 違い", "url": "https://app.taimei-code.com:8443/", "expected": false },
+  {
+    "name": "scheme 違い http (trusted は https)",
+    "url": "http://app.taimei-code.com/",
+    "expected": false
+  },
+  { "name": "javascript: smuggling", "url": "javascript:alert(1)", "expected": false },
+  { "name": "data: URI", "url": "data:text/html,<script>alert(1)</script>", "expected": false },
+  { "name": "file: protocol", "url": "file:///etc/passwd", "expected": false },
+  { "name": "ftp: protocol", "url": "ftp://app.taimei-code.com/", "expected": false },
+  { "name": "IPv4 loopback", "url": "https://127.0.0.1/", "expected": false },
+  { "name": "IPv6 loopback", "url": "https://[::1]/", "expected": false },
+  { "name": "スキーム無し host", "url": "app.taimei-code.com/", "expected": false },
+  { "name": "URL でない文字列", "url": "not-a-url", "expected": false },
+  { "name": "空白のみ", "url": "   ", "expected": false }
+]

@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "../client";
-import { appendAuditLog, recordCompanyCreated } from "../repositories/audit-log";
+import {
+  appendAuditLog,
+  recordCompanyCreated,
+  recordMfaDisabled,
+  recordMfaEnabled,
+} from "../repositories/audit-log";
 import { revokeAllSessionsForUser } from "../repositories/session";
 import { deleteUser as deleteUserRepo } from "../repositories/user";
 import { auditLog, session, user } from "../schema";
@@ -46,6 +51,28 @@ describe("audit log repository", () => {
     const rows = await db.select().from(auditLog).where(eq(auditLog.userId, testUserId));
     expect(rows[0]?.eventType).toBe("account_delete");
     expect(rows[0]?.payload).toEqual({});
+  });
+
+  // MFA の有効化・無効化は「乗っ取り犯による勝手な操作」を本人が後から辿れる唯一の記録なので、
+  // event_type 2 種と payload の形が union に載っていること自体が前提条件になる。
+  test("QA-M-01 mfa_enabled / mfa_disabled が union に載り 1 行ずつ追加される", async () => {
+    await recordMfaEnabled({ user_id: testUserId, ip: "1.2.3.4", userAgent: "test/1.0" });
+    await recordMfaDisabled({
+      user_id: testUserId,
+      ip: null,
+      userAgent: "management/disable-user-mfa",
+    });
+
+    const rows = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.userId, testUserId))
+      .orderBy(asc(auditLog.createdAt));
+    expect(rows.map((row) => row.eventType)).toEqual(["mfa_enabled", "mfa_disabled"]);
+    // secret / リカバリーコード / 残数は載せない (監査ログ閲覧を第二要素の漏洩経路にしない)。
+    expect(rows[0]?.payload).toEqual({ ip: "1.2.3.4", userAgent: "test/1.0" });
+    // ip が null を取れるのは、リクエストを持たない運用救済スクリプト経路があるため。
+    expect(rows[1]?.payload).toEqual({ ip: null, userAgent: "management/disable-user-mfa" });
   });
 
   test("recordCompanyCreated helper は event_type + payload 整合性を強制", async () => {

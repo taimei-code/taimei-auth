@@ -33,7 +33,8 @@
     // アカウント所有者宛にしか送れず任意ユーザーへの magic-link が 403 になる。
     "AUTH_FROM_EMAIL_MAGIC_LINK": "noreply@transactional.taimei-code.com",
     "AUTH_FROM_EMAIL_WELCOME": "noreply@transactional.taimei-code.com",
-    "AUTH_FROM_EMAIL_INVITATION": "noreply@transactional.taimei-code.com"
+    "AUTH_FROM_EMAIL_INVITATION": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_SECURITY": "noreply@transactional.taimei-code.com"
   },
   // 本番ドメイン。custom_domain:true で Cloudflare が auth.taimei-code.com の DNS レコードと
   // TLS 証明書を管理し Worker に紐付ける。cross-subdomain cookie (.taimei-code.com) のため

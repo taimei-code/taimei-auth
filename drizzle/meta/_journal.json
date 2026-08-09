@@ -43,6 +43,13 @@
       "when": 1779710938257,
       "tag": "0005_glossy_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786244825416,
+      "tag": "0006_hot_slyde",
+      "breakpoints": true
     }
   ]
 }

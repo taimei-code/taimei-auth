@@ -3,14 +3,14 @@ import { Resend } from "resend";
 
 let resendInstance: Resend | null = null;
 
-// magic link / welcome / invitation の 3 メールが同じ render → send → error 変換を辿るため
+// magic link / welcome / invitation / MFA 通知の全メールが同じ render → send → error 変換を辿るため
 // ここに閉じ、送信基盤の差し替え点を 1 箇所にする。
 export async function renderAndSendEmail(params: {
   from: string;
   to: string;
   subject: string;
   component: ReactElement;
-  kind: "magic link" | "welcome" | "invitation";
+  kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }): Promise<void> {
   // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
   // undefined ("render2 is not a function") になる。dynamic import で実行時に module
@@ -59,6 +59,10 @@ export function getMagicLinkFromEmail(): string {
 
 export function getInvitationFromEmail(): string {
   return process.env.AUTH_FROM_EMAIL_INVITATION || "onboarding@resend.dev";
+}
+
+export function getSecurityFromEmail(): string {
+  return process.env.AUTH_FROM_EMAIL_SECURITY || "onboarding@resend.dev";
 }
 
 export function getSupportEmail(): string {

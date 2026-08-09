@@ -30,7 +30,13 @@ const routes: { method: "GET" | "POST"; path: string }[] = [
   { method: "POST", path: "/api/account/companies/co_1/members/u_1/role" },
   { method: "POST", path: "/api/account/companies/co_1/members/u_1/remove" },
   { method: "POST", path: "/api/account/companies/co_1/transfer-ownership" },
+  { method: "GET", path: "/api/account/mfa" },
+  { method: "POST", path: "/api/account/mfa/enroll" },
+  { method: "POST", path: "/api/account/mfa/activate" },
+  { method: "POST", path: "/api/account/mfa/disable" },
 ];
+
+const MFA_ROUTE_PREFIX = "/api/account/mfa";
 
 describe("account routes は cookie 無しで全て 401", () => {
   for (const { method, path } of routes) {
@@ -40,4 +46,18 @@ describe("account routes は cookie 無しで全て 401", () => {
       expect(await res.json()).toEqual({ error: "unauthorized" });
     });
   }
+});
+
+// MFA 4 route は個別 app.route でなく mountAccountRoutes に載せる。外れると 404 になって上の 401
+// smoke の網から落ち、guard を通さない route が silent に増える (認可の抜けを CI で検知できない)。
+describe("QA-M-15 MFA route が mountAccountRoutes 経由で登録される", () => {
+  test("4 route すべてが mountAccountRoutes だけのアプリで 401 に解決する", async () => {
+    const mfaRoutes = routes.filter(({ path }) => path.startsWith(MFA_ROUTE_PREFIX));
+    expect(mfaRoutes).toHaveLength(4);
+
+    for (const { method, path } of mfaRoutes) {
+      const res = await app.request(`http://localhost${path}`, { method });
+      expect({ path, status: res.status }).toEqual({ path, status: 401 });
+    }
+  });
 });

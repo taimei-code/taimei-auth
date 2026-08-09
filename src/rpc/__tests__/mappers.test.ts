@@ -11,6 +11,7 @@ describe("toProtoUser", () => {
       image: null,
       revision: 0,
       lastUsedCompanyId: null,
+      twoFactorEnabled: false,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-02T00:00:00Z"),
     };
@@ -35,6 +36,7 @@ describe("toProtoUser", () => {
       image: "https://example.com/b.png",
       revision: 0,
       lastUsedCompanyId: null,
+      twoFactorEnabled: false,
       createdAt: new Date("2026-03-01T00:00:00Z"),
       updatedAt: new Date("2026-03-01T00:00:00Z"),
     });
@@ -50,6 +52,7 @@ describe("toProtoUser", () => {
       image: null,
       revision: 7,
       lastUsedCompanyId: null,
+      twoFactorEnabled: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -65,6 +68,7 @@ describe("toProtoUser", () => {
       image: null,
       revision: 0,
       lastUsedCompanyId: "cmp_abcdefghijklmnopqrstuvwx",
+      twoFactorEnabled: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });

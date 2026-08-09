@@ -1,26 +1,18 @@
 import { betterAuth, APIError } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink } from "better-auth/plugins";
+import { magicLink, twoFactor } from "better-auth/plugins";
 import { db } from "@/db/client";
-import { appendAuditLog } from "@/db/repositories/audit-log";
 import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import * as schema from "@/db/schema";
-import { sendWelcomeEmail } from "./email/send-welcome";
+import { mfaChallenge } from "./auth-plugins/mfa-challenge";
+import { signInObserver } from "./auth-plugins/sign-in-observer";
+import { getAppName } from "./email/client";
 import { sendInvitationEmail } from "./email/send-invitation";
 import { sendMagicLinkEmail } from "./email/send-magic-link";
 import { resolveInvitationEmailContext } from "./invitation/resolve-email-context";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
-import { captureAuditLogError } from "./audit-error";
-import { getClientContext } from "./request-context";
 import { redisStorage } from "./redis";
-import { runBackground } from "./background";
-
-const NEW_USER_THRESHOLD_MS = 10000;
-
-const isJustSignedUp = (createdAt: Date): boolean =>
-  Date.now() - createdAt.getTime() < NEW_USER_THRESHOLD_MS;
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
@@ -116,6 +108,20 @@ function buildAuth() {
         // production: Hono middleware (src/rate-limit.ts) と独立した二重防御として 10 req/min。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
+      // allowPasswordless はパスワードレス構成 (emailAndPassword.enabled: false) では必須。
+      // 既定ではプラグインが操作前のパスワード再入力を要求し、enable / disable が常に 400 になる。
+      // 残り 4 つはプラグイン既定値と同値だが、既定が動くと不変条件 (two_factor_enabled ⇒ verified 行)
+      // や登録済み認証アプリが黙って壊れるため明示する。検証窓は @better-auth/utils 側の ±1 step 固定。
+      twoFactor({
+        allowPasswordless: true,
+        skipVerificationOnEnable: false,
+        issuer: getAppName(),
+        totpOptions: { period: 30, digits: 6 },
+        backupCodeOptions: { storeBackupCodes: "encrypted" },
+      }),
+      // この 2 つは登録順が正しさの前提 (詳細: src/auth-plugins/sign-in-observer.ts)。
+      mfaChallenge(),
+      signInObserver(),
     ],
 
     session: {
@@ -137,45 +143,6 @@ function buildAuth() {
         enabled: true,
         trustedProviders: [],
       },
-    },
-
-    hooks: {
-      after: createAuthMiddleware(async (ctx) => {
-        const newSession = ctx.context.newSession;
-
-        if (newSession) {
-          const createdAt = new Date(newSession.user.createdAt);
-          if (isJustSignedUp(createdAt)) {
-            // Workers では fire-and-forget を waitUntil 経由にしないと "hung" になる (background.ts)。
-            runBackground(
-              sendWelcomeEmail(newSession.user.email, newSession.user.name).catch((e) =>
-                console.error("Welcome email failed:", e),
-              ),
-            );
-          }
-
-          // sign-out path は ctx.context.newSession を populate しないため (better-auth 1.6.9 仕様)、
-          // sign-out audit は handler 側で取る。ここは sign-in 経路のみ通る。
-          // 将来 provider 追加時に sign_in payload の method 型と分岐が乖離するのを防ぐため、
-          // 識別不能なら audit append 自体を skip (else 固定の "github" 誤判定を避ける)。
-          const method: "magic_link" | "github" | null =
-            ctx.path === "/sign-in/magic-link"
-              ? "magic_link"
-              : ctx.path?.startsWith("/callback/github")
-                ? "github"
-                : null;
-          if (method) {
-            const { ip, userAgent } = getClientContext(ctx.headers);
-            runBackground(
-              appendAuditLog({
-                eventType: "sign_in",
-                userId: newSession.user.id,
-                payload: { method, ip, userAgent },
-              }).catch((e) => captureAuditLogError("sign_in", e)),
-            );
-          }
-        }
-      }),
     },
   });
 }

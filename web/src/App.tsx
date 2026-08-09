@@ -4,6 +4,7 @@ import { SignIn } from "./pages/SignIn";
 import { SignUp } from "./pages/SignUp";
 import { SignUpCompany } from "./pages/SignUpCompany";
 import { SignUpAcceptInvitation } from "./pages/SignUpAcceptInvitation";
+import { MfaChallenge } from "./pages/MfaChallenge";
 import { ErrorPage } from "./pages/Error";
 import { AuthLayout } from "./components/auth/AuthLayout";
 import { AccountLayout } from "./components/account/AccountLayout";
@@ -28,6 +29,8 @@ export const App = () => {
           <Route path="signup" element={<SignUp />} />
           <Route path="signup/company" element={<SignUpCompany />} />
           <Route path="signup/accept-invitation" element={<SignUpAcceptInvitation />} />
+          {/* 一次認証の後に server が 302 で送り込む着地先 (src/auth-plugins/mfa-challenge.ts)。 */}
+          <Route path="mfa" element={<MfaChallenge />} />
           <Route path="error" element={<ErrorPage />} />
         </Route>
 

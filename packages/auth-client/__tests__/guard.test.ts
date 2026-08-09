@@ -211,3 +211,82 @@ describe("createAuthGuard.getSession", () => {
     expect(a).toEqual(b);
   });
 });
+
+// MFA チャレンジ保留中の user は、一次認証の session が破棄済みで第二要素も未検証という
+// 中間状態にある。SDK はこの状態を表す新しい戻り値を持たず、consumer からは単に未認証に見える。
+describe("MFA チャレンジ保留中の consumer 表面", () => {
+  const userWithMfaEnabled = {
+    ...validUser,
+    twoFactorEnabled: true,
+    twoFactorSecret: "should-not-leak",
+  };
+
+  test("QA-M-27 チャレンジ保留中は session token が無く RPC も呼ばずに未認証を返す", async () => {
+    let rpcCalled = false;
+    const guard = createAuthGuard({
+      client: makeClient(async () => {
+        rpcCalled = true;
+        return okResponse;
+      }),
+      getSessionToken: async () => undefined,
+    });
+
+    const result = await guard.getSession();
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error();
+    expect(result.reason).toBe(Result.SESSION_NOT_FOUND);
+    expect(rpcCalled).toBe(false);
+  });
+
+  test("QA-M-27 破棄済み token が残っていても SESSION_NOT_FOUND を未認証として返す", async () => {
+    const guard = createAuthGuard({
+      client: makeClient(async () => ({
+        outcome: { case: "error", value: { reason: Result.SESSION_NOT_FOUND } },
+      })),
+      getSessionToken: async () => "stale-token-from-dropped-cookie",
+    });
+
+    const result = await guard.getSession();
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error();
+    expect(result.reason).toBe(Result.SESSION_NOT_FOUND);
+  });
+
+  test("QA-M-27 SessionData の shape は MFA 導入前と同一で MFA 由来のフィールドが増えない", async () => {
+    const guard = createAuthGuard({
+      client: makeClient(async () => ({
+        outcome: {
+          case: "ok" as const,
+          value: { user: userWithMfaEnabled, session: validSession },
+        },
+      })),
+      getSessionToken: async () => "valid-token",
+    });
+
+    const result = await guard.getSession();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error();
+
+    expect(Object.keys(result.data).sort()).toEqual(["companyId", "session", "user"]);
+    expect(Object.keys(result.data.user).sort()).toEqual([
+      "createdAt",
+      "email",
+      "emailVerified",
+      "id",
+      "image",
+      "name",
+      "updatedAt",
+    ]);
+    expect(Object.keys(result.data.session).sort()).toEqual(["expiresAt", "id", "kind"]);
+
+    const allKeys = [
+      ...Object.keys(result.data),
+      ...Object.keys(result.data.user),
+      ...Object.keys(result.data.session),
+    ];
+    expect(allKeys.filter((key) => /mfa|twofactor|2fa|backup|recovery/i.test(key))).toEqual([]);
+    expect(JSON.stringify(result.data)).not.toContain("should-not-leak");
+  });
+});
