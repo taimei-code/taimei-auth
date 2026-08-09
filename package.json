@@ -66,7 +66,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.4",
-    "lucide-react": "^0.482.0",
+    "lucide-react": "^1.29.0",
     "postcss": "^8.5.23",
     "qrcode": "^1.5.4",
     "react-router-dom": "^7.18.1",
