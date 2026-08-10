@@ -66,8 +66,10 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
   const windowCount = async (key: string): Promise<number> =>
     Number((await (await getRedis()).get(key)) ?? 0);
 
-  // 窓は TTL (60 秒) で自然に消えるため後始末は置かない。
-  const isolatedClientIp = (): string => `203.0.113.${crypto.randomUUID()}`;
+  // 窓は TTL (60 秒) で自然に消えるため後始末は置かない。IP literal 以外は unknown へ落ちて窓を
+  // 共有するため (request-context.ts)、下位 2 octet を振って test 間の衝突だけを避ける。
+  const isolatedClientIp = (): string =>
+    `203.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
 
   test("状態取得が IP 軸の枠を消費する", async () => {
     const ip = isolatedClientIp();

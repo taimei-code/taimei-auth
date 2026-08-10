@@ -129,6 +129,23 @@ better-auth の更新でチャレンジが機能しなくなった場合など�
 
 off で動作している間は Sentry に warning が 6 時間おきに出続ける (止めたまま気づかない状態を作らないため)。復旧したら必ず戻す。
 
+### client IP の導出 (`AUTH_TRUSTED_PROXY_HOPS`)
+
+audit ログの `ip` と IP 軸 rate limit の key は「client が詐称できない出所」からしか取らない (`src/request-context.ts`)。信用できる出所は runtime で違う。
+
+- **Cloudflare Workers (本番)** … Cloudflare が edge で上書きする `cf-connecting-ip` のみを見る。`X-Forwarded-For` / `X-Real-IP` は読まない。**設定不要**
+- **Bun (compose / e2e / self-managed)** … `X-Forwarded-For` を**末尾から** `AUTH_TRUSTED_PROXY_HOPS` 番目 (= 自前 proxy が付け足した位置) で読む。client は先頭にしか値を積めないため、この位置は詐称できない
+
+| 値 | 想定構成 |
+|---|---|
+| `1` | proxy 1 段 (nginx / ALB 等) が XFF に追記する構成。`X-Real-IP` も突き合わせ、食い違えば `unknown` に倒す |
+| `2` 以上 | 自分たちが運用する proxy の段数。末尾から N 番目を client とみなす |
+| `0` | proxy 無しの直公開。ヘッダを一切信用しない (全リクエストが `unknown` になり IP 軸の枠は共有される) |
+
+`APP_ENV=production` で未設定 / 非負整数でない場合は **Bun entry (`src/index.ts`) が起動を拒否する** (`AUTH_SERVICE_KEY` と同じ fail-fast)。既定値で黙って埋めると、audit の `ip` も IP 軸の枠も動いて見えたまま無価値化するため。非 production は未設定なら 1 hop 相当で動く (compose / bun test / e2e は proxy 無しの直公開で、枠自体も 1000/min に緩和されている)。
+
+IP literal (IPv4 / IPv6) として読めない値・hop 数に足りない列・不在ヘッダはすべて `unknown` になる。
+
 ### `AUTH_SECRET` のローテーション制約
 
 `AUTH_SECRET` は cookie 署名鍵であると同時に、MFA 登録済みユーザーの TOTP secret とリカバリーコードの暗号鍵を兼ねる。**MFA 登録済みユーザーが 1 人でもいる状態で差し替えると、全員が自力復帰不能なロックアウトに陥る**。差し替えが避けられない場合の手順 (全員を `disable-user-mfa.ts` で無効化してから差し替える) と、この制約を採った理由は [ADR-0013](./docs/adr/0013-mfa-totp-challenge.md) を参照。

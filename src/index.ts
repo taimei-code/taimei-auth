@@ -3,6 +3,7 @@ import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "./app";
 import { pingRedis } from "./redis";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
+import { parseTrustedProxyHops } from "./request-context";
 
 initBunSentry();
 
@@ -10,6 +11,15 @@ initBunSentry();
 // dev / test 環境では従来通り warn のみで通す (compose の local-dev-key を hardcoded する運用も維持)。
 if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
   console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
+  process.exit(1);
+}
+
+// 未設定を既定値で埋めると client IP が全リクエスト "unknown" へ潰れ、audit の ip も IP 軸 rate-limit も
+// 動いて見えたまま無価値化する。Workers 本番はこの entry を通らないため設定不要 (request-context.ts)。
+const trustedProxyHopsConfigured =
+  parseTrustedProxyHops(process.env.AUTH_TRUSTED_PROXY_HOPS) !== null;
+if (process.env.APP_ENV === "production" && !trustedProxyHopsConfigured) {
+  console.error("FATAL: AUTH_TRUSTED_PROXY_HOPS (non-negative integer) is required in production.");
   process.exit(1);
 }
 
