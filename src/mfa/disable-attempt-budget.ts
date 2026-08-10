@@ -2,23 +2,21 @@ import { incrementRateWindow, redisStorage } from "../redis";
 import { Sentry } from "../sentry";
 import { failure, LOCKED, type MfaFailure } from "./error-mapping";
 
-// ADR-0012 (Use-case 層): 無効化のコード検証に掛けるアカウント単位の試行上限。
-// プラグインの試行カウントとアカウントロックは sign-in 経路でしか動かず、handler 側の
-// createRateLimitMiddleware は数える軸がセッションで Redis 障害時に fail-open する。
-// session cookie を盗んだ攻撃者による 6 桁の総当たりは、ここでしか止まらない。
+// ADR-0012 (Use-case 層): 無効化のコード検証に掛けるアカウント単位の試行上限。プラグインの
+// 試行制限も汎用 rate limit も届かないセッションあり経路で、session cookie を盗んだ攻撃者に
+// よる 6 桁の総当たりはここでしか止まらない (詳細: docs/adr/0013-mfa-totp-challenge.md)。
 
 // セッション単位にすると、cookie を盗んだ攻撃者がセッションを取り直すたびに枠を得られる。
 // export しているのは、テストが TTL を観測する対象を production と同じキーに固定するため。
 export const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
 
-// プラグインのアカウントロック (10 回 / 15 分) より狭いのは、本人のセッションを前提にした操作で
-// 正規利用の打ち直しが数回に収まるため。TTL は試行のたびに引き直され、連投を続ける間は解けない。
+// プラグインのアカウントロック (gateway.ts の verifyMfaCode) より狭いのは、本人のセッションを
+// 前提にした操作で正規利用の打ち直しが数回に収まるため。TTL は試行のたびに引き直され、
+// 連投を続ける間は解けない。
 const WINDOW_SECONDS = 15 * 60;
 const MAX_ATTEMPTS = 5;
 
-// **fail-closed — 数えられない時は必ず拒否する**。汎用 rate limit と同じ fail-open にすると、
-// Redis を落とすだけで第二要素の総当たり防御が消える (src/rate-limit.ts の fail-open は
-// availability 優先の判断で、この counter には適用しない)。
+// **fail-closed — 数えられない時は必ず拒否する** (fail-open との使い分けの判断: ADR-0013)。
 export async function spendDisableAttempt(userId: string): Promise<MfaFailure | undefined> {
   const spent = await incrementRateWindow(disableAttemptsKey(userId), WINDOW_SECONDS).catch(
     (error: unknown) => {

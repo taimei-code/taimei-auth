@@ -13,19 +13,13 @@ import {
   type AuthRouteMatch,
 } from "./primary-auth-routes";
 
-// twoFactor プラグインのチャレンジ強制 after-hook は `/sign-in/email|username|phone-number` に
-// しか match せず、本サービスの一次認証では 1 度も発火しない。その差分だけを本プラグインが埋め、
-// TOTP の検証・保管・試行制限はプラグイン本体に残す。
-//
-// 撤退線: upstream がチャレンジ範囲の再拡大 (per-method opt-out) を出したら本プラグインを捨てて
-// 標準機構へ移行する。その時に触るのは challenge-store と src/auth.ts のプラグイン登録だけ。
-// 設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// プラグインの after-hook が発火しない一次認証経路 (magic link / OAuth) にチャレンジ強制を
+// 差し込む自前プラグイン。ハイブリッド構成の理由と撤退線: docs/adr/0013-mfa-totp-challenge.md
 
 const MFA_CHALLENGE_PAGE = "/auth/mfa";
 
-// 止めたまま気づかないことを防ぐ通知なので、止めている間は鳴り続ける必要がある。1 回きりの
-// フラグだと isolate 常駐の warm 実行が初回以降ずっと黙り、放置が長い定常状態で信号が消える。
-// 6 時間はオンコール交代を必ず 1 回またぐ粒度 (詳細: docs/adr/0013-mfa-totp-challenge.md)。
+// 止めている間は鳴り続ける (1 回きりの module-state フラグでは黙る理由: ADR-0013)。
+// 6 時間はオンコール交代を必ず 1 回またぐ粒度。
 export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 let killSwitchReportedAt = 0;

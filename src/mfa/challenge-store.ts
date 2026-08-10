@@ -2,18 +2,12 @@ import { generateRandomString } from "better-auth/crypto";
 import { getAuthContext } from "./gateway";
 
 // better-auth twoFactor プラグインのチャレンジ状態を、プラグイン自身と同じ内部形式で
-// 読み書きする。**この結合は意図的**で、プラグインの after-hook が magic link / OAuth 経路に
-// match しない (1.6.4 で upstream が意図的に縮小) ため、チャレンジの発行だけを自前で行い
-// 検証はプラグイン本体に通す、というハイブリッド構成を取っているのが理由。
+// 読み書きする。**この結合は意図的** — ハイブリッド構成の理由と撤退線は
+// docs/adr/0013-mfa-totp-challenge.md。
 //
-// 内部形式への結合はこの 1 ファイルに封じる。cookie 名 / 署名 scheme / verification key 形式 /
-// maxAge を src/mfa/ の他ファイルや src/auth-plugins/ に漏らさないこと。封じ込めは
-// 静的 tripwire (`two_factor` / `2fa-` リテラルの出現箇所) と、challenge-store が作った状態を
-// gateway の verify が消費できることを見る統合 tripwire が固定する。
-//
-// 撤退線: upstream がチャレンジ範囲の再拡大 (per-method opt-out) を出したら本ファイルと
-// プラグイン登録だけを捨てて標準構成へ移行する。
-// 設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// 内部形式 (cookie 名 / 署名 scheme / verification key 形式 / maxAge) はこの 1 ファイルから
+// 漏らさないこと。封じ込めは静的 tripwire (`two_factor` / `2fa-` リテラルの出現箇所) と、
+// challenge-store が作った状態を gateway の verify が消費できることを見る統合 tripwire が固定する。
 
 // 出典: node_modules/better-auth/dist/plugins/two-factor/constant.mjs (better-auth 1.6.23)。
 // 公開 subpath から re-export されていないためハードコピーしている。実際の cookie 名は
@@ -189,10 +183,9 @@ function parseDetail(raw: string | undefined): ChallengeDetail | undefined {
 }
 
 // チャレンジ検証へ渡す前にセッション cookie を落とし、「一次認証は済んだがセッションはまだ無い」
-// 状態をヘッダで表明する。プラグインは session を解決できたかどうかで挙動を切り替えており、
-// セッションが解決できると **試行カウント (5 回でチャレンジ破棄) もアカウントロック (10 回で
-// 15 分) も丸ごと skip され、チャレンジを消費しないまま成功扱いになる**。stale なセッション
-// cookie が 1 本残っているだけで第二要素の総当たり防御が消えるため、経路の入口で必ず通すこと。
+// 状態をヘッダで表明する。セッションが解決できるとプラグインは**試行制限を丸ごと skip し、
+// チャレンジを消費しないまま成功扱いにする** (挙動の詳細: gateway.ts の verifyMfaCode) — stale な
+// セッション cookie 1 本で第二要素の総当たり防御が消えるため、経路の入口で必ず通すこと。
 //
 // cookie 名は chunk 分割 (`.0` / `.1` 接尾) されうるので前方一致で落とす。
 export async function asPreSessionHeaders(headers: Headers): Promise<Headers> {
@@ -260,11 +253,8 @@ function readCookie(headers: Headers, name: string): string | null {
 }
 
 // 出典: better-call 1.3.7 の dist/crypto.mjs (makeSignature) と dist/context.mjs
-// (getSignedCookie)。better-auth の署名付き cookie は better-call の scheme で、HMAC-SHA-256 を
-// **パディング付き標準 base64** で載せる。better-auth 自身が trust device token 等に使う
-// createHMAC("SHA-256", "base64urlnopad") とは非互換で、それで検証すると常に false になる。
-// hono の getSignedCookie は同一 scheme で署名としては互換だが、Hono の Context を要求するため
-// 生の Headers を扱う本経路には載らない (詳細: docs/adr/0013-mfa-totp-challenge.md)。
+// (getSignedCookie)。HMAC-SHA-256 を**パディング付き標準 base64** で載せる scheme で、同じ
+// better-auth 内の base64urlnopad 系と取り違えると常に false になる (詳細: ADR-0013 §2)。
 const COOKIE_SIGNATURE_ALGORITHM = { name: "HMAC", hash: "SHA-256" } as const;
 
 // 署名の形 (標準 base64 の 32 byte = 44 文字、末尾 "=") を先に見るのは better-call と同じ順序。

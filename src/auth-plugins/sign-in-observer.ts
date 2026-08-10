@@ -13,11 +13,8 @@ import {
   type AuthRouteMatch,
 } from "./primary-auth-routes";
 
-// better-auth は `options.hooks.after` を全プラグインの after-hook より先に実行する。この記帳を
-// src/auth.ts の hooks.after に残すとチャレンジ介入より先に走り、MFA 未通過のログインを sign_in と
-// して記録してしまう。mfa-challenge の**後に**登録することで、介入時に null 化された newSession を
-// そのまま観測してスキップする — 登録順が正しさの前提。
-// 設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// mfa-challenge の**後に**登録し、チャレンジ介入で null 化された newSession を観測してスキップ
+// する — 登録順が正しさの前提 (hook 実行順の実測と経緯: docs/adr/0013-mfa-totp-challenge.md)。
 
 // RawTwoFactorPath で型付けし、blocked-paths カタログ側の path が変われば型エラーで気付ける状態にする。
 const CHALLENGE_COMPLETION_ROUTES = [

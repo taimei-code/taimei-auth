@@ -8,8 +8,7 @@ import { requiresMfaChallenge } from "./policy";
 
 export type MfaStatus = { enabled: boolean; recoveryCodesRemaining: number };
 
-// enabled はチャレンジ判定と同じ述語を通す。画面の表示とログイン時の実挙動が食い違わないよう、
-// 条件式をここに書き下ろさないこと。
+// enabled はチャレンジ判定と同じ述語を通す (規律: policy.ts)。
 //
 // 有効化は「user.twoFactorEnabled を true にする」と「two_factor 行を verified にする」の
 // 2 つの書き込みで成り、両者は同一トランザクションに入らない (better-auth 側の実装)。間で失敗すると

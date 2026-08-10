@@ -34,11 +34,9 @@ async function isMfaInEffect(actor: Actor): Promise<boolean> {
 // これを後段に回すと誤コードでも他セッションの revoke やセッション rotate が起きてしまう。
 // 成功後の順序は activate と同じ (revoke → rotate → audit → 宛先を Result で返す)。
 //
-// **セッションあり経路にはプラグインの試行制限が一切継承されない** (プラグインの試行カウントと
-// アカウントロックは session 無し = sign-in 経路でのみ動き、プラグインの rate limit も
-// /two-factor/* path 限定)。誤コード連投の抑止はこの use-case が自前で持つ
-// (disable-attempt-budget.ts)。handler 側の createRateLimitMiddleware は数える軸がセッションで、
-// かつ Redis 障害時に fail-open するため、これ単独では第二要素の総当たりを止められない。
+// **セッションあり経路にはプラグインの試行制限が一切継承されない** (挙動: gateway.ts の
+// verifyMfaCode、判断の詳細: ADR-0013)。誤コード連投の抑止はこの use-case が自前で持つ
+// (disable-attempt-budget.ts)。
 export async function disable(params: {
   actor: Actor;
   headers: Headers;
@@ -47,9 +45,8 @@ export async function disable(params: {
 }): Promise<DisableResult> {
   const { actor, headers, code, kind } = params;
 
-  // 前提条件をコード検証より前に置く。プラグインの verifyTOTP は「未 verified 行 + フラグ false」を
-  // 有効化の合図として扱うため、未有効化のまま無効化を呼ぶと、要求と正反対の有効化 (フラグ true +
-  // verified 化 + セッション rotate) が成立したうえで後段の revoke が 401 で落ちる。
+  // 前提条件をコード検証より前に置く。verifyTOTP は未有効化状態を有効化の合図として扱う
+  // (gateway.ts の activateTotp) ため、未有効化のまま呼ぶと要求と正反対の有効化が成立する。
   if (!(await isMfaInEffect(actor))) return failure(NOT_ENABLED);
 
   // コード検証は 1 回ぶんの枠を消費してから通す。枠を確かめてから数える順にすると、同時に
@@ -67,8 +64,7 @@ export async function disable(params: {
   const disabled = await disableTotp(headers);
   if (!disabled.ok) return disabled;
 
-  // 記帳の失敗で手続き全体を落とさないのは activate と同じ理由 — rotate 済みで巻き戻せない地点であり、
-  // 例外にすると Set-Cookie が転送されず本人が今のデバイスからログアウトし、通知メールも消える。
+  // 記帳の失敗で手続き全体を落とさない (rotate 済みで巻き戻せない地点 — 理由の全文: activate.ts)。
   const { ip, userAgent } = getClientContext(headers);
   await recordMfaDisabled({ user_id: actor.id, ip, userAgent }).catch((e) =>
     captureAuditLogError("mfa_disabled", e),

@@ -17,12 +17,11 @@ export type ForceDisableResult =
   | { ok: true; changed: false }
   | { ok: false; reason: "user_not_found" };
 
-// **two_factor 行の削除を先に、フラグ降ろしを後に** 行う。逆順にすると、フラグだけ false に
-// なって verified 行が残る中断状態が生まれ、その状態からの enroll はプラグインの
-// 「既存行が verified なら新行も verified」規則で本人の知らない secret を有効化してしまう
-// (= 救済スクリプトが恒久ロックアウトを作る)。この順序なら中断しても「まだ解除されていない」に
-// 留まり、再実行で解消できる。2 つの書き込みは同一トランザクションに入れられない
-// (フラグ更新は better-auth の internalAdapter 経由のため)。
+// **two_factor 行の削除を先に、フラグ降ろしを後に** 行う。逆順の中断は「フラグ false +
+// verified 行」を残し、そこからの enroll が本人の知らない secret を黙って有効化する
+// (機構: enroll.ts = 救済スクリプトが恒久ロックアウトを作る)。この順序なら中断は
+// 「まだ解除されていない」に留まり、再実行で解消できる。2 つの書き込みは同一トランザクションに
+// 入れられない (フラグ更新は better-auth の internalAdapter 経由のため)。
 export async function forceDisableMfa(userId: string): Promise<ForceDisableResult> {
   const user = await findUserById(userId);
   if (!user) return { ok: false, reason: "user_not_found" };
