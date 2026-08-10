@@ -7,25 +7,25 @@ taimei-auth は taimei エコシステム全体で共有する認証サービス
 ### 事業所 / ドメイン主体
 
 **事業所 (company)**:
-taimei における課金単位かつ user の所属先となるドメイン主体。1 つの法人格 or 個人事業主が 1 事業所として登録される。1 user は **membership** を介して複数事業所に所属可能 (N:M)。`org_code` で `PERSONAL` (個人事業主) と `CORPORATE` (法人) を区別する。詳細: ADR-009。
+taimei における課金単位かつ user の所属先となるドメイン主体。1 つの法人格 or 個人事業主が 1 事業所として登録される。1 user は **membership** を介して複数事業所に所属可能 (N:M)。`org_code` で `PERSONAL` (個人事業主) と `CORPORATE` (法人) を区別する。詳細: PR #55 → #63。
 _Avoid_: 組織 / organization (より広義、`tenant_id` と意味重複), 事業者 / merchant (EC 寄りの語感), tenant (proto reserved field とのみ対応する内部 ID 概念)
 
 **membership**:
-1 user が 1 **事業所** に所属する関係を表す行。N:M bridge エンティティ。`role` (OWNER/ADMIN/MEMBER) を持ち、行の存在自体が「確定所属」を表す (= INVITED 状態は持たず、未承諾の招待は **invitation** で別管理)。離脱 / 除名は audit_log 1 行記録した上で行 hard delete。技術プリミティブとして DB / proto / TS type で英語 `membership` を一貫使用。詳細: ADR-009 §D4 / Q3。
+1 user が 1 **事業所** に所属する関係を表す行。N:M bridge エンティティ。`role` (OWNER/ADMIN/MEMBER) を持ち、行の存在自体が「確定所属」を表す (= INVITED 状態は持たず、未承諾の招待は **invitation** で別管理)。離脱 / 除名は audit_log 1 行記録した上で行 hard delete。技術プリミティブとして DB / proto / TS type で英語 `membership` を一貫使用。詳細: PR #55 → #63。
 _Avoid_: メンバーシップ (カタカナ語、UI に冗長), affiliation (より広義), association (DB 関係の意味と衝突), invitation_status (membership 列ではなく invitation テーブルで管理)
 
 **current_company_id** / **last_used_company_id**:
-2 つの近接概念を分離して使い分ける (ADR-009 Q9):
+2 つの近接概念を分離して使い分ける (詳細: PR #55 → #63):
 - `session.current_company_id` (`Session.company_id` proto field): **現在 active な事業所**。1 session 内で操作対象となる事業所。`/account` の CompanySwitcher で切替可能、`SetCurrentCompany` RPC で UPDATE + Redis cookieCache invalidate。`NULL` = 「事業所未選択」状態 (= membership 0 件 / 唯一 company DELETED 直後)
 - `user.last_used_company_id` (`User.default_company_id` proto field): **新規 session 確立時の default 候補**。better-auth lifecycle hook が session 確立時にこの値を `current_company_id` に copy する
 _Avoid_: default_company_id (user 列だが proto field のみ。DB 列名は last_used_company_id), active_company_id (current_company_id の同義語、混在禁止)
 
 **activation_status**:
-**事業所** のライフサイクル状態を表す列。`ACTIVE` / `DELETED` の 2 値のみ (freee `nest-auth` の `Company_ActivationStatus` から INVITING / DUPLICATED 等を除外した縮退形)。DeleteCompany RPC で `DELETED` + `deleted_at = now()` の soft delete、ACTIVE への復元は admin DB 操作のみ (UI から不可)。物理削除は本 ADR スコープ外 (Phase E+ の GDPR retention ADR の trigger 待ち)。詳細: ADR-009 Q21。
+**事業所** のライフサイクル状態を表す列。`ACTIVE` / `DELETED` の 2 値のみ (freee `nest-auth` の `Company_ActivationStatus` から INVITING / DUPLICATED 等を除外した縮退形)。DeleteCompany RPC で `DELETED` + `deleted_at = now()` の soft delete、ACTIVE への復元は admin DB 操作のみ (UI から不可)。物理削除 (GDPR hard delete) は未実装で、retention 方針の trigger 待ち。詳細: ADR-0010 / PR #55 → #63。
 _Avoid_: status (より広義), state (将来 INVITING など別軸の状態と混同), deleted (boolean column への矮小化、deleted_at timestamp と分離)
 
 **org_code**:
-**事業所** が `PERSONAL` (個人事業主) か `CORPORATE` (法人) かを表す列。OWNER のみが `UpdateCompany` RPC で変更可能、変更時は `audit_log.event_type='company_updated'` に before/after diff を記録 (ADR-009 Q8 結論)。
+**事業所** が `PERSONAL` (個人事業主) か `CORPORATE` (法人) かを表す列。OWNER のみが `UpdateCompany` RPC で変更可能、変更時は `audit_log.event_type='company_updated'` に before/after diff を記録 (詳細: PR #55 → #63)。
 _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 
 **メンバー (member)**:
@@ -33,12 +33,12 @@ _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 _Avoid_: ユーザー (より広義、global user を指す時に使う), メンバーシップ (関係の方を指す時は **membership**)
 
 **role**:
-**membership** が表現する権限階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階。OWNER のみが事業所削除 / 課金変更 / OWNER 権限委譲を行える。ADMIN は OWNER を作れず、自身の昇格もできない (= OWNER 昇格は OWNER のみ承認可)。1 事業所に複数 OWNER を許容する。詳細: ADR-009。
+**membership** が表現する権限階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階。OWNER のみが事業所削除 / 課金変更 / OWNER 権限委譲を行える。ADMIN は OWNER を作れず、自身の昇格もできない (= OWNER 昇格は OWNER のみ承認可)。1 事業所に複数 OWNER を許容する。詳細: PR #55 → #63。
 _Avoid_: 役職 (人事ドメインの語と紛らわしい), permission (個別アクション認可と混同), member_type (freee の `Membership.Type` は業種分類で role とは別概念)
 
 **invitation**:
 **事業所** から外部 email 宛に出された「メンバー参加」の打診 1 件。`token` + `expires_at` (24h) + `used_at` で単発消費を管理する verification 的な独立テーブル。受諾されると **membership** 行が新規作成される (= INVITED 状態の dangling membership 行は作らない)。期限切れ / 取消は invitation 行に対する update + audit 記録で表現。
-_Avoid_: 招待状態 (membership に invitation_status 列を持たせるパターン、ADR-009 Q3 で不採用), pending member (status 表現と紛らわしい)
+_Avoid_: 招待状態 (membership に invitation_status 列を持たせるパターン、PR #55 → #63 で不採用), pending member (status 表現と紛らわしい)
 
 ### 認証画面 (共通画面 SPA)
 

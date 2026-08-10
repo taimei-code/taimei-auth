@@ -10,19 +10,19 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
-// ADR-009: membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
+// membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
 
-// ADR-009: company / audit_log payload が共有する org_code 値集合の SSOT。CONTEXT.md 'org_code'
+// company / audit_log payload が共有する org_code 値集合の SSOT。CONTEXT.md 'org_code'
 export type OrgCode = "PERSONAL" | "CORPORATE";
 
-// ADR-009: 事業所のライフサイクル状態。CONTEXT.md 'activation_status'
+// 事業所のライフサイクル状態。CONTEXT.md 'activation_status'
 export type ActivationStatus = "ACTIVE" | "DELETED";
 
 // used_at 1 列に 3 状態を多重化せず、独立した status 列で表す。
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
 
-// ADR-009: 事業所 (課金単位)。詳細: CONTEXT.md '事業所 / company'
+// 事業所 (課金単位)。詳細: CONTEXT.md '事業所 / company'
 // user / session / membership / invitation が参照するため declaration を先頭に置く。
 export const company = pgTable("company", {
   id: text("id").primaryKey().notNull(),
@@ -48,7 +48,7 @@ export const user = pgTable(
     revision: integer("revision").notNull().default(0),
     // MFA チャレンジ要否の唯一の判定源 (不変条件は twoFactor テーブル定義に記載)。
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
-    // ADR-009: 新規 session 確立時の default 候補事業所 (proto User.default_company_id 対応)。
+    // 新規 session 確立時の default 候補事業所 (proto User.default_company_id 対応)。
     // 削除済 company を参照しないよう ON DELETE SET NULL。
     lastUsedCompanyId: text("last_used_company_id").references(() => company.id, {
       onDelete: "set null",
@@ -81,7 +81,7 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // ADR-009: 現在 active な事業所 (proto Session.company_id 対応)。
+    // 現在 active な事業所 (proto Session.company_id 対応)。
     // DeleteCompany (soft delete) 時にこの列を NULL に更新する handler が責任を持つ。
     currentCompanyId: text("current_company_id").references(() => company.id, {
       onDelete: "set null",
@@ -179,10 +179,10 @@ export const auditLog = pgTable(
   ],
 );
 
-// ADR-009: 1 user × 1 company の所属関係 1 行。N:M bridge。
+// 1 user × 1 company の所属関係 1 行。N:M bridge。
 // company_id は誤物理削除を防ぐため ON DELETE RESTRICT (company は soft delete のみ)。
 // user_id は account 削除時に所属解除する ON DELETE CASCADE (退会の事前 OWNER pre-check が
-// OWNER 不在 company を防ぐため、cascade しても課金責任者不在は発生しない: ADR-009 Q24)。
+// OWNER 不在 company を防ぐため、cascade しても課金責任者不在は発生しない: PR #55 → #63)。
 export const membership = pgTable(
   "membership",
   {
@@ -208,7 +208,7 @@ export const membership = pgTable(
   ],
 );
 
-// ADR-009: 事業所から外部 email 宛の参加打診 1 件。受諾されると membership 行が新規作成される。
+// 事業所から外部 email 宛の参加打診 1 件。受諾されると membership 行が新規作成される。
 // company の cascade で削除されることを許容する (= 削除済事業所への dangling 招待を持ち越さない)。
 export const invitation = pgTable(
   "invitation",

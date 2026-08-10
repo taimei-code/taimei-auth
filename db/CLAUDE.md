@@ -14,7 +14,7 @@ drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/
 
 `/db/` を別プロセスに剥がして RPC 越しに呼ぶ形にすることが将来の分離方法。`/db/` の外から drizzle に触らせない。
 
-`src/rpc/*` 配下からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (ADR-006 D2)。
+`src/rpc/*` 配下からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (PR #34 → #35)。
 
 例外: `e2e/fixtures.ts` の DB 接触は e2e fixture 再生成に限り許可する (spec からは `e2e/seed.ts` の子プロセス経由でのみ呼ぶ。`biome.json` の e2e override が spec からの直接 import を block する)。
 
@@ -44,7 +44,7 @@ const rows = await db.select().from(user).where(...);  // NG
 
 剥がすときに置き換える対象を repository 関数に局所化する。better-auth の internal 利用 (`/src/auth.ts`) は例外として schema に直接触ってよい。
 
-例外: `Session` / `User` の **削除・更新** は better-auth が `secondaryStorage` (Redis cookieCache, `src/auth.ts:106` `maxAge: 5*60`) と DB を二重保管するため、`db/repositories/<entity>.ts` を作って repository 経由にすると最大 5 分の窓で stale session が cookieCache hit で valid に見える。`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、cache invalidation を lifecycle hook に委ねる。`Session` repository を作らないのはこの理由。詳細: `~/.claude/plans/taimei/ADR-006-codebase-slim-down.md` (D2)
+例外: `Session` / `User` の **削除・更新** は better-auth が `secondaryStorage` (Redis cookieCache, `src/auth.ts:106` `maxAge: 5*60`) と DB を二重保管するため、`db/repositories/<entity>.ts` を作って repository 経由にすると最大 5 分の窓で stale session が cookieCache hit で valid に見える。`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、cache invalidation を lifecycle hook に委ねる。`Session` repository を作らないのはこの理由。詳細: PR #34 → #35
 
 ## ルール 8: drizzle-kit が管理できない SQL は `drizzle/manual/` に分離する
 
@@ -59,7 +59,7 @@ PL/pgSQL trigger / VIEW / FUNCTION / custom DDL など、`db/schema.ts` のス�
 
 新規 trigger SQL を追加する場合は `drizzle/manual/NNNN_*.sql` を 1 ファイルずつ append し、host で `drizzle-kit migrate` や `psql` で手動適用せず compose 再起動で `auth-migrate` を経由させる (root CLAUDE.md ルール 4 と整合)。
 
-詳細: `~/.claude/plans/taimei/ADR-001-auth-separation.md` Phase 1.5 retrospective (R1 user.revision DB trigger の導入経緯)。
+詳細: PR #43 (user.revision DB trigger の導入経緯)。
 
 ---
 

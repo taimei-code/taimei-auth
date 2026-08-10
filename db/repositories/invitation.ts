@@ -4,7 +4,7 @@ import { db } from "../client";
 import { invitation, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// ADR-009: Stripe 流 prefix `inv_<24chars>` で entity type を log / audit_log 上で即判定可能に。
+// Stripe 流 prefix `inv_<24chars>` で entity type を log / audit_log 上で即判定可能に。
 export const generateInvitationId = (): string => `inv_${nanoid(24)}`;
 
 // accept URL に載せる token。invitation.id とは別 (id は内部参照、token は推測困難な公開 secret)。

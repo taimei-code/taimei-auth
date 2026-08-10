@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 // Magic Link フォーム下の SNS ログイン区画。招待経由では GitHub を隠して案内文に差し替える —
 // invitation の strict email match は Magic Link 経路を前提とし、GitHub アカウントの email が
-// 招待先と一致する保証がないため (ADR-009)。SignIn / SignUp 両ページで共有し、招待分岐の
+// 招待先と一致する保証がないため。SignIn / SignUp 両ページで共有し、招待分岐の
 // 変更が片ページだけに入るのを防ぐ。boolean 2 つで受けるのは useSignPage の状態表現に
 // 依存させないため (表示部品はどの送信手段が走っているかの内部型を知らなくてよい)。
 export const SocialSignInSection = ({

@@ -10,7 +10,7 @@ import {
 
 // 型レベル assert: repository 関数の戻り値が `Promise<T | undefined>` で揃うことを
 // CI の `tsc --noEmit` で機械的に守る。型エラーが出れば PR は CI で reject される。
-// 詳細: ~/.claude/plans/taimei/ADR-006-codebase-slim-down.md (D2)
+// 詳細: PR #34 → #35
 type Assert<T extends true> = T;
 type IsExact<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;

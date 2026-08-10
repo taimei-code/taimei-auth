@@ -100,8 +100,7 @@ esac
 image="$2"
 
 # stale tag に対する実行を可視化する (過去 iteration の残骸 image を検証して緑になるのを防ぐ)。
-inspected=$(docker image inspect -f '{{.Id}}|{{.Created}}' "$image" 2>&1)
-if [ "$?" -ne 0 ]; then
+if ! inspected=$(docker image inspect -f '{{.Id}}|{{.Created}}' "$image" 2>&1); then
   echo "error: image を inspect できない: $image" >&2
   echo "$inspected" >&2
   exit 1
@@ -188,6 +187,8 @@ if [ "$mode" = "dev" ]; then
     'test -e /app/node_modules/lucide-react'
   # SQL が image から落ちても drizzle-kit は正常終了し migration が silent no-op になるため、
   # binary の behavioral assert では代替できない。
+  # 単一引用符は意図通り: $1 はコンテナ内 sh の位置引数で、host 側で展開させてはならない。
+  # shellcheck disable=SC2016
   assert_in_image "dev image に drizzle の migration SQL がある" \
     'set -- /app/drizzle/*.sql; test -f "$1"'
   assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
@@ -206,6 +207,8 @@ else
   # `| wc -l` も `$(find ...)` 単体も禁止: 前者はパイプで、後者は command substitution で find の
   # exit status を捨て、find 不在・dir 不在でも「0 行 = 合格」になる。status を明示的に拾って
   # 区別する。scope を 2 dir に限るのは COPY . . 由来の repo symlink を除くため。
+  # 単一引用符は意図通り: $out / $st はコンテナ内 sh の変数で、host 側で展開させてはならない。
+  # shellcheck disable=SC2016
   assert_in_image "runner image の node_modules / packages に broken symlink が無い" \
     'out=$(find /app/node_modules /app/packages -xtype l 2>&1); st=$?; [ "$st" -eq 0 ] || { echo "find failed: $out"; exit 2; }; [ -z "$out" ] || { echo "$out"; exit 1; }'
 

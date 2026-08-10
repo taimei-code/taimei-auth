@@ -147,7 +147,7 @@ off で動作している間は Sentry に warning が 6 時間おきに出続�
 - Resend 経由のメール送信 — local では console.log で代替
 - Passkey — `/account/security` に枠だけあり、本番デプロイ後の拡張機能フェーズで実装予定
 - セッション個別 revoke / 連携アカウント追加・解除 — `/account/sessions` `/account/connections` に閲覧 UI のみ、変更操作は本番デプロイ後の拡張機能フェーズで実装予定
-- 事業所の課金 (Stripe) / 物理削除 (GDPR hard delete) / GUEST・VIEWER role — ADR-009 Phase E+ として本番運用後の trigger 待ち (現状は soft delete + OWNER / MEMBER の 2 role)
+- 事業所の課金 (Stripe) / 物理削除 (GDPR hard delete) / GUEST・VIEWER role — 本番運用後の trigger 待ち (現状は soft delete + OWNER / MEMBER の 2 role)
 
 ---
 

@@ -10,7 +10,7 @@ import { findMembershipsByUserId } from "@/db/repositories/membership";
 // 事業所登録 page 自身の guard は SPA 側 (web/src/pages/SignUpCompany.tsx) が担う。
 const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
 
-// ADR-009: 認証後の最終 redirect 先で「事業所未確定」(membership 0 件) なら /auth/signup/company に強制誘導する。
+// 認証後の最終 redirect 先で「事業所未確定」(membership 0 件) なら /auth/signup/company に強制誘導する。
 // /auth/, /auth/signup の認証済 fallback に既存挙動を維持しつつ、membership 0 件のみ別 path に分岐。
 export const authEntryRedirect = async (c: Context, next: Next) => {
   if (!AUTH_ENTRY_PATHS.has(c.req.path)) return next();

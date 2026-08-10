@@ -48,7 +48,7 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      // ADR-009 Q24: user が唯一の OWNER の ACTIVE 事業所が残っていると退会不可。
+      // user が唯一の OWNER の ACTIVE 事業所が残っていると退会不可 (詳細: PR #55 → #63)。
       // 退会すると課金責任者不在の事業所が生まれるため、先に委譲 / 削除を要求する。
       // pre-check と delete を同一 tx に置き、check 後に actor が OWNER 昇格される race を避ける。
       // 削除手順 (audit → session 失効 → 物理削除) と順序根拠は src/account/delete-account.ts に集約。

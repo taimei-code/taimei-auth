@@ -1,7 +1,7 @@
 import { incrementRateWindow } from "../redis";
 import { Sentry } from "../sentry";
 
-// ADR-009: company 単位の invitation rate limit。既存 Magic Link rate limit と独立した二重防御。
+// company 単位の invitation rate limit。既存 Magic Link rate limit と独立した二重防御。
 // 法人 30 人入社等の legitimate burst を見越した既定値。
 const DEFAULT_HOURLY_LIMIT_PER_COMPANY = 50;
 

@@ -56,7 +56,7 @@ const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
           expiresAt: session.expiresAt,
           kind: "user",
         },
-        // session.companyId は事業所切替 (ADR-009 Phase C) 用で、secondaryStorage 構成では
+        // session.companyId は事業所切替 (PR #55 → #63) 用で、secondaryStorage 構成では
         // session が Redis 管理のため常に空。現状は user 側の永続値 (last_used_company_id) が権威。
         companyId: session.companyId ?? user.defaultCompanyId,
       });

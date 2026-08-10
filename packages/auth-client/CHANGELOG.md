@@ -2,7 +2,7 @@
 
 ## 1.1.0 — 2026-05-26
 
-ADR-009 の company 機能を SDK 公開 API に反映。proto field 追加のみで wire 互換は維持 (`buf breaking` 通過)。
+事業所 (company) 機能 (PR #55 → #63) を SDK 公開 API に反映。proto field 追加のみで wire 互換は維持 (`buf breaking` 通過)。
 
 ### Features
 

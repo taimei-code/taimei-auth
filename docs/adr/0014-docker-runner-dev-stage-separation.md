@@ -78,8 +78,9 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
 - advisory 対応時の影響判定が package.json の dependencies セクションだけで即答可能になる
 - 2 つの契約 (既定 target = dev / runner = 本番相当) の検証は機械化した: CI の `docker` job
   (build 4 本 + 既定 build と `--target dev` build の image ID 一致 assert + `scripts/docker-smoke.sh`
-  の dev / runner 2 モード) と config-invariant test `src/__tests__/dependency-classification.test.ts`
-  (依存分類の同期 + Dockerfile 静的 invariant — 最後の `FROM ... AS <name>` が dev であること等)。
+  の dev / runner 2 モード) と config-invariant test (`src/__tests__/dependency-classification.test.ts`
+  の依存分類の同期 + `src/__tests__/dockerfile-contract.test.ts` の Dockerfile 静的 invariant —
+  最後の `FROM ... AS <name>` が dev であること等)。
   ローカルで同じ assert を回すには、先に `scripts/docker-smoke.sh seed` で sentinel / canary を build context に
   作って image を build してから `scripts/docker-smoke.sh <dev|runner> <image>` (seed 無しだと不在 assert が空検証になる)
 - deploy.yml は CI workflow の **run-level conclusion** を gate にしているため、本番 deploy

@@ -190,15 +190,15 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "next": "auth-client は consumer framework 非依存 (ADR-007)",
-                  "next/headers": "auth-client は consumer framework 非依存 (ADR-007)",
-                  "next/navigation": "auth-client は consumer framework 非依存 (ADR-007)",
-                  "next/server": "auth-client は consumer framework 非依存 (ADR-007)",
-                  "next/cache": "auth-client は consumer framework 非依存 (ADR-007)",
-                  "react": "SDK は React.cache 等の React 固有 API に依存しない (ADR-007)",
-                  "react-dom": "SDK は React 固有 API に依存しない (ADR-007)",
-                  "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (ADR-007)",
-                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (ADR-007)"
+                  "next": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "next/headers": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "next/navigation": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "next/server": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "next/cache": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "react": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "react-dom": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
+                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)"
                 }
               }
             }

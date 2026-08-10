@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { app } from "../index";
 import { getRedis } from "../redis";
 
-// ADR-008 retrospective で発覚した 2 件の隠れバグを再発防止する integration test。
+// taimei (consumer app) 側の実装中に顕在化した 2 件の隠れバグを再発防止する integration test。
 //
 // 1. Hono v4 wildcard 構文ミス (#52): `/api/auth/**` は `* が 2 つ` と解釈されて
 //    `/api/auth/sign-in/magic-link` 等の nested path に match せず Better Auth handler に

@@ -44,7 +44,7 @@ export async function deleteUser(id: string, txOrDb: DbOrTx = db): Promise<UserR
     .then((rows) => rows.at(0));
 }
 
-// ADR-009: CreateCompany / SetCurrentCompany handler から呼ばれる column 単独更新。
+// CreateCompany / SetCurrentCompany handler から呼ばれる column 単独更新。
 // repository に置くことで src/* から drizzle-orm 直叩きを避ける (db/CLAUDE.md ルール 1)。
 export async function updateUserLastUsedCompany(
   userId: string,

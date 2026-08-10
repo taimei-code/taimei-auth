@@ -18,7 +18,7 @@ export type SessionData = {
     // 将来 "admin" | "system" | "assumed" を足すための discriminant (現状は user session のみ)。
     kind: "user";
   };
-  // undefined = 「事業所未選択」。consumer は事業所作成フロー (/auth/signup/company) へ誘導する。詳細: ADR-009
+  // undefined = 「事業所未選択」。consumer は事業所作成フロー (/auth/signup/company) へ誘導する。詳細: CONTEXT.md '事業所 / company'
   companyId?: string;
 };
 

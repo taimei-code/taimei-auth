@@ -2,7 +2,7 @@
 
 taimei-auth 認証サービス (IdP) のクライアント SDK。
 
-**設計方針 (ADR-007)**: SDK は consumer の framework に依存しない。`@connectrpc/connect` で抽象化された Transport / Interceptor のみを受け取り、`next/*` / `react` / `@connectrpc/connect-node` 等の framework / runtime 固有モジュールを import しない。Node runtime / Edge runtime / Cloudflare Workers / Bun fetch / Deno のいずれからも利用できる。
+**設計方針 (taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41)**: SDK は consumer の framework に依存しない。`@connectrpc/connect` で抽象化された Transport / Interceptor のみを受け取り、`next/*` / `react` / `@connectrpc/connect-node` 等の framework / runtime 固有モジュールを import しない。Node runtime / Edge runtime / Cloudflare Workers / Bun fetch / Deno のいずれからも利用できる。
 
 ---
 
@@ -101,7 +101,7 @@ const cookieHeader = request.headers.get("cookie") ?? "";
 
 ## 4. `requireSession` 自前実装 (Next.js 以外の framework)
 
-ADR-007 で SDK は `getSession` のみを提供する。redirect 制御フロー (副作用) は consumer 側 wrapper で書く。Next.js 版は §1 Quickstart 参照。他 framework での例:
+SDK は `getSession` のみを提供する (`packages/auth-client/CLAUDE.md` ルール 7)。redirect 制御フロー (副作用) は consumer 側 wrapper で書く。Next.js 版は §1 Quickstart 参照。他 framework での例:
 
 ```ts
 // Hono
@@ -140,4 +140,4 @@ function requireSession(req, res, next) {
 - `createAuthClient({ baseUrl, serviceKey })` → `createAuthClient({ transport })` (transport は consumer が組み立て、Service Key は `createServiceKeyInterceptor(key)` を interceptor として transport に注入)
 - `createAuthGuard(...).requireSession` 廃止 → consumer 側 4 行 wrapper に移動
 
-詳細: [`~/.claude/plans/taimei/ADR-007-auth-client-framework-agnostic.md`](https://github.com/) を参照。
+詳細: taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41 を参照。
