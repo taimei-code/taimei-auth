@@ -30,5 +30,5 @@ const redirectToAuthFlow = (path: string) => {
 
 export const redirectToSignIn = () => redirectToAuthFlow("/auth/");
 
-// ADR-009: 事業所未確定 (membership 0 件) の user を /account 操作の前に事業所作成へ誘導する。
+// 事業所未確定 (membership 0 件) の user を /account 操作の前に事業所作成へ誘導する。
 export const redirectToCompanySignup = () => redirectToAuthFlow("/auth/signup/company");

@@ -4,7 +4,7 @@ import { db } from "../client";
 import { company, type OrgCode } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// ADR-009: company.id は Stripe 流の `cmp_<24chars>` prefix で format 統一。
+// company.id は Stripe 流の `cmp_<24chars>` prefix で format 統一。
 // 観測性 (log / audit_log payload / error message) で entity type が直ちに判定可能になる。
 // TS = nanoid(24), SQL (backfill) = translate(encode(gen_random_bytes(18), 'base64'), '+/=', '-_') で alphabet/長さを揃える。
 export const generateCompanyId = (): string => `cmp_${nanoid(24)}`;

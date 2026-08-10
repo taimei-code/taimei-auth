@@ -62,5 +62,4 @@ AUTH_SERVICE_KEY_PREVIOUS=
 
 ## 関連
 
-- spec: `~/.claude/plans/taimei/ADR-001-phase-3-spec.md` (PR-1 A-1)
-- ADR: `~/.claude/plans/taimei/ADR-001-auth-separation.md` Phase 3
+- 導入経緯: PR #49 (dual-key rotation + session revoke + magic-link rate limit)

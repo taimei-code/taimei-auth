@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { UnaryRequest, UnaryResponse } from "@connectrpc/connect";
 import { createAuthClient, createServiceKeyInterceptor } from "../src/server";
 
-// ADR-007 §6.1 / MC4 解消後: createServiceKeyInterceptor は taimei-auth IdP の private contract
+// createServiceKeyInterceptor は taimei-auth IdP の private contract
 // (`X-Service-Key`) を SDK 内に閉じる helper。Service Key header の set を機械検証する。
 
 // 最小限の UnaryRequest mock。interceptor 内で参照するのは `header` のみ。

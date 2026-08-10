@@ -1,6 +1,6 @@
 // /auth/* route 配下で URL 詐称 (phishing) 警告を表示する sticky banner。
 // production build のみ render (AuthLayout で MODE 分岐)。
-// 詳細: ~/.claude/plans/taimei/ADR-001-phase-3-spec.md PR-3
+// 詳細: PR #51
 export const PhishingBanner = () => {
   return (
     <div

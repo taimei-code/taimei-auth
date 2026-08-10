@@ -1,4 +1,5 @@
-// session cookie 名と取り出し方を SDK 内に閉じ込める helper。詳細: ADR-004 / ADR-007
+// session cookie 名と取り出し方を SDK 内に閉じ込める helper。
+// 詳細: docs/adr/0006-sdk-encapsulation.md / packages/auth-client/CLAUDE.md ルール 7
 // SESSION_COOKIE_NAMES は SDK 外部に export しないこと
 const SESSION_COOKIE_NAMES = [
   "better-auth.session_token",

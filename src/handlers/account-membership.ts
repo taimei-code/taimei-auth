@@ -101,7 +101,7 @@ accountMembership.post(
 );
 
 // POST オーナー委譲 (OWNER のみ)。target を OWNER 昇格 + actor を ADMIN 降格を 1 transaction で。
-// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (ADR-009 Q5)。use-case (transferOwnership) が
+// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (詳細: PR #55 → #63)。use-case (transferOwnership) が
 // withOwnerLockGuard 内で mutation + audit を所有する。
 // entry (requireTransferOwnership) が 401→400 (parse + self)→403 (OWNER)→404→400 (already_owner) を担う。
 accountMembership.post("/api/account/companies/:companyId/transfer-ownership", async (c) => {

@@ -10,6 +10,12 @@ on:
     branches:
       - main
 
+# PR への連続 push は古い run を打ち切る。main push は打ち切らない (deploy が CI の run-level
+# conclusion を gate にしているため: .github/workflows/deploy.yml)。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -66,13 +72,17 @@ jobs:
         run: bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2
 
       # taimei-auth (root) が `@taimei-code/auth-client` を workspace dep として import するため、
-      # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (ADR-006 D3 dogfooding)。
+      # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (PR #34 → #35 の dogfooding)。
       - name: Build auth-client SDK
         working-directory: packages/auth-client
         run: bun run build
 
       - name: Lint (Biome)
         run: bun run lint
+
+      # ubuntu runner に preinstalled の shellcheck を使う (install step は足さない)。
+      - name: Lint (shellcheck)
+        run: shellcheck scripts/*.sh e2e/*.sh
 
       - name: Typecheck
         run: bun run typecheck
@@ -274,20 +284,14 @@ jobs:
             exit 1
           fi
 
-      # web/vite.config.ts の define が process.env.APP_ENV を bundle に畳み込むため、src/services.ts の
-      # isLocalEnvironment() は minify 後に真偽値リテラルへ定数畳み込みされる (文字列 "development" は
-      # 畳み込みで消えるので grep できない)。marker が形を変えたらこの 2 行を再導出する — 実測は
-      # 1 行で取れる:
-      #   docker run --rm <img> sh -c 'grep -oE "=\![01],[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
-      - name: Assert APP_ENV=development が SPA bundle に反映されている
+      # build-info.json は web/vite.config.ts の plugin が build 時の APP_ENV から出す成果物。
+      - name: Assert APP_ENV=development が SPA build 成果物に反映されている
         run: |
-          # identifier class に 0-9 を含める: minify 後の識別子は 1 文字使い切ると数字を含む名前
-          # (a1, b2 …) に進むため、digit 無しの class では bundle 内容が同じでも空振りする。
-          docker run --rm --network none -w /app smoke-dev-devenv \
-            sh -c 'grep -qE "=\!0,[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
-          # 対照: 既定 build (APP_ENV=production) では同じ位置が =!1 になる (marker の非 vacuous 性)
-          docker run --rm --network none -w /app smoke-dev \
-            sh -c 'grep -qE "=\!1,[A-Za-z0-9_$]+=\{taimei:\{name:" web/dist/assets/index-*.js'
+          docker run --rm --network none -w /app smoke-dev-devenv cat web/dist/build-info.json \
+            | grep -F '"appEnv":"development"'
+          # 対照: 既定 build は production (marker の非 vacuous 性)
+          docker run --rm --network none -w /app smoke-dev cat web/dist/build-info.json \
+            | grep -F '"appEnv":"production"'
 
       # dev / runner は mode と期待件数が違うだけなので 1 step + 関数にまとめる
       # (2 step に分けると片方だけ件数突合を直す drift が起きる)。

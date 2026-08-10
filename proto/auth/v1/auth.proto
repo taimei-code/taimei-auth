@@ -45,13 +45,13 @@ message User {
   // VerifySession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
   int32 revision = 8;
 
-  // ADR-009: 新規 session 確立時の default 候補事業所。
+  // 新規 session 確立時の default 候補事業所。
   // better-auth lifecycle hook がこの値を Session.company_id に copy する。
   // membership 0 件 / 削除済 company を参照していた場合は NULL。
   // 対応 DB 列は `user.last_used_company_id` (proto field 名と異なる)。
   optional string default_company_id = 12;
 
-  // 将来の AI 拡張用に field 番号を予約 (multi-tenant 関連は ADR-009 で活性化済)
+  // 将来の AI 拡張用に field 番号を予約 (multi-tenant 関連は PR #55 で活性化済)
   reserved 9 to 11, 13 to 20;
   reserved "ai_consent_settings", "active_ai_clients",
            "tenant_id", "locale";
@@ -64,12 +64,12 @@ message Session {
   // 将来 Become / system session を実装した時点で拡張。
   string session_kind = 7;
 
-  // ADR-006 D6: token/user_id は SDK で trim 済の dead field、ip_address/user_agent は
+  // PR #34 → #35: token/user_id は SDK で trim 済の dead field、ip_address/user_agent は
   // better-auth client が直接参照のため proto 経由不要。
   reserved 2, 4, 5, 6;
   reserved "token", "user_id", "ip_address", "user_agent";
 
-  // ADR-009: 現在 active な事業所 ID。1 session 内で操作対象となる事業所。
+  // 現在 active な事業所 ID。1 session 内で操作対象となる事業所。
   // /account の CompanySwitcher で切替、SetCurrentCompany RPC で UPDATE + cookieCache invalidate。
   // NULL = 「事業所未選択」(membership 0 件 / 唯一 company DELETED 直後)。
   optional string company_id = 8;

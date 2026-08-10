@@ -22,7 +22,7 @@ import { Label } from "@/components/ui/label";
 
 type GuardStatus = "loading" | "needs-input" | "already-has-company";
 
-// ADR-009: signup フローの「事業所登録」ステップ。
+// signup フローの「事業所登録」ステップ。
 // 未認証 → /auth/、認証済 + membership ≥ 1 → 完了済として redirect。
 // 認証済 + membership = 0 のときだけ入力フォームを表示する
 // (server-side guard auth-entry-redirect.ts と SessionGuard に続く 3 層目の page-self guard)。

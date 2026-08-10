@@ -4,10 +4,10 @@ import { db } from "../client";
 import { company, membership, type Role, user } from "../schema";
 import type { DbOrTx, DbTx } from "../transaction";
 
-// ADR-009: Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
+// Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
-// ADR-009: signup の CreateCompany で同 user の 2 tab 同時 submit を直列化する per-user 排他ロック。
+// signup の CreateCompany で同 user の 2 tab 同時 submit を直列化する per-user 排他ロック。
 // user_id 単独の unique 制約は N:M (1 user が複数 company 所属) と衝突するため使えず、
 // transaction-scoped advisory lock + tx 内 re-check で TOCTOU を解消する。
 // hashtext(text) は int4 を返し pg_advisory_xact_lock(bigint) に暗黙 cast される。
@@ -200,7 +200,7 @@ export async function deleteMembership(
     .then((rows) => rows.at(0));
 }
 
-// ADR-009: OWNER ≥ 1 invariant をアプリ層で守る。
+// OWNER ≥ 1 invariant をアプリ層で守る (詳細: PR #55 → #63)。
 // outer transaction を必須にして「OWNER 行 lock → 操作 → 再 count 検証」を atomic に。
 // 全 mutation 経路 (DeleteMembership / UpdateRole / TransferOwnership / DeleteUser) は必ずこれを経由する。
 export async function withOwnerLockGuard<T>(

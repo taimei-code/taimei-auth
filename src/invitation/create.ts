@@ -20,7 +20,7 @@ import { tryConsumeInvitationQuota } from "./rate-limit";
 // 認可 (OWNER / ADMIN、canInviteRole) は Guard 層 (requireInvite) の責務。
 // 設計詳細: docs/adr/0012-layered-architecture.md
 
-const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // ADR-009: invitation は 24h 有効
+const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // invitation は 24h 有効 (CONTEXT.md 'invitation')
 
 export type CreateInvitationResult =
   | { ok: true; invitation: InvitationRow; reused: boolean }

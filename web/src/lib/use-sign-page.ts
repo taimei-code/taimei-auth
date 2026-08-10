@@ -30,8 +30,7 @@ export function useSignPage(options: {
   );
 
   // 招待経由 (相互リンクで SignIn/SignUp 間を移った場合を含む) は着地先を accept-invitation に
-  // 揃える。redirect_url へ直行すると membership が作られないまま流れ、受諾フローから脱落する
-  // (ADR-009)。
+  // 揃える。redirect_url へ直行すると membership が作られないまま流れ、受諾フローから脱落する。
   const invitationToken = parseResult.success ? parseResult.data.invitation_token : undefined;
   const isInvitation = invitationToken !== undefined;
   const callbackUrl = !parseResult.success

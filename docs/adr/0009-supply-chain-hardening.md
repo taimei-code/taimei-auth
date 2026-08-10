@@ -30,7 +30,7 @@ Bun 1.3+ で対応済み (本リポは `bun-version: "1.3"`)。既に `bun.lock`
 
 更新は `.github/dependabot.yml` の `package-ecosystem: "github-actions"` に委ね、Dependabot が SHA pin を維持したまま update PR を出す。`package-ecosystem: "npm"` も同時に有効化し、本リポ全体の依存更新を Dependabot に集約する。
 
-機械検証: `src/__tests__/dependency-classification.test.ts` (全 workflow の `uses:` SHA pin を assert)
+機械検証: `src/__tests__/workflow-action-pin.test.ts` (全 workflow の `uses:` SHA pin を assert)
 
 ### B. CI に lockfile audit step を追加 + 既存 high fix
 

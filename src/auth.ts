@@ -53,12 +53,12 @@ function buildAuth() {
         // 実際の ++ は drizzle/manual/0001_user_revision_triggers.sql の DB trigger に閉じる。
         // input: false により API 経由の client からは書き換え不能。
         revision: { type: "number", required: true, defaultValue: 0, input: false },
-        // ADR-009: user の現在事業所 (= last_used_company_id)。VerifySession が DB から fresh 読みして
+        // user の現在事業所 (= last_used_company_id)。VerifySession が DB から fresh 読みして
         // proto User.default_company_id 経由で SDK SessionData.companyId に公開する。
         // input: false で API 経由の書き換えを封じ、更新は CreateCompany / SetCurrentCompany handler 経由のみ。
         lastUsedCompanyId: { type: "string", required: false, input: false },
       },
-      // ADR-009 Q24: SPA DangerZone (authClient.deleteUser) の経路。
+      // SPA DangerZone (authClient.deleteUser) の経路 (詳細: PR #55 → #63)。
       // beforeDelete で「唯一の OWNER の ACTIVE 事業所が残っていないか」を検証し、
       // 残っていれば APIError で退会を中断する (RPC DeleteUser handler と二重防御)。
       deleteUser: {
@@ -94,7 +94,7 @@ function buildAuth() {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // ADR-009: callbackURL に invitation_token があれば、default ログインリンクではなく
+          // callbackURL に invitation_token があれば、default ログインリンクではなく
           // 事業所名 / 招待者を載せた招待メールを送る (1-click 受諾 + custom 文面の両立)。
           const invitationContext = await resolveInvitationEmailContext(url);
           if (invitationContext) {

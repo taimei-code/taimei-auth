@@ -18,7 +18,7 @@
 
 層 4 の機械的防壁は root `biome.json` の override (`includes: ["packages/auth-client/**"]`) にある `style.noRestrictedImports` で、ban 対象 path の正本はその override (現在 9 path: next 系 / react 系 / @connectrpc 系)。層 1-3 / 5 は lint で検出困難なため、SDK API 追加時に本ルールを参照して目視 audit する。
 
-機械検証: `src/__tests__/dependency-classification.test.ts` (override の path 集合を assert)
+機械検証: `src/__tests__/sdk-boundary-ban.test.ts` (override の path 集合を assert)
 
 理由: root `CLAUDE.md` ルール 3 は「consumer → SDK のみ依存」を強制するが、逆方向 (「SDK → consumer framework に暗黙依存」) は別の壁。SDK が Next.js 専用に見えていなかったのに 5 層すべてで lock-in していた前例 (PR #41) があり、grep だけでは検出できない。`taimei-auth` を別 process 化しても consumer 側修正が auth-client バージョン上げのみで済む (ルール 3 末尾) には、SDK 側が framework 中立である前提が必須。
 
