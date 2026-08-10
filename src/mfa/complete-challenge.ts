@@ -14,8 +14,8 @@ export type CompleteChallengeResult =
 // 検証前にチャレンジ状態を解決するのは、遷移先と一次認証手段が検証成功の副作用で消えるため
 // (プラグインが完了マーカーを消費し、こちらが補助キーを消す)。
 //
-// gateway へは asPreSessionHeaders を通した headers だけを渡す。これによりプラグインの
-// 試行制限 (同一チャレンジ 5 回で破棄 / アカウント 10 回で 15 分ロック) が効く経路に確実に乗る。
+// gateway へは asPreSessionHeaders を通した headers だけを渡し、プラグインの試行制限が効く
+// セッション無し経路に確実に乗せる (挙動: gateway.ts の verifyMfaCode)。
 //
 // sign_in audit はここでは発火しない。検証は gateway 経由でプラグイン本体を通るため、
 // その after-hook に載っている sign-in-observer が 1 件だけ記帳する (二重記帳の回避)。

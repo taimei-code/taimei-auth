@@ -1,8 +1,6 @@
 // ブラウザからの到達を遮断する better-auth twoFactor プラグインの生 path カタログ。
-// 遮断の設計判断 (自前 REST だけを表面にする) は docs/adr/0013-mfa-totp-challenge.md。
-//
-// verify 系も含めて全遮断するのは、自前 POST を迂回されると sign_in audit の記帳と
-// チャレンジ状態の掃除がまとめてバイパスされるため。
+// 遮断の設計判断 (自前 REST だけを表面にする・verify 系も含め全遮断) は
+// docs/adr/0013-mfa-totp-challenge.md。
 //
 // 8 件なのは、プラグインの endpoint のうち generateTOTP / viewBackupCodes が serverOnly
 // (@better-auth/core の createAuthEndpoint.serverOnly) で HTTP router に登録されず path を

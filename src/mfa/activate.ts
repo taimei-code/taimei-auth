@@ -21,7 +21,7 @@ export type ActivateResult =
 //    revokeOtherSessions が除外する「現在のセッション」が rotate 後の新しいものになり、
 //    rotate 前の旧トークンが revoke 対象から外れて生き残る。コード検証より前に revoke が
 //    走る帰結は docs/adr/0013-mfa-totp-challenge.md に受容した制約として記録した。
-// 2. 返した Headers の Set-Cookie を handler が必ず転送する。転送漏れ = 操作直後にログアウト。
+// 2. 返した Headers の Set-Cookie は handler が必ず転送する (gateway.ts invoke の契約)。
 // 3. 通知メールは送らず「宛先」だけ Result に載せる。送信は handler が post-commit で
 //    runBackground に流す (src/handlers/account-invitation.ts と同じ分担)。
 //
@@ -40,7 +40,7 @@ export async function activate(params: {
   if (requiresMfaChallenge(actor)) return failure(ALREADY_ENABLED);
   const enrollment = await findTwoFactorVerificationState(actor.id);
   if (!enrollment) return failure(USER_NOT_FOUND);
-  // 行が verified なら、プラグインの verifyTOTP は有効化を行わず純粋な検証に縮退する。存在だけを
+  // 行が verified なら verifyTOTP は純粋な検証に縮退する (gateway.ts の activateTotp)。存在だけを
   // 前提条件にすると、中断した無効化が残す「フラグ false + verified 行」で ok:true が返り、
   // フラグは false のまま通知メールと audit だけが増える。enroll と同じ拒み方に揃える。
   if (enrollment.verified) return failure(ALREADY_ENABLED);
