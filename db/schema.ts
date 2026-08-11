@@ -138,8 +138,9 @@ export const verification = pgTable(
 // two-factor/schema.mjs と 1:1)。自前コードが読まない列も、削るとプラグイン側のロック機構が
 // silent に死ぬか毎回 500 になるため落とさない。export 名の camelCase は必須 — drizzle adapter が
 // schema["twoFactor"] で引くため、snake_case にすると起動時に BetterAuthError で落ちる。
-// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified
-// (プラグインが verify-totp 成功時に両者を同時に更新する)。
+// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified。
+// ただしプラグインの verify-totp はフラグと verified を別々の非トランザクショナルな書き込みで
+// 更新するため、中断すると破れる (破れの分類と復旧経路: docs/adr/0013-mfa-totp-challenge.md §7)。
 export const twoFactor = pgTable(
   "two_factor",
   {
@@ -158,7 +159,11 @@ export const twoFactor = pgTable(
   },
   (table) => [
     index("two_factor_secret_idx").on(table.secret),
-    index("two_factor_user_id_idx").on(table.userId),
+    // user あたり 1 行を DB で強制する。プラグインの enable は deleteMany + create でしか
+    // 収束せず、並行 enroll で 2 行になる窓があった (2 行状態では「フラグ × 行」から状態が
+    // 一意に決まらず interrupted_activate に誤誘導される)。UNIQUE で 2 本目の create が
+    // fail-closed に落ちる (詳細: ADR-0013 §7)。
+    uniqueIndex("two_factor_user_id_idx").on(table.userId),
   ],
 );
 

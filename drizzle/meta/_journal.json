@@ -50,6 +50,13 @@
       "when": 1786244825416,
       "tag": "0006_hot_slyde",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786450923504,
+      "tag": "0007_charming_raza",
+      "breakpoints": true
     }
   ]
 }

@@ -140,6 +140,37 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
   ).toBeVisible();
 });
 
+test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
+  page,
+}) => {
+  // 再 enroll はサーバ契約として secret を回転させ、認証アプリが無効な secret を握る
+  // (機構と評決の正本: docs/adr/0013 §7)。抑止は client guard のみ —
+  // e2e が踏まない reload / 別タブ経路の観測は手動 QA の担当。
+  let enrollCalls = 0;
+  await page.route("**/api/account/mfa/enroll", async (route) => {
+    enrollCalls++;
+    await route.continue();
+  });
+
+  await signInWithMagicLink(page, MFA_EMAIL);
+  await page.goto("/account/security");
+  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+
+  const dialog = page.getByRole("dialog");
+  const firstSecret = (await dialog.locator('p[translate="no"]').innerText()).trim();
+  // readTotpSecret が失敗すると placeholder "—" が描画され、"—" === "—" で空疎に通ってしまう
+  expect(firstSecret.length).toBeGreaterThan(1);
+  expect(firstSecret).not.toBe("—");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+
+  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+  const secondSecret = (await dialog.locator('p[translate="no"]').innerText()).trim();
+
+  expect(secondSecret).toBe(firstSecret);
+  expect(enrollCalls).toBe(1);
+});
+
 test("QA-M-07 チャレンジ画面のコード入力欄は種別に応じた入力支援属性と aria を持つ", async ({
   page,
 }) => {

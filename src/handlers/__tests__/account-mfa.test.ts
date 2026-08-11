@@ -3,10 +3,12 @@ import { Hono } from "hono";
 import { findUserById } from "@/db/repositories/user";
 import {
   countTwoFactorRows,
+  createSessionFor,
   enableMfaFor,
   wrongTotpCode,
   totpCode,
 } from "../../mfa/__tests__/helpers";
+import { clearTwoFactorEnabled } from "../../mfa/gateway";
 import { createRateLimitMiddleware, mfaAttemptKey } from "../../rate-limit";
 import { getClientContext } from "../../request-context";
 import { accountMfa } from "../account-mfa";
@@ -102,7 +104,7 @@ describe("account MFA API", () => {
     expect(await countTwoFactorRows(user.id)).toBe(1);
   });
 
-  test("GET /api/account/mfa は有効状態とリカバリーコード残数だけを返す", async () => {
+  test("GET /api/account/mfa は有効状態・in_effect・リカバリーコード残数だけを返す", async () => {
     const user = await seedUser("status");
     const enabled = await enableMfaFor(user);
 
@@ -112,7 +114,103 @@ describe("account MFA API", () => {
     // secret とリカバリーコードの実体を後から読み戻せる経路を作らないための response 形。
     expect(await res.json()).toEqual({
       enabled: true,
+      in_effect: true,
       recovery_codes_remaining: enabled.recoveryCodes.length,
     });
+  });
+
+  test("QA-M-03 enroll の応答は {totp_uri, recovery_codes} の 2 キーだけ", async () => {
+    const user = await seedUser("m03");
+    const session = await createSessionFor(user.id);
+
+    const res = await buildApp().request("/api/account/mfa/enroll", {
+      method: "POST",
+      headers: Object.fromEntries(session.headers),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { totp_uri: string; recovery_codes: string[] };
+    // secret 単体のキーを増やさない (実体は totp_uri のクエリにのみ載る)。
+    expect(Object.keys(body).sort()).toEqual(["recovery_codes", "totp_uri"]);
+    expect(new URL(body.totp_uri).searchParams.get("secret")).not.toBeNull();
+    expect(Array.isArray(body.recovery_codes)).toBe(true);
+  });
+
+  test("QA-M-04 未登録ユーザーの GET /api/account/mfa も同じキー形 (enabled/in_effect false)", async () => {
+    const user = await seedUser("m04");
+    const session = await createSessionFor(user.id);
+
+    const res = await buildApp().request("/api/account/mfa", { headers: session.headers });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      enabled: false,
+      in_effect: false,
+      recovery_codes_remaining: 0,
+    });
+  });
+
+  test("QA-M-25 「中断した無効化」は enabled:false だが in_effect:true (UI 袋小路を防ぐ)", async () => {
+    const user = await seedUser("m25");
+    const enabled = await enableMfaFor(user);
+    // フラグ降ろしだけ済んで verified 行が残った中断状態を作る。
+    await clearTwoFactorEnabled(user.id);
+
+    const res = await buildApp().request("/api/account/mfa", { headers: enabled.session.headers });
+
+    expect(res.status).toBe(200);
+    // enabled=false なので無効バッジ、しかし in_effect=true で SPA は disable を出す
+    // (enroll は 409 なので唯一の出口が disable)。
+    expect(await res.json()).toEqual({
+      enabled: false,
+      in_effect: true,
+      recovery_codes_remaining: 0,
+    });
+  });
+
+  test("QA-E-01 有効ユーザーの enroll → 409 already_enabled", async () => {
+    const user = await seedUser("e01");
+    const enabled = await enableMfaFor(user);
+
+    const res = await buildApp().request("/api/account/mfa/enroll", {
+      method: "POST",
+      headers: Object.fromEntries(enabled.session.headers),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "already_enabled" });
+  });
+
+  test("QA-E-04 有効ユーザーの activate 再実行 → 409 (正しいコードでも副作用なし)", async () => {
+    const user = await seedUser("e04");
+    const enabled = await enableMfaFor(user);
+
+    const res = await buildApp().request("/api/account/mfa/activate", {
+      method: "POST",
+      headers: {
+        ...Object.fromEntries(enabled.session.headers),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ code: await totpCode(enabled.secret) }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "already_enabled" });
+    // rotate が走っていないこと (走ると本人が今のデバイスからログアウトする)。
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  test("QA-M-06 未登録ユーザーの activate → 404 not_found", async () => {
+    const user = await seedUser("m06");
+    const session = await createSessionFor(user.id);
+
+    const res = await buildApp().request("/api/account/mfa/activate", {
+      method: "POST",
+      headers: { ...Object.fromEntries(session.headers), "content-type": "application/json" },
+      body: JSON.stringify({ code: "123456" }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "not_found" });
   });
 });

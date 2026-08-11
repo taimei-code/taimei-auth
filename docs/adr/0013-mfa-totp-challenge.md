@@ -167,6 +167,63 @@ Magic Link 再送など) も本件では実装しない。
 動く。`SessionData` に MFA 状態を載せないため、consumer app が MFA の有無で分岐する手段は現時点で
 提供しない (必要になった時点で proto 追加 + SDK の minor で対応する)。
 
+### 7. MFA 登録状態 — 5 状態マトリクス (2026-08-11 追記)
+
+**MFA 登録状態** (用語定義: CONTEXT.md) は `user.twoFactorEnabled` フラグと `two_factor` 行の組から
+一意に決まる。解釈と操作単位の前提条件判定は `src/mfa/enrollment-state.ts` に集約し、union は
+module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が黙って別の評決を
+持てるため)。**評決を変える変更は本表の更新とセットで行う。**
+
+| 状態 (フラグ × 行) | enroll | activate | disable | 状態取得 (表示) |
+|---|---|---|---|---|
+| 未登録 (F × 行なし) | 受理 | 404 `not_found` | 409 `not_enabled` | 無効 |
+| 登録済み未有効 (F × 未 verified) | 受理 — 再 enroll は secret を回転する (まだ使われていない前提で無害扱い。抑止は SPA の client guard のみで reload / 別タブでは破れる) | 受理 | 409 `not_enabled` | 無効 |
+| 有効 (T × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 | 有効 |
+| 中断した無効化 (F × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 (この状態の唯一の出口) | 無効 (バッジ) だが `in_effect=true` を返し SPA は disable を出す |
+| 中断した有効化 (T × 未 verified) | 409 `already_enabled` | 409 `already_enabled` | 前提条件は受理 — 正しいコードで 200 成功 (プラグインが行を verified へ修復してから削除する唯一の自己復旧口)。誤コードは 400 `invalid_code` | 有効 + Sentry error |
+| 中断した有効化 (T × 行なし) | 409 `already_enabled` | 409 `already_enabled` | **前提条件で 401 `challenge_expired`** — 検証すべき secret が無く永久に成功しないため、試行枠を消費せず即拒否する (正しいコードでも枠を空費して 429 に達する事故を防ぐ)。救済は `management/disable-user-mfa.ts` | 有効 + Sentry error (窓 6h の per-user throttle) |
+
+評決の根拠:
+
+- enroll を「効いている」全状態で拒むのは、プラグインの enable が既存行を無条件に
+  deleteMany + create し、本人の知らない secret へ黙って差し替わるため (差し替わると手元の
+  認証アプリが通らなくなる = 恒久ロックアウト)
+- activate の受理を「登録済み未有効」に限るのは、「中断した無効化」(verified 行あり) では
+  verifyTOTP が純粋検証に縮退し、フラグ false のまま通知メールと audit だけが増える偽成功に
+  なるため。「中断した有効化」で `not_found` でなく `already_enabled` を返すのはフラグ先勝ちの
+  現挙動保存
+- 中断 2 状態が生じるのは better-auth の 2 書き込み (フラグ / 行) が同一トランザクションに
+  入らないため。順序は disable がフラグ降ろし → 行削除、activate が**フラグ立て → セッション
+  rotate → 行 verified 化** (1.6.23 totp/index.mjs 実測)。activate の中断窓は書き込み 1 対では
+  なく rotate の複数 I/O を挟むぶん広い。この順序を前提に「flag true ⇒ verified 行」を DB
+  trigger で強制すると activate 自身のフラグ書き込みが弾かれるので不可
+
+運用上の境界:
+
+- `MfaStatus` (画面表示用、read-status.ts) は本状態の射影であり別概念。表示の enabled は kind から
+  導出せず `requiresMfaChallenge` (policy.ts) を通す — 表示とチャレンジ要否の判定二重化を防ぐ規律
+- force-disable (`management/disable-user-mfa.ts`) は本状態判定の対象外 — Actor を持たず行削除数で
+  冪等判定し、行削除 → フラグ降ろしの順序を正しさの前提にする (`user.twoFactorEnabled` の直接比較は
+  policy 規律の既知の例外)
+- 本表と enrollment-state は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** — kill-switch は
+  ログイン境界 (src/auth-plugins/) のみに効く。enrollment-state に混ぜると kill-switch off の
+  incident 中に全ユーザーの disable が `not_enabled` になり self-service の出口が閉じる
+- 表示 (enabled) とは別に `in_effect` (第二要素がまだ効いているか = isMfaInEffect) を SPA へ返す。
+  「中断した無効化」は enabled=false だが in_effect=true で、SPA はこれで disable を出す (enroll は
+  409 なので唯一の出口を UI から塞がない)。in_effect のため read-status は flag=false でも行を読む
+  (security page は human-rate なので +1 SELECT を受容)
+- フラグと行の 2 読みは単一スナップショットでないため、並行 activate / disable の最中は
+  「中断した〜」が一瞬観測されうる (Sentry の false-positive として既知)。通報は user 単位・窓 6h の
+  throttle (`incrementRateWindow` の count===1) で 1 エピソード 1 回に丸め、滞留再訪の event 無制限
+  積み上がりを止める。行なしでは残数取得 (viewBackupCodes) を呼ばず、gateway の captureException を
+  自作失敗で汚さない
+- 行の一意性を DB UNIQUE で強制する (`two_factor_user_id_idx` を unique 化)。プラグインの enable は
+  deleteMany + create で収束するが並行 enroll で 2 行になる窓があり、2 行状態では本表の前提
+  「組から一意に決まる」が崩れるため。2 本目の create は fail-closed に落ちる。読み側
+  (`findTwoFactorVerificationState`) も verified 優先の ORDER BY で決定化する
+- Passkey (Scope out) を追加する時は enrollment-state 内部の union を再設計する (非 export のため
+  消費者は無傷)
+
 ## Consequences
 
 - **upstream 追随のコストを恒常的に負う**: better-auth の minor 更新で cookie 名・署名 scheme・

@@ -10,11 +10,11 @@ const SEARCH_ROOTS = "src web/src";
 
 // __tests__ 除外は self-hit 回避 (この file 自身がパターン文字列を持つ)。コメント内の出現は
 // 封じ込め違反でないため `//` 以降を落としてから判定する (`[^:]` は URL の `://` を残すため)。
-function filesWithCodeLiteral(pattern: string): string[] {
+function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): string[] {
   const command = [
     `cd ${JSON.stringify(REPO_ROOT)} &&`,
     `for f in $(grep -rlE ${JSON.stringify(pattern)}`,
-    `--include=*.ts --include=*.tsx --exclude-dir=__tests__ ${SEARCH_ROOTS}); do`,
+    `--include=*.ts --include=*.tsx --exclude-dir=__tests__ ${roots}); do`,
     `if sed -E 's#(^|[^:])//.*#\\1#' "$f" | grep -qE ${JSON.stringify(pattern)};`,
     `then echo "$f"; fi; done`,
   ].join(" ");
@@ -24,6 +24,17 @@ function filesWithCodeLiteral(pattern: string): string[] {
     .filter(Boolean)
     .sort();
 }
+
+describe("ログイン hot path の非影響 (静的 tripwire)", () => {
+  test("QA-R-01 src/auth-plugins/ は enrollment-state を import しない (直接 import 限定の近似)", () => {
+    // 検索 dir の改名等で grep が空振りしても [] が返るため、実在の import で検出器が
+    // 生きていることを先に確認する (positive control)。
+    expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
+    // enrollment-state は全 entry が行 SELECT を持つ eager 判定。ログイン境界に混入すると
+    // 全ログインに pg 往復が増える (この規律の Why: src/mfa/policy.ts のコメント)。
+    expect(filesWithCodeLiteral("from ['\"].*enrollment-state", "src/auth-plugins")).toEqual([]);
+  });
+});
 
 describe("プラグイン内部形式の封じ込め (静的 tripwire)", () => {
   test("QA-M-11 two_factor リテラルを持つコードは challenge-store.ts だけ", () => {

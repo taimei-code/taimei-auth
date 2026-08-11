@@ -70,7 +70,7 @@ export const Security = () => {
               <Badge variant={status?.enabled ? "default" : "secondary"}>
                 {status?.enabled ? "有効" : "無効"}
               </Badge>
-              {status?.enabled ? (
+              {status?.in_effect ? (
                 <MfaDisableDialog
                   onDisabled={refresh}
                   trigger={

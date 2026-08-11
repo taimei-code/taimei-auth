@@ -1,11 +1,10 @@
 import { recordMfaEnabled } from "@/db/repositories/audit-log";
-import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { captureAuditLogError } from "../audit-error";
 import type { Actor } from "../membership/guard/core";
 import { getClientContext } from "../request-context";
-import { ALREADY_ENABLED, failure, type MfaFailure, USER_NOT_FOUND } from "./error-mapping";
+import { ensureCanActivate } from "./enrollment-state";
+import type { MfaFailure } from "./error-mapping";
 import { activateTotp, mergeForwardedCookies, revokeOtherSessions } from "./gateway";
-import { requiresMfaChallenge } from "./policy";
 
 // ADR-0012 (Use-case 層): 認証アプリの有効化手続。登録済み (未 verified) の two_factor 行を
 // 6 桁コードで verified 化し、user.twoFactorEnabled を true にする。
@@ -37,13 +36,9 @@ export async function activate(params: {
 
   // 前提条件は revoke より前に置く。後ろに回すと、未登録のまま呼ばれた no-op が
   // 「何も有効化しないまま全デバイスをログアウトさせる」副作用だけを残す。
-  if (requiresMfaChallenge(actor)) return failure(ALREADY_ENABLED);
-  const enrollment = await findTwoFactorVerificationState(actor.id);
-  if (!enrollment) return failure(USER_NOT_FOUND);
-  // 行が verified なら verifyTOTP は純粋な検証に縮退する (gateway.ts の activateTotp)。存在だけを
-  // 前提条件にすると、中断した無効化が残す「フラグ false + verified 行」で ok:true が返り、
-  // フラグは false のまま通知メールと audit だけが増える。enroll と同じ拒み方に揃える。
-  if (enrollment.verified) return failure(ALREADY_ENABLED);
+  // 受理条件 (登録済み未有効のみ) の正本は enrollment-state / ADR-0013 の 5 状態マトリクス。
+  const rejected = await ensureCanActivate(actor);
+  if (rejected) return rejected;
 
   const revoked = await revokeOtherSessions(headers);
   if (!revoked.ok) return revoked;

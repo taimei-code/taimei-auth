@@ -29,6 +29,7 @@ accountMfa.get("/api/account/mfa", async (c) => {
   const status = await readStatus(actorResult.actor);
   return c.json({
     enabled: status.enabled,
+    in_effect: status.inEffect,
     recovery_codes_remaining: status.recoveryCodesRemaining,
   });
 });
