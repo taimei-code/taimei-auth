@@ -1,6 +1,6 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
-import { spyOn } from "bun:test";
+import { expect, spyOn } from "bun:test";
 import { makeSignature } from "better-auth/crypto";
 import { eq, like } from "drizzle-orm";
 import { db } from "@/db/client";
@@ -14,6 +14,7 @@ import { activate } from "../activate";
 import { issueChallenge, type ChallengeMethod } from "../challenge-store";
 import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
 import { enroll } from "../enroll";
+import { clearTwoFactorEnabled } from "../gateway";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
 // 状態を DB へ直接捏造すると、プラグインが持つ暗号化 secret とコードの対応が伴わず以降の検証が
@@ -204,6 +205,69 @@ export async function enableMfaFor(user: { id: string; email: string }): Promise
   };
 }
 
+// CONTEXT.md「MFA 登録状態」の 5 状態 (中断した有効化は行あり / 行なしの 2 サブ状態)。
+// 網羅テストが回す実行時配列と型を同源にし、状態追加時のカバレッジ追随を自動にする。
+export const MFA_ENROLLMENT_STATE_NAMES = [
+  "unregistered",
+  "enrolledNotActivated",
+  "active",
+  "interruptedDisable",
+  "interruptedActivationUnverified",
+  "interruptedActivationNoRow",
+] as const;
+
+export type MfaEnrollmentStateName = (typeof MFA_ENROLLMENT_STATE_NAMES)[number];
+
+export type MfaStateFixture = {
+  actor: Actor;
+  session: TestSession;
+  /** 未登録のみ undefined。 */
+  secret?: string;
+  recoveryCodes?: string[];
+};
+
+// 状態は必ず本番と同じ経路 (enroll / activate) で作り、中断だけを 1 箇所の直接書き換えで再現する
+// (このファイル冒頭の「捏造しない」方針)。「登録済み未有効」は verified の DB default が true の
+// ため、プラグインが明示 false を書く enroll 経由でしか作れない — two_factor への直接 INSERT を
+// 足さないこと。
+export async function seedMfaEnrollmentState(
+  user: { id: string; email: string },
+  state: MfaEnrollmentStateName,
+): Promise<MfaStateFixture> {
+  switch (state) {
+    case "unregistered":
+      return { actor: actorOf(user), session: await createSessionFor(user.id) };
+    case "enrolledNotActivated": {
+      const session = await createSessionFor(user.id);
+      const enrolled = await enroll(actorOf(user), session.headers);
+      if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
+      return {
+        actor: actorOf(user),
+        session,
+        secret: secretFromTotpUri(enrolled.totpUri),
+        recoveryCodes: enrolled.recoveryCodes,
+      };
+    }
+    case "active":
+      return enableMfaFor(user);
+    case "interruptedDisable": {
+      const enabled = await enableMfaFor(user);
+      await clearTwoFactorEnabled(user.id);
+      return { ...enabled, actor: actorOf(user) };
+    }
+    case "interruptedActivationUnverified": {
+      const enabled = await enableMfaFor(user);
+      await db.update(twoFactor).set({ verified: false }).where(eq(twoFactor.userId, user.id));
+      return enabled;
+    }
+    case "interruptedActivationNoRow": {
+      const enabled = await enableMfaFor(user);
+      await db.delete(twoFactor).where(eq(twoFactor.userId, user.id));
+      return enabled;
+    }
+  }
+}
+
 export type IssuedChallenge = {
   challengeId: string;
   cookieName: string;
@@ -312,6 +376,56 @@ export async function findVerification(
 export async function deleteVerification(identifier: string): Promise<void> {
   const { internalAdapter } = await auth.$context;
   await internalAdapter.deleteVerificationByIdentifier(identifier);
+}
+
+// キー形式の出典: better-auth 1.6.23 dist/db/internal-adapter.mjs (storeIdentifier 未設定のため
+// identifier がそのまま載る)。
+const verificationRedisKey = (identifier: string): string => `verification:${identifier}`;
+
+export async function challengeMarkerRedisTtl(challengeId: string): Promise<number> {
+  const redis = await getRedis();
+  return redis.ttl(verificationRedisKey(challengeId));
+}
+
+// 実 writer (issueChallenge) が Redis に書いた JSON の expiresAt だけを書き換え、TTL は発行時に
+// 実測した cookie maxAge (= verification TTL と同値) で入れ直す —「Redis TTL は生きているが
+// expiresAt は過去」という TTL とアプリ判定のずれ自体が検証対象のため。createVerificationValue に
+// 過去時刻を渡す方法では作れない: better-auth は TTL<=0 で Redis write を skip し、テスト環境では
+// Postgres fallback を読む別経路になる (本番は storeInDatabase=false で Redis のみ)。
+export async function rewriteChallengeExpiry(
+  challenge: IssuedChallenge,
+  expiresAt: Date,
+): Promise<void> {
+  const redis = await getRedis();
+  const identifiers = await findChallengeIdentifiers(challenge.challengeId);
+  if (identifiers.length === 0) {
+    throw new Error(`no verification values for challenge ${challenge.challengeId}`);
+  }
+  if (challenge.cookieMaxAgeSeconds === undefined) {
+    throw new Error("challenge cookie has no maxAge to reuse as verification TTL");
+  }
+  for (const identifier of identifiers) {
+    const key = verificationRedisKey(identifier);
+    const raw = await redis.get(key);
+    if (!raw) throw new Error(`verification value not in redis: ${key}`);
+    const stored = JSON.parse(raw) as Record<string, unknown>;
+    stored.expiresAt = expiresAt.toISOString();
+    await redis.set(key, JSON.stringify(stored), { EX: challenge.cookieMaxAgeSeconds });
+  }
+}
+
+// rewriteChallengeExpiry した fixture が本番と同じ Redis 経路で配信されていることの事前 assert。
+// これが無いと「期限判定による拒否」と「fixture が Redis に届いていないだけの拒否」を区別できない。
+// DB 行は発行時の expiresAt のままで Redis だけを書き換えているため、書き換え後の値が読めること
+// 自体が Redis 経路の証拠 (better-auth 1.6.23 の safeJSONParse は ISO 文字列を Date へ復元する
+// ため、型では経路を判別できない)。
+export async function assertChallengeServedFromRedis(
+  challenge: IssuedChallenge,
+  expiresAt: Date,
+): Promise<void> {
+  expect(await challengeMarkerRedisTtl(challenge.challengeId)).toBeGreaterThan(0);
+  const stored = await findVerification(challenge.challengeId);
+  expect(stored?.expiresAt.getTime()).toBe(expiresAt.getTime());
 }
 
 // redis の TTL が「キーが存在しない」を表す値。枠が消えたことの観測に使う。

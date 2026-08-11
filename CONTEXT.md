@@ -128,6 +128,10 @@ _Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の
 認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**多要素認証 (MFA)** の有効化時に一度だけ表示し、以後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0013。
 _Avoid_: バックアップコード (better-auth の `backupCodes` は API 名・列名としてのみ使う), 復旧コード, 緊急コード
 
+**MFA 登録状態**:
+user のフラグ (`twoFactorEnabled`) と `two_factor` 行 (verified か否か) の組から一意に決まる、**多要素認証 (MFA)** の登録ライフサイクル状態。**未登録** / **登録済み未有効** (登録済み・有効化前) / **有効** / **中断した無効化** (フラグ降ろし後の行削除が中断した残骸。出口は無効化操作のみ) / **中断した有効化** (フラグは立ったが行が verified にならなかった状態。未 verified 行が残っていれば正しいコードの無効化操作で自己復旧でき、行ごと無い場合のみ救済は `management/disable-user-mfa.ts`) の 5 状態。詳細: ADR-0013。
+_Avoid_: enrollment status (英語混在), MFA 状態 (画面表示用の `MfaStatus` と紛らわしい), 2FA 状態 (要素数を 2 に固定する語)
+
 **session**:
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
@@ -163,6 +167,7 @@ _Avoid_: log entry, audit record
 - **多要素認証 (MFA)** を有効にした user の一次認証 (**Magic Link** / GitHub OAuth) 成功は、**session** でなく **MFA チャレンジ** を生む。**session** はチャレンジ通過時に初めて確立される
 - **MFA チャレンジ** の通過手段は **TOTP** コードか **リカバリーコード** の 2 つ。どちらも同一チャレンジに対して単回のみ有効
 - **多要素認証 (MFA)** の有効化 / 無効化は、操作した **session** 以外を **session revoke** する
+- **MFA 登録状態** (5 状態) が MFA の登録 / 有効化 / 無効化の受理可否とセキュリティページの表示を一元に決める
 
 ## Example dialogue
 

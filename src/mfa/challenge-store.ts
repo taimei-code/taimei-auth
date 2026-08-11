@@ -215,8 +215,8 @@ async function readValue(
   return isUnexpired(record) ? record?.value : undefined;
 }
 
-// findVerificationValue は secondaryStorage 経路で Redis の JSON をそのまま返すため
-// expiresAt が string になる (DB 経路では Date)。new Date() で正規化してから比較する。
+// findVerificationValue の expiresAt は経路と版で型が揺れる (better-auth 1.6.23 の safeJSONParse
+// は ISO 文字列を Date へ復元するが公開契約ではない)。new Date() で正規化してから比較する。
 function isUnexpired(record: { expiresAt: Date | string } | null | undefined): boolean {
   if (!record) return false;
   return new Date(record.expiresAt).getTime() > Date.now();

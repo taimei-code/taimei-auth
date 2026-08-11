@@ -1,37 +1,69 @@
-import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import type { Actor } from "../membership/guard/core";
+import { incrementRateWindow } from "../redis";
 import { Sentry } from "../sentry";
+import { readEnrollmentFacts } from "./enrollment-state";
 import { countRemainingRecoveryCodes } from "./gateway";
 import { requiresMfaChallenge } from "./policy";
 
 // ADR-0012 (Use-case 層): セキュリティページ向けの MFA 状態取得。
 
-export type MfaStatus = { enabled: boolean; recoveryCodesRemaining: number };
+// inEffect = 第二要素がまだ効いているか (enabled=false でも「中断した無効化」は true)。SPA は
+// enabled でなくこれで disable / enroll を出し分ける — enroll は 409 なので出口を disable にする。
+// (`//` で書くのは containment tripwire がブロックコメントを素通しするため — 型名リテラルの誤検出回避)
+export type MfaStatus = {
+  enabled: boolean;
+  inEffect: boolean;
+  recoveryCodesRemaining: number;
+};
 
-// enabled はチャレンジ判定と同じ述語を通す (規律: policy.ts)。
+// 「中断した有効化」滞留ユーザーが画面を再訪するたびに error event が積み上がるのを防ぐ throttle。
+// user 単位に窓を持つので取りこぼしはなく (kill-switch の全体 1 本とはここが違う)、並行 disable の
+// 一過的な false-positive の連発も窓 1 回に丸める。6h はオンコール交代を必ず 1 回またぐ粒度。
+const INTERRUPTED_REPORT_WINDOW_SECONDS = 6 * 60 * 60;
+// export しているのは、テストが窓をリセットする対象を production と同じキーに固定するため
+// (disable-attempt-budget.ts の disableAttemptsKey と同形)。
+export const interruptedReportKey = (userId: string): string =>
+  `mfa:interrupted-reported:${userId}`;
+
+// 窓内の最初の 1 hit だけ通報を許す (INCR の count===1)。incrementRateWindow は hit ごとに
+// EXPIRE を引き直すスライディング窓なので、滞留して再訪し続ける間は 1 エピソード 1 回に丸まる。
+// throttle 自体が失敗したら通報を通す (検出を止めない fail-open。過剰通報より欠測を避ける)。
+async function claimInterruptedReport(userId: string): Promise<boolean> {
+  const { count } = await incrementRateWindow(
+    interruptedReportKey(userId),
+    INTERRUPTED_REPORT_WINDOW_SECONDS,
+  );
+  return count === 1;
+}
+
+async function reportInterruptedActivation(
+  actor: Actor,
+  interrupted: { enrollmentRecord: "absent" | "unverified" },
+): Promise<void> {
+  const fresh = await claimInterruptedReport(actor.id).catch(() => true);
+  if (!fresh) return;
+  Sentry.captureMessage("mfa: enabled flag without verified two factor row", {
+    level: "error",
+    tags: { component: "mfa-read-status" },
+    extra: { userId: actor.id, enrollmentRecord: interrupted.enrollmentRecord },
+  });
+}
+
+// enabled はチャレンジ判定と同じ述語を通す (規律: policy.ts)。「MFA 登録状態」の kind から
+// 導出しないのは、表示とチャレンジ要否の導出が分かれると「画面では有効なのにチャレンジが出ない」
+// 型の判定二重化が再発するため。
 //
-// 有効化は「user.twoFactorEnabled を true にする」と「two_factor 行を verified にする」の
-// 2 つの書き込みで成り、両者は同一トランザクションに入らない (better-auth 側の実装)。間で失敗すると
-// 「フラグは true だが行は未 verified」= チャレンジは要求されるが検証は必ず TOTP_NOT_ENABLED で
-// 落ちる復帰不能状態になる。不変条件を「常に成り立つ」と仮定せず、状態を読むこの経路で検出して
-// 観測に載せる (復帰は disable か management/disable-user-mfa.ts)。
+// 残数取得は enabled かつ「中断した有効化」でないときだけ行う。中断状態 (特に行なし) で呼ぶと
+// gateway の「有効ユーザーに限る (行が存在する)」契約を破って captureException を汚し、
+// 本当に viewBackupCodes が壊れた時の信号が埋もれる。
 export async function readStatus(actor: Actor): Promise<MfaStatus> {
-  // enabled は actor から同期に決まるので、2 本の問い合わせ (DB の行 + プラグインの残数) は
-  // 互いを待つ理由が無い。残数の取得を有効時のみにするのは、行が無い前提の失敗を gateway 側で
-  // 毎回観測しないため (この短絡が gateway の「有効ユーザーに限る」契約の実装)。
   const enabled = requiresMfaChallenge(actor);
-  const [verificationState, recoveryCodesRemaining] = await Promise.all([
-    findTwoFactorVerificationState(actor.id),
-    enabled ? countRemainingRecoveryCodes(actor) : 0,
-  ]);
+  const facts = await readEnrollmentFacts(actor);
 
-  if (enabled && !verificationState?.verified) {
-    Sentry.captureMessage("mfa: enabled flag without verified two factor row", {
-      level: "error",
-      tags: { component: "mfa-read-status" },
-      extra: { userId: actor.id, hasRow: verificationState !== undefined },
-    });
-  }
+  if (facts.interrupted) await reportInterruptedActivation(actor, facts.interrupted);
 
-  return { enabled, recoveryCodesRemaining };
+  const recoveryCodesRemaining =
+    enabled && !facts.interrupted ? await countRemainingRecoveryCodes(actor) : 0;
+
+  return { enabled, inEffect: facts.inEffect, recoveryCodesRemaining };
 }

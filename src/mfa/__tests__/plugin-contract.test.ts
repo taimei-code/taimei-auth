@@ -13,6 +13,7 @@ import {
   issuedSessionCookieCount,
   issueTestChallenge,
   requestHeaders,
+  seedMfaEnrollmentState,
   totpCode,
   wrongTotpCode,
 } from "./helpers";
@@ -85,6 +86,21 @@ describe("twoFactor プラグインとの結合契約", () => {
     expect(row?.lockedUntil).toBeNull();
     expect((await findVerification(attemptsIdentifier))?.value).toBe("0");
     expect(await readChallenge(challenge.headers)).toMatchObject({ pending: true });
+  });
+
+  test("QA-M-05 セッション同梱の verify は未 verified 行を verified へ修復してから成功する", async () => {
+    const user = await seedUser("m05");
+    const fx = await seedMfaEnrollmentState(user, "interruptedActivationUnverified");
+
+    const verified = await verifyMfaCode(fx.session.headers, {
+      code: await totpCode(fx.secret ?? ""),
+      kind: "totp",
+    });
+
+    expect(verified.ok).toBe(true);
+    // 「中断した有効化 × disable = 正しいコードで成功」(ADR-0013 の 5 状態マトリクス) は
+    // この upstream 内部挙動に全面依存する。upstream 更新で変わればここが先に落ちる。
+    expect((await findTwoFactorRow(user.id))?.verified).toBe(true);
   });
 
   test("QA-M-11 プラグイン由来の失敗は自前エラー形に写像される", async () => {

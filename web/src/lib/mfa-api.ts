@@ -11,6 +11,9 @@ export type MfaCodeKind = "totp" | "recovery_code";
 
 export type MfaStatus = {
   enabled: boolean;
+  // two_factor 認証がまだ効いているか。enabled=false でも「中断した無効化」は true になり、
+  // その状態の唯一の出口は無効化操作 (enroll は 409 で拒まれる) なので disable を出す判定に使う。
+  in_effect: boolean;
   recovery_codes_remaining: number;
 };
 

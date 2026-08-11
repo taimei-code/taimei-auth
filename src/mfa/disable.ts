@@ -1,10 +1,10 @@
 import { recordMfaDisabled } from "@/db/repositories/audit-log";
-import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { captureAuditLogError } from "../audit-error";
 import type { Actor } from "../membership/guard/core";
 import { getClientContext } from "../request-context";
 import { resetDisableAttempts, spendDisableAttempt } from "./disable-attempt-budget";
-import { failure, type MfaFailure, NOT_ENABLED } from "./error-mapping";
+import { ensureDisableCanProceed } from "./enrollment-state";
+import type { MfaFailure } from "./error-mapping";
 import {
   disableTotp,
   mergeForwardedCookies,
@@ -12,22 +12,14 @@ import {
   verifyMfaCode,
   type MfaCodeKind,
 } from "./gateway";
-import { requiresMfaChallenge } from "./policy";
 
 // ADR-0012 (Use-case 層): 認証アプリの無効化手続。two_factor 行を削除し
-// user.twoFactorEnabled を false に戻す。
+// user.twoFactorEnabled を false に戻す。受理条件 (中断状態からの出口を含む) の正本は
+// enrollment-state / docs/adr/0013-mfa-totp-challenge.md の 5 状態マトリクス。
 
 export type DisableResult =
   | { ok: true; forwardedHeaders: Headers; notifyEmail: string }
   | MfaFailure;
-
-// フラグと verified 行のどちらかが有効を主張していれば「今 MFA が効いている」と見なす。
-// 両方を見るのは、中断した無効化が残す「フラグ false + verified 行」を運用救済でしか出られない
-// 状態にしないため — enroll は同じ状態を already_enabled で拒むので、出口は disable しかない。
-async function isMfaInEffect(actor: Actor): Promise<boolean> {
-  if (requiresMfaChallenge(actor)) return true;
-  return (await findTwoFactorVerificationState(actor.id))?.verified === true;
-}
 
 // 本人確認を先頭に置き、**コードが誤っていれば副作用を 1 つも起こさない**。パスワードを持たない
 // 構成では現在の TOTP コードかリカバリーコードだけが「本人が第二要素を今も持っている」証拠で、
@@ -45,9 +37,12 @@ export async function disable(params: {
 }): Promise<DisableResult> {
   const { actor, headers, code, kind } = params;
 
-  // 前提条件をコード検証より前に置く。verifyTOTP は未有効化状態を有効化の合図として扱う
-  // (gateway.ts の activateTotp) ため、未有効化のまま呼ぶと要求と正反対の有効化が成立する。
-  if (!(await isMfaInEffect(actor))) return failure(NOT_ENABLED);
+  // 前提条件をコード検証・試行枠消費より前に置く。verifyTOTP は未有効化状態を有効化の合図として
+  // 扱う (gateway.ts の activateTotp) ため未有効化のまま呼ぶと要求と正反対の有効化が成立し、
+  // かつ「検証しても永久に成功しない状態」で枠を空費すると正しいコードでもロックに達する
+  // (どちらも ensureDisableCanProceed が弾く)。
+  const rejected = await ensureDisableCanProceed(actor);
+  if (rejected) return rejected;
 
   // コード検証は 1 回ぶんの枠を消費してから通す。枠を確かめてから数える順にすると、同時に
   // 撃ち込まれた複数リクエストが全員「まだ 0 回」を読んで上限を素通りする。

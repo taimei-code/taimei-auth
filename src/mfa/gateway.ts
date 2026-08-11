@@ -82,9 +82,11 @@ export function verifyMfaCode(
       );
 }
 
-// verifyTOTP は「two_factor 行が未 verified かつ user.twoFactorEnabled が false」のときだけ
-// 有効化を兼ねる — verified: true への更新・twoFactorEnabled: true への更新・セッション rotate を
-// まとめて行う。有効化済みユーザーに対しては純粋な検証になり副作用を持たない。
+// verifyTOTP は two_factor 行が未 verified なら **flag の値に関わらず** 行を verified へ更新し、
+// さらに user.twoFactorEnabled が false のときはフラグ立て + セッション rotate も行う
+// (better-auth 1.6.23 totp/index.mjs。順序はフラグ立て → rotate → 行 verified 化)。
+// 純粋な検証になるのは「有効」(verified 行 + flag true) のときだけ — この行修復が
+// 「中断した有効化」からの唯一の自己復旧口を支える (帰結の正本: ADR-0013 §7)。
 // この非対称を呼び出し側に持ち出さないため、活性化の意図を名前で表明する。
 export function activateTotp(headers: Headers, code: string): Promise<GatewayResult<unknown>> {
   return verifyMfaCode(headers, { code, kind: "totp" });

@@ -2,9 +2,11 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { createSeedHelpers } from "./helpers";
 import {
+  assertChallengeServedFromRedis,
   cleanupIssuedChallenges,
   enableMfaFor,
   issueTestChallenge,
+  rewriteChallengeExpiry,
   requestHeaders,
   signCookieValue,
   tamperCookieSignature,
@@ -93,6 +95,30 @@ describe("MFA チャレンジ API", () => {
     expect(await verifyRes.json()).toEqual({ error: "challenge_expired" });
     expect(verifyRes.headers.getSetCookie()).toEqual([]);
     expect(await statusRes.json()).toEqual({ pending: false });
+  });
+
+  test("QA-M-08 期限切れ cookie → 401 情報漏洩なし", async () => {
+    const user = await seedUser("m08");
+    const enabled = await enableMfaFor(user);
+    const challenge = await issueTestChallenge({
+      userId: user.id,
+      redirectUrl: "/account/security",
+      method: "magic_link",
+    });
+    const expiresAt = new Date(Date.now() - 60_000);
+    await rewriteChallengeExpiry(challenge, expiresAt);
+    await assertChallengeServedFromRedis(challenge, expiresAt);
+
+    const res = await buildApp().request("/api/mfa/challenge/verify", {
+      method: "POST",
+      headers: { ...Object.fromEntries(challenge.headers), "content-type": "application/json" },
+      body: JSON.stringify({ code: await totpCode(enabled.secret), kind: "totp" }),
+    });
+
+    expect(res.status).toBe(401);
+    // cookie 無し / 改ざん と同一 body — どの段階で落ちたかを未認証のブラウザに教えない
+    expect(await res.json()).toEqual({ error: "challenge_expired" });
+    expect(res.headers.getSetCookie()).toEqual([]);
   });
 
   test("有効なチャレンジの状態取得は pending だけを返す", async () => {
