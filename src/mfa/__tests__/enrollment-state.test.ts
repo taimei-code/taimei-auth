@@ -4,17 +4,17 @@ import { findUserById } from "@/db/repositories/user";
 import { twoFactor } from "@/db/schema";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import type { Actor } from "../../membership/guard/core";
-import { activate } from "../activate";
-import { disable } from "../disable";
-import { enroll } from "../enroll";
+import { activate } from "../registration/activate";
+import { disable } from "../registration/disable";
+import { enroll } from "../registration/enroll";
 import {
   ensureCanActivate,
   ensureCanEnroll,
   ensureDisableCanProceed,
   readEnrollmentFacts,
-} from "../enrollment-state";
+} from "../registration/state";
 import type { MfaFailure } from "../error-mapping";
-import { readStatus } from "../read-status";
+import { readStatus } from "../registration/status";
 import {
   ATTEMPT_BUDGET_ABSENT,
   attemptBudgetTtlSeconds,

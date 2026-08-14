@@ -1,8 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { disable } from "../disable";
-import { enroll } from "../enroll";
+import { disable } from "../registration/disable";
+import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
 import {
   actorOf,
@@ -24,7 +24,7 @@ import {
   wrongTotpCode,
 } from "./helpers";
 
-// disable use-case (src/mfa/disable.ts) の DB/Redis 統合テスト。
+// disable use-case (src/mfa/registration/disable.ts) の DB/Redis 統合テスト。
 // 本人確認を先頭に置く契約は「誤コードで 400」ではなく「誤コードで何も動かない」ことでしか
 // 確認できないため、副作用の観測は操作前後の突き合わせで行う。
 

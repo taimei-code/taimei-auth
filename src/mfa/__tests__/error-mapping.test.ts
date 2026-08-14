@@ -1,7 +1,13 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
-import { CHALLENGE_EXPIRED, failure, mapTwoFactorError, type MfaError } from "../error-mapping";
+import {
+  CHALLENGE_EXPIRED,
+  failure,
+  mapPluginError,
+  mapTwoFactorError,
+  type MfaError,
+} from "../error-mapping";
 
 type Captured = { message: string; context?: CaptureContext };
 
@@ -155,6 +161,11 @@ describe("mapTwoFactorError", () => {
     expect(unmapped).toHaveLength(2);
     expect(unmapped[0]?.context?.level).toBe("error");
     expect(unmapped[0]?.context?.tags?.component).toBe("mfa-error-mapping");
+  });
+
+  test("a structured upstream API error is terminal even when its code is unknown", () => {
+    expect(mapPluginError(apiErrorWithCode("SESSION_EXPIRED"))).toEqual(CHALLENGE_EXPIRED);
+    expect(mapPluginError(new Error("connection lost"))).toBeUndefined();
   });
 
   test("QA-M-11 failure() は handler が 1 行で HTTP に落とせる形を返す", () => {

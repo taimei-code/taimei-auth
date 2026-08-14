@@ -2,6 +2,10 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { findUserById } from "@/db/repositories/user";
 import {
+  acquireRegistrationGuard,
+  releaseRegistrationGuard,
+} from "@/db/repositories/mfa-registration";
+import {
   countTwoFactorRows,
   createSessionFor,
   enableMfaFor,
@@ -119,7 +123,7 @@ describe("account MFA API", () => {
     });
   });
 
-  test("QA-M-03 enroll の応答は {totp_uri, recovery_codes} の 2 キーだけ", async () => {
+  test("QA-H-01 enroll の応答は登録情報とopaqueな登録識別子だけを返す", async () => {
     const user = await seedUser("m03");
     const session = await createSessionFor(user.id);
 
@@ -129,9 +133,14 @@ describe("account MFA API", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { totp_uri: string; recovery_codes: string[] };
+    const body = (await res.json()) as {
+      enrollment_id: string;
+      totp_uri: string;
+      recovery_codes: string[];
+    };
     // secret 単体のキーを増やさない (実体は totp_uri のクエリにのみ載る)。
-    expect(Object.keys(body).sort()).toEqual(["recovery_codes", "totp_uri"]);
+    expect(Object.keys(body).sort()).toEqual(["enrollment_id", "recovery_codes", "totp_uri"]);
+    expect(body.enrollment_id.length).toBeGreaterThan(0);
     expect(new URL(body.totp_uri).searchParams.get("secret")).not.toBeNull();
     expect(Array.isArray(body.recovery_codes)).toBe(true);
   });
@@ -212,5 +221,42 @@ describe("account MFA API", () => {
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
+  });
+
+  test("QA-E-02 activateの不正な登録識別子は400で副作用を起こさない", async () => {
+    const user = await seedUser("invalid-enrollment-id");
+    const session = await createSessionFor(user.id);
+
+    const res = await buildApp().request("/api/account/mfa/activate", {
+      method: "POST",
+      headers: { ...Object.fromEntries(session.headers), "content-type": "application/json" },
+      body: JSON.stringify({ code: "123456", enrollment_id: 42 }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_argument" });
+    expect(await countTwoFactorRows(user.id)).toBe(0);
+  });
+
+  test("QA-E-05 競合中の登録操作は503とRetry-Afterを返す", async () => {
+    const user = await seedUser("busy");
+    const session = await createSessionFor(user.id);
+    const acquired = await acquireRegistrationGuard(user.id, "disable");
+    expect(acquired.acquired).toBe(true);
+    if (!acquired.acquired) return;
+
+    try {
+      const res = await buildApp().request("/api/account/mfa/enroll", {
+        method: "POST",
+        headers: Object.fromEntries(session.headers),
+      });
+
+      expect(res.status).toBe(503);
+      expect(res.headers.get("retry-after")).toBe("10");
+      expect(await res.json()).toEqual({ error: "temporarily_unavailable" });
+      expect(await countTwoFactorRows(user.id)).toBe(0);
+    } finally {
+      await releaseRegistrationGuard(acquired.lease);
+    }
   });
 });
