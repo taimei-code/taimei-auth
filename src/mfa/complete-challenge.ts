@@ -1,7 +1,8 @@
 import { Sentry } from "../sentry";
 import { asPreSessionHeaders, openChallenge } from "./challenge-store";
 import { CHALLENGE_EXPIRED, failure, type MfaFailure } from "./error-mapping";
-import { mergeForwardedCookies, verifyMfaCode, type MfaCodeKind } from "./gateway";
+import { mergeForwardedCookies, verifyMfaCode } from "./gateway";
+import type { MfaCodeKind } from "./wire-contracts";
 import { validateChallengeRedirect } from "./redirect-guard";
 
 // ADR-0012 (Use-case 層): ログイン時 MFA チャレンジの通過手続。一次認証済みでセッションを
@@ -29,7 +30,9 @@ export async function completeChallenge(
   const challenge = await openChallenge(headers);
   if (!challenge) return failure(CHALLENGE_EXPIRED);
 
-  const verified = await verifyMfaCode(await asPreSessionHeaders(headers), input);
+  // preserveUnknown=false: チャレンジ経路は registration guard を持たず、結果不明を保存する義理が
+  // 無い。未知の失敗も challenge_expired へ総写像し、未認証ブラウザに内部状態を漏らさない。
+  const verified = await verifyMfaCode(await asPreSessionHeaders(headers), input, false);
   if (!verified.ok) return verified;
 
   // 後始末の失敗で成功を取り消さない。ここに来た時点でプラグインは完了マーカーを消費し新セッションを

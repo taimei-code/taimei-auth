@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { z } from "zod";
 import type { Role } from "@/db/repositories/membership";
 import type { ParseBodyCallback } from "../membership/guard";
-import type { MfaCodeKind } from "../mfa/gateway";
+import type { MfaCodeKind } from "../mfa/wire-contracts";
 
 // role を body で受ける 2 route (role 変更 / 招待作成) が同じ値集合を受理するための共有 schema。
 // 片方だけ新 role を受理する非対称を防ぐ。値集合の SSOT は db/schema.ts の Role
