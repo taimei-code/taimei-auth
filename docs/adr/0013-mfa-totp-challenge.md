@@ -119,7 +119,7 @@ better-auth は `options.hooks.after` を全プラグインの after-hook より
 復号不能になる。
 
 復号不能は自力で回復しない: ログイン手段は Magic Link / GitHub OAuth のみでチャレンジは必ず通る必要が
-あり、再登録 (enroll) は MFA 有効中は 409 で拒否され、無効化 (disable) は有効なコードの入力を要求する。
+あり、登録の再実行 (enroll) は MFA 有効中は 409 で拒否され、無効化 (disable) は有効なコードの入力を要求する。
 つまり **MFA 登録済みユーザー全員が同時に、自力復帰不能なロックアウトに陥る**。session が失効するだけの
 通常の鍵差し替え (再ログインで回復する) とは影響の質が違う。
 
@@ -136,7 +136,7 @@ better-auth は `options.hooks.after` を全プラグインの after-hook より
 1. `management/disable-user-mfa.ts` を MFA 登録済みユーザー全員に対して実行する
    (`two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event + 本人通知メール)
 2. `AUTH_SECRET` を差し替えて deploy する
-3. 各ユーザーに認証アプリの再登録を依頼する
+3. 各ユーザーに認証アプリの新規登録を依頼する
 
 再評価トリガー: MFA 登録ユーザー数がこの手順で捌けない規模になったとき。その時点で再暗号化手順を設計し、
 本 ADR を更新する。
@@ -150,8 +150,8 @@ Magic Link 再送など) も本件では実装しない。
 したがって次のリスクを受容する: **session を奪取した攻撃者が enroll → activate を実行すると、
 有効化に伴う他 session の revoke で正規ユーザーが自分のアカウントから締め出される。**
 
-- **検知経路**: 有効化・無効化の両方で本人に通知メールを送る (勝手な有効化 = 締め出し、勝手な無効化 =
-  保護解除の、いずれも本人が気づける唯一の信号)
+- **検知経路**: 有効化・無効化の両方で本人にbest-effortの通知メールを送る (勝手な有効化 = 締め出し、
+  勝手な無効化 = 保護解除)。運用調査にはaudit logを使う。process crashを跨ぐdurable deliveryは保証しない。
 - **復旧経路**: `management/disable-user-mfa.ts` による運用救済
 
 不採用の理由は、防げる範囲が「session 奪取済みの攻撃者による有効化」に限られる一方で、ログイン動線が
@@ -170,14 +170,15 @@ Magic Link 再送など) も本件では実装しない。
 ### 7. MFA 登録状態 — 5 状態マトリクス (2026-08-11 追記)
 
 **MFA 登録状態** (用語定義: CONTEXT.md) は `user.twoFactorEnabled` フラグと `two_factor` 行の組から
-一意に決まる。解釈と操作単位の前提条件判定は `src/mfa/enrollment-state.ts` に集約し、union は
+一意に決まる。解釈と操作単位の前提条件判定は `src/mfa/registration/state.ts` の関数群へ
+集約し、旧 `src/mfa/enrollment-state.ts` は削除した。union は
 module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が黙って別の評決を
 持てるため)。**評決を変える変更は本表の更新とセットで行う。**
 
 | 状態 (フラグ × 行) | enroll | activate | disable | 状態取得 (表示) |
 |---|---|---|---|---|
 | 未登録 (F × 行なし) | 受理 | 404 `not_found` | 409 `not_enabled` | 無効 |
-| 登録済み未有効 (F × 未 verified) | 受理 — 再 enroll は secret を回転する (まだ使われていない前提で無害扱い。抑止は SPA の client guard のみで reload / 別タブでは破れる) | 受理 | 409 `not_enabled` | 無効 |
+| 登録済み未有効 (F × 未 verified) | 受理 — 同じ secret、リカバリーコード、登録識別子を再表示する。交換は明示的な登録やり直しだけが行う | 登録識別子が一致する場合に受理 | 409 `not_enabled` | 無効 |
 | 有効 (T × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 | 有効 |
 | 中断した無効化 (F × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 (この状態の唯一の出口) | 無効 (バッジ) だが `in_effect=true` を返し SPA は disable を出す |
 | 中断した有効化 (T × 未 verified) | 409 `already_enabled` | 409 `already_enabled` | 前提条件は受理 — 正しいコードで 200 成功 (プラグインが行を verified へ修復してから削除する唯一の自己復旧口)。誤コードは 400 `invalid_code` | 有効 + Sentry error |
@@ -200,13 +201,13 @@ module 内部に閉じる (評決の組み立てが消費者側に散ると、�
 
 運用上の境界:
 
-- `MfaStatus` (画面表示用、read-status.ts) は本状態の射影であり別概念。表示の enabled は kind から
+- `MfaStatus` (画面表示用、`src/mfa/registration/status.ts`) は本状態の射影であり別概念。表示の enabled は kind から
   導出せず `requiresMfaChallenge` (policy.ts) を通す — 表示とチャレンジ要否の判定二重化を防ぐ規律
 - force-disable (`management/disable-user-mfa.ts`) は本状態判定の対象外 — Actor を持たず行削除数で
   冪等判定し、行削除 → フラグ降ろしの順序を正しさの前提にする (`user.twoFactorEnabled` の直接比較は
   policy 規律の既知の例外)
-- 本表と enrollment-state は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** — kill-switch は
-  ログイン境界 (src/auth-plugins/) のみに効く。enrollment-state に混ぜると kill-switch off の
+- 本表と `registration/state.ts` は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** — kill-switch は
+  ログイン境界 (src/auth-plugins/) のみに効く。登録状態の判定に混ぜると kill-switch off の
   incident 中に全ユーザーの disable が `not_enabled` になり self-service の出口が閉じる
 - 表示 (enabled) とは別に `in_effect` (第二要素がまだ効いているか = isMfaInEffect) を SPA へ返す。
   「中断した無効化」は enabled=false だが in_effect=true で、SPA はこれで disable を出す (enroll は
@@ -221,8 +222,99 @@ module 内部に閉じる (評決の組み立てが消費者側に散ると、�
   deleteMany + create で収束するが並行 enroll で 2 行になる窓があり、2 行状態では本表の前提
   「組から一意に決まる」が崩れるため。2 本目の create は fail-closed に落ちる。読み側
   (`findTwoFactorVerificationState`) も verified 優先の ORDER BY で決定化する
-- Passkey (Scope out) を追加する時は enrollment-state 内部の union を再設計する (非 export のため
+- Passkey (Scope out) を追加する時は `registration/state.ts` 内部の union を再設計する (非 export のため
   消費者は無傷)
+
+### 8. MFA 登録遷移を user 単位で直列化する (2026-08-13 追記)
+
+登録、有効化、無効化、運用救済は、同じ user に対する **MFA 登録遷移**として application-owned の
+`mfa_registration_transition_guard` を取得する。`user_id` を主キーにし、guard 挿入と user 行と
+`two_factor` 行の最新状態の再読込を同じ短い DB transaction で確定する。取得 transaction は
+`lock_timeout` と `statement_timeout` を 250ms 以下に局所設定する。挿入できた request だけが
+外部副作用を開始し、未 commit の insert を含む競合 request は上限内に、状態を変更せず
+`503 temporarily_unavailable` に倒す。
+
+外部 I/O を待つ間に DB transaction や session lock は保持しない。guard はランダムな operation token、
+操作種別、取得時刻を持つ。成功または既知の業務失敗で、呼び出した外部 I/O の終端結果が明確な場合だけ、
+user ID と token が一致する guard を CAS delete する。予期しない例外、DB 応答喪失、外部副作用の結果不明、
+process crash では guard を残す。自動 TTL では解放せず、後続 writer を止めて先行 writer との交差を防ぐ。
+残置の検知は解放と分離する: 取得競合時に先行 guard の `acquired_at` を観測し、正常な遷移で説明できない
+滞留 (15 分超) を Sentry へ通報する。通報は検知のみで、解除は従来どおり停止確認を経た management 操作に限る。
+
+MFA 登録遷移自体が明確な終端結果へ到達した後に guard 解放だけが失敗または結果不明になった場合は、解放失敗を
+観測して guard を隔離状態として扱う一方、確定済みの遷移結果、session 変更、本人通知は失わない。解放障害を
+HTTP 500 へ変換すると、rotate 済み session の cookie と不正変更を検知する通知だけが失われるためである。
+
+運用者は先行 process の停止を確認した後、management 専用操作で guard を解除できる。解除は guard 削除と
+`mfa_registration_guard_released` audit を同じ transaction で確定する。`DELETE ... RETURNING` で
+1 行削除できた場合だけ audit を挿入し、同時解除または正常 CAS 解放との競合敗者は `released:false` で
+audit を残さない。audit payload は実行元、理由、停止確認済みの事実だけを許可し、operation token、
+登録識別子、secret、code、recovery code、session token を記録しない。
+
+状態取得とログイン時のチャレンジ判定は guard に参加させない。ログインの hot path に DB write を加えず、
+better-auth の非原子的書き込み中に一時状態を観測し得る既存契約と Sentry 検知を維持する。
+
+**登録済み未有効**で登録を再実行した場合は secret を回転せず、暗号化保管済みの TOTP URI と
+リカバリーコード、および同じ **MFA 登録識別子**を返す。最終的な有効化契約はこの識別子を必須入力とし、
+guard 取得時の最新の登録と一致しなければ拒否する。これにより response 消失からは同じ登録を再開でき、
+古いタブは後から作られた別の登録を有効化できない。
+
+移行は 2 段階に分ける。第 1 段階では登録 response へ識別子を additive に追加し、新 SPA は識別子を
+送る一方、旧 SPA の省略 request を旧 request 専用の application 入口で受理する。この段階では
+登録やり直しを公開せず、旧タブの command と secret 交換が同時に存在する期間を作らない。ID なし
+request の利用が観測されなくなった後、第 2 段階で compatibility port を削除し、識別子の必須化と
+登録やり直しを同時に公開する。旧 SPA と各段階の server、新 SPA と旧 server の組合せを contract test で
+固定する。
+
+その前の phase 0 として guard migration と guard 参加を既存 wire 契約のまま全 server と management CLI へ
+先行配布し、旧 fleet を完全 drain してから第 1 段階を有効化する。rollback 先も guard 参加版へ限定する。
+guard 非参加版へ戻す場合は MFA write を停止し、全 process 停止と guard 残行解消を確認してから切り替える。
+旧 CLI artifact は実行禁止とし、CLI は guard protocol version が一致しなければ変更を始めず終了する。
+
+(2026-08-14 追記) 実配布では guard 参加と識別子の additive 追加を単一 changeset で配布した。本サービスの
+配布単位は版の一括切替 (Workers の版切替 / compose の単一 service 再作成) で、長期の混在 fleet を持たない。
+旧版 process が残る短い窓では guard が相互排他を提供しないが、その窓で交差しうるのは同一 user の並行 MFA
+操作に限られ、発生時の帰結も §7 の中断状態と既存の復旧契約に収まるため受容する。rollback 先を guard 参加版に
+限定する制約は維持する。
+
+この guard が保証するのは、自前の正規 write 経路で結果不明の writer と後続 writer を交差させない
+ことであり、better-auth の複数書き込みを 1 DB transaction にまとめる原子性ではない。`auth.api.*` は
+別 connection で DB / Redis / session を更新するため、関連行の `FOR UPDATE` は自分が待つ書き込みを
+塞ぐので使わない。途中失敗で生じる中断状態と既存の復旧契約は残す。audit は guard 解放前に呼ぶ。
+guard 解放を試行した後、application service は通知を best-effort で開始する。通知失敗は観測へ回すが、
+確定済み状態を巻き戻さない。操作確定後から通知投入前の process crash では通知を失い得るという
+既存制約を受容し、durable delivery は別計画とする。外部メールの到着順は保証しない。
+
+account deletion はこの guard の相互排他へ参加させない。user 削除時は既存の物理削除契約どおり
+guard 行も FK cascade で削除する。削除処理と MFA 外部 I/O の競合を閉じるには account deletion 全体の
+transaction 境界を再設計する必要があるため、別計画とする。
+
+公開面は MFA 登録の directory module に集約する。self-service port は操作名を保った `getStatus` /
+`enroll` / `restart` / `activate` / `disable` を提供し、権限の異なる `forceDisable` と
+`forceReleaseRegistrationGuard` は management port へ
+分ける。単一の `transition(command)` に異なる入力・結果を詰め込まず、handler と management CLI は
+それぞれの bound façade だけを使う。`getStatus` は同じ module が状態解釈を所有するため self-service
+façade に含めるが、guard は取得しない。
+
+**MFA 登録やり直し**は通常の登録の再実行と分けた明示的な遷移とする。現在の **MFA 登録識別子**を必須にし、
+guard 取得時の最新登録と一致する場合だけ secret、リカバリーコード、識別子を回転する。有効化または
+登録やり直しで識別子が一致しない場合は `409 enrollment_changed` を返し、共通画面 SPA は現在の登録を
+取り直すよう案内する。
+
+module 内部には application-owned port と factory を置く。application core は Drizzle の
+transaction 型、Redis、Sentry、email sender を参照しない。session 材料の `Headers` (WHATWG 標準型) は
+不透明値として operations へ受け渡すだけで、読み取り・生成は adapter / handler 側に置く。
+composition root が better-auth / transition guard /
+attempt budget / audit / notification / observability adapter を結線する。本番 adapter と fault-injection 用
+test adapter の 2 つで seam を正当化する一方、factory と port は handler へ公開しない。既存の統合テストは
+façade 越しに残し、競合順序と部分失敗は test adapter で決定的に作る。
+
+世代照合だけの楽観的競合制御は採らない。古いタブは拒否できても、同じ登録識別子を読んだ
+enroll × activate や activate × activate が同時に better-auth を呼ぶ余地が残るためである。
+反対に MFA 永続化を自前所有して 1 DB transaction へ入れる案も採らない。DB 状態の原子性と引き換えに、
+secret 暗号化、リカバリーコードの単回消費、session cache 更新という認証の中核を自前所有することになり、
+本 ADR が選んだハイブリッド構成の利点を失う。採用するのは永続 guard による正規経路の排他と、
+結果不明時の guard 残置である。
 
 ## Consequences
 
