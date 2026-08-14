@@ -1,32 +1,28 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { z } from "zod";
 
-import { runBackground } from "../background";
-import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "../email/send-mfa-notification";
 import { guardErrorResponse, requireActor, resolveParseBody } from "../membership/guard";
-import { activate } from "../mfa/activate";
-import { disable } from "../mfa/disable";
-import { enroll } from "../mfa/enroll";
-import { readStatus } from "../mfa/read-status";
+import type { MfaFailure } from "../mfa/error-mapping";
+import { activate, disable, enroll, getStatus } from "../mfa/registration";
+import { activateLegacy } from "../mfa/registration/compatibility";
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 
-// SPA のセキュリティページから呼ばれる MFA 操作 (requireActor 経路)。プラグインの /two-factor/* は
+// SPA のセキュリティページから呼ばれる MFA 登録遷移 (requireActor 経路)。プラグインの /two-factor/* は
 // ブラウザに露出させずこの 4 route だけを窓口にする (生 path は auth-plugins/mfa-challenge.ts の
 // before-hook が 403 に落とす)。不変条件・副作用順序・audit は use-case (src/mfa/) が所有する。
 // 設計詳細: docs/adr/0013-mfa-totp-challenge.md
 export const accountMfa = new Hono();
 
-const activateBody = z.object({ code: mfaCodeSchema });
+const activateBody = z.object({ code: mfaCodeSchema, enrollment_id: z.string().min(1).optional() });
 const disableBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
 
-// GET MFA 状態。secret とリカバリーコードの実体は決して載せない — 一度きり表示したものを
-// 後から読み戻せる経路を作らないための境界がこの response 形。
+// GET MFA 状態。secret とリカバリーコードの実体は載せず、登録途中の再表示はenrollだけに閉じる。
 accountMfa.get("/api/account/mfa", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
   if (!actorResult.ok) return guardErrorResponse(actorResult);
 
-  const status = await readStatus(actorResult.actor);
+  const status = await getStatus(principalOf(actorResult.actor));
   return c.json({
     enabled: status.enabled,
     in_effect: status.inEffect,
@@ -34,15 +30,21 @@ accountMfa.get("/api/account/mfa", async (c) => {
   });
 });
 
-// POST 認証アプリの登録開始。TOTP URI とリカバリーコードを本人に渡す唯一の機会で、再取得の経路は
-// 持たない (有効化済みユーザーの再登録を 409 で拒む前提条件は enroll use-case が持つ)。
+// POST 認証アプリの登録開始。登録途中なら同じ情報を返し、有効化済みならuse-caseが拒否する。
 accountMfa.post("/api/account/mfa/enroll", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
   if (!actorResult.ok) return guardErrorResponse(actorResult);
 
-  const result = await enroll(actorResult.actor, c.req.raw.headers);
-  if (!result.ok) return c.json({ error: result.error }, result.status);
-  return c.json({ totp_uri: result.totpUri, recovery_codes: result.recoveryCodes });
+  const result = await enroll({
+    principal: principalOf(actorResult.actor),
+    headers: c.req.raw.headers,
+  });
+  if (!result.ok) return mfaErrorResponse(c, result);
+  return c.json({
+    totp_uri: result.totpUri,
+    recovery_codes: result.recoveryCodes,
+    enrollment_id: result.enrollmentId,
+  });
 });
 
 // POST 有効化 (6 桁コードで verified 化)。
@@ -53,15 +55,20 @@ accountMfa.post("/api/account/mfa/activate", async (c) => {
   const parsed = await resolveParseBody(parseZodBody(c, activateBody));
   if (!parsed.ok) return guardErrorResponse(parsed);
 
-  const result = await activate({
-    actor: actorResult.actor,
+  const activation = {
+    principal: principalOf(actorResult.actor),
     headers: c.req.raw.headers,
     code: parsed.data.code,
-  });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  };
+  // 判定は「フィールドの有無」で行う。truthiness だと空文字が schema の .min(1) 緩和 1 つで
+  // 識別子照合を素通りする legacy 経路に落ちる (照合迂回の入口を .min(1) と二重に塞ぐ)。
+  const result =
+    parsed.data.enrollment_id !== undefined
+      ? await activate({ ...activation, enrollmentId: parsed.data.enrollment_id })
+      : await activateLegacy(activation);
+  if (!result.ok) return mfaErrorResponse(c, result);
 
-  notifyMfaChange(sendMfaEnabledEmail(result.notifyEmail));
-  return forwardSetCookie(c.json({ ok: true }), result.forwardedHeaders);
+  return forwardSetCookie(c.json({ ok: true }), result.sessionChanges);
 });
 
 // POST 無効化 (現在の TOTP コードまたはリカバリーコードによる本人確認つき)。
@@ -73,22 +80,23 @@ accountMfa.post("/api/account/mfa/disable", async (c) => {
   if (!parsed.ok) return guardErrorResponse(parsed);
 
   const result = await disable({
-    actor: actorResult.actor,
+    principal: principalOf(actorResult.actor),
     headers: c.req.raw.headers,
     code: parsed.data.code,
     kind: parsed.data.kind,
   });
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  if (!result.ok) return mfaErrorResponse(c, result);
 
-  notifyMfaChange(sendMfaDisabledEmail(result.notifyEmail));
-  return forwardSetCookie(c.json({ ok: true }), result.forwardedHeaders);
+  return forwardSetCookie(c.json({ ok: true }), result.sessionChanges);
 });
 
-// 状態変化が確定してから送る post-commit 分担は招待メールと同じ (src/handlers/account-invitation.ts)。
-function notifyMfaChange(sending: Promise<void>): void {
-  runBackground(
-    sending.catch((e) => {
-      console.error("failed to send MFA notification email", e);
-    }),
-  );
+function principalOf(actor: { id: string; email: string; twoFactorEnabled: boolean }) {
+  return { userId: actor.id, email: actor.email, twoFactorEnabled: actor.twoFactorEnabled };
+}
+
+function mfaErrorResponse(c: Context, failure: MfaFailure & { retryAfterSeconds?: number }) {
+  if (failure.retryAfterSeconds !== undefined) {
+    c.header("Retry-After", String(failure.retryAfterSeconds));
+  }
+  return c.json({ error: failure.error }, failure.status);
 }
