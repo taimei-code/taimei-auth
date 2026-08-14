@@ -10,10 +10,10 @@ import { withWaitUntil } from "../../background";
 import type { Actor } from "../../membership/guard/core";
 import { getRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
-import { activate } from "../activate";
+import { activate } from "../registration/activate";
 import { issueChallenge, type ChallengeMethod } from "../challenge-store";
 import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
-import { enroll } from "../enroll";
+import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。

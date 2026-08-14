@@ -3,9 +3,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { user } from "@/db/schema";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { activate } from "../../mfa/activate";
+import { activate } from "../../mfa/registration/activate";
 import { completeChallenge } from "../../mfa/complete-challenge";
-import { enroll } from "../../mfa/enroll";
+import { enroll } from "../../mfa/registration/enroll";
 import {
   actorOf,
   cleanupIssuedChallenges,

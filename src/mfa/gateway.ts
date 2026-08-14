@@ -1,7 +1,16 @@
+import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { auth } from "../auth";
 import type { Actor } from "../membership/guard/core";
 import { Sentry } from "../sentry";
-import { failure, mapTwoFactorError, type MfaFailure } from "./error-mapping";
+import {
+  ALREADY_ENABLED,
+  CHALLENGE_EXPIRED,
+  failure,
+  mapPluginError,
+  mapTwoFactorError,
+  type MfaFailure,
+} from "./error-mapping";
+import type { MfaCodeKind } from "./wire-contracts";
 
 // twoFactor プラグイン (auth.api.*) と auth.$context への唯一の正規窓口。
 // src/account/revoke-sessions.ts と同じ「窓口 1 ファイル」規律で、プラグインの呼び出し方 —
@@ -17,21 +26,29 @@ export type GatewayResult<T> = { ok: true; value: T; headers: Headers } | MfaFai
 
 export type TotpEnrollment = { totpUri: string; recoveryCodes: string[] };
 
-export type MfaCodeKind = "totp" | "recovery_code";
-
 // プラグインは失敗を APIError の throw で返すため、Result 化はこの 1 箇所に閉じる。
 // 成功時の headers には Set-Cookie (セッション rotate / チャレンジ cookie 失効) が載りうる。
-// 転送しないと操作直後にログアウトするため、呼び出し側は必ず handler まで運ぶこと。
+// 転送しないと操作直後にログアウトするため、handler の forwardSetCookie まで必ず運ぶこと。
+//
+// 既定はプラグイン由来でない例外を rethrow する (結果不明を既知の失敗に化けさせると、
+// registration guard が外部副作用の結果不明のまま解放される — ADR-0013 §8)。
+// 総写像が要るのは guard を持たないチャレンジ経路だけで、そちらが明示的に opt-out する。
 async function invoke<T>(
   call: () => Promise<{ headers?: Headers; response: T }>,
+  preserveUnknown = true,
 ): Promise<GatewayResult<T>> {
-  return call()
-    .then(({ headers, response }) => ({
+  try {
+    const { headers, response } = await call();
+    return {
       ok: true as const,
       value: response,
       headers: headers ?? new Headers(),
-    }))
-    .catch((error: unknown) => failure(mapTwoFactorError(error)));
+    };
+  } catch (error) {
+    const mapped = preserveUnknown ? mapPluginError(error) : mapTwoFactorError(error);
+    if (!mapped) throw error;
+    return failure(mapped);
+  }
 }
 
 // 複数の gateway 呼び出しをまたいで Set-Cookie を 1 本の Headers に束ねる。
@@ -65,6 +82,37 @@ export async function enrollTotp(headers: Headers): Promise<GatewayResult<TotpEn
   };
 }
 
+export async function readPendingTotpEnrollment(
+  actor: Actor,
+  headers: Headers,
+): Promise<GatewayResult<TotpEnrollment>> {
+  // 未 verified 行の存在をここでも検証する (多層防御)。プラグインの getTOTPURI / viewBackupCodes は
+  // verified を見ないため、呼び出し側の前提条件だけに依存すると、将来の呼び出し元 (登録やり直し等)
+  // が有効ユーザーの実 secret と平文リカバリーコードを引き出せてしまう。
+  const current = await findTwoFactorVerificationState(actor.id);
+  if (!current) return failure(CHALLENGE_EXPIRED);
+  if (current.verified) return failure(ALREADY_ENABLED);
+
+  // preserveUnknown=false: 純粋な読み取りで守るべき外部副作用が無い。既定の rethrow のままだと
+  // 一過性の失敗 (復号不能・接続断) が guard を残置し、読むだけの失敗がその user の全 MFA 操作を
+  // 運用解除まで塞ぐ。総写像なら既知の失敗として guard が解放され、再試行で復旧できる。
+  const [uri, codes] = await Promise.all([
+    invoke(() => auth.api.getTOTPURI({ body: {}, headers, returnHeaders: true }), false),
+    invoke(
+      () =>
+        auth.api.viewBackupCodes({ body: { userId: actor.id } }).then((response) => ({ response })),
+      false,
+    ),
+  ]);
+  if (!uri.ok) return uri;
+  if (!codes.ok) return codes;
+  return {
+    ok: true,
+    value: { totpUri: uri.value.totpURI, recoveryCodes: codes.value.backupCodes },
+    headers: uri.headers,
+  };
+}
+
 // セッション無し (チャレンジ) 経路とセッションあり (disable) 経路の両方が通る。
 // プラグインは session の有無で挙動を変える: セッション無しなら試行カウント 5 回で
 // チャレンジ破棄・アカウント 10 回で 15 分ロックが働き、成功時に新セッションを発行する。
@@ -72,13 +120,17 @@ export async function enrollTotp(headers: Headers): Promise<GatewayResult<TotpEn
 export function verifyMfaCode(
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },
+  preserveUnknown = true,
 ): Promise<GatewayResult<unknown>> {
   return input.kind === "totp"
-    ? invoke(() =>
-        auth.api.verifyTOTP({ body: { code: input.code }, headers, returnHeaders: true }),
+    ? invoke(
+        () => auth.api.verifyTOTP({ body: { code: input.code }, headers, returnHeaders: true }),
+        preserveUnknown,
       )
-    : invoke(() =>
-        auth.api.verifyBackupCode({ body: { code: input.code }, headers, returnHeaders: true }),
+    : invoke(
+        () =>
+          auth.api.verifyBackupCode({ body: { code: input.code }, headers, returnHeaders: true }),
+        preserveUnknown,
       );
 }
 

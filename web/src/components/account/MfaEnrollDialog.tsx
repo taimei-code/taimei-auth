@@ -20,8 +20,8 @@ import {
 const CODE_INPUT_ID = "mfa-enroll-code";
 
 // 登録は「読み取る → 確認コードで検証 → リカバリーコードを控える」の 3 段で、戻れるのは
-// 検証まで。リカバリーコードは activate 成功時に一度だけ手渡され、以後 server から読み戻す
-// 経路が無いため、この state に載っている間だけが本人に渡せる唯一の機会になる。
+// 検証まで。有効化後は server からリカバリーコードを読み戻せないため、この state に載っている
+// 間だけが本人に渡せる唯一の機会になる。
 type EnrollState =
   | { step: "starting" }
   | { step: "scan"; enrollment: MfaEnrollment }
@@ -129,9 +129,9 @@ type Props = {
 export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
-  // better-auth の `/two-factor/enable` は呼ぶたび既存行を削除して新しい secret で作り直す。開くたび
-  // enroll すると、QR を読ませた後に一度閉じただけで認証アプリが無効な secret を握り、以後どのコードも
-  // 「コードが正しくありません」になる (画面に原因は出ない)。保持してもログアウト・アカウント切替は
+  // 登録途中の再 enroll は server が同じ登録内容を返す (正しさの正本: ADR-0013 §8 の replay +
+  // enrollment_id 照合)。この保持は開き直しのたびの enroll 往復を省く表示 cache で、server と
+  // ずれても有効化時の enrollment_changed で検知される。保持してもログアウト・アカウント切替は
   // full reload (lib/auth-redirect.ts) なので、他ユーザーへは渡らない。
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
 
@@ -140,10 +140,20 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
     submit: ({ code }) => {
       if (state.step !== "verify") return Promise.resolve();
       const { recovery_codes } = state.enrollment;
-      return activateMfa(code).then(() => {
-        setResumableEnrollment(null);
-        setState({ step: "recoveryCodes", recoveryCodes: recovery_codes });
-      });
+      return activateMfa({ code, enrollmentId: state.enrollment.enrollment_id })
+        .then(() => {
+          setResumableEnrollment(null);
+          setState({ step: "recoveryCodes", recoveryCodes: recovery_codes });
+        })
+        .catch((error: unknown) => {
+          // server 側で登録が置き換わっていた場合、cache を保持したままだと開き直しても同じ
+          // 古い登録を再表示して 409 を繰り返す。破棄すれば次の開き直しが enroll し直し、
+          // エラー文言「もう一度登録を開始してください」の操作が UI 上で成立する。
+          if (error instanceof MfaApiError && error.code === "enrollment_changed") {
+            setResumableEnrollment(null);
+          }
+          throw error;
+        });
     },
   });
 

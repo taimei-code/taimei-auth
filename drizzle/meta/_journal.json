@@ -57,6 +57,20 @@
       "when": 1786450923504,
       "tag": "0007_charming_raza",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786621808657,
+      "tag": "0008_overjoyed_dark_phoenix",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786678771127,
+      "tag": "0009_smart_sentinel",
+      "breakpoints": true
     }
   ]
 }

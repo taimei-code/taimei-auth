@@ -125,12 +125,24 @@ _Avoid_: OTP / ワンタイムパスワード (メール OTP・SMS OTP を含む
 _Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の一つに過ぎない), pending session (session は存在しないため誤り)
 
 **リカバリーコード**:
-認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**多要素認証 (MFA)** の有効化時に一度だけ表示し、以後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0013。
+認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**登録済み未有効**の間は同じ登録内容として再表示できるが、有効化後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0013。
 _Avoid_: バックアップコード (better-auth の `backupCodes` は API 名・列名としてのみ使う), 復旧コード, 緊急コード
 
 **MFA 登録状態**:
 user のフラグ (`twoFactorEnabled`) と `two_factor` 行 (verified か否か) の組から一意に決まる、**多要素認証 (MFA)** の登録ライフサイクル状態。**未登録** / **登録済み未有効** (登録済み・有効化前) / **有効** / **中断した無効化** (フラグ降ろし後の行削除が中断した残骸。出口は無効化操作のみ) / **中断した有効化** (フラグは立ったが行が verified にならなかった状態。未 verified 行が残っていれば正しいコードの無効化操作で自己復旧でき、行ごと無い場合のみ救済は `management/disable-user-mfa.ts`) の 5 状態。詳細: ADR-0013。
 _Avoid_: enrollment status (英語混在), MFA 状態 (画面表示用の `MfaStatus` と紛らわしい), 2FA 状態 (要素数を 2 に固定する語)
+
+**MFA 登録遷移**:
+user の **MFA 登録状態**を登録・有効化・無効化・運用救済のいずれかで移す試み。同じ user の遷移は一列に並び、各遷移は直前の結果を反映した最新状態で受理可否を決める。**登録済み未有効**で登録を再実行した場合は新しい secret を発行せず、同じ登録内容を返す。詳細: ADR-0013。
+_Avoid_: MFA transition (英語混在), MFA 操作 (状態を変えない参照まで含む広義語)
+
+**MFA 登録識別子**:
+1 回の登録開始で生まれ、有効化が対象とする登録内容を識別する不透明な値。**登録済み未有効**で登録を再実行すると同じ値を返し、無効化後の新しい登録では別の値になる。詳細: ADR-0013。
+_Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続化形式を外向きへ漏らす語)
+
+**MFA 登録やり直し**:
+**登録済み未有効**の登録内容を明示的に破棄し、新しい TOTP secret・リカバリーコード・**MFA 登録識別子**へ置き換える **MFA 登録遷移**。通常の登録の再実行は同じ内容の再表示なので、登録内容を回転する意図と区別する。詳細: ADR-0013。
+_Avoid_: 再登録 (同じ登録内容の再表示と区別できない), reset (何を初期化するか曖昧)
 
 **session**:
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
@@ -153,7 +165,7 @@ user の意図ある action (**sign-in** / **sign-out** / account delete 等) �
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012。Phase 4 で credential change 系が実装された時に event_type を追加する。
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled` / `mfa_registration_guard_released`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。`mfa_registration_guard_released` は結果不明の MFA 登録遷移を停止確認後に運用解除した記録で、実行元・理由・停止確認だけを保存する。詳細: ADR-0012 / ADR-0013。
 _Avoid_: log entry, audit record
 
 ## Relationships

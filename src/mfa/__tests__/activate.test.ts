@@ -2,8 +2,8 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { guard } from "../../membership/guard";
-import { activate } from "../activate";
-import { enroll } from "../enroll";
+import { activate } from "../registration/activate";
+import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
 import {
   actorOf,
@@ -21,7 +21,7 @@ import {
   withFailingAuditWrite,
 } from "./helpers";
 
-// activate use-case (src/mfa/activate.ts) の DB/Redis 統合テスト。
+// activate use-case (src/mfa/registration/activate.ts) の DB/Redis 統合テスト。
 // 副作用の順序 (前提条件 → revoke → rotate → audit) が守られていることを、rotate 前のトークンが
 // revoke 対象から漏れていないか / 前提条件を外れた呼び出しで副作用が 1 つも起きないかで観測する。
 
@@ -55,7 +55,7 @@ describe("activate", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 送信そのものは handler が post-commit で行う分担のため、use-case 側の契約は「宛先 1 件」。
+    // 送信そのものは registration application がguard解放後に行うため、use-case 側の契約は「宛先 1 件」。
     expect(result.notifyEmail).toBe(user.email);
     expect(await issuedSessionCookieCount(result.forwardedHeaders)).toBe(1);
 
@@ -116,6 +116,27 @@ describe("activate", () => {
     expect(await auditRowsFor(user.id, "mfa_enabled")).toEqual([]);
   });
 
+  test("QA-D-02 stale enrollment ID is rejected before session revocation", async () => {
+    const user = await seedUser("stale-enrollment");
+    const operating = await createSessionFor(user.id);
+    const otherDevice = await createSessionFor(user.id);
+    const enrolled = await enroll(actorOf(user), operating.headers);
+    expect(enrolled.ok).toBe(true);
+    if (!enrolled.ok) return;
+
+    const result = await activate({
+      actor: actorOf(user),
+      headers: operating.headers,
+      enrollmentId: "a-different-enrollment",
+      code: await totpCode(secretFromTotpUri(enrolled.totpUri)),
+    });
+
+    expect(result).toEqual({ ok: false, error: "enrollment_changed", status: 409 });
+    expect(await countLiveSessions([operating.token, otherDevice.token])).toBe(2);
+    expect((await findTwoFactorRow(user.id))?.verified).toBe(false);
+    expect(await auditRowsFor(user.id, "mfa_enabled")).toEqual([]);
+  });
+
   test("有効化済みユーザーの再 activate → already_enabled (audit / 宛先が増えない)", async () => {
     const user = await seedUser("reactivate");
     const enabled = await enableMfaFor(user);
@@ -129,7 +150,7 @@ describe("activate", () => {
     });
 
     expect(result).toEqual({ ok: false, error: "already_enabled", status: 409 });
-    // 通知メールは handler が result.notifyEmail を受けて送るため、2 通目は失敗を返すことで止まる。
+    // 通知メールは registration application が成功結果を受けて送るため、2 通目は失敗を返すことで止まる。
     expect(await auditRowsFor(user.id, "mfa_enabled")).toHaveLength(1);
     expect(await countLiveSessions([otherDevice.token])).toBe(1);
   });

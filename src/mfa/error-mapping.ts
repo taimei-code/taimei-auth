@@ -1,23 +1,21 @@
 import { TWO_FACTOR_ERROR_CODES } from "better-auth/plugins";
 import { Sentry } from "../sentry";
+import type { MfaWireErrorCode } from "./wire-contracts";
 
 // twoFactor プラグインのエラーコードを自前のエラー形へ写像する唯一の場所。
 // プラグインのコード文字列は呼び出し側 (handler / SPA) に一切出さない。
 // 設計詳細: docs/adr/0013-mfa-totp-challenge.md
 
-export type MfaErrorCode =
-  | "invalid_code"
-  | "challenge_expired"
-  | "locked"
-  | "already_enabled"
-  | "not_enabled"
-  | "not_found";
+// wire 語彙 (wire-contracts.ts) から、guard 層が返す 2 コードを除いた部分集合として導出する。
+// server 側にコードを足すには wire 語彙への追加が先に必要になり、SPA の受理集合との乖離を
+// typecheck が検出する。
+export type MfaErrorCode = Exclude<MfaWireErrorCode, "invalid_argument" | "unauthorized">;
 
 // { error, status } の形は guard 層 (src/membership/guard/core.ts の Unauthorized 等) と同形。
 // handler が `c.json({ error: r.error }, r.status)` の 1 行で HTTP に落とせる状態を保つ。
 export type MfaError = {
   readonly error: MfaErrorCode;
-  readonly status: 400 | 401 | 404 | 409 | 429;
+  readonly status: 400 | 401 | 404 | 409 | 429 | 503;
 };
 
 export type MfaFailure = { ok: false } & MfaError;
@@ -33,8 +31,15 @@ export const CHALLENGE_EXPIRED: MfaError = { error: "challenge_expired", status:
 
 // 検証以外の失敗。プラグイン由来ではなく use-case が自分の不変条件から返す。
 export const ALREADY_ENABLED: MfaError = { error: "already_enabled", status: 409 };
+export const ENROLLMENT_CHANGED: MfaError = { error: "enrollment_changed", status: 409 };
 export const NOT_ENABLED: MfaError = { error: "not_enabled", status: 409 };
 export const USER_NOT_FOUND: MfaError = { error: "not_found", status: 404 };
+// registration guard の競合。literal 型を保つのは TransitionBusy (registration/transition.ts) が
+// status: 503 を判別に使うため。
+export const TEMPORARILY_UNAVAILABLE = {
+  error: "temporarily_unavailable",
+  status: 503,
+} as const satisfies MfaError;
 
 type PluginErrorCode = keyof typeof TWO_FACTOR_ERROR_CODES;
 
@@ -82,19 +87,27 @@ function findAppError(pluginCode: string): MfaError | undefined {
     : undefined;
 }
 
-export function mapTwoFactorError(error: unknown): MfaError {
-  const pluginCode = readPluginErrorCode(error);
-  const appError = pluginCode === undefined ? undefined : findAppError(pluginCode);
+// 未知コードは challenge_expired へ fail-closed する。invalid_code に倒すと、実際には
+// 打ち直しても通らない失敗が「コードを打ち直せば通る」ように見え、袋小路に閉じ込める。
+function reportUnmapped(pluginCode: string | undefined): MfaError {
+  Sentry.captureMessage("mfa: unmapped two factor error", {
+    level: "error",
+    tags: { component: "mfa-error-mapping", pluginCode },
+  });
+  return CHALLENGE_EXPIRED;
+}
 
-  // 未知コードは challenge_expired へ fail-closed する。invalid_code に倒すと、実際には
-  // 打ち直しても通らない失敗が「コードを打ち直せば通る」ように見え、袋小路に閉じ込める。
-  if (!appError) {
-    Sentry.captureMessage("mfa: unmapped two factor error", {
-      level: "error",
-      tags: { component: "mfa-error-mapping", pluginCode },
-    });
-    return CHALLENGE_EXPIRED;
-  }
+export function mapTwoFactorError(error: unknown): MfaError {
+  return mapPluginError(error) ?? reportUnmapped(undefined);
+}
+
+// undefined は「plugin 由来 (body.code 持ち) でない」の意味。plugin 由来なら未知コードも fail-closed で必ず落とす。
+export function mapPluginError(error: unknown): MfaError | undefined {
+  const pluginCode = readPluginErrorCode(error);
+  if (pluginCode === undefined) return undefined;
+
+  const appError = findAppError(pluginCode);
+  if (!appError) return reportUnmapped(pluginCode);
 
   if (REPORTED_PLUGIN_CODES.has(pluginCode as PluginErrorCode)) {
     Sentry.captureMessage("mfa: verification attempt budget exhausted", {

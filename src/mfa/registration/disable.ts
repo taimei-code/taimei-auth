@@ -1,21 +1,17 @@
 import { recordMfaDisabled } from "@/db/repositories/audit-log";
-import { captureAuditLogError } from "../audit-error";
-import type { Actor } from "../membership/guard/core";
-import { getClientContext } from "../request-context";
-import { resetDisableAttempts, spendDisableAttempt } from "./disable-attempt-budget";
-import { ensureDisableCanProceed } from "./enrollment-state";
-import type { MfaFailure } from "./error-mapping";
-import {
-  disableTotp,
-  mergeForwardedCookies,
-  revokeOtherSessions,
-  verifyMfaCode,
-  type MfaCodeKind,
-} from "./gateway";
+import { captureAuditLogError } from "../../audit-error";
+import type { Actor } from "../../membership/guard/core";
+import { getClientContext } from "../../request-context";
+import type { MfaCodeKind } from "../wire-contracts";
+import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
+import type { MfaFailure } from "../error-mapping";
+import { disableTotp, mergeForwardedCookies, revokeOtherSessions, verifyMfaCode } from "../gateway";
+import type { RegistrationSnapshot } from "./ports";
+import { ensureDisableCanProceed } from "./state";
 
 // ADR-0012 (Use-case 層): 認証アプリの無効化手続。two_factor 行を削除し
 // user.twoFactorEnabled を false に戻す。受理条件 (中断状態からの出口を含む) の正本は
-// enrollment-state / docs/adr/0013-mfa-totp-challenge.md の 5 状態マトリクス。
+// registration/state.ts / docs/adr/0013-mfa-totp-challenge.md の状態マトリクス。
 
 export type DisableResult =
   | { ok: true; forwardedHeaders: Headers; notifyEmail: string }
@@ -34,14 +30,15 @@ export async function disable(params: {
   headers: Headers;
   code: string;
   kind: MfaCodeKind;
+  snapshot?: RegistrationSnapshot;
 }): Promise<DisableResult> {
-  const { actor, headers, code, kind } = params;
+  const { actor, headers, code, kind, snapshot } = params;
 
   // 前提条件をコード検証・試行枠消費より前に置く。verifyTOTP は未有効化状態を有効化の合図として
   // 扱う (gateway.ts の activateTotp) ため未有効化のまま呼ぶと要求と正反対の有効化が成立し、
   // かつ「検証しても永久に成功しない状態」で枠を空費すると正しいコードでもロックに達する
   // (どちらも ensureDisableCanProceed が弾く)。
-  const rejected = await ensureDisableCanProceed(actor);
+  const rejected = await ensureDisableCanProceed(actor, snapshot);
   if (rejected) return rejected;
 
   // コード検証は 1 回ぶんの枠を消費してから通す。枠を確かめてから数える順にすると、同時に

@@ -113,12 +113,20 @@ DB に直接つなぐ one-shot / 定期スクリプト。compose 環境では `d
 | `sweep-abandoned-signups.ts` | 登録途中放棄アカウントの定期 sweep (dry-run → `--execute` の 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
 | `backfill-orphan-cleanup.ts` | ghost membership と orphan アカウントの one-shot 掃除 (同 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
 | `disable-user-mfa.ts` | 多要素認証 (MFA) のロックアウト救済。userId 指定で当該ユーザーの MFA を強制的に無効化する |
+| `release-mfa-registration-guard.ts` | 結果不明で残った MFA 登録遷移 guard の運用解除。当該ユーザーの MFA 操作 (disable-user-mfa.ts を含む) が `temporarily_unavailable` になり続ける場合に使う。詳細: [ADR-0013 §8](./docs/adr/0013-mfa-totp-challenge.md) |
 
 ```bash
 bun run management/disable-user-mfa.ts <userId>
 ```
 
-認証アプリとリカバリーコードを両方失ったユーザーには**自力で復帰する手段がない** (ログインはチャレンジ通過が必須、再登録は MFA 有効中は拒否、無効化は有効なコードの入力が必要)。このスクリプトがロックアウトからの唯一の出口で、実行すると当該ユーザーの `two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event の記録 + 本人への通知メール送信が行われる。
+認証アプリとリカバリーコードを両方失ったユーザーには**自力で復帰する手段がない** (ログインはチャレンジ通過が必須、登録の再実行は MFA 有効中は拒否、無効化は有効なコードの入力が必要)。このスクリプトがロックアウトからの唯一の出口で、実行すると当該ユーザーの `two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event の記録 + 本人への通知メール送信が行われる。
+
+MFA 登録遷移が結果不明のまま中断した場合 (process crash 等)、guard 行が意図的に残置され、当該ユーザーの MFA 操作は `disable-user-mfa.ts` を含めて `temporarily_unavailable` になる。その場合は先行 process の停止を確認したうえで guard を解除してから救済を実行する:
+
+```bash
+bun run management/release-mfa-registration-guard.ts <userId> \
+  --reason "<incident reference>" --process-stopped-confirmed
+```
 
 ### MFA チャレンジの緊急停止 (`MFA_CHALLENGE_ENABLED`)
 

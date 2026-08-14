@@ -6,8 +6,10 @@
 // describeMfaChallengeError) で解く。
 // 設計詳細: docs/adr/0013-mfa-totp-challenge.md
 
-// wire 上の第二要素の種別。server 側の正本は src/mfa/gateway.ts の MfaCodeKind (API contract の写し)。
-export type MfaCodeKind = "totp" | "recovery_code";
+import { MFA_WIRE_ERROR_CODES, type MfaWireErrorCode } from "@core/mfa/wire-contracts";
+import type { MfaCodeKind } from "@core/mfa/wire-contracts";
+
+export type { MfaCodeKind } from "@core/mfa/wire-contracts";
 
 export type MfaStatus = {
   enabled: boolean;
@@ -17,9 +19,10 @@ export type MfaStatus = {
   recovery_codes_remaining: number;
 };
 
-// recovery_codes を返すのは enroll の 1 回だけで、後から読み戻す endpoint は用意していない
-// (一度きり表示したものを再取得できる経路を作らないため)。受け取った画面より先へ持ち出さないこと。
+// recovery_codes は登録途中のenroll再実行で同じ値を返す。有効化後は残数しか取得できない。
+// 受け取った画面より先へ持ち出さないこと。
 export type MfaEnrollment = {
+  enrollment_id: string;
   totp_uri: string;
   recovery_codes: string[];
 };
@@ -28,28 +31,9 @@ export type MfaChallengeState = { pending: boolean };
 
 export type MfaChallengePassed = { redirect_url: string };
 
-export type MfaErrorCode =
-  | "invalid_code"
-  | "challenge_expired"
-  | "locked"
-  | "already_enabled"
-  | "not_enabled"
-  | "invalid_argument"
-  | "unauthorized"
-  | "not_found"
-  | "rate_limited"
-  | "unknown";
+export type MfaErrorCode = MfaWireErrorCode | "rate_limited" | "unknown";
 
-const WIRE_ERROR_CODES: ReadonlySet<string> = new Set([
-  "invalid_code",
-  "challenge_expired",
-  "locked",
-  "already_enabled",
-  "not_enabled",
-  "invalid_argument",
-  "unauthorized",
-  "not_found",
-] as const satisfies readonly MfaErrorCode[]);
+const WIRE_ERROR_CODES: ReadonlySet<string> = new Set(MFA_WIRE_ERROR_CODES);
 
 // ロックアウト (`locked`) と rate limit は同じ 429 で返るため、status だけで丸めると
 // 「数十秒待てば通る」失敗をユーザーに 15 分待たせる。判別は body の error コードで行い、
@@ -100,8 +84,11 @@ export const getMfaStatus = (): Promise<MfaStatus> => requestJson("/api/account/
 
 export const enrollMfa = (): Promise<MfaEnrollment> => postJson("/api/account/mfa/enroll");
 
-export const activateMfa = (code: string): Promise<void> =>
-  postJson("/api/account/mfa/activate", { code });
+export const activateMfa = (input: { code: string; enrollmentId: string }): Promise<void> =>
+  postJson("/api/account/mfa/activate", {
+    code: input.code,
+    enrollment_id: input.enrollmentId,
+  });
 
 export const disableMfa = (input: { code: string; kind: MfaCodeKind }): Promise<void> =>
   postJson("/api/account/mfa/disable", input);

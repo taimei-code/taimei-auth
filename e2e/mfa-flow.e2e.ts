@@ -62,11 +62,17 @@ type EnabledMfa = { secret: string; recoveryCodes: string[] };
 const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   const enrolled = await page.request.post("/api/account/mfa/enroll");
   expect(enrolled.status()).toBe(200);
-  const enrollment = (await enrolled.json()) as { totp_uri: string; recovery_codes: string[] };
+  const enrollment = (await enrolled.json()) as {
+    totp_uri: string;
+    recovery_codes: string[];
+    enrollment_id: string;
+  };
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
+  // enrollment_id を送るのは SPA と同じ識別子照合つきの activate 経路 (ID 省略は旧タブ互換用で
+  // 第 2 段階に削除予定 — e2e が互換経路だけを踏むと本経路が end-to-end 無検証になる)。
   const activated = await page.request.post("/api/account/mfa/activate", {
-    data: { code: await totpCode(secret) },
+    data: { code: await totpCode(secret), enrollment_id: enrollment.enrollment_id },
   });
   expect(activated.status()).toBe(200);
 
@@ -143,9 +149,10 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
   page,
 }) => {
-  // 再 enroll はサーバ契約として secret を回転させ、認証アプリが無効な secret を握る
-  // (機構と評決の正本: docs/adr/0013 §7)。抑止は client guard のみ —
-  // e2e が踏まない reload / 別タブ経路の観測は手動 QA の担当。
+  // 登録途中の再 enroll はサーバが同じ登録内容を replay する (正本: docs/adr/0013 §8) ため
+  // secret は変わらない前提。この test が固定するのは client cache が余分な enroll 往復を
+  // 発生させないことと、開き直しでも同じ secret が表示されること。reload / 別タブ経路の
+  // 観測は手動 QA の担当。
   let enrollCalls = 0;
   await page.route("**/api/account/mfa/enroll", async (route) => {
     enrollCalls++;

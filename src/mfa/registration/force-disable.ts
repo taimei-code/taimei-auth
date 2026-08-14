@@ -1,8 +1,8 @@
 import { recordMfaDisabled } from "@/db/repositories/audit-log";
 import { deleteTwoFactorByUserId } from "@/db/repositories/two-factor";
-import { findUserById } from "@/db/repositories/user";
-import { captureAuditLogError } from "../audit-error";
-import { clearTwoFactorEnabled } from "./gateway";
+import { captureAuditLogError } from "../../audit-error";
+import { clearTwoFactorEnabled } from "../gateway";
+import type { RegistrationSnapshot } from "./ports";
 
 // ADR-0012 (Use-case 層): 運用救済としての MFA 強制解除。認証アプリとリカバリーコードを
 // 両方失ったユーザーの唯一の出口 — ログイン手段は magic link / GitHub だけで再認証機構が無く、
@@ -22,12 +22,14 @@ export type ForceDisableResult =
 // (機構: enroll.ts = 救済スクリプトが恒久ロックアウトを作る)。この順序なら中断は
 // 「まだ解除されていない」に留まり、再実行で解消できる。2 つの書き込みは同一トランザクションに
 // 入れられない (フラグ更新は better-auth の internalAdapter 経由のため)。
-export async function forceDisableMfa(userId: string): Promise<ForceDisableResult> {
-  const user = await findUserById(userId);
-  if (!user) return { ok: false, reason: "user_not_found" };
+export async function forceDisableMfa(
+  userId: string,
+  snapshot: RegistrationSnapshot,
+): Promise<ForceDisableResult> {
+  if (snapshot.user === "absent") return { ok: false, reason: "user_not_found" };
 
   const deletedRows = await deleteTwoFactorByUserId(userId);
-  if (deletedRows === 0 && !user.twoFactorEnabled) return { ok: true, changed: false };
+  if (deletedRows === 0 && !snapshot.twoFactorEnabled) return { ok: true, changed: false };
 
   await clearTwoFactorEnabled(userId);
   // 記帳の失敗で CLI を止めない。ここで throw すると解除自体は済んでいるのに本人通知が送られず、
@@ -36,5 +38,5 @@ export async function forceDisableMfa(userId: string): Promise<ForceDisableResul
     captureAuditLogError("mfa_disabled", e),
   );
 
-  return { ok: true, changed: true, notifyEmail: user.email };
+  return { ok: true, changed: true, notifyEmail: snapshot.email };
 }

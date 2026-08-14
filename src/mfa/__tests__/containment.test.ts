@@ -26,13 +26,66 @@ function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): st
 }
 
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
-  test("QA-R-01 src/auth-plugins/ は enrollment-state を import しない (直接 import 限定の近似)", () => {
+  test("QA-R-01 src/auth-plugins/ は登録状態 policy を import しない (直接 import 限定の近似)", () => {
     // 検索 dir の改名等で grep が空振りしても [] が返るため、実在の import で検出器が
     // 生きていることを先に確認する (positive control)。
     expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
-    // enrollment-state は全 entry が行 SELECT を持つ eager 判定。ログイン境界に混入すると
-    // 全ログインに pg 往復が増える (この規律の Why: src/mfa/policy.ts のコメント)。
-    expect(filesWithCodeLiteral("from ['\"].*enrollment-state", "src/auth-plugins")).toEqual([]);
+    // registration/state のguard外経路は行SELECTを伴う。ログイン境界に混入すると
+    // 全ログインにpg往復が増える (この規律のWhy: src/mfa/policy.tsのコメント)。
+    expect(filesWithCodeLiteral("from ['\"].*registration/state", "src/auth-plugins")).toEqual([]);
+  });
+});
+
+describe("MFA registration module boundary", () => {
+  test("QA-E-03 phase 1 self-service facade does not expose restart", async () => {
+    const facade = await import("../registration");
+    expect("restart" in facade).toBe(false);
+  });
+
+  test("QA-E-03 IDなしactivate compatibilityのproduction importerはHTTP adapterだけ", () => {
+    expect(filesWithCodeLiteral("registration/compatibility")).toEqual([
+      "src/handlers/account-mfa.ts",
+    ]);
+  });
+
+  test("QA-E-03 wiring/application の直 import で activateLegacy へ迂回できない", () => {
+    // registrationApplication は activateLegacy を持つため、compatibility.ts の grep だけでは
+    // ./wiring や ./application を直接 import する新しい呼び出し元が ID なし経路に乗れてしまう。
+    expect(filesWithCodeLiteral(`from ['"](\\./wiring|.*registration/wiring)['"]`)).toEqual([
+      "src/mfa/registration/compatibility.ts",
+      "src/mfa/registration/index.ts",
+      "src/mfa/registration/management.ts",
+    ]);
+    expect(
+      filesWithCodeLiteral(`from ['"](\\./application|.*registration/application)['"]`),
+    ).toEqual(["src/mfa/registration/wiring.ts"]);
+  });
+
+  test("QA-R-01 authとauth pluginはregistration moduleへback-edgeを持たない", () => {
+    expect(filesWithCodeLiteral("mfa/registration", "src/auth.ts src/auth-plugins")).toEqual([]);
+  });
+
+  test("QA-I-01 registration state and port types do not leak back into legacy MFA modules", () => {
+    const importers = filesWithCodeLiteral("registration/(state|ports)", "src/mfa").filter(
+      (file) => !file.startsWith("src/mfa/registration/"),
+    );
+    expect(importers).toEqual([]);
+  });
+
+  test("QA-R-01 registration/ は kill-switch を参照しない (ADR-0013 §7: 混ぜると incident 中に disable の出口が閉じる)", () => {
+    expect(filesWithCodeLiteral("MFA_CHALLENGE_ENABLED", "src/mfa/registration")).toEqual([]);
+  });
+
+  test("QA-I-01 db/ は src/ を import しない (分離時に逆流する依存を作らない)", () => {
+    expect(filesWithCodeLiteral(`from ['"](\\.\\./)*\\.\\./src/`, "db")).toEqual([]);
+  });
+
+  test("QA-I-01 registration state writerのproduction importerはwiringだけ", () => {
+    for (const operation of ["activate", "disable", "enroll", "restart"] as const) {
+      expect(filesWithCodeLiteral(`from ['"].*/${operation}['"]`, "src")).toEqual([
+        "src/mfa/registration/wiring.ts",
+      ]);
+    }
   });
 });
 

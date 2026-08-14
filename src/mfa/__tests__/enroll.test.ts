@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { getAppName } from "../../email/client";
-import { enroll } from "../enroll";
+import { readPendingTotpEnrollment } from "../gateway";
+import { enroll } from "../registration/enroll";
 import {
   actorOf,
   countTwoFactorRows,
@@ -11,10 +12,10 @@ import {
   secretFromTotpUri,
   totpCode,
 } from "./helpers";
-import { activate } from "../activate";
+import { activate } from "../registration/activate";
 import { clearTwoFactorEnabled } from "../gateway";
 
-// enroll use-case (src/mfa/enroll.ts) の DB 統合テスト。実際に better-auth の
+// enroll use-case (src/mfa/registration/enroll.ts) の DB 統合テスト。実際に better-auth の
 // enableTwoFactor を通すので、two_factor 行の生成・verified の初期値・再 enroll の収束は
 // プラグイン本体の挙動込みで固定される。
 
@@ -91,7 +92,7 @@ describe("enroll", () => {
     expect(await countTwoFactorRows(user.id)).toBe(1);
   });
 
-  test("QA-D-07 再 enroll → 200 1 行収束", async () => {
+  test("QA-H-04 再 enroll → 同じ登録情報を再表示", async () => {
     const user = await seedUser("d07");
     const session = await createSessionFor(user.id);
 
@@ -106,10 +107,21 @@ describe("enroll", () => {
     expect(await countTwoFactorRows(user.id)).toBe(1);
     const row = await findTwoFactorRow(user.id);
     expect(row?.verified).toBe(false);
-    // 放棄された secret が生き残ると、認証アプリに残った古い登録でも通ってしまう。
-    const newSecret = secretFromTotpUri(reEnrolled.totpUri);
-    expect(newSecret).not.toBe(secretFromTotpUri(abandoned.totpUri));
-    expect(await totpCode(newSecret)).toMatch(/^\d{6}$/);
+    expect(reEnrolled.totpUri).toBe(abandoned.totpUri);
+    expect(reEnrolled.recoveryCodes).toEqual(abandoned.recoveryCodes);
+    expect(reEnrolled.enrollmentId).toBe(abandoned.enrollmentId);
+  });
+
+  test("有効ユーザーへの replay 読みは gateway が拒否する (実 secret とリカバリーコードを返さない)", async () => {
+    const user = await seedUser("replayguard");
+    const enabled = await enableMfaFor(user);
+
+    const result = await readPendingTotpEnrollment(
+      actorOf(user, { twoFactorEnabled: true }),
+      enabled.session.headers,
+    );
+
+    expect(result).toEqual({ ok: false, error: "already_enabled", status: 409 });
   });
 
   test("フラグ降ろしだけ済んだ中断状態 → 409 secret 不変", async () => {

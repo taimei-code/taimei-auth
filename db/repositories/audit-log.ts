@@ -32,6 +32,11 @@ export type AuditLogEntry =
       payload: { ip: string | null; userAgent: string };
     }
   | {
+      eventType: "mfa_registration_guard_released";
+      userId: string;
+      payload: { source: string; reason: string; process_stopped_confirmed: true };
+    }
+  | {
       eventType: "account_delete";
       userId: string;
       payload: Record<string, never>;
@@ -201,6 +206,23 @@ export const recordMfaDisabled = (
       eventType: "mfa_disabled",
       userId: params.user_id,
       payload: { ip: params.ip, userAgent: params.userAgent },
+    },
+    txOrDb,
+  );
+
+export const recordMfaRegistrationGuardReleased = (
+  params: { user_id: string; source: string; reason: string; process_stopped_confirmed: true },
+  txOrDb: DbOrTx = db,
+): Promise<void> =>
+  appendAuditLog(
+    {
+      eventType: "mfa_registration_guard_released",
+      userId: params.user_id,
+      payload: {
+        source: params.source,
+        reason: params.reason,
+        process_stopped_confirmed: params.process_stopped_confirmed,
+      },
     },
     txOrDb,
   );

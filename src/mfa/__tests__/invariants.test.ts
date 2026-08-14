@@ -1,11 +1,11 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { activate } from "../activate";
+import { activate } from "../registration/activate";
 import { completeChallenge } from "../complete-challenge";
-import { disable } from "../disable";
-import { enroll } from "../enroll";
-import { readStatus } from "../read-status";
+import { disable } from "../registration/disable";
+import { enroll } from "../registration/enroll";
+import { readStatus } from "../registration/status";
 import {
   actorOf,
   cleanupIssuedChallenges,

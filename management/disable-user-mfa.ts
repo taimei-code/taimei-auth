@@ -3,11 +3,9 @@
 //
 //   bun run management/disable-user-mfa.ts <userId>
 //
-// 削除・記帳は src/mfa/force-disable.ts が所有し、ここは引数の解釈と結果の報告に徹する
-// (sweep-abandoned-signups.ts と同じ 3 層構成)。通知メールを CLI 側で送るのは、use-case が
-// src/email/ を import しない層分担を handler 経路 (src/handlers/account-mfa.ts) と揃えるため。
-import { sendMfaDisabledEmail } from "../src/email/send-mfa-notification";
-import { forceDisableMfa } from "../src/mfa/force-disable";
+// 削除・記帳は registration management port が所有し、ここは引数の解釈と結果の報告に徹する。
+import { forceDisable } from "../src/mfa/registration/management";
+import { notifyMfaDisabledForManagement } from "../src/mfa/registration/notification-adapter";
 
 const userId = process.argv[2];
 if (!userId) {
@@ -15,10 +13,19 @@ if (!userId) {
   process.exit(1);
 }
 
-const result = await forceDisableMfa(userId);
+const result = await forceDisable(userId);
+
+if ("retryAfterSeconds" in result) {
+  console.error(JSON.stringify({ userId, error: "temporarily_unavailable" }, null, 2));
+  process.exit(1);
+}
 
 if (!result.ok) {
-  console.error(JSON.stringify({ userId, error: result.reason }, null, 2));
+  // guard 取得中の user 削除 race は MfaFailure (error) で返る。pre-check の user_not_found (reason)
+  // と同じ「対象不在」として報告する。
+  console.error(
+    JSON.stringify({ userId, error: "reason" in result ? result.reason : result.error }, null, 2),
+  );
   process.exit(1);
 }
 
@@ -31,12 +38,7 @@ if (!result.changed) {
 
 // 通知の失敗で解除自体を失敗扱いにしない (解除は確定済みで、再実行しても changed:false になる)。
 // 送信可否は報告に載せ、届かなかった場合は運用者が別経路で本人に知らせる。
-const notified = await sendMfaDisabledEmail(result.notifyEmail)
-  .then(() => true)
-  .catch((e: unknown) => {
-    console.error("failed to send MFA disabled notification email", e);
-    return false;
-  });
+const notified = await notifyMfaDisabledForManagement(result.notifyEmail);
 
 console.log(JSON.stringify({ userId, changed: true, notified }, null, 2));
 // pg pool が開いたままだと process が終了しないため明示 exit する。
