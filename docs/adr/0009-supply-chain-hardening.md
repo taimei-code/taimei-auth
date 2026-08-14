@@ -119,6 +119,17 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - 手順は 3 回目の教訓どおり: `bun update` を使わず (transitive を direct dep に昇格させるため) registry の実 metadata (version / integrity / dependencies) で `bun.lock` を in-place 差し替え → 非 clean `bun install` で当該 3 family のみが差し替わることを確認 → `bun install --frozen-lockfile` (CI parity) と typecheck / lint / 全 test の green を確認
 - 後始末 (任意): `3.3.17` が 7 日齢 (2026-08-10 以降) を超えたら `nanoid` 除外を外しても resolve は維持される
 
+### audit gate 対応 5 回目 (2026-08-14, nanoid advisory 範囲拡大)
+
+`GHSA-2v37-7h3g-55p8` の 3.x 系 vulnerable range が 2026-08-13 に `<3.3.18` へ更新され、4 回目対応で固定した `3.3.17` が再び `bun audit --audit-level=high` gate を落とした。
+この失敗は、機能ブランチの実装差分ではなく advisory DB 側の変更による。
+
+- **nanoid 3.x (postcss transitive)** → `bun.lock` の `postcss/nanoid` entry だけを `3.3.18` に in-place 差し替え。`postcss@8.5.23` の宣言 (`nanoid: ^3.3.16`) を満たすため、postcss 自体の更新や複数 family への分岐は不要
+- `3.3.18` は 2026-08-07 16:41 UTC publish で、失敗した CI (2026-08-14 11:49 UTC) 時点では 7 日齢に約 5 時間届かない
+  4 回目で追加済みの `minimumReleaseAgeExcludes = ["nanoid", ...]` を継続し、緊急 security patch を解決可能にする
+- direct dependency の nanoid 5.x は `5.1.16` で修正済みのため変更しない。リスク評価と利用経路は4回目対応から不変
+- 後始末 (任意): `3.3.18` が 7 日齢を超える 2026-08-15 01:41 JST 以降は `nanoid` 除外を外しても resolve を維持できる
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
