@@ -7,8 +7,9 @@ import {
   boolean,
   integer,
   jsonb,
+  check,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 
 // membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
@@ -164,6 +165,47 @@ export const twoFactor = pgTable(
     // 一意に決まらず interrupted_activate に誤誘導される)。UNIQUE で 2 本目の create が
     // fail-closed に落ちる (詳細: ADR-0013 §7)。
     uniqueIndex("two_factor_user_id_idx").on(table.userId),
+  ],
+);
+
+export type MfaRegistrationOperationKind =
+  | "enroll"
+  | "restart"
+  | "activate"
+  | "disable"
+  | "force_disable";
+
+export const mfaRegistrationGuardProtocol = pgTable(
+  "mfa_registration_guard_protocol",
+  {
+    protocolKey: text("protocol_key").primaryKey().notNull(),
+    version: integer("version").notNull(),
+  },
+  (table) => [
+    check(
+      "mfa_registration_guard_protocol_key_check",
+      sql`${table.protocolKey} = 'mfa_registration_guard'`,
+    ),
+    check("mfa_registration_guard_protocol_version_check", sql`${table.version} > 0`),
+  ],
+);
+
+export const mfaRegistrationTransitionGuard = pgTable(
+  "mfa_registration_transition_guard",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    operationToken: text("operation_token").notNull(),
+    operationKind: text("operation_kind").$type<MfaRegistrationOperationKind>().notNull(),
+    acquiredAt: timestamp("acquired_at").defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      "mfa_registration_guard_operation_kind_check",
+      sql`${table.operationKind} in ('enroll', 'restart', 'activate', 'disable', 'force_disable')`,
+    ),
   ],
 );
 
