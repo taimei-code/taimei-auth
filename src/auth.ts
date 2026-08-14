@@ -24,6 +24,12 @@ function buildAuth() {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
+    // 認証アプリの表示名を初回 enable と中断再開 (get-totp-uri) の両経路で「taimei」に揃える。
+    // twoFactor.issuer は初回経路にしか効かず、再開経路は appName へフォールバックする
+    // (better-auth 1.6.23 がトップレベル issuer を totp サブモジュールへ転送しないため)。
+    // 未設定だと再開時だけ「Better Auth」名の QR になり、認証アプリで同一アカウントが 2 エントリに分かれる。
+    appName: getAppName(),
+
     secondaryStorage: redisStorage,
 
     // local の Bun e2e のみ verification を DB にも保存 (postgres から token を取得するため)。
