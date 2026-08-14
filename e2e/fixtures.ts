@@ -168,7 +168,7 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   await updateUserLastUsedCompany(userId, currentCompanyId);
 }
 
-// mfa-flow 用 (消費型): 単一 OWNER。認証アプリの secret は enroll のたびに変わり事前 seed
+// mfa-flow 用 (消費型): 単一 OWNER。認証アプリの secret は server が enroll 時に生成し事前 seed
 // できないため、fixture は「MFA 未設定の user」までを用意し、有効化は spec が実行中に行う。
 // test ごとに作り直すのは、有効化済みの user を次の test が掴むと enroll が 409 で落ちるため
 // (main に置かず専用事業所へ隔離するのは leave / delete と同じ規約)。
