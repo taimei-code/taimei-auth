@@ -2,7 +2,6 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { getAppName } from "../../email/client";
 import { readPendingTotpEnrollment } from "../gateway";
-import { enroll } from "../registration/enroll";
 import {
   actorOf,
   countTwoFactorRows,
@@ -12,8 +11,8 @@ import {
   secretFromTotpUri,
   totpCode,
 } from "./helpers";
-import { activate } from "../registration/activate";
 import { clearTwoFactorEnabled } from "../gateway";
+import { activate, enroll } from "./registration-production-harness";
 
 // enroll use-case (src/mfa/registration/enroll.ts) の DB 統合テスト。実際に better-auth の
 // enableTwoFactor を通すので、two_factor 行の生成・verified の初期値・再 enroll の収束は

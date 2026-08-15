@@ -2,8 +2,6 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { guard } from "../../membership/guard";
-import { activate } from "../registration/activate";
-import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
 import {
   actorOf,
@@ -20,6 +18,12 @@ import {
   totpCode,
   withFailingAuditWrite,
 } from "./helpers";
+import {
+  activate,
+  enroll,
+  productionRegistrationNotifications,
+  resetProductionRegistrationNotifications,
+} from "./registration-production-harness";
 
 // activate use-case (src/mfa/registration/activate.ts) の DB/Redis 統合テスト。
 // 副作用の順序 (前提条件 → revoke → rotate → audit) が守られていることを、rotate 前のトークンが
@@ -33,6 +37,7 @@ describe("activate", () => {
   beforeEach(async () => {
     await cleanup();
     sentry.reset();
+    resetProductionRegistrationNotifications();
   });
 
   afterAll(async () => {
@@ -55,9 +60,8 @@ describe("activate", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // 送信そのものは registration application がguard解放後に行うため、use-case 側の契約は「宛先 1 件」。
-    expect(result.notifyEmail).toBe(user.email);
-    expect(await issuedSessionCookieCount(result.forwardedHeaders)).toBe(1);
+    expect(productionRegistrationNotifications).toEqual([`enabled:${user.email}`]);
+    expect(await issuedSessionCookieCount(result.sessionChanges)).toBe(1);
 
     const audits = await auditRowsFor(user.id, "mfa_enabled");
     expect(audits.length).toBe(1);
@@ -94,7 +98,7 @@ describe("activate", () => {
       status: 401,
     });
 
-    const rotated = await sessionTokenFromForwarded(result.forwardedHeaders);
+    const rotated = await sessionTokenFromForwarded(result.sessionChanges);
     expect(rotated).toBeDefined();
     expect(await countLiveSessions([rotated as string])).toBe(1);
   });
@@ -191,8 +195,8 @@ describe("activate", () => {
     // 通知メールの宛先も返らない。有効化が済んでいる以上、記帳の失敗は観測へ回すしかない。
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.notifyEmail).toBe(user.email);
-    expect(await issuedSessionCookieCount(result.forwardedHeaders)).toBe(1);
+    expect(productionRegistrationNotifications).toEqual([`enabled:${user.email}`]);
+    expect(await issuedSessionCookieCount(result.sessionChanges)).toBe(1);
     expect((await findTwoFactorRow(user.id))?.verified).toBe(true);
 
     expect(await auditRowsFor(user.id, "mfa_enabled")).toEqual([]);

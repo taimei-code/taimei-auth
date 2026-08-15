@@ -51,17 +51,6 @@ async function invoke<T>(
   }
 }
 
-// 複数の gateway 呼び出しをまたいで Set-Cookie を 1 本の Headers に束ねる。
-// 後段の呼び出しが前段の cookie を上書きしないよう append で積む (セッション rotate と
-// チャレンジ cookie 失効が同じ response に同居する)。
-export function mergeForwardedCookies(...sources: Headers[]): Headers {
-  const merged = new Headers();
-  for (const source of sources) {
-    for (const cookie of source.getSetCookie()) merged.append("set-cookie", cookie);
-  }
-  return merged;
-}
-
 // challenge-store が cookie 名の導出と verification value の読み書きに使う。
 // auth.$context を触れるのはこの 2 ファイルだけ。
 export function getAuthContext(): typeof auth.$context {

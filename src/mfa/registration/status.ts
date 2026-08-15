@@ -3,7 +3,7 @@ import { incrementRateWindow } from "../../redis";
 import { Sentry } from "../../sentry";
 import { countRemainingRecoveryCodes } from "../gateway";
 import { requiresMfaChallenge } from "../policy";
-import { readEnrollmentFacts } from "./state";
+import { readEnrollmentFacts } from "./state-reader";
 
 // ADR-0012 (Use-case 層): セキュリティページ向けの MFA 状態取得。
 

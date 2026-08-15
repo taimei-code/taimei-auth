@@ -1,8 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { disable } from "../registration/disable";
-import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
 import {
   actorOf,
@@ -23,6 +21,12 @@ import {
   withFailingAuditWrite,
   wrongTotpCode,
 } from "./helpers";
+import {
+  disable,
+  enroll,
+  productionRegistrationNotifications,
+  resetProductionRegistrationNotifications,
+} from "./registration-production-harness";
 
 // disable use-case (src/mfa/registration/disable.ts) の DB/Redis 統合テスト。
 // 本人確認を先頭に置く契約は「誤コードで 400」ではなく「誤コードで何も動かない」ことでしか
@@ -40,6 +44,7 @@ describe("disable", () => {
   beforeEach(async () => {
     await cleanup();
     sentry.reset();
+    resetProductionRegistrationNotifications();
   });
 
   afterAll(async () => {
@@ -60,8 +65,11 @@ describe("disable", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.notifyEmail).toBe(user.email);
-    expect(await issuedSessionCookieCount(result.forwardedHeaders)).toBe(1);
+    expect(productionRegistrationNotifications).toEqual([
+      `enabled:${user.email}`,
+      `disabled:${user.email}`,
+    ]);
+    expect(await issuedSessionCookieCount(result.sessionChanges)).toBe(1);
 
     const audits = await auditRowsFor(user.id, "mfa_disabled");
     expect(audits.length).toBe(1);
@@ -266,8 +274,11 @@ describe("disable", () => {
     // 転送されず本人が今のデバイスから落ち、通知メールの宛先も返らないぶん状況が悪化する。
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.notifyEmail).toBe(user.email);
-    expect(await issuedSessionCookieCount(result.forwardedHeaders)).toBe(1);
+    expect(productionRegistrationNotifications).toEqual([
+      `enabled:${user.email}`,
+      `disabled:${user.email}`,
+    ]);
+    expect(await issuedSessionCookieCount(result.sessionChanges)).toBe(1);
     expect(await countTwoFactorRows(user.id)).toBe(0);
 
     expect(await auditRowsFor(user.id, "mfa_disabled")).toEqual([]);

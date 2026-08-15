@@ -1,7 +1,8 @@
 import { Sentry } from "../sentry";
 import { asPreSessionHeaders, openChallenge } from "./challenge-store";
 import { CHALLENGE_EXPIRED, failure, type MfaFailure } from "./error-mapping";
-import { mergeForwardedCookies, verifyMfaCode } from "./gateway";
+import { mergeForwardedCookies } from "./session-headers";
+import { verifyMfaCode } from "./gateway";
 import type { MfaCodeKind } from "./wire-contracts";
 import { validateChallengeRedirect } from "./redirect-guard";
 

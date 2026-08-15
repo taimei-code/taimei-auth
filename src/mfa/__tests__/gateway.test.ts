@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { countRemainingRecoveryCodes, verifyMfaCode } from "../gateway";
+import { mergeForwardedCookies } from "../session-headers";
 import {
   awaitNextTotpStep,
   currentTotpStep,
@@ -16,6 +17,20 @@ import {
 
 const P = "mfa-gateway-";
 const { cleanup, seedUser } = createSeedHelpers(P);
+
+test("複数 source の Set-Cookie を入力順で保持する", () => {
+  const first = new Headers();
+  first.append("set-cookie", "session=first");
+  first.append("set-cookie", "challenge=first");
+  const second = new Headers();
+  second.append("set-cookie", "session=second");
+
+  expect(mergeForwardedCookies(first, second).getSetCookie()).toEqual([
+    "session=first",
+    "challenge=first",
+    "session=second",
+  ]);
+});
 
 describe("gateway の TOTP 検証", () => {
   beforeEach(cleanup);

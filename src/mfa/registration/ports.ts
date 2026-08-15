@@ -25,6 +25,36 @@ export type TransitionGuard = {
   release(lease: GuardLease): Promise<{ released: boolean }>;
 };
 
+export type SessionMutationResult = { ok: true; headers: Headers } | MfaFailure;
+
+export type AuditInput = {
+  userId: string;
+  ip: string | null;
+  userAgent: string;
+};
+
+export type ActivateDependencies = {
+  revokeOtherSessions(headers: Headers): Promise<SessionMutationResult>;
+  activateTotp(headers: Headers, code: string): Promise<SessionMutationResult>;
+  writeAudit(input: AuditInput): Promise<void>;
+  // Observer は例外を投げず、確定済みの登録遷移を変更しない。
+  observeAuditError(error: unknown): void;
+};
+
+export type DisableDependencies = {
+  spendAttempt(userId: string): Promise<MfaFailure | undefined>;
+  verifyCode(
+    headers: Headers,
+    input: { code: string; kind: MfaCodeKind },
+  ): Promise<SessionMutationResult>;
+  resetAttempts(userId: string): Promise<void>;
+  revokeOtherSessions(headers: Headers): Promise<SessionMutationResult>;
+  disableTotp(headers: Headers): Promise<SessionMutationResult>;
+  writeAudit(input: AuditInput): Promise<void>;
+  // Observer は例外を投げず、確定済みの登録遷移を変更しない。
+  observeAuditError(error: unknown): void;
+};
+
 export type RegistrationOperations = {
   getStatus(principal: RegistrationPrincipal): Promise<MfaStatus>;
   enroll(input: {

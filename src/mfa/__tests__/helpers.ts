@@ -10,11 +10,12 @@ import { withWaitUntil } from "../../background";
 import type { Actor } from "../../membership/guard/core";
 import { getRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
-import { activate } from "../registration/activate";
+import type { RegistrationSnapshot } from "../registration/ports";
+import { readCurrentEnrollment } from "../registration/state-reader";
 import { issueChallenge, type ChallengeMethod } from "../challenge-store";
 import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
-import { enroll } from "../registration/enroll";
 import { clearTwoFactorEnabled } from "../gateway";
+import { activate, enroll } from "./registration-production-harness";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
 // 状態を DB へ直接捏造すると、プラグインが持つ暗号化 secret とコードの対応が伴わず以降の検証が
@@ -115,6 +116,15 @@ export function actorOf(
   };
 }
 
+export async function snapshotFor(actor: Actor): Promise<RegistrationSnapshot> {
+  return {
+    user: "present",
+    email: actor.email,
+    twoFactorEnabled: actor.twoFactorEnabled,
+    enrollment: await readCurrentEnrollment(actor),
+  };
+}
+
 // DB の secret 列は AUTH_SECRET 由来の鍵で暗号化されており、平文 secret を得る経路は
 // enroll が返す otpauth URI (secret パラメータは平文の base32) だけ。
 export function secretFromTotpUri(totpUri: string): string {
@@ -178,18 +188,19 @@ export type EnabledMfaUser = {
 
 export async function enableMfaFor(user: { id: string; email: string }): Promise<EnabledMfaUser> {
   const session = await createSessionFor(user.id);
-  const enrolled = await enroll(actorOf(user), session.headers);
+  const actor = actorOf(user);
+  const enrolled = await enroll(actor, session.headers);
   if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
 
   const secret = secretFromTotpUri(enrolled.totpUri);
   const activated = await activate({
-    actor: actorOf(user),
+    actor,
     headers: session.headers,
     code: await totpCode(secret),
   });
   if (!activated.ok) throw new Error(`activate failed: ${activated.error}`);
 
-  const rotatedToken = await sessionTokenFromForwarded(activated.forwardedHeaders);
+  const rotatedToken = await sessionTokenFromForwarded(activated.sessionChanges);
   if (!rotatedToken) throw new Error("activate did not forward a session cookie");
 
   // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
@@ -239,7 +250,8 @@ export async function seedMfaEnrollmentState(
       return { actor: actorOf(user), session: await createSessionFor(user.id) };
     case "enrolledNotActivated": {
       const session = await createSessionFor(user.id);
-      const enrolled = await enroll(actorOf(user), session.headers);
+      const actor = actorOf(user);
+      const enrolled = await enroll(actor, session.headers);
       if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
       return {
         actor: actorOf(user),
