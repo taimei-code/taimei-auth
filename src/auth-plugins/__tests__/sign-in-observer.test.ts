@@ -3,9 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { user } from "@/db/schema";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { activate } from "../../mfa/registration/activate";
 import { completeChallenge } from "../../mfa/complete-challenge";
-import { enroll } from "../../mfa/registration/enroll";
 import {
   actorOf,
   cleanupIssuedChallenges,
@@ -20,6 +18,7 @@ import {
   totpCode,
   WELCOME_EMAIL_LOG,
 } from "../../mfa/__tests__/helpers";
+import { activate, enroll } from "../../mfa/__tests__/registration-production-harness";
 
 // sign-in 観測プラグイン (src/auth-plugins/sign-in-observer.ts) の統合テスト。
 // 移設前の写像は route パターン (`/callback/:id`) でなく実 path を見ており、magic link の

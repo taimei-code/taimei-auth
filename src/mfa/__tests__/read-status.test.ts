@@ -5,8 +5,7 @@ import { findUserById } from "@/db/repositories/user";
 import { twoFactor } from "@/db/schema";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { redisStorage } from "../../redis";
-import { disable } from "../registration/disable";
-import { interruptedReportKey, readStatus } from "../registration/status";
+import { interruptedReportKey } from "../registration/status";
 import {
   actorOf,
   countTwoFactorRows,
@@ -17,6 +16,7 @@ import {
   seedMfaEnrollmentState,
   totpCode,
 } from "./helpers";
+import { disable, readStatus } from "./registration-production-harness";
 
 // status use-case (src/mfa/registration/status.ts) の DB 統合テスト。
 // 「中断した有効化」(フラグ true × 未 verified 行) は better-auth 側の 2 書き込みが

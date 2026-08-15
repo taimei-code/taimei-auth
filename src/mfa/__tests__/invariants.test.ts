@@ -1,11 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findUserById } from "@/db/repositories/user";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { activate } from "../registration/activate";
 import { completeChallenge } from "../complete-challenge";
-import { disable } from "../registration/disable";
-import { enroll } from "../registration/enroll";
-import { readStatus } from "../registration/status";
 import {
   actorOf,
   cleanupIssuedChallenges,
@@ -20,6 +16,7 @@ import {
   totpCode,
   wrongTotpCode,
 } from "./helpers";
+import { activate, disable, enroll, readStatus } from "./registration-production-harness";
 
 // MFA の不変条件。個々の use-case テストが「その操作の結果」を見るのに対し、ここは操作を
 // またいで成立し続けるべき性質だけを見る。policy.ts が two_factor 行を読まずに user の 1 フラグで
@@ -148,11 +145,12 @@ describe("MFA の不変条件", () => {
       kind: "totp",
     });
 
-    const issuedCookies = await Promise.all(
-      [succeeded, wrongCode, withoutChallenge, rejectedDisable].map((result) =>
-        result.ok ? issuedSessionCookieCount(result.forwardedHeaders) : 0,
-      ),
-    );
+    const issuedCookies = await Promise.all([
+      succeeded.ok ? issuedSessionCookieCount(succeeded.forwardedHeaders) : 0,
+      wrongCode.ok ? issuedSessionCookieCount(wrongCode.forwardedHeaders) : 0,
+      withoutChallenge.ok ? issuedSessionCookieCount(withoutChallenge.forwardedHeaders) : 0,
+      rejectedDisable.ok ? issuedSessionCookieCount(rejectedDisable.sessionChanges) : 0,
+    ]);
 
     expect(issuedCookies).toEqual([1, 0, 0, 0]);
   });

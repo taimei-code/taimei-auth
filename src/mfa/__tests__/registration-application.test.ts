@@ -7,6 +7,7 @@ import type {
   RegistrationSnapshot,
   TransitionGuard,
 } from "../registration/ports";
+import type { ReportUnknownTransition } from "../registration/transition";
 
 const principal: RegistrationPrincipal = {
   userId: "user-1",
@@ -26,7 +27,8 @@ type HarnessOverrides = {
   operations?: Partial<RegistrationOperations>;
   release?: TransitionGuard["release"];
   notifyEnabled?: () => void;
-  reportUnknownTransition?: () => void;
+  notifyDisabled?: () => void;
+  reportUnknownTransition?: ReportUnknownTransition;
 };
 
 function createHarness(overrides: HarnessOverrides = {}) {
@@ -78,7 +80,7 @@ function createHarness(overrides: HarnessOverrides = {}) {
       guard,
       operations,
       notifyEnabled: overrides.notifyEnabled ?? (() => events.push("notify:enabled")),
-      notifyDisabled: () => events.push("notify:disabled"),
+      notifyDisabled: overrides.notifyDisabled ?? (() => events.push("notify:disabled")),
       reportUnknownTransition: overrides.reportUnknownTransition,
     }),
     events,
@@ -161,22 +163,41 @@ describe("MFA registration application", () => {
     }
   });
 
-  test("keeps session changes and notification when only guard release fails", async () => {
-    const { app, events } = createHarness({
-      release: async () => {
-        throw new Error("release failed");
-      },
-      reportUnknownTransition: () => events.push("report:release"),
-    });
+  for (const scenario of [
+    { operation: "activate", releaseOutcome: "throws", notification: "notify:enabled" },
+    { operation: "activate", releaseOutcome: "returns false", notification: "notify:enabled" },
+    { operation: "disable", releaseOutcome: "throws", notification: "notify:disabled" },
+    { operation: "disable", releaseOutcome: "returns false", notification: "notify:disabled" },
+  ] as const) {
+    test(`QA-M-03 keeps ${scenario.operation} success and one notification when release ${scenario.releaseOutcome}`, async () => {
+      const { app, events } = createHarness({
+        release: async () => {
+          events.push("release");
+          if (scenario.releaseOutcome === "throws") throw new Error("release failed");
+          return { released: false };
+        },
+        reportUnknownTransition: (event) => events.push(`report:${event.phase}`),
+      });
 
-    expect(
-      await app.activate({
-        principal,
-        headers,
-        enrollmentId: "enrollment-1",
-        code: "123456",
-      }),
-    ).toEqual({ ok: true, sessionChanges });
-    expect(events).toEqual(["acquire:activate", "activate", "report:release", "notify:enabled"]);
-  });
+      const result =
+        scenario.operation === "activate"
+          ? await app.activate({
+              principal,
+              headers,
+              enrollmentId: "enrollment-1",
+              code: "123456",
+            })
+          : await app.disable({ principal, headers, code: "123456", kind: "totp" });
+
+      expect(result).toEqual({ ok: true, sessionChanges });
+      expect(events).toEqual([
+        `acquire:${scenario.operation}`,
+        scenario.operation,
+        "release",
+        "report:release",
+        scenario.notification,
+      ]);
+      expect(events.filter((event) => event === scenario.notification)).toHaveLength(1);
+    });
+  }
 });

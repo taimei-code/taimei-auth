@@ -4,17 +4,9 @@ import { findUserById } from "@/db/repositories/user";
 import { twoFactor } from "@/db/schema";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import type { Actor } from "../../membership/guard/core";
-import { activate } from "../registration/activate";
-import { disable } from "../registration/disable";
-import { enroll } from "../registration/enroll";
-import {
-  ensureCanActivate,
-  ensureCanEnroll,
-  ensureDisableCanProceed,
-  readEnrollmentFacts,
-} from "../registration/state";
+import { ensureCanActivate, ensureCanEnroll, ensureDisableCanProceed } from "../registration/state";
 import type { MfaFailure } from "../error-mapping";
-import { readStatus } from "../registration/status";
+import { readEnrollmentFacts } from "../registration/state-reader";
 import {
   ATTEMPT_BUDGET_ABSENT,
   attemptBudgetTtlSeconds,
@@ -22,10 +14,12 @@ import {
   findTwoFactorRow,
   MFA_ENROLLMENT_STATE_NAMES,
   seedMfaEnrollmentState,
+  snapshotFor,
   totpCode,
   wrongTotpCode,
   type MfaEnrollmentStateName,
 } from "./helpers";
+import { activate, disable, enroll, readStatus } from "./registration-production-harness";
 
 // 「MFA 登録状態」× 操作 entry の評決マトリクスの統合テスト。期待値 (下の MATRIX) は
 // docs/adr/0013-mfa-totp-challenge.md の 5 状態マトリクスからの転記で、実装からは導出しない。
@@ -102,12 +96,15 @@ const MATRIX: {
   },
 ];
 
-const evaluateEntries = async (actor: Actor) => ({
-  enroll: verdictOf(await ensureCanEnroll(actor)),
-  activate: verdictOf(await ensureCanActivate(actor)),
-  disable: verdictOf(await ensureDisableCanProceed(actor)),
-  interrupted: (await readEnrollmentFacts(actor)).interrupted,
-});
+const evaluateEntries = async (actor: Actor) => {
+  const snapshot = await snapshotFor(actor);
+  return {
+    enroll: verdictOf(ensureCanEnroll(snapshot)),
+    activate: verdictOf(ensureCanActivate(snapshot)),
+    disable: verdictOf(ensureDisableCanProceed(snapshot)),
+    interrupted: (await readEnrollmentFacts(actor)).interrupted,
+  };
+};
 
 describe("MFA 登録状態の操作単位 entry", () => {
   beforeEach(cleanup);
@@ -241,8 +238,9 @@ describe("MFA 登録状態の操作単位 entry", () => {
     const user = await seedUser("d02");
     const fx = await seedMfaEnrollmentState(user, "interruptedDisable");
 
-    expect(verdictOf(await ensureCanEnroll(fx.actor))).toEqual(ALREADY);
-    expect(await ensureDisableCanProceed(fx.actor)).toBeUndefined();
+    const snapshot = await snapshotFor(fx.actor);
+    expect(verdictOf(ensureCanEnroll(snapshot))).toEqual(ALREADY);
+    expect(ensureDisableCanProceed(snapshot)).toBeUndefined();
     // enabled=false (無効バッジ) だが inEffect=true — SPA はこれで disable を出し袋小路を防ぐ
     const status = await readStatus(fx.actor);
     expect(status.enabled).toBe(false);

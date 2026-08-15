@@ -37,6 +37,17 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
 });
 
 describe("MFA registration module boundary", () => {
+  test("QA-E-02 public facade does not expose operation factories or dependency types", async () => {
+    const facade = await import("../registration");
+    expect(Object.keys(facade).sort()).toEqual(["activate", "disable", "enroll", "getStatus"]);
+    expect(
+      filesWithCodeLiteral(
+        "createActivate|createDisable|ActivateDependencies|DisableDependencies",
+        "src/mfa/registration/index.ts src/handlers",
+      ),
+    ).toEqual([]);
+  });
+
   test("QA-E-03 phase 1 self-service facade does not expose restart", async () => {
     const facade = await import("../registration");
     expect("restart" in facade).toBe(false);
@@ -86,6 +97,24 @@ describe("MFA registration module boundary", () => {
         "src/mfa/registration/wiring.ts",
       ]);
     }
+  });
+
+  test("QA-E-03 operation factories do not bind infrastructure adapters directly", () => {
+    expect(
+      filesWithCodeLiteral(
+        "../gateway|../disable-attempt-budget|../../audit-error|@/db/|./wiring",
+        "src/mfa/registration/activate.ts src/mfa/registration/disable.ts",
+      ),
+    ).toEqual([]);
+  });
+
+  test("QA-M-06 production wiring keeps enabled and disabled notifications distinct", () => {
+    expect(filesWithCodeLiteral("notifyEnabled: notifyMfaEnabled", "src/mfa/registration")).toEqual(
+      ["src/mfa/registration/wiring.ts"],
+    );
+    expect(
+      filesWithCodeLiteral("notifyDisabled: notifyMfaDisabled", "src/mfa/registration"),
+    ).toEqual(["src/mfa/registration/wiring.ts"]);
   });
 });
 

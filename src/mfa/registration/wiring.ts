@@ -2,17 +2,20 @@ import {
   acquireRegistrationGuard,
   releaseRegistrationGuard,
 } from "@/db/repositories/mfa-registration";
-import type { Actor } from "../../membership/guard/core";
-import { activate as activateOperation } from "./activate";
+import { recordMfaDisabled, recordMfaEnabled } from "@/db/repositories/audit-log";
+import { captureAuditLogError } from "../../audit-error";
+import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
+import { activateTotp, disableTotp, revokeOtherSessions, verifyMfaCode } from "../gateway";
+import { createActivate } from "./activate";
 import { createRegistrationApplication } from "./application";
-import type { RegistrationPrincipal } from "./contracts";
-import { disable as disableOperation } from "./disable";
+import { createDisable } from "./disable";
 import { enroll as enrollOperation } from "./enroll";
 import { notifyMfaDisabled, notifyMfaEnabled } from "./notification-adapter";
 import { reportUnknownMfaRegistrationTransition } from "./observability-adapter";
-import type { RegistrationSnapshot } from "./ports";
+import type { RegistrationOperations } from "./ports";
 import { restart as restartOperation } from "./restart";
 import { readStatus } from "./status";
+import { actorFromSnapshot } from "./state";
 
 // self-service と management の両経路が同じ production guard 配線を共有する (二重定義で
 // 片方だけ計測やアダプタ差替えが漏れる drift を防ぐ)。
@@ -21,59 +24,45 @@ export const registrationGuard = {
   release: releaseRegistrationGuard,
 };
 
+export const productionRegistrationOperations: RegistrationOperations = {
+  getStatus: (principal) =>
+    readStatus({
+      id: principal.userId,
+      email: principal.email,
+      lastUsedCompanyId: null,
+      twoFactorEnabled: principal.twoFactorEnabled,
+    }),
+  enroll: ({ principal, headers, snapshot }) =>
+    enrollOperation(actorFromSnapshot(principal, snapshot), headers, snapshot),
+  restart: ({ principal, headers, snapshot, enrollmentId }) =>
+    restartOperation({
+      actor: actorFromSnapshot(principal, snapshot),
+      headers,
+      enrollmentId,
+      snapshot,
+    }),
+  activate: createActivate({
+    revokeOtherSessions,
+    activateTotp,
+    writeAudit: ({ userId, ip, userAgent }) => recordMfaEnabled({ user_id: userId, ip, userAgent }),
+    observeAuditError: (error) => captureAuditLogError("mfa_enabled", error),
+  }),
+  disable: createDisable({
+    spendAttempt: spendDisableAttempt,
+    verifyCode: verifyMfaCode,
+    resetAttempts: resetDisableAttempts,
+    revokeOtherSessions,
+    disableTotp,
+    writeAudit: ({ userId, ip, userAgent }) =>
+      recordMfaDisabled({ user_id: userId, ip, userAgent }),
+    observeAuditError: (error) => captureAuditLogError("mfa_disabled", error),
+  }),
+};
+
 export const registrationApplication = createRegistrationApplication({
   guard: registrationGuard,
   reportUnknownTransition: reportUnknownMfaRegistrationTransition,
   notifyEnabled: notifyMfaEnabled,
   notifyDisabled: notifyMfaDisabled,
-  operations: {
-    getStatus: (principal) => readStatus(actorFor(principal)),
-    enroll: ({ principal, headers, snapshot }) =>
-      enrollOperation(actorFor(principal, snapshot), headers, snapshot),
-    restart: ({ principal, headers, snapshot, enrollmentId }) =>
-      restartOperation({ actor: actorFor(principal, snapshot), headers, enrollmentId, snapshot }),
-    async activate({ principal, headers, snapshot, enrollmentId, code }) {
-      const result = await activateOperation({
-        actor: actorFor(principal, snapshot),
-        headers,
-        enrollmentId,
-        code,
-        snapshot,
-      });
-      return result.ok
-        ? { ok: true, sessionChanges: result.forwardedHeaders, notifyEmail: result.notifyEmail }
-        : result;
-    },
-    async disable({ principal, headers, snapshot, code, kind }) {
-      const result = await disableOperation({
-        actor: actorFor(principal, snapshot),
-        headers,
-        code,
-        kind,
-        snapshot,
-      });
-      return result.ok
-        ? { ok: true, sessionChanges: result.forwardedHeaders, notifyEmail: result.notifyEmail }
-        : result;
-    },
-  },
+  operations: productionRegistrationOperations,
 });
-
-// snapshot があれば guard 取得時点の状態を、なければ requireActor が読んだリクエスト時点の状態を使う。
-function actorFor(principal: RegistrationPrincipal, snapshot?: RegistrationSnapshot): Actor {
-  if (snapshot?.user === "present") {
-    return {
-      id: principal.userId,
-      email: snapshot.email,
-      lastUsedCompanyId: null,
-      twoFactorEnabled: snapshot.twoFactorEnabled,
-    };
-  }
-  return {
-    id: principal.userId,
-    email: principal.email,
-    lastUsedCompanyId: null,
-    // snapshot が user 不在を観測したら request 時点のフラグは信じない (削除済み user を有効扱いしない)。
-    twoFactorEnabled: snapshot === undefined ? principal.twoFactorEnabled : false,
-  };
-}
