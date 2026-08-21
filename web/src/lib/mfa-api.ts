@@ -93,7 +93,8 @@ export const activateMfa = (input: { code: string; enrollmentId: string }): Prom
 export const disableMfa = (input: { code: string; kind: MfaCodeKind }): Promise<void> =>
   postJson("/api/account/mfa/disable", input);
 
-export const getMfaChallenge = (): Promise<MfaChallengeState> => requestJson("/api/mfa/challenge");
+export const getMfaChallenge = (signal?: AbortSignal): Promise<MfaChallengeState> =>
+  requestJson("/api/mfa/challenge", { signal });
 
 export const verifyMfaChallenge = (input: {
   code: string;

@@ -1,12 +1,19 @@
-import { useState, type ChangeEvent, type ComponentPropsWithoutRef, type FormEvent } from "react";
+import {
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ComponentPropsWithoutRef,
+  type FormEvent,
+} from "react";
 
 // 純関数を bun test (cwd = repo root) から読むため相対 import にする ("@/*" の割り当てが
 // root と web で違う理由は web/tsconfig.json のコメント)。
 import { MfaApiError, type MfaCodeKind, type MfaErrorCode } from "./mfa-api";
 
 // 第二要素のコード入力を持つ 3 画面 (チャレンジ画面 / 有効化ダイアログ / 無効化ダイアログ) が
-// 共有する状態機械。正規化・入力支援属性・エラー文言を各画面に散らすと、片方だけ直して
-// 他方が古い挙動のまま残る (use-sign-page.ts と同じ規律)。文言・レイアウトの差分は JSX が持つ。
+// 共有する入力機構。正規化・入力支援属性・エラー文言を各画面に散らすと、片方だけ直して
+// 他方が古い挙動のまま残る (use-sign-page.ts と同じ規律)。非同期処理は controlled options か
+// 互換 useMfaCodeEntry が所有し、文言・レイアウトの差分は JSX が持つ。
 
 const WHITESPACE = /\s+/g;
 // NFKC が ASCII に畳まないダッシュ類 (ハイフン U+2010〜U+2015 / 負符号 / 長音記号)。
@@ -50,7 +57,7 @@ export function describeMfaChallengeError(code: string): string {
     : GENERIC_MESSAGE;
 }
 
-export type MfaCodeEntry = {
+export type MfaCodeInput = {
   kind: MfaCodeKind;
   toggleKind: () => void;
   toggleLabel: string;
@@ -66,14 +73,15 @@ export type MfaCodeEntry = {
   reset: () => void;
 };
 
-export function useMfaCodeEntry(options: {
+export function useMfaCodeInput(options: {
   inputId: string;
-  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<unknown>;
-}): MfaCodeEntry {
+  submitting: boolean;
+  errorCode: MfaErrorCode | null;
+  submit: (input: { code: string; kind: MfaCodeKind }) => void;
+  onKindChange?: () => void;
+}): MfaCodeInput {
   const [kind, setKind] = useState<MfaCodeKind>("totp");
   const [code, setCode] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [errorCode, setErrorCode] = useState<MfaErrorCode | null>(null);
 
   const normalizedCode = normalizeMfaCode(code, kind);
   const isTotp = kind === "totp";
@@ -83,27 +91,21 @@ export function useMfaCodeEntry(options: {
   const toggleKind = () => {
     setKind(isTotp ? "recovery_code" : "totp");
     setCode("");
-    setErrorCode(null);
+    options.onKindChange?.();
   };
 
+  // 入力 (kind / code) だけを初期化する。errorCode / submitting は options の所有者の状態で
+  // ここからは触れない — error を消し忘れると失敗文言と初期化後の入力欄が並び、打ち直せば通る
+  // ように読めてしまうため、所有者側が併せて消す (useMfaCodeEntry の reset が実例)。
   const reset = () => {
     setKind("totp");
     setCode("");
-    setErrorCode(null);
-    setSubmitting(false);
   };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (submitting || normalizedCode === "") return;
-    setSubmitting(true);
-    setErrorCode(null);
-    options
-      .submit({ code: normalizedCode, kind })
-      .catch((error: unknown) =>
-        setErrorCode(error instanceof MfaApiError ? error.code : "unknown"),
-      )
-      .finally(() => setSubmitting(false));
+    if (options.submitting || normalizedCode === "") return;
+    options.submit({ code: normalizedCode, kind });
   };
 
   return {
@@ -116,14 +118,14 @@ export function useMfaCodeEntry(options: {
       : "有効化時に控えたリカバリーコードを 1 つ入力してください (1 つにつき 1 回だけ使えます)。",
     hintId,
     errorId,
-    errorMessage: errorCode === null ? null : describeMfaChallengeError(errorCode),
-    submitting,
-    canSubmit: !submitting && normalizedCode !== "",
+    errorMessage: options.errorCode === null ? null : describeMfaChallengeError(options.errorCode),
+    submitting: options.submitting,
+    canSubmit: !options.submitting && normalizedCode !== "",
     inputProps: {
       id: options.inputId,
       value: code,
       onChange: (event: ChangeEvent<HTMLInputElement>) => setCode(event.target.value),
-      disabled: submitting,
+      disabled: options.submitting,
       required: true,
       // one-time-code はモバイル OS の確認コード補完の合図。inputMode を種別で変えるのは、
       // リカバリーコードが英数混在で数字キーボードでは入力できないため。
@@ -137,10 +139,53 @@ export function useMfaCodeEntry(options: {
       maxLength: 32,
       placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
       "aria-label": isTotp ? "確認コード" : "リカバリーコード",
-      "aria-invalid": errorCode !== null,
-      "aria-describedby": errorCode === null ? hintId : `${hintId} ${errorId}`,
+      "aria-invalid": options.errorCode !== null,
+      "aria-describedby": options.errorCode === null ? hintId : `${hintId} ${errorId}`,
     },
     handleSubmit,
     reset,
+  };
+}
+
+export function useMfaCodeEntry(options: {
+  inputId: string;
+  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<unknown>;
+}): MfaCodeInput {
+  const [submitting, setSubmitting] = useState(false);
+  const [errorCode, setErrorCode] = useState<MfaErrorCode | null>(null);
+  // submitting state の反映は同期でないため、同一 task 内の二重 submit (二重発火・連打) を
+  // state だけでは弾けない。POST を一回に保つ同期 guard は ref が持つ
+  // (use-mfa-challenge-flow.ts の verificationInFlight と同じ規律)。
+  const submitInFlight = useRef(false);
+
+  const input = useMfaCodeInput({
+    inputId: options.inputId,
+    submitting,
+    errorCode,
+    onKindChange: () => setErrorCode(null),
+    submit: (value) => {
+      if (submitInFlight.current) return;
+      submitInFlight.current = true;
+      setSubmitting(true);
+      setErrorCode(null);
+      void options
+        .submit(value)
+        .catch((error: unknown) =>
+          setErrorCode(error instanceof MfaApiError ? error.code : "unknown"),
+        )
+        .finally(() => {
+          submitInFlight.current = false;
+          setSubmitting(false);
+        });
+    },
+  });
+
+  return {
+    ...input,
+    reset: () => {
+      input.reset();
+      setErrorCode(null);
+      setSubmitting(false);
+    },
   };
 }
