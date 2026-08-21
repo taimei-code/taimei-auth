@@ -9,13 +9,11 @@ import { activateTotp, disableTotp, revokeOtherSessions, verifyMfaCode } from ".
 import { createActivate } from "./activate";
 import { createRegistrationApplication } from "./application";
 import { createDisable } from "./disable";
-import { enroll as enrollOperation } from "./enroll";
+import { enroll } from "./enroll";
 import { notifyMfaDisabled, notifyMfaEnabled } from "./notification-adapter";
 import { reportUnknownMfaRegistrationTransition } from "./observability-adapter";
 import type { RegistrationOperations } from "./ports";
-import { restart as restartOperation } from "./restart";
-import { readStatus } from "./status";
-import { actorFromSnapshot } from "./state";
+import { restart } from "./restart";
 
 // self-service と management の両経路が同じ production guard 配線を共有する (二重定義で
 // 片方だけ計測やアダプタ差替えが漏れる drift を防ぐ)。
@@ -25,22 +23,8 @@ export const registrationGuard = {
 };
 
 export const productionRegistrationOperations: RegistrationOperations = {
-  getStatus: (principal) =>
-    readStatus({
-      id: principal.userId,
-      email: principal.email,
-      lastUsedCompanyId: null,
-      twoFactorEnabled: principal.twoFactorEnabled,
-    }),
-  enroll: ({ principal, headers, snapshot }) =>
-    enrollOperation(actorFromSnapshot(principal, snapshot), headers, snapshot),
-  restart: ({ principal, headers, snapshot, enrollmentId }) =>
-    restartOperation({
-      actor: actorFromSnapshot(principal, snapshot),
-      headers,
-      enrollmentId,
-      snapshot,
-    }),
+  enroll,
+  restart,
   activate: createActivate({
     revokeOtherSessions,
     activateTotp,

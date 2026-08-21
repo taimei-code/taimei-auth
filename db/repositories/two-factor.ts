@@ -10,7 +10,9 @@ import type { DbOrTx } from "../transaction";
 // アプリのメモリへ載せないため。呼び出し側が必要とするのは verified の真偽だけ。
 export type TwoFactorVerificationState = { id: string; verified: boolean };
 
-// 読み出しは「MFA 登録状態」(CONTEXT.md) の解釈経由に限る (単一入口の宣言は解釈側が持つ)。
+// 行の読み出しはこの関数を通し、読んだ行の解釈 (評決の組み立て) は「MFA 登録状態」を所有する
+// src/mfa/registration/state.ts に集約する — 呼び出し側で verified を直接分岐させない。
+// 入口の集合は containment tripwire (QA-I-01 two-factor importers) が機械的に固定する。
 
 export async function findTwoFactorVerificationState(
   userId: string,

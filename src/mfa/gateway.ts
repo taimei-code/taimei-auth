@@ -1,6 +1,5 @@
 import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { auth } from "../auth";
-import type { Actor } from "../membership/guard/core";
 import { Sentry } from "../sentry";
 import {
   ALREADY_ENABLED,
@@ -10,6 +9,7 @@ import {
   mapTwoFactorError,
   type MfaFailure,
 } from "./error-mapping";
+import type { MfaActor } from "./registration/contracts";
 import type { MfaCodeKind } from "./wire-contracts";
 
 // twoFactor プラグイン (auth.api.*) と auth.$context への唯一の正規窓口。
@@ -72,7 +72,7 @@ export async function enrollTotp(headers: Headers): Promise<GatewayResult<TotpEn
 }
 
 export async function readPendingTotpEnrollment(
-  actor: Actor,
+  actor: MfaActor,
   headers: Headers,
 ): Promise<GatewayResult<TotpEnrollment>> {
   // 未 verified 行の存在をここでも検証する (多層防御)。プラグインの getTOTPURI / viewBackupCodes は
@@ -155,13 +155,13 @@ export async function clearTwoFactorEnabled(userId: string): Promise<void> {
   await authContext.internalAdapter.updateUser(userId, { twoFactorEnabled: false });
 }
 
-// 引数を Actor に、戻り値を残数 (number) に絞ることで、任意 userId の平文リカバリーコードを
+// 引数を MfaActor に、戻り値を残数 (number) に絞ることで、任意 userId の平文リカバリーコードを
 // 引ける viewBackupCodes を IDOR にしない。string の userId を渡せない・コード配列を受け取れない
 // という制約を型で表明しているので、この 2 点を緩めないこと。
 //
 // 呼び出しは MFA 有効ユーザーに限る契約 (行が存在する)。したがって失敗は想定外であり、
 // 残数 0 に縮退させたうえで観測する。
-export async function countRemainingRecoveryCodes(actor: Actor): Promise<number> {
+export async function countRemainingRecoveryCodes(actor: MfaActor): Promise<number> {
   return auth.api
     .viewBackupCodes({ body: { userId: actor.id } })
     .then((result) => result.backupCodes.length)

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createRegistrationApplication } from "../registration/application";
-import type { RegistrationPrincipal } from "../registration/contracts";
+import type { MfaActor } from "../registration/contracts";
 import type {
   GuardLease,
   RegistrationOperations,
@@ -9,8 +9,8 @@ import type {
 } from "../registration/ports";
 import type { ReportUnknownTransition } from "../registration/transition";
 
-const principal: RegistrationPrincipal = {
-  userId: "user-1",
+const actor: MfaActor = {
+  id: "user-1",
   email: "user@example.com",
   twoFactorEnabled: false,
 };
@@ -18,7 +18,7 @@ const headers = new Headers();
 const sessionChanges = new Headers([["set-cookie", "session=rotated"]]);
 const pendingSnapshot: RegistrationSnapshot = {
   user: "present",
-  email: principal.email,
+  email: actor.email,
   twoFactorEnabled: false,
   enrollment: { id: "enrollment-1", verified: false },
 };
@@ -34,7 +34,7 @@ type HarnessOverrides = {
 function createHarness(overrides: HarnessOverrides = {}) {
   const events: string[] = [];
   const lease: GuardLease = {
-    userId: principal.userId,
+    userId: actor.id,
     token: "guard-1",
     operation: "activate",
     snapshot: pendingSnapshot,
@@ -52,7 +52,6 @@ function createHarness(overrides: HarnessOverrides = {}) {
       }),
   };
   const operations: RegistrationOperations = {
-    getStatus: async () => ({ enabled: false, inEffect: false, recoveryCodesRemaining: 0 }),
     enroll: async () => ({
       ok: true,
       enrollmentId: "enrollment-1",
@@ -67,11 +66,11 @@ function createHarness(overrides: HarnessOverrides = {}) {
     }),
     activate: async () => {
       events.push("activate");
-      return { ok: true, sessionChanges, notifyEmail: principal.email };
+      return { ok: true, sessionChanges, notifyEmail: actor.email };
     },
     disable: async () => {
       events.push("disable");
-      return { ok: true, sessionChanges, notifyEmail: principal.email };
+      return { ok: true, sessionChanges, notifyEmail: actor.email };
     },
     ...overrides.operations,
   };
@@ -92,7 +91,7 @@ describe("MFA registration application", () => {
     const { app, events } = createHarness();
 
     const result = await app.activate({
-      principal,
+      actor,
       headers,
       enrollmentId: "enrollment-1",
       code: "123456",
@@ -114,7 +113,7 @@ describe("MFA registration application", () => {
 
     await expect(
       app.activate({
-        principal,
+        actor,
         headers,
         enrollmentId: "enrollment-1",
         code: "123456",
@@ -129,13 +128,13 @@ describe("MFA registration application", () => {
       operations: {
         activate: async ({ enrollmentId }) => {
           receivedIds.push(enrollmentId);
-          return { ok: true, sessionChanges, notifyEmail: principal.email };
+          return { ok: true, sessionChanges, notifyEmail: actor.email };
         },
       },
     });
 
-    await app.activateLegacy({ principal, headers, code: "123456" });
-    await app.activate({ principal, headers, enrollmentId: "enrollment-1", code: "123456" });
+    await app.activateLegacy({ actor, headers, code: "123456" });
+    await app.activate({ actor, headers, enrollmentId: "enrollment-1", code: "123456" });
 
     expect(receivedIds).toEqual([undefined, "enrollment-1"]);
   });
@@ -152,7 +151,7 @@ describe("MFA registration application", () => {
     try {
       expect(
         await app.activate({
-          principal,
+          actor,
           headers,
           enrollmentId: "enrollment-1",
           code: "123456",
@@ -182,12 +181,12 @@ describe("MFA registration application", () => {
       const result =
         scenario.operation === "activate"
           ? await app.activate({
-              principal,
+              actor,
               headers,
               enrollmentId: "enrollment-1",
               code: "123456",
             })
-          : await app.disable({ principal, headers, code: "123456", kind: "totp" });
+          : await app.disable({ actor, headers, code: "123456", kind: "totp" });
 
       expect(result).toEqual({ ok: true, sessionChanges });
       expect(events).toEqual([

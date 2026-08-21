@@ -1,8 +1,7 @@
 import type { MfaFailure } from "../error-mapping";
 import type { MfaCodeKind } from "../wire-contracts";
-import type { EnrollResult, RegistrationPrincipal, RestartResult } from "./contracts";
+import type { EnrollResult, MfaActor, RestartResult } from "./contracts";
 import type { RegistrationOperations, TransitionGuard } from "./ports";
-import type { MfaStatus } from "./status";
 import {
   createTransitionRunner,
   type ReportUnknownTransition,
@@ -21,12 +20,12 @@ export function createRegistrationApplication(deps: {
   const runTransition = createTransitionRunner(deps.guard, deps.reportUnknownTransition);
 
   const runActivation = async (input: {
-    principal: RegistrationPrincipal;
+    actor: MfaActor;
     headers: Headers;
     enrollmentId?: string;
     code: string;
   }): Promise<SessionResult | TransitionBusy> => {
-    const transitioned = await runTransition(input.principal.userId, "activate", (snapshot) =>
+    const transitioned = await runTransition(input.actor.id, "activate", (snapshot) =>
       deps.operations.activate({ ...input, snapshot }),
     );
     if (!transitioned.ok) return transitioned;
@@ -35,28 +34,22 @@ export function createRegistrationApplication(deps: {
   };
 
   return {
-    getStatus(principal: RegistrationPrincipal): Promise<MfaStatus> {
-      return deps.operations.getStatus(principal);
-    },
-    enroll(input: {
-      principal: RegistrationPrincipal;
-      headers: Headers;
-    }): Promise<EnrollResult | TransitionBusy> {
-      return runTransition(input.principal.userId, "enroll", (snapshot) =>
+    enroll(input: { actor: MfaActor; headers: Headers }): Promise<EnrollResult | TransitionBusy> {
+      return runTransition(input.actor.id, "enroll", (snapshot) =>
         deps.operations.enroll({ ...input, snapshot }),
       );
     },
     restart(input: {
-      principal: RegistrationPrincipal;
+      actor: MfaActor;
       headers: Headers;
       enrollmentId: string;
     }): Promise<RestartResult | TransitionBusy> {
-      return runTransition(input.principal.userId, "restart", (snapshot) =>
+      return runTransition(input.actor.id, "restart", (snapshot) =>
         deps.operations.restart({ ...input, snapshot }),
       );
     },
     activate(input: {
-      principal: RegistrationPrincipal;
+      actor: MfaActor;
       headers: Headers;
       enrollmentId: string;
       code: string;
@@ -64,19 +57,19 @@ export function createRegistrationApplication(deps: {
       return runActivation(input);
     },
     activateLegacy(input: {
-      principal: RegistrationPrincipal;
+      actor: MfaActor;
       headers: Headers;
       code: string;
     }): Promise<SessionResult | TransitionBusy> {
       return runActivation(input);
     },
     async disable(input: {
-      principal: RegistrationPrincipal;
+      actor: MfaActor;
       headers: Headers;
       code: string;
       kind: MfaCodeKind;
     }): Promise<SessionResult | TransitionBusy> {
-      const transitioned = await runTransition(input.principal.userId, "disable", (snapshot) =>
+      const transitioned = await runTransition(input.actor.id, "disable", (snapshot) =>
         deps.operations.disable({ ...input, snapshot }),
       );
       if (!transitioned.ok) return transitioned;

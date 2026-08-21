@@ -8,6 +8,7 @@ import {
   user,
   type MfaRegistrationOperationKind,
 } from "../schema";
+import type { DbOrTx } from "../transaction";
 import { recordMfaRegistrationGuardReleased } from "./audit-log";
 import type { TwoFactorVerificationState } from "./two-factor";
 
@@ -38,6 +39,41 @@ export type AcquireRegistrationGuardResult =
   | { acquired: true; lease: GuardLease }
   | { acquired: false; cause: "held"; heldSince: Date | undefined }
   | { acquired: false; cause: "timeout" | "lock" | "user_absent" };
+
+// (flag, 行) の組は 1 statement で読む。READ COMMITTED では statement ごとに MVCC snapshot が
+// 変わるため、分割すると guard 外 writer (ログインチャレンジの verifyTOTP / account deletion) と
+// 交差した時に「どの時点にも存在しなかった組」を前提条件判定へ渡しうる。行の一意性は
+// two_factor.user_id の UNIQUE が保証するので ORDER BY は不要 (読み側の決定化規則の正本:
+// db/repositories/two-factor.ts)。テストの snapshot 組み立てもこの関数を共有し、production が
+// 生成しない形の snapshot で前提条件マトリクスが緑になる drift を防ぐ。
+export async function readRegistrationSnapshot(
+  userId: string,
+  txOrDb: DbOrTx = db,
+): Promise<RegistrationSnapshot> {
+  const rows = await txOrDb
+    .select({
+      email: user.email,
+      twoFactorEnabled: user.twoFactorEnabled,
+      enrollmentId: twoFactor.id,
+      verified: twoFactor.verified,
+    })
+    .from(user)
+    .leftJoin(twoFactor, eq(twoFactor.userId, user.id))
+    .where(eq(user.id, userId))
+    .limit(1);
+  const row = rows.at(0);
+  return row
+    ? {
+        user: "present",
+        email: row.email,
+        twoFactorEnabled: row.twoFactorEnabled,
+        enrollment:
+          row.enrollmentId === null
+            ? undefined
+            : { id: row.enrollmentId, verified: row.verified === true },
+      }
+    : { user: "absent" };
+}
 
 const REGISTRATION_GUARD_PROTOCOL_KEY = "mfa_registration_guard";
 
@@ -77,29 +113,7 @@ export async function acquireRegistrationGuard(
           heldSince: holders.at(0)?.acquiredAt,
         };
       }
-      const rows = await tx
-        .select({
-          email: user.email,
-          twoFactorEnabled: user.twoFactorEnabled,
-          enrollmentId: twoFactor.id,
-          verified: twoFactor.verified,
-        })
-        .from(user)
-        .leftJoin(twoFactor, eq(twoFactor.userId, user.id))
-        .where(eq(user.id, userId))
-        .limit(1);
-      const row = rows.at(0);
-      const snapshot: RegistrationSnapshot = row
-        ? {
-            user: "present",
-            email: row.email,
-            twoFactorEnabled: row.twoFactorEnabled,
-            enrollment:
-              row.enrollmentId === null
-                ? undefined
-                : { id: row.enrollmentId, verified: row.verified === true },
-          }
-        : { user: "absent" };
+      const snapshot = await readRegistrationSnapshot(userId, tx);
       return { acquired: true as const, lease: { userId, token, operation, snapshot } };
     });
   } catch (error) {

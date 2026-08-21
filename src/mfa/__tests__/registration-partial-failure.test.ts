@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import type { MfaFailure } from "../error-mapping";
-import type { RegistrationPrincipal } from "../registration/contracts";
+import type { MfaActor } from "../registration/contracts";
 import {
   createRegistrationFaultHarness,
   type RegistrationFault,
 } from "./registration-fault-adapter";
 
-const principal: RegistrationPrincipal = {
-  userId: "user-1",
+const actor: MfaActor = {
+  id: "user-1",
   email: "principal@example.com",
   twoFactorEnabled: false,
 };
@@ -217,13 +217,13 @@ describe("MFA registration partial failures", () => {
         const result =
           scenario.operation === "activate"
             ? await harness.app.activate({
-                principal,
+                actor,
                 headers: new Headers(),
                 enrollmentId: "enrollment-1",
                 code: "123456",
               })
             : await harness.app.disable({
-                principal,
+                actor,
                 headers: new Headers(),
                 code: "123456",
                 kind: "totp",
@@ -277,13 +277,13 @@ describe("MFA registration partial failures", () => {
       const result =
         operation === "activate"
           ? await harness.app.activate({
-              principal,
+              actor,
               headers: new Headers(),
               enrollmentId: "enrollment-1",
               code: "123456",
             })
           : await harness.app.disable({
-              principal,
+              actor,
               headers: new Headers(),
               code: "123456",
               kind: "totp",
@@ -305,7 +305,7 @@ describe("MFA registration partial failures", () => {
       fault: { step: "revoke", mode: "throw" },
     });
     const command = {
-      principal,
+      actor,
       headers: new Headers(),
       enrollmentId: "enrollment-1",
       code: "123456",

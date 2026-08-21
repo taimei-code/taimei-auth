@@ -160,7 +160,6 @@ export function createRegistrationFaultHarness(options: {
     },
   });
   const operations: RegistrationOperations = {
-    getStatus: async () => ({ enabled: false, inEffect: false, recoveryCodesRemaining: 0 }),
     enroll: async () => {
       throw new Error("not used");
     },

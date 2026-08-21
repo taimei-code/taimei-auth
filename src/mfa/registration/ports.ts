@@ -1,7 +1,6 @@
 import type { MfaFailure } from "../error-mapping";
 import type { MfaCodeKind } from "../wire-contracts";
-import type { EnrollResult, RegistrationPrincipal, RestartResult } from "./contracts";
-import type { MfaStatus } from "./status";
+import type { EnrollResult, MfaActor, RestartResult } from "./contracts";
 import type {
   AcquireRegistrationGuardResult,
   GuardLease,
@@ -56,27 +55,26 @@ export type DisableDependencies = {
 };
 
 export type RegistrationOperations = {
-  getStatus(principal: RegistrationPrincipal): Promise<MfaStatus>;
   enroll(input: {
-    principal: RegistrationPrincipal;
+    actor: MfaActor;
     headers: Headers;
     snapshot: RegistrationSnapshot;
   }): Promise<EnrollResult>;
   restart(input: {
-    principal: RegistrationPrincipal;
+    actor: MfaActor;
     headers: Headers;
     snapshot: RegistrationSnapshot;
     enrollmentId: string;
   }): Promise<RestartResult>;
   activate(input: {
-    principal: RegistrationPrincipal;
+    actor: MfaActor;
     headers: Headers;
     snapshot: RegistrationSnapshot;
     enrollmentId?: string;
     code: string;
   }): Promise<{ ok: true; sessionChanges: Headers; notifyEmail: string } | MfaFailure>;
   disable(input: {
-    principal: RegistrationPrincipal;
+    actor: MfaActor;
     headers: Headers;
     snapshot: RegistrationSnapshot;
     code: string;

@@ -21,8 +21,8 @@ import { actorFromSnapshot, enrollmentRecordIn, ensureCanActivate } from "./stat
 // (フラグと verified の更新は better-auth 側で完結し、同じ tx には入れられない)。
 // 既存の at-least-once 近似に倣う。
 export function createActivate(deps: ActivateDependencies): RegistrationOperations["activate"] {
-  return async ({ principal, headers, code, enrollmentId, snapshot }) => {
-    const actor = actorFromSnapshot(principal, snapshot);
+  return async ({ actor: requestActor, headers, code, enrollmentId, snapshot }) => {
+    const actor = actorFromSnapshot(requestActor, snapshot);
 
     // 前提条件は revoke より前に置く。後ろに回すと、未登録のまま呼ばれた no-op が
     // 「何も有効化しないまま全デバイスをログアウトさせる」副作用だけを残す。

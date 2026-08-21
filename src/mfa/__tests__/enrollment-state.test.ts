@@ -1,12 +1,18 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { db } from "@/db/client";
+import { readRegistrationSnapshot } from "@/db/repositories/mfa-registration";
 import { findUserById } from "@/db/repositories/user";
 import { twoFactor } from "@/db/schema";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import type { Actor } from "../../membership/guard/core";
-import { ensureCanActivate, ensureCanEnroll, ensureDisableCanProceed } from "../registration/state";
+import {
+  enrollmentFactsFor,
+  enrollmentRecordIn,
+  ensureCanActivate,
+  ensureCanEnroll,
+  ensureDisableCanProceed,
+} from "../registration/state";
 import type { MfaFailure } from "../error-mapping";
-import { readEnrollmentFacts } from "../registration/state-reader";
 import {
   ATTEMPT_BUDGET_ABSENT,
   attemptBudgetTtlSeconds,
@@ -14,7 +20,6 @@ import {
   findTwoFactorRow,
   MFA_ENROLLMENT_STATE_NAMES,
   seedMfaEnrollmentState,
-  snapshotFor,
   totpCode,
   wrongTotpCode,
   type MfaEnrollmentStateName,
@@ -97,12 +102,13 @@ const MATRIX: {
 ];
 
 const evaluateEntries = async (actor: Actor) => {
-  const snapshot = await snapshotFor(actor);
+  const snapshot = await readRegistrationSnapshot(actor.id);
   return {
     enroll: verdictOf(ensureCanEnroll(snapshot)),
     activate: verdictOf(ensureCanActivate(snapshot)),
     disable: verdictOf(ensureDisableCanProceed(snapshot)),
-    interrupted: (await readEnrollmentFacts(actor)).interrupted,
+    // flag は actor・行は snapshot 由来だが、fixture の actor は DB の user 行を写すため同源 (混合ではない)
+    interrupted: enrollmentFactsFor(actor, enrollmentRecordIn(snapshot)).interrupted,
   };
 };
 
@@ -238,7 +244,7 @@ describe("MFA 登録状態の操作単位 entry", () => {
     const user = await seedUser("d02");
     const fx = await seedMfaEnrollmentState(user, "interruptedDisable");
 
-    const snapshot = await snapshotFor(fx.actor);
+    const snapshot = await readRegistrationSnapshot(fx.actor.id);
     expect(verdictOf(ensureCanEnroll(snapshot))).toEqual(ALREADY);
     expect(ensureDisableCanProceed(snapshot)).toBeUndefined();
     // enabled=false (無効バッジ) だが inEffect=true — SPA はこれで disable を出し袋小路を防ぐ

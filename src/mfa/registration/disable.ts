@@ -16,8 +16,8 @@ import { actorFromSnapshot, ensureDisableCanProceed } from "./state";
 // verifyMfaCode、判断の詳細: ADR-0013)。誤コード連投の抑止はこの use-case が自前で持つ
 // (disable-attempt-budget.ts)。
 export function createDisable(deps: DisableDependencies): RegistrationOperations["disable"] {
-  return async ({ principal, headers, code, kind, snapshot }) => {
-    const actor = actorFromSnapshot(principal, snapshot);
+  return async ({ actor: requestActor, headers, code, kind, snapshot }) => {
+    const actor = actorFromSnapshot(requestActor, snapshot);
 
     // 前提条件をコード検証・試行枠消費より前に置く。verifyTOTP は未有効化状態を有効化の合図として
     // 扱う (gateway.ts の activateTotp) ため未有効化のまま呼ぶと要求と正反対の有効化が成立し、
