@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { MfaApiError, resolveMfaErrorCode, type MfaCodeKind, type MfaErrorCode } from "../mfa-api";
-import { describeMfaChallengeError, normalizeMfaCode } from "../use-mfa-code-entry";
+import {
+  describeMfaChallengeError,
+  normalizeMfaCode,
+  useMfaCodeInput,
+  type MfaCodeInput,
+} from "../use-mfa-code-entry";
 
 type NormalizeCase = { name: string; raw: string; kind: MfaCodeKind; normalized: string };
 
@@ -209,5 +216,29 @@ describe("resolveMfaErrorCode", () => {
     expect(error.status).toBe(429);
     expect(error.message).not.toContain("locked");
     expect(error.message).not.toContain("_");
+  });
+});
+
+describe("useMfaCodeInput", () => {
+  test("AC-024 controlled submitting と error を入力属性へ反映する", () => {
+    let observed: MfaCodeInput | undefined;
+    const Probe = () => {
+      observed = useMfaCodeInput({
+        inputId: "mfa-probe",
+        submitting: true,
+        errorCode: "invalid_code",
+        submit: () => undefined,
+      });
+      return null;
+    };
+
+    renderToStaticMarkup(createElement(Probe));
+
+    expect(observed?.submitting).toBe(true);
+    expect(observed?.canSubmit).toBe(false);
+    expect(observed?.errorMessage).toBe("入力されたコードが正しくありません。");
+    expect(observed?.inputProps.disabled).toBe(true);
+    expect(observed?.inputProps["aria-invalid"]).toBe(true);
+    expect(observed?.inputProps["aria-describedby"]).toBe("mfa-probe-hint mfa-probe-error");
   });
 });

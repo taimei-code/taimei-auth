@@ -115,6 +115,32 @@ test("QA-H-10 セキュリティページの MFA 行は有効化の前後で Bad
   await expect(row.getByRole("button", { name: "無効にする" })).toBeVisible();
 });
 
+test("AC-016 無効化ダイアログは error を表示し、閉じると入力状態を reset する", async ({
+  page,
+}) => {
+  await signInWithMagicLink(page, MFA_EMAIL);
+  const { secret } = await enableMfaViaApi(page);
+  await page.goto("/account/security");
+
+  const row = mfaRow(page);
+  await row.getByRole("button", { name: "無効にする" }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.locator("#mfa-disable-code").fill(await wrongTotpCode(secret));
+  await dialog.getByRole("button", { name: "無効にする" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText("入力されたコードが正しくありません。");
+
+  await dialog.getByRole("button", { name: "キャンセル" }).click();
+  await row.getByRole("button", { name: "無効にする" }).click();
+  dialog = page.getByRole("dialog");
+  await expect(dialog.locator("#mfa-disable-code")).toHaveValue("");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+
+  await dialog.locator("#mfa-disable-code").fill(await totpCode(secret));
+  await dialog.getByRole("button", { name: "無効にする" }).click();
+  await expect(page.getByText("多要素認証 (MFA) を無効にしました。")).toBeVisible();
+  await expect(row.getByText("無効", { exact: true })).toBeVisible();
+});
+
 test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリーコードの 3 ステップを順に見せる", async ({
   page,
 }) => {
