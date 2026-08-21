@@ -294,7 +294,9 @@ transaction 境界を再設計する必要があるため、別計画とする�
 `forceReleaseRegistrationGuard` は management port へ
 分ける。単一の `transition(command)` に異なる入力・結果を詰め込まず、handler と management CLI は
 それぞれの bound façade だけを使う。`getStatus` は同じ module が状態解釈を所有するため self-service
-façade に含めるが、guard は取得しない。
+façade に含めるが、guard は取得しない。(2026-08-21 追記) guard 非参加を構造でも表明するため、
+`getStatus` は operations port (`RegistrationOperations`) から外し、façade が状態所有側
+(`registration/status.ts` の `readStatus`) へ直接 bind する形にした — façade の操作名 5 つ (restart は第 2 段階まで非公開) は変わらない。
 
 **MFA 登録やり直し**は通常の登録の再実行と分けた明示的な遷移とする。現在の **MFA 登録識別子**を必須にし、
 guard 取得時の最新登録と一致する場合だけ secret、リカバリーコード、識別子を回転する。有効化または

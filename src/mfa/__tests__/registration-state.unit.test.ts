@@ -17,21 +17,21 @@ const actor: Actor = {
 
 describe("MFA registration snapshot policy", () => {
   test("uses snapshot identity and disables MFA when the snapshot has no user", () => {
-    const principal = {
-      userId: actor.id,
+    const requestActor = {
+      id: actor.id,
       email: "principal@example.com",
       twoFactorEnabled: true,
     };
 
     expect(
-      actorFromSnapshot(principal, {
+      actorFromSnapshot(requestActor, {
         user: "present",
         email: "snapshot@example.com",
         twoFactorEnabled: false,
         enrollment: undefined,
       }),
     ).toMatchObject({ email: "snapshot@example.com", twoFactorEnabled: false });
-    expect(actorFromSnapshot(principal, { user: "absent" })).toMatchObject({
+    expect(actorFromSnapshot(requestActor, { user: "absent" })).toMatchObject({
       email: "principal@example.com",
       twoFactorEnabled: false,
     });

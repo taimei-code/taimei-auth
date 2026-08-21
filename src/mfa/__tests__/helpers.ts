@@ -10,8 +10,6 @@ import { withWaitUntil } from "../../background";
 import type { Actor } from "../../membership/guard/core";
 import { getRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
-import type { RegistrationSnapshot } from "../registration/ports";
-import { readCurrentEnrollment } from "../registration/state-reader";
 import { issueChallenge, type ChallengeMethod } from "../challenge-store";
 import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
 import { clearTwoFactorEnabled } from "../gateway";
@@ -113,15 +111,6 @@ export function actorOf(
     email: user.email,
     lastUsedCompanyId: overrides.lastUsedCompanyId ?? null,
     twoFactorEnabled: overrides.twoFactorEnabled ?? false,
-  };
-}
-
-export async function snapshotFor(actor: Actor): Promise<RegistrationSnapshot> {
-  return {
-    user: "present",
-    email: actor.email,
-    twoFactorEnabled: actor.twoFactorEnabled,
-    enrollment: await readCurrentEnrollment(actor),
   };
 }
 

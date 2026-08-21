@@ -1,9 +1,10 @@
-import type { Actor } from "../../membership/guard/core";
+import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { incrementRateWindow } from "../../redis";
 import { Sentry } from "../../sentry";
 import { countRemainingRecoveryCodes } from "../gateway";
 import { requiresMfaChallenge } from "../policy";
-import { readEnrollmentFacts } from "./state-reader";
+import type { MfaActor } from "./contracts";
+import { enrollmentFactsFor } from "./state";
 
 // ADR-0012 (Use-case 層): セキュリティページ向けの MFA 状態取得。
 
@@ -37,7 +38,7 @@ async function claimInterruptedReport(userId: string): Promise<boolean> {
 }
 
 async function reportInterruptedActivation(
-  actor: Actor,
+  actor: MfaActor,
   interrupted: { enrollmentRecord: "absent" | "unverified" },
 ): Promise<void> {
   const fresh = await claimInterruptedReport(actor.id).catch(() => true);
@@ -56,9 +57,9 @@ async function reportInterruptedActivation(
 // 残数取得は enabled かつ「中断した有効化」でないときだけ行う。中断状態 (特に行なし) で呼ぶと
 // gateway の「有効ユーザーに限る (行が存在する)」契約を破って captureException を汚し、
 // 本当に viewBackupCodes が壊れた時の信号が埋もれる。
-export async function readStatus(actor: Actor): Promise<MfaStatus> {
+export async function readStatus(actor: MfaActor): Promise<MfaStatus> {
   const enabled = requiresMfaChallenge(actor);
-  const facts = await readEnrollmentFacts(actor);
+  const facts = enrollmentFactsFor(actor, await findTwoFactorVerificationState(actor.id));
 
   if (facts.interrupted) await reportInterruptedActivation(actor, facts.interrupted);
 

@@ -1,28 +1,14 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
+import { readRegistrationSnapshot } from "@/db/repositories/mfa-registration";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { forceDisableMfa } from "../registration/force-disable";
-import type { RegistrationSnapshot } from "../registration/ports";
 import {
   countTwoFactorRows,
   enableMfaFor,
   installSentryRecorder,
   withFailingAuditWrite,
 } from "./helpers";
-
-// guard 取得 transaction が作る snapshot と同じ形を DB から組む (production では
-// db/repositories/mfa-registration.ts の acquireRegistrationGuard が供給する)。
-async function snapshotFor(userId: string): Promise<RegistrationSnapshot> {
-  const user = await findUserById(userId);
-  if (!user) return { user: "absent" };
-  return {
-    user: "present",
-    email: user.email,
-    twoFactorEnabled: user.twoFactorEnabled,
-    enrollment: await findTwoFactorVerificationState(userId),
-  };
-}
 
 // force-disable use-case (src/mfa/registration/force-disable.ts) の DB 統合テスト。
 // 認証アプリとリカバリーコードを両方失ったユーザーの唯一の出口なので、「解除された」だけでなく
@@ -47,7 +33,7 @@ describe("forceDisableMfa", () => {
     const user = await seedUser("m04");
     await enableMfaFor(user);
 
-    const result = await forceDisableMfa(user.id, await snapshotFor(user.id));
+    const result = await forceDisableMfa(user.id, await readRegistrationSnapshot(user.id));
 
     expect(result).toEqual({ ok: true, changed: true, notifyEmail: user.email });
     expect(await countTwoFactorRows(user.id)).toBe(0);
@@ -70,8 +56,8 @@ describe("forceDisableMfa", () => {
   test("QA-M-04 MFA 未設定ユーザー → 冪等 (changed:false / audit なし)", async () => {
     const user = await seedUser("idempotent");
 
-    const first = await forceDisableMfa(user.id, await snapshotFor(user.id));
-    const second = await forceDisableMfa(user.id, await snapshotFor(user.id));
+    const first = await forceDisableMfa(user.id, await readRegistrationSnapshot(user.id));
+    const second = await forceDisableMfa(user.id, await readRegistrationSnapshot(user.id));
 
     expect(first).toEqual({ ok: true, changed: false });
     expect(second).toEqual({ ok: true, changed: false });
@@ -84,7 +70,7 @@ describe("forceDisableMfa", () => {
     await enableMfaFor(user);
 
     const result = await withFailingAuditWrite(async () =>
-      forceDisableMfa(user.id, await snapshotFor(user.id)),
+      forceDisableMfa(user.id, await readRegistrationSnapshot(user.id)),
     );
 
     // 記帳失敗で CLI が止まると、解除済みなので再実行は changed:false に落ち、

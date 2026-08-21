@@ -1,7 +1,6 @@
 // MFA 登録状態の解釈と操作前提条件の正本実装。評決を変える変更は docs/adr/0013-mfa-totp-challenge.md
 // §7 の 5 状態マトリクスの更新とセットで行う。kill-switch (MFA_CHALLENGE_ENABLED) はここに
 // 混ぜない — ログイン境界のみに効かせる (混ぜた場合の帰結も同 §7 に記録済み)。
-import type { Actor } from "../../membership/guard/core";
 import {
   ALREADY_ENABLED,
   CHALLENGE_EXPIRED,
@@ -11,7 +10,7 @@ import {
   USER_NOT_FOUND,
 } from "../error-mapping";
 import { requiresMfaChallenge } from "../policy";
-import type { RegistrationPrincipal } from "./contracts";
+import type { MfaActor } from "./contracts";
 import type { RegistrationSnapshot } from "./ports";
 
 type EnrollmentRecord = "absent" | "unverified";
@@ -39,14 +38,12 @@ export function enrollmentRecordIn(snapshot: RegistrationSnapshot) {
   return snapshot.user === "present" ? snapshot.enrollment : undefined;
 }
 
-export function actorFromSnapshot(
-  principal: RegistrationPrincipal,
-  snapshot: RegistrationSnapshot,
-): Actor {
+// snapshot を属性 (email / twoFactorEnabled) の正とする — request が運んだ値は guard 取得までに
+// 古びうる。id は snapshot に無く、session から解決した actor が正 (guard も actor.id で取得済み)。
+export function actorFromSnapshot(actor: MfaActor, snapshot: RegistrationSnapshot): MfaActor {
   return {
-    id: principal.userId,
-    email: snapshot.user === "present" ? snapshot.email : principal.email,
-    lastUsedCompanyId: null,
+    id: actor.id,
+    email: snapshot.user === "present" ? snapshot.email : actor.email,
     twoFactorEnabled: snapshot.user === "present" ? snapshot.twoFactorEnabled : false,
   };
 }
@@ -90,8 +87,10 @@ export function ensureDisableCanProceed(snapshot: RegistrationSnapshot): MfaFail
   return undefined;
 }
 
+// チャレンジ要否の評価はこの関数内に閉じる (stateIn と同型) — 呼び出し側に boolean を組ませず、
+// 述語 requiresMfaChallenge を必ず通す。型は構造的で捏造は防げないため、規律の実体は内部評価にある。
 export function enrollmentFactsFor(
-  actor: Actor,
+  actor: MfaActor,
   enrollment: { verified: boolean } | undefined,
 ): {
   inEffect: boolean;

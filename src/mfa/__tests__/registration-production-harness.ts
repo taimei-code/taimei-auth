@@ -20,21 +20,13 @@ export function resetProductionRegistrationNotifications(): void {
   productionRegistrationNotifications.length = 0;
 }
 
-const registrationPrincipalFor = (actor: Actor) => ({
-  userId: actor.id,
-  email: actor.email,
-  twoFactorEnabled: actor.twoFactorEnabled,
-});
-
-export function readStatus(actor: Actor) {
-  return productionBackedRegistrationFacade.getStatus(registrationPrincipalFor(actor));
-}
+// status だけは公開 façade (index.ts) の bind ごと観測する。enroll / activate / disable は通知を
+// 捕捉するため harness 専用 application を通す (reportUnknownTransition は未結線 — 観測系の検証は
+// production wiring 側のテストが担う)。この非対称は意図的で、対称化すると実通知アダプタが結線される。
+export { getStatus as readStatus } from "../registration";
 
 export function enroll(actor: Actor, headers: Headers) {
-  return productionBackedRegistrationFacade.enroll({
-    principal: registrationPrincipalFor(actor),
-    headers,
-  });
+  return productionBackedRegistrationFacade.enroll({ actor, headers });
 }
 
 export function activate(input: {
@@ -43,17 +35,10 @@ export function activate(input: {
   enrollmentId?: string;
   code: string;
 }) {
-  const command = {
-    principal: registrationPrincipalFor(input.actor),
-    headers: input.headers,
-    code: input.code,
-  };
-  return input.enrollmentId === undefined
+  const { enrollmentId, ...command } = input;
+  return enrollmentId === undefined
     ? productionBackedRegistrationFacade.activateLegacy(command)
-    : productionBackedRegistrationFacade.activate({
-        ...command,
-        enrollmentId: input.enrollmentId,
-      });
+    : productionBackedRegistrationFacade.activate({ ...command, enrollmentId });
 }
 
 export function disable(input: {
@@ -63,7 +48,7 @@ export function disable(input: {
   kind: MfaCodeKind;
 }) {
   return productionBackedRegistrationFacade.disable({
-    principal: registrationPrincipalFor(input.actor),
+    actor: input.actor,
     headers: input.headers,
     code: input.code,
     kind: input.kind,

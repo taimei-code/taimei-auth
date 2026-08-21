@@ -22,7 +22,7 @@ accountMfa.get("/api/account/mfa", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
   if (!actorResult.ok) return guardErrorResponse(actorResult);
 
-  const status = await getStatus(principalOf(actorResult.actor));
+  const status = await getStatus(actorResult.actor);
   return c.json({
     enabled: status.enabled,
     in_effect: status.inEffect,
@@ -36,7 +36,7 @@ accountMfa.post("/api/account/mfa/enroll", async (c) => {
   if (!actorResult.ok) return guardErrorResponse(actorResult);
 
   const result = await enroll({
-    principal: principalOf(actorResult.actor),
+    actor: actorResult.actor,
     headers: c.req.raw.headers,
   });
   if (!result.ok) return mfaErrorResponse(c, result);
@@ -56,7 +56,7 @@ accountMfa.post("/api/account/mfa/activate", async (c) => {
   if (!parsed.ok) return guardErrorResponse(parsed);
 
   const activation = {
-    principal: principalOf(actorResult.actor),
+    actor: actorResult.actor,
     headers: c.req.raw.headers,
     code: parsed.data.code,
   };
@@ -80,7 +80,7 @@ accountMfa.post("/api/account/mfa/disable", async (c) => {
   if (!parsed.ok) return guardErrorResponse(parsed);
 
   const result = await disable({
-    principal: principalOf(actorResult.actor),
+    actor: actorResult.actor,
     headers: c.req.raw.headers,
     code: parsed.data.code,
     kind: parsed.data.kind,
@@ -89,10 +89,6 @@ accountMfa.post("/api/account/mfa/disable", async (c) => {
 
   return forwardSetCookie(c.json({ ok: true }), result.sessionChanges);
 });
-
-function principalOf(actor: { id: string; email: string; twoFactorEnabled: boolean }) {
-  return { userId: actor.id, email: actor.email, twoFactorEnabled: actor.twoFactorEnabled };
-}
 
 function mfaErrorResponse(c: Context, failure: MfaFailure & { retryAfterSeconds?: number }) {
   if (failure.retryAfterSeconds !== undefined) {
