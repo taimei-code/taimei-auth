@@ -401,6 +401,9 @@ test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷�
     history.pushState({}, "", "/auth/error");
     dispatchEvent(new PopStateEvent("popstate"));
   });
+  // POST を解放する前に画面離脱が完了したことを固定し、未 mount 中の応答だけを検証する。
+  await expect(page).toHaveURL(/\/auth\/error$/);
+  await expect(challengeCodeInput(page)).toHaveCount(0);
 
   releaseVerify?.();
   await expect.poll(() => postCompleted).toBe(true);
