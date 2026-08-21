@@ -316,7 +316,7 @@ secret 暗号化、リカバリーコードの単回消費、session cache 更�
 本 ADR が選んだハイブリッド構成の利点を失う。採用するのは永続 guard による正規経路の排他と、
 結果不明時の guard 残置である。
 
-### 9. 共通画面 SPA は MFA チャレンジの継続可否を server 結果から決める (2026-08-21 追記)
+### 9. 共通画面 SPA は MFA チャレンジの継続可否を auth ホストの結果から決める (2026-08-21 追記)
 
 共通画面 SPA の MFA チャレンジフローは、初期観測、コード検証、必要な再照会、表示 error の決定を
 共通画面 SPA 内の一つの module に集約する。画面は HTTP status や wire response を直接判別せず、
@@ -329,10 +329,10 @@ MFA チャレンジを混同せず、wire contract を変更しても共通画�
 再照会し、プラグインが試行上限到達時に MFA チャレンジを破棄した場合を `expired` 表示へ反映する。
 再照会が失敗した場合は `invalid_code` を表示し、自動 retry と polling は行わない。
 
-状態取得の GET は画面離脱時に中断できるが、送信済みの POST 検証は中断しない。POST 検証は server 側で
-MFA チャレンジを消費し、新 session を発行して response の `Set-Cookie` で browser へ渡す。client が
-途中で中断すると、server では成功したのに session cookie を受け取れない結果不明を作り得るためである。
-画面離脱後は POST を完了させたまま client state への反映だけを破棄する。
+状態取得の GET は画面離脱時に中断できるが、送信済みの POST 検証は中断しない。POST 検証は auth ホスト側で
+MFA チャレンジを消費し、新 session を発行して response の `Set-Cookie` で browser へ渡す。共通画面 SPA が
+途中で中断すると、auth ホストでは成功したのに session cookie を受け取れない結果不明を作り得るためである。
+画面離脱後は POST を完了させたまま共通画面 SPA の state への反映だけを破棄する。
 
 検証成功時の redirect 先は、auth ホストが response を返す直前に行う出口検証を正本とする。
 共通画面 SPA は allowlist を複製せず、検証済みの redirect 先へ browser 遷移を実行するだけに留める。
