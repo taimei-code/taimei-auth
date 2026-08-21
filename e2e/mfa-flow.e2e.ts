@@ -239,6 +239,194 @@ test("QA-E-10 cookie 無しで /auth/mfa を直接開くと期限切れ案内だ
   await expect(page.getByRole("button", { name: "ログインを続ける" })).toHaveCount(0);
 });
 
+test("AC-006 verify が直接 challenge_expired を返したら入力を閉じる", async ({ page }) => {
+  await page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pending: true } });
+      return;
+    }
+    await route.fulfill({ status: 401, json: { error: "challenge_expired" } });
+  });
+
+  await page.goto("/auth/mfa");
+  await challengeCodeInput(page).fill("123456");
+  await page.getByRole("button", { name: "ログインを続ける" }).click();
+
+  await expect(page.getByText("セッションの有効期限が切れました")).toBeVisible();
+  await expect(page.getByRole("link", { name: "ログイン画面へ" })).toBeVisible();
+  await expect(challengeCodeInput(page)).toHaveCount(0);
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveCount(0);
+});
+
+test("AC-003/025 初期 GET が失敗しても一度の観測で入力を許す", async ({ page }) => {
+  let getCalls = 0;
+  await page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() !== "GET") {
+      await route.abort();
+      return;
+    }
+    getCalls++;
+    await route.fulfill({ status: 503, json: {} });
+  });
+
+  await page.goto("/auth/mfa");
+  await expect(challengeCodeInput(page)).toBeVisible();
+  await page.waitForTimeout(200);
+
+  expect(getCalls).toBe(1);
+  await expect(page.getByText("セッションの有効期限が切れました")).toHaveCount(0);
+});
+
+test("AC-023 初期観測中は status だけを表示して入力を隠す", async ({ page }) => {
+  let releaseObservation: (() => void) | undefined;
+  const observationPending = new Promise<void>((resolve) => {
+    releaseObservation = resolve;
+  });
+  await page.route("**/api/mfa/challenge", async (route) => {
+    await observationPending;
+    await route.fulfill({ json: { pending: true } });
+  });
+
+  await page.goto("/auth/mfa");
+  await expect(page.getByRole("status")).toBeVisible();
+  await expect(challengeCodeInput(page)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "ログインを続ける" })).toHaveCount(0);
+
+  releaseObservation?.();
+  await expect(challengeCodeInput(page)).toBeVisible();
+});
+
+test("AC-004 Abort 済みの古い GET は新しい画面状態を上書きしない", async ({ page }) => {
+  let getCalls = 0;
+  let releaseFirst: (() => void) | undefined;
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  await page.route("**/api/mfa/challenge", async (route) => {
+    getCalls++;
+    if (getCalls === 1) {
+      await firstPending;
+      await route.fulfill({ json: { pending: false } }).catch(() => undefined);
+      return;
+    }
+    await route.fulfill({ json: { pending: true } });
+  });
+
+  await page.goto("/auth/mfa");
+  await expect(page.getByRole("status")).toBeVisible();
+  await page.evaluate(() => {
+    history.pushState({}, "", "/auth/error");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await page.evaluate(() => {
+    history.pushState({}, "", "/auth/mfa");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(challengeCodeInput(page)).toBeVisible();
+
+  releaseFirst?.();
+  await page.waitForTimeout(200);
+  expect(getCalls).toBe(2);
+  await expect(challengeCodeInput(page)).toBeVisible();
+  await expect(page.getByText("セッションの有効期限が切れました")).toHaveCount(0);
+});
+
+test("AC-013/024 verify 中は操作を止め、同期二重 submit でも POST は一回", async ({ page }) => {
+  let postCalls = 0;
+  let releaseVerify: (() => void) | undefined;
+  const verifyPending = new Promise<void>((resolve) => {
+    releaseVerify = resolve;
+  });
+  await page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pending: true } });
+      return;
+    }
+    postCalls++;
+    await verifyPending;
+    await route.fulfill({ status: 400, json: { error: "invalid_code" } });
+  });
+
+  await page.goto("/auth/mfa");
+  await challengeCodeInput(page).fill("123456");
+  await page.locator("form").evaluate((form) => {
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+
+  await expect.poll(() => postCalls).toBe(1);
+  await expect(challengeCodeInput(page)).toBeDisabled();
+  await expect(page.getByRole("button", { name: "ログインを続ける" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "リカバリーコードを使う" })).toBeDisabled();
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveCount(0);
+
+  releaseVerify?.();
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
+    "入力されたコードが正しくありません。",
+  );
+  expect(postCalls).toBe(1);
+
+  await page.getByRole("button", { name: "リカバリーコードを使う" }).click();
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveCount(0);
+  await expect(challengeCodeInput(page)).toHaveValue("");
+  await expect(challengeCodeInput(page)).toHaveAttribute("inputmode", "text");
+});
+
+test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷移しない", async ({ page }) => {
+  let postStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    postStarted = resolve;
+  });
+  let releaseVerify: (() => void) | undefined;
+  const verifyPending = new Promise<void>((resolve) => {
+    releaseVerify = resolve;
+  });
+  let postCompleted = false;
+  await page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pending: true } });
+      return;
+    }
+    postStarted?.();
+    await verifyPending;
+    await route.fulfill({ json: { redirect_url: "/account" } });
+    postCompleted = true;
+  });
+
+  await page.goto("/auth/mfa");
+  await challengeCodeInput(page).fill("123456");
+  await page.getByRole("button", { name: "ログインを続ける" }).click();
+  await started;
+  await page.evaluate(() => {
+    history.pushState({}, "", "/auth/error");
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
+
+  releaseVerify?.();
+  await expect.poll(() => postCompleted).toBe(true);
+  await expect(page).toHaveURL(/\/auth\/error$/);
+  await expect(challengeCodeInput(page)).toHaveCount(0);
+});
+
+test("AC-033 空の code は verify を呼ばない", async ({ page }) => {
+  let postCalls = 0;
+  await page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pending: true } });
+      return;
+    }
+    postCalls++;
+    await route.abort();
+  });
+
+  await page.goto("/auth/mfa");
+  await expect(page.getByRole("button", { name: "ログインを続ける" })).toBeDisabled();
+  await page.locator("form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
+  await page.waitForTimeout(100);
+
+  expect(postCalls).toBe(0);
+});
+
 test("MFA 有効化後のログインはチャレンジ画面を挟み、通過すると元の遷移先に着地する", async ({
   page,
 }) => {
