@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Copy, Loader2, ShieldCheck } from "lucide-react";
 
-import { activateMfa, enrollMfa, MfaApiError, type MfaEnrollment } from "@/lib/mfa-api";
+import { activateMfa, enrollMfa, mfaErrorCodeOf, type MfaEnrollment } from "@/lib/mfa-api";
 import { describeMfaChallengeError, useMfaCodeEntry } from "@/lib/use-mfa-code-entry";
 import { notifyAfterRefresh } from "@/components/notify";
 import { Button } from "@/components/ui/button";
@@ -149,7 +149,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
           // server 側で登録が置き換わっていた場合、cache を保持したままだと開き直しても同じ
           // 古い登録を再表示して 409 を繰り返す。破棄すれば次の開き直しが enroll し直し、
           // エラー文言「もう一度登録を開始してください」の操作が UI 上で成立する。
-          if (error instanceof MfaApiError && error.code === "enrollment_changed") {
+          if (mfaErrorCodeOf(error) === "enrollment_changed") {
             setResumableEnrollment(null);
           }
           throw error;
@@ -179,9 +179,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
         .catch((error: unknown) =>
           setState({
             step: "failed",
-            message: describeMfaChallengeError(
-              error instanceof MfaApiError ? error.code : "unknown",
-            ),
+            message: describeMfaChallengeError(mfaErrorCodeOf(error)),
           }),
         );
       return;

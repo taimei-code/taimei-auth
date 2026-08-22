@@ -48,7 +48,7 @@ describe("reduceMfaChallengeFlow", () => {
       { phase: "verifying" },
       {
         type: "verification_resolved",
-        outcome: { kind: "redirect", redirectUrl: "/account" },
+        verification: { kind: "passed", redirectUrl: "/account" },
       },
     );
 
@@ -58,7 +58,7 @@ describe("reduceMfaChallengeFlow", () => {
   test("AC-006 terminal の検証結果は expired へ進む", () => {
     const state = reduceMfaChallengeFlow(
       { phase: "verifying" },
-      { type: "verification_resolved", outcome: { kind: "expired" } },
+      { type: "verification_resolved", verification: { kind: "expired" } },
     );
 
     expect(state).toEqual({ phase: "expired" });
@@ -69,7 +69,7 @@ describe("reduceMfaChallengeFlow", () => {
       { phase: "verifying" },
       {
         type: "verification_resolved",
-        outcome: { kind: "rejected", errorCode: "invalid_code" },
+        verification: { kind: "rejected", errorCode: "invalid_code" },
       },
     );
 
@@ -106,7 +106,7 @@ describe("resolveMfaChallengeVerification", () => {
       new AbortController().signal,
     );
 
-    expect(outcome).toEqual({ kind: "redirect", redirectUrl: "/account" });
+    expect(outcome).toEqual({ kind: "passed", redirectUrl: "/account" });
     expect(calls).toEqual({ observe: 0, verify: 1 });
   });
 

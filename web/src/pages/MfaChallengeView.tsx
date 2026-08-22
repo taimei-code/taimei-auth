@@ -15,43 +15,32 @@ import {
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { signInLandingUrl } from "../lib/auth-redirect";
-import type { MfaChallengeFlowState } from "../lib/mfa-challenge-flow";
-import type { MfaErrorCode } from "../lib/mfa-api";
-import type { MfaCodeInput } from "../lib/use-mfa-code-entry";
+import type { MfaChallengeFlow } from "../lib/use-mfa-challenge-flow";
 
-export function MfaChallengeView({
-  state,
-  entry,
-}: {
-  state: MfaChallengeFlowState<MfaErrorCode>;
-  entry: MfaCodeInput;
-}) {
-  const showsEntry = state.phase === "ready" || state.phase === "verifying";
-  const showsProgress = state.phase === "observing" || state.phase === "redirecting";
-
+export function MfaChallengeView({ view, entry }: MfaChallengeFlow) {
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle>多要素認証 (MFA)</CardTitle>
           <CardDescription>
-            {state.phase === "expired"
+            {view === "expired"
               ? "ログインをやり直してください"
               : "ログインを完了するには、追加の確認が必要です"}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {showsProgress && (
+          {(view === "observing" || view === "redirecting") && (
             <div className="flex justify-center py-6" role="status" aria-live="polite">
               <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden="true" />
               <span className="sr-only">
-                {state.phase === "redirecting" ? "ログインを完了しています…" : "読み込み中…"}
+                {view === "redirecting" ? "ログインを完了しています…" : "読み込み中…"}
               </span>
             </div>
           )}
 
-          {state.phase === "expired" && (
+          {view === "expired" && (
             <>
               <p className="text-sm text-muted-foreground">
                 セッションの有効期限が切れました。お手数ですが、もう一度ログインしてください。
@@ -62,7 +51,7 @@ export function MfaChallengeView({
             </>
           )}
 
-          {showsEntry && (
+          {view === "entry" && (
             <>
               <form onSubmit={entry.handleSubmit} className="space-y-3">
                 <div className="space-y-2">
@@ -102,14 +91,15 @@ export function MfaChallengeView({
                   ログインをやり直す
                 </Link>
               </p>
-            </>
-          )}
 
-          {/* ready 以外で失敗文言を残さない理由は use-mfa-challenge-flow.ts の errorCode 導出コメント */}
-          {state.phase === "ready" && entry.errorMessage && (
-            <p id={entry.errorId} role="alert" className="text-sm text-destructive">
-              {entry.errorMessage}
-            </p>
+              {/* verifying 中や expired で失敗文言を残さない規律は hook 側の errorCode 導出が持つ
+                  (use-mfa-challenge-flow.ts) — ここでは非 null をそのまま描画してよい */}
+              {entry.errorMessage && (
+                <p id={entry.errorId} role="alert" className="text-sm text-destructive">
+                  {entry.errorMessage}
+                </p>
+              )}
+            </>
           )}
         </CardContent>
 

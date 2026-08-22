@@ -3,32 +3,71 @@ import {
   initialMfaChallengeFlowState,
   reduceMfaChallengeFlow,
   resolveMfaChallengeVerification,
-  type MfaChallengeFlowEvent,
   type MfaChallengeFlowState,
   type MfaChallengePort,
 } from "./mfa-challenge-flow";
-import { mfaChallengePort, type MfaChallengeCodeInput } from "./mfa-challenge-port";
-import type { MfaErrorCode } from "./mfa-api";
+import { getMfaChallenge, mfaErrorCodeOf, verifyMfaChallenge, type MfaErrorCode } from "./mfa-api";
+import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
+
+// wire の入力型に直接繋ぐ — 別に書き下すと verify API に field が増えた時に黙って drift する。
+type MfaChallengeCodeInput = Parameters<typeof verifyMfaChallenge>[0];
 
 type ChallengePort = MfaChallengePort<MfaChallengeCodeInput, MfaErrorCode>;
 
-export type MfaChallengeFlow = {
-  state: MfaChallengeFlowState<MfaErrorCode>;
-  submitting: boolean;
-  errorCode: MfaErrorCode | null;
-  submit(input: MfaChallengeCodeInput): void;
-  clearError(): void;
+// HTTP 応答・例外を flow 向けの観測結果 / 検証結果へ変換する唯一の production port (ADR-0013 §9)。
+// requestJson は body を無検証 cast で返すため、wire 契約どおりの形かはこの port が最後の砦になる。
+export const mfaChallengePort: ChallengePort = {
+  observe: async (signal) => {
+    try {
+      const { pending } = await getMfaChallenge(signal);
+      // 「不在」は positive な pending === false だけで判定する。形の崩れた 2xx を absent に
+      // 倒すと生きているチャレンジで期限切れ画面に袋小路になる — 通信失敗と同じく
+      // 不存在を推測せず入力を許す (ADR-0013 §9)。
+      if (pending === true) return { kind: "present" };
+      if (pending === false) return { kind: "absent" };
+      return { kind: "unavailable" };
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return { kind: "unavailable" };
+    }
+  },
+  // POST 側には意図的に AbortSignal を渡さない。理由は ADR-0013 §9。
+  verify: async (input) => {
+    try {
+      const { redirect_url } = await verifyMfaChallenge(input);
+      // redirect 先を持たない 2xx をそのまま passed にすると assign(undefined) が
+      // 文字列 "undefined" へ遷移する。遷移先不明の成功は表示可能な失敗へ倒す
+      // (再試行が通らなくても challenge_expired → 再ログイン導線で復帰できる)。
+      if (typeof redirect_url !== "string" || redirect_url === "") {
+        return { kind: "rejected", errorCode: "unknown" };
+      }
+      return { kind: "passed", redirectUrl: redirect_url };
+    } catch (error) {
+      return { kind: "rejected", errorCode: mfaErrorCodeOf(error) };
+    }
+  },
 };
 
-const reducer = (
-  state: MfaChallengeFlowState<MfaErrorCode>,
-  event: MfaChallengeFlowEvent<MfaErrorCode>,
-) => reduceMfaChallengeFlow(state, event);
+// 画面が受け取る表示区分。observing / redirecting は同じ spinner でも sr-only 文言が違うため
+// 区別を保つ。ready / verifying の差は entry.submitting が吸収するので entry に畳む。
+type MfaChallengeViewKind = "observing" | "redirecting" | "expired" | "entry";
+
+export type MfaChallengeFlow = {
+  view: MfaChallengeViewKind;
+  entry: MfaCodeInput;
+};
+
+// ready / verifying 以外の phase 名は表示区分と一致するのでそのまま流用する。
+const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
+  state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
 // port は test 注入用の seam。useEffect の依存のため参照安定な値 (module 定数等) を渡すこと —
 // render ごとに新しい object を渡すと観測 GET の abort → 再実行が render のたびに繰り返される。
 export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): MfaChallengeFlow {
-  const [state, dispatch] = useReducer(reducer, initialMfaChallengeFlowState);
+  const [state, dispatch] = useReducer(
+    reduceMfaChallengeFlow<MfaErrorCode>,
+    initialMfaChallengeFlowState,
+  );
   const readController = useRef<AbortController | null>(null);
   const verificationInFlight = useRef(false);
 
@@ -76,16 +115,19 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
     verificationInFlight.current = true;
     dispatch({ type: "verification_started" });
     void resolveMfaChallengeVerification(port, input, controller.signal)
-      .then((outcome) => {
+      .then((verification) => {
         if (!controller.signal.aborted) {
-          dispatch({ type: "verification_resolved", outcome });
+          dispatch({ type: "verification_resolved", verification });
         }
       })
+      // 縮退は "unknown" 固定にする — reject 経路の error を code へ写すと、注入 port が
+      // terminal な challenge_expired で reject した時に ready (入力可能) へ載り、
+      // 打ち直せない文言と生きた入力欄が並ぶ。
       .catch(() => {
         if (!controller.signal.aborted) {
           dispatch({
             type: "verification_resolved",
-            outcome: { kind: "rejected", errorCode: "unknown" },
+            verification: { kind: "rejected", errorCode: "unknown" },
           });
         }
       })
@@ -94,13 +136,23 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
       });
   };
 
-  return {
-    state,
+  const entry = useMfaCodeInput({
+    inputId: "mfa-challenge-code",
     submitting: state.phase === "verifying",
     // ready 以外では error を出さない: チャレンジ消滅で expired に移った直後に直前の失敗文言が
     // 残ると、「コードが違う」と「やり直し」が並んで打ち直せば通るように読めるため。
     errorCode: state.phase === "ready" ? state.errorCode : null,
     submit,
-    clearError: () => dispatch({ type: "error_cleared" }),
-  };
+    onKindChange: () => dispatch({ type: "error_cleared" }),
+  });
+
+  const redirectUrl = state.phase === "redirecting" ? state.redirectUrl : null;
+  useEffect(() => {
+    if (redirectUrl !== null) {
+      // auth ホストの出口検証を正本とする。詳細は ADR-0013 §9。
+      window.location.assign(redirectUrl);
+    }
+  }, [redirectUrl]);
+
+  return { view: viewOf(state), entry };
 }
