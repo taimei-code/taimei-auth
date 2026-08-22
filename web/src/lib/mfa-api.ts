@@ -56,6 +56,11 @@ export class MfaApiError extends Error {
   }
 }
 
+// 画面側の catch が受けた失敗を表示可能な code へ縮退する唯一の入口。非 MfaApiError
+// (通信断・想定外 throw) は原因を code で識別できないため fail-closed に "unknown" へ倒す。
+export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
+  error instanceof MfaApiError ? error.code : "unknown";
+
 function readWireError(body: unknown): string | undefined {
   if (typeof body !== "object" || body === null) return undefined;
   const { error } = body as { error?: unknown };

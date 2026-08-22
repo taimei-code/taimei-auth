@@ -8,7 +8,7 @@ import {
 
 // 純関数を bun test (cwd = repo root) から読むため相対 import にする ("@/*" の割り当てが
 // root と web で違う理由は web/tsconfig.json のコメント)。
-import { MfaApiError, type MfaCodeKind, type MfaErrorCode } from "./mfa-api";
+import { mfaErrorCodeOf, type MfaCodeKind, type MfaErrorCode } from "./mfa-api";
 
 // 第二要素のコード入力を持つ 3 画面 (チャレンジ画面 / 有効化ダイアログ / 無効化ダイアログ) が
 // 共有する入力機構。正規化・入力支援属性・エラー文言を各画面に散らすと、片方だけ直して
@@ -170,9 +170,7 @@ export function useMfaCodeEntry(options: {
       setErrorCode(null);
       void options
         .submit(value)
-        .catch((error: unknown) =>
-          setErrorCode(error instanceof MfaApiError ? error.code : "unknown"),
-        )
+        .catch((error: unknown) => setErrorCode(mfaErrorCodeOf(error)))
         .finally(() => {
           submitInFlight.current = false;
           setSubmitting(false);

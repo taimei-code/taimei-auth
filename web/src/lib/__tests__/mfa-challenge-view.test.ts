@@ -28,7 +28,7 @@ test("AC-034 redirecting view は status だけを表示して再入力を許さ
   const { MfaChallengeView } = await import("../../pages/MfaChallengeView");
   const html = renderToStaticMarkup(
     createElement(MfaChallengeView, {
-      state: { phase: "redirecting", redirectUrl: "/account" },
+      view: "redirecting",
       entry: unusedEntry,
     }),
   );
