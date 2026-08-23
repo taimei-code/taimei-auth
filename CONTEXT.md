@@ -144,6 +144,10 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続
 **登録済み未有効**の登録内容を明示的に破棄し、新しい TOTP secret・リカバリーコード・**MFA 登録識別子**へ置き換える **MFA 登録遷移**。通常の登録の再実行は同じ内容の再表示なので、登録内容を回転する意図と区別する。詳細: ADR-0013。
 _Avoid_: 再登録 (同じ登録内容の再表示と区別できない), reset (何を初期化するか曖昧)
 
+**MFA 運用救済**:
+認証アプリと **リカバリーコード** を両方失った user を、運用者が本人のコード検証なしに復帰可能な **MFA 登録状態**へ戻す **MFA 登録遷移**。user の session / Actor を使う self-service の無効化とは区別し、結果不明の遷移で残置された guard の解除も同じ運用権限に含む。詳細: ADR-0013。
+_Avoid_: 強制解除 (何を強制するか曖昧), force disable (コード識別子としてのみ使う), 救済スクリプト (実装形態名)
+
 **session**:
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)

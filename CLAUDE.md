@@ -7,6 +7,13 @@ Web UI / IdP / User・Account・Session DB を 1 サービスに同居させて�
 - `/db/` 配下 → [`db/CLAUDE.md`](./db/CLAUDE.md) — ルール 1 (DB アクセスは `/db/` に閉じる。`/src/` `/web/` から drizzle / `pg` を直接 import しない) / 2 (認証ドメインは repository 経由) / 8 (手書き SQL は `drizzle/manual/` に分離)
 - `/packages/auth-client/` 配下 → [`packages/auth-client/CLAUDE.md`](./packages/auth-client/CLAUDE.md) — ルール 7 (SDK を consumer framework に依存させない 5 層 audit)
 
+## 層↔ディレクトリ対応 (レイヤードアーキテクチャ)
+
+- Transport = `src/handlers/`, `src/rpc/` / Guard = `src/membership/guard/`
+- Use-case = `src/mfa/`, `src/company/`, `src/invitation/`, `src/account/`, `src/membership/*.ts` (+ `management/` はその CLI 殻)
+- Repository = `db/repositories/` (薄く保つ。判定を持たない)
+- 詳細・禁止事項の SSOT: [`docs/adr/0012-layered-architecture.md`](./docs/adr/0012-layered-architecture.md)
+
 ## ルール 3: consumer app は `@taimei-code/auth-client` 経由のみ
 
 外部 consumer app の窓口は `auth-client` が export する関数と HTTP / Connect RPC エンドポイントだけ。consumer app から `/db/` を import しない・drizzle / `pg` を依存に入れない。consumer 向け新機能は先に `auth-client` 側の API を設計する。別 process 分割時に consumer 側の修正が SDK バージョン上げのみで済む状態を保つ。
