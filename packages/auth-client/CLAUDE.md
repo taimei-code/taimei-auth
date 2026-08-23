@@ -1,6 +1,6 @@
 # packages/auth-client/ 境界ルール
 
-`@taimei-code/auth-client` SDK の公開 API を編集する時に守るルール。root `CLAUDE.md` の境界 framework から派生し、本 dir 配下を編集するセッションで context-aware に load される。
+`@taimei-code/auth-client` SDK の公開 API を編集する時に守るルール。root `CLAUDE.md` の「共通境界」から派生し、本 dir 配下を編集するセッションで context-aware に load される。
 
 ---
 
@@ -20,6 +20,6 @@
 
 機械検証: `src/__tests__/sdk-boundary-ban.test.ts` (override の path 集合を assert)
 
-理由: root `CLAUDE.md` ルール 3 は「consumer → SDK のみ依存」を強制するが、逆方向 (「SDK → consumer framework に暗黙依存」) は別の壁。SDK が Next.js 専用に見えていなかったのに 5 層すべてで lock-in していた前例 (PR #41) があり、grep だけでは検出できない。`taimei-auth` を別 process 化しても consumer 側修正が auth-client バージョン上げのみで済む (ルール 3 末尾) には、SDK 側が framework 中立である前提が必須。
+理由: root `CLAUDE.md` の「共通境界」は「consumer → SDK のみ依存」を強制するが、逆方向 (「SDK → consumer framework に暗黙依存」) は別の壁。SDK が Next.js 専用に見えていなかったのに 5 層すべてで lock-in していた前例 (PR #41) があり、grep だけでは検出できない。`taimei-auth` を別 process 化しても consumer 側修正が auth-client バージョン上げのみで済むには、SDK 側が framework 中立である前提が必須。
 
 詳細: PR #41 (SDK を framework 中立化した経緯 — 5 層の audit 結果と中立化前後の interface)。

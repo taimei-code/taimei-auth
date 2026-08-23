@@ -2,7 +2,7 @@
 
 ## Context
 
-consumer app (taimei 等) から taimei-auth に話す窓口は `packages/auth-client/` の SDK のみ (CLAUDE.md ルール 3)。現状 IdP は better-auth だが、将来的に Go 自作 IdP 等への差し替え可能性を確保したい。SDK の interface に IdP 内部詳細を漏らすと、IdP 移行時に consumer 側コードまで連鎖修正が要る。
+consumer app (taimei 等) から taimei-auth に話す窓口は `packages/auth-client/` の SDK のみ (CLAUDE.md「共通境界」)。現状 IdP は better-auth だが、将来的に Go 自作 IdP 等への差し替え可能性を確保したい。SDK の interface に IdP 内部詳細を漏らすと、IdP 移行時に consumer 側コードまで連鎖修正が要る。
 
 consumer 側の上位 ADR (`plans/taimei/ADR-004-idp-encapsulation.md`) で SDK レイヤーの責務が定められており、本 ADR は taimei-auth リポ視点でのその実装方針を記述する。
 

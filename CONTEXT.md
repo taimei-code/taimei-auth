@@ -55,7 +55,7 @@ _Avoid_: SignUp 画面, 新規登録画面, サインアップ
 _Avoid_: マイページ, account ページ
 
 **auth ホスト**:
-`auth.taimei-code.com` の HTTP entry すべてを 1 プロセスで担う Hono server (`src/index.ts`)。better-auth IdP (`/api/auth/*`)、ConnectRPC (`/rpc/*`)、`/login` ショートカット、`/health`、**共通画面 SPA** の配信 (`/auth/*` `/account/*`) を同居させる (CLAUDE.md ルール 1-2 の「Web UI / IdP / DB の同居」のうち HTTP 入口を担う層)。**共通画面 SPA** からの fetch と consumer app からの RPC の両方を受ける。
+`auth.taimei-code.com` の HTTP entry すべてを 1 プロセスで担う Hono server (`src/index.ts`)。better-auth IdP (`/api/auth/*`)、ConnectRPC (`/rpc/*`)、`/login` ショートカット、`/health`、**共通画面 SPA** の配信 (`/auth/*` `/account/*`) を同居させる (CLAUDE.md 冒頭の「Web UI / IdP / DB の同居」のうち HTTP 入口を担う層)。**共通画面 SPA** からの fetch と consumer app からの RPC の両方を受ける。
 _Avoid_: Layer A (順序ラベルで内容を示さない), バックエンド, server (より広義), Hono server (実装名で抽象が剥がれる)
 
 **共通画面 SPA**:

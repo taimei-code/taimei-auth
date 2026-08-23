@@ -157,7 +157,7 @@ warn / audit を一切発火しない (拒否経路との対称性 = 監視の f
 ## Consequences
 
 - **挙動変更 (accept 経路の新 410)**: 現役 OWNER でない inviter が過去に投げた OWNER 招待の accept が
-  新たに 410 で拒否される。SPA (`web/src/pages/SignUpAcceptInvitation.tsx`) の既存 410 分岐が新経路
+  新たに 410 で拒否される。SPA (`web/src/invitation/pages/SignUpAcceptInvitation.tsx`) の既存 410 分岐が新経路
   も既存 UI 文言 (期限切れ/使用済み) で吸収するため、SPA 変更なし。
 - **byte-invariant migration**: 移行対象 12 route の response body / status / Content-Type は
   変更前と JSON deep-equal で一致。fixture (`src/handlers/__tests__/__fixtures__/expected/`) は

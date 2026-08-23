@@ -165,7 +165,7 @@
       }
     },
     {
-      "includes": ["web/**", "!web/src/components/notify.tsx"],
+      "includes": ["web/**", "!web/src/shared/notify.tsx"],
       "linter": {
         "rules": {
           "style": {
@@ -173,7 +173,7 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "sonner": "通知は web/src/components/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
                 }
               }
             }

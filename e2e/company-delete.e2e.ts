@@ -21,7 +21,7 @@ test("最後の事業所削除はアカウントごと削除され、ログイ�
   await expectSignInLanding(page);
 });
 
-// 所属が残る削除は一覧への SPA 遷移 + 成功トーストで終わる (通知経路の正本: web/src/components/notify.tsx)。
+// 所属が残る削除は一覧への SPA 遷移 + 成功トーストで終わる (通知経路の正本: web/src/shared/notify.tsx)。
 // 通知だけが silent に落ちても画面遷移は正しく見えるため、トーストの表示までを固定する。
 
 const DELETED_COMPANY = "e2e-co-delete-multi-current";

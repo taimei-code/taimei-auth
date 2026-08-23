@@ -1,6 +1,6 @@
 # db/ 境界ルール
 
-`/db/` 配下を編集する時に守るルール。root `CLAUDE.md` の境界 framework から派生し、本 dir 配下を編集するセッションで context-aware に load される。
+`/db/` 配下を編集する時に守るルール。root `CLAUDE.md` の「共通境界」から派生し、本 dir 配下を編集するセッションで context-aware に load される。
 
 ---
 
@@ -16,7 +16,14 @@ drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/
 
 `src/rpc/*` 配下からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (PR #34 → #35)。
 
-例外: `e2e/fixtures.ts` の DB 接触は e2e fixture 再生成に限り許可する (spec からは `e2e/seed.ts` の子プロセス経由でのみ呼ぶ。`biome.json` の e2e override が spec からの直接 import を block する)。
+### 例外 path (正本)
+
+`/db/` の外から DB に触れてよいのは次に限る。例外 path を追加する変更は DB 境界の設計変更として review し、`biome.json` の機械的境界も同時に更新する。
+
+- `src/auth.ts` … better-auth integration が DB adapter と schema を結線する (ルール 2 の例外も参照)
+- `src/worker.ts` … Workers entry が per-request pool を供給する `@/db/client` import のみ。`biome-ignore` で個別に許可
+- test fixture … setup と事後状態の観測に DB client / schema を利用する
+- `e2e/fixtures.ts` … e2e fixture 再生成に限る (spec からは `e2e/seed.ts` の子プロセス経由でのみ呼ぶ。`biome.json` の e2e override が spec からの直接 import を block する)
 
 ## ルール 2: 認証ドメインのモデルは repository 経由でのみ触る
 
@@ -57,7 +64,7 @@ PL/pgSQL trigger / VIEW / FUNCTION / custom DDL など、`db/schema.ts` のス�
 - `db/migrate-manual.ts` が `drizzle/manual/*.sql` を `db.transaction` 内で順次適用
 - 複数 file の部分適用を防ぐため transaction 内に閉じている (例: `0001` 成功 / `0002` 失敗で全 rollback)
 
-新規 trigger SQL を追加する場合は `drizzle/manual/NNNN_*.sql` を 1 ファイルずつ append し、host で `drizzle-kit migrate` や `psql` で手動適用せず compose 再起動で `auth-migrate` を経由させる (root CLAUDE.md ルール 4 と整合)。
+新規 trigger SQL を追加する場合は `drizzle/manual/NNNN_*.sql` を 1 ファイルずつ append し、host で `drizzle-kit migrate` や `psql` で手動適用せず compose 再起動で `auth-migrate` を経由させる ([`README.md`](../README.md) のmigrationフローと整合)。
 
 詳細: PR #43 (user.revision DB trigger の導入経緯)。
 
@@ -67,7 +74,7 @@ PL/pgSQL trigger / VIEW / FUNCTION / custom DDL など、`db/schema.ts` のス�
 
 ### `db/client.ts` の Pool を「最適化のため」singleton 化しない
 
-workerd は別 request の I/O コンテキストで開いた socket を再利用できないため、`pg.Pool` を module singleton にして request 横断で使い回すと query がハングする ("Worker hung")。`db` は単一インスタンスのまま、中の Pool だけを `AsyncLocalStorage` 経由で per-request に差し替える現行設計を崩さないこと (詳細は root CLAUDE.md「既知の落とし穴」/ PR #91)。
+workerd は別 request の I/O コンテキストで開いた socket を再利用できないため、`pg.Pool` を module singleton にして request 横断で使い回すと query がハングする ("Worker hung")。`db` は単一インスタンスのまま、中の Pool だけを `AsyncLocalStorage` 経由で per-request に差し替える現行設計を崩さないこと (詳細は [`src/CLAUDE.md`](../src/CLAUDE.md) のworkerd規則 / [`ADR-0011`](../docs/adr/0011-cloudflare-workers-migration.md) / PR #91)。
 
 ### drizzle に渡す Pool 代替クラスは `extends Pool` にする
 

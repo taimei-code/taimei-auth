@@ -83,7 +83,7 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
   });
 
   test("状態取得は verify の枠を消費しない", async () => {
-    // 画面はコード誤入力のたびに状態を取り直す (web/src/pages/MfaChallenge.tsx)。枠を共有すると
+    // 画面はコード誤入力のたびに状態を取り直す (web/src/mfa/pages/MfaChallenge.tsx)。枠を共有すると
     // その再取得が verify の枠を削り、正規ユーザーが打ち直しの途中で 429 に落ちる。
     const ip = isolatedClientIp();
 

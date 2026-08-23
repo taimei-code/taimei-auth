@@ -1,6 +1,8 @@
 // 相対 import なのは web の "@/" alias との誤解決を避けるため (詳細: role-label.ts の同制約)
 import type { Role } from "../../db/repositories/membership";
 
+export type { Role } from "../../db/repositories/membership";
+
 // membership guard の role 判定を担う純粋関数群。I/O は持たない。
 // web も @core alias 経由で UI の出し分けに使う共有実装。runtime import の禁止は
 // src/__tests__/web-shared-core-runtime-free.test.ts が CI で固定する。

@@ -52,7 +52,7 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
    明示する)。足し忘れは deps stage の `bun install --frozen-lockfile` が落として気づけるが、
    メッセージは 2 通りに分かれる (bun 1.3.5 で実測)。root が `workspace:*` で依存する通常の
    workspace package では `error: Workspace dependency "<name>" not found` — bun.lock が正なのに
-   これで落ちたら manifests stage の COPY 漏れと読む (CLAUDE.md ルール 6 の gotcha と同じ文言)。
+   これで落ちたら manifests stage の COPY 漏れと読む (CLAUDE.md「リポジトリ共通規則」の workspace 依存の項と同じ文言)。
    root が依存していない workspace package の場合だけ
    `error: lockfile had changes, but lockfile is frozen` になる。
    `deps` は manifests から full install した**後に** source を COPY して auth-client を
@@ -98,4 +98,4 @@ runner へ node_modules を丸ごと COPY しており (`--production` install �
   lint が捕らえない経路 (動的 import 等) に対する defense-in-depth
 - codegen (`db:generate` / `generate`) は host の bun で実行する運用に確定した。コンテナ内実行は
   生成物が `--rm` で消え、読む schema も image 焼き込み時点のものになるため (実測)。「原則 compose で
-  完結」(CLAUDE.md ルール 4) に対する明示的な例外で、working tree へ書き出す作業のみが対象
+  完結」(README「compose での環境操作」) に対する明示的な例外で、working tree へ書き出す作業のみが対象

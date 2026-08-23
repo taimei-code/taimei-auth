@@ -152,7 +152,7 @@ orphan 削除は本人不在の経路 (DeleteCompany / member remove / batch) �
 |----|----------|-----------|------|
 | PR-1 | repository primitive + orphan use-case: `countActiveMembershipsByUserId` / `removeMembershipsOfCompany` / `reassignLastUsedCompany` / invitation 一括 REVOKED / `deleteAccountIfOrphaned`(src/account/orphan.ts) + 単体テスト | db/repositories/membership.ts, db/repositories/invitation.ts, db/repositories/user.ts, src/account/orphan.ts, db/__tests__ | - |
 | PR-2 | DeleteCompany use-case(src/company/delete.ts, 単一 tx orchestration) + handler 配線 + member remove の orphan cleanup + 統合テスト + 既存コメント更新 | src/company/delete.ts, src/handlers/account-company.ts, src/handlers/account-membership.ts, src/company/__tests__ | PR-1 |
-| PR-3 | UX(D3): web DangerZone/CompanySettings の「最後の事業所削除=アカウント削除」警告 + actor≠victim 確認 + ログアウト遷移 | web/src/components/account/DangerZone.tsx, web/src/pages/account/CompanySettings.tsx, web/src/lib/account-api.ts | PR-2 |
+| PR-3 | UX(D3): web DangerZone/CompanySettings の「最後の事業所削除=アカウント削除」警告 + actor≠victim 確認 + ログアウト遷移 | web/src/account/DangerZone.tsx, web/src/company/pages/CompanySettings.tsx, web/src/company/company-api.ts | PR-2 |
 | PR-4 | backfill 管理スクリプト(2 段階: dry-run → batched 実削除 + 全 user_id ログ) | management/backfill-orphan-cleanup.ts | PR-2 |
 | PR-5 | TTL sweep バッチ(0 件 AND created_at<now-24h)+ 定期実行設定 | src/jobs/orphan-sweep.ts, db/repositories/user.ts | PR-2 |
 

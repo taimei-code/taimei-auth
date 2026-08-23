@@ -4,7 +4,7 @@ import type { Config } from "tailwindcss";
 import formsPlugin from "@tailwindcss/forms";
 import animatePlugin from "tailwindcss-animate";
 
-// content path は CWD 非依存の絶対 path で書く (CLAUDE.md ルール 5)
+// content path は CWD 非依存の絶対 path で書く (CLAUDE.md「リポジトリ共通規則」)
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 const config: Config = {
