@@ -25,6 +25,24 @@ function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): st
     .sort();
 }
 
+// management/ → src/ の import 面は file 単位でなく出現単位で全列挙する。file 単位の grep では
+// 許可済み file に増えた 2 本目の import を見逃し、file 列挙のハードコードでは新規 file が
+// 検査を素通りする。`from` / `import(` の行は整形で import が折り返されても 1 行に残る。
+// 相対深度 (`../../src/` 等)・path alias (`@/` = repo root, `@core/` = src/)・side-effect import・
+// dynamic import も同じ面に含める — 別表記の抜け道を残すと列挙が「全」でなくなる。
+function srcImportOccurrences(root: string): string[] {
+  const pattern = `(from|import)[ (]['"]((\\.\\./)+src/|@/|@core/)[^'"]*['"]`;
+  const command = [
+    `cd ${JSON.stringify(REPO_ROOT)} &&`,
+    `grep -roE ${JSON.stringify(pattern)} --include=*.ts --exclude-dir=__tests__ ${root} || true`,
+  ].join(" ");
+  return execSync(command, { encoding: "utf8", shell: "/bin/bash" })
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort();
+}
+
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
   test("QA-R-01 src/auth-plugins/ は登録状態 policy を import しない (直接 import 限定の近似)", () => {
     // 検索 dir の改名等で grep が空振りしても [] が返るため、実在の import で検出器が
@@ -68,11 +86,19 @@ describe("MFA registration module boundary", () => {
     expect(filesWithCodeLiteral(`from ['"](\\./wiring|.*registration/wiring)['"]`)).toEqual([
       "src/mfa/registration/compatibility.ts",
       "src/mfa/registration/index.ts",
-      "src/mfa/registration/management.ts",
     ]);
     expect(
       filesWithCodeLiteral(`from ['"](\\./application|.*registration/application)['"]`),
     ).toEqual(["src/mfa/registration/wiring.ts"]);
+  });
+
+  test("QA-E-03 management/ → src/ の import 面は全列挙で固定する (MFA 経路は wiring の façade のみ)", () => {
+    expect(srcImportOccurrences("management")).toEqual([
+      'management/backfill-orphan-cleanup.ts:from "../src/account/backfill-orphan-cleanup"',
+      'management/disable-user-mfa.ts:from "../src/mfa/registration/wiring"',
+      'management/release-mfa-registration-guard.ts:from "../src/mfa/registration/wiring"',
+      'management/sweep-abandoned-signups.ts:from "../src/account/sweep-abandoned-signups"',
+    ]);
   });
 
   test("QA-R-01 authとauth pluginはregistration moduleへback-edgeを持たない", () => {
@@ -133,11 +159,14 @@ describe("MFA registration module boundary", () => {
   });
 
   test("QA-M-06 production wiring keeps enabled and disabled notifications distinct", () => {
-    expect(filesWithCodeLiteral("notifyEnabled: notifyMfaEnabled", "src/mfa/registration")).toEqual(
-      ["src/mfa/registration/wiring.ts"],
-    );
+    // 末尾 comma まで一致させる — `notifyMfaDisabled` は `notifyMfaDisabledForManagement` の
+    // prefix なので、comma なしでは self-service 側が management 用 (待機型・schedule なし) に
+    // すり替わっても検出できない。
     expect(
-      filesWithCodeLiteral("notifyDisabled: notifyMfaDisabled", "src/mfa/registration"),
+      filesWithCodeLiteral("notifyEnabled: notifyMfaEnabled,", "src/mfa/registration"),
+    ).toEqual(["src/mfa/registration/wiring.ts"]);
+    expect(
+      filesWithCodeLiteral("notifyDisabled: notifyMfaDisabled,", "src/mfa/registration"),
     ).toEqual(["src/mfa/registration/wiring.ts"]);
   });
 });

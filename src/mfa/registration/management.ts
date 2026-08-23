@@ -1,13 +1,11 @@
+import { failure, USER_NOT_FOUND, type MfaFailure } from "../error-mapping";
+import type { ForceDisableResult } from "./force-disable";
+import type { RegistrationSnapshot, TransitionGuard } from "./ports";
 import {
-  readRegistrationGuardProtocolVersion,
-  releaseRegistrationGuardByManagement,
-} from "@/db/repositories/mfa-registration";
-import { findUserById } from "@/db/repositories/user";
-import type { MfaFailure } from "../error-mapping";
-import { forceDisableMfa, type ForceDisableResult } from "./force-disable";
-import { reportUnknownMfaRegistrationTransition } from "./observability-adapter";
-import { createTransitionRunner, type TransitionBusy } from "./transition";
-import { registrationGuard } from "./wiring";
+  createTransitionRunner,
+  type ReportUnknownTransition,
+  type TransitionBusy,
+} from "./transition";
 
 export const MFA_REGISTRATION_GUARD_PROTOCOL_VERSION = 1;
 
@@ -18,44 +16,91 @@ export function assertRegistrationGuardProtocolVersion(version: number | undefin
   );
 }
 
-async function assertGuardProtocol(): Promise<void> {
-  assertRegistrationGuardProtocolVersion(await readRegistrationGuardProtocolVersion());
-}
+type ManagementForceDisableResult =
+  | { ok: true; changed: false }
+  | { ok: true; changed: true; notified: boolean }
+  | TransitionBusy
+  | MfaFailure;
 
-const runTransition = createTransitionRunner(
-  registrationGuard,
-  reportUnknownMfaRegistrationTransition,
-);
-
-export async function forceDisable(
-  userId: string,
-): Promise<ForceDisableResult | TransitionBusy | MfaFailure> {
-  await assertGuardProtocol();
-  // guard 取得前の存在確認は user_not_found を FK 違反由来の 503 に化けさせないための advisory。
-  // 正式な判定は guard 取得後の snapshot が行う。
-  if (!(await findUserById(userId))) return { ok: false, reason: "user_not_found" };
-  return runTransition(userId, "force_disable", (snapshot) => forceDisableMfa(userId, snapshot));
-}
-
-export async function forceReleaseRegistrationGuard(input: {
+type ReleaseByManagementInput = {
   userId: string;
   source: string;
   reason: string;
   processStoppedConfirmed: boolean;
-}): Promise<
-  { ok: true; released: boolean } | { ok: false; reason: "invalid_release_confirmation" }
-> {
-  const source = input.source.trim();
-  const reason = input.reason.trim();
-  if (!input.processStoppedConfirmed || source.length === 0 || reason.length === 0) {
-    return { ok: false, reason: "invalid_release_confirmation" };
-  }
-  await assertGuardProtocol();
-  const result = await releaseRegistrationGuardByManagement({
-    userId: input.userId,
-    source,
-    reason,
-    processStoppedConfirmed: input.processStoppedConfirmed,
-  });
-  return { ok: true, released: result.released };
+};
+
+type ManagementReleaseResult =
+  | { ok: true; released: boolean }
+  | { ok: false; reason: "invalid_release_confirmation" };
+
+export function createManagementApplication(deps: {
+  guard: TransitionGuard;
+  // 必須にする: optional + 無音 no-op 既定だと、wiring から束縛が消えても typecheck と
+  // 全テストが green のまま、ADR-0013 §8 唯一の残置 guard 検知 (Sentry 通報) が消灯する。
+  reportUnknownTransition: ReportUnknownTransition;
+  readProtocolVersion(): Promise<number | undefined>;
+  findUserById(userId: string): Promise<{ id: string } | undefined>;
+  forceDisableOperation(
+    userId: string,
+    snapshot: RegistrationSnapshot,
+  ): Promise<ForceDisableResult>;
+  releaseGuardByManagement(input: {
+    userId: string;
+    source: string;
+    reason: string;
+    processStoppedConfirmed: true;
+  }): Promise<{ released: boolean }>;
+  notifyDisabled(email: string): Promise<boolean>;
+}): {
+  forceDisable(userId: string): Promise<ManagementForceDisableResult>;
+  forceReleaseRegistrationGuard(input: ReleaseByManagementInput): Promise<ManagementReleaseResult>;
+} {
+  const assertGuardProtocol = async (): Promise<void> => {
+    assertRegistrationGuardProtocolVersion(await deps.readProtocolVersion());
+  };
+  const runTransition = createTransitionRunner(deps.guard, deps.reportUnknownTransition);
+
+  return {
+    async forceDisable(userId) {
+      await assertGuardProtocol();
+      // guard 取得前の存在確認は user 削除との競合による FK 違反を busy に化けさせないための
+      // advisory。正式な判定は guard 取得後の snapshot が行う。
+      if (!(await deps.findUserById(userId))) return failure(USER_NOT_FOUND);
+
+      const transitioned = await runTransition(userId, "force_disable", (snapshot) =>
+        deps.forceDisableOperation(userId, snapshot),
+      );
+      if (!transitioned.ok || !transitioned.changed) return transitioned;
+
+      // 通知の失敗で解除を失敗にしない — 解除は確定済みで、再実行しても changed:false になる。
+      // 送信可否は notified で報告し、届かなかった場合は運用者が別経路で本人に知らせる。
+      // adapter の内部握り潰しに依存せず reject もここで notified:false に畳む — 確定済みの
+      // 解除が「失敗」に見えると、運用者に不要な次の手 (DB 直接操作等) を踏ませる。
+      let notified = false;
+      try {
+        notified = await deps.notifyDisabled(transitioned.notifyEmail);
+      } catch {
+        // 規律の所有はこの façade。dep の実装差で確定結果を変えない。
+      }
+      return { ok: true, changed: true, notified };
+    },
+    async forceReleaseRegistrationGuard(input) {
+      const source = input.source.trim();
+      const reason = input.reason.trim();
+      if (!input.processStoppedConfirmed || source.length === 0 || reason.length === 0) {
+        return { ok: false, reason: "invalid_release_confirmation" };
+      }
+
+      await assertGuardProtocol();
+      const result = await deps.releaseGuardByManagement({
+        userId: input.userId,
+        source,
+        reason,
+        // literal を書かず narrowing 済みの入力を渡す — repo 側の literal true 型が要求する
+        // 「検証を経ない呼び出し元は確認済み audit を書けない」結合を保つ。
+        processStoppedConfirmed: input.processStoppedConfirmed,
+      });
+      return { ok: true, released: result.released };
+    },
+  };
 }

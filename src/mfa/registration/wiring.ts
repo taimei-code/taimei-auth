@@ -1,7 +1,10 @@
 import {
   acquireRegistrationGuard,
+  readRegistrationGuardProtocolVersion,
   releaseRegistrationGuard,
+  releaseRegistrationGuardByManagement,
 } from "@/db/repositories/mfa-registration";
+import { findUserById } from "@/db/repositories/user";
 import { recordMfaDisabled, recordMfaEnabled } from "@/db/repositories/audit-log";
 import { captureAuditLogError } from "../../audit-error";
 import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
@@ -10,7 +13,13 @@ import { createActivate } from "./activate";
 import { createRegistrationApplication } from "./application";
 import { createDisable } from "./disable";
 import { enroll } from "./enroll";
-import { notifyMfaDisabled, notifyMfaEnabled } from "./notification-adapter";
+import { forceDisableMfa } from "./force-disable";
+import { createManagementApplication } from "./management";
+import {
+  notifyMfaDisabled,
+  notifyMfaDisabledForManagement,
+  notifyMfaEnabled,
+} from "./notification-adapter";
 import { reportUnknownMfaRegistrationTransition } from "./observability-adapter";
 import type { RegistrationOperations } from "./ports";
 import { restart } from "./restart";
@@ -21,6 +30,16 @@ export const registrationGuard = {
   acquire: acquireRegistrationGuard,
   release: releaseRegistrationGuard,
 };
+
+export const managementApplication = createManagementApplication({
+  guard: registrationGuard,
+  reportUnknownTransition: reportUnknownMfaRegistrationTransition,
+  readProtocolVersion: readRegistrationGuardProtocolVersion,
+  findUserById,
+  forceDisableOperation: forceDisableMfa,
+  releaseGuardByManagement: releaseRegistrationGuardByManagement,
+  notifyDisabled: notifyMfaDisabledForManagement,
+});
 
 export const productionRegistrationOperations: RegistrationOperations = {
   enroll,

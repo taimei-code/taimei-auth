@@ -49,7 +49,7 @@ describe("forceDisableMfa", () => {
   test("QA-M-04 存在しない userId → not_found (副作用なし)", async () => {
     const result = await forceDisableMfa(`${P}missing`, { user: "absent" });
 
-    expect(result).toEqual({ ok: false, reason: "user_not_found" });
+    expect(result).toEqual({ ok: false, error: "not_found", status: 404 });
     expect(await auditRowsFor(`${P}missing`, "mfa_disabled")).toEqual([]);
   });
 
