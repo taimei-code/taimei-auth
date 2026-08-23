@@ -122,7 +122,7 @@ export function buildApp(options: AppOptions): Hono {
 
   // 状態取得も未認証で到達でき、有効なチャレンジ cookie が付けば 1 リクエストで Redis 3 往復を
   // 引くため、同じく IP 単位で抑える。正規利用の上限は「初回表示 1 + 誤入力のたびの取り直し =
-  // verify の上限 10」で 11 回/分 (web/src/pages/MfaChallenge.tsx)。同一 NAT 配下の数人分を足して 30。
+  // verify の上限 10」で 11 回/分 (web/src/mfa/pages/MfaChallenge.tsx)。同一 NAT 配下の数人分を足して 30。
   app.use(
     "/api/mfa/challenge",
     createRateLimitMiddleware({

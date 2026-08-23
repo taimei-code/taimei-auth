@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 // web が @core alias で読む server 実装 (sign-in-params / role-label / policy 等) の依存
 // クロージャに server 専用の runtime import (db / drizzle / resend / hono 等) が入ると、
 // SPA bundle へ引き込まれるが typecheck / lint / build:web はいずれも exit 0 のまま気づけない
-// (CLAUDE.md ルール5 と同型の silent failure)。web/src の @core import から共有ファイル集合を
+// (CLAUDE.md「リポジトリ共通規則」の build 設定 path 解決と同型の silent failure)。web/src の @core import から共有ファイル集合を
 // 動的に導出し、相対 import を推移的に辿った全ファイルについて「外部パッケージの runtime
 // import は browser-safe allowlist のみ」を CI で固定する (allowlist 外は fail-closed で違反)。
 

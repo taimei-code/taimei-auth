@@ -160,7 +160,7 @@ Magic Link 再送など) も本件では実装しない。
 
 ### 6. SDK / consumer 表面は本件で変更しない
 
-`packages/auth-client` / proto / `SessionData` は無変更とする (CLAUDE.md ルール 3)。
+`packages/auth-client` / proto / `SessionData` は無変更とする (CLAUDE.md「共通境界」)。
 
 チャレンジ保留中は session の実体が破棄されているため、`createAuthGuard` を使う consumer app からは
 単に「未認証」に見え、既存の未認証ハンドリングがそのまま働く。consumer 側は SDK のバージョンを上げずに

@@ -8,7 +8,7 @@ Vercel Blob client upload は次の流れ: クライアントが server endpoint
 
 ## Decision
 
-`web/src/components/account/AvatarUploader.tsx` で、blob upload 完了直後に `authClient.updateUser({ image: blobUrl })` を続けて呼ぶ。「画像を変更」と「保存」を form に分離せず、ファイル選択 1 アクションで blob upload + DB 反映までを完結させる。
+`web/src/account/AvatarUploader.tsx` で、blob upload 完了直後に `authClient.updateUser({ image: blobUrl })` を続けて呼ぶ。「画像を変更」と「保存」を form に分離せず、ファイル選択 1 アクションで blob upload + DB 反映までを完結させる。
 
 ## Why
 

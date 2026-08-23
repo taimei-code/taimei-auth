@@ -155,6 +155,6 @@ accountCompany.post("/api/account/companies/:companyId/delete", async (c) => {
   if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   // account_deleted=true は actor 自身が orphan として消えたことを示す。client は
   // redirectAfterAuthChange("deleteAccount") でログアウト先へ full reload 遷移する
-  // (web/src/pages/account/CompanySettings.tsx)。
+  // (web/src/company/pages/CompanySettings.tsx)。
   return c.json({ ok: true, account_deleted: result.actorDeleted });
 });

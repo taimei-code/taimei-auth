@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Role } from "@/db/repositories/membership";
+import type { Role } from "../policy";
 import {
   canAcceptInvitedRole,
   canAttemptRemoval,

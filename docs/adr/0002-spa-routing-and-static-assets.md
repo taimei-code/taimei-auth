@@ -9,7 +9,7 @@
 - Vite の `base` は `/auth/` 固定 (`web/vite.config.ts`)。生成 asset URL (script / link href) はすべて `/auth/assets/*` を指す。
 - Hono は `/auth/*` を `serveStatic({ root: WEB_DIST, rewriteRequestPath: p => p.replace(/^\/auth/, "") })` で配信。
 - `/account/*` は SPA fallback handler が `web/dist/index.html` を返す。`/account` 訪問時にブラウザが取りに行く `/auth/assets/*.js` は上の serveStatic で配信されるため整合する。
-- React Router (`web/src/App.tsx`) は **`basename` を使わない**。`Routes` に `/auth` `/account` の絶対 path を直接書く。Vite `base` は asset URL prefix のためで Router の path 解決とは独立。
+- React Router (`web/src/app/App.tsx`) は **`basename` を使わない**。`Routes` に `/auth` `/account` の絶対 path を直接書く。Vite `base` は asset URL prefix のためで Router の path 解決とは独立。
 
 ### 拡張子付き path は SPA fallback しない
 

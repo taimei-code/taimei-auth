@@ -6,7 +6,7 @@
 
 ## Decision
 
-`web/src/components/CanaryTokens.tsx` で次の 3 経路を埋込む。`VITE_CANARY_TOKEN_ID` env が未設定なら何も埋込まない (開発環境のノイズ削減)。
+`web/src/auth/CanaryTokens.tsx` で次の 3 経路を埋込む。`VITE_CANARY_TOKEN_ID` env が未設定なら何も埋込まない (開発環境のノイズ削減)。
 
 1. **不可視リンク** (`<a aria-hidden tabIndex={-1} className="-left-[9999px] -top-[9999px]">`): DOM scraping bot が `<a href>` を辿る挙動を検出
 2. **hidden input** (`<input type="hidden" name="canary_token">`): form 自動送信ボットが name 一致で値を拾う挙動を検出
