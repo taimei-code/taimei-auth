@@ -4,34 +4,34 @@
 //
 // bun run management/release-mfa-registration-guard.ts <userId> \
 //   --reason "incident reference" --process-stopped-confirmed
-import { forceReleaseRegistrationGuard } from "../src/mfa/registration/management";
-
-const userId = process.argv[2];
-const reasonIndex = process.argv.indexOf("--reason");
-const reason = reasonIndex >= 0 ? process.argv[reasonIndex + 1] : undefined;
-const processStoppedConfirmed = process.argv.includes("--process-stopped-confirmed");
+import { managementApplication } from "../src/mfa/registration/wiring";
+import { parseReleaseArgs } from "./release-args";
 
 // フラグ順の取り違え (`--reason` の直後に別フラグ / userId の位置にフラグ) を弾く。素通しすると
 // audit の reason にフラグ名が記録されたり、userId="--reason" で 0 行削除・exit 0 になり、
 // 「解除済み」と誤認したまま user が 503 に残る。
-if (!userId || userId.startsWith("--") || !reason || reason.startsWith("--")) {
-  console.error(
-    "usage: bun run management/release-mfa-registration-guard.ts <userId> --reason <text> --process-stopped-confirmed",
-  );
-  process.exit(1);
+if (import.meta.main) {
+  const parsed = parseReleaseArgs(process.argv.slice(2));
+  if ("error" in parsed) {
+    console.error(parsed.error);
+    process.exit(1);
+  }
+
+  const result = await managementApplication.forceReleaseRegistrationGuard({
+    userId: parsed.userId,
+    source: "management/release-mfa-registration-guard",
+    reason: parsed.reason,
+    processStoppedConfirmed: parsed.processStoppedConfirmed,
+  });
+
+  if (!result.ok) {
+    console.error(JSON.stringify({ userId: parsed.userId, error: result.reason }, null, 2));
+    process.exit(1);
+  }
+
+  console.log(JSON.stringify({ userId: parsed.userId, released: result.released }, null, 2));
+  // released:false (guard 行なし = userId typo か解除済み) を exit 0 にすると、打ち間違えた運用者が
+  // 「解除済み」と誤認したまま去り、実際の user は 503 に残る — header の検証と同じ事故クラス。
+  // pg pool が開いたままだと process が終了しないため、いずれの場合も明示 exit する。
+  process.exit(result.released ? 0 : 1);
 }
-
-const result = await forceReleaseRegistrationGuard({
-  userId,
-  source: "management/release-mfa-registration-guard",
-  reason,
-  processStoppedConfirmed,
-});
-
-if (!result.ok) {
-  console.error(JSON.stringify({ userId, error: result.reason }, null, 2));
-  process.exit(1);
-}
-
-console.log(JSON.stringify({ userId, released: result.released }, null, 2));
-process.exit(0);

@@ -1,6 +1,7 @@
 import { recordMfaDisabled } from "@/db/repositories/audit-log";
 import { deleteTwoFactorByUserId } from "@/db/repositories/two-factor";
 import { captureAuditLogError } from "../../audit-error";
+import { failure, USER_NOT_FOUND, type MfaFailure } from "../error-mapping";
 import { clearTwoFactorEnabled } from "../gateway";
 import type { RegistrationSnapshot } from "./ports";
 
@@ -15,7 +16,7 @@ const MANAGEMENT_ACTOR = "management/disable-user-mfa";
 export type ForceDisableResult =
   | { ok: true; changed: true; notifyEmail: string }
   | { ok: true; changed: false }
-  | { ok: false; reason: "user_not_found" };
+  | MfaFailure;
 
 // **two_factor 行の削除を先に、フラグ降ろしを後に** 行う。逆順の中断は「フラグ false +
 // verified 行」を残し、そこからの enroll が本人の知らない secret を黙って有効化する
@@ -26,7 +27,7 @@ export async function forceDisableMfa(
   userId: string,
   snapshot: RegistrationSnapshot,
 ): Promise<ForceDisableResult> {
-  if (snapshot.user === "absent") return { ok: false, reason: "user_not_found" };
+  if (snapshot.user === "absent") return failure(USER_NOT_FOUND);
 
   const deletedRows = await deleteTwoFactorByUserId(userId);
   if (deletedRows === 0 && !snapshot.twoFactorEnabled) return { ok: true, changed: false };
