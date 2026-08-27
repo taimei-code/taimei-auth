@@ -2,7 +2,7 @@ import { Sentry } from "../sentry";
 import { asPreSessionHeaders, openChallenge } from "./challenge-store";
 import { CHALLENGE_EXPIRED, failure, type MfaFailure } from "./error-mapping";
 import { mergeForwardedCookies } from "./session-headers";
-import { verifyMfaCode } from "./gateway";
+import { verifyMfaCodeWithoutGuard } from "./gateway";
 import type { MfaCodeKind } from "./wire-contracts";
 import { validateChallengeRedirect } from "./redirect-guard";
 
@@ -17,7 +17,7 @@ export type CompleteChallengeResult =
 // (プラグインが完了マーカーを消費し、こちらが補助キーを消す)。
 //
 // gateway へは asPreSessionHeaders を通した headers だけを渡し、プラグインの試行制限が効く
-// セッション無し経路に確実に乗せる (挙動: gateway.ts の verifyMfaCode)。
+// セッション無し経路に確実に乗せる (挙動: gateway.ts の verifyMfaCodeWithoutGuard)。
 //
 // sign_in audit はここでは発火しない。検証は gateway 経由でプラグイン本体を通るため、
 // その after-hook に載っている sign-in-observer が 1 件だけ記帳する (二重記帳の回避)。
@@ -31,9 +31,8 @@ export async function completeChallenge(
   const challenge = await openChallenge(headers);
   if (!challenge) return failure(CHALLENGE_EXPIRED);
 
-  // preserveUnknown=false: チャレンジ経路は registration guard を持たず、結果不明を保存する義理が
-  // 無い。未知の失敗も challenge_expired へ総写像し、未認証ブラウザに内部状態を漏らさない。
-  const verified = await verifyMfaCode(await asPreSessionHeaders(headers), input, false);
+  // guard を持たない経路なので総写像入口を使う。未知の失敗も既知へ畳み、未認証ブラウザに内部状態を漏らさない。
+  const verified = await verifyMfaCodeWithoutGuard(await asPreSessionHeaders(headers), input);
   if (!verified.ok) return verified;
 
   // 後始末の失敗で成功を取り消さない。ここに来た時点でプラグインは完了マーカーを消費し新セッションを
