@@ -29,11 +29,11 @@ export const MfaSettingsItem = ({
       {status.enabled && (
         <>
           <p className="mt-2 text-sm text-muted-foreground">
-            リカバリーコードの残り: {status.recovery_codes_remaining} 個
+            リカバリーコードの残り: {status.recoveryCodesRemaining} 個
           </p>
-          {status.recovery_codes_remaining <= LOW_RECOVERY_CODE_THRESHOLD && (
+          {status.recoveryCodesRemaining <= LOW_RECOVERY_CODE_THRESHOLD && (
             <p className="mt-1 text-sm text-destructive">
-              {describeRecoveryCodeShortage(status.recovery_codes_remaining)}
+              {describeRecoveryCodeShortage(status.recoveryCodesRemaining)}
             </p>
           )}
         </>
@@ -43,7 +43,7 @@ export const MfaSettingsItem = ({
       <Badge variant={status.enabled ? "default" : "secondary"}>
         {status.enabled ? "有効" : "無効"}
       </Badge>
-      {status.in_effect ? (
+      {status.inEffect ? (
         <MfaDisableDialog
           onDisabled={refresh}
           trigger={

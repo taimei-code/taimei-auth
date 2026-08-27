@@ -130,7 +130,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
   // 登録途中の再 enroll は server が同じ登録内容を返す (正しさの正本: ADR-0013 §8 の replay +
-  // enrollment_id 照合)。この保持は開き直しのたびの enroll 往復を省く表示 cache で、server と
+  // 登録識別子の照合)。この保持は開き直しのたびの enroll 往復を省く表示 cache で、server と
   // ずれても有効化時の enrollment_changed で検知される。保持してもログアウト・アカウント切替は
   // full reload (auth/auth-redirect.ts) なので、他ユーザーへは渡らない。
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
@@ -139,11 +139,11 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
     inputId: CODE_INPUT_ID,
     submit: ({ code }) => {
       if (state.step !== "verify") return Promise.resolve();
-      const { recovery_codes } = state.enrollment;
-      return activateMfa({ code, enrollmentId: state.enrollment.enrollment_id })
+      const { recoveryCodes } = state.enrollment;
+      return activateMfa({ code, enrollmentId: state.enrollment.enrollmentId })
         .then(() => {
           setResumableEnrollment(null);
-          setState({ step: "recoveryCodes", recoveryCodes: recovery_codes });
+          setState({ step: "recoveryCodes", recoveryCodes });
         })
         .catch((error: unknown) => {
           // server 側で登録が置き換わっていた場合、cache を保持したままだと開き直しても同じ
@@ -157,7 +157,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
     },
   });
 
-  const totpSecret = state.step === "scan" ? readTotpSecret(state.enrollment.totp_uri) : null;
+  const totpSecret = state.step === "scan" ? readTotpSecret(state.enrollment.totpUri) : null;
 
   const handleOpenChange = (next: boolean) => {
     if (state.step === "starting" && open) return; // enroll 応答待ちに閉じられると宙ぶらりんの登録が残る
@@ -221,7 +221,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
 
         {state.step === "scan" && (
           <div className="space-y-4">
-            <TotpQrCode totpUri={state.enrollment.totp_uri} />
+            <TotpQrCode totpUri={state.enrollment.totpUri} />
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 認証アプリで QR コードを読み取ってください。読み取れない場合は、次の secret

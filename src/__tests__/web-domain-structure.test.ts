@@ -4,21 +4,11 @@ import { readFileSync } from "node:fs";
 import {
   analyzeWebStructure,
   extractModuleSpecifiers,
-  findMoveManifestMismatches,
-  findRawManifestMismatches,
-  findStaleReferences,
-  findUnapprovedChangedPaths,
-  HISTORICAL_STALE_ALLOWLIST,
-  normalizeTypeScriptStructure,
   readActualWebSources,
-  readRepoTextSources,
-  readWorkingTreeChangedPaths,
 } from "./web-domain-structure-helpers";
-import {
-  WEB_DOMAIN_BASELINE_HEAD,
-  WEB_DOMAIN_MOVE_MANIFEST,
-  WEB_DOMAIN_RAW_MANIFEST,
-} from "./web-domain-move-manifest";
+
+// web/src のドメイン構造 (ADR-0015 / web/src/CLAUDE.md) を固定する恒久 architecture test。
+// #151 の一度きり移行完了 witness は baseline merge 済みのため退役した (helper のコメント参照)。
 
 describe("extractModuleSpecifiers", () => {
   test("全 static import 形式と literal dynamic import を抽出する", async () => {
@@ -42,104 +32,6 @@ describe("extractModuleSpecifiers", () => {
       "./type-re-export",
       "./dynamic",
     ]);
-  });
-});
-
-describe("normalizeTypeScriptStructure", () => {
-  test("import path、import order、comment だけの差を同一化する", async () => {
-    const before = `
-      // old path
-      import { b } from "./old-b";
-      import { a } from "./old-a";
-      export const value = a + b;
-      export const View = () => <>{/* old/path.tsx */}</>;
-    `;
-    const after = `
-      import { a } from "../new/a";
-      // new path
-      import { b } from "../new/b";
-      export const value = a + b;
-      export const View = () => <>{/* new/path.tsx */}</>;
-    `;
-
-    expect(await normalizeTypeScriptStructure(before, "before.ts")).toBe(
-      await normalizeTypeScriptStructure(after, "after.ts"),
-    );
-  });
-
-  test("logic token の変更は mismatch にする", async () => {
-    const before = "export const value = left + right;";
-    const after = "export const value = left - right;";
-
-    expect(await normalizeTypeScriptStructure(before, "before.ts")).not.toBe(
-      await normalizeTypeScriptStructure(after, "after.ts"),
-    );
-  });
-});
-
-describe("baseline move manifest", () => {
-  test("move-only 50 file と raw 2 file が baseline digest に一致する", async () => {
-    expect(WEB_DOMAIN_BASELINE_HEAD).toBe("91dde8ae421a18621a049f0a3692abf5f89861f4");
-    expect(WEB_DOMAIN_MOVE_MANIFEST).toHaveLength(50);
-    expect(WEB_DOMAIN_RAW_MANIFEST).toHaveLength(2);
-    expect(await findMoveManifestMismatches(WEB_DOMAIN_MOVE_MANIFEST)).toEqual([]);
-    expect(findRawManifestMismatches(WEB_DOMAIN_RAW_MANIFEST)).toEqual([]);
-  });
-
-  test("move-only source の logic mutation を path 付きで拒否する", async () => {
-    const [entry] = WEB_DOMAIN_MOVE_MANIFEST;
-    const findings = await findMoveManifestMismatches([entry], (path) => {
-      const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
-      return `${source}\nexport const injectedMutation = true;\n`;
-    });
-
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toStartWith(`${entry.currentPath}: normalized digest mismatch`);
-  });
-
-  test("raw source の mutation を path 付きで拒否する", () => {
-    const [entry] = WEB_DOMAIN_RAW_MANIFEST;
-    const findings = findRawManifestMismatches([entry], (path) => {
-      const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
-      return `${source}\n/* injected mutation */\n`;
-    });
-
-    expect(findings).toHaveLength(1);
-    expect(findings[0]).toStartWith(`${entry.currentPath}: raw digest mismatch`);
-  });
-});
-
-describe("refactor completion checkers", () => {
-  test("approved path だけを通し package change を拒否する", () => {
-    expect(
-      findUnapprovedChangedPaths([
-        "web/src/app/App.tsx",
-        "web/components.json",
-        "src/company/org-code.ts",
-        "docs/adr/0015-web-domain-first-directory-structure.md",
-      ]),
-    ).toEqual([]);
-    expect(findUnapprovedChangedPaths(["package.json"])).toEqual(["package.json"]);
-  });
-
-  test("stale path を path と line 付きで報告し明示allowlistだけ除外する", () => {
-    const sources = {
-      "src/live.ts": 'import "@/lib/account-api";',
-      "docs/history.md": "historical web/src/pages/SignIn.tsx",
-      "packages/client/README.md": 'import { authClient } from "@/lib/auth/client";',
-    };
-
-    expect(findStaleReferences(sources, new Set(["docs/history.md"]))).toEqual([
-      'src/live.ts:1: import "@/lib/account-api";',
-    ]);
-  });
-
-  test("実 worktree の変更 path (untracked 含む) が全て approved である", () => {
-    expect(findUnapprovedChangedPaths(readWorkingTreeChangedPaths())).toEqual([]);
-  });
-
-  test("実 repo の text に旧 path への live reference が無い", () => {
-    expect(findStaleReferences(readRepoTextSources(), HISTORICAL_STALE_ALLOWLIST)).toEqual([]);
   });
 });
 

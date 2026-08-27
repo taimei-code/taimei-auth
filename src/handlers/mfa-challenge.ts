@@ -4,6 +4,13 @@ import { z } from "zod";
 import { guardErrorResponse, resolveParseBody } from "../membership/guard";
 import { readChallenge } from "../mfa/challenge-store";
 import { completeChallenge } from "../mfa/complete-challenge";
+import type {
+  MatchesWireShape,
+  MfaChallengeStateResponse,
+  MfaChallengeVerifyRequest,
+  MfaChallengeVerifyResponse,
+  MfaErrorResponse,
+} from "../mfa/wire-contracts";
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 
@@ -14,12 +21,17 @@ import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 export const mfaChallenge = new Hono();
 
 const verifyBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
+// 検出器: schema と wire 型の乖離を typecheck で落とす (MatchesWireShape のコメント参照)。
+const _verifyBodyMatchesWire: MatchesWireShape<
+  z.infer<typeof verifyBody>,
+  MfaChallengeVerifyRequest
+> = true;
 
 // GET チャレンジの保留判定。返すのは boolean 1 つに限る — 遷移先・userId・第二要素の種別は
 // いずれも cookie を拾った第三者への手掛かりになる。
 mfaChallenge.get("/api/mfa/challenge", async (c) => {
   const challenge = await readChallenge(c.req.raw.headers);
-  return c.json({ pending: challenge.pending });
+  return c.json({ pending: challenge.pending } satisfies MfaChallengeStateResponse);
 });
 
 // POST チャレンジ通過 (検証・遷移先の出口検証・状態の掃除は completeChallenge が所有)。
@@ -28,7 +40,10 @@ mfaChallenge.post("/api/mfa/challenge/verify", async (c) => {
   if (!parsed.ok) return guardErrorResponse(parsed);
 
   const result = await completeChallenge(c.req.raw.headers, parsed.data);
-  if (!result.ok) return c.json({ error: result.error }, result.status);
+  if (!result.ok) return c.json({ error: result.error } satisfies MfaErrorResponse, result.status);
 
-  return forwardSetCookie(c.json({ redirect_url: result.redirectUrl }), result.forwardedHeaders);
+  return forwardSetCookie(
+    c.json({ redirect_url: result.redirectUrl } satisfies MfaChallengeVerifyResponse),
+    result.forwardedHeaders,
+  );
 });
