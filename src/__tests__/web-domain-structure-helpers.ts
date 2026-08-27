@@ -1,6 +1,4 @@
-import { execSync } from "node:child_process";
 import {
-  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -9,7 +7,6 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
 import { dirname, extname, join, posix, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { API } from "typescript/unstable/async";
@@ -23,94 +20,17 @@ import {
 
 import { REPO_ROOT } from "./config-invariant-helpers";
 
-// web/src のドメイン構造 (ADR-0015 / web/src/CLAUDE.md) を固定する検査群。役割は 2 種に分かれる:
-// - 恒久 architecture test: analyzeWebStructure (cross-domain allowlist / pages 規則 / shared 逆依存 /
-//   cycle)。新しい cross-domain interface を設ける時は ALLOWED_CROSS_DOMAIN に file path を足し、
-//   設計変更として review する。
-// - 移行完了 witness (plan AC-142〜144): move manifest 照合 / APPROVED_CHANGED_PATHS /
-//   STALE_REFERENCE_PATTERNS。baseline 91dde8a 時点の移行を固定する一度きりの検査で、
-//   恒久規則ではない。
+// web/src のドメイン構造 (ADR-0015 / web/src/CLAUDE.md) を固定する恒久 architecture test の helper:
+// analyzeWebStructure (cross-domain allowlist / pages 規則 / shared 逆依存 / cycle)。新しい
+// cross-domain interface を設ける時は ALLOWED_CROSS_DOMAIN に file path を足し、設計変更として
+// review する。#151 の一度きり移行完了 witness (move manifest 照合 / 変更 path 承認 / stale
+// reference 検査) は baseline merge 済みのため退役した。
 
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
 const DOMAIN_ROOTS = new Set(["account", "auth", "company", "invitation", "membership", "mfa"]);
 const MODULE_ROOTS = new Set([...DOMAIN_ROOTS, "app", "shared"]);
 const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
-
-const APPROVED_CHANGED_PATHS = new Set([
-  "AGENTS.md",
-  "CLAUDE.md",
-  "CONTEXT.md",
-  "biome.json",
-  "db/AGENTS.md",
-  "db/CLAUDE.md",
-  "docs/adr/0002-spa-routing-and-static-assets.md",
-  "docs/adr/0005-canary-token-embedding.md",
-  "docs/adr/0006-sdk-encapsulation.md",
-  "docs/adr/0008-avatar-immediate-persist.md",
-  "docs/adr/0010-company-account-deletion-lifecycle.md",
-  "docs/adr/0012-layered-architecture.md",
-  "docs/adr/0013-mfa-totp-challenge.md",
-  "docs/adr/0014-docker-runner-dev-stage-separation.md",
-  "docs/adr/0015-web-domain-first-directory-structure.md",
-  "docs/qa/manual-regression.md",
-  "packages/auth-client/AGENTS.md",
-  "packages/auth-client/CLAUDE.md",
-  "src/AGENTS.md",
-  "src/CLAUDE.md",
-  "e2e/company-delete.e2e.ts",
-  "e2e/helpers.ts",
-  "src/__tests__/routes-integration.test.ts",
-  "src/__tests__/web-shared-core-runtime-free.test.ts",
-  "web/tailwind.config.ts",
-  "src/__tests__/web-domain-structure-helpers.ts",
-  "src/__tests__/web-domain-move-manifest.ts",
-  "src/__tests__/web-domain-structure.test.ts",
-  "src/app.ts",
-  "src/company/__tests__/org-code.test.ts",
-  "src/company/org-code.ts",
-  "src/handlers/account-company.ts",
-  "src/handlers/auth-entry-redirect.ts",
-  "src/invitation/accept-path.ts",
-  "src/membership/__tests__/policy.test.ts",
-  "src/membership/policy.ts",
-  "src/sign-in-params.ts",
-  "web/components.json",
-]);
-
-const LEGACY_LIB_IMPORTS = [
-  "account-api",
-  "auth-client",
-  "auth-redirect",
-  "company-context",
-  "labels",
-  "mfa-api",
-  "mfa-challenge-flow",
-  "session-guard",
-  "sign-params",
-  "use-async-load",
-  "use-mfa-challenge-flow",
-  "use-mfa-code-entry",
-  "use-sign-page",
-  "utils",
-];
-
-const STALE_REFERENCE_PATTERNS = [
-  ...LEGACY_LIB_IMPORTS.map((module) => `@/lib/${module}`),
-  "@/components/CanaryTokens",
-  "@/components/ConfirmDestructiveDialog",
-  "@/components/FullScreenLoader",
-  "@/components/PhishingBanner",
-  "@/components/account/",
-  "@/components/auth/",
-  "@/components/notify",
-  "@/components/ui/",
-  "web/src/lib/",
-  "web/src/components/",
-  "web/src/pages/",
-  "components/notify.tsx",
-  "lib/auth-redirect.ts",
-];
 
 const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
@@ -181,120 +101,7 @@ export type StructureResult = {
   fileCount: number;
 };
 
-export type MoveManifestEntry = {
-  baselinePath: string;
-  currentPath: string;
-  normalizedSha256: string;
-};
-
-export type RawManifestEntry = {
-  baselinePath: string;
-  currentPath: string;
-  rawSha256: string;
-};
-
-const sha256 = (source: string): string => createHash("sha256").update(source).digest("hex");
-
-export async function findMoveManifestMismatches(
-  entries: readonly MoveManifestEntry[],
-  readCurrent: (path: string) => string = (path) => readFileSync(join(REPO_ROOT, path), "utf8"),
-): Promise<string[]> {
-  // 全 entry を 1 つの fixture project でまとめて正規化する (file ごとに project を建てると
-  // tsgo process 起動 ~50ms × 50 file が全 PR の CI に載る)。
-  const normalized = await normalizeTypeScriptStructures(
-    new Map(entries.map((entry) => [entry.currentPath, readCurrent(entry.currentPath)])),
-  );
-  return entries
-    .flatMap((entry) => {
-      const normalizedSource = normalized.get(entry.currentPath);
-      if (normalizedSource === undefined) {
-        throw new Error(`TypeScript normalization source not found: ${entry.currentPath}`);
-      }
-      const actual = sha256(normalizedSource);
-      return actual === entry.normalizedSha256
-        ? []
-        : [
-            `${entry.currentPath}: normalized digest mismatch (baseline ${entry.baselinePath}, expected ${entry.normalizedSha256}, actual ${actual})`,
-          ];
-    })
-    .sort();
-}
-
-export function findRawManifestMismatches(
-  entries: readonly RawManifestEntry[],
-  readCurrent: (path: string) => string = (path) => readFileSync(join(REPO_ROOT, path), "utf8"),
-): string[] {
-  return entries
-    .flatMap((entry) => {
-      const actual = sha256(readCurrent(entry.currentPath));
-      return actual === entry.rawSha256
-        ? []
-        : [
-            `${entry.currentPath}: raw digest mismatch (baseline ${entry.baselinePath}, expected ${entry.rawSha256}, actual ${actual})`,
-          ];
-    })
-    .sort();
-}
-
-export function findUnapprovedChangedPaths(paths: readonly string[]): string[] {
-  return [...new Set(paths.map((path) => path.replaceAll("\\", "/")))]
-    .filter((path) => !path.startsWith("web/src/") && !APPROVED_CHANGED_PATHS.has(path))
-    .sort();
-}
-
-export function findStaleReferences(
-  sources: Readonly<Record<string, string>>,
-  allowedPaths: ReadonlySet<string> = new Set(),
-): string[] {
-  const findings: string[] = [];
-  for (const [rawPath, source] of Object.entries(sources)) {
-    const path = rawPath.replaceAll("\\", "/");
-    if (allowedPaths.has(path)) continue;
-    for (const [lineIndex, line] of source.split("\n").entries()) {
-      if (STALE_REFERENCE_PATTERNS.some((pattern) => line.includes(pattern))) {
-        findings.push(`${path}:${lineIndex + 1}: ${line.trim()}`);
-      }
-    }
-  }
-  return findings.sort();
-}
-
-// 完了 witness (AC-143/144) の走査対象。commit 前の worktree で検証する前提で、tracked の変更と
-// untracked を git から取る (merge 後の clean tree では空集合になり無害化する)。
-const gitLines = (command: string): string[] =>
-  execSync(command, { cwd: REPO_ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
-
-export const readWorkingTreeChangedPaths = (): string[] => [
-  ...gitLines("git diff --name-only HEAD"),
-  ...gitLines("git ls-files --others --exclude-standard"),
-];
-
-// 旧 path 文字列を意図的に保持する file (baseline manifest / stale pattern 定義 / その fixture)。
-export const HISTORICAL_STALE_ALLOWLIST: ReadonlySet<string> = new Set([
-  "src/__tests__/web-domain-move-manifest.ts",
-  "src/__tests__/web-domain-structure-helpers.ts",
-  "src/__tests__/web-domain-structure.test.ts",
-]);
-
-const TEXT_EXTENSIONS = [".ts", ".tsx", ".md", ".json", ".yml", ".yaml", ".toml", ".css"];
-
-export const readRepoTextSources = (): Record<string, string> => {
-  const result: Record<string, string> = {};
-  const paths = [
-    ...gitLines("git ls-files"),
-    ...gitLines("git ls-files --others --exclude-standard"),
-  ];
-  for (const path of paths) {
-    if (!TEXT_EXTENSIONS.some((extension) => path.endsWith(extension))) continue;
-    const full = join(REPO_ROOT, path);
-    if (!existsSync(full)) continue; // worktree で削除済みの tracked path
-    result[path] = readFileSync(full, "utf8");
-  }
-  return result;
-};
-
-// import 宣言 / re-export / literal dynamic import の module specifier。digest 正規化と依存 graph の
-// 双方がこの 1 判定を共有する (二重実装だと import 形式を足した時に片側だけ増えて silent に食い違う)。
+// import 宣言 / re-export / literal dynamic import の module specifier。
 const moduleSpecifierOf = (node: Node) => {
   if (
     (isImportDeclaration(node) || isExportDeclaration(node)) &&
@@ -382,64 +189,6 @@ export async function extractModuleSpecifiers(source: string, fileName: string):
   const path = fileName.replaceAll("\\", "/");
   const parsed = await parseSources(new Map([[path, source]]));
   return parsed.get(path) ?? [];
-}
-
-const normalizedNode = (
-  node: Node,
-  sourceFile: SourceFile,
-  moduleNodes: ReadonlySet<Node>,
-): string => {
-  if (moduleNodes.has(node)) return `${node.kind}:<module>`;
-  const children: string[] = [];
-  node.forEachChild((child) => {
-    children.push(normalizedNode(child, sourceFile, moduleNodes));
-  });
-  if (children.length > 0) return `${node.kind}(${children.join(",")})`;
-  const text = node.getText(sourceFile);
-  if (/^\{\/\*[\s\S]*\*\/\}$/.test(text)) return `${node.kind}:<comment>`;
-  return `${node.kind}:${text}`;
-};
-
-const normalizedSourceFile = (sourceFile: SourceFile): string => {
-  const moduleNodes = new Set<Node>();
-  const collectModules = (node: Node): void => {
-    const specifier = moduleSpecifierOf(node);
-    if (specifier) moduleNodes.add(specifier);
-    node.forEachChild(collectModules);
-  };
-  collectModules(sourceFile);
-
-  const imports: string[] = [];
-  const body: string[] = [];
-  for (const statement of sourceFile.statements) {
-    const normalized = normalizedNode(statement, sourceFile, moduleNodes);
-    if (isImportDeclaration(statement) || isExportDeclaration(statement)) imports.push(normalized);
-    else body.push(normalized);
-  }
-  return JSON.stringify({ imports: imports.sort(), body });
-};
-
-const normalizeTypeScriptStructures = (
-  sources: ReadonlyMap<string, string>,
-): Promise<Map<string, string>> =>
-  withFixtureProject(sources, async (getSourceFile) => {
-    const result = new Map<string, string>();
-    for (const path of sources.keys()) {
-      result.set(path, normalizedSourceFile(await getSourceFile(path)));
-    }
-    return result;
-  });
-
-export async function normalizeTypeScriptStructure(
-  source: string,
-  fileName: string,
-): Promise<string> {
-  const path = fileName.replaceAll("\\", "/");
-  const normalized = (await normalizeTypeScriptStructures(new Map([[path, source]]))).get(path);
-  if (normalized === undefined) {
-    throw new Error(`TypeScript normalization source not found: ${path}`);
-  }
-  return normalized;
 }
 
 const withExtension = (base: string, sources: ReadonlyMap<string, string>): string | null => {
