@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MfaApiError, resolveMfaErrorCode, type MfaCodeKind, type MfaErrorCode } from "../mfa-api";
+import type { MfaCodeKind, MfaErrorCode } from "../mfa-api";
 import {
   describeMfaChallengeError,
   normalizeMfaCode,
@@ -169,55 +169,8 @@ describe("describeMfaChallengeError", () => {
   });
 });
 
-describe("resolveMfaErrorCode", () => {
-  const cases: {
-    name: string;
-    status: number;
-    wireError: string | undefined;
-    code: MfaErrorCode;
-  }[] = [
-    { name: "429 + error 無し", status: 429, wireError: undefined, code: "rate_limited" },
-    { name: "429 + locked", status: 429, wireError: "locked", code: "locked" },
-    {
-      name: "429 + Too Many Requests (proxy 文言)",
-      status: 429,
-      wireError: "Too Many Requests",
-      code: "rate_limited",
-    },
-    { name: "400 + invalid_code", status: 400, wireError: "invalid_code", code: "invalid_code" },
-    {
-      name: "401 + challenge_expired",
-      status: 401,
-      wireError: "challenge_expired",
-      code: "challenge_expired",
-    },
-    {
-      name: "409 + already_enabled",
-      status: 409,
-      wireError: "already_enabled",
-      code: "already_enabled",
-    },
-    { name: "500 + error 無し", status: 500, wireError: undefined, code: "unknown" },
-    { name: "400 + prototype メンバー名", status: 400, wireError: "toString", code: "unknown" },
-  ];
-
-  test.each(cases)("QA-E-11 $name → $code", ({ status, wireError, code }) => {
-    expect(resolveMfaErrorCode(status, wireError)).toBe(code);
-  });
-
-  test("QA-E-11 同じ 429 でも locked と rate_limited を取り違えない", () => {
-    expect(resolveMfaErrorCode(429, "locked")).not.toBe(resolveMfaErrorCode(429, undefined));
-  });
-
-  test("QA-E-11 MfaApiError は code を保持し message には汎用文言だけを載せる", () => {
-    const error = new MfaApiError(429, resolveMfaErrorCode(429, "locked"));
-
-    expect(error.code).toBe("locked");
-    expect(error.status).toBe(429);
-    expect(error.message).not.toContain("locked");
-    expect(error.message).not.toContain("_");
-  });
-});
+// error code 解決 (旧 resolveMfaErrorCode の表駆動) は公開関数越しの検証へ移した
+// (web/src/mfa/__tests__/mfa-api.test.ts の AC-011)。
 
 describe("useMfaCodeInput", () => {
   test("AC-024 controlled submitting と error を入力属性へ反映する", () => {

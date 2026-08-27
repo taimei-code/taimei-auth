@@ -13,9 +13,7 @@ export const Security = () => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // mfa-api の requestJson は 2xx 空 body を undefined に解決するため null へ正規化する
-  // (正規化しないと下の isEmpty 判定を素通りし、MFA 行が文言なしで消える)。
-  const refresh = useCallback(() => getMfaStatus().then((next) => setStatus(next ?? null)), []);
+  const refresh = useCallback(() => getMfaStatus().then(setStatus), []);
 
   useEffect(() => {
     refresh()

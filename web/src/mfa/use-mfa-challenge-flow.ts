@@ -9,39 +9,31 @@ import {
 import { getMfaChallenge, mfaErrorCodeOf, verifyMfaChallenge, type MfaErrorCode } from "./mfa-api";
 import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
 
-// wire の入力型に直接繋ぐ — 別に書き下すと verify API に field が増えた時に黙って drift する。
+// verify API の入力型に直接繋ぐ — 別に書き下すと field が増えた時に黙って drift する。
 type MfaChallengeCodeInput = Parameters<typeof verifyMfaChallenge>[0];
 
 type ChallengePort = MfaChallengePort<MfaChallengeCodeInput, MfaErrorCode>;
 
 // HTTP 応答・例外を flow 向けの観測結果 / 検証結果へ変換する唯一の production port (ADR-0013 §9)。
-// requestJson は body を無検証 cast で返すため、wire 契約どおりの形かはこの port が最後の砦になる。
+// wire 形の検査 (空 redirect_url の拒否まで) は mfa-api の positive check が所有し、ここは
+// HTTP の成否を flow の語彙へ写すだけ。
 export const mfaChallengePort: ChallengePort = {
   observe: async (signal) => {
     try {
       const { pending } = await getMfaChallenge(signal);
-      // 「不在」は positive な pending === false だけで判定する。形の崩れた 2xx を absent に
-      // 倒すと生きているチャレンジで期限切れ画面に袋小路になる — 通信失敗と同じく
-      // 不存在を推測せず入力を許す (ADR-0013 §9)。
-      if (pending === true) return { kind: "present" };
-      if (pending === false) return { kind: "absent" };
-      return { kind: "unavailable" };
+      return pending ? { kind: "present" } : { kind: "absent" };
     } catch (error) {
       if (signal.aborted) throw error;
+      // 形の崩れた 2xx (mfa-api の throw) も通信失敗と同じく、不存在を推測せず入力を許す
+      // — absent に倒すと生きているチャレンジで期限切れ画面に袋小路になる (ADR-0013 §9)。
       return { kind: "unavailable" };
     }
   },
   // POST 側には意図的に AbortSignal を渡さない。理由は ADR-0013 §9。
   verify: async (input) => {
     try {
-      const { redirect_url } = await verifyMfaChallenge(input);
-      // redirect 先を持たない 2xx をそのまま passed にすると assign(undefined) が
-      // 文字列 "undefined" へ遷移する。遷移先不明の成功は表示可能な失敗へ倒す
-      // (再試行が通らなくても challenge_expired → 再ログイン導線で復帰できる)。
-      if (typeof redirect_url !== "string" || redirect_url === "") {
-        return { kind: "rejected", errorCode: "unknown" };
-      }
-      return { kind: "passed", redirectUrl: redirect_url };
+      const { redirectUrl } = await verifyMfaChallenge(input);
+      return { kind: "passed", redirectUrl };
     } catch (error) {
       return { kind: "rejected", errorCode: mfaErrorCodeOf(error) };
     }
