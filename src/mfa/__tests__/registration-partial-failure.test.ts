@@ -21,8 +21,8 @@ type Scenario = {
   expectedReturn?: { ok: true } | MfaFailure;
   expectedCookies?: string[];
   expectedNotifications?: string[];
-  expectedReleasedLeaseTokens?: string[];
-  expectedHeldLeaseToken?: string;
+  expectedReleasedHoldTokens?: string[];
+  expectedHeldToken?: string;
   expectedTransitionReport?: boolean;
   expectedAuditObservation?: boolean;
 };
@@ -36,42 +36,42 @@ const scenarios: Scenario[] = [
     expectedReturn: { ok: true },
     expectedCookies: ["activate-revoke=1", "activate-totp=1"],
     expectedNotifications: ["enabled:snapshot@example.com"],
-    expectedReleasedLeaseTokens: ["guard-activate"],
+    expectedReleasedHoldTokens: ["guard-activate"],
   },
   {
     id: "A-RK",
-    description: "activate returns a known revoke failure and releases the lease",
+    description: "activate returns a known revoke failure and releases the hold",
     operation: "activate",
     fault: { step: "revoke", mode: "known" },
     expectedLedger: ["acquire", "revoke", "release"],
     expectedReturn: { ok: false, error: "challenge_expired", status: 401 },
-    expectedReleasedLeaseTokens: ["guard-activate"],
+    expectedReleasedHoldTokens: ["guard-activate"],
   },
   {
     id: "A-RT",
-    description: "activate rethrows an unknown revoke outcome and holds the lease",
+    description: "activate rethrows an unknown revoke outcome and keeps the hold",
     operation: "activate",
     fault: { step: "revoke", mode: "throw" },
     expectedLedger: ["acquire", "revoke"],
-    expectedHeldLeaseToken: "guard-activate",
+    expectedHeldToken: "guard-activate",
     expectedTransitionReport: true,
   },
   {
     id: "A-AK",
-    description: "activate returns a known TOTP activation failure and releases the lease",
+    description: "activate returns a known TOTP activation failure and releases the hold",
     operation: "activate",
     fault: { step: "activateTotp", mode: "known" },
     expectedLedger: ["acquire", "revoke", "activateTotp", "release"],
     expectedReturn: { ok: false, error: "invalid_code", status: 400 },
-    expectedReleasedLeaseTokens: ["guard-activate"],
+    expectedReleasedHoldTokens: ["guard-activate"],
   },
   {
     id: "A-AT",
-    description: "activate rethrows an unknown TOTP activation outcome and holds the lease",
+    description: "activate rethrows an unknown TOTP activation outcome and keeps the hold",
     operation: "activate",
     fault: { step: "activateTotp", mode: "throw" },
     expectedLedger: ["acquire", "revoke", "activateTotp"],
-    expectedHeldLeaseToken: "guard-activate",
+    expectedHeldToken: "guard-activate",
     expectedTransitionReport: true,
   },
   {
@@ -91,7 +91,7 @@ const scenarios: Scenario[] = [
     expectedReturn: { ok: true },
     expectedCookies: ["activate-revoke=1", "activate-totp=1"],
     expectedNotifications: ["enabled:snapshot@example.com"],
-    expectedReleasedLeaseTokens: ["guard-activate"],
+    expectedReleasedHoldTokens: ["guard-activate"],
     expectedAuditObservation: true,
   },
   {
@@ -112,7 +112,7 @@ const scenarios: Scenario[] = [
     expectedReturn: { ok: true },
     expectedCookies: ["disable-verify=1", "disable-revoke=1", "disable-totp=1"],
     expectedNotifications: ["disabled:snapshot@example.com"],
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
   },
   {
     id: "D-SK",
@@ -121,60 +121,60 @@ const scenarios: Scenario[] = [
     fault: { step: "spend", mode: "known" },
     expectedLedger: ["acquire", "spend", "release"],
     expectedReturn: { ok: false, error: "locked", status: 429 },
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
   },
   {
     id: "D-VK",
-    description: "disable returns a known verification failure and releases the lease",
+    description: "disable returns a known verification failure and releases the hold",
     operation: "disable",
     fault: { step: "verify", mode: "known" },
     expectedLedger: ["acquire", "spend", "verify", "release"],
     expectedReturn: { ok: false, error: "invalid_code", status: 400 },
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
   },
   {
     id: "D-VT",
-    description: "disable rethrows an unknown verification outcome and holds the lease",
+    description: "disable rethrows an unknown verification outcome and keeps the hold",
     operation: "disable",
     fault: { step: "verify", mode: "throw" },
     expectedLedger: ["acquire", "spend", "verify"],
-    expectedHeldLeaseToken: "guard-disable",
+    expectedHeldToken: "guard-disable",
     expectedTransitionReport: true,
   },
   {
     id: "D-RK",
-    description: "disable returns a known revoke failure and releases the lease",
+    description: "disable returns a known revoke failure and releases the hold",
     operation: "disable",
     fault: { step: "revoke", mode: "known" },
     expectedLedger: ["acquire", "spend", "verify", "reset", "revoke", "release"],
     expectedReturn: { ok: false, error: "challenge_expired", status: 401 },
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
   },
   {
     id: "D-RT",
-    description: "disable rethrows an unknown revoke outcome and holds the lease",
+    description: "disable rethrows an unknown revoke outcome and keeps the hold",
     operation: "disable",
     fault: { step: "revoke", mode: "throw" },
     expectedLedger: ["acquire", "spend", "verify", "reset", "revoke"],
-    expectedHeldLeaseToken: "guard-disable",
+    expectedHeldToken: "guard-disable",
     expectedTransitionReport: true,
   },
   {
     id: "D-DK",
-    description: "disable returns a known TOTP disable failure and releases the lease",
+    description: "disable returns a known TOTP disable failure and releases the hold",
     operation: "disable",
     fault: { step: "disableTotp", mode: "known" },
     expectedLedger: ["acquire", "spend", "verify", "reset", "revoke", "disableTotp", "release"],
     expectedReturn: { ok: false, error: "challenge_expired", status: 401 },
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
   },
   {
     id: "D-DT",
-    description: "disable rethrows an unknown TOTP disable outcome and holds the lease",
+    description: "disable rethrows an unknown TOTP disable outcome and keeps the hold",
     operation: "disable",
     fault: { step: "disableTotp", mode: "throw" },
     expectedLedger: ["acquire", "spend", "verify", "reset", "revoke", "disableTotp"],
-    expectedHeldLeaseToken: "guard-disable",
+    expectedHeldToken: "guard-disable",
     expectedTransitionReport: true,
   },
   {
@@ -197,7 +197,7 @@ const scenarios: Scenario[] = [
     expectedReturn: { ok: true },
     expectedCookies: ["disable-verify=1", "disable-revoke=1", "disable-totp=1"],
     expectedNotifications: ["disabled:snapshot@example.com"],
-    expectedReleasedLeaseTokens: ["guard-disable"],
+    expectedReleasedHoldTokens: ["guard-disable"],
     expectedAuditObservation: true,
   },
 ];
@@ -244,10 +244,10 @@ describe("MFA registration partial failures", () => {
       expect(harness.ledger).toEqual(scenario.expectedLedger);
       expect(cookies).toEqual(scenario.expectedCookies ?? []);
       expect(harness.notifications).toEqual(scenario.expectedNotifications ?? []);
-      expect(harness.releasedLeases.map((lease) => lease.token)).toEqual(
-        scenario.expectedReleasedLeaseTokens ?? [],
+      expect(harness.releasedHolds.map((hold) => hold.token)).toEqual(
+        scenario.expectedReleasedHoldTokens ?? [],
       );
-      expect(harness.activeLease?.token).toBe(scenario.expectedHeldLeaseToken);
+      expect(harness.activeHold?.token).toBe(scenario.expectedHeldToken);
 
       expect(
         harness.transitionReports.map(({ operation, phase }) => ({ operation, phase })),
@@ -319,6 +319,6 @@ describe("MFA registration partial failures", () => {
       retryAfterSeconds: 10,
     });
     expect(harness.ledger).toEqual(["acquire", "revoke", "acquire"]);
-    expect(harness.activeLease?.token).toBe("guard-activate");
+    expect(harness.activeHold?.token).toBe("guard-activate");
   });
 });

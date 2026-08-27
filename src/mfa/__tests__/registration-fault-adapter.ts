@@ -3,7 +3,7 @@ import { createRegistrationApplication } from "../registration/application";
 import { createDisable } from "../registration/disable";
 import { CHALLENGE_EXPIRED, failure, LOCKED, type MfaFailure } from "../error-mapping";
 import type {
-  GuardLease,
+  GuardHold,
   RegistrationOperations,
   RegistrationSnapshot,
   TransitionGuard,
@@ -49,9 +49,9 @@ export function createRegistrationFaultHarness(options: {
   const notifications: string[] = [];
   const observedAuditErrors: unknown[] = [];
   const transitionReports: Parameters<ReportUnknownTransition>[0][] = [];
-  const releasedLeases: GuardLease[] = [];
+  const releasedHolds: GuardHold[] = [];
   const faultError = new Error(`${options.operation}:${options.fault?.step ?? "success"}`);
-  let activeLease: GuardLease | undefined;
+  let activeHold: GuardHold | undefined;
 
   const throwAt = (step: ThrowFaultStep): void => {
     if (options.fault?.step === step && options.fault.mode === "throw") throw faultError;
@@ -75,24 +75,24 @@ export function createRegistrationFaultHarness(options: {
   const guard: TransitionGuard = {
     acquire: async (userId, operation) => {
       ledger.push("acquire");
-      if (activeLease) {
+      if (activeHold) {
         return { acquired: false, cause: "held", heldSince: new Date() };
       }
       if (operation !== options.operation) {
         throw new Error(`expected ${options.operation}, received ${operation}`);
       }
-      activeLease = {
+      activeHold = {
         userId,
         token: `guard-${operation}`,
         operation,
         snapshot: options.snapshot ?? acceptedSnapshotsByOperation[operation],
       };
-      return { acquired: true, lease: activeLease };
+      return { acquired: true, hold: activeHold };
     },
-    release: async (lease) => {
+    release: async (hold) => {
       ledger.push("release");
-      releasedLeases.push(lease);
-      activeLease = undefined;
+      releasedHolds.push(hold);
+      activeHold = undefined;
       return { released: true };
     },
   };
@@ -190,9 +190,9 @@ export function createRegistrationFaultHarness(options: {
     notifications,
     observedAuditErrors,
     transitionReports,
-    releasedLeases,
-    get activeLease() {
-      return activeLease;
+    releasedHolds,
+    get activeHold() {
+      return activeHold;
     },
   };
 }

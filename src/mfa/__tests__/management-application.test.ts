@@ -11,7 +11,7 @@ import { forceDisableMfa, type ForceDisableResult } from "../registration/force-
 import { createManagementApplication } from "../registration/management";
 import type {
   AcquireRegistrationGuardResult,
-  GuardLease,
+  GuardHold,
   RegistrationSnapshot,
   TransitionGuard,
 } from "../registration/ports";
@@ -26,7 +26,7 @@ const presentSnapshot: RegistrationSnapshot = {
   enrollment: undefined,
 };
 
-const lease: GuardLease = {
+const hold: GuardHold = {
   userId: "user-1",
   token: "guard-1",
   operation: "force_disable",
@@ -61,7 +61,7 @@ function createHarness(options: HarnessOptions = {}) {
   const notifyDisabled = options.notifyDisabled ?? (async () => true);
   const app = createManagementApplication({
     guard: {
-      acquire: instrument("acquire", options.acquire ?? (async () => ({ acquired: true, lease }))),
+      acquire: instrument("acquire", options.acquire ?? (async () => ({ acquired: true, hold }))),
       release: instrument("release", options.release ?? (async () => ({ released: true }))),
     },
     reportUnknownTransition: (event) => {
@@ -150,7 +150,7 @@ describe("management forceDisable failure vocabulary", () => {
   test("pre-check absence and acquired absent snapshot are identical", async () => {
     const precheck = createHarness({ findUserById: async () => undefined });
     const snapshot = createHarness({
-      acquire: async () => ({ acquired: true, lease: { ...lease, snapshot: { user: "absent" } } }),
+      acquire: async () => ({ acquired: true, hold: { ...hold, snapshot: { user: "absent" } } }),
       forceDisableOperation: forceDisableMfa,
     });
 
@@ -193,7 +193,7 @@ describe("management forceDisable failure vocabulary", () => {
       acquire: async () => {
         if (held) return { acquired: false, cause: "held", heldSince: new Date() };
         held = true;
-        return { acquired: true, lease };
+        return { acquired: true, hold };
       },
       release: async () => {
         releaseCalls += 1;
@@ -380,7 +380,7 @@ describe("management application DB integration", () => {
       expect(await mfaDisableState(user.id)).toEqual(before);
       expect(notificationEmails).toEqual([]);
     } finally {
-      await releaseRegistrationGuard(acquired.lease);
+      await releaseRegistrationGuard(acquired.hold);
     }
   });
 

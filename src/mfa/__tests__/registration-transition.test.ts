@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { RegistrationOperationKind, TransitionGuard } from "../registration/ports";
 import { createTransitionRunner } from "../registration/transition";
 
-const lease = {
+const hold = {
   userId: "user-1",
   token: "token-1",
   operation: "enroll" as const,
@@ -112,7 +112,7 @@ describe("MFA registration transition lifecycle", () => {
   test("QA-M-02 releases a known terminal result with the acquired token", async () => {
     const released: unknown[] = [];
     const guard: TransitionGuard = {
-      acquire: async () => ({ acquired: true, lease }),
+      acquire: async () => ({ acquired: true, hold }),
       release: async (value) => {
         released.push(value);
         return { released: true };
@@ -120,18 +120,18 @@ describe("MFA registration transition lifecycle", () => {
     };
 
     const result = await createTransitionRunner(guard)("user-1", "enroll", async (snapshot) => {
-      expect(snapshot).toEqual(lease.snapshot);
+      expect(snapshot).toEqual(hold.snapshot);
       return { ok: true };
     });
 
     expect(result).toEqual({ ok: true });
-    expect(released).toEqual([lease]);
+    expect(released).toEqual([hold]);
   });
 
   test("QA-M-09 leaves the guard when the outcome is unknown", async () => {
     let releaseCalls = 0;
     const guard: TransitionGuard = {
-      acquire: async () => ({ acquired: true, lease }),
+      acquire: async () => ({ acquired: true, hold }),
       release: async () => {
         releaseCalls += 1;
         return { released: true };
@@ -155,7 +155,7 @@ describe("MFA registration transition lifecycle", () => {
     }> = [];
     const failure = new Error("connection lost after commit");
     const guard: TransitionGuard = {
-      acquire: async () => ({ acquired: true, lease }),
+      acquire: async () => ({ acquired: true, hold }),
       release: async () => ({ released: true }),
     };
 
@@ -176,7 +176,7 @@ describe("MFA registration transition lifecycle", () => {
       error: unknown;
     }> = [];
     const guard: TransitionGuard = {
-      acquire: async () => ({ acquired: true, lease }),
+      acquire: async () => ({ acquired: true, hold }),
       release: async () => {
         throw new Error("release response lost");
       },
@@ -219,7 +219,7 @@ describe("MFA registration transition lifecycle", () => {
         acquire: async (_userId, operation) => {
           if (occupied) return { acquired: false, cause: "held", heldSince: undefined };
           occupied = true;
-          return { acquired: true, lease: { ...lease, operation } };
+          return { acquired: true, hold: { ...hold, operation } };
         },
         release: async () => {
           occupied = false;

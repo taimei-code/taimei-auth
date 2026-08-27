@@ -68,14 +68,14 @@ export function createTransitionRunner(
 
     let result: T;
     try {
-      result = await work(acquired.lease.snapshot);
+      result = await work(acquired.hold.snapshot);
     } catch (error) {
       reportWithoutChangingOutcome(reportUnknown, { operation, phase: "transition", error });
       throw error;
     }
 
     try {
-      const released = await guard.release(acquired.lease);
+      const released = await guard.release(acquired.hold);
       if (!released.released) {
         reportWithoutChangingOutcome(reportUnknown, {
           operation,

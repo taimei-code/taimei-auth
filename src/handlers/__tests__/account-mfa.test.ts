@@ -256,7 +256,7 @@ describe("account MFA API", () => {
       expect(await res.json()).toEqual({ error: "temporarily_unavailable" });
       expect(await countTwoFactorRows(user.id)).toBe(0);
     } finally {
-      await releaseRegistrationGuard(acquired.lease);
+      await releaseRegistrationGuard(acquired.hold);
     }
   });
 });

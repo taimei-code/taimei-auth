@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { createRegistrationApplication } from "../registration/application";
 import type { MfaActor } from "../registration/contracts";
 import type {
-  GuardLease,
+  GuardHold,
   RegistrationOperations,
   RegistrationSnapshot,
   TransitionGuard,
@@ -33,7 +33,7 @@ type HarnessOverrides = {
 
 function createHarness(overrides: HarnessOverrides = {}) {
   const events: string[] = [];
-  const lease: GuardLease = {
+  const hold: GuardHold = {
     userId: actor.id,
     token: "guard-1",
     operation: "activate",
@@ -42,7 +42,7 @@ function createHarness(overrides: HarnessOverrides = {}) {
   const guard: TransitionGuard = {
     acquire: async (_userId, operation) => {
       events.push(`acquire:${operation}`);
-      return { acquired: true, lease: { ...lease, operation } };
+      return { acquired: true, hold: { ...hold, operation } };
     },
     release:
       overrides.release ??
