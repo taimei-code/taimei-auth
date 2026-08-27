@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RegistrationOperationKind, TransitionGuard } from "../registration/ports";
-import { createTransitionRunner } from "../registration/transition";
+import { createTransitionRunner, type ReportUnknownTransition } from "../registration/transition";
 
 const hold = {
   userId: "user-1",
@@ -21,6 +21,9 @@ const busy = {
   retryAfterSeconds: 10,
 } as const;
 
+// 観測しないテスト用の明示 no-op。event を捕捉するテストは各自の reporter を渡して対比する。
+const silentReport: ReportUnknownTransition = () => undefined;
+
 describe("MFA registration transition lifecycle", () => {
   test("QA-E-03 returns busy without starting an external effect", async () => {
     let workStarted = false;
@@ -29,7 +32,7 @@ describe("MFA registration transition lifecycle", () => {
       release: async () => ({ released: false }),
     };
 
-    const run = createTransitionRunner(guard);
+    const run = createTransitionRunner(guard, silentReport);
     const result = await run("user-1", "enroll", async () => {
       workStarted = true;
       return "unexpected";
@@ -45,7 +48,11 @@ describe("MFA registration transition lifecycle", () => {
       release: async () => ({ released: false }),
     };
 
-    const result = await createTransitionRunner(guard)("user-1", "enroll", async () => "unused");
+    const result = await createTransitionRunner(guard, silentReport)(
+      "user-1",
+      "enroll",
+      async () => "unused",
+    );
 
     expect(result).toEqual({ ok: false, error: "not_found", status: 404 });
   });
@@ -119,10 +126,14 @@ describe("MFA registration transition lifecycle", () => {
       },
     };
 
-    const result = await createTransitionRunner(guard)("user-1", "enroll", async (snapshot) => {
-      expect(snapshot).toEqual(hold.snapshot);
-      return { ok: true };
-    });
+    const result = await createTransitionRunner(guard, silentReport)(
+      "user-1",
+      "enroll",
+      async (snapshot) => {
+        expect(snapshot).toEqual(hold.snapshot);
+        return { ok: true };
+      },
+    );
 
     expect(result).toEqual({ ok: true });
     expect(released).toEqual([hold]);
@@ -138,7 +149,7 @@ describe("MFA registration transition lifecycle", () => {
       },
     };
 
-    const run = createTransitionRunner(guard);
+    const run = createTransitionRunner(guard, silentReport);
     await expect(
       run("user-1", "enroll", async () => {
         throw new Error("connection lost after commit");
@@ -226,7 +237,7 @@ describe("MFA registration transition lifecycle", () => {
           return { released: true };
         },
       };
-      const run = createTransitionRunner(guard);
+      const run = createTransitionRunner(guard, silentReport);
       const first = run("user-1", firstOperation, async () => {
         firstStarted();
         await finishing;

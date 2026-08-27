@@ -30,8 +30,6 @@ type ManagementReleaseResult =
 
 export function createManagementApplication(deps: {
   guard: TransitionGuard;
-  // 必須にする: optional + 無音 no-op 既定だと、wiring から束縛が消えても typecheck と
-  // 全テストが green のまま、ADR-0013 §8 唯一の残置 guard 検知 (Sentry 通報) が消灯する。
   reportUnknownTransition: ReportUnknownTransition;
   readProtocolVersion(): Promise<number | undefined>;
   findUserById(userId: string): Promise<{ id: string } | undefined>;

@@ -8,7 +8,7 @@ type SessionResult = { ok: true; sessionChanges: Headers } | MfaFailure;
 
 export function createRegistrationApplication(deps: {
   guard: TransitionGuard;
-  reportUnknownTransition?: ReportUnknownTransition;
+  reportUnknownTransition: ReportUnknownTransition;
   operations: RegistrationOperations;
   notifyEnabled(email: string): void;
   notifyDisabled(email: string): void;

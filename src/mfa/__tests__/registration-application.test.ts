@@ -80,7 +80,8 @@ function createHarness(overrides: HarnessOverrides = {}) {
       operations,
       notifyEnabled: overrides.notifyEnabled ?? (() => events.push("notify:enabled")),
       notifyDisabled: overrides.notifyDisabled ?? (() => events.push("notify:disabled")),
-      reportUnknownTransition: overrides.reportUnknownTransition,
+      // no-op 既定はこの test 二重体に閉じる (production factory 側は必須のまま)。
+      reportUnknownTransition: overrides.reportUnknownTransition ?? (() => undefined),
     }),
     events,
   };

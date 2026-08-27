@@ -10,6 +10,10 @@ import type { RegistrationOperationKind, RegistrationSnapshot, TransitionGuard }
 // これを大きく超えて残る guard は結果不明の残置とみなし観測する。解放はしない (ADR-0013 §8)。
 const STALE_GUARD_REPORT_AFTER_MS = 15 * 60 * 1000;
 
+// 消費側 (runner / application factory) はこの依存を必須で受ける。optional + 無音 no-op 既定だと、
+// wiring から束縛が消えても typecheck と全テストが green のまま、ADR-0013 §8 唯一の残置 guard
+// 検知 (Sentry 通報) が消灯する。
+//
 // phase は運用者の復旧手順を分ける判別子: "transition" = 結果不明で guard を意図的に残置
 // (解除前に先行 process の停止確認が必須)、"release" = 遷移は確定済みで解放だけ失敗 (解除してよい)、
 // "acquire" = 取得できなかった側の観測 (滞留 guard の検知・DB 遅延の busy 化)。
@@ -20,11 +24,9 @@ export type ReportUnknownTransition = (event: {
   error: unknown;
 }) => void;
 
-const ignoreUnknownTransition: ReportUnknownTransition = () => undefined;
-
 export function createTransitionRunner(
   guard: TransitionGuard,
-  reportUnknown: ReportUnknownTransition = ignoreUnknownTransition,
+  reportUnknown: ReportUnknownTransition,
 ) {
   return async function runTransition<T>(
     userId: string,
