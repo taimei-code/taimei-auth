@@ -32,7 +32,7 @@ export type TotpEnrollment = { totpUri: string; recoveryCodes: string[] };
 //
 // 既定はプラグイン由来でない例外を rethrow する (結果不明を既知の失敗に化けさせると、
 // registration guard が外部副作用の結果不明のまま解放される — ADR-0013 §8)。
-// 総写像が要るのは guard を持たないチャレンジ経路だけで、そちらが明示的に opt-out する。
+// 総写像への opt-out は、結果不明のまま守るべき外部副作用が無い場合に限る (チャレンジ経路・純読み取り)。
 async function invoke<T>(
   call: () => Promise<{ headers?: Headers; response: T }>,
   preserveUnknown = true,
@@ -106,21 +106,30 @@ export async function readPendingTotpEnrollment(
 // プラグインは session の有無で挙動を変える: セッション無しなら試行カウント 5 回で
 // チャレンジ破棄・アカウント 10 回で 15 分ロックが働き、成功時に新セッションを発行する。
 // セッションありなら試行制限は一切働かない (呼び出し側が rate limit を自前で持つこと)。
+// guard 内用の既定入口。unknown を rethrow し、結果不明を既知の失敗に化けさせない (ADR-0013 §8)。
 export function verifyMfaCode(
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },
-  preserveUnknown = true,
 ): Promise<GatewayResult<unknown>> {
+  return invoke(verifyCall(headers, input));
+}
+
+// guard を持たない経路 (ログイン時チャレンジ) 専用。結果不明のまま守るべき外部副作用が無いため、
+// unknown も既知の失敗へ総写像する。
+export function verifyMfaCodeWithoutGuard(
+  headers: Headers,
+  input: { code: string; kind: MfaCodeKind },
+): Promise<GatewayResult<unknown>> {
+  return invoke(verifyCall(headers, input), false);
+}
+
+function verifyCall(
+  headers: Headers,
+  input: { code: string; kind: MfaCodeKind },
+): () => Promise<{ headers?: Headers; response: unknown }> {
   return input.kind === "totp"
-    ? invoke(
-        () => auth.api.verifyTOTP({ body: { code: input.code }, headers, returnHeaders: true }),
-        preserveUnknown,
-      )
-    : invoke(
-        () =>
-          auth.api.verifyBackupCode({ body: { code: input.code }, headers, returnHeaders: true }),
-        preserveUnknown,
-      );
+    ? () => auth.api.verifyTOTP({ body: { code: input.code }, headers, returnHeaders: true })
+    : () => auth.api.verifyBackupCode({ body: { code: input.code }, headers, returnHeaders: true });
 }
 
 // verifyTOTP は two_factor 行が未 verified なら **flag の値に関わらず** 行を verified へ更新し、

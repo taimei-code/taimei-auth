@@ -25,7 +25,8 @@ export type RegistrationSnapshot =
       enrollment: TwoFactorVerificationState | undefined;
     };
 
-export type GuardLease = {
+// 「lease」と呼ばない (TTL 失効を示唆するため — 語彙の正本: CONTEXT.md「MFA 登録遷移 guard」の _Avoid_)。
+export type GuardHold = {
   userId: string;
   token: string;
   operation: MfaRegistrationOperationKind;
@@ -36,7 +37,7 @@ export type GuardLease = {
 // timeout・lock (競合打ち切り → busy) / user_absent (user 行が無い → 恒久条件。busy に倒すと
 // 削除済みアカウントへ Retry-After を返し続ける)。
 export type AcquireRegistrationGuardResult =
-  | { acquired: true; lease: GuardLease }
+  | { acquired: true; hold: GuardHold }
   | { acquired: false; cause: "held"; heldSince: Date | undefined }
   | { acquired: false; cause: "timeout" | "lock" | "user_absent" };
 
@@ -114,7 +115,7 @@ export async function acquireRegistrationGuard(
         };
       }
       const snapshot = await readRegistrationSnapshot(userId, tx);
-      return { acquired: true as const, lease: { userId, token, operation, snapshot } };
+      return { acquired: true as const, hold: { userId, token, operation, snapshot } };
     });
   } catch (error) {
     const cause = acquireFailureCause(error);
@@ -123,13 +124,13 @@ export async function acquireRegistrationGuard(
   }
 }
 
-export async function releaseRegistrationGuard(lease: GuardLease): Promise<{ released: boolean }> {
+export async function releaseRegistrationGuard(hold: GuardHold): Promise<{ released: boolean }> {
   const deleted = await db
     .delete(mfaRegistrationTransitionGuard)
     .where(
       and(
-        eq(mfaRegistrationTransitionGuard.userId, lease.userId),
-        eq(mfaRegistrationTransitionGuard.operationToken, lease.token),
+        eq(mfaRegistrationTransitionGuard.userId, hold.userId),
+        eq(mfaRegistrationTransitionGuard.operationToken, hold.token),
       ),
     )
     .returning({ userId: mfaRegistrationTransitionGuard.userId });

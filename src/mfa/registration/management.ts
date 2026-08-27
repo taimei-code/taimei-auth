@@ -1,11 +1,7 @@
 import { failure, USER_NOT_FOUND, type MfaFailure } from "../error-mapping";
 import type { ForceDisableResult } from "./force-disable";
 import type { RegistrationSnapshot, TransitionGuard } from "./ports";
-import {
-  createTransitionRunner,
-  type ReportUnknownTransition,
-  type TransitionBusy,
-} from "./transition";
+import { createTransitionRunner, type ReportUnknownTransition } from "./transition";
 
 export const MFA_REGISTRATION_GUARD_PROTOCOL_VERSION = 1;
 
@@ -19,7 +15,6 @@ export function assertRegistrationGuardProtocolVersion(version: number | undefin
 type ManagementForceDisableResult =
   | { ok: true; changed: false }
   | { ok: true; changed: true; notified: boolean }
-  | TransitionBusy
   | MfaFailure;
 
 type ReleaseByManagementInput = {
@@ -35,8 +30,6 @@ type ManagementReleaseResult =
 
 export function createManagementApplication(deps: {
   guard: TransitionGuard;
-  // 必須にする: optional + 無音 no-op 既定だと、wiring から束縛が消えても typecheck と
-  // 全テストが green のまま、ADR-0013 §8 唯一の残置 guard 検知 (Sentry 通報) が消灯する。
   reportUnknownTransition: ReportUnknownTransition;
   readProtocolVersion(): Promise<number | undefined>;
   findUserById(userId: string): Promise<{ id: string } | undefined>;

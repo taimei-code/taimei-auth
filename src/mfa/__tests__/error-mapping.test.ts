@@ -6,7 +6,7 @@ import {
   failure,
   mapPluginError,
   mapTwoFactorError,
-  type MfaError,
+  type PluginMappedError,
 } from "../error-mapping";
 
 type Captured = { message: string; context?: CaptureContext };
@@ -34,7 +34,7 @@ const BUDGET_EXHAUSTED_MESSAGE = "mfa: verification attempt budget exhausted";
 
 type PluginCodeCase = {
   pluginCode: string;
-  expected: MfaError;
+  expected: PluginMappedError;
   reported: boolean;
 };
 

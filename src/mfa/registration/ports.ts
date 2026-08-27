@@ -3,7 +3,7 @@ import type { MfaCodeKind } from "../wire-contracts";
 import type { EnrollResult, MfaActor, RestartResult } from "./contracts";
 import type {
   AcquireRegistrationGuardResult,
-  GuardLease,
+  GuardHold,
   RegistrationOperationKind,
   RegistrationSnapshot,
 } from "@/db/repositories/mfa-registration";
@@ -11,7 +11,7 @@ import type {
 // guard 型の正本は snapshot を作る側の db/repositories/mfa-registration.ts (db → src 依存を作らない)。
 export type {
   AcquireRegistrationGuardResult,
-  GuardLease,
+  GuardHold,
   RegistrationOperationKind,
   RegistrationSnapshot,
 } from "@/db/repositories/mfa-registration";
@@ -21,7 +21,7 @@ export type TransitionGuard = {
     userId: string,
     operation: RegistrationOperationKind,
   ): Promise<AcquireRegistrationGuardResult>;
-  release(lease: GuardLease): Promise<{ released: boolean }>;
+  release(hold: GuardHold): Promise<{ released: boolean }>;
 };
 
 export type SessionMutationResult = { ok: true; headers: Headers } | MfaFailure;

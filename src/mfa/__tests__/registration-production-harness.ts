@@ -7,6 +7,7 @@ export const productionRegistrationNotifications: string[] = [];
 
 const productionBackedRegistrationFacade = createRegistrationApplication({
   guard: registrationGuard,
+  reportUnknownTransition: () => undefined,
   operations: productionRegistrationOperations,
   notifyEnabled: (email) => {
     productionRegistrationNotifications.push(`enabled:${email}`);
@@ -21,7 +22,7 @@ export function resetProductionRegistrationNotifications(): void {
 }
 
 // status だけは公開 façade (index.ts) の bind ごと観測する。enroll / activate / disable は通知を
-// 捕捉するため harness 専用 application を通す (reportUnknownTransition は未結線 — 観測系の検証は
+// 捕捉するため harness 専用 application を通す (reportUnknownTransition は明示 no-op — 観測系の検証は
 // production wiring 側のテストが担う)。この非対称は意図的で、対称化すると実通知アダプタが結線される。
 export { getStatus as readStatus } from "../registration";
 

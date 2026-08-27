@@ -47,9 +47,9 @@ describe("MFA registration guard repository", () => {
     const blocked = await acquireRegistrationGuard(userId, "activate");
     expect(blocked).toMatchObject({ acquired: false, cause: "held" });
     expect(
-      await releaseRegistrationGuard({ ...acquired.lease, token: "stale-operation-token" }),
+      await releaseRegistrationGuard({ ...acquired.hold, token: "stale-operation-token" }),
     ).toEqual({ released: false });
-    expect(await releaseRegistrationGuard(acquired.lease)).toEqual({ released: true });
+    expect(await releaseRegistrationGuard(acquired.hold)).toEqual({ released: true });
   });
 
   test("QA-E-05 bounds an uncommitted unique-key wait", async () => {

@@ -6,20 +6,14 @@ import {
 } from "../error-mapping";
 import type { RegistrationOperationKind, RegistrationSnapshot, TransitionGuard } from "./ports";
 
-// Retry-After は rate limit (10 req/60s のスライディング窓) と両立する値にする。1 秒にすると
-// 指示に従うクライアントが 10 秒で上限に達し、guard 競合が 429 ロックへ化ける。
-const RETRY_AFTER_SECONDS = 10;
-
-export type TransitionBusy = MfaFailure & {
-  error: "temporarily_unavailable";
-  status: 503;
-  retryAfterSeconds: typeof RETRY_AFTER_SECONDS;
-};
-
 // 正常な遷移は better-auth 呼び出し数回の秒オーダーで終わる (acquire 自体は 250ms 上限)。
 // これを大きく超えて残る guard は結果不明の残置とみなし観測する。解放はしない (ADR-0013 §8)。
 const STALE_GUARD_REPORT_AFTER_MS = 15 * 60 * 1000;
 
+// 消費側 (runner / application factory) はこの依存を必須で受ける。optional + 無音 no-op 既定だと、
+// wiring から束縛が消えても typecheck と全テストが green のまま、ADR-0013 §8 唯一の残置 guard
+// 検知 (Sentry 通報) が消灯する。
+//
 // phase は運用者の復旧手順を分ける判別子: "transition" = 結果不明で guard を意図的に残置
 // (解除前に先行 process の停止確認が必須)、"release" = 遷移は確定済みで解放だけ失敗 (解除してよい)、
 // "acquire" = 取得できなかった側の観測 (滞留 guard の検知・DB 遅延の busy 化)。
@@ -30,17 +24,15 @@ export type ReportUnknownTransition = (event: {
   error: unknown;
 }) => void;
 
-const ignoreUnknownTransition: ReportUnknownTransition = () => undefined;
-
 export function createTransitionRunner(
   guard: TransitionGuard,
-  reportUnknown: ReportUnknownTransition = ignoreUnknownTransition,
+  reportUnknown: ReportUnknownTransition,
 ) {
   return async function runTransition<T>(
     userId: string,
     operation: RegistrationOperationKind,
     work: (snapshot: RegistrationSnapshot) => Promise<T>,
-  ): Promise<T | TransitionBusy | MfaFailure> {
+  ): Promise<T | MfaFailure> {
     const acquired = await guard.acquire(userId, operation);
     if (!acquired.acquired) {
       if (acquired.cause === "user_absent") return failure(USER_NOT_FOUND);
@@ -63,19 +55,19 @@ export function createTransitionRunner(
           ),
         });
       }
-      return { ok: false, ...TEMPORARILY_UNAVAILABLE, retryAfterSeconds: RETRY_AFTER_SECONDS };
+      return failure(TEMPORARILY_UNAVAILABLE);
     }
 
     let result: T;
     try {
-      result = await work(acquired.lease.snapshot);
+      result = await work(acquired.hold.snapshot);
     } catch (error) {
       reportWithoutChangingOutcome(reportUnknown, { operation, phase: "transition", error });
       throw error;
     }
 
     try {
-      const released = await guard.release(acquired.lease);
+      const released = await guard.release(acquired.hold);
       if (!released.released) {
         reportWithoutChangingOutcome(reportUnknown, {
           operation,

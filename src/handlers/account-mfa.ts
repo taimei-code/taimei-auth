@@ -109,8 +109,8 @@ accountMfa.post("/api/account/mfa/disable", async (c) => {
   return forwardSetCookie(c.json({ ok: true } satisfies MfaOkResponse), result.sessionChanges);
 });
 
-function mfaErrorResponse(c: Context, failure: MfaFailure & { retryAfterSeconds?: number }) {
-  if (failure.retryAfterSeconds !== undefined) {
+function mfaErrorResponse(c: Context, failure: MfaFailure) {
+  if (failure.error === "temporarily_unavailable") {
     c.header("Retry-After", String(failure.retryAfterSeconds));
   }
   return c.json({ error: failure.error } satisfies MfaErrorResponse, failure.status);

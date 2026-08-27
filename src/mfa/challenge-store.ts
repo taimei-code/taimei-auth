@@ -184,7 +184,7 @@ function parseDetail(raw: string | undefined): ChallengeDetail | undefined {
 
 // チャレンジ検証へ渡す前にセッション cookie を落とし、「一次認証は済んだがセッションはまだ無い」
 // 状態をヘッダで表明する。セッションが解決できるとプラグインは**試行制限を丸ごと skip し、
-// チャレンジを消費しないまま成功扱いにする** (挙動の詳細: gateway.ts の verifyMfaCode) — stale な
+// チャレンジを消費しないまま成功扱いにする** (挙動の詳細: gateway.ts の verifyMfaCodeWithoutGuard) — stale な
 // セッション cookie 1 本で第二要素の総当たり防御が消えるため、経路の入口で必ず通すこと。
 //
 // cookie 名は chunk 分割 (`.0` / `.1` 接尾) されうるので前方一致で落とす。
