@@ -27,7 +27,9 @@ export function toDisableUserMfaReport(
         userId,
         error: result.error,
         // busy だけ additive に載せる。運用者が待つべき秒数を出力から読める状態にする。
-        ...("retryAfterSeconds" in result ? { retryAfterSeconds: result.retryAfterSeconds } : {}),
+        ...(result.error === "temporarily_unavailable"
+          ? { retryAfterSeconds: result.retryAfterSeconds }
+          : {}),
       },
     };
   }

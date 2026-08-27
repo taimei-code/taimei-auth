@@ -188,6 +188,8 @@ describe("account MFA API", () => {
 
     expect(res.status).toBe(409);
     expect(await res.json()).toEqual({ error: "already_enabled" });
+    // 非 busy の失敗に Retry-After が付かないことを固定 (busy 側の付与は QA-E-05)。
+    expect(res.headers.get("retry-after")).toBeNull();
   });
 
   test("QA-E-04 有効ユーザーの activate 再実行 → 409 (正しいコードでも副作用なし)", async () => {

@@ -1,11 +1,7 @@
 import { failure, USER_NOT_FOUND, type MfaFailure } from "../error-mapping";
 import type { ForceDisableResult } from "./force-disable";
 import type { RegistrationSnapshot, TransitionGuard } from "./ports";
-import {
-  createTransitionRunner,
-  type ReportUnknownTransition,
-  type TransitionBusy,
-} from "./transition";
+import { createTransitionRunner, type ReportUnknownTransition } from "./transition";
 
 export const MFA_REGISTRATION_GUARD_PROTOCOL_VERSION = 1;
 
@@ -19,7 +15,6 @@ export function assertRegistrationGuardProtocolVersion(version: number | undefin
 type ManagementForceDisableResult =
   | { ok: true; changed: false }
   | { ok: true; changed: true; notified: boolean }
-  | TransitionBusy
   | MfaFailure;
 
 type ReleaseByManagementInput = {

@@ -6,16 +6,6 @@ import {
 } from "../error-mapping";
 import type { RegistrationOperationKind, RegistrationSnapshot, TransitionGuard } from "./ports";
 
-// Retry-After は rate limit (10 req/60s のスライディング窓) と両立する値にする。1 秒にすると
-// 指示に従うクライアントが 10 秒で上限に達し、guard 競合が 429 ロックへ化ける。
-const RETRY_AFTER_SECONDS = 10;
-
-export type TransitionBusy = MfaFailure & {
-  error: "temporarily_unavailable";
-  status: 503;
-  retryAfterSeconds: typeof RETRY_AFTER_SECONDS;
-};
-
 // 正常な遷移は better-auth 呼び出し数回の秒オーダーで終わる (acquire 自体は 250ms 上限)。
 // これを大きく超えて残る guard は結果不明の残置とみなし観測する。解放はしない (ADR-0013 §8)。
 const STALE_GUARD_REPORT_AFTER_MS = 15 * 60 * 1000;
@@ -40,7 +30,7 @@ export function createTransitionRunner(
     userId: string,
     operation: RegistrationOperationKind,
     work: (snapshot: RegistrationSnapshot) => Promise<T>,
-  ): Promise<T | TransitionBusy | MfaFailure> {
+  ): Promise<T | MfaFailure> {
     const acquired = await guard.acquire(userId, operation);
     if (!acquired.acquired) {
       if (acquired.cause === "user_absent") return failure(USER_NOT_FOUND);
@@ -63,7 +53,7 @@ export function createTransitionRunner(
           ),
         });
       }
-      return { ok: false, ...TEMPORARILY_UNAVAILABLE, retryAfterSeconds: RETRY_AFTER_SECONDS };
+      return failure(TEMPORARILY_UNAVAILABLE);
     }
 
     let result: T;
