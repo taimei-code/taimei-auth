@@ -1,6 +1,6 @@
 import { failure, USER_NOT_FOUND, type MfaFailure } from "../error-mapping";
 import type { ForceDisableResult } from "./force-disable";
-import type { RegistrationSnapshot, TransitionGuard } from "./ports";
+import type { GuardedGatewayFactory, RegistrationSnapshot, TransitionGuard } from "./ports";
 import { createTransitionRunner, type ReportUnknownTransition } from "./transition";
 
 export const MFA_REGISTRATION_GUARD_PROTOCOL_VERSION = 1;
@@ -31,6 +31,9 @@ type ManagementReleaseResult =
 export function createManagementApplication(deps: {
   guard: TransitionGuard;
   reportUnknownTransition: ReportUnknownTransition;
+  // force-disable は遷移内窓口を使わない (clearTwoFactorEnabled 直 import は既知の例外)。それでも
+  // 必須で受けるのは、runner の契約を self-service と一枚にし optional 化の無音穴を作らないため。
+  guardedGateway: GuardedGatewayFactory;
   readProtocolVersion(): Promise<number | undefined>;
   findUserById(userId: string): Promise<{ id: string } | undefined>;
   forceDisableOperation(
@@ -51,7 +54,11 @@ export function createManagementApplication(deps: {
   const assertGuardProtocol = async (): Promise<void> => {
     assertRegistrationGuardProtocolVersion(await deps.readProtocolVersion());
   };
-  const runTransition = createTransitionRunner(deps.guard, deps.reportUnknownTransition);
+  const runTransition = createTransitionRunner(
+    deps.guard,
+    deps.reportUnknownTransition,
+    deps.guardedGateway,
+  );
 
   return {
     async forceDisable(userId) {
@@ -60,8 +67,8 @@ export function createManagementApplication(deps: {
       // advisory。正式な判定は guard 取得後の snapshot が行う。
       if (!(await deps.findUserById(userId))) return failure(USER_NOT_FOUND);
 
-      const transitioned = await runTransition(userId, "force_disable", (snapshot) =>
-        deps.forceDisableOperation(userId, snapshot),
+      const transitioned = await runTransition(userId, "force_disable", (hold) =>
+        deps.forceDisableOperation(userId, hold.snapshot),
       );
       if (!transitioned.ok || !transitioned.changed) return transitioned;
 

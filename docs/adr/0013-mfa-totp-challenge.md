@@ -175,6 +175,21 @@ Magic Link 再送など) も本件では実装しない。
 module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が黙って別の評決を
 持てるため)。**評決を変える変更は本表の更新とセットで行う。**
 
+状態と成功遷移の見取り図。評決 (受理・拒否コードの全組合せ) の正本は下表で、図には成功遷移と中断の
+落ち方だけを描く:
+
+```mermaid
+stateDiagram-v2
+    未登録 --> 登録済み未有効 : enroll (secret 発行)
+    登録済み未有効 --> 登録済み未有効 : enroll 再実行 (同じ内容の再表示)
+    登録済み未有効 --> 有効 : activate (登録識別子一致 + 正しいコード)
+    有効 --> 未登録 : disable (正しいコード)
+    登録済み未有効 --> 中断した有効化 : activate の中断
+    有効 --> 中断した無効化 : disable の中断
+    中断した無効化 --> 未登録 : disable (唯一の出口)
+    中断した有効化 --> 未登録 : 行あり は disable で自己復旧 / 行なし は運用救済のみ
+```
+
 | 状態 (フラグ × 行) | enroll | activate | disable | 状態取得 (表示) |
 |---|---|---|---|---|
 | 未登録 (F × 行なし) | 受理 | 404 `not_found` | 409 `not_enabled` | 無効 |
@@ -318,6 +333,16 @@ secret 暗号化、リカバリーコードの単回消費、session cache 更�
 本 ADR が選んだハイブリッド構成の利点を失う。採用するのは永続 guard による正規経路の排他と、
 結果不明時の guard 残置である。
 
+(2026-08-29 追記) 写像方針 (結果不明を rethrow して guard を残置するか、既知の失敗へ総写像するか)
+の選択を、gateway の関数名選択から構造へ昇格した。`runTransition` は guard 取得の証憑
+(**MFA 登録遷移 guard hold**。brand 付き `GuardHold`、用語定義: CONTEXT.md) から遷移内専用の
+窓口 `GuardedMfaGateway` を作って work へ配り、書き込み系 = rethrow / 読み取り
+(`readPendingTotpEnrollment`) = 総写像の選定を束縛 (registration/wiring.ts の `guardedGateway`) に
+内部固定する。operations は gateway module を import できず (封じ込めの静的テストで固定)、guard 外の総写像入口は
+ログイン時チャレンジ (complete-challenge) だけに固定する。gateway.ts 自体は guard の概念を知らない
+better-auth への純粋な窓口のまま保つ (façade を gateway 側が所有する案は、この純粋性を優先して
+不採用)。**読み取り = 総写像の内部固定に例外が必要になった場合は本 §8 を re-open して判断する。**
+
 ### 9. 共通画面 SPA は MFA チャレンジの継続可否を auth ホストの結果から決める (2026-08-21 追記)
 
 共通画面 SPA の MFA チャレンジフローは、初期観測、コード検証、必要な再照会、表示 error の決定を
@@ -412,6 +437,6 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
 - ADR-0011 (Workers 移行) — secondaryStorage 構成でチャレンジ状態が Redis で完結する前提
 - ADR-0012 (レイヤードアーキテクチャ) — プラグイン殻を `src/auth-plugins/` (Frameworks & Drivers)、
   判定と業務手続を `src/mfa/` に置く層規律
-- 用語定義: [`CONTEXT.md`](../../CONTEXT.md) の「多要素認証 (MFA)」「TOTP」「MFA チャレンジ」「リカバリーコード」
+- 用語定義: [`CONTEXT.md`](../../CONTEXT.md) の「多要素認証 (MFA)」「TOTP」「MFA チャレンジ」「リカバリーコード」「MFA 登録遷移 guard hold」
 </content>
 </invoke>

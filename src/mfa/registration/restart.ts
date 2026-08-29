@@ -1,6 +1,5 @@
 import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { ENROLLMENT_CHANGED, failure } from "../error-mapping";
-import { enrollTotp } from "../gateway";
 import type { RegistrationOperations } from "./ports";
 import { ensureCanActivate, enrollmentRecordIn } from "./state";
 
@@ -15,13 +14,14 @@ export const restart: RegistrationOperations["restart"] = async ({
   headers,
   enrollmentId,
   snapshot,
+  gateway,
 }) => {
   const rejected = ensureCanActivate(snapshot);
   if (rejected) return rejected;
   const current = enrollmentRecordIn(snapshot);
   if (current?.id !== enrollmentId) return failure(ENROLLMENT_CHANGED);
 
-  const enrolled = await enrollTotp(headers);
+  const enrolled = await gateway.enrollTotp(headers);
   if (!enrolled.ok) return enrolled;
   const replacement = await findTwoFactorVerificationState(actor.id);
   if (!replacement) return failure(ENROLLMENT_CHANGED);

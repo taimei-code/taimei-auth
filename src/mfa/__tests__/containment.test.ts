@@ -147,15 +147,103 @@ describe("MFA registration module boundary", () => {
     ).toEqual([]);
   });
 
-  test("QA-E-03 read-side operations (enroll/restart) は gateway + two-factor repository 以外を束縛しない", () => {
-    // fault-injection seam を持たない 2 operation に adapter (budget/audit/redis/sentry/結線) が
-    // 増えると検証不能なまま混入する — seam 一様化 (候補 2 別トラック) までこの列挙で塞ぐ。
+  test("QA-E-03 read-side operations (enroll/restart) は two-factor repository と入力の遷移内窓口以外を束縛しない", () => {
+    // better-auth 窓口は runTransition が配る GuardedMfaGateway (入力) で届く — gateway の直束縛も
+    // adapter (budget/audit/redis/sentry/結線) の混入も、fault seam の外に検証不能な経路を作るため塞ぐ。
     expect(
       filesWithCodeLiteral(
-        "../disable-attempt-budget|../../audit-error|../../redis|../../sentry|./wiring",
+        "../gateway|../disable-attempt-budget|../../audit-error|../../redis|../../sentry|./wiring",
         "src/mfa/registration/enroll.ts src/mfa/registration/restart.ts",
       ),
     ).toEqual([]);
+  });
+
+  test("AC-011 gateway module の production importer は 5 ファイルに固定 (operations は façade 経由のみ)", () => {
+    // 遷移内の better-auth 窓口は runTransition が配る — operations (enroll/restart/activate/disable)
+    // がこの列挙に現れたら evidence-gating の迂回。dynamic import も含めるため from 限定にしない。
+    expect(
+      filesWithCodeLiteral(`(from|import)[ (]['"](\\.{1,2}/gateway|.*mfa/gateway)['"]`, "src"),
+    ).toEqual([
+      "src/mfa/challenge-store.ts",
+      "src/mfa/complete-challenge.ts",
+      "src/mfa/registration/force-disable.ts",
+      "src/mfa/registration/status.ts",
+      "src/mfa/registration/wiring.ts",
+    ]);
+  });
+
+  // AC-012/AC-023 の正本表: gateway export ごとの許可出現ファイル (定義元 gateway.ts は暗黙)。
+  // 新しい export は下の全数一致が表への行追加を要求し、行追加は出現面の明示を要求する。
+  const GATEWAY_ENTRY_OCCURRENCES: Record<string, { pattern?: string; files: string[] }> = {
+    activateTotp: {
+      files: [
+        "src/mfa/registration/activate.ts",
+        "src/mfa/registration/ports.ts",
+        "src/mfa/registration/wiring.ts",
+      ],
+    },
+    clearTwoFactorEnabled: { files: ["src/mfa/registration/force-disable.ts"] },
+    countRemainingRecoveryCodes: { files: ["src/mfa/registration/status.ts"] },
+    disableTotp: {
+      files: [
+        "src/mfa/registration/disable.ts",
+        "src/mfa/registration/ports.ts",
+        "src/mfa/registration/wiring.ts",
+      ],
+    },
+    enrollTotp: {
+      files: [
+        "src/mfa/registration/enroll.ts",
+        "src/mfa/registration/ports.ts",
+        "src/mfa/registration/restart.ts",
+        "src/mfa/registration/wiring.ts",
+      ],
+    },
+    getAuthContext: { files: ["src/mfa/challenge-store.ts"] },
+    readPendingTotpEnrollment: {
+      files: [
+        "src/mfa/registration/enroll.ts",
+        "src/mfa/registration/ports.ts",
+        "src/mfa/registration/wiring.ts",
+      ],
+    },
+    revokeOtherSessions: {
+      files: [
+        "src/mfa/registration/activate.ts",
+        "src/mfa/registration/disable.ts",
+        "src/mfa/registration/ports.ts",
+        "src/mfa/registration/wiring.ts",
+      ],
+    },
+    // WithoutGuard を除外しつつ行末の裸出現も拾う。
+    verifyMfaCode: {
+      pattern: "verifyMfaCode($|[^W])",
+      files: ["src/mfa/registration/wiring.ts"],
+    },
+    verifyMfaCodeWithoutGuard: { files: ["src/mfa/complete-challenge.ts"] },
+  };
+
+  test("AC-012/AC-023 gateway 全 export の出現面を entry 単位で固定", () => {
+    for (const [entry, { pattern, files }] of Object.entries(GATEWAY_ENTRY_OCCURRENCES)) {
+      expect({ entry, files: filesWithCodeLiteral(pattern ?? entry) }).toEqual({
+        entry,
+        files: ["src/mfa/gateway.ts", ...files].sort(),
+      });
+    }
+  });
+
+  test("AC-023 gateway の export 全数が表の対象 (未 pin の新 export を赤にする)", async () => {
+    // 実行せず parse だけで export 名を得る — better-auth の実構築 (~300ms) をこの静的 tripwire
+    // ファイルへ持ち込まない。type export は runtime capability でないため表の対象外だが、名前の
+    // denylist でなく宣言形 (`export type`) から導出する — runtime export をここへ逃がすには
+    // export type へ変える必要があり、その時点で値として使えなくなる。
+    const source = await Bun.file(resolve(REPO_ROOT, "src/mfa/gateway.ts")).text();
+    const typeExports = [...source.matchAll(/^export type (?:\{ )?(\w+)/gm)].map((m) => m[1]);
+    const scanned = new Bun.Transpiler({ loader: "ts" })
+      .scan(source)
+      .exports.filter((name) => !typeExports.includes(name))
+      .sort();
+    expect(scanned).toEqual(Object.keys(GATEWAY_ENTRY_OCCURRENCES).sort());
   });
 
   test("QA-M-06 production wiring keeps enabled and disabled notifications distinct", () => {

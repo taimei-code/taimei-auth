@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { createRegistrationApplication } from "../registration/application";
 import type { MfaActor } from "../registration/contracts";
 import type {
-  GuardHold,
   RegistrationOperations,
   RegistrationSnapshot,
   TransitionGuard,
 } from "../registration/ports";
 import type { ReportUnknownTransition } from "../registration/transition";
+import { makeGuardHold, unusedGuardedGatewayFactory } from "./test-doubles";
 
 const actor: MfaActor = {
   id: "user-1",
@@ -33,12 +33,12 @@ type HarnessOverrides = {
 
 function createHarness(overrides: HarnessOverrides = {}) {
   const events: string[] = [];
-  const hold: GuardHold = {
+  const hold = makeGuardHold({
     userId: actor.id,
     token: "guard-1",
     operation: "activate",
     snapshot: pendingSnapshot,
-  };
+  });
   const guard: TransitionGuard = {
     acquire: async (_userId, operation) => {
       events.push(`acquire:${operation}`);
@@ -77,6 +77,7 @@ function createHarness(overrides: HarnessOverrides = {}) {
   return {
     app: createRegistrationApplication({
       guard,
+      guardedGateway: unusedGuardedGatewayFactory,
       operations,
       notifyEnabled: overrides.notifyEnabled ?? (() => events.push("notify:enabled")),
       notifyDisabled: overrides.notifyDisabled ?? (() => events.push("notify:disabled")),

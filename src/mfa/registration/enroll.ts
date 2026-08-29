@@ -1,6 +1,5 @@
 import { findTwoFactorVerificationState } from "@/db/repositories/two-factor";
 import { CHALLENGE_EXPIRED, failure } from "../error-mapping";
-import { enrollTotp, readPendingTotpEnrollment } from "../gateway";
 import type { RegistrationOperations } from "./ports";
 import { ensureCanEnroll, enrollmentRecordIn } from "./state";
 
@@ -12,18 +11,23 @@ import { ensureCanEnroll, enrollmentRecordIn } from "./state";
 // actorFromSnapshot (snapshot 優先の属性上書き) は適用しない — この operation が使うのは actor.id
 // だけで、id は上書きの対象外。email / flag を消費する activate / disable のみが適用する。
 
-export const enroll: RegistrationOperations["enroll"] = async ({ actor, headers, snapshot }) => {
+export const enroll: RegistrationOperations["enroll"] = async ({
+  actor,
+  headers,
+  snapshot,
+  gateway,
+}) => {
   const rejected = ensureCanEnroll(snapshot);
   if (rejected) return rejected;
 
   const current = enrollmentRecordIn(snapshot);
   if (current && !current.verified) {
-    const replayed = await readPendingTotpEnrollment(actor, headers);
+    const replayed = await gateway.readPendingTotpEnrollment(actor, headers);
     if (!replayed.ok) return replayed;
     return { ok: true, enrollmentId: current.id, ...replayed.value };
   }
 
-  const enrolled = await enrollTotp(headers);
+  const enrolled = await gateway.enrollTotp(headers);
   if (!enrolled.ok) return enrolled;
   const created = await findTwoFactorVerificationState(actor.id);
   if (!created) return failure(CHALLENGE_EXPIRED);

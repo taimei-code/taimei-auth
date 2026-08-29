@@ -14,3 +14,6 @@ export type EnrollmentMaterial = {
 
 export type EnrollResult = ({ ok: true } & EnrollmentMaterial) | MfaFailure;
 export type RestartResult = EnrollResult;
+
+// 登録内容の素材 (識別子抜き)。gateway と ports が同じ形をここから参照する (再宣言の drift 防止)。
+export type TotpEnrollment = Omit<EnrollmentMaterial, "enrollmentId">;

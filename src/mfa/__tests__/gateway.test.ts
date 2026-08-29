@@ -1,14 +1,28 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { countRemainingRecoveryCodes, verifyMfaCode } from "../gateway";
+import { db } from "@/db/client";
+import { auth } from "../../auth";
+import {
+  countRemainingRecoveryCodes,
+  enrollTotp,
+  readPendingTotpEnrollment,
+  verifyMfaCode,
+} from "../gateway";
 import { mergeForwardedCookies } from "../session-headers";
 import {
+  actorOf,
   awaitNextTotpStep,
+  createSessionFor,
   currentTotpStep,
   enableMfaFor,
+  installSentryRecorder,
   totpCode,
   wrongTotpCode,
 } from "./helpers";
+
+// 総写像テストで Sentry (unmapped 通報) が発火するため recorder を入れ、後続ファイルへ漏らさない。
+const sentry = installSentryRecorder();
+afterAll(() => sentry.restore());
 
 // gateway (src/mfa/gateway.ts) 経由の検証挙動。プラグインの検証窓は @better-auth/utils の既定
 // (±1 step) で、totpOptions に窓を指定する option が存在しない — つまり窓の広さは
@@ -96,5 +110,43 @@ describe("gateway の TOTP 検証", () => {
     });
 
     expect(result).toEqual({ ok: false, error: "invalid_code", status: 400 });
+  });
+
+  test("readPendingTotpEnrollment は結果不明も既知の失敗へ畳む (総写像 — AC-009 の gateway 側)", async () => {
+    const user = await seedUser("read-total");
+    const session = await createSessionFor(user.id);
+    const actor = actorOf(user);
+    // fixture もテスト対象 module 自身で作る (production 配線一式を引き込まない)。
+    const enrolled = await enrollTotp(session.headers);
+    if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
+
+    // plugin 由来でない例外を注入 — 読み取りは総写像 (正本: ADR-0013 §8。runner 側の観測: E-RPK)。
+    const spy = spyOn(auth.api, "getTOTPURI").mockImplementation((async () => {
+      throw new Error("transient decryption failure");
+    }) as unknown as typeof auth.api.getTOTPURI);
+    try {
+      const result = await readPendingTotpEnrollment(actor, session.headers);
+      expect(result).toEqual({ ok: false, error: "challenge_expired", status: 401 });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test("readPendingTotpEnrollment は前段 SELECT の失敗も既知の失敗へ畳む (guard を残置させない)", async () => {
+    const user = await seedUser("read-db-fail");
+    const session = await createSessionFor(user.id);
+    const actor = actorOf(user);
+
+    // withFailingAuditWrite と同じ db-level seam。SELECT が投げても総写像が既知へ畳むことを固定する。
+    const select = db.select.bind(db);
+    const failing = spyOn(db, "select").mockImplementation((() => {
+      throw new Error("transient pg failure");
+    }) as typeof select);
+    try {
+      const result = await readPendingTotpEnrollment(actor, session.headers);
+      expect(result).toEqual({ ok: false, error: "challenge_expired", status: 401 });
+    } finally {
+      failing.mockRestore();
+    }
   });
 });

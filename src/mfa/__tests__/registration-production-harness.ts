@@ -1,13 +1,18 @@
 import type { Actor } from "../../membership/guard/core";
 import type { MfaCodeKind } from "../wire-contracts";
 import { createRegistrationApplication } from "../registration/application";
-import { productionRegistrationOperations, registrationGuard } from "../registration/wiring";
+import {
+  guardedGateway,
+  productionRegistrationOperations,
+  registrationGuard,
+} from "../registration/wiring";
 
 export const productionRegistrationNotifications: string[] = [];
 
 const productionBackedRegistrationFacade = createRegistrationApplication({
   guard: registrationGuard,
   reportUnknownTransition: () => undefined,
+  guardedGateway,
   operations: productionRegistrationOperations,
   notifyEnabled: (email) => {
     productionRegistrationNotifications.push(`enabled:${email}`);

@@ -11,12 +11,12 @@ import { forceDisableMfa, type ForceDisableResult } from "../registration/force-
 import { createManagementApplication } from "../registration/management";
 import type {
   AcquireRegistrationGuardResult,
-  GuardHold,
   RegistrationSnapshot,
   TransitionGuard,
 } from "../registration/ports";
+import { makeGuardHold, unusedGuardedGatewayFactory } from "./test-doubles";
 import { reportUnknownMfaRegistrationTransition } from "../registration/observability-adapter";
-import { managementApplication, registrationGuard } from "../registration/wiring";
+import { guardedGateway, managementApplication, registrationGuard } from "../registration/wiring";
 import { countTwoFactorRows, enableMfaFor } from "./helpers";
 
 const presentSnapshot: RegistrationSnapshot = {
@@ -26,12 +26,12 @@ const presentSnapshot: RegistrationSnapshot = {
   enrollment: undefined,
 };
 
-const hold: GuardHold = {
+const hold = makeGuardHold({
   userId: "user-1",
   token: "guard-1",
   operation: "force_disable",
   snapshot: presentSnapshot,
-};
+});
 
 type HarnessOptions = {
   protocolVersion?: number | undefined;
@@ -68,6 +68,7 @@ function createHarness(options: HarnessOptions = {}) {
       events.push(`report:${event.phase}`);
       reports.push(event);
     },
+    guardedGateway: unusedGuardedGatewayFactory,
     // ?? 1 にしない: 明示した undefined は「protocol version 未設定の DB」の再現で、正常値 1 に
     // 畳んではならない。未指定の時だけ正常系の 1 を返す。
     readProtocolVersion: instrument("protocol", async () =>
@@ -308,6 +309,7 @@ function createDbApplication({ notificationDelivered = true } = {}) {
     app: createManagementApplication({
       guard: registrationGuard,
       reportUnknownTransition: reportUnknownMfaRegistrationTransition,
+      guardedGateway,
       readProtocolVersion: readRegistrationGuardProtocolVersion,
       findUserById,
       forceDisableOperation: forceDisableMfa,

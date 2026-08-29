@@ -9,7 +9,7 @@ import {
   mapTwoFactorError,
   type MfaFailure,
 } from "./error-mapping";
-import type { MfaActor } from "./registration/contracts";
+import type { MfaActor, TotpEnrollment } from "./registration/contracts";
 import type { MfaCodeKind } from "./wire-contracts";
 
 // twoFactor プラグイン (auth.api.*) と auth.$context への唯一の正規窓口。
@@ -24,15 +24,15 @@ import type { MfaCodeKind } from "./wire-contracts";
 
 export type GatewayResult<T> = { ok: true; value: T; headers: Headers } | MfaFailure;
 
-export type TotpEnrollment = { totpUri: string; recoveryCodes: string[] };
+export type { TotpEnrollment };
 
 // プラグインは失敗を APIError の throw で返すため、Result 化はこの 1 箇所に閉じる。
 // 成功時の headers には Set-Cookie (セッション rotate / チャレンジ cookie 失効) が載りうる。
 // 転送しないと操作直後にログアウトするため、handler の forwardSetCookie まで必ず運ぶこと。
 //
-// 既定はプラグイン由来でない例外を rethrow する (結果不明を既知の失敗に化けさせると、
-// registration guard が外部副作用の結果不明のまま解放される — ADR-0013 §8)。
-// 総写像への opt-out は、結果不明のまま守るべき外部副作用が無い場合に限る (チャレンジ経路・純読み取り)。
+// 既定はプラグイン由来でない例外 (body.code なし) を rethrow し、総写像 (第 2 引数 false) は
+// 未知も既知の失敗へ畳む。どちらを使うかは呼び出し側の選択ではない — 書き込み = 既定 /
+// 読み取り = 総写像を registration/wiring.ts の guardedGateway 束縛が内部固定する (正本: ADR-0013 §8)。
 async function invoke<T>(
   call: () => Promise<{ headers?: Headers; response: T }>,
   preserveUnknown = true,
@@ -78,13 +78,17 @@ export async function readPendingTotpEnrollment(
   // 未 verified 行の存在をここでも検証する (多層防御)。プラグインの getTOTPURI / viewBackupCodes は
   // verified を見ないため、呼び出し側の前提条件だけに依存すると、将来の呼び出し元 (登録やり直し等)
   // が有効ユーザーの実 secret と平文リカバリーコードを引き出せてしまう。
-  const current = await findTwoFactorVerificationState(actor.id);
+  // この前段 SELECT も総写像に含める — throw を素通しすると読むだけの一過性失敗 (接続断等) が
+  // guard を残置し、「読み取り = 総写像」(ADR-0013 §8) の不変条件が破れる。行なしと読めなかったは
+  // どちらも challenge_expired へ畳み、失敗の実体は観測へ回す。
+  const current = await findTwoFactorVerificationState(actor.id).catch((error: unknown) => {
+    Sentry.captureException(error, { tags: { component: "mfa-gateway" } });
+    return undefined;
+  });
   if (!current) return failure(CHALLENGE_EXPIRED);
   if (current.verified) return failure(ALREADY_ENABLED);
 
-  // preserveUnknown=false: 純粋な読み取りで守るべき外部副作用が無い。既定の rethrow のままだと
-  // 一過性の失敗 (復号不能・接続断) が guard を残置し、読むだけの失敗がその user の全 MFA 操作を
-  // 運用解除まで塞ぐ。総写像なら既知の失敗として guard が解放され、再試行で復旧できる。
+  // preserveUnknown=false: 読み取りの総写像 (理由の正本: ADR-0013 §8「読み取り = 総写像」)。
   const [uri, codes] = await Promise.all([
     invoke(() => auth.api.getTOTPURI({ body: {}, headers, returnHeaders: true }), false),
     invoke(
@@ -106,7 +110,7 @@ export async function readPendingTotpEnrollment(
 // プラグインは session の有無で挙動を変える: セッション無しなら試行カウント 5 回で
 // チャレンジ破棄・アカウント 10 回で 15 分ロックが働き、成功時に新セッションを発行する。
 // セッションありなら試行制限は一切働かない (呼び出し側が rate limit を自前で持つこと)。
-// guard 内用の既定入口。unknown を rethrow し、結果不明を既知の失敗に化けさせない (ADR-0013 §8)。
+// import 元は registration/wiring.ts の guardedGateway 束縛のみ (containment で固定)。
 export function verifyMfaCode(
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },
@@ -114,8 +118,7 @@ export function verifyMfaCode(
   return invoke(verifyCall(headers, input));
 }
 
-// guard を持たない経路 (ログイン時チャレンジ) 専用。結果不明のまま守るべき外部副作用が無いため、
-// unknown も既知の失敗へ総写像する。
+// 総写像入口。import 元は complete-challenge.ts のみ (containment で固定)。理由の正本: ADR-0013 §8。
 export function verifyMfaCodeWithoutGuard(
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },

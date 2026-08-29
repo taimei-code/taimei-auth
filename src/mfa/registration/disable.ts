@@ -16,7 +16,7 @@ import { actorFromSnapshot, ensureDisableCanProceed } from "./state";
 // verifyMfaCode、判断の詳細: ADR-0013)。誤コード連投の抑止はこの use-case が自前で持つ
 // (disable-attempt-budget.ts)。
 export function createDisable(deps: DisableDependencies): RegistrationOperations["disable"] {
-  return async ({ actor: requestActor, headers, code, kind, snapshot }) => {
+  return async ({ actor: requestActor, headers, code, kind, snapshot, gateway }) => {
     const actor = actorFromSnapshot(requestActor, snapshot);
 
     // 前提条件をコード検証・試行枠消費より前に置く。verifyTOTP は未有効化状態を有効化の合図として
@@ -31,14 +31,14 @@ export function createDisable(deps: DisableDependencies): RegistrationOperations
     const exhausted = await deps.spendAttempt(actor.id);
     if (exhausted) return exhausted;
 
-    const verified = await deps.verifyCode(headers, { code, kind });
+    const verified = await gateway.verifyCode(headers, { code, kind });
     if (!verified.ok) return verified;
     await deps.resetAttempts(actor.id);
 
-    const revoked = await deps.revokeOtherSessions(headers);
+    const revoked = await gateway.revokeOtherSessions(headers);
     if (!revoked.ok) return revoked;
 
-    const disabled = await deps.disableTotp(headers);
+    const disabled = await gateway.disableTotp(headers);
     if (!disabled.ok) return disabled;
 
     // 記帳の失敗で手続き全体を落とさない (rotate 済みで巻き戻せない地点 — 理由の全文: activate.ts)。
