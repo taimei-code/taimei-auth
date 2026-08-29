@@ -1,32 +1,41 @@
 import { createActivate } from "../registration/activate";
 import { createRegistrationApplication } from "../registration/application";
 import { createDisable } from "../registration/disable";
+import { enroll } from "../registration/enroll";
 import { CHALLENGE_EXPIRED, failure, LOCKED, type MfaFailure } from "../error-mapping";
 import type {
+  GuardedMfaGateway,
   GuardHold,
   RegistrationOperations,
   RegistrationSnapshot,
   TransitionGuard,
 } from "../registration/ports";
 import type { ReportUnknownTransition } from "../registration/transition";
+import { makeGuardHold } from "./test-doubles";
 
-type ThrowFaultStep = "verify" | "revoke" | "activateTotp" | "disableTotp" | "audit";
+type SessionStep = "verify" | "revoke" | "activateTotp" | "disableTotp";
+type ThrowFaultStep = SessionStep | "audit";
 
 export type RegistrationFault =
-  | { step: "spend"; mode: "known" }
-  | {
-      step: Exclude<ThrowFaultStep, "audit">;
-      mode: "known" | "throw";
-    }
+  // readPending が known 限定なのは本物が総写像のため (正本: ADR-0013 §8、観測: gateway.test)。
+  | { step: "spend" | "readPending"; mode: "known" }
+  | { step: SessionStep; mode: "known" | "throw" }
   | { step: "audit"; mode: "throw" };
 
-const acceptedSnapshotsByOperation: Record<"activate" | "disable", RegistrationSnapshot> = {
-  activate: {
-    user: "present",
-    email: "snapshot@example.com",
-    twoFactorEnabled: false,
-    enrollment: { id: "enrollment-1", verified: false },
-  },
+// 登録済み未有効 — enroll は replay 分岐 (readPendingTotpEnrollment) に入る。activate と同じ前提状態。
+const pendingEnrollmentSnapshot: RegistrationSnapshot = {
+  user: "present",
+  email: "snapshot@example.com",
+  twoFactorEnabled: false,
+  enrollment: { id: "enrollment-1", verified: false },
+};
+
+const acceptedSnapshotsByOperation: Record<
+  "activate" | "disable" | "enroll",
+  RegistrationSnapshot
+> = {
+  activate: pendingEnrollmentSnapshot,
+  enroll: pendingEnrollmentSnapshot,
   disable: {
     user: "present",
     email: "snapshot@example.com",
@@ -41,7 +50,7 @@ const successfulSessionMutation = (cookie: string) => ({
 });
 
 export function createRegistrationFaultHarness(options: {
-  operation: "activate" | "disable";
+  operation: "activate" | "disable" | "enroll";
   fault?: RegistrationFault;
   snapshot?: RegistrationSnapshot;
 }) {
@@ -68,6 +77,7 @@ export function createRegistrationFaultHarness(options: {
         return failure({ error: "invalid_code", status: 400 });
       case "revoke":
       case "disableTotp":
+      case "readPending":
         return failure(CHALLENGE_EXPIRED);
     }
   };
@@ -81,12 +91,12 @@ export function createRegistrationFaultHarness(options: {
       if (operation !== options.operation) {
         throw new Error(`expected ${options.operation}, received ${operation}`);
       }
-      activeHold = {
+      activeHold = makeGuardHold({
         userId,
         token: `guard-${operation}`,
         operation,
         snapshot: options.snapshot ?? acceptedSnapshotsByOperation[operation],
-      };
+      });
       return { acquired: true, hold: activeHold };
     },
     release: async (hold) => {
@@ -97,21 +107,38 @@ export function createRegistrationFaultHarness(options: {
     },
   };
 
+  // known → throw → 成功、の順序が seam の意味そのもの。4 メソッド分をここで 1 回だけ固定する。
+  const sessionStep = (step: SessionStep, cookie: string) => async () => {
+    ledger.push(step);
+    const known = knownFailureAt(step);
+    if (known) return known;
+    throwAt(step);
+    return successfulSessionMutation(cookie);
+  };
+
+  // runTransition が配る遷移内窓口の fake。production の束縛 (wiring.guardedGateway) と同じ関数選定。
+  const guardedGateway = (_hold: GuardHold): GuardedMfaGateway => ({
+    enrollTotp: async () => {
+      // 新規登録分岐は実 DB (findTwoFactorVerificationState) を要するため fault harness の対象外。
+      throw new Error("not used: fresh-enroll branch requires the real DB");
+    },
+    readPendingTotpEnrollment: async () => {
+      ledger.push("readPending");
+      const known = knownFailureAt("readPending");
+      if (known) return known;
+      return {
+        ok: true,
+        value: { totpUri: "otpauth://fake", recoveryCodes: ["code-1"] },
+        headers: new Headers(),
+      };
+    },
+    verifyCode: sessionStep("verify", "disable-verify=1"),
+    activateTotp: sessionStep("activateTotp", "activate-totp=1"),
+    disableTotp: sessionStep("disableTotp", "disable-totp=1"),
+    revokeOtherSessions: sessionStep("revoke", `${options.operation}-revoke=1`),
+  });
+
   const activate = createActivate({
-    revokeOtherSessions: async () => {
-      ledger.push("revoke");
-      const known = knownFailureAt("revoke");
-      if (known) return known;
-      throwAt("revoke");
-      return successfulSessionMutation("activate-revoke=1");
-    },
-    activateTotp: async () => {
-      ledger.push("activateTotp");
-      const known = knownFailureAt("activateTotp");
-      if (known) return known;
-      throwAt("activateTotp");
-      return successfulSessionMutation("activate-totp=1");
-    },
     writeAudit: async () => {
       ledger.push("audit");
       throwAt("audit");
@@ -126,29 +153,8 @@ export function createRegistrationFaultHarness(options: {
       ledger.push("spend");
       return knownFailureAt("spend");
     },
-    verifyCode: async () => {
-      ledger.push("verify");
-      const known = knownFailureAt("verify");
-      if (known) return known;
-      throwAt("verify");
-      return successfulSessionMutation("disable-verify=1");
-    },
     resetAttempts: async () => {
       ledger.push("reset");
-    },
-    revokeOtherSessions: async () => {
-      ledger.push("revoke");
-      const known = knownFailureAt("revoke");
-      if (known) return known;
-      throwAt("revoke");
-      return successfulSessionMutation("disable-revoke=1");
-    },
-    disableTotp: async () => {
-      ledger.push("disableTotp");
-      const known = knownFailureAt("disableTotp");
-      if (known) return known;
-      throwAt("disableTotp");
-      return successfulSessionMutation("disable-totp=1");
     },
     writeAudit: async () => {
       ledger.push("audit");
@@ -160,9 +166,8 @@ export function createRegistrationFaultHarness(options: {
     },
   });
   const operations: RegistrationOperations = {
-    enroll: async () => {
-      throw new Error("not used");
-    },
+    // enroll は本物 (bare export) — replay 分岐の readPending seam を step 粒度で検証できる。
+    enroll,
     restart: async () => {
       throw new Error("not used");
     },
@@ -171,6 +176,7 @@ export function createRegistrationFaultHarness(options: {
   };
   const app = createRegistrationApplication({
     guard,
+    guardedGateway,
     operations,
     notifyEnabled: (email) => {
       ledger.push("notifyEnabled");

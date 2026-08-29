@@ -321,4 +321,35 @@ describe("MFA registration partial failures", () => {
     expect(harness.ledger).toEqual(["acquire", "revoke", "acquire"]);
     expect(harness.activeHold?.token).toBe("guard-activate");
   });
+
+  // AC-009 (runner 側): enroll replay の readPending が既知の失敗を返すと guard は解放される
+  // (known 限定の理由の正本: ADR-0013 §8)。
+  test("E-S: enroll replay reads the pending enrollment and releases the hold", async () => {
+    const harness = createRegistrationFaultHarness({ operation: "enroll" });
+
+    const result = await harness.app.enroll({ actor, headers: new Headers() });
+
+    expect(result).toEqual({
+      ok: true,
+      enrollmentId: "enrollment-1",
+      totpUri: "otpauth://fake",
+      recoveryCodes: ["code-1"],
+    });
+    expect(harness.ledger).toEqual(["acquire", "readPending", "release"]);
+    expect(harness.activeHold).toBeUndefined();
+  });
+
+  test("E-RPK: a known readPending failure releases the hold (AC-009)", async () => {
+    const harness = createRegistrationFaultHarness({
+      operation: "enroll",
+      fault: { step: "readPending", mode: "known" },
+    });
+
+    const result = await harness.app.enroll({ actor, headers: new Headers() });
+
+    expect(result).toEqual({ ok: false, error: "challenge_expired", status: 401 });
+    expect(harness.ledger).toEqual(["acquire", "readPending", "release"]);
+    expect(harness.activeHold).toBeUndefined();
+    expect(harness.transitionReports).toEqual([]);
+  });
 });
