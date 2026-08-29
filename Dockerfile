@@ -1,5 +1,11 @@
 FROM oven/bun:1.3 AS base
 WORKDIR /app
+# TLS 復号 proxy 配下の network では registry.npmjs.org が private CA 署名の証明書で応答し、
+# bun install が SELF_SIGNED_CERT_IN_CHAIN で失敗する。その環境では certs/palo-root.pem に
+# 信頼させたい CA (PEM) を置くとコンテナ内の bun がそれを信頼する。ファイルが無い環境
+# (CI など) では bun が "ignoring extra certs" warn を 1 行出すだけで動作は変わらない。
+COPY certs/ /opt/certs/
+ENV NODE_EXTRA_CA_CERTS=/opt/certs/palo-root.pem
 EXPOSE 3100
 CMD ["bun", "run", "src/index.ts"]
 
