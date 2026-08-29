@@ -21,7 +21,7 @@ import { actorFromSnapshot, enrollmentRecordIn, ensureCanActivate } from "./stat
 // (フラグと verified の更新は better-auth 側で完結し、同じ tx には入れられない)。
 // 既存の at-least-once 近似に倣う。
 export function createActivate(deps: ActivateDependencies): RegistrationOperations["activate"] {
-  return async ({ actor: requestActor, headers, code, enrollmentId, snapshot }) => {
+  return async ({ actor: requestActor, headers, code, enrollmentId, snapshot, gateway }) => {
     const actor = actorFromSnapshot(requestActor, snapshot);
 
     // 前提条件は revoke より前に置く。後ろに回すと、未登録のまま呼ばれた no-op が
@@ -35,10 +35,10 @@ export function createActivate(deps: ActivateDependencies): RegistrationOperatio
       if (current?.id !== enrollmentId) return failure(ENROLLMENT_CHANGED);
     }
 
-    const revoked = await deps.revokeOtherSessions(headers);
+    const revoked = await gateway.revokeOtherSessions(headers);
     if (!revoked.ok) return revoked;
 
-    const activated = await deps.activateTotp(headers, code);
+    const activated = await gateway.activateTotp(headers, code);
     if (!activated.ok) return activated;
 
     // 記帳の失敗で手続き全体を落とさない。ここはセッション rotate が済んで巻き戻せない地点で、

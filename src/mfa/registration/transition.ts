@@ -4,7 +4,13 @@ import {
   USER_NOT_FOUND,
   type MfaFailure,
 } from "../error-mapping";
-import type { RegistrationOperationKind, RegistrationSnapshot, TransitionGuard } from "./ports";
+import type {
+  GuardedGatewayFactory,
+  GuardedMfaGateway,
+  GuardHold,
+  RegistrationOperationKind,
+  TransitionGuard,
+} from "./ports";
 
 // 正常な遷移は better-auth 呼び出し数回の秒オーダーで終わる (acquire 自体は 250ms 上限)。
 // これを大きく超えて残る guard は結果不明の残置とみなし観測する。解放はしない (ADR-0013 §8)。
@@ -24,14 +30,17 @@ export type ReportUnknownTransition = (event: {
   error: unknown;
 }) => void;
 
+// guardedGateway も必須 (optional + 無音既定の禁止は reportUnknown と同じ理由)。遷移内の
+// better-auth 窓口は進行係が配ったものだけ — 写像方針の正本: ADR-0013 §8。
 export function createTransitionRunner(
   guard: TransitionGuard,
   reportUnknown: ReportUnknownTransition,
+  guardedGateway: GuardedGatewayFactory,
 ) {
   return async function runTransition<T>(
     userId: string,
     operation: RegistrationOperationKind,
-    work: (snapshot: RegistrationSnapshot) => Promise<T>,
+    work: (hold: GuardHold, gateway: GuardedMfaGateway) => Promise<T>,
   ): Promise<T | MfaFailure> {
     const acquired = await guard.acquire(userId, operation);
     if (!acquired.acquired) {
@@ -60,7 +69,7 @@ export function createTransitionRunner(
 
     let result: T;
     try {
-      result = await work(acquired.hold.snapshot);
+      result = await work(acquired.hold, guardedGateway(acquired.hold));
     } catch (error) {
       reportWithoutChangingOutcome(reportUnknown, { operation, phase: "transition", error });
       throw error;

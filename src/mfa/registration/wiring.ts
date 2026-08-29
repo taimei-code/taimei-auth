@@ -8,7 +8,14 @@ import { findUserById } from "@/db/repositories/user";
 import { recordMfaDisabled, recordMfaEnabled } from "@/db/repositories/audit-log";
 import { captureAuditLogError } from "../../audit-error";
 import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
-import { activateTotp, disableTotp, revokeOtherSessions, verifyMfaCode } from "../gateway";
+import {
+  activateTotp,
+  disableTotp,
+  enrollTotp,
+  readPendingTotpEnrollment,
+  revokeOtherSessions,
+  verifyMfaCode,
+} from "../gateway";
 import { createActivate } from "./activate";
 import { createRegistrationApplication } from "./application";
 import { createDisable } from "./disable";
@@ -21,7 +28,7 @@ import {
   notifyMfaEnabled,
 } from "./notification-adapter";
 import { reportUnknownMfaRegistrationTransition } from "./observability-adapter";
-import type { RegistrationOperations } from "./ports";
+import type { GuardedGatewayFactory, GuardedMfaGateway, RegistrationOperations } from "./ports";
 import { restart } from "./restart";
 
 // self-service と management の両経路が同じ production guard 配線を共有する (二重定義で
@@ -31,9 +38,22 @@ export const registrationGuard = {
   release: releaseRegistrationGuard,
 };
 
+// 遷移内窓口の唯一の束縛点 (正本: ADR-0013 §8)。export は production-harness 用。
+// module 定数を返すだけの hold 非依存 — hold は資格の証憑であって束縛材料ではない。
+const guardedMfaGateway: GuardedMfaGateway = {
+  enrollTotp,
+  readPendingTotpEnrollment,
+  verifyCode: verifyMfaCode,
+  activateTotp,
+  disableTotp,
+  revokeOtherSessions,
+};
+export const guardedGateway: GuardedGatewayFactory = (_hold) => guardedMfaGateway;
+
 export const managementApplication = createManagementApplication({
   guard: registrationGuard,
   reportUnknownTransition: reportUnknownMfaRegistrationTransition,
+  guardedGateway,
   readProtocolVersion: readRegistrationGuardProtocolVersion,
   findUserById,
   forceDisableOperation: forceDisableMfa,
@@ -45,17 +65,12 @@ export const productionRegistrationOperations: RegistrationOperations = {
   enroll,
   restart,
   activate: createActivate({
-    revokeOtherSessions,
-    activateTotp,
     writeAudit: ({ userId, ip, userAgent }) => recordMfaEnabled({ user_id: userId, ip, userAgent }),
     observeAuditError: (error) => captureAuditLogError("mfa_enabled", error),
   }),
   disable: createDisable({
     spendAttempt: spendDisableAttempt,
-    verifyCode: verifyMfaCode,
     resetAttempts: resetDisableAttempts,
-    revokeOtherSessions,
-    disableTotp,
     writeAudit: ({ userId, ip, userAgent }) =>
       recordMfaDisabled({ user_id: userId, ip, userAgent }),
     observeAuditError: (error) => captureAuditLogError("mfa_disabled", error),
@@ -65,6 +80,7 @@ export const productionRegistrationOperations: RegistrationOperations = {
 export const registrationApplication = createRegistrationApplication({
   guard: registrationGuard,
   reportUnknownTransition: reportUnknownMfaRegistrationTransition,
+  guardedGateway,
   notifyEnabled: notifyMfaEnabled,
   notifyDisabled: notifyMfaDisabled,
   operations: productionRegistrationOperations,
