@@ -25,13 +25,20 @@ export type RegistrationSnapshot =
       enrollment: TwoFactorVerificationState | undefined;
     };
 
-// 「lease」と呼ばない (TTL 失効を示唆するため — 語彙の正本: CONTEXT.md「MFA 登録遷移 guard」の _Avoid_)。
+// 「lease」と呼ばない (語彙の正本: CONTEXT.md「MFA 登録遷移 guard hold」の _Avoid_)。
+// brand で生成点をこの file の acquire に限定 (テストは cast helper 経由。設計: ADR-0013 §8)。
+declare const guardHoldBrand: unique symbol;
 export type GuardHold = {
+  readonly [guardHoldBrand]: true;
   userId: string;
   token: string;
   operation: MfaRegistrationOperationKind;
   snapshot: RegistrationSnapshot;
 };
+
+function asGuardHold(hold: Omit<GuardHold, typeof guardHoldBrand>): GuardHold {
+  return hold as GuardHold;
+}
 
 // 取得失敗の cause は呼び出し側の分岐に効く: held (先行 guard が存在。heldSince は滞留検知の入力) /
 // timeout・lock (競合打ち切り → busy) / user_absent (user 行が無い → 恒久条件。busy に倒すと
@@ -115,7 +122,10 @@ export async function acquireRegistrationGuard(
         };
       }
       const snapshot = await readRegistrationSnapshot(userId, tx);
-      return { acquired: true as const, hold: { userId, token, operation, snapshot } };
+      return {
+        acquired: true as const,
+        hold: asGuardHold({ userId, token, operation, snapshot }),
+      };
     });
   } catch (error) {
     const cause = acquireFailureCause(error);
