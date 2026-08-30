@@ -12,4 +12,8 @@ APP_ENV=development bun run build:web
 bun run e2e/seed.ts
 : > e2e/.server.log
 
+# MFA 暗号鍵は .env 未設定でも e2e が自走できるよう固定ダミーで補う (production と共有しない値。
+# src/mfa/__tests__/helpers.ts の既定値と同一)
+export MFA_TOTP_ENCRYPTION_KEYS="${MFA_TOTP_ENCRYPTION_KEYS:-v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
+
 PORT=3110 AUTH_SERVICE_URL=http://localhost:3110 bun run src/index.ts 2>&1 | tee -a e2e/.server.log

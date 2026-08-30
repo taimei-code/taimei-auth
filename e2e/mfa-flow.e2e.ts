@@ -5,7 +5,7 @@ import { reseedFixture, signInWithMagicLink } from "./helpers";
 
 // 多要素認証 (MFA) のブラウザ実機スモーク。use-case / handler テストでは組み立てられない
 // 「一次認証 → チャレンジ画面 → 元の遷移先」の連鎖と、画面にしか存在しない状態 (一度きり表示の
-// リカバリーコード / 入力支援属性) を固定する。設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// リカバリーコード / 入力支援属性) を固定する。設計詳細: docs/adr/0016-mfa-self-owned-totp.md
 
 const MFA_EMAIL = "e2e-mfa@example.com";
 
@@ -58,7 +58,7 @@ type EnabledMfa = { secret: string; recoveryCodes: string[] };
 
 // 画面からの有効化動線は QA-H-11 が受け持つ。他の test は「MFA 有効な user」を前提条件として
 // だけ必要とするので、SPA と同じ API で用意する。page.request は browser context の cookie を
-// 共有するため、activate が rotate したセッションはそのまま画面側の続きに引き継がれる。
+// 共有するため、そのまま画面側の続きに引き継がれる (activate はセッションを rotate しない)。
 const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   const enrolled = await page.request.post("/api/account/mfa/enroll");
   expect(enrolled.status()).toBe(200);
@@ -69,18 +69,18 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   };
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
-  // enrollment_id を送るのは SPA と同じ識別子照合つきの activate 経路 (ID 省略は旧タブ互換用で
-  // 第 2 段階に削除予定 — e2e が互換経路だけを踏むと本経路が end-to-end 無検証になる)。
+  // 前 step のコードで有効化する — timestep は単調消費 (ADR-0016) のため、現 step を後続の
+  // 無効化・チャレンジ検証に残す (現 step で有効化すると同一 step の再利用がリプレイ拒否される)。
   const activated = await page.request.post("/api/account/mfa/activate", {
-    data: { code: await totpCode(secret), enrollment_id: enrollment.enrollment_id },
+    data: { code: await totpCode(secret, -1), enrollment_id: enrollment.enrollment_id },
   });
   expect(activated.status()).toBe(200);
 
   return { secret, recoveryCodes: enrollment.recovery_codes };
 };
 
-// 有効化しても手元のセッションは rotate されて生き続ける (チャレンジが挟まるのは一次認証の
-// 直後だけ) ため、チャレンジ画面へはログアウトしてログインし直して到達する。
+// 有効化しても手元のセッションは生き続ける (チャレンジが挟まるのは一次認証の直後だけ) ため、
+// チャレンジ画面へはログアウトしてログインし直して到達する。
 const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(page).toHaveURL(/\/auth\//);

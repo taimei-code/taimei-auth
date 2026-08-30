@@ -1,23 +1,21 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
-import { createSeedHelpers } from "./helpers";
 import {
-  assertChallengeServedFromRedis,
   cleanupIssuedChallenges,
   enableMfaFor,
   issueTestChallenge,
-  rewriteChallengeExpiry,
   requestHeaders,
-  signCookieValue,
   tamperCookieSignature,
   totpCode,
 } from "../../mfa/__tests__/helpers";
+import { challengeKey } from "../../mfa/totp/login-challenge";
+import { getRedis } from "../../redis";
 import { mfaChallenge } from "../mfa-challenge";
+import { createSeedHelpers } from "./helpers";
 
 // pre-session チャレンジ API (src/handlers/mfa-challenge.ts) の統合テスト。
 // requireActor を通らずチャレンジ cookie を認証材料にする二本目の認証経路なので、
-// cookie 無し / 改ざん の 2 ケースは認可スモークと同格の扱いで固定する。
-// route は mountAccountRoutes でなく個別 app.route (canary-token と同じ) なのでここでも個別に張る。
+// cookie 無し / 改ざん / 期限切れの 3 ケースは認可スモークと同格の扱いで固定する。
 
 const P = "mfa-h-challenge-";
 const { cleanup, seedUser } = createSeedHelpers(P);
@@ -79,8 +77,10 @@ describe("MFA チャレンジ API", () => {
       redirectUrl: "https://app.example.com/dashboard",
       method: "github",
     });
-    const tampered = tamperCookieSignature(await signCookieValue(challenge.challengeId));
-    const tamperedHeaders = requestHeaders({ [challenge.cookieName]: tampered });
+    const tampered = tamperCookieSignature(challenge.signedValue);
+    const tamperedHeaders = requestHeaders({
+      [challenge.cookieName]: encodeURIComponent(tampered),
+    });
     const app = buildApp();
 
     const verifyRes = await app.request("/api/mfa/challenge/verify", {
@@ -97,7 +97,7 @@ describe("MFA チャレンジ API", () => {
     expect(await statusRes.json()).toEqual({ pending: false });
   });
 
-  test("QA-M-08 期限切れ cookie → 401 情報漏洩なし", async () => {
+  test("QA-M-08 期限切れ (Redis 消滅) → 401 情報漏洩なし", async () => {
     const user = await seedUser("m08");
     const enabled = await enableMfaFor(user);
     const challenge = await issueTestChallenge({
@@ -105,9 +105,9 @@ describe("MFA チャレンジ API", () => {
       redirectUrl: "/account/security",
       method: "magic_link",
     });
-    const expiresAt = new Date(Date.now() - 60_000);
-    await rewriteChallengeExpiry(challenge, expiresAt);
-    await assertChallengeServedFromRedis(challenge, expiresAt);
+    // TTL 経過の決定的な再現: 実 store の key を消す (固定 sleep は使わない)。
+    const redis = await getRedis();
+    await redis.del(challengeKey(challenge.challengeId));
 
     const res = await buildApp().request("/api/mfa/challenge/verify", {
       method: "POST",
@@ -116,7 +116,7 @@ describe("MFA チャレンジ API", () => {
     });
 
     expect(res.status).toBe(401);
-    // cookie 無し / 改ざん と同一 body — どの段階で落ちたかを未認証のブラウザに教えない
+    // cookie 無し / 改ざんと同一 body — どの段階で落ちたかを未認証のブラウザに教えない。
     expect(await res.json()).toEqual({ error: "challenge_expired" });
     expect(res.headers.getSetCookie()).toEqual([]);
   });

@@ -1,47 +1,49 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
-import { expect, spyOn } from "bun:test";
 import { makeSignature } from "better-auth/crypto";
-import { eq, like } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { auditLog, twoFactor, verification } from "@/db/schema";
+import { mfaRecoveryCode, mfaTotp } from "@/db/schema";
 import { auth } from "../../auth";
 import { withWaitUntil } from "../../background";
-import type { Actor } from "../../membership/guard/core";
 import { getRedis } from "../../redis";
 import { setSentryBackend, type CaptureContext } from "../../sentry";
-import { issueChallenge, type ChallengeMethod } from "../challenge-store";
-import { disableAttemptsKey, resetDisableAttempts } from "../disable-attempt-budget";
-import { clearTwoFactorEnabled } from "../gateway";
-import { activate, enroll } from "./registration-production-harness";
+import { resetDisableAttempts } from "../disable-attempt-budget";
+import { activate, enroll } from "../totp";
+import type { MfaTotpActor } from "../totp/contracts";
+import {
+  attemptsKey,
+  buildLoginChallengeCookie,
+  challengeKey,
+  type ChallengeMethod,
+} from "../totp/login-challenge";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
-// 状態を DB へ直接捏造すると、プラグインが持つ暗号化 secret とコードの対応が伴わず以降の検証が
-// すべて偽陽性になるため、生成はいずれも production と同じ経路 (internalAdapter / use-case) を通す。
-//
-// このファイルはチャレンジ cookie 名と challengeId 接頭辞の文字列リテラルを持たない。
-// challenge-store が createAuthCookie / setSignedCookie 越しに渡す値を観測して使うことで、
-// 内部形式の封じ込めを見る静的 tripwire (containment.test.ts) の対象を増やさない。
+// 状態を DB へ直接捏造すると、暗号化 secret とコードの対応が伴わず以降の検証がすべて偽陽性になる
+// ため、生成はいずれも production と同じ経路 (internalAdapter / totp façade) を通す。
+
+// テスト実行時の鍵 ring 既定値 (.env に無くても bun test が自走できるようにする)。
+// 値は "0123456789abcdef0123456789abcdef" (32byte) の base64 — production と共有しない固定ダミー。
+process.env.MFA_TOTP_ENCRYPTION_KEYS ??= "v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
 
-// src/auth.ts の totpOptions.period と同値。プラグインに検証窓の option が無く、窓の広さは
-// @better-auth/utils の既定 (±1 step) にしか書かれていないため、テストは step を自分で刻む。
+// src/mfa/totp/totp-engine.ts の PERIOD と同値。検証は独立実装 (@better-auth/utils) で行う (§10)。
 const TOTP_PERIOD_SECONDS = 30;
 
-export type TwoFactorRow = typeof twoFactor.$inferSelect;
+export type { MfaTotpRow } from "@/db/repositories/mfa-totp";
+import type { MfaTotpRow } from "@/db/repositories/mfa-totp";
 
-// better-call の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる
-// (非互換な署名 scheme との違いは src/mfa/challenge-store.ts のコメントにある)。
-export async function signCookieValue(value: string): Promise<string> {
+// better-auth の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる。
+async function signCookieValue(value: string): Promise<string> {
   const { secret } = await auth.$context;
   return `${value}.${await makeSignature(value, secret)}`;
 }
 
 // 署名の**末尾**を書き換えても改ざんにならない。標準 base64 の最終文字は下位ビットがパディングで、
-// atob が捨てるため復号後のバイト列が変わらず署名が通ってしまう (実測: 6 桁中 4/64 の確率で
-// テストが偽陰性になった)。6 ビットすべてが有効な先頭文字を差し替える。
+// atob が捨てるため復号後のバイト列が変わらず署名が通ってしまう。6 ビットすべてが有効な先頭文字を
+// 差し替える。
 export function tamperCookieSignature(signed: string): string {
   const separator = signed.lastIndexOf(".");
   const signature = signed.slice(separator + 1);
@@ -77,16 +79,6 @@ export async function createSessionFor(userId: string): Promise<TestSession> {
   return { token: session.token, headers: await sessionHeaders(session.token) };
 }
 
-// activate / disable / チャレンジ通過はいずれもセッションを rotate するため、続きの操作は
-// 転送された cookie で組み直さないと直前に消えた token を使うことになる。
-export async function sessionTokenFromForwarded(forwarded: Headers): Promise<string | undefined> {
-  const { authCookies } = await auth.$context;
-  return issuedSessionCookieValues(forwarded, authCookies.sessionToken.name)
-    .map((value) => value.slice(0, value.lastIndexOf(".")))
-    .map(decodeURIComponent)
-    .at(0);
-}
-
 export async function issuedSessionCookieCount(forwarded: Headers): Promise<number> {
   const { authCookies } = await auth.$context;
   return issuedSessionCookieValues(forwarded, authCookies.sessionToken.name).length;
@@ -102,20 +94,12 @@ function issuedSessionCookieValues(forwarded: Headers, cookieName: string): stri
     .filter((value) => value.lastIndexOf(".") > 0);
 }
 
-export function actorOf(
-  user: { id: string; email: string },
-  overrides: { twoFactorEnabled?: boolean; lastUsedCompanyId?: string | null } = {},
-): Actor {
-  return {
-    id: user.id,
-    email: user.email,
-    lastUsedCompanyId: overrides.lastUsedCompanyId ?? null,
-    twoFactorEnabled: overrides.twoFactorEnabled ?? false,
-  };
+export function actorOf(user: { id: string; email: string }): MfaTotpActor {
+  return { id: user.id, email: user.email };
 }
 
-// DB の secret 列は AUTH_SECRET 由来の鍵で暗号化されており、平文 secret を得る経路は
-// enroll が返す otpauth URI (secret パラメータは平文の base32) だけ。
+// DB の secret 列は鍵 ring で暗号化されており、平文 secret を得る経路は enroll が返す otpauth URI
+// (secret パラメータは平文の base32) だけ。secret は ASCII のため base32 → TextDecoder 往復互換。
 export function secretFromTotpUri(totpUri: string): string {
   const encoded = new URL(totpUri).searchParams.get("secret");
   if (!encoded) throw new Error(`totp uri has no secret: ${totpUri}`);
@@ -129,18 +113,8 @@ export function totpCode(secret: string, stepOffset = 0): Promise<string> {
   return otp.hotp(counter);
 }
 
-export const currentTotpStep = (): number => Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000));
-
-// TOTP の刻みをまたぐと offset 指定で作ったコードが 1 つずれ、窓の内外が入れ替わる。次の step の
-// 頭まで待って観測の持ち時間を最大化する (待つだけでは足りないので、跨いだかどうかは
-// currentTotpStep の前後比較で検出すること)。
-export async function awaitNextTotpStep(): Promise<void> {
-  const periodMs = TOTP_PERIOD_SECONDS * 1000;
-  await new Promise((resolve) => setTimeout(resolve, periodMs - (Date.now() % periodMs) + 100));
-}
-
-// 固定の誤コードは 6 桁の一様分布に対し窓 5 本ぶん = 100 万分の 5 の確率で偶然一致し、
-// 間欠的に緑になる。窓の前後まで含めて実際に生成し、それらを避ける。
+// 固定の誤コードは 6 桁の一様分布に対し窓 5 本ぶんの確率で偶然一致し、間欠的に緑になる。
+// 窓の前後まで含めて実際に生成し、それらを避ける。
 export async function wrongTotpCode(secret: string): Promise<string> {
   const rejected = await Promise.all([-2, -1, 0, 1, 2].map((offset) => totpCode(secret, offset)));
   for (let candidate = 0; candidate < 1000; candidate++) {
@@ -150,298 +124,104 @@ export async function wrongTotpCode(secret: string): Promise<string> {
   throw new Error("failed to find a code outside the verification window");
 }
 
-export function findTwoFactorRow(userId: string): Promise<TwoFactorRow | undefined> {
+export function findMfaTotpRow(userId: string): Promise<MfaTotpRow | undefined> {
   return db
     .select()
-    .from(twoFactor)
-    .where(eq(twoFactor.userId, userId))
+    .from(mfaTotp)
+    .where(eq(mfaTotp.userId, userId))
     .then((rows) => rows.at(0));
 }
 
-export function countTwoFactorRows(userId: string): Promise<number> {
+export function countMfaTotpRows(userId: string): Promise<number> {
   return db
     .select()
-    .from(twoFactor)
-    .where(eq(twoFactor.userId, userId))
+    .from(mfaTotp)
+    .where(eq(mfaTotp.userId, userId))
+    .then((rows) => rows.length);
+}
+
+export function countRecoveryCodeRows(userId: string): Promise<number> {
+  return db
+    .select()
+    .from(mfaRecoveryCode)
+    .where(eq(mfaRecoveryCode.userId, userId))
     .then((rows) => rows.length);
 }
 
 export type EnabledMfaUser = {
-  actor: Actor;
+  actor: MfaTotpActor;
   /** 認証アプリが持つ値に相当する平文 TOTP secret。 */
   secret: string;
   recoveryCodes: string[];
-  /** 有効化で rotate した後の現行セッション。 */
+  enrollmentId: string;
+  /** 有効化後も同じセッションのまま (rotate は行わない — ADR-0016 §4.3)。 */
   session: TestSession;
 };
 
 export async function enableMfaFor(user: { id: string; email: string }): Promise<EnabledMfaUser> {
   const session = await createSessionFor(user.id);
   const actor = actorOf(user);
-  const enrolled = await enroll(actor, session.headers);
+  const enrolled = await enroll({ actor });
   if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
 
   const secret = secretFromTotpUri(enrolled.totpUri);
+  // 前 step のコードで有効化し、現 step 以降を後続の検証に残す (timestep は単調消費のため)。
   const activated = await activate({
     actor,
     headers: session.headers,
-    code: await totpCode(secret),
+    code: await totpCode(secret, -1),
+    enrollmentId: enrolled.enrollmentId,
   });
   if (!activated.ok) throw new Error(`activate failed: ${activated.error}`);
 
-  const rotatedToken = await sessionTokenFromForwarded(activated.sessionChanges);
-  if (!rotatedToken) throw new Error("activate did not forward a session cookie");
-
   // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
-  // DB の行削除だけでは前回実行ぶんが積み上がり、誤コードを 1 回試すテストが 5 回目の実行から
-  // locked に化ける。「有効化直後は枠が空」を fixture 側で保証する。
+  // 「有効化直後は枠が空」を fixture 側で保証する。
   await resetDisableAttempts(user.id);
 
   return {
-    actor: actorOf(user, { twoFactorEnabled: true }),
+    actor,
     secret,
     recoveryCodes: enrolled.recoveryCodes,
-    session: { token: rotatedToken, headers: await sessionHeaders(rotatedToken) },
+    enrollmentId: enrolled.enrollmentId,
+    session,
   };
-}
-
-// CONTEXT.md「MFA 登録状態」の 5 状態 (中断した有効化は行あり / 行なしの 2 サブ状態)。
-// 網羅テストが回す実行時配列と型を同源にし、状態追加時のカバレッジ追随を自動にする。
-export const MFA_ENROLLMENT_STATE_NAMES = [
-  "unregistered",
-  "enrolledNotActivated",
-  "active",
-  "interruptedDisable",
-  "interruptedActivationUnverified",
-  "interruptedActivationNoRow",
-] as const;
-
-export type MfaEnrollmentStateName = (typeof MFA_ENROLLMENT_STATE_NAMES)[number];
-
-export type MfaStateFixture = {
-  actor: Actor;
-  session: TestSession;
-  /** 未登録のみ undefined。 */
-  secret?: string;
-  recoveryCodes?: string[];
-};
-
-// 状態は必ず本番と同じ経路 (enroll / activate) で作り、中断だけを 1 箇所の直接書き換えで再現する
-// (このファイル冒頭の「捏造しない」方針)。「登録済み未有効」は verified の DB default が true の
-// ため、プラグインが明示 false を書く enroll 経由でしか作れない — two_factor への直接 INSERT を
-// 足さないこと。
-export async function seedMfaEnrollmentState(
-  user: { id: string; email: string },
-  state: MfaEnrollmentStateName,
-): Promise<MfaStateFixture> {
-  switch (state) {
-    case "unregistered":
-      return { actor: actorOf(user), session: await createSessionFor(user.id) };
-    case "enrolledNotActivated": {
-      const session = await createSessionFor(user.id);
-      const actor = actorOf(user);
-      const enrolled = await enroll(actor, session.headers);
-      if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
-      return {
-        actor: actorOf(user),
-        session,
-        secret: secretFromTotpUri(enrolled.totpUri),
-        recoveryCodes: enrolled.recoveryCodes,
-      };
-    }
-    case "active":
-      return enableMfaFor(user);
-    case "interruptedDisable": {
-      const enabled = await enableMfaFor(user);
-      await clearTwoFactorEnabled(user.id);
-      return { ...enabled, actor: actorOf(user) };
-    }
-    case "interruptedActivationUnverified": {
-      const enabled = await enableMfaFor(user);
-      await db.update(twoFactor).set({ verified: false }).where(eq(twoFactor.userId, user.id));
-      return enabled;
-    }
-    case "interruptedActivationNoRow": {
-      const enabled = await enableMfaFor(user);
-      await db.delete(twoFactor).where(eq(twoFactor.userId, user.id));
-      return enabled;
-    }
-  }
 }
 
 export type IssuedChallenge = {
   challengeId: string;
   cookieName: string;
-  cookieMaxAgeSeconds: number | undefined;
-  /** issueChallenge が createAuthCookie へ渡した上書き。cookie の作用域を assert するため。 */
-  cookieOverrides: Record<string, unknown> | undefined;
-  issuedAt: number;
   /** チャレンジ cookie だけを載せた (セッション cookie を持たない) リクエスト headers。 */
   headers: Headers;
+  /** ブラウザがそのまま送り返す署名済み cookie 値。 */
+  signedValue: string;
 };
 
-// issueChallenge が要求する機能だけを備えた ctx stub を渡し、発行された challengeId と cookie 属性を
-// 観測できる形で返す。プラグイン殻を経由しないので、チャレンジ状態そのものを見るテストが
-// 一次認証のセットアップから独立する。
+const issuedChallengeIds: string[] = [];
+
+// 実 store (buildLoginChallengeCookie) で発行し、cookie 素材をそのまま headers に載せる。
 export async function issueTestChallenge(challenge: {
   userId: string;
   redirectUrl: string;
   method: ChallengeMethod;
 }): Promise<IssuedChallenge> {
-  const authContext = await auth.$context;
-  let captured: { name: string; value: string; maxAge: number | undefined } | undefined;
-  let capturedOverrides: Record<string, unknown> | undefined;
-
-  const issuedAt = Date.now();
-  await issueChallenge(
-    {
-      context: {
-        secret: authContext.secret,
-        createAuthCookie: (name, overrides) => {
-          capturedOverrides = overrides as Record<string, unknown> | undefined;
-          return authContext.createAuthCookie(name, overrides);
-        },
-        internalAdapter: authContext.internalAdapter,
-      },
-      setSignedCookie: async (name, value, _secret, options) => {
-        captured = { name, value, maxAge: (options as { maxAge?: number } | undefined)?.maxAge };
-      },
-    },
-    challenge,
-  );
-
-  if (!captured) throw new Error("issueChallenge did not set a challenge cookie");
-  issuedChallengeIds.push(captured.value);
+  const cookie = await buildLoginChallengeCookie(challenge);
+  const challengeId = cookie.value.slice(0, cookie.value.lastIndexOf("."));
+  issuedChallengeIds.push(challengeId);
   return {
-    challengeId: captured.value,
-    cookieName: captured.name,
-    cookieMaxAgeSeconds: captured.maxAge,
-    cookieOverrides: capturedOverrides,
-    issuedAt,
-    headers: requestHeaders({ [captured.name]: await signCookieValue(captured.value) }),
+    challengeId,
+    cookieName: cookie.name,
+    signedValue: cookie.value,
+    headers: requestHeaders({ [cookie.name]: encodeURIComponent(cookie.value) }),
   };
 }
 
-export async function challengeAndSessionHeaders(
-  challenge: IssuedChallenge,
-  sessionToken: string,
-): Promise<Headers> {
-  const { authCookies } = await auth.$context;
-  return requestHeaders({
-    [challenge.cookieName]: await signCookieValue(challenge.challengeId),
-    [authCookies.sessionToken.name]: await signCookieValue(sessionToken),
-  });
-}
-
-// 1 チャレンジが書く verification value の identifier 群。challengeId を接尾に持つことだけを
-// 手掛かりにするので、キー名の接頭辞リテラルをテスト側に持ち込まずに済む。
-export function findChallengeIdentifiers(challengeId: string): Promise<string[]> {
-  return db
-    .select({ identifier: verification.identifier })
-    .from(verification)
-    .where(like(verification.identifier, `%${challengeId}`))
-    .then((rows) => rows.map((row) => row.identifier));
-}
-
-// プラグインが所有する試行カウンタ。完了マーカー (challengeId 自身) でも challenge-store の
-// 補助キー (mfa- 接頭) でもない 1 本として差分で特定する。
-export async function findAttemptsIdentifier(challengeId: string): Promise<string> {
-  const candidates = (await findChallengeIdentifiers(challengeId)).filter(
-    (identifier) => identifier !== challengeId && !identifier.startsWith("mfa-"),
-  );
-  if (candidates.length !== 1) {
-    throw new Error(`expected exactly one attempts identifier, got ${candidates.join(", ")}`);
-  }
-  return candidates[0];
-}
-
-const issuedChallengeIds: string[] = [];
-
-// verification 行は TTL 切れでも DB に残るため、テストが作ったチャレンジ状態は明示的に消す。
+// TTL 前に消し損ねた state が後続テストへ漏れないよう、テストが発行したチャレンジは明示的に消す。
 export async function cleanupIssuedChallenges(): Promise<void> {
-  const identifiers = await Promise.all(issuedChallengeIds.map(findChallengeIdentifiers));
-  await Promise.all(identifiers.flat().map(deleteVerification));
+  const redis = await getRedis();
+  await Promise.all(
+    issuedChallengeIds.flatMap((id) => [redis.del(challengeKey(id)), redis.del(attemptsKey(id))]),
+  );
   issuedChallengeIds.length = 0;
-}
-
-export type StoredVerification = { value: string; expiresAt: Date };
-
-export async function findVerification(
-  identifier: string,
-): Promise<StoredVerification | undefined> {
-  const { internalAdapter } = await auth.$context;
-  const record = await internalAdapter.findVerificationValue(identifier);
-  return record ? { value: record.value, expiresAt: new Date(record.expiresAt) } : undefined;
-}
-
-export async function deleteVerification(identifier: string): Promise<void> {
-  const { internalAdapter } = await auth.$context;
-  await internalAdapter.deleteVerificationByIdentifier(identifier);
-}
-
-// キー形式の出典: better-auth 1.6.23 dist/db/internal-adapter.mjs (storeIdentifier 未設定のため
-// identifier がそのまま載る)。
-const verificationRedisKey = (identifier: string): string => `verification:${identifier}`;
-
-export async function challengeMarkerRedisTtl(challengeId: string): Promise<number> {
-  const redis = await getRedis();
-  return redis.ttl(verificationRedisKey(challengeId));
-}
-
-// 実 writer (issueChallenge) が Redis に書いた JSON の expiresAt だけを書き換え、TTL は発行時に
-// 実測した cookie maxAge (= verification TTL と同値) で入れ直す —「Redis TTL は生きているが
-// expiresAt は過去」という TTL とアプリ判定のずれ自体が検証対象のため。createVerificationValue に
-// 過去時刻を渡す方法では作れない: better-auth は TTL<=0 で Redis write を skip し、テスト環境では
-// Postgres fallback を読む別経路になる (本番は storeInDatabase=false で Redis のみ)。
-export async function rewriteChallengeExpiry(
-  challenge: IssuedChallenge,
-  expiresAt: Date,
-): Promise<void> {
-  const redis = await getRedis();
-  const identifiers = await findChallengeIdentifiers(challenge.challengeId);
-  if (identifiers.length === 0) {
-    throw new Error(`no verification values for challenge ${challenge.challengeId}`);
-  }
-  if (challenge.cookieMaxAgeSeconds === undefined) {
-    throw new Error("challenge cookie has no maxAge to reuse as verification TTL");
-  }
-  for (const identifier of identifiers) {
-    const key = verificationRedisKey(identifier);
-    const raw = await redis.get(key);
-    if (!raw) throw new Error(`verification value not in redis: ${key}`);
-    const stored = JSON.parse(raw) as Record<string, unknown>;
-    stored.expiresAt = expiresAt.toISOString();
-    await redis.set(key, JSON.stringify(stored), { EX: challenge.cookieMaxAgeSeconds });
-  }
-}
-
-// rewriteChallengeExpiry した fixture が本番と同じ Redis 経路で配信されていることの事前 assert。
-// これが無いと「期限判定による拒否」と「fixture が Redis に届いていないだけの拒否」を区別できない。
-// DB 行は発行時の expiresAt のままで Redis だけを書き換えているため、書き換え後の値が読めること
-// 自体が Redis 経路の証拠 (better-auth 1.6.23 の safeJSONParse は ISO 文字列を Date へ復元する
-// ため、型では経路を判別できない)。
-export async function assertChallengeServedFromRedis(
-  challenge: IssuedChallenge,
-  expiresAt: Date,
-): Promise<void> {
-  expect(await challengeMarkerRedisTtl(challenge.challengeId)).toBeGreaterThan(0);
-  const stored = await findVerification(challenge.challengeId);
-  expect(stored?.expiresAt.getTime()).toBe(expiresAt.getTime());
-}
-
-// redis の TTL が「キーが存在しない」を表す値。枠が消えたことの観測に使う。
-export const ATTEMPT_BUDGET_ABSENT = -2;
-
-export async function attemptBudgetTtlSeconds(userId: string): Promise<number> {
-  const redis = await getRedis();
-  return redis.ttl(disableAttemptsKey(userId));
-}
-
-// INCR できない値を置いて storage 障害を起こす。counter を握り潰す mock ではなく実際に
-// 失敗する Redis 操作を通すことで、fail-closed が production と同じ経路で確かめられる。
-export async function poisonAttemptBudget(userId: string): Promise<void> {
-  const redis = await getRedis();
-  await redis.set(disableAttemptsKey(userId), "not-a-number", { EX: 60 });
 }
 
 // revoke の実効性は DB では観測できない (secondaryStorage 構成では session 行が存在しない)。
@@ -458,7 +238,7 @@ export async function deleteSessionEntities(tokens: string[]): Promise<void> {
 }
 
 // baseURL 未設定時 better-auth は request の origin を baseURL として使うため、テストは
-// 一次認証を絶対 URL のリクエストで駆動する (auth.api 経由だと baseURL が空で magic link を組めない)。
+// 一次認証を絶対 URL のリクエストで駆動する。
 const AUTH_ORIGIN = "http://localhost:3100";
 
 // local fallback のログ文言。e2e が同じ行からリンクを拾う契約なので、変えるなら送信側と同時に。
@@ -470,8 +250,7 @@ export type PrimaryAuthLogin = { response: Response; location: URL | null; logs:
 export type ObservedRun<T> = { value: T; logs: string[] };
 
 // audit 記帳と通知メールは runBackground の fire-and-forget。worker entry と同じ withWaitUntil で
-// 拾って完走を待つことで、記帳の観測が時間依存にならない。メール送信は local fallback が
-// console へ落とすので、同じ捕捉でついでに拾う (実送信の確認は手動台帳の担当)。
+// 拾って完走を待つことで、記帳の観測が時間依存にならない。
 export async function runObserving<T>(fn: () => Promise<T>): Promise<ObservedRun<T>> {
   const logs: string[] = [];
   const background: Promise<unknown>[] = [];
@@ -511,7 +290,7 @@ export async function requestMagicLink(input: {
 }
 
 // リンクを踏む側だけを分けているのは、チャレンジ発行の失敗を注入するテストが「リンク発行は
-// 成功させたまま検証だけ壊す」必要があるため (発行側にも verification value の書き込みがある)。
+// 成功させたまま発行だけ壊す」必要があるため。
 export async function followMagicLink(link: string): Promise<PrimaryAuthLogin> {
   const { response, logs } = await handleWithBackgroundTasks(
     new Request(link, {
@@ -523,8 +302,8 @@ export async function followMagicLink(link: string): Promise<PrimaryAuthLogin> {
   return { response, location: location ? new URL(location) : null, logs };
 }
 
-// 一次認証の実 HTTP 経路。プラグイン殻の after-hook は一次認証が newSession を積んだ後にしか
-// 走らないため、合成 ctx で代用すると「介入したつもり」のテストになる。
+// 一次認証の実 HTTP 経路。after-hook は一次認証が newSession を積んだ後にしか走らないため、
+// 合成 ctx で代用すると「介入したつもり」のテストになる。
 export async function loginWithMagicLink(input: {
   email: string;
   callbackURL: string;
@@ -547,29 +326,11 @@ export function browserCookieHeaders(response: Response): Headers {
   );
 }
 
-// audit の書き込みだけを落とす注入。db.insert を丸ごと潰すとプラグイン側の書き込みまで巻き込み、
-// 「記帳が失敗しても手続きは完走する」ではなく「手続きごと失敗した」を観測してしまうため、
-// 対象テーブルで絞る。
-export async function withFailingAuditWrite<T>(run: () => Promise<T>): Promise<T> {
-  const insert = db.insert.bind(db);
-  const failing = spyOn(db, "insert").mockImplementation(((
-    table: Parameters<typeof db.insert>[0],
-  ) => {
-    if (table === auditLog) throw new Error("audit store unavailable");
-    return insert(table);
-  }) as typeof db.insert);
-  try {
-    return await run();
-  } finally {
-    failing.mockRestore();
-  }
-}
-
 export type SentryCapture = { message: string; context?: CaptureContext };
 
-// MFA の失敗経路は「握り潰さず観測へ回す」ことが仕様の一部 (ロック急増の検知信号 / 不変条件破れの
-// 検出) なので、captureMessage / captureException の発火はテストの検証対象になる。backend は
-// module-global のため、install した test file は必ず restore して後続ファイルへ spy を漏らさない。
+// MFA の失敗経路は「握り潰さず観測へ回す」ことが仕様の一部なので、captureMessage /
+// captureException の発火はテストの検証対象になる。backend は module-global のため、
+// install した test file は必ず restore して後続ファイルへ spy を漏らさない。
 export function installSentryRecorder(): {
   messages: SentryCapture[];
   exceptions: SentryCapture[];
