@@ -159,9 +159,7 @@ export function revokeOtherSessions(headers: Headers): Promise<GatewayResult<unk
 }
 
 // 運用救済スクリプト専用のフラグ降ろし。リクエストもセッションも無いため auth.api の disable は
-// 使えない。それでも drizzle で user 行を直更新せず internalAdapter を通すのは、better-auth が
-// user を secondaryStorage にも二重保管しており、cache 無効化を lifecycle hook に委ねる必要が
-// あるため (db/CLAUDE.md ルール 2 の User 更新に関する例外規定)。
+// 使えない。drizzle 直更新でなく internalAdapter を通す理由: db/CLAUDE.md ルール 2 の User 更新例外。
 export async function clearTwoFactorEnabled(userId: string): Promise<void> {
   const authContext = await auth.$context;
   await authContext.internalAdapter.updateUser(userId, { twoFactorEnabled: false });
