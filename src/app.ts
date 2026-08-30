@@ -19,18 +19,14 @@ import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
 import { getTrustedOrigins, isLocalEnvironment } from "./env";
 
-// Bun entry (index.ts) と Workers entry (worker.ts) が共有する Hono アプリ定義。
-// runtime 固有なのは「静的配信」のみ (Bun = serveStatic+Bun.file / Workers = env.ASSETS) で、
-// それを mountStatic コールバックで最後に受ける。RPC は両 runtime とも fetch ハンドラ直配信し、
-// connect-node の内部 http proxy は使わない (ADR-0011)。
-// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+// Bun entry (index.ts) と Workers entry (worker.ts) が共有する composition root。runtime 固有なのは
+// 静的配信のみで mountStatic で受ける。RPC は両 runtime とも fetch ハンドラ直配信 (詳細: ADR-0011)。
 export type AppOptions = {
   // catch-all (SPA fallback) を含むため、共有ルートをすべて登録した後に呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
-// 認可 smoke (account-routes-auth.test.ts) が同じ helper でアプリを組むことで、
-// router の追加漏れ (guard 未通過 route の混入) を CI で検知できる。
+// 認可 smoke (account-routes-auth.test.ts) が同じ helper で組み、guard 未通過 route の混入を CI で検知する。
 export function mountAccountRoutes(app: Hono): void {
   app.route("/", accountAvatar);
   app.route("/", accountCompany);
@@ -39,16 +35,14 @@ export function mountAccountRoutes(app: Hono): void {
   app.route("/", accountMfa);
 }
 
-// local (dev / e2e) は同一 key への連続アクセスが常態のため、production limit だと自テストが 429 を
-// 踏む。better-auth 内蔵 rateLimit (auth.ts) と同じ緩和方針。
+// local (dev / e2e) は同一 key 連投が常態で、production limit だと自テストが 429 を踏むため緩める。
 const LOCAL_RELAXED_LIMIT = 1000;
 
 const requireServiceKey: MiddlewareHandler = async (c, next) => {
   const serviceKey = c.req.header("X-Service-Key");
   const acceptedServiceKeys = getValidServiceKeys();
   if (acceptedServiceKeys.length === 0) {
-    // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。
-    // ここに到達するのは dev / test のみ。二重防御として production だけ 503 を返す。
+    // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。ここは二重防御。
     if (process.env.APP_ENV === "production") {
       return c.json({ error: "Service Key not configured (production)" }, 503);
     }
@@ -95,9 +89,8 @@ export function buildApp(options: AppOptions): Hono {
 
   const isLocal = isLocalEnvironment();
 
-  // canary は無認証で Sentry captureMessage を直叩きする endpoint のため、連打による
-  // Sentry quota 枯渇 (= 攻撃検知チャネル自体の盲目化) を IP 単位で抑える。
-  // 正規の発火は攻撃者が canary を踏んだ瞬間のみで頻度は稀なため 10/IP/min で十分。
+  // canary は無認証で Sentry captureMessage を直叩きするため、連打による quota 枯渇 (= 攻撃検知
+  // チャネル自体の盲目化) を IP 単位で抑える。正規の発火は稀なので 10/IP/min で十分。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
@@ -108,9 +101,8 @@ export function buildApp(options: AppOptions): Hono {
   );
   app.route("/", canaryToken);
 
-  // プラグインの試行制限はチャレンジ単位 (5 回で破棄) とアカウント単位 (10 回で 15 分ロック) しか
-  // 数えず、チャレンジを取り直しながら別アカウントを順に試す形は素通りする。その穴を IP 軸で塞ぐ。
-  // 正規利用は 600 秒のチャレンジ 1 本につき数回の打ち直しで収まる。
+  // プラグインの試行制限はチャレンジ単位とアカウント単位しか数えず、チャレンジを取り直しながら
+  // 別アカウントを順に試す形は素通りする。その穴を IP 軸で塞ぐ。
   app.use(
     "/api/mfa/challenge/verify",
     createRateLimitMiddleware({
@@ -120,9 +112,8 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  // 状態取得も未認証で到達でき、有効なチャレンジ cookie が付けば 1 リクエストで Redis 3 往復を
-  // 引くため、同じく IP 単位で抑える。正規利用の上限は「初回表示 1 + 誤入力のたびの取り直し =
-  // verify の上限 10」で 11 回/分 (web/src/mfa/pages/MfaChallenge.tsx)。同一 NAT 配下の数人分を足して 30。
+  // 状態取得も未認証で到達でき、チャレンジ cookie 付きなら Redis 3 往復を引くため IP 単位で抑える。
+  // 正規利用の上限は初回表示 1 + verify 上限 10 = 11 回/分で、同一 NAT 配下の数人分を足して 30。
   app.use(
     "/api/mfa/challenge",
     createRateLimitMiddleware({
@@ -143,9 +134,8 @@ export function buildApp(options: AppOptions): Hono {
     }),
     createRateLimitMiddleware({
       keyFn: async (c) => {
-        // workerd は request body の clone 二重読み (rate-limit の clone + better-auth) で hang する。
-        // この json() は email を取りつつ raw body を Hono cache に先読みさせる役割で、
-        // 後段 auth.handler へ渡す Request は下の "/api/auth/*" で同 cache (arrayBuffer) から再構築する。
+        // workerd は request body の clone 二重読み (rate-limit + better-auth) で hang する。この json()
+        // は email を取りつつ raw body を Hono cache に先読みさせ、後段は同 cache から Request を再構築する。
         const body = await c.req
           .json<Record<string, unknown>>()
           .catch(() => ({}) as Record<string, unknown>);
@@ -157,12 +147,8 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  // Hono v4 の wildcard は末尾 `*` で multi-segment を catch する (`/api/auth/**` ではない)。
-  // GET/POST のみ better-auth に渡す (本アプリが使う magic-link / sign-out / get-session / callback は
-  // すべて GET か POST)。将来 better-auth が DELETE/PATCH route を増やしたらここを広げる
-  // — でないと static fallback に落ちて 200 HTML が返り silent に壊れる。
-  // rate-limit middleware が body を Hono cache に載せているため、raw を直接渡すと body が空になる。
-  // POST は cache 済み body を buffer して fresh Request を better-auth に渡す。
+  // GET/POST のみ better-auth に渡す。将来 better-auth が DELETE/PATCH route を増やしたら広げる
+  // — でないと static fallback に落ちて 200 HTML が返り silent に壊れる。body は cache から再構築する。
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
     if (c.req.method === "GET") return auth.handler(c.req.raw);
     const body = await c.req.arrayBuffer();
@@ -175,9 +161,8 @@ export function buildApp(options: AppOptions): Hono {
     );
   });
 
-  // MFA 状態変更 3 route の試行制限 (数える軸の理由は rate-limit.ts の mfaAttemptKey)。wildcard に
-  // しないのは Hono の "/api/account/mfa/*" が前置 path 自身 (GET /api/account/mfa) にも match する
-  // ため (実測) — 状態参照まで枠に入れると、連投で枠を使い切った直後に画面表示まで 429 になる。
+  // MFA 状態変更 3 route の試行制限 (軸の理由は rate-limit.ts の mfaAttemptKey)。wildcard にしないのは
+  // "/api/account/mfa/*" が前置 path 自身にも match し (実測)、状態参照まで 429 に巻き込むため。
   const mfaAttemptRateLimit = createRateLimitMiddleware({
     keyFn: (c) => mfaAttemptKey(c.req.raw.headers, getClientContext(c.req.raw.headers).ip),
     limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,

@@ -45,8 +45,7 @@ export const Companies = () => {
     removeMember(m.company_id, selfUserId)
       .then(({ accountDeleted }) => {
         if (accountDeleted) {
-          // 遷移完了まで busy を維持する (解除すると遷移までの間に再クリックでき、
-          // 2 回目の 401 が「抜けられませんでした」と誤表示されるため)
+          // 遷移完了まで busy を維持する (解除すると再クリックでき、2 回目の 401 が誤表示される)
           redirecting = true;
           redirectAfterAuthChange("deleteAccount");
           return;
@@ -58,8 +57,7 @@ export const Companies = () => {
       })
       .catch((err) => {
         if (err instanceof RequestJsonError && err.status === 409) {
-          // toast にしない: このエラーは「オーナーを委譲」ボタンの出現理由の説明として
-          // 導線と一緒に画面へ残り続ける必要がある (shared/notify.tsx の経路規則)
+          // toast にしない: 「オーナーを委譲」ボタンの出現理由として導線と一緒に残す (shared/notify.tsx の経路規則)
           setSoleOwnerCompanyId(m.company_id);
         } else {
           notifyError("事業所から抜けられませんでした。");

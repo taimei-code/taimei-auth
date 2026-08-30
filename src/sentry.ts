@@ -1,8 +1,5 @@
-// runtime 非依存の Sentry facade。
-// 実 backend (Bun = @sentry/bun、Workers = @sentry/cloudflare) は各 entry が setSentryBackend で
-// 注入する。handler 群が import する本 module に SDK 依存を持たせないことで、Workers バンドルに
-// Bun 専用の @sentry/bun が混入するのを防ぐ。
-// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+// runtime 非依存の Sentry facade。実 backend は各 entry が setSentryBackend で注入する。本 module に
+// SDK 依存を持たせないことで Workers バンドルへの @sentry/bun 混入を防ぐ (詳細: ADR-0011)。
 export type CaptureContext = {
   level?: "fatal" | "error" | "warning" | "info" | "debug";
   tags?: Record<string, string | undefined>;

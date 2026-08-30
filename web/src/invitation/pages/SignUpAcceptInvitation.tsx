@@ -10,9 +10,8 @@ import { acceptInvitation } from "../invitation-api";
 
 type AcceptRequestStatus = "processing" | "error";
 
-// 招待メールの 1-click magic link で認証後、callbackURL でここに着地する。
-// invitation_token を accept API に渡し membership を作成 → /account へ。
-// strict email match (session.email !== invitation.email) は 403 でエラー表示。
+// 招待メールの 1-click magic link で認証後、callbackURL でここに着地する。invitation_token を
+// accept API に渡し membership を作成 → /account へ。strict email match 違反は 403 でエラー表示。
 export const SignUpAcceptInvitation = () => {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<AcceptRequestStatus>("processing");

@@ -37,8 +37,7 @@ export async function findInvitationById(
     .then((rows) => rows.at(0));
 }
 
-// 重複招待の idempotency 判定に使う。
-// email は handler 側で lowercase 済だが、migration 前データに大文字が残る可能性に備え lower() 比較で robust に。
+// 重複招待の idempotency 判定。migration 前データに大文字が残る可能性に備え lower() 比較で robust に。
 export async function findActivePendingInvitation(
   companyId: string,
   email: string,
@@ -136,9 +135,8 @@ export async function markInvitationRevoked(
     .then((rows) => rows.at(0));
 }
 
-// ADR-0010: 事業所削除時に当該 company の PENDING 招待を一括 REVOKED 化する。revoked 行を返すので
-// 呼び出し側が invitation_revoked audit を残せる。soft-deleted company への招待受諾で membership が
-// 再生成され DELETED company に所属が復活するのを防ぐ (受諾側のガードと対で効かせる)。
+// ADR-0010: 事業所削除時に PENDING 招待を一括 REVOKED 化する (revoked 行を返すので呼び出し側が audit を
+// 残せる)。soft-deleted company への受諾で所属が復活するのを防ぐ (受諾側のガードと対で効かせる)。
 export async function revokePendingInvitationsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,

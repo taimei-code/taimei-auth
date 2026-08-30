@@ -18,15 +18,13 @@ import { OrgCodeField } from "./OrgCodeField";
 import { addCompany, type OrgCode } from "./company-api";
 
 type Props = {
-  // 作成成功後に呼ぶ。呼び出し側で company state を refresh する想定
-  // (サーバが last_used を新事業所へ更新済みなので refresh だけで「現在の事業所」が切り替わる)。
+  // 作成成功後に呼ぶ (server が last_used を更新済みなので refresh だけで「現在の事業所」が切り替わる)。
   onCreated: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
-// 既存 user が新しい事業所を追加するダイアログ。入力項目は SignUpCompany と同じ 2 つ
-// (事業所名 + 事業形態)。既定は法人 (追加作成は法人が主のため signup の個人事業主とは別既定)。
-// 作成後は新事業所が現在の事業所になる。
+// 既存 user が新しい事業所を追加するダイアログ。入力は SignUpCompany と同じ 2 つで、既定は法人
+// (追加作成は法人が主のため signup の個人事業主とは別既定)。作成後は新事業所が現在の事業所になる。
 export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -40,8 +38,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     setErrorMessage(null);
   };
 
-  // 送信中は閉じない (二重 submit / state 不整合を防ぐ)。作成後は dialog を先に閉じるが、
-  // サーバ側に作成の dedupe が無いため submitting 解除は chain 全体の finally に置いたままにする
+  // 送信中は閉じない。server 側に作成の dedupe が無いため submitting 解除は chain 全体の finally に置く
   // (成功枝に移すと閉じてから再取得が終わるまでの間に再送信でき、事業所が 2 つできる)
   const handleOpenChange = (next: boolean) => {
     if (submitting) return;

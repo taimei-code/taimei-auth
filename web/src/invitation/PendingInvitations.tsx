@@ -24,8 +24,7 @@ const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
   second: "numeric",
 });
 
-// 未受諾の招待一覧と取り消し。busy はメンバー行の操作と別キーで持つ (別セクションの実行中に
-// 取消ボタンまで塞がないため)。
+// 未受諾の招待一覧と取り消し。busy はメンバー行の操作と別キーで持つ (別セクションの実行中に塞がないため)。
 export const PendingInvitations = ({ companyId, invitations, onChanged }: Props) => {
   const [busyInvitationId, setBusyInvitationId] = useState<string | null>(null);
 

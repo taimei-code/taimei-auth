@@ -6,9 +6,8 @@ import { guardErrorResponse, requireActor } from "../membership/guard";
 const ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-// 他の /api/account/* と同じく guard 層 (requireActor) を通す。素の getSession 判定だと
-// better-auth cookieCache (最大 5 分) の窓内で削除済み user にも upload token を発行してしまう
-// (guard の user 存在チェックが fail-closed で 401 に倒す。src/membership/guard/core.ts 参照)。
+// 他の /api/account/* と同じく guard 層 (requireActor) を通す。素の getSession 判定だと cookieCache
+// (最大 5 分) の窓内で削除済み user にも upload token を発行してしまう (guard は fail-closed で 401)。
 export const accountAvatar = new Hono();
 
 accountAvatar.post("/api/account/avatar/upload-token", async (c) => {

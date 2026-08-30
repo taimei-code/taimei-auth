@@ -14,10 +14,8 @@ import type {
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 
-// ログイン時 MFA チャレンジの通過 API。requireActor を通らず two_factor cookie を認証材料にする
-// 二本目の認証経路のため、account-mfa.ts (セッションあり) とはファイルを分けて混線を防ぐ。
-// 登録も mountAccountRoutes でなく個別 app.route (canary-token / login-shortcut と同じ扱い)。
-// 設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// ログイン時 MFA チャレンジの通過 API。requireActor を通らず two_factor cookie を認証材料にする二本目の
+// 経路のため account-mfa.ts と file を分ける。登録も個別 app.route で行う。詳細: ADR-0013
 export const mfaChallenge = new Hono();
 
 const verifyBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
@@ -27,8 +25,7 @@ const _verifyBodyMatchesWire: MatchesWireShape<
   MfaChallengeVerifyRequest
 > = true;
 
-// GET チャレンジの保留判定。返すのは boolean 1 つに限る — 遷移先・userId・第二要素の種別は
-// いずれも cookie を拾った第三者への手掛かりになる。
+// GET チャレンジの保留判定。返すのは boolean 1 つに限る — 他は cookie を拾った第三者への手掛かりになる。
 mfaChallenge.get("/api/mfa/challenge", async (c) => {
   const challenge = await readChallenge(c.req.raw.headers);
   return c.json({ pending: challenge.pending } satisfies MfaChallengeStateResponse);

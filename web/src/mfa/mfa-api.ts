@@ -1,11 +1,5 @@
-// SPA → auth ホストの多要素認証 (MFA) API client。wire の形 (@core/mfa/wire-contracts が正本) を
-// view 形 (camelCase) へ変換して返す唯一の場所で、形の崩れた 2xx はここで表示可能な失敗
-// ("unknown") へ縮退する (render 中の throw にしない)。
-//
-// shared/request-json.ts と分けているのは、エラーを status だけで解けないため。
-// status → 文言 では「ロックアウト (15 分待ち)」と「操作が集中 (数十秒待ち)」を書き分けられない。
-// body の error コードを code に載せ、code → 文言 (use-mfa-code-entry の
-// describeMfaChallengeError) で解く。
+// SPA → auth ホストの MFA API client。wire (@core/mfa/wire-contracts が正本) を view 形へ変換する唯一の場所で、
+// 形の崩れた 2xx は "unknown" へ縮退する。汎用 request と分ける理由: web/src/CLAUDE.md「HTTPとerror」。
 // 設計詳細: docs/adr/0013-mfa-totp-challenge.md
 
 import {
@@ -48,9 +42,8 @@ export type MfaErrorCode = MfaWireErrorCode | "rate_limited" | "unknown";
 
 const WIRE_ERROR_CODES: ReadonlySet<string> = new Set(MFA_WIRE_ERROR_CODES);
 
-// ロックアウト (`locked`) と rate limit は同じ 429 で返るため、status だけで丸めると
-// 「数十秒待てば通る」失敗をユーザーに 15 分待たせる。判別は body の error コードで行い、
-// 載っていない 429 を rate_limited、それ以外の未知の失敗を unknown に倒す。
+// ロックアウト (`locked`) と rate limit は同じ 429 で返る。status だけで丸めると「数十秒待てば通る」失敗を
+// 15 分待たせるため、判別は body の error コードで行い、載っていない 429 を rate_limited に倒す。
 const resolveMfaErrorCode = (status: number, wireError: string | undefined): MfaErrorCode => {
   if (wireError !== undefined && WIRE_ERROR_CODES.has(wireError)) return wireError as MfaErrorCode;
   if (status === 429) return "rate_limited";
@@ -64,8 +57,7 @@ class MfaApiError extends Error {
   }
 }
 
-// 画面側の catch が受けた失敗を表示可能な code へ縮退する唯一の入口。非 MfaApiError
-// (通信断・想定外 throw) は原因を code で識別できないため fail-closed に "unknown" へ倒す。
+// 非 MfaApiError (通信断・想定外 throw) は原因を識別できないため fail-closed に "unknown" へ倒す。
 export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
   error instanceof MfaApiError ? error.code : "unknown";
 
@@ -78,8 +70,7 @@ function readWireError(body: unknown): string | undefined {
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
-  // credentials: セッション cookie の送信に加え、activate / disable / verify が返す
-  // ローテート後セッションの Set-Cookie 受領にも要る (外すと操作直後にログアウトする)。
+  // credentials: cookie 送信に加えローテート後セッションの Set-Cookie 受領にも要る (外すと操作直後にログアウト)。
   const res = await fetch(url, { credentials: "include", ...init });
   // 空 body (activate / disable の 200) と非 JSON body (proxy が返す 5xx) を同じ経路で通す。
   const body: unknown = await res.json().catch(() => undefined);

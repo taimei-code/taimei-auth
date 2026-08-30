@@ -17,8 +17,7 @@ import { SocialSignInSection } from "../SocialSignInSection";
 import { buildSignParams } from "../sign-params";
 import { useSignPage } from "../use-sign-page";
 
-// 状態機械 (params 解析 / 招待分岐 / 送信) は useSignPage、SNS 区画は SocialSignInSection を
-// SignUp と共有する (ADR-0007: 画面のみ分離)。
+// 状態機械は useSignPage、SNS 区画は SocialSignInSection を SignUp と共有する (ADR-0007: 画面のみ分離)。
 export const SignIn = () => {
   const [searchParams] = useSearchParams();
   const sign = useSignPage({ githubErrorFallback: "GitHub ログインに失敗しました" });

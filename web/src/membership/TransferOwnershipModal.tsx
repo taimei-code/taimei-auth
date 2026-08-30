@@ -23,7 +23,6 @@ type Props = {
 };
 
 // 唯一の OWNER が事業所から抜ける前に、別メンバーへオーナーを委譲する modal。
-// 自分以外のメンバーを一覧し、選択 → transfer-ownership 実行。
 export const TransferOwnershipModal = ({
   companyId,
   companyName,

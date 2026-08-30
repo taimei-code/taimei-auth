@@ -2,9 +2,7 @@ import { canAttemptRemoval, canRemoveTarget } from "../policy";
 import { findMembership, type Role } from "@/db/repositories/membership";
 import { type Actor, type Forbidden, guard, type NotFound, type Unauthorized } from "./core";
 
-// POST .../members/:targetUserId/remove の判定順:
-// 401 (actor) → 403 (membership 非所属 = requireMembership 失敗) → 403 (canAttemptRemoval) →
-// 404 (target membership) → 403 (canRemoveTarget)。body なし。
+// 判定順: 401 → 403 (非所属) → 403 (canAttemptRemoval) → 404 (target) → 403 (canRemoveTarget)。body なし。
 
 export type RemovalGuardResult =
   | {

@@ -23,8 +23,7 @@ export type ActivationStatus = "ACTIVE" | "DELETED";
 // used_at 1 列に 3 状態を多重化せず、独立した status 列で表す。
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
 
-// 事業所 (課金単位)。詳細: CONTEXT.md '事業所 / company'
-// user / session / membership / invitation が参照するため declaration を先頭に置く。
+// 事業所 (課金単位)。他テーブルが参照するため declaration を先頭に置く。詳細: CONTEXT.md '事業所 / company'
 export const company = pgTable("company", {
   id: text("id").primaryKey().notNull(),
   name: text("name").notNull(),
@@ -49,8 +48,7 @@ export const user = pgTable(
     revision: integer("revision").notNull().default(0),
     // MFA チャレンジ要否の唯一の判定源 (不変条件は twoFactor テーブル定義に記載)。
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
-    // 新規 session 確立時の default 候補事業所 (proto User.default_company_id 対応)。
-    // 削除済 company を参照しないよう ON DELETE SET NULL。
+    // 新規 session 確立時の default 候補事業所。削除済 company を参照しないよう ON DELETE SET NULL。
     lastUsedCompanyId: text("last_used_company_id").references(() => company.id, {
       onDelete: "set null",
     }),
@@ -82,8 +80,7 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // 現在 active な事業所 (proto Session.company_id 対応)。
-    // DeleteCompany (soft delete) 時にこの列を NULL に更新する handler が責任を持つ。
+    // 現在 active な事業所。DeleteCompany (soft delete) 時の NULL 更新は handler が責任を持つ。
     currentCompanyId: text("current_company_id").references(() => company.id, {
       onDelete: "set null",
     }),
@@ -135,13 +132,10 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-// better-auth twoFactor プラグイン規定のスキーマ (node_modules/better-auth/dist/plugins/
-// two-factor/schema.mjs と 1:1)。自前コードが読まない列も、削るとプラグイン側のロック機構が
-// silent に死ぬか毎回 500 になるため落とさない。export 名の camelCase は必須 — drizzle adapter が
-// schema["twoFactor"] で引くため、snake_case にすると起動時に BetterAuthError で落ちる。
-// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified。
-// ただしプラグインの verify-totp はフラグと verified を別々の非トランザクショナルな書き込みで
-// 更新するため、中断すると破れる (破れの分類と復旧経路: docs/adr/0013-mfa-totp-challenge.md §7)。
+// better-auth twoFactor プラグイン規定のスキーマと 1:1。読まない列も削るとプラグインのロック機構が
+// silent に死ぬ。export 名の camelCase は必須 (drizzle adapter が schema["twoFactor"] で引くため)。
+// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified。プラグインの
+// verify-totp は非トランザクショナルな 2 書き込みのため中断で破れる (分類と復旧: ADR-0013 §7)。
 export const twoFactor = pgTable(
   "two_factor",
   {
@@ -160,10 +154,8 @@ export const twoFactor = pgTable(
   },
   (table) => [
     index("two_factor_secret_idx").on(table.secret),
-    // user あたり 1 行を DB で強制する。プラグインの enable は deleteMany + create でしか
-    // 収束せず、並行 enroll で 2 行になる窓があった (2 行状態では「フラグ × 行」から状態が
-    // 一意に決まらず interrupted_activate に誤誘導される)。UNIQUE で 2 本目の create が
-    // fail-closed に落ちる (詳細: ADR-0013 §7)。
+    // user あたり 1 行を DB で強制する。プラグインの enable は deleteMany + create のため並行 enroll で
+    // 2 行になる窓があり、2 行では状態が一意に決まらない。UNIQUE で fail-closed (詳細: ADR-0013 §7)。
     uniqueIndex("two_factor_user_id_idx").on(table.userId),
   ],
 );
@@ -209,8 +201,7 @@ export const mfaRegistrationTransitionGuard = pgTable(
   ],
 );
 
-// account_delete 後も log を残すため意図的に user_id に FK を付けない (cascade delete を回避)。
-// 詳細: CONTEXT.md 'audit log'
+// account_delete 後も log を残すため意図的に user_id に FK を付けない。詳細: CONTEXT.md 'audit log'
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -226,10 +217,8 @@ export const auditLog = pgTable(
   ],
 );
 
-// 1 user × 1 company の所属関係 1 行。N:M bridge。
-// company_id は誤物理削除を防ぐため ON DELETE RESTRICT (company は soft delete のみ)。
-// user_id は account 削除時に所属解除する ON DELETE CASCADE (退会の事前 OWNER pre-check が
-// OWNER 不在 company を防ぐため、cascade しても課金責任者不在は発生しない: PR #55 → #63)。
+// 1 user × 1 company の所属関係 1 行 (N:M bridge)。company_id は誤物理削除を防ぐ ON DELETE RESTRICT。
+// user_id は退会時に所属解除する CASCADE (OWNER pre-check があるため責任者不在は起きない: PR #55 → #63)。
 export const membership = pgTable(
   "membership",
   {
@@ -255,8 +244,7 @@ export const membership = pgTable(
   ],
 );
 
-// 事業所から外部 email 宛の参加打診 1 件。受諾されると membership 行が新規作成される。
-// company の cascade で削除されることを許容する (= 削除済事業所への dangling 招待を持ち越さない)。
+// 事業所から外部 email 宛の参加打診。company の cascade 削除を許容する (dangling 招待を残さない)。
 export const invitation = pgTable(
   "invitation",
   {
@@ -272,11 +260,9 @@ export const invitation = pgTable(
     status: text("status").$type<InvitationStatus>().notNull().default("PENDING"),
     acceptedAt: timestamp("accepted_at"),
     revokedAt: timestamp("revoked_at"),
-    // legacy alias / 派生値 (COALESCE(accepted_at, revoked_at)) を入れる窓口。
-    // accept / revoke handler が status 更新と同 transaction で set する。
+    // legacy alias / 派生値 (COALESCE(accepted_at, revoked_at)) の窓口。status 更新と同 transaction で set。
     usedAt: timestamp("used_at"),
-    // 招待者が退会したら、その人が出した invitation 行も道連れに削除する (audit_log に
-    // invitation_sent が残るため操作行の消失は許容)。NOT NULL のため SET NULL は不可。
+    // 招待者の退会で道連れ削除 (audit_log に invitation_sent が残る)。NOT NULL のため SET NULL は不可。
     invitedByUserId: text("invited_by_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

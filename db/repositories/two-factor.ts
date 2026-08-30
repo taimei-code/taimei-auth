@@ -3,16 +3,14 @@ import { db } from "../client";
 import { twoFactor } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// two_factor 行への直接アクセス。通常の enroll / activate / disable は better-auth twoFactor
-// プラグインが行を所有する — プラグインが担う経路を repository で再実装しないこと。
+// two_factor 行への直接アクセス。通常の enroll / activate / disable はプラグインが行を所有する —
+// プラグインが担う経路を repository で再実装しないこと。
 
-// secret / backup_codes を読み出さない型にしているのは、状態確認のためだけに第二要素の実体を
-// アプリのメモリへ載せないため。呼び出し側が必要とするのは verified の真偽だけ。
+// secret / backup_codes を読み出さない型にしているのは、第二要素の実体をアプリのメモリへ載せないため。
 export type TwoFactorVerificationState = { id: string; verified: boolean };
 
-// 行の読み出しはこの関数を通し、読んだ行の解釈 (評決の組み立て) は「MFA 登録状態」を所有する
-// src/mfa/registration/state.ts に集約する — 呼び出し側で verified を直接分岐させない。
-// 入口の集合は containment tripwire (QA-I-01 two-factor importers) が機械的に固定する。
+// 読んだ行の解釈 (評決の組み立て) は「MFA 登録状態」を所有する側に集約する — 呼び出し側で verified を
+// 直接分岐させない。入口の集合は containment tripwire (QA-I-01) が機械的に固定する。
 
 export async function findTwoFactorVerificationState(
   userId: string,
@@ -23,15 +21,15 @@ export async function findTwoFactorVerificationState(
       .select({ id: twoFactor.id, verified: twoFactor.verified })
       .from(twoFactor)
       .where(eq(twoFactor.userId, userId))
-      // user あたり 1 行が UNIQUE で保証されるため通常は 1 件だが、万一 2 行残っても verified を
-      // 優先し (id で決定化)、プラグインが有効化した行と読み側がずれるのを防ぐ。
+      // user あたり 1 行が UNIQUE だが、万一 2 行残っても verified 優先 (id で決定化) にして
+      // プラグインが有効化した行と読み側がずれるのを防ぐ。
       .orderBy(desc(twoFactor.verified), twoFactor.id)
       .limit(1)
       .then((rows) => rows.at(0))
   );
 }
 
-// 運用救済 (src/mfa/registration/force-disable.ts 経由の management/disable-user-mfa.ts) 専用の強制削除。
+// MFA 運用救済 (management/disable-user-mfa.ts) 専用の強制削除。
 export async function deleteTwoFactorByUserId(
   userId: string,
   txOrDb: DbOrTx = db,

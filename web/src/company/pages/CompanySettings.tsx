@@ -75,11 +75,8 @@ export const CompanySettings = () => {
       .finally(() => setSubmitting(false));
   };
 
-  // 削除後は一覧へ SPA 遷移してから notifyAfterRefresh で通知する (Companies の handleLeave と同じ形)。
-  // 遷移を refresh の成否に依存させず「削除済なのにエラー表示」を防ぐ (失敗は「表示が古い」文言で吸収)。
-  // 通知と refresh が遷移後も生きるのは Toaster (AccountLayout) と CurrentCompanyProvider が page より
-  // 上位にある app/App.tsx の route 構成が前提 (通知経路の正本: shared/notify.tsx 冒頭)。
-  // 最後の事業所削除は actor 自身の連動削除 = AuthChange のため full reload で抜ける (ADR-0010 D3)。
+  // 削除後は一覧へ SPA 遷移してから通知する (Companies の handleLeave と同じ形)。遷移を refresh の成否に
+  // 依存させない。最後の事業所削除は actor 自身の連動削除 = AuthChange のため full reload で抜ける (ADR-0010 D3)。
   const handleDelete = () =>
     deleteCompany(companyId)
       .then(({ accountDeleted }) => {

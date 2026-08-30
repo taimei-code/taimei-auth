@@ -3,8 +3,7 @@ import { join } from "node:path";
 import { db } from "./client";
 import { sql } from "drizzle-orm";
 
-// drizzle-kit が管理できない PL/pgSQL trigger を別 dir に分離して適用する。
-// drizzle/0001_user_revision.sql 等の auto-managed migration は drizzle-kit migrate が処理する。
+// drizzle-kit が管理できない PL/pgSQL trigger を別 dir に分離して適用する (db/CLAUDE.md ルール 8)。
 const manualDir = join(import.meta.dir, "..", "drizzle", "manual");
 
 if (!existsSync(manualDir)) {
@@ -21,8 +20,7 @@ if (sqlFilesInApplyOrder.length === 0) {
   process.exit(0);
 }
 
-// PostgreSQL の DDL は transaction 内で rollback 可能なため、複数 file の部分適用を防ぐ。
-// 将来 drizzle/manual/0002_*.sql が追加された時に「0001 成功 / 0002 失敗」で停止しないことを保証。
+// 複数 file の部分適用を防ぐため transaction 内に閉じる (PostgreSQL の DDL は rollback 可能)。
 await db.transaction(async (tx) => {
   for (const f of sqlFilesInApplyOrder) {
     const content = readFileSync(join(manualDir, f), "utf-8");

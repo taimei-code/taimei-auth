@@ -7,12 +7,8 @@ import {
 } from "@/db/repositories/company";
 import { runInTransaction } from "@/db/transaction";
 
-// ADR-0012 (Use-case 層): 事業所編集手続。before/after diff 収集を tx 内で行うことで、
-// 並行 update と audit の payload がずれない (before 取得を tx 外にすると別 tx の update と
-// 混線して audit の before が現行値と一致しない silent drift が起きる)。
-// inactive company への update は tx callback が null 返却 → rollback → not_found を返す。
-// 認可 (OWNER のみ) は Guard 層 (requireMembership OWNER) の責務。
-// 設計詳細: docs/adr/0012-layered-architecture.md
+// ADR-0012 (Use-case 層): 事業所編集手続。before/after diff を tx 内で集めるのは、tx 外だと別 tx の update と
+// 混線して audit の before が現行値とずれる silent drift が起きるため。inactive company は not_found を返す。
 
 export type UpdateCompanyInput = { name: string; orgCode: OrgCode };
 

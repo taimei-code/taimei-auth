@@ -3,8 +3,7 @@ import { Resend } from "resend";
 
 let resendInstance: Resend | null = null;
 
-// magic link / welcome / invitation / MFA 通知の全メールが同じ render → send → error 変換を辿るため
-// ここに閉じ、送信基盤の差し替え点を 1 箇所にする。
+// 全メールが同じ render → send → error 変換を辿るためここに閉じ、送信基盤の差し替え点を 1 箇所にする。
 export async function renderAndSendEmail(params: {
   from: string;
   to: string;
@@ -12,11 +11,8 @@ export async function renderAndSendEmail(params: {
   component: ReactElement;
   kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }): Promise<void> {
-  // render は workerd バンドルで esbuild の lazy CJS init が re-export 経由で走らず
-  // undefined ("render2 is not a function") になる。dynamic import で実行時に module
-  // init を強制する。詳細: docs/adr/0011-cloudflare-workers-migration.md
-  // この render は実行時に react/jsx-runtime と react-dom/server を引く。src からの直 import が
-  // 型のみでも react / react-dom は devDependencies へ移さない (runner のメール送信だけが壊れる)。
+  // render は workerd バンドルで esbuild の lazy CJS init が走らず undefined になるため、dynamic import で
+  // module init を強制する (ADR-0011)。実行時に react を引くので react / react-dom は devDependencies へ移さない。
   const { render } = await import("@react-email/components");
   const [html, text] = await Promise.all([
     render(params.component),

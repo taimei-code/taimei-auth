@@ -5,10 +5,8 @@ import type { DbOrTx } from "../transaction";
 
 // revoked_at は better-auth 非管理列のため repository を経由する (db/CLAUDE.md ルール 1/2)。
 
-// AND revoked_at IS NULL で 2 回目 revoke が 1 回目の時刻を上書きしない (forensic 時刻精度保証)。
-// 単独では失効しない: secondaryStorage 構成では session 実体は Redis 側にあり、この関数は
-// Postgres の revoked_at 記帳のみ。失効は src/account/revoke-sessions.ts の revokeUserSessions
-// 経由に限る (src/* からの直接 import は biome noRestrictedImports で block)。
+// AND revoked_at IS NULL で 2 回目 revoke が 1 回目の時刻を上書きしない (forensic 時刻精度)。単独では
+// 失効しない — session 実体は Redis 側で、失効は revokeUserSessions 経由に限る (biome が直 import を block)。
 export async function revokeAllSessionsForUser(userId: string, txOrDb: DbOrTx = db): Promise<void> {
   await txOrDb
     .update(session)

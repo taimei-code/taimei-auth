@@ -5,12 +5,8 @@ import { redirectToCompanySignup, redirectToSignIn } from "../auth/auth-redirect
 import { FullScreenLoader } from "../shared/FullScreenLoader";
 
 // /account 配下の入口ガード。認証判定は CurrentCompanyProvider の memberships fetch (401 = 未認証) に
-// 相乗りし、getSession → memberships の直列 2 round trip を作らない。
-// - 未認証 (401) → 共通ログインへ full reload 遷移 (mount 済み画面に副作用を残さない)
-// - membership 0 件 → signup/company へ (事業所未確定は /account 操作を許可しない。
-//   session.user の lastUsedCompanyId は better-auth cookieCache (5min) に乗るため CreateCompany
-//   直後は stale=null になりループする。DB を引く membership API を権威ソースにする)
-// - 401 以外の取得失敗 → guard を通過させ、各 page 側で再取得に委ねる (誤遮断を避ける)
+// 相乗りし、直列 2 round trip を作らない。membership 0 件は signup/company へ倒す — session.user の
+// lastUsedCompanyId は cookieCache (5min) で CreateCompany 直後 stale=null になりループするため DB を権威にする。
 export const SessionGuard = ({ children }: { children: ReactNode }) => {
   const { loading, unauthorized, loadFailed, memberships } = useCurrentCompany();
   const needsCompanySignup = !loadFailed && memberships.length === 0;

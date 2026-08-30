@@ -18,9 +18,8 @@ export function createAuthClient(options: ClientOptions) {
   return { authService, userService };
 }
 
-// Service Key header (`X-Service-Key`) は taimei-auth IdP の private contract。
-// docs/adr/0006-sdk-encapsulation.md の Cookie 名と同格の隠蔽対象で、consumer は header 名を
-// 直接書かないこと (packages/auth-client/CLAUDE.md ルール 7)。
+// Service Key header (`X-Service-Key`) は IdP の private contract。Cookie 名と同格の隠蔽対象で、consumer は
+// header 名を直接書かないこと (docs/adr/0006-sdk-encapsulation.md / packages/auth-client/CLAUDE.md ルール 7)。
 export function createServiceKeyInterceptor(serviceKey: string): Interceptor {
   return (next) => async (req) => {
     req.header.set("X-Service-Key", serviceKey);

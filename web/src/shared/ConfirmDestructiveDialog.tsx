@@ -13,9 +13,8 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 
-// 破壊的操作の確認ダイアログ。open state の所有・実行中 disable・完了/失敗時に閉じる までを
-// ここに閉じる。結果の通知は呼び出し側が dialog の外で行う (背面 aria-hidden 下の読み上げ制約を
-// 含む通知経路の規則は shared/notify.tsx のコメントが正本)。
+// 破壊的操作の確認ダイアログ。open state の所有・実行中 disable・完了/失敗時に閉じるまでを閉じる。
+// 結果の通知は呼び出し側が dialog の外で行う (通知経路の正本: shared/notify.tsx)。
 export const ConfirmDestructiveDialog = ({
   trigger,
   title,
@@ -30,7 +29,7 @@ export const ConfirmDestructiveDialog = ({
   description: ReactNode;
   confirmLabel: string;
   confirmIcon?: ReactNode;
-  // resolve / reject いずれでも dialog は閉じる。失敗の通知は呼び出し側が自身の catch で出す
+  // resolve / reject いずれでも dialog は閉じる
   onConfirm: () => Promise<unknown>;
   // description 下に挟む追加の警告等
   children?: ReactNode;

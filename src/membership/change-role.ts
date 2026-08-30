@@ -7,13 +7,8 @@ import {
 } from "@/db/repositories/membership";
 import { type DbTx, runInTransaction } from "@/db/transaction";
 
-// ADR-0012 (Use-case 層): membership.role の変更手続 1 業務単位。
-// tx / audit / OWNER≥1 保証を所有し、Transport (handler) は Guard 通過後の値を渡すだけ。
-// beforeRole === nextRole の 200 短絡は handler ではなく本 use-case が担当する
-// (tx / audit を発火しない no-op 経路を 1 箇所に閉じる)。
-// OWNER→非 OWNER の降格のみ withOwnerLockGuard で「OWNER ≥ 1」を守り、割ると Result で
-// last_owner を返す。認可 (誰が誰の role を変えられるか) は Guard 層 (requireRoleChange) の責務。
-// 設計詳細: docs/adr/0012-layered-architecture.md
+// ADR-0012 (Use-case 層): membership.role の変更手続。tx / audit / OWNER≥1 保証と no-op 短絡を所有する。
+// OWNER→非 OWNER の降格のみ withOwnerLockGuard で守り、割ると Result で last_owner を返す。
 
 export type ChangeRoleResult = { ok: true } | { ok: false; reason: "last_owner" | "not_found" };
 
@@ -26,8 +21,7 @@ export const changeRole = (params: {
 }): Promise<ChangeRoleResult> => {
   const { actorUserId, targetUserId, companyId, beforeRole, nextRole } = params;
 
-  // no-op 短絡: guard で確認済みの beforeRole と一致するなら tx open / audit 発火なし。
-  // 「tx 数 metric が silent に増える」regression を防ぐため use-case 層で吸収する。
+  // no-op 短絡: beforeRole と一致するなら tx open / audit を発火しない (tx 数 metric の silent 増を防ぐ)。
   if (beforeRole === nextRole) {
     return Promise.resolve({ ok: true });
   }

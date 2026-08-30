@@ -12,10 +12,8 @@ export type RemoveMemberResult =
   | { ok: true; accountDeleted: boolean }
   | { ok: false; reason: "last_owner" };
 
-// ADR-0010 D2: メンバー除名 / 退会の mutation。membership を物理削除し、所属 0 件になった対象を
-// 連動でアカウント削除する (orphan 不変条件)。OWNER を抜く場合は withOwnerLockGuard で「OWNER ≥ 1」を
-// 守り、割る場合は orphan 削除ごと rollback する。認可 (誰が誰を抜けるか) は Guard 層 (requireRemoval) の責務。
-// 設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
+// ADR-0010 D2: 除名 / 退会の mutation。membership を物理削除し所属 0 件になった対象を連動削除する。
+// OWNER を抜く場合は withOwnerLockGuard で「OWNER ≥ 1」を守り、割る場合は orphan 削除ごと rollback する。
 export const removeMember = (
   actorUserId: string,
   targetUserId: string,

@@ -10,15 +10,9 @@ import {
 import { runInTransaction } from "@/db/transaction";
 import { tryConsumeInvitationQuota } from "./rate-limit";
 
-// ADR-0012 (Use-case 層): 招待作成手続 (idempotency + rate-limit + INSERT + audit)。
-// 手順は現行 handler と厳密に一致: idempotency 読取 (tx 外) → 新規のみ rate-limit 消費 (tx 外)
-//   → tx 内で insertInvitation + recordInvitationSent。tx 内へ rate-limit を統合しない理由は、
-// 並行重複招待時の Redis カウンタ消費パターンが変わって監視系が silent に drift するため。
-// magic-link 送信は本 use-case が持たず handler が post-commit で行う (accept 側と対称)。
-// 真並行 (両者が既存なしを観測) で rate 2 回消費 + PENDING 2 行 INSERT はあり得るのは
-// 現行仕様 (PENDING に unique index なし)。冪等契約は逐次 semantic で担保する。
-// 認可 (OWNER / ADMIN、canInviteRole) は Guard 層 (requireInvite) の責務。
-// 設計詳細: docs/adr/0012-layered-architecture.md
+// ADR-0012 (Use-case 層): 招待作成手続 (idempotency + rate-limit + INSERT + audit)。rate-limit を tx 内へ
+// 統合しないのは、並行重複招待時の Redis カウンタ消費パターンが変わり監視系が silent に drift するため。
+// 真並行では rate 2 回消費 + PENDING 2 行 INSERT があり得る (現行仕様。冪等契約は逐次 semantic で担保)。
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // invitation は 24h 有効 (CONTEXT.md 'invitation')
 

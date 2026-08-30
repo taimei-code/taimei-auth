@@ -3,16 +3,9 @@ import { findMembership } from "@/db/repositories/membership";
 import { updateUserLastUsedCompany } from "@/db/repositories/user";
 import { runInTransaction } from "@/db/transaction";
 
-// ADR-0012 (Use-case 層): 事業所切替手続。user.last_used_company_id (secondaryStorage 構成の
-// SDK companyId の source) を target に付け替える。fromCompanyId === targetCompanyId は
-// 200 短絡で tx open / audit なし (「切替が発生していない」ので metric に載せない)。
-// fromCompanyId は guard (requireActor) が fail-closed 判定で読んだ同 request の user 行から
-// 受け取る (ここで再 SELECT すると同じ行を 1 request に 2 度読む)。
-// membership の存在は tx 内で再確認する: tx 外 check と更新の間に除名が入ると無効な
-// company_id を last_used_company_id に書き込む TOCTOU が発生するため、findMembership の
-// 再取得を tx 内に置くことで別 tx の除名 UPDATE と直列化する。
-// 認可 (session 通過) は Guard 層 (requireActor) の責務。
-// 設計詳細: docs/adr/0012-layered-architecture.md
+// ADR-0012 (Use-case 層): 事業所切替手続。last_used_company_id を target に付け替える。同一 company は
+// 200 短絡で tx / audit なし。fromCompanyId は guard が読んだ同 request の user 行から受け取る (再 SELECT を避ける)。
+// membership の存在は tx 内で再確認する — tx 外 check と更新の間に除名が入る TOCTOU を直列化するため。
 
 export type SwitchCompanyResult =
   | { ok: true; companyId: string }

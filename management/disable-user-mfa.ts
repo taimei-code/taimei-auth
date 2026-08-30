@@ -1,8 +1,5 @@
-// MFA 運用救済。認証アプリとリカバリーコードを両方失ったユーザーが
-// 恒久ロックアウトから出る唯一の経路 (前提と手順: README.md の運用節 / ADR-0013)。
-//
+// MFA 運用救済 CLI (位置づけと手順: ADR-0013 Consequences / README.md の運用節)。
 //   bun run management/disable-user-mfa.ts <userId>
-//
 // 解除・記帳・通知は bound management application が所有し、ここは引数の解釈と結果の報告に徹する。
 import { managementApplication } from "../src/mfa/registration/wiring";
 
@@ -34,8 +31,7 @@ export function toDisableUserMfaReport(
     };
   }
 
-  // 既に無効なら何も変えずに成功で返す。ロックアウト対応中の再実行が「失敗」に見えると、
-  // 実際には不要な次の手 (DB 直接操作等) を運用者に踏ませてしまう。
+  // 既に無効なら何も変えずに成功で返す。再実行が「失敗」に見えると不要な次の手 (DB 直接操作等) を踏ませる。
   if (!result.changed) {
     return {
       stream: "stdout",

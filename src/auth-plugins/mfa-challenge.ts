@@ -13,12 +13,12 @@ import {
   type AuthRouteMatch,
 } from "./primary-auth-routes";
 
-// プラグインの after-hook が発火しない一次認証経路 (magic link / OAuth) にチャレンジ強制を
-// 差し込む自前プラグイン。ハイブリッド構成の理由と撤退線: docs/adr/0013-mfa-totp-challenge.md
+// プラグインの after-hook が発火しない一次認証経路にチャレンジ強制を差し込む自前プラグイン
+// (ハイブリッド構成の理由と撤退線: ADR-0013 §1)。
 
 const MFA_CHALLENGE_PAGE = "/auth/mfa";
 
-// 止めている間は鳴り続ける (1 回きりの module-state フラグでは黙る理由: ADR-0013)。
+// 止めている間は鳴り続ける (1 回きりだと warm isolate が黙る: ADR-0013 Consequences)。
 // 6 時間はオンコール交代を必ず 1 回またぐ粒度。
 export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -34,10 +34,8 @@ function reportKillSwitchPeriodically(): void {
   });
 }
 
-// `/magic-link/verify` も `/callback/:id` も最後は `throw ctx.redirect(...)` で終わり、dispatch が
-// その location を `ctx.context.responseHeaders` へ載せてから after-hook を呼ぶ。クエリから組み
-// 直さないのは、新規 user 時の newUserCallbackURL 差し替えと baseURL 起点の絶対化まで再現する
-// 必要がなくなるため。location が無いのは callbackURL 省略で JSON を返した API 呼び出しだけ。
+// 一次認証経路は `throw ctx.redirect(...)` で終わり、dispatch が location を responseHeaders へ
+// 載せてから after-hook を呼ぶ。クエリから組み直すと newUserCallbackURL 差し替えと絶対化の再現が要る。
 function pendingRedirectTarget(responseHeaders: Headers | undefined): string {
   return responseHeaders?.get("location") ?? FALLBACK_REDIRECT;
 }
@@ -48,10 +46,8 @@ function requirePrimaryAuthMethod(route: AuthRouteMatch): ChallengeMethod {
   return method;
 }
 
-// better-auth の session user 型は plugin 由来の追加列を `Record<string, any>` でしか公開しないため、
-// policy が要求する boolean への確定はこの 1 箇所で行う (判定自体は requiresMfaChallenge が持つ)。
-// 列を欠くのはロールアウト前に secondaryStorage へ載った古い payload だけで、その時点ではまだ誰も
-// MFA を有効化できていないため false 扱いで正しい。
+// session user 型は plugin 由来の列を `Record<string, any>` でしか公開しないため、boolean への確定は
+// ここ 1 箇所で行う (判定は requiresMfaChallenge)。列を欠くのは古い payload だけで false 扱いが正しい。
 function asMfaPolicyUser(user: Record<string, unknown>): { twoFactorEnabled: boolean } {
   return { twoFactorEnabled: Boolean(user.twoFactorEnabled) };
 }
@@ -66,18 +62,16 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   }
   if (!requiresMfaChallenge(asMfaPolicyUser(issuedSession.user))) return;
 
-  // 失敗しない cookie クリアを先頭に置くことで、後段 (本番は Upstash REST の DEL 1 HTTP、リトライ
-  // 無し) が落ちてもブラウザに使えるセッション cookie を残さない。upstream の twoFactor プラグインは
-  // setNewSession(null) を最後に置くが、ここでは deleteSession より前に出す — 後段が落ちた時に
-  // 後続の sign-in-observer がチャレンジ未通過のセッションを観測して記帳するのを防ぐため。
+  // 失敗しない cookie クリアを先頭に置き、後段 (Upstash REST の DEL、リトライ無し) が落ちてもブラウザに
+  // 使えるセッション cookie を残さない。upstream より前に出すのは、後段が落ちた時に sign-in-observer が
+  // チャレンジ未通過のセッションを記帳するのを防ぐため。
   const dropIssuedSession = (): void => {
     deleteSessionCookie(ctx, true);
     ctx.context.setNewSession(null);
   };
 
-  // 介入を決めた後は「元の 302 を通さない」が最優先。fail-open にすると MFA を有効にした user が
-  // 第二要素なしでセッションを得るため、issueChallenge の失敗も破棄途中の失敗も、セッション
-  // cookie を落としたまま同じチャレンジ画面へ倒す (未成立なら画面が再ログイン導線を出す)。
+  // 介入を決めた後の失敗は全て fail-closed — セッション cookie を落としたまま同じチャレンジ画面へ
+  // 倒す (未成立なら画面が再ログイン導線を出す。判断の正本: ADR-0013 §1)。
   const handOffToChallenge = async (): Promise<void> => {
     try {
       await issueChallenge(ctx, {
@@ -98,8 +92,7 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
 });
 
 // ブラウザ由来かの判定に path でなく `ctx.request` の有無を使う (originCheck と同じ discriminator)。
-// gateway の `auth.api.*` は headers だけを渡し request を持たないため、この 1 行が「生 path は
-// ブラウザから届かない / 自前 REST の server-side 呼び出しは通る」を両立させる。
+// gateway は headers だけを渡すため、「生 path は遮断 / server-side 呼び出しは通る」が両立する。
 const blockRawTwoFactorRoutes = createAuthMiddleware(async (ctx) => {
   if (!ctx.request) return;
   throw new APIError("FORBIDDEN", {

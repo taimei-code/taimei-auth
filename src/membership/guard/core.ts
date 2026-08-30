@@ -3,20 +3,10 @@ import { isAtLeast } from "../policy";
 import { findMembership, type Role } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
 
-// SPA 向け Hono ルートの認可入口 (I/O 層) のコア。session→membership→role→403 を解決し、
-// handler が `if (!r.ok) return guardErrorResponse(r)` の 1 行で HTTP に写像できる Result を返す。
-// この 4 ステップが各 route にコピペで散るのを防ぐ。role 判定の純粋述語 (canChangeRole 等) は
-// policy.ts に集約。Hono には依存しない。operation 単位 entry (requireRoleChange 等) は同 dir の
-// 別 file に置き、この core が共通の generic entry (requireActor / requireMembershipOf /
-// requireMembership) と Result 型を提供する。
+// ADR-0012 (Guard 層) / CONTEXT.md「membership guard」: generic entry と Result 型の正本。Hono 非依存。
 
-// lastUsedCompanyId を載せるのは、getActor が fail-closed 判定で user 行を毎 request 読んで
-// いるため。列を捨てると handler / use-case が同じ行をもう 1 度 SELECT する羽目になる
-// (GET /api/account/memberships は SPA の全 /account ページで呼ばれる最頻 endpoint)。
-// Actor は認証 identity の抽象であり user 行の projection ではない — 列の追加は
-// 「hot path の再 SELECT を消す」場合に限り、表示用途 (name / image 等) では足さないこと。
-// twoFactorEnabled はこの規律の例外ではなく、表示ではなく認可判定の入力として載せている:
-// MFA の再登録を 409 で拒む前提条件と、MFA 状態参照の可否がこの値を述語に通して決まる。
+// 列は「hot path の再 SELECT を消す」目的でのみ足す (getActor が毎 request user 行を読むため)。
+// 表示用途 (name / image) では足さない。twoFactorEnabled も表示でなく認可判定の入力。
 export type Actor = {
   id: string;
   email: string;
@@ -38,16 +28,12 @@ export type ActorResult = { ok: true; actor: Actor } | Unauthorized;
 
 type MembershipOnlyResult = { ok: true; role: Role } | Forbidden;
 
-// operation 単位 entry の parseBody callback 契約。zod schema は Transport 側 (handler) に残し、
-// callback が {ok:true, data} | {ok:false, details?} で返す。details は「invalid_argument に details
-// を付けて 400 を返す 3 route (signup 作成 / add / 招待作成)」のみ non-undefined、他 route は省略。
+// operation 単位 entry の parseBody callback 契約。zod schema は Transport 側に残す。details は
+// invalid_argument に details を付ける 3 route (signup 作成 / add / 招待作成) のみ non-undefined。
 export type ParseBodyResult<T> = { ok: true; data: T } | { ok: false; details?: unknown };
 
 export type ParseBodyCallback<T> = () => Promise<ParseBodyResult<T>> | ParseBodyResult<T>;
 
-// parseBody callback を await し、失敗時は InvalidArgument に写像して 1 箇所に閉じる。
-// entry 側は `const p = await resolveParseBody(cb); if (!p.ok) return p;` の 2 行で
-// 判定順コメントとの 1:1 対応が保てる。
 export async function resolveParseBody<T>(
   parseBody: ParseBodyCallback<T>,
 ): Promise<{ ok: true; data: T } | InvalidArgument> {
@@ -64,23 +50,18 @@ export type MembershipGuardResult =
   | Forbidden;
 
 // deps に per-request でしか持てないリソース (pg.Pool 実体等) を bind しない。findMembership を
-// module ロード時 bind してよいのは RoutingPool が pool 解決を AsyncLocalStorage に委ねるため
-// (CLAUDE.md workerd gotcha / PR #91)。
+// module ロード時 bind してよい理由は db/CLAUDE.md の workerd gotcha (RoutingPool / PR #91)。
 export type GuardDeps = {
   getActor: (headers: Headers) => Promise<Actor | null>;
-  // findMembership の throw は捕捉せず伝播させ 500 にする (fail-closed の対象は session 解決のみ)。
-  // identity DB を RPC 化して findMembership が RPC になる時、auth 断→401 / membership 断→500 の
-  // 失敗契約の非対称を再判断する。
+  // findMembership の throw は伝播させ 500 にする (fail-closed の対象は session 解決のみ)。
+  // identity DB の RPC 化時に auth 断→401 / membership 断→500 の非対称を再判断する。
   findMembership: typeof findMembership;
 };
 
 export function createMembershipGuard(deps: GuardDeps) {
   const requireActor = async (headers: Headers): Promise<ActorResult> => {
-    // getActor の失敗 (cookie 不正 / Redis 一時断 / 設定ミス) は null に倒し 401 にする
-    // = auth は fail-closed が安全 (誤って通すより拒否する)。fail-closed を組立済み guard の
-    // production getActor でなくここで担保し、DI 差し替えの getActor が throw しても 401 に落とす。
-    // 呼び出しを .then に包むのは、非 async な getActor の同期 throw も拾うため。直接
-    // deps.getActor().catch() だと同期 throw は .catch 装着前に伝播して 500 になり fail-open する。
+    // getActor の失敗は null に倒し 401 にする (auth は fail-closed)。.then に包むのは非 async な
+    // getActor の同期 throw も拾うため — 直接 .catch() だと装着前に伝播して 500 = fail-open になる。
     const actor = await Promise.resolve()
       .then(() => deps.getActor(headers))
       .catch(() => null);
@@ -88,7 +69,7 @@ export function createMembershipGuard(deps: GuardDeps) {
     return { ok: true, actor };
   };
 
-  // 401→400→403 の status 順序を保つ route が requireActor と別に呼ぶ (401 と 403 の間に body parse 400 を挟むため)。Actor 型を受けることで「認証済み actor しか渡せない」前提を型で表明する。
+  // 401→400→403 の順序を保つ route が requireActor と別に呼ぶ (401 と 403 の間に body parse 400 を挟む)。
   const requireMembershipOf = async (
     actor: Actor,
     companyId: string,
@@ -120,16 +101,12 @@ export function createMembershipGuard(deps: GuardDeps) {
 
 export type MembershipGuard = ReturnType<typeof createMembershipGuard>;
 
-// 本番用 default guard。handler / rpc / tests が名前 import で使う。
 export const guard: MembershipGuard = createMembershipGuard({
-  // fail-closed (getSession 失敗時の 401 倒し) は requireActor 側に集約している。
   getActor: async (headers) => {
     const session = await auth.api.getSession({ headers });
     if (!session?.user?.id) return null;
-    // better-auth cookieCache (最大 5 分) は user 行の削除後も session を返し続ける。
-    // 削除済み user を actor として通すと membership insert 等が FK 違反 500 になるため、
-    // VerifySession の USER_DELETED (src/rpc/auth-handler.ts) と同じく DB の user 存在で
-    // fail-closed する。DB 断で読めない場合も requireActor の catch が 401 に倒す。
+    // better-auth cookieCache (最大 5 分) は user 行削除後も session を返す。削除済み user を通すと
+    // membership insert が FK 違反 500 になるため DB の user 存在で fail-closed (auth-handler.ts と同様)。
     const dbUser = await findUserById(session.user.id);
     return dbUser
       ? {

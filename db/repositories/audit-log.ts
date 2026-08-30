@@ -3,9 +3,8 @@ import { db } from "../client";
 import { auditLog, type OrgCode, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// user の意図ある action のみを記録する (session revoke 等の internal state change は記録対象外)。
-// IP / userAgent は session cascade delete でも forensic 可能にするため payload に persist。
-// 詳細: CONTEXT.md 'audit log' / 'audit event'
+// user の意図ある action のみ記録する (session revoke 等の internal state change は対象外)。IP / userAgent は
+// session cascade delete でも forensic 可能にするため payload に persist。詳細: CONTEXT.md 'audit log'
 export type AuditLogEntry =
   | {
       eventType: "sign_in";
@@ -17,10 +16,8 @@ export type AuditLogEntry =
       userId: string;
       payload: { ip: string; userAgent: string };
     }
-  // secret / リカバリーコード / 残数は載せない (監査ログ閲覧を second factor の漏洩経路にしない)。
-  // ip が null を取るのは、運用救済スクリプト (management/disable-user-mfa.ts) にはリクエストが
-  // 無く、"unknown" のような偽の値を入れると「本人操作だが IP 不明」と区別できなくなるため。
-  // その経路は userAgent に実行元スクリプト名を入れて操作主体を示す。
+  // secret / リカバリーコード / 残数は載せない (監査ログ閲覧を second factor の漏洩経路にしない)。ip が null を
+  // 取るのは運用救済スクリプトに request が無いためで、その経路は userAgent に実行元名を入れて主体を示す。
   | {
       eventType: "mfa_enabled";
       userId: string;
@@ -106,8 +103,7 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         invited_by_user_id: string;
-        // attempted_role / inviter_current_role は DB `role` 列 (text) の生値なので `string`。
-        // 未知文字列も含めて監査ログの解析に必要なため union に絞らず、事実を正直に持つ。
+        // DB `role` 列 (text) の生値なので union に絞らず string。未知文字列も監査解析に必要なため事実を持つ。
         attempted_role: string;
         inviter_current_role: string | null;
         reason: string;
@@ -157,9 +153,8 @@ export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db):
   await appendAuditLogs([entry], txOrDb);
 }
 
-// N 件を 1 statement で書く。DeleteCompany のように FOR UPDATE lock 保持中の tx 内で
-// メンバー数ぶんの INSERT を発行すると lock 時間が round trip × N で伸びるため、batch を正とする。
-// created_at は tx 内で now() が transaction timestamp に固定されるため単発 INSERT と同値。
+// N 件を 1 statement で書く。FOR UPDATE lock 保持中の tx で N 回 INSERT すると lock 時間が round trip × N
+// で伸びるため batch を正とする (created_at は tx 内 now() 固定なので単発と同値)。
 export async function appendAuditLogs(
   entries: AuditLogEntry[],
   txOrDb: DbOrTx = db,
@@ -315,11 +310,8 @@ export const recordInvitationRevoked = (
     txOrDb,
   );
 
-// 招待受諾で防御 (accept 内 OWNER mint 再検証 / unknown role fail-closed / 招待者行不在) が
-// 発火したことを記録する。accept tx が rollback された後に別 tx で同期実行し、DB 書込みの前に
-// 同 payload を console.warn で emit することで isolate crash 時にも wrangler tail に痕跡を残す。
-// payload key set は監視 query の互換維持のため固定 (email 等 PII は含めない — invitation_id
-// から辿れるため露出面を作らない)。運用契約: docs/adr/0012-layered-architecture.md
+// 招待受諾の防御発火を記録する。accept tx の rollback 後に別 tx で同期実行し、DB 書込み前に console.warn
+// で痕跡を残す。payload key set は監視 query 互換のため固定し PII は含めない (運用契約: ADR-0012)。
 export const recordInvitationAcceptRejected = (
   params: {
     actor_user_id: string;

@@ -7,17 +7,14 @@ import type { DbOrTx, DbTx } from "../transaction";
 // Stripe 流 prefix `mbr_<24chars>` で entity type を log / audit_log 上で即判定可能に。
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
-// signup の CreateCompany で同 user の 2 tab 同時 submit を直列化する per-user 排他ロック。
-// user_id 単独の unique 制約は N:M (1 user が複数 company 所属) と衝突するため使えず、
-// transaction-scoped advisory lock + tx 内 re-check で TOCTOU を解消する。
-// hashtext(text) は int4 を返し pg_advisory_xact_lock(bigint) に暗黙 cast される。
+// signup の CreateCompany で同 user の 2 tab 同時 submit を直列化する per-user 排他ロック。user_id 単独の
+// unique 制約は N:M と衝突して使えないため、advisory lock + tx 内 re-check で TOCTOU を解消する。
 export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
-// ADR-0010 (BB-11): 事業所削除と member remove の異経路同時実行を直列化する。
-// withOwnerLockGuard と同じ OWNER 行を FOR UPDATE で取り、両経路が同じ行で contend するようにする。
-// DeleteCompany は全 membership を消すため OWNER≥1 の事後検証は不要 (= guard ではなく lock のみ)。
+// ADR-0010 (BB-11): 事業所削除と member remove の同時実行を直列化する。withOwnerLockGuard と同じ
+// OWNER 行を FOR UPDATE で取り同じ行で contend させる (全削除なので OWNER≥1 の事後検証は不要)。
 export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
   await tx.execute(
     sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
@@ -55,8 +52,7 @@ export async function findMembershipsByUserId(
     .where(eq(membership.userId, userId));
 }
 
-// ADR-0010 D2: orphan 判定の述語。「所属している = ACTIVE company の membership 行が存在する」を
-// 唯一の基準にするため、status filter ではなく行 + ACTIVE join で数える。
+// ADR-0010 D2: 「ACTIVE company の membership 行が存在する」を orphan 判定の唯一の基準にする。
 export async function countActiveMembershipsByUserId(
   userId: string,
   txOrDb: DbOrTx = db,
@@ -69,8 +65,7 @@ export async function countActiveMembershipsByUserId(
   return rows.at(0)?.count ?? 0;
 }
 
-// ADR-0010 D1: 事業所削除で当該 company の所属を物理削除する。削除行を返すので呼び出し側が
-// 元メンバーごとに orphan 判定 (deleteAccountIfOrphaned) を回せる。
+// ADR-0010 D1: 削除行を返すので呼び出し側が元メンバーごとに orphan 判定を回せる。
 export async function removeMembershipsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,
@@ -78,8 +73,7 @@ export async function removeMembershipsOfCompany(
   return txOrDb.delete(membership).where(eq(membership.companyId, companyId)).returning();
 }
 
-// ADR-0010 PR-4 (backfill): D1 導入前に soft delete された company に残る ghost membership を
-// 持つ company id を引く。これらは D1 後なら存在しないはずの掃除対象。
+// ADR-0010 PR-4 (backfill): D1 導入前の soft delete で残った ghost membership の掃除対象を引く。
 export async function findDeletedCompanyIdsWithMemberships(txOrDb: DbOrTx = db): Promise<string[]> {
   const rows = await txOrDb
     .selectDistinct({ companyId: membership.companyId })
@@ -129,13 +123,8 @@ export async function findMembership(
     .then((rows) => rows.at(0));
 }
 
-// FOR SHARE で 1 行を掴んだまま role のみ返す。invitation accept tx が「招待者は今 OWNER か」を
-// 再検証する用途 (accept use-case) 向けで、並行 UPDATE (role 降格) と直列化する。DbOrTx=db を
-// default にしないのは autocommit だと FOR SHARE lock が statement 終了で解放され、accept tx の
-// 残り step (insertMembership 等) commit までの窓が silent に消えて TOCTOU が復活するため。
-// 呼び出し側は runInTransaction の tx を必ず渡すこと。role は DB text 列の生値なので `string`。
-// 未知の role が入っていた場合の判定は呼び出し側の policy 述語 (canAcceptInvitedRole) が
-// Object.hasOwn で fail-closed に倒す。詳細: docs/adr/0012-layered-architecture.md
+// FOR SHARE で 1 行掴んだまま role を返し、accept tx の「招待者は今 OWNER か」再検証を並行 UPDATE と
+// 直列化する。default を db にしないのは autocommit だと lock が statement 終了で解放され TOCTOU が復活するため。
 export async function lockMembershipForShare(
   tx: DbTx,
   userId: string,
@@ -200,16 +189,14 @@ export async function deleteMembership(
     .then((rows) => rows.at(0));
 }
 
-// OWNER ≥ 1 invariant をアプリ層で守る (詳細: PR #55 → #63)。
-// outer transaction を必須にして「OWNER 行 lock → 操作 → 再 count 検証」を atomic に。
-// 全 mutation 経路 (DeleteMembership / UpdateRole / TransferOwnership / DeleteUser) は必ずこれを経由する。
+// OWNER ≥ 1 invariant をアプリ層で守る (詳細: PR #55 → #63)。outer transaction 必須で「OWNER 行 lock →
+// 操作 → 再 count 検証」を atomic にし、全 mutation 経路が必ずこれを経由する。
 export async function withOwnerLockGuard<T>(
   tx: DbTx,
   companyId: string,
   fn: (tx: DbTx) => Promise<T>,
 ): Promise<T> {
-  // DeleteCompany 経路 (lockOwnerMembershipsOfCompany) と同じ OWNER 行で contend させるため
-  // lock 文を共有する。WHERE 条件が片方だけ変わると直列化が silent に外れる。
+  // DeleteCompany 経路と同じ OWNER 行で contend させる。WHERE が片方だけ変わると直列化が silent に外れる。
   await lockOwnerMembershipsOfCompany(tx, companyId);
   const result = await fn(tx);
   const remaining = await tx
@@ -230,10 +217,8 @@ export class OwnerInvariantViolation extends Error {
   }
 }
 
-// withOwnerLockGuard を跨いだ use-case (change-role / transfer-ownership / remove) が同形で
-// 使う「OwnerInvariantViolation を Result の last_owner reason に写像し、他 error は再 throw」の
-// catch 節を 1 箇所に閉じる。3 箇所コピペしていると片方の catch だけ error class の import を
-// 忘れて silent に 500 化する regression が起きやすいため、helper 側で fail-closed に。
+// OwnerInvariantViolation を last_owner reason に写像し他は再 throw する catch を 1 箇所に閉じる。
+// コピペすると片方だけ import を忘れて silent に 500 化する regression が起きるため helper 側で fail-closed。
 export function catchOwnerInvariant<T>(
   p: Promise<T>,
 ): Promise<T | { ok: false; reason: "last_owner" }> {
@@ -245,9 +230,8 @@ export function catchOwnerInvariant<T>(
 
 export type BlockingCompany = { companyId: string; companyName: string };
 
-// DeleteUser pre-check (Q24): user が唯一の OWNER である ACTIVE company を返す。
-// これらが残っている限り退会できない (退会すると OWNER ゼロの課金責任者不在 company が生まれるため)。
-// 解消するには TransferOwnership で委譲するか DeleteCompany で削除する。
+// DeleteUser pre-check (Q24): user が唯一の OWNER である ACTIVE company を返す。残る限り退会できない
+// (OWNER ゼロの課金責任者不在 company を防ぐ)。解消は TransferOwnership か DeleteCompany。
 export async function findCompaniesBlockingUserDeletion(
   userId: string,
   txOrDb: DbOrTx = db,

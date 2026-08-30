@@ -10,10 +10,8 @@ export type InvitationEmailContext = {
   roleLabel: string;
 };
 
-// magic link verify URL の callbackURL に invitation_token が載っていれば、
-// 招待メール描画に必要な company / inviter 情報を解決する。invitation 経由でなければ null。
-// better-auth の sendMagicLink callback は {email, url} しか受け取らないため、
-// url から callbackURL → invitation_token を辿って context を再構成する。
+// callbackURL に invitation_token が載っていれば招待メール描画に必要な company / inviter を解決する。
+// sendMagicLink callback は {email, url} しか受け取らないため url から context を再構成する。
 export async function resolveInvitationEmailContext(
   magicLinkUrl: string,
 ): Promise<InvitationEmailContext | null> {
@@ -39,7 +37,6 @@ export async function resolveInvitationEmailContext(
 }
 
 function extractInvitationToken(magicLinkUrl: string): string | null {
-  // magicLinkUrl 例: https://auth.../api/auth/magic-link/verify?token=...&callbackURL=<encoded>
   const callback = safeParseUrl(magicLinkUrl)?.searchParams.get("callbackURL");
   if (!callback) return null;
   // callbackURL は相対 / 絶対どちらもあり得る。

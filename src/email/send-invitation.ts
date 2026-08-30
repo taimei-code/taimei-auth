@@ -26,8 +26,7 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
   }
 
   const appName = getAppName();
-  // 件名は SMTP ヘッダに入るため CR/LF を含む user 入力 (inviter/company 名) を sanitize し
-  // ヘッダインジェクションを防ぐ。
+  // 件名は SMTP ヘッダに入るため CR/LF を含む user 入力を sanitize しヘッダインジェクションを防ぐ。
   const headerSafeInviterName = sanitizeDisplayText(params.inviterName);
   const headerSafeCompanyName = sanitizeDisplayText(params.companyName);
   await renderAndSendEmail({

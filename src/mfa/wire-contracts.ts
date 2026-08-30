@@ -1,6 +1,5 @@
-// server と共通画面 SPA が HTTP 越しに共有する MFA の wire 語彙と、6 endpoint の request/response
-// の形の正本。server handler は satisfies、SPA (mfa-api) は import で同じ型に縛る。SPA バンドルが
-// @core alias で直接 import するため、runtime 依存ゼロ (型と const のみ) を保つこと。
+// server と共通画面 SPA が共有する MFA の wire 語彙と 6 endpoint の request/response の形の正本。
+// SPA バンドルが @core alias で直接 import するため、runtime 依存ゼロ (型と const のみ) を保つこと。
 
 export type MfaCodeKind = "totp" | "recovery_code";
 
@@ -37,13 +36,12 @@ export type MfaChallengeStateResponse = { pending: boolean };
 
 export type MfaChallengeVerifyResponse = { redirect_url: string };
 
-// use-case 由来の error envelope。guard 層 (requireActor / parseZodBody) の envelope は
-// membership/guard/respond.ts が正本で本型の外 — そちらから MFA route に到達する code
-// (unauthorized / invalid_argument) は wire 語彙側に含めて一致を保っている。
+// use-case 由来の error envelope。guard 層の envelope は membership/guard/respond.ts が正本で本型の外 —
+// そこから MFA route に到達する code (unauthorized / invalid_argument) だけ wire 語彙側に含める。
 export type MfaErrorResponse = { error: MfaWireErrorCode };
 
-// zod schema と wire 型の双方向 shape 一致。`satisfies z.ZodType<T>` は片方向で、optional field の
-// 欠落も必須 field の追加も検出しないため、request schema はこちらで縛る。
+// `satisfies z.ZodType<T>` は片方向で optional の欠落も必須の追加も検出しないため、
+// request schema の shape 一致はこちらで双方向に縛る。
 export type MatchesWireShape<A, B> = [A, keyof A] extends [B, keyof B]
   ? [B, keyof B] extends [A, keyof A]
     ? true

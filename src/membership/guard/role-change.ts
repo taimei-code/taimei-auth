@@ -11,9 +11,7 @@ import {
   type Unauthorized,
 } from "./core";
 
-// POST .../members/:targetUserId/role の判定順:
-// 401 (actor) → 400 (parseBody) → 403 (actor が ADMIN 以上) → 404 (target membership) → 403 (canChangeRole)。
-// zod schema は Transport 側 (handler) に残し、parseBody callback から InvalidArgument を返す。
+// 判定順: 401 → 400 (parseBody) → 403 (ADMIN 以上) → 404 (target membership) → 403 (canChangeRole)。
 
 export type ParsedRoleBody = { nextRole: Role };
 
