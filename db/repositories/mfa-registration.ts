@@ -14,8 +14,7 @@ import type { TwoFactorVerificationState } from "./two-factor";
 
 export type { MfaRegistrationOperationKind as RegistrationOperationKind } from "../schema";
 
-// 取得 transaction が読んだ user / two_factor の最新状態。use-case の前提条件判定は
-// この snapshot だけを見る (ADR-0013 §8)。
+// 取得 transaction が読んだ最新状態。use-case の前提条件判定はこの snapshot だけを見る (ADR-0013 §8)。
 export type RegistrationSnapshot =
   | { user: "absent" }
   | {
@@ -26,7 +25,7 @@ export type RegistrationSnapshot =
     };
 
 // 「lease」と呼ばない (語彙の正本: CONTEXT.md「MFA 登録遷移 guard hold」の _Avoid_)。
-// brand で生成点をこの file の acquire に限定 (テストは cast helper 経由。設計: ADR-0013 §8)。
+// brand で生成点をこの file の acquire に限定する (設計: ADR-0013 §8)。
 declare const guardHoldBrand: unique symbol;
 export type GuardHold = {
   readonly [guardHoldBrand]: true;
@@ -40,20 +39,17 @@ function asGuardHold(hold: Omit<GuardHold, typeof guardHoldBrand>): GuardHold {
   return hold as GuardHold;
 }
 
-// 取得失敗の cause は呼び出し側の分岐に効く: held (先行 guard が存在。heldSince は滞留検知の入力) /
-// timeout・lock (競合打ち切り → busy) / user_absent (user 行が無い → 恒久条件。busy に倒すと
-// 削除済みアカウントへ Retry-After を返し続ける)。
+// cause は呼び出し側の分岐に効く: held (先行 guard。heldSince は滞留検知の入力) / timeout・lock
+// (競合打ち切り → busy) / user_absent (恒久条件。busy に倒すと削除済みアカウントへ Retry-After を返し続ける)。
 export type AcquireRegistrationGuardResult =
   | { acquired: true; hold: GuardHold }
   | { acquired: false; cause: "held"; heldSince: Date | undefined }
   | { acquired: false; cause: "timeout" | "lock" | "user_absent" };
 
-// (flag, 行) の組は 1 statement で読む。READ COMMITTED では statement ごとに MVCC snapshot が
-// 変わるため、分割すると guard 外 writer (ログインチャレンジの verifyTOTP / account deletion) と
-// 交差した時に「どの時点にも存在しなかった組」を前提条件判定へ渡しうる。行の一意性は
-// two_factor.user_id の UNIQUE が保証するので ORDER BY は不要 (読み側の決定化規則の正本:
-// db/repositories/two-factor.ts)。テストの snapshot 組み立てもこの関数を共有し、production が
-// 生成しない形の snapshot で前提条件マトリクスが緑になる drift を防ぐ。
+// (flag, 行) の組は 1 statement で読む。READ COMMITTED では statement ごとに MVCC snapshot が変わり、
+// 分割すると guard 外 writer と交差した時に「どの時点にも存在しなかった組」を判定へ渡しうる。
+// 一意性は two_factor.user_id の UNIQUE が保証するので ORDER BY は不要 (決定化規則: two-factor.ts)。
+// テストも本関数を共有する — production が生成しない形の snapshot で判定が緑になる drift を防ぐ。
 export async function readRegistrationSnapshot(
   userId: string,
   txOrDb: DbOrTx = db,
@@ -183,8 +179,8 @@ function pgErrorCode(error: unknown): unknown {
     : undefined;
 }
 
-// 55P03 = lock_timeout / 57014 = statement_timeout (未 commit の競合 insert 待ちの打ち切り)。
-// 23503 = user 行の FK 違反 = guard 取得と user 削除の race。恒久条件なので busy と区別して返す。
+// 55P03 = lock_timeout / 57014 = statement_timeout (競合 insert 待ちの打ち切り)。
+// 23503 = FK 違反 = guard 取得と user 削除の race。恒久条件なので busy と区別して返す。
 function acquireFailureCause(error: unknown): "timeout" | "lock" | "user_absent" | undefined {
   switch (pgErrorCode(error)) {
     case "55P03":

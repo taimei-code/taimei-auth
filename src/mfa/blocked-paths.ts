@@ -1,10 +1,5 @@
-// ブラウザからの到達を遮断する better-auth twoFactor プラグインの生 path カタログ。
-// 遮断の設計判断 (自前 REST だけを表面にする・verify 系も含め全遮断) は
-// docs/adr/0013-mfa-totp-challenge.md。
-//
-// 8 件なのは、プラグインの endpoint のうち generateTOTP / viewBackupCodes が serverOnly
-// (@better-auth/core の createAuthEndpoint.serverOnly) で HTTP router に登録されず path を
-// 持たないから。この 8 件とプラグイン側の path 付き endpoint の一致は網羅テストが固定する。
+// 遮断する better-auth twoFactor プラグインの生 path カタログ (全遮断の判断: ADR-0013 §1)。
+// 8 件なのは generateTOTP / viewBackupCodes が serverOnly で path を持たないため (一致は網羅テストが固定)。
 export const RAW_TWO_FACTOR_PATHS = [
   "/two-factor/enable",
   "/two-factor/disable",

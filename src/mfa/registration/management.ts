@@ -31,8 +31,8 @@ type ManagementReleaseResult =
 export function createManagementApplication(deps: {
   guard: TransitionGuard;
   reportUnknownTransition: ReportUnknownTransition;
-  // force-disable は遷移内窓口を使わない (clearTwoFactorEnabled 直 import は既知の例外)。それでも
-  // 必須で受けるのは、runner の契約を self-service と一枚にし optional 化の無音穴を作らないため。
+  // force-disable は遷移内窓口を使わない (直 import は既知の例外)。それでも必須で受けるのは、
+  // runner の契約を self-service と一枚にし optional 化の無音穴を作らないため。
   guardedGateway: GuardedGatewayFactory;
   readProtocolVersion(): Promise<number | undefined>;
   findUserById(userId: string): Promise<{ id: string } | undefined>;
@@ -63,8 +63,7 @@ export function createManagementApplication(deps: {
   return {
     async forceDisable(userId) {
       await assertGuardProtocol();
-      // guard 取得前の存在確認は user 削除との競合による FK 違反を busy に化けさせないための
-      // advisory。正式な判定は guard 取得後の snapshot が行う。
+      // guard 取得前の存在確認は FK 違反を busy に化けさせない advisory。正式な判定は guard 後の snapshot。
       if (!(await deps.findUserById(userId))) return failure(USER_NOT_FOUND);
 
       const transitioned = await runTransition(userId, "force_disable", (hold) =>
@@ -72,15 +71,13 @@ export function createManagementApplication(deps: {
       );
       if (!transitioned.ok || !transitioned.changed) return transitioned;
 
-      // 通知の失敗で解除を失敗にしない — 解除は確定済みで、再実行しても changed:false になる。
-      // 送信可否は notified で報告し、届かなかった場合は運用者が別経路で本人に知らせる。
-      // adapter の内部握り潰しに依存せず reject もここで notified:false に畳む — 確定済みの
-      // 解除が「失敗」に見えると、運用者に不要な次の手 (DB 直接操作等) を踏ませる。
+      // 通知の失敗で解除を失敗にしない (ADR-0013 §8)。reject もここで notified:false に畳む —
+      // 確定済みの解除が「失敗」に見えると、運用者に不要な次の手 (DB 直接操作等) を踏ませる。
       let notified = false;
       try {
         notified = await deps.notifyDisabled(transitioned.notifyEmail);
       } catch {
-        // 規律の所有はこの façade。dep の実装差で確定結果を変えない。
+        // 規律の所有はこの façade — dep の実装差で確定結果を変えない。
       }
       return { ok: true, changed: true, notified };
     },
@@ -96,8 +93,7 @@ export function createManagementApplication(deps: {
         userId: input.userId,
         source,
         reason,
-        // literal を書かず narrowing 済みの入力を渡す — repo 側の literal true 型が要求する
-        // 「検証を経ない呼び出し元は確認済み audit を書けない」結合を保つ。
+        // literal を書かず narrowing 済みの入力を渡し、repo 側の literal true 型が要求する結合を保つ。
         processStoppedConfirmed: input.processStoppedConfirmed,
       });
       return { ok: true, released: result.released };

@@ -29,7 +29,7 @@ export type TotpEnrollmentResult =
   | MfaFailure;
 
 // runTransition が work へ配る遷移内専用の better-auth 窓口。写像方針 (書き込み = rethrow /
-// readPendingTotpEnrollment = 総写像) は関数選定に内部固定 — 正本: ADR-0013 §8。
+// 読み取り = 総写像) は関数選定に内部固定 — 正本: ADR-0013 §8。
 export type GuardedMfaGateway = {
   enrollTotp(headers: Headers): Promise<TotpEnrollmentResult>;
   readPendingTotpEnrollment(actor: MfaActor, headers: Headers): Promise<TotpEnrollmentResult>;
@@ -53,8 +53,7 @@ export type AuditInput = {
   userAgent: string;
 };
 
-// deps に残るのは自前持ちの周辺 (試行枠・audit・観測) だけ。better-auth 窓口は deps でなく
-// operations 入力の GuardedMfaGateway で届く (runTransition が配る)。
+// deps に残るのは自前持ちの周辺 (試行枠・audit・観測) だけ。better-auth 窓口は runTransition が配る。
 export type ActivateDependencies = {
   writeAudit(input: AuditInput): Promise<void>;
   // Observer は例外を投げず、確定済みの登録遷移を変更しない。
@@ -65,12 +64,11 @@ export type DisableDependencies = {
   spendAttempt(userId: string): Promise<MfaFailure | undefined>;
   resetAttempts(userId: string): Promise<void>;
   writeAudit(input: AuditInput): Promise<void>;
-  // Observer は例外を投げず、確定済みの登録遷移を変更しない。
   observeAuditError(error: unknown): void;
 };
 
 // 各 operation の gateway は使う能力だけの Pick で受ける (least-privilege) — enroll が disableTotp を
-// 呼べる等の全能力面を型で塞ぐ。runner が配る実体は GuardedMfaGateway 全体 (部分型で受かる)。
+// 呼べる等の全能力面を型で塞ぐ。
 export type RegistrationOperations = {
   enroll(input: {
     actor: MfaActor;

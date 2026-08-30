@@ -31,15 +31,14 @@ import { reportUnknownMfaRegistrationTransition } from "./observability-adapter"
 import type { GuardedGatewayFactory, GuardedMfaGateway, RegistrationOperations } from "./ports";
 import { restart } from "./restart";
 
-// self-service と management の両経路が同じ production guard 配線を共有する (二重定義で
-// 片方だけ計測やアダプタ差替えが漏れる drift を防ぐ)。
+// self-service と management の両経路で同じ配線を共有し、片方だけ差替えが漏れる drift を防ぐ。
 export const registrationGuard = {
   acquire: acquireRegistrationGuard,
   release: releaseRegistrationGuard,
 };
 
-// 遷移内窓口の唯一の束縛点 (正本: ADR-0013 §8)。export は production-harness 用。
-// module 定数を返すだけの hold 非依存 — hold は資格の証憑であって束縛材料ではない。
+// 遷移内窓口の唯一の束縛点 (正本: ADR-0013 §8)。hold は資格の証憑であって束縛材料ではないため
+// module 定数を返すだけ。export は production-harness 用。
 const guardedMfaGateway: GuardedMfaGateway = {
   enrollTotp,
   readPendingTotpEnrollment,
