@@ -12,17 +12,13 @@ export function toProtoUser(userRow: UserRow) {
     createdAt: userRow.createdAt.toISOString(),
     updatedAt: userRow.updatedAt.toISOString(),
     revision: userRow.revision,
-    // proto field 名は default_company_id、DB 列は last_used_company_id
-    // (CONTEXT.md 'current_company_id / last_used_company_id')。
+    // proto field 名は default_company_id、DB 列は last_used_company_id (詳細: CONTEXT.md)。
     defaultCompanyId: userRow.lastUsedCompanyId ?? undefined,
   };
 }
 
-// session_kind は現状 "user" 固定。将来 enum 化を予定。
-// db/CLAUDE.md ルール 2 例外: session repository を作らない方針 (better-auth secondaryStorage の
-// stale 問題回避) のため、SessionRow 型を import せず better-auth Session 型から派生する。
-// better-auth の Session.session 型変更を compile-time に検出するため Pick で型固定。
-// proto Session.company_id はここでは埋めない — 現在事業所は User.default_company_id 経由で公開する。
+// session_kind は現状 "user" 固定。session repository を作らない方針 (db/CLAUDE.md ルール 2 例外) のため
+// better-auth Session 型から Pick で派生し型変更を compile-time に検出する。company_id は埋めない。
 type SessionRowLike = Pick<Session["session"], "id" | "expiresAt">;
 
 export function toProtoSession(sessionRow: SessionRowLike) {
@@ -33,9 +29,7 @@ export function toProtoSession(sessionRow: SessionRowLike) {
   };
 }
 
-// password / idToken / accessTokenExpiresAt 等は proto に乗せない (consumer は不要)。
-// 漏出するとセキュリティリスク (password hash leak) で、かつ SDK で trim 済の dead field に
-// 該当するため、明示的に whitelist mapping する。
+// password / idToken 等は proto に乗せない (漏出は password hash leak) ため明示的に whitelist mapping する。
 export function toProtoAccount(accountRow: AccountRow) {
   return {
     id: accountRow.id,

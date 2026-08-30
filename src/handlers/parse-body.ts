@@ -4,18 +4,16 @@ import type { Role } from "@/db/repositories/membership";
 import type { ParseBodyCallback } from "../membership/guard";
 import type { MfaCodeKind } from "../mfa/wire-contracts";
 
-// role を body で受ける 2 route (role 変更 / 招待作成) が同じ値集合を受理するための共有 schema。
-// 片方だけ新 role を受理する非対称を防ぐ。値集合の SSOT は db/schema.ts の Role
-// (satisfies が Role に無い値の混入を型エラーで検出する)。
+// role を body で受ける 2 route が同じ値集合を受理するための共有 schema (片方だけ受理する非対称を防ぐ)。
+// 値集合の SSOT は db/schema.ts の Role (satisfies が Role に無い値の混入を型エラーで検出する)。
 export const roleBodySchema = z.enum([
   "OWNER",
   "ADMIN",
   "MEMBER",
 ] as const satisfies readonly Role[]);
 
-// 桁数を縛らないのは、TOTP (6 桁) とリカバリーコードで書式が異なるうえ、書式判定を Transport が
-// 持つと誤入力が invalid_argument になり SPA の invalid_code 文言分岐から外れるため。正否は
-// gateway 越しのプラグインが決める。string 固定は先頭 0 の保持 (`012345` は 12345 でない)。
+// 桁数を縛らないのは TOTP とリカバリーコードで書式が異なり、書式判定を Transport が持つと誤入力が
+// invalid_argument になり SPA の invalid_code 分岐から外れるため。string 固定は先頭 0 の保持。
 export const mfaCodeSchema = z.string().min(1).max(64);
 
 export const mfaCodeKindSchema = z.enum([
@@ -28,11 +26,8 @@ type ParseZodBodyOptions<S extends z.ZodTypeAny, Out> = {
   transform?: (data: z.infer<S>) => Out;
 };
 
-// Transport 層で「c.req.json() + zod safeParse」を entry の parseBody callback に接続する adapter。
-// 「.catch(() => null) を safeParse より先に置く」不変条件 (invalid JSON body を 400 に変換するため
-// throw を握る) を helper 内に隠蔽し、handler は schema + optional transform だけを渡す。
-// withDetails=true は details 付き 400 が現行挙動の 3 route (signup 作成 / add / 招待作成) 向けで、
-// 他 route は details 無しの定型 400 を返す (SPA が期待する response shape の差分を維持)。
+// c.req.json() + zod safeParse を entry の parseBody callback に接続する adapter。「.catch を safeParse
+// より先に置く」不変条件を隠蔽する。withDetails は details 付き 400 を返す 3 route 向け。
 export function parseZodBody<S extends z.ZodTypeAny, Out = z.infer<S>>(
   c: Context,
   schema: S,

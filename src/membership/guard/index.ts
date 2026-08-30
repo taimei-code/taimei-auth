@@ -1,7 +1,5 @@
-// membership guard 層の公開 façade。handler / rpc / tests は `../membership/guard` の 1 path で
-// 全ての entry と Result 型 / guardErrorResponse を得る。operation 単位 entry の追加は
-// このディレクトリ配下に 1 file 1 操作で足し、ここから re-export する。
-// 詳細: docs/adr/0012-layered-architecture.md
+// membership guard 層の公開 façade (ADR-0012)。operation 単位 entry は同 dir に 1 file 1 操作で足し、
+// ここから re-export する。
 
 export {
   createMembershipGuard,
@@ -20,8 +18,7 @@ export {
   type ParseBodyResult,
 } from "./core";
 
-// 本番用 default guard の generic entry (requireActor / requireMembership / requireMembershipOf)。
-// module ロード時 bind 済み。DI テストは createMembershipGuard を直接呼ぶ。
+// 本番用 default guard の generic entry (module ロード時 bind 済み)。DI テストは createMembershipGuard を直接呼ぶ。
 import { guard } from "./core";
 export const requireActor = guard.requireActor;
 export const requireMembership = guard.requireMembership;

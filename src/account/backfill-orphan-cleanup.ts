@@ -19,10 +19,8 @@ export type BackfillReport = {
 
 type GhostMembershipPurge = { ghostMembershipCount: number; orphanUserIds: string[] };
 
-// ADR-0010 PR-4: D1 (事業所削除で membership 物理削除) 導入前に soft delete された company に残る
-// ghost membership と、それにより放置された orphan アカウントを掃除する one-shot backfill。
-// rollback 不能な物理削除を初回適用するため、execute=false の dry-run で対象 (件数 + 削除予定 user_id) を
-// 確認してから execute=true で実行する運用。設計詳細: docs/adr/0010-company-account-deletion-lifecycle.md
+// ADR-0010 PR-4: D1 導入前に soft delete された company に残る ghost membership と orphan アカウントを
+// 掃除する one-shot backfill。rollback 不能なため dry-run で対象を確認してから execute=true で実行する。
 export async function backfillOrphanCleanup(opts: { execute: boolean }): Promise<BackfillReport> {
   const companyIds = await findDeletedCompanyIdsWithMemberships();
   const deletedUserIds = new Set<string>();
@@ -54,8 +52,7 @@ async function previewGhostMembershipPurge(companyId: string): Promise<GhostMemb
   return { ghostMembershipCount: members.length, orphanUserIds };
 }
 
-// DeleteCompany と同じく invitation 失効 → membership 物理削除 → last_used 付け替え → orphan 削除
-// の順を守る (company は既に soft delete 済みなので触らない)。
+// DeleteCompany と同じ順 (invitation 失効 → membership 削除 → last_used 付け替え → orphan 削除) を守る。
 async function purgeGhostMemberships(companyId: string): Promise<GhostMembershipPurge> {
   return runInTransaction(async (tx) => {
     await revokePendingInvitationsOfCompany(companyId, tx);

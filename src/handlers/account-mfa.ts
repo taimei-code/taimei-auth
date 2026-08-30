@@ -17,16 +17,13 @@ import type {
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 
-// SPA のセキュリティページから呼ばれる MFA 登録遷移 (requireActor 経路)。プラグインの /two-factor/* は
-// ブラウザに露出させずこの 4 route だけを窓口にする (生 path は auth-plugins/mfa-challenge.ts の
-// before-hook が 403 に落とす)。不変条件・副作用順序・audit は use-case (src/mfa/) が所有する。
-// 設計詳細: docs/adr/0013-mfa-totp-challenge.md
+// SPA から呼ばれる MFA 登録遷移の 4 route。プラグインの /two-factor/* は露出させずここだけを窓口にする
+// (生 path は before-hook が 403)。不変条件・順序・audit は use-case (src/mfa/) 所有。詳細: ADR-0013
 export const accountMfa = new Hono();
 
 const activateBody = z.object({ code: mfaCodeSchema, enrollment_id: z.string().min(1).optional() });
 const disableBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
-// 検出器: schema と wire 型の乖離 (optional の欠落 = 全 activate が legacy 経路へ落ちる事故を含む)
-// を typecheck で落とす。`satisfies z.ZodType` では捕まらない (MatchesWireShape のコメント参照)。
+// 検出器: schema と wire 型の乖離 (optional 欠落 = 全 activate が legacy 経路へ落ちる) を typecheck で落とす。
 const _activateBodyMatchesWire: MatchesWireShape<
   z.infer<typeof activateBody>,
   MfaActivateRequest
@@ -79,8 +76,7 @@ accountMfa.post("/api/account/mfa/activate", async (c) => {
     headers: c.req.raw.headers,
     code: parsed.data.code,
   };
-  // 判定は「フィールドの有無」で行う。truthiness だと空文字が schema の .min(1) 緩和 1 つで
-  // 識別子照合を素通りする legacy 経路に落ちる (照合迂回の入口を .min(1) と二重に塞ぐ)。
+  // 判定は「フィールドの有無」で行う。truthiness だと空文字が識別子照合を素通りする legacy 経路に落ちる。
   const result =
     parsed.data.enrollment_id !== undefined
       ? await activate({ ...activation, enrollmentId: parsed.data.enrollment_id })

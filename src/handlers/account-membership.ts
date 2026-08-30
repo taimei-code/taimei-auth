@@ -21,9 +21,8 @@ const setCurrentCompanyBody = z.object({ company_id: z.string().min(1).max(64) }
 const updateRoleBody = z.object({ role: roleBodySchema });
 const transferOwnershipBody = z.object({ to_user_id: z.string().min(1).max(64) });
 
-// POST 事業所切替。target の active membership を持つことを switchCompany use-case が tx 内で再検証し
-// user.last_used_company_id (SDK companyId source) を更新する。TOCTOU / same-company 短絡 / audit の
-// 詳細は use-case 側 (src/account/switch-company.ts) と ADR-0012 参照。
+// POST 事業所切替。target の active membership を switchCompany use-case が tx 内で再検証し
+// last_used_company_id を更新する。TOCTOU / 短絡 / audit は use-case 側 (ADR-0012)。
 accountMembership.post("/api/account/current-company", async (c) => {
   const actorResult = await requireActor(c.req.raw.headers);
   if (!actorResult.ok) return guardErrorResponse(actorResult);
@@ -44,9 +43,8 @@ accountMembership.post("/api/account/current-company", async (c) => {
   return c.json({ ok: true, company_id: result.companyId });
 });
 
-// POST role 変更。role 階層: OWNER は全 role 設定可、ADMIN は MEMBER↔ADMIN のみ (OWNER 昇格 / OWNER 操作は不可)。
-// OWNER を降格する変更の OWNER≥1 保証 / no-op 短絡 / audit は changeRole use-case が持つ。
-// entry (requireRoleChange) が 401→400→403 (ADMIN)→404→403 (canChangeRole) を担う。
+// POST role 変更。OWNER≥1 保証 / no-op 短絡 / audit は changeRole use-case が持ち、
+// 401→400→403→404→403 の判定順は entry (requireRoleChange) が担う。
 accountMembership.post(
   "/api/account/companies/:companyId/members/:targetUserId/role",
   async (c) => {
@@ -75,10 +73,8 @@ accountMembership.post(
   },
 );
 
-// POST メンバー削除 (除名 / 退会)。本人 (退会) または OWNER/ADMIN (除名) が可能。
-// 認可は entry (requireRemoval) が 401→403 (membership)→403 (canAttemptRemoval)→404→403 (canRemoveTarget)
-// の順で担い、mutation (membership 削除 + 所属 0 件なら account 連動削除 + OWNER≥1 保証) は
-// removeMember use-case が担う (ADR-0010 D2)。
+// POST メンバー削除 (除名 / 退会)。認可順は entry (requireRemoval)、mutation (membership 削除 + 所属
+// 0 件なら account 連動削除 + OWNER≥1 保証) は removeMember use-case が担う (ADR-0010 D2)。
 accountMembership.post(
   "/api/account/companies/:companyId/members/:targetUserId/remove",
   async (c) => {
@@ -100,10 +96,8 @@ accountMembership.post(
   },
 );
 
-// POST オーナー委譲 (OWNER のみ)。target を OWNER 昇格 + actor を ADMIN 降格を 1 transaction で。
-// 「唯一の OWNER が抜けたい」場合に先に委譲してから退会する導線 (詳細: PR #55 → #63)。use-case (transferOwnership) が
-// withOwnerLockGuard 内で mutation + audit を所有する。
-// entry (requireTransferOwnership) が 401→400 (parse + self)→403 (OWNER)→404→400 (already_owner) を担う。
+// POST オーナー委譲 (OWNER のみ)。target 昇格 + actor 降格を 1 tx で行い、「唯一の OWNER が抜けたい」
+// 場合の先行導線になる (詳細: PR #55 → #63)。判定順は entry (requireTransferOwnership)。
 accountMembership.post("/api/account/companies/:companyId/transfer-ownership", async (c) => {
   const companyId = c.req.param("companyId");
 

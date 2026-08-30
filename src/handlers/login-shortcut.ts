@@ -7,8 +7,7 @@ import { Sentry } from "../sentry";
 // 未知のクエリは破棄し、allowlist 経由のみ /auth/ に渡す (パラメータ汚染防止)
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
 
-// ログイン URL の組み立ては SDK の buildAuthLoginUrl に委ねる (キー名 typo / 順序の揺らぎを
-// consumer と host で同じ 1 箇所に集約)。error の転記だけが本 handler 固有。
+// ログイン URL の組み立ては SDK の buildAuthLoginUrl に委ねる (キー名 / 順序を consumer と 1 箇所に集約)。
 const buildLoginRedirect = (url: URL): URL => {
   const target = new URL(
     buildAuthLoginUrl({

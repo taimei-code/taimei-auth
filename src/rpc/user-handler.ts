@@ -48,10 +48,8 @@ export function registerUserService(router: ConnectRouter) {
     },
 
     async deleteUser(req) {
-      // user が唯一の OWNER の ACTIVE 事業所が残っていると退会不可 (詳細: PR #55 → #63)。
-      // 退会すると課金責任者不在の事業所が生まれるため、先に委譲 / 削除を要求する。
+      // 唯一の OWNER の ACTIVE 事業所が残っていると退会不可 (課金責任者不在を防ぐ。詳細: PR #55 → #63)。
       // pre-check と delete を同一 tx に置き、check 後に actor が OWNER 昇格される race を避ける。
-      // 削除手順 (audit → session 失効 → 物理削除) と順序根拠は src/account/delete-account.ts に集約。
       const result = await runInTransaction(async (tx) => {
         const blocking = await findCompaniesBlockingUserDeletion(req.userId, tx);
         if (blocking.length > 0) return { blocked: blocking.length };

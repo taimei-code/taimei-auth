@@ -5,16 +5,10 @@ import * as schema from "./schema";
 
 type Db = NodePgDatabase<typeof schema>;
 
-// Workers (workerd) は「ある request の I/O コンテキストで開いた socket を別 request で再利用できない」ため、
-// module singleton の Pool を使い回すと 2 回目以降の query が resolve も reject もせず "Worker hung" になる
-// (= /auth/ で findMembershipsByUserId が毎回ハングしていた真因。PR #87〜)。
-// Cloudflare 公式の node-postgres + Hyperdrive 方針は「handler 内で request ごとに Pool を生成し
-// ctx.waitUntil(pool.end()) で閉じる」。一方 repository 群 / better-auth drizzleAdapter は単一の `db` を
-// import するので、db インスタンス自体は module ロード時に 1 度だけ構築し、drizzle に渡す Pool 実体だけを
-// request 単位に差し替える RoutingPool を噛ませる。実 Pool は ALS (AsyncLocalStorage) に載せ、worker entry が
-// runWithRequestPool で set し、background DB 書き込み (audit log) 完走後に pool.end() する。
-// Bun / Node (compose / テスト / CLI) は長命プロセスなので singletonPool を共有する。
-// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+// Workers は別 request の I/O コンテキストで開いた socket を再利用できず、singleton Pool を使い回すと
+// query が "Worker hung" になる。db は module ロード時に 1 度だけ構築し Pool 実体だけを ALS 経由で
+// request 単位に差し替える (Bun / Node は長命プロセスなので singletonPool を共有)。
+// 詳細: db/CLAUDE.md の gotcha / ADR-0011 / PR #91
 const requestPoolStore = new AsyncLocalStorage<Pool>();
 let singletonPool: Pool | undefined;
 
@@ -28,12 +22,8 @@ function requireCurrentPool(): Pool {
   return pool;
 }
 
-// drizzle に渡す前段。query / connect を「その時点の」request pool (Workers) か singletonPool (Bun) へ委譲する。
-// drizzle は transaction 時に `this.client instanceof Pool` で pool 判定し、pool なら connect() で 1 接続を
-// pin する (drizzle-orm 0.45 node-postgres session.cjs:216、実機確認済み)。満たさないと BEGIN/COMMIT が
-// 別接続に散り advisory lock / FOR UPDATE の atomicity が壊れる。Pool を extends することで instanceof を
-// 自然に満たし (object 全体の cast 不要)、query / connect だけ requireCurrentPool() への委譲で上書き
-// する (このインスタンス自身は実接続を持たない)。委譲関数の `as Pool[...]` は引数を 1:1 転送する局所 cast。
+// drizzle に渡す前段。query / connect を request pool (Workers) か singletonPool (Bun) へ委譲する。
+// `extends Pool` は drizzle の `instanceof Pool` 判定を満たすために必須 (詳細: db/CLAUDE.md の gotcha)。
 class RoutingPool extends Pool {
   override query = ((...args: Parameters<Pool["query"]>) =>
     requireCurrentPool().query(...args)) as Pool["query"];
@@ -49,16 +39,14 @@ export function initDb(connectionString: string): void {
   singletonPool = new Pool({ connectionString });
 }
 
-// Workers: request ごとに実 Pool を作り ALS に載せて fn を実行する。
-// 戻り値の pool を呼び出し側 (src/worker.ts) が background task 完走後に ctx.waitUntil(pool.end()) で閉じる。
-// max:5 は Workers の同時外部接続上限 (Cloudflare 公式)。
+// Workers: request ごとに実 Pool を作り ALS に載せる。戻り値の pool は呼び出し側 (src/worker.ts) が
+// background task 完走後に ctx.waitUntil(pool.end()) で閉じる。max:5 は Workers の同時外部接続上限。
 export function runWithRequestPool<T>(connectionString: string, fn: (pool: Pool) => T): T {
   const pool = new Pool({ connectionString, max: 5 });
   return requestPoolStore.run(pool, () => fn(pool));
 }
 
-// Bun / Node: 接続文字列が env にあれば即 init。Workers では DATABASE_URL が未設定のため skip し、
-// worker entry (src/worker.ts) が request ごとに runWithRequestPool で実 Pool を供給する。
+// Bun / Node は env にあれば即 init (Workers は DATABASE_URL 未設定で skip し worker entry が供給する)。
 if (typeof process !== "undefined" && process.env?.DATABASE_URL) {
   initDb(process.env.DATABASE_URL);
 }

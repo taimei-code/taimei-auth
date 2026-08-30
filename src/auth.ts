@@ -16,25 +16,20 @@ import { redisStorage } from "./redis";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
-// Workers は per-request env のため、better-auth インスタンスを module ロード時ではなく
-// initAuth() で構築する。buildAuth は db / redisStorage が init 済みの前提で呼ぶ
-// (Bun は module ロード順で自動 init 済み、Workers は worker entry が initDb→initRedis→initAuth)。
-// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+// Workers は per-request env のため module ロード時でなく initAuth() で構築する
+// (Workers は worker entry が initDb→initRedis→initAuth の順で呼ぶ)。詳細: ADR-0011
 function buildAuth() {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
-    // 認証アプリの表示名を初回 enable と中断再開 (get-totp-uri) の両経路で「taimei」に揃える。
-    // twoFactor.issuer は初回経路にしか効かず、再開経路は appName へフォールバックする
-    // (better-auth 1.6.23 がトップレベル issuer を totp サブモジュールへ転送しないため)。
-    // 未設定だと再開時だけ「Better Auth」名の QR になり、認証アプリで同一アカウントが 2 エントリに分かれる。
+    // twoFactor.issuer は初回 enable にしか効かず、再開 (get-totp-uri) は appName へ落ちる
+    // (better-auth 1.6.23)。未設定だと再開時だけ別名 QR になり認証アプリが 2 エントリに割れる。
     appName: getAppName(),
 
     secondaryStorage: redisStorage,
 
     // local の Bun e2e のみ verification を DB にも保存 (postgres から token を取得するため)。
-    // Workers では DB verification 消費が hang する (ADR-0011: better-auth の DB token 消費が
-    // workerd/Hyperdrive 経路で完走しない) ため false にし、本番同様 secondaryStorage に保存する。
+    // Workers は DB token 消費が hang する (ADR-0011) ため false にし secondaryStorage に保存する。
     verification: {
       storeInDatabase: isBunRuntime() && isLocalEnvironment(),
     },
@@ -55,18 +50,15 @@ function buildAuth() {
 
     user: {
       additionalFields: {
-        // secondaryStorage payload に revision を含めるための宣言。
-        // 実際の ++ は drizzle/manual/0001_user_revision_triggers.sql の DB trigger に閉じる。
-        // input: false により API 経由の client からは書き換え不能。
+        // secondaryStorage payload に revision を含めるための宣言。実際の ++ は
+        // drizzle/manual/0001_user_revision_triggers.sql の DB trigger に閉じる (input: false で client 不可)。
         revision: { type: "number", required: true, defaultValue: 0, input: false },
-        // user の現在事業所 (= last_used_company_id)。VerifySession が DB から fresh 読みして
-        // proto User.default_company_id 経由で SDK SessionData.companyId に公開する。
-        // input: false で API 経由の書き換えを封じ、更新は CreateCompany / SetCurrentCompany handler 経由のみ。
+        // user の現在事業所。VerifySession が DB から fresh 読みして SDK SessionData.companyId に公開する。
+        // input: false で書き換えを封じ、更新は CreateCompany / SetCurrentCompany handler 経由のみ。
         lastUsedCompanyId: { type: "string", required: false, input: false },
       },
-      // SPA DangerZone (authClient.deleteUser) の経路 (詳細: PR #55 → #63)。
-      // beforeDelete で「唯一の OWNER の ACTIVE 事業所が残っていないか」を検証し、
-      // 残っていれば APIError で退会を中断する (RPC DeleteUser handler と二重防御)。
+      // SPA DangerZone (authClient.deleteUser) の経路 (PR #55 → #63)。beforeDelete で「唯一の OWNER の
+      // ACTIVE 事業所が残っていないか」を検証し中断する (RPC DeleteUser handler と二重防御)。
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
@@ -100,8 +92,7 @@ function buildAuth() {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // callbackURL に invitation_token があれば、default ログインリンクではなく
-          // 事業所名 / 招待者を載せた招待メールを送る (1-click 受諾 + custom 文面の両立)。
+          // callbackURL に invitation_token があれば事業所名 / 招待者を載せた招待メールを送る。
           const invitationContext = await resolveInvitationEmailContext(url);
           if (invitationContext) {
             await sendInvitationEmail({ inviteeEmail: email, url, ...invitationContext });
@@ -110,14 +101,11 @@ function buildAuth() {
           await sendMagicLinkEmail(email, url);
         },
         expiresIn: 300,
-        // local: 1000 req/s 許可 (test の高速化)。
-        // production: Hono middleware (src/rate-limit.ts) と独立した二重防御として 10 req/min。
+        // local は test 高速化で緩め、production は Hono middleware (src/rate-limit.ts) と独立した二重防御。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
-      // allowPasswordless はパスワードレス構成 (emailAndPassword.enabled: false) では必須。
-      // 既定ではプラグインが操作前のパスワード再入力を要求し、enable / disable が常に 400 になる。
-      // 残り 4 つはプラグイン既定値と同値だが、既定が動くと不変条件 (two_factor_enabled ⇒ verified 行)
-      // や登録済み認証アプリが黙って壊れるため明示する。検証窓は @better-auth/utils 側の ±1 step 固定。
+      // allowPasswordless はパスワードレス構成では必須 (既定はパスワード再入力を要求し enable/disable が 400)。
+      // 残り 4 つは既定値と同値だが、既定の変化で不変条件 (two_factor_enabled ⇒ verified 行) が黙って壊れるため明示。
       twoFactor({
         allowPasswordless: true,
         skipVerificationOnEnable: false,
@@ -135,12 +123,8 @@ function buildAuth() {
         enabled: true,
         maxAge: 5 * 60,
       },
-      // Magic Link / OAuth のみで password を持たず、delete-user 等の sensitive 操作で
-      // 再認証 (password 再入力) ができない。freshAge=0 で fresh セッション要求を無効化し、
-      // 退会が常に SESSION_NOT_FRESH で弾かれるのを防ぐ (DangerZone は再認証 step なしの設計)。
-      // freshAge=0 は全 sensitive 操作の fresh 保護を無効化するグローバル設定のため、将来
-      // emailAndPassword / changeEmail / changePassword を有効化する際は freshAge 再有効化を
-      // 検討すること (password 認証ありなら fresh 再認証が機能するため)。
+      // password を持たない構成のため sensitive 操作の再認証が不可能で、freshAge=0 にしないと退会が
+      // 常に SESSION_NOT_FRESH で弾かれる。全 sensitive 操作の fresh 保護を切るので password 有効化時は再検討。
       freshAge: 0,
     },
 
@@ -163,8 +147,7 @@ export function initAuth(): void {
 
 export type Session = ReturnType<typeof buildAuth>["$Infer"]["Session"];
 
-// Bun / Node: db / redisStorage は import 時に自動 init 済みのため auth も自動 init。
-// Workers では Bun global が無いため skip し、worker entry が initDb→initRedis→initAuth を呼ぶ。
+// Bun / Node は import 時に db / redisStorage が init 済みのため auth も自動 init (Workers は worker entry)。
 if (isBunRuntime()) {
   initAuth();
 }

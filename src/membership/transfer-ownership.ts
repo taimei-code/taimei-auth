@@ -6,13 +6,8 @@ import {
 } from "@/db/repositories/membership";
 import { runInTransaction } from "@/db/transaction";
 
-// ADR-0012 (Use-case 層): オーナー委譲手続。target を OWNER 昇格 + actor を ADMIN 降格を単一 tx で。
-// withOwnerLockGuard の FOR UPDATE 直列化により、二段委譲 (A→B 後 B→C) は両者 200、
-// A→B 完了後の A→C 再送は Guard 側の OWNER 判定 (A は既に ADMIN) で 403 (現行挙動維持)。
-// actor は委譲中 OWNER のままなので OWNER≥1 は理論上壊れないが、並行操作との合流点で
-// 万一 lock guard 内 count が < 1 になったら Result で last_owner を返す。
-// 認可 (OWNER のみ) / self-transfer 拒否 / not_found / already_owner は Guard 層の責務。
-// 設計詳細: docs/adr/0012-layered-architecture.md
+// ADR-0012 (Use-case 層): オーナー委譲手続。target 昇格 + actor 降格を単一 tx で行い、withOwnerLockGuard の
+// FOR UPDATE 直列化で並行委譲を捌く。lock guard 内 count が < 1 になったら Result で last_owner を返す。
 
 export type TransferOwnershipResult = { ok: true } | { ok: false; reason: "last_owner" };
 

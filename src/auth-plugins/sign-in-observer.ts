@@ -13,8 +13,7 @@ import {
   type AuthRouteMatch,
 } from "./primary-auth-routes";
 
-// mfa-challenge の**後に**登録し、チャレンジ介入で null 化された newSession を観測してスキップ
-// する — 登録順が正しさの前提 (hook 実行順の実測と経緯: docs/adr/0013-mfa-totp-challenge.md)。
+// mfa-challenge の**後に**登録し null 化された newSession でスキップする — 登録順が正しさの前提 (ADR-0013)。
 
 // RawTwoFactorPath で型付けし、blocked-paths カタログ側の path が変われば型エラーで気付ける状態にする。
 const CHALLENGE_COMPLETION_ROUTES = [
@@ -31,10 +30,8 @@ function isChallengeCompletionRoute(path: string | undefined): boolean {
   return CHALLENGE_COMPLETION_ROUTES.some((route) => route === path);
 }
 
-// チャレンジ通過時の一次認証手段は path から引けない (第二要素を出しただけなので) ため、発行時に
-// 控えた値を引く。完了マーカーは検証成功の時点でプラグインが消費済みなので、マーカー非依存の
-// readChallengeMethod を使う。同じ path は MFA 有効化時のセッション rotate でも通るが、そちらは
-// `two_factor` cookie を持たず undefined になるため記帳されない。
+// チャレンジ通過時の一次認証手段は path から引けないため発行時に控えた値を引く (完了マーカーは検証成功で
+// 消費済みのためマーカー非依存)。MFA 有効化の rotate は `two_factor` cookie を持たず記帳されない。
 async function resolveSignInMethod(
   route: AuthRouteMatch,
   headers: Headers | undefined,
@@ -48,8 +45,7 @@ const observeSignIn = createAuthMiddleware(async (ctx) => {
   if (!establishedSession) return;
   const { user } = establishedSession;
 
-  // welcome メールを一次認証 path に限るのは、チャレンジ通過も MFA 有効化の rotate も「既存 user が
-  // 第二要素を出した」だけで初回サインアップではないため (2 通目を防ぐ)。
+  // welcome メールを一次認証 path に限るのは、チャレンジ通過も rotate も初回サインアップでないため (2 通目防止)。
   if (isPrimaryAuthRoute(ctx.path) && isJustSignedUp(new Date(user.createdAt))) {
     // Workers では fire-and-forget を waitUntil 経由にしないと "hung" になる (background.ts)。
     runBackground(

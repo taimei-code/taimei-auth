@@ -67,10 +67,8 @@ accountInvitation.get("/api/account/companies/:companyId/invitations", async (c)
   });
 });
 
-// POST 招待作成 (OWNER / ADMIN のみ、canInviteRole で OWNER 招待は OWNER のみ)。
-// 判定順は requireInvite entry に集約 (401 → 403 ADMIN → 400 with details → 403 canInviteRole)。
-// idempotency (既存 PENDING 再送) / rate-limit / insert + audit は createInvitation use-case が所有。
-// magic-link 送信は handler が post-commit で行う (accept 側と対称、DB 失敗時は無送信)。
+// POST 招待作成 (OWNER / ADMIN のみ、OWNER 招待は OWNER のみ)。判定順は requireInvite entry、idempotency /
+// rate-limit / insert + audit は createInvitation use-case。magic-link 送信は handler が post-commit で行う。
 accountInvitation.post("/api/account/companies/:companyId/invitations", async (c) => {
   const companyId = c.req.param("companyId");
   const guardResult = await requireInvite({
@@ -93,10 +91,8 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", async (c
   if (!result.ok) return guardErrorResponse(reasonToGuardError(result.reason));
   const invitationRow = result.invitation;
 
-  // commit 後にメール送信 (DB INSERT 成功してから送る、失敗時は無送信)。
-  // signInMagicLink が magic link を発行 → sendMagicLink が invitation_token を検出して招待メールに分岐。
-  // 送信結果は response に載せない (失敗はログのみ) ため、Resend の応答を待たず background に
-  // 逃がして 200 を即返す (Workers は ctx.waitUntil で完走保証、src/background.ts 参照)。
+  // commit 後に送信する (DB INSERT 失敗時は無送信)。送信結果は response に載せないため、Resend の応答を
+  // 待たず background へ逃がして 200 を即返す (Workers は ctx.waitUntil で完走保証、src/background.ts)。
   const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token)}`;
   runBackground(
     auth.api
@@ -136,10 +132,8 @@ accountInvitation.post(
   },
 );
 
-// POST 招待受諾。strict email match (invitation.email === session.email) で token 盗難に対する phishing 防御。
-// entry (requireInvitationAccept) が 401→400→404 (token)→403 (email_mismatch)→reused 短絡→410 の
-// 判定を担い、accept mutation (PENDING guard / OWNER 招待の招待者再検証 / membership INSERT / audit)
-// は acceptInvitation use-case が tx 所有で行う。
+// POST 招待受諾。strict email match (invitation.email === session.email) で token 盗難の phishing を防ぐ。
+// 判定順は entry (requireInvitationAccept)、accept mutation は acceptInvitation use-case が tx 所有で行う。
 accountInvitation.post("/api/account/accept-invitation", async (c) => {
   const guardResult = await requireInvitationAccept({
     headers: c.req.raw.headers,

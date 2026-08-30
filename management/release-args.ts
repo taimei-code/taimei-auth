@@ -12,9 +12,8 @@ export function parseReleaseArgs(
   if (!userId || userId.startsWith("--") || !reason || reason.startsWith("--")) {
     return { error: RELEASE_USAGE };
   }
-  // 消費されない token は usage エラーにする。許すと、引用符を忘れた reason
-  // (--reason incident 999) が黙って先頭 1 語に切り詰められ、audit に不完全な理由が残る —
-  // 正確な理由の記帳がこのコマンドが儀式的な引数を要求する眼目。
+  // 消費されない token は usage エラーにする。許すと引用符を忘れた reason が黙って先頭 1 語に切り詰められ、
+  // audit に不完全な理由が残る — 正確な理由の記帳がこのコマンドの眼目。
   const leftover = rest.filter(
     (token, index) =>
       index !== reasonIndex && index !== reasonIndex + 1 && token !== "--process-stopped-confirmed",

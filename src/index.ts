@@ -7,15 +7,14 @@ import { parseTrustedProxyHops } from "./request-context";
 
 initBunSentry();
 
-// production で AUTH_SERVICE_KEY 未設定なら起動拒否。
-// dev / test 環境では従来通り warn のみで通す (compose の local-dev-key を hardcoded する運用も維持)。
+// production で AUTH_SERVICE_KEY 未設定なら起動拒否 (dev / test は warn のみで通す)。
 if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
   console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
   process.exit(1);
 }
 
-// 未設定を既定値で埋めると client IP が全リクエスト "unknown" へ潰れ、audit の ip も IP 軸 rate-limit も
-// 動いて見えたまま無価値化する。Workers 本番はこの entry を通らないため設定不要 (request-context.ts)。
+// 未設定を既定値で埋めると client IP が "unknown" に潰れ、audit も IP 軸 rate-limit も無価値化する。
+// Workers 本番はこの entry を通らないため設定不要 (request-context.ts)。
 const trustedProxyHopsConfigured =
   parseTrustedProxyHops(process.env.AUTH_TRUSTED_PROXY_HOPS) !== null;
 if (process.env.APP_ENV === "production" && !trustedProxyHopsConfigured) {
@@ -44,10 +43,8 @@ export const app = buildApp({
 // compose / CI は healthcheck で redis 先行起動済みのため通常は数十 ms で返る。
 const REDIS_BOOT_TIMEOUT_MS = 10_000;
 
-// session 実体 (secondaryStorage) と rate-limit が Redis 前提のため、疎通不能なら
-// 「起動はしたが認証できない」プロセスを作らず boot で止める。
-// race による打ち切りが必須 — pingRedis は redis 断のとき resolve しない (node-redis の
-// 既定 reconnectStrategy が無限リトライし connect() が settle しないため)。
+// session 実体と rate-limit が Redis 前提のため、疎通不能なら「起動はしたが認証できない」プロセスを
+// 作らず boot で止める。race による打ち切りは必須 — redis 断のとき pingRedis は resolve しない。
 const redisReachable = await Promise.race([
   pingRedis(),
   new Promise<false>((resolve) => setTimeout(() => resolve(false), REDIS_BOOT_TIMEOUT_MS)),

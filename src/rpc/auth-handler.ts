@@ -30,11 +30,8 @@ const verifySessionError = (reason: Result) =>
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     async verifySession(req) {
-      // auth.api.getSession 経由で secondaryStorage (Redis) の payload を取得し、
-      // 含まれる user.revision と DB の最新値を比較する。
-      // 注意: ここで参照する "cache" は cookieCache (cookie-side payload) ではなく
-      // secondaryStorage (Redis 側 payload) — handler は session_data cookie を送らないため
-      // internalAdapter.findSession 経由で Redis を引く。
+      // auth.api.getSession で secondaryStorage (Redis) の payload を取り、user.revision と DB の最新値を
+      // 比較する。参照するのは cookieCache でなく Redis 側 payload (handler は cookie を送らないため)。
       const headers = new Headers();
       headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
 
@@ -44,8 +41,7 @@ export function registerAuthService(router: ConnectRouter) {
         return verifySessionError(Result.SESSION_NOT_FOUND);
       }
 
-      // VerifySession は cookieCache を bypass し DB の最新値を毎回読む (cookieCache stale 対策)。
-      // hot path のため user / session.revoked_at の 2 つの SELECT を Promise.all で 1 RTT に。
+      // cookieCache を bypass し DB の最新値を毎回読む。hot path のため 2 つの SELECT を 1 RTT に畳む。
       const [dbUser, revokedAt] = await Promise.all([
         findUserByIdRepo(result.user.id),
         findSessionRevokedAt(result.session.id),
@@ -57,14 +53,11 @@ export function registerAuthService(router: ConnectRouter) {
         return verifySessionError(Result.REVOKED);
       }
 
-      // better-auth の additionalFields (auth.ts) は revision: number を型に付けるが、revision 導入前に
-      // 発行された Redis 上の session payload にはフィールド自体が無いため optional として読む。
-      // undefined を「cache miss」として整合判定を skip し、一斉ログアウト loop を防ぐ。
-      // 次回 session 発行時に revision が cache に乗るため、この経路は session.expiresAt 経過で自然消滅する。
+      // revision 導入前に発行された Redis session payload にはフィールドが無いため optional で読む。
+      // undefined は cache miss として整合判定を skip し一斉ログアウト loop を防ぐ (失効で自然消滅)。
       const cachedRevision: number | undefined = result.user.revision;
       if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
-        // signOut 例外 (Redis 一時断 / signature mismatch 等) は握り、必ず REVISION_OUTDATED を返す。
-        // consumer は再ログインに倒すので、ここで ConnectError を伝播させると UX が悪化する。
+        // signOut 例外は握り必ず REVISION_OUTDATED を返す (consumer は再ログインに倒すため)。
         await auth.api
           .signOut({ headers })
           .catch((e) => console.warn("signOut failed during revision mismatch", e));
@@ -95,15 +88,12 @@ export function registerAuthService(router: ConnectRouter) {
     },
 
     async signOut(req) {
-      // auth.api.signOut 経由で Redis cookieCache (auth.ts の session.cookieCache) と DB session を
-      // 一括 invalidate する。
-      // 透過させて ConnectRPC adapter に Code.Unknown 化を委譲する方が consumer に正しく伝わる。
+      // auth.api.signOut 経由で Redis cookieCache と DB session を一括 invalidate する。例外は透過させ
+      // ConnectRPC adapter の Code.Unknown 化に委ねる方が consumer に正しく伝わる。
       const headers = new Headers();
       headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
-      // sign-out path は better-auth hooks.after では ctx.context.session が populate されない
-      // (1.6.9 仕様) ため、signOut 前に session lookup して user_id を取得する。
-      // IP / userAgent は RPC 経由のため request header から直接取れない (consumer 側で別 RPC field 化必要)。
-      // 本 PR では "unknown" 固定で記録、Phase 4 で proto SignOutRequest に追加検討。
+      // sign-out path は better-auth hooks.after で ctx.context.session が populate されない (1.6.9) ため、
+      // signOut 前に session lookup して user_id を取る。IP / userAgent は RPC 経由で取れず "unknown" 固定。
       const result = await auth.api.getSession({ headers }).catch(() => null);
       const userId = result?.user?.id;
       if (userId) {

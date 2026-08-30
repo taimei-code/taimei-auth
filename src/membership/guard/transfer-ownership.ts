@@ -10,9 +10,8 @@ import {
   type Unauthorized,
 } from "./core";
 
-// POST .../transfer-ownership の判定順:
-// 401 (actor) → 400 (parseBody, self→400 も同ステップに畳む) → 403 (OWNER) → 404 (target) →
-// 400 (already_owner)。self 委譲は zod pass 後の意味エラーだが handler 側と同じ 400 に倒す。
+// 判定順: 401 → 400 (parseBody + self) → 403 (OWNER) → 404 (target) → 400 (already_owner)。
+// self 委譲は zod pass 後の意味エラーだが handler 側と同じ 400 に倒す。
 
 export type ParsedTransferBody = { toUserId: string };
 

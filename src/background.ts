@@ -1,11 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// 背景タスク (audit log / welcome email 等の fire-and-forget) を runtime 横断で安全に走らせる。
-// Bun/Node: process が生き続けるため fire-and-forget で問題ない。
-// Workers (workerd): response 後に未解決 promise が残ると runtime が "hung" として request を
-// cancel するため、ctx.waitUntil に登録して response 後も完走させる必要がある。
-// ctx は深い呼出 (better-auth hook 等) まで引き回せないので AsyncLocalStorage で per-request に伝播する。
-// 設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+// 背景タスク (audit log / welcome email 等) を runtime 横断で走らせる。Workers は response 後の未解決
+// promise を "hung" として cancel するため ctx.waitUntil に登録し、ALS で per-request に伝播する (ADR-0011)。
 type WaitUntil = (promise: Promise<unknown>) => void;
 
 const waitUntilStore = new AsyncLocalStorage<WaitUntil>();
@@ -15,10 +11,8 @@ export function withWaitUntil<T>(waitUntil: WaitUntil, fn: () => T): T {
   return waitUntilStore.run(waitUntil, fn);
 }
 
-// promise は呼出側で生成・.catch 済みの前提。
-// Workers: ctx.waitUntil で response 後も完走を保証する。
-// Bun/Node: store 無し → fire-and-forget (best-effort。process 終了時は取りこぼしうるが、
-// 監査ログ等は critical path ではないため許容)。
+// promise は呼出側で生成・.catch 済みの前提。Workers は ctx.waitUntil で完走を保証し、Bun/Node は
+// fire-and-forget (process 終了時の取りこぼしは監査ログが critical path でないため許容)。
 export function runBackground(promise: Promise<unknown>): void {
   const waitUntil = waitUntilStore.getStore();
   if (waitUntil) waitUntil(promise);

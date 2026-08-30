@@ -1,12 +1,7 @@
 import type { Forbidden, InvalidArgument, NotFound, Unauthorized } from "./core";
 
-// guard entry の failure を Hono 非依存の Response に写像する。route 側は
-// `if (!r.ok) return guardErrorResponse(r)` の 1 行で済む。Web 標準 `Response.json()` は
-// `application/json` (charset なし) を返す — 現行の Hono `c.json()` も同一のため明示 header で
-// application/json を維持し byte-invariant に保つ (成功 response は route 側で c.json のままとし
-// success/error 間で Content-Type を揃える)。
-// エラー文字列と HTTP status の対応表は本 file に集約する — route から散らばると同じ文字列を
-// 別 status で返す silent なずれ (SPA が error 分岐を hard-code する場合の破損) が発生するため。
+// guard entry の failure を Hono 非依存の Response に写像する (ADR-0012)。明示 header で application/json
+// を維持し成功 response と byte-invariant に保つ。文字列 × status の対応表は本 file に集約する。
 
 export type GuardErrorResult =
   | Unauthorized
@@ -22,11 +17,8 @@ export type GuardErrorResult =
   | { ok: false; error: "last_owner"; status: 409 }
   | { ok: false; error: "rate_limited"; status: 429 };
 
-// use-case が Result で返す reason literal を GuardErrorResult (status 込み) に写像する。
-// 全 use-case の reason literal を GuardReason union に集約し、写像 table を Record 型で pin する
-// ことで、未登録 reason があれば typecheck が落ちる = silent 500 化を type gate で予防する。
-// 緩い `Record<string, GuardErrorResult>` にしないのは、未登録 reason が undefined を返して
-// 500 に silent 化する事故を型で防ぐため (ADR-0012)。
+// use-case の reason literal を GuardErrorResult に写像する。Record 型で pin するのは、未登録 reason が
+// undefined を返して silent に 500 化する事故を typecheck で落とすため (ADR-0012)。
 export type GuardReason =
   | "forbidden"
   | "not_found"
@@ -60,8 +52,7 @@ const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 export function guardErrorResponse(result: GuardErrorResult): Response {
   const body: { error: string; details?: unknown } = { error: result.error };
-  // details は InvalidArgument variant にのみ存在するため、in narrowing で access する
-  // (union で narrow できないと成功枝 body key の順序が silent に崩れる)。
+  // details は InvalidArgument variant にのみ存在するため in narrowing で access する。
   if ("details" in result && result.details !== undefined) {
     body.details = result.details;
   }

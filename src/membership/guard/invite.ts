@@ -10,10 +10,8 @@ import {
   type Unauthorized,
 } from "./core";
 
-// POST .../invitations の判定順 (現行実装維持):
-// 401 (actor) → 403 (ADMIN 以上) → 400 (parseBody, details 付き) → 403 (canInviteRole)。
-// parse を 403 の後に置くのは現行 handler の順序で、SPA が「forbidden よりも先に body の zod error を
-// 見て入力欄を光らせる」誤挙動を作らないため。
+// 判定順: 401 → 403 (ADMIN 以上) → 400 (parseBody, details 付き) → 403 (canInviteRole)。parse を 403 の後に
+// 置くのは、SPA が forbidden より先に zod error を見て入力欄を光らせる誤挙動を作らないため。
 
 export type ParsedInviteBody = { email: string; role: Role };
 
