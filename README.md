@@ -113,20 +113,12 @@ DB に直接つなぐ one-shot / 定期スクリプト。compose 環境では `d
 | `sweep-abandoned-signups.ts` | 登録途中放棄アカウントの定期 sweep (dry-run → `--execute` の 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
 | `backfill-orphan-cleanup.ts` | ghost membership と orphan アカウントの one-shot 掃除 (同 2 段階)。詳細: [ADR-0010](./docs/adr/0010-company-account-deletion-lifecycle.md) |
 | `disable-user-mfa.ts` | 多要素認証 (MFA) のロックアウト救済。userId 指定で当該ユーザーの MFA を強制的に無効化する |
-| `release-mfa-registration-guard.ts` | 結果不明で残った MFA 登録遷移 guard の運用解除。当該ユーザーの MFA 操作 (disable-user-mfa.ts を含む) が `temporarily_unavailable` になり続ける場合に使う。詳細: [ADR-0013 §8](./docs/adr/0013-mfa-totp-challenge.md) |
 
 ```bash
 bun run management/disable-user-mfa.ts <userId>
 ```
 
-認証アプリとリカバリーコードを両方失ったユーザーには**自力で復帰する手段がない** (ログインはチャレンジ通過が必須、登録の再実行は MFA 有効中は拒否、無効化は有効なコードの入力が必要)。このスクリプトがロックアウトからの唯一の出口で、実行すると当該ユーザーの `two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event の記録 + 本人への通知メール送信が行われる。
-
-MFA 登録遷移が結果不明のまま中断した場合 (process crash 等)、guard 行が意図的に残置され、当該ユーザーの MFA 操作は `disable-user-mfa.ts` を含めて `temporarily_unavailable` になる。その場合は先行 process の停止を確認したうえで guard を解除してから救済を実行する:
-
-```bash
-bun run management/release-mfa-registration-guard.ts <userId> \
-  --reason "<incident reference>" --process-stopped-confirmed
-```
+認証アプリとリカバリーコードを両方失ったユーザーには**自力で復帰する手段がない** (ログインはチャレンジ通過が必須、登録の再実行は MFA 有効中は拒否、無効化は有効なコードの入力が必要)。このスクリプトがロックアウトからの唯一の出口で、実行すると当該ユーザーの `mfa_totp` 行とリカバリーコード全行の削除 (1 tx) + `mfa_disabled` audit event の記録 + 本人への通知メール送信が行われる。詳細: [ADR-0016](./docs/adr/0016-mfa-self-owned-totp.md)
 
 ### MFA チャレンジの緊急停止 (`MFA_CHALLENGE_ENABLED`)
 
@@ -154,9 +146,17 @@ audit ログの `ip` と IP 軸 rate limit の key は「client が詐称でき�
 
 IP literal (IPv4 / IPv6) として読めない値・hop 数に足りない列・不在ヘッダはすべて `unknown` になる。
 
-### `AUTH_SECRET` のローテーション制約
+### MFA 暗号鍵 (`MFA_TOTP_ENCRYPTION_KEYS`) とローテーション
 
-`AUTH_SECRET` は cookie 署名鍵であると同時に、MFA 登録済みユーザーの TOTP secret とリカバリーコードの暗号鍵を兼ねる。**MFA 登録済みユーザーが 1 人でもいる状態で差し替えると、全員が自力復帰不能なロックアウトに陥る**。差し替えが避けられない場合の手順 (全員を `disable-user-mfa.ts` で無効化してから差し替える) と、この制約を採った理由は [ADR-0013](./docs/adr/0013-mfa-totp-challenge.md) を参照。
+TOTP secret とリカバリーコードの暗号鍵 ring。形式は `v1:<base64 32byte>[,v2:...]` で、最大 version が現行鍵 (dev 値の例は `.env.example`、生成は `openssl rand -base64 32`)。未設定・不正形式のまま MFA 操作に入ると fail-closed で 500 になる。production (Workers) へは `wrangler secret put MFA_TOTP_ENCRYPTION_KEYS` で注入する。
+
+ローテーション手順 (ADR-0016):
+
+1. 新鍵を生成し `,v2:<new>` を追記して deploy (旧 version は残す — 既存暗号文の復号に必要)
+2. 以後の新規書き込みは v2 で暗号化される。旧 version の廃止は当該 version の行が 0 になってから。0 にする手段は再登録の案内 (既存行の一括再暗号化バッチは持たない。判断: ADR-0016 Consequences)。案内しない限り旧 version の行は残り続ける
+3. 鍵漏洩時の強制失効は該当ユーザーへ `disable-user-mfa.ts` を実行する
+
+`AUTH_SECRET` は cookie 署名鍵 (チャレンジ cookie の署名を含む) で、MFA の暗号鍵は兼ねない。差し替えの影響は保留中チャレンジ (最大 600 秒) の失効のみ。
 
 `AUTH_SERVICE_KEY` の緊急 rotation 手順は [`docs/runbook/service-key-rotation.md`](./docs/runbook/service-key-rotation.md) にある。
 
