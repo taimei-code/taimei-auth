@@ -51,7 +51,7 @@ const rows = await db.select().from(user).where(...);  // NG
 
 剥がすときに置き換える対象を repository 関数に局所化する。better-auth の internal 利用 (`/src/auth.ts`) は例外として schema に直接触ってよい。
 
-例外: `Session` / `User` の **削除・更新** は better-auth が `secondaryStorage` (Redis cookieCache, `src/auth.ts:106` `maxAge: 5*60`) と DB を二重保管するため、`db/repositories/<entity>.ts` を作って repository 経由にすると最大 5 分の窓で stale session が cookieCache hit で valid に見える。`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、cache invalidation を lifecycle hook に委ねる。`Session` repository を作らないのはこの理由。詳細: PR #34 → #35
+例外: `Session` / `User` の **削除・更新** は `db/repositories/<entity>.ts` を作らず、`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、複製の更新を lifecycle hook に委ねる。理由は複製が 2 層あるため: (1) session の実体は Redis (secondaryStorage) のみで DB の `session` テーブルに行は無く (CONTEXT.md の session)、SQL 直操作は消したはずの session を Redis に残す。(2) user は DB が正本だが、各 active session の Redis payload と cookieCache (署名付き cookie、`session.cookieCache` maxAge 5 分) に複製され、SQL 直更新はこれらに届かない (better-auth の updateUser は Redis payload を書き直し、cookieCache は最大 5 分で失効して追いつく)。`Session` repository を作らないのはこの理由。詳細: PR #34 → #35
 
 ## ルール 8: drizzle-kit が管理できない SQL は `drizzle/manual/` に分離する
 
