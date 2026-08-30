@@ -1,5 +1,6 @@
 import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { parse as parseCookieHeader, serialize as serializeSetCookie } from "hono/utils/cookie";
+import { auth } from "../../auth";
 import { isLocalEnvironment } from "../../env";
 import { redisStorage } from "../../redis";
 import { Sentry } from "../../sentry";
@@ -27,11 +28,11 @@ export type LoginChallenge = { userId: string; redirectUrl: string; method: Chal
 export type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
 // cookie 署名鍵は AUTH_SECRET を共有する — cookie 署名は AUTH_SECRET の本来用途と同クラスで、
-// 差し替え時の影響は保留中チャレンジ (最大 600 秒) の失効だけ (§4.2。専用鍵は不採用)。
-function authSecret(): string {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error("AUTH_SECRET is not set");
-  return secret;
+// 差し替え時の影響は保留中チャレンジ (最大 600 秒) の失効だけ (専用鍵は不採用: ADR-0016)。
+// env 直読みでなく better-auth の解決 (dev の default fallback を含む) に合わせる — 旧構成と同じ
+// 供給網に乗せ、AUTH_SECRET 未設定の dev/CI で session 側と鍵がずれないようにする。
+async function authSecret(): Promise<string> {
+  return (await auth.$context).secret;
 }
 
 type ChallengeCookieAttributes = {
@@ -67,7 +68,7 @@ export async function buildLoginChallengeCookie(
     JSON.stringify(challenge),
     CHALLENGE_TTL_SECONDS,
   );
-  const signature = await makeSignature(challengeId, authSecret());
+  const signature = await makeSignature(challengeId, await authSecret());
   return {
     name: LOGIN_CHALLENGE_COOKIE,
     value: `${challengeId}.${signature}`,
@@ -169,7 +170,7 @@ async function resolveChallengeId(headers: Headers): Promise<string | null> {
   const signature = raw.slice(separator + 1);
   // 署名 scheme の知識を verify 側に複製しない — 期待値を同じ makeSignature で再計算して
   // 定数時間比較する (どちらも better-auth の公開 export)。
-  return constantTimeEqual(signature, await makeSignature(challengeId, authSecret()))
+  return constantTimeEqual(signature, await makeSignature(challengeId, await authSecret()))
     ? challengeId
     : null;
 }
