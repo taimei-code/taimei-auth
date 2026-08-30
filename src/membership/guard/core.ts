@@ -6,12 +6,11 @@ import { findUserById } from "@/db/repositories/user";
 // ADR-0012 (Guard 層) / CONTEXT.md「membership guard」: generic entry と Result 型の正本。Hono 非依存。
 
 // 列は「hot path の再 SELECT を消す」目的でのみ足す (getActor が毎 request user 行を読むため)。
-// 表示用途 (name / image) では足さない。twoFactorEnabled も表示でなく認可判定の入力。
+// 表示用途 (name / image) では足さない。
 export type Actor = {
   id: string;
   email: string;
   lastUsedCompanyId: string | null;
-  twoFactorEnabled: boolean;
 };
 
 export type Unauthorized = { ok: false; error: "unauthorized"; status: 401 };
@@ -113,7 +112,6 @@ export const guard: MembershipGuard = createMembershipGuard({
           id: dbUser.id,
           email: dbUser.email,
           lastUsedCompanyId: dbUser.lastUsedCompanyId,
-          twoFactorEnabled: dbUser.twoFactorEnabled,
         }
       : null;
   },

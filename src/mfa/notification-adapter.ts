@@ -1,5 +1,5 @@
-import { runBackground } from "../../background";
-import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "../../email/send-mfa-notification";
+import { runBackground } from "../background";
+import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "../email/send-mfa-notification";
 
 export function notifyMfaEnabled(email: string): void {
   schedule(sendMfaEnabledEmail(email));

@@ -17,7 +17,7 @@ const WHITESPACE = /\s+/g;
 const HYPHEN_LIKE = /[-‐-―−ー]/g;
 
 // kind 必須の理由: ハイフンの扱いが種別で逆になる。認証アプリの 6 桁では飾りだが、リカバリーコードの
-// ハイフンは server 側の完全一致比較 (better-auth の backupCodes.includes) の一部で、落とすと必ず不一致。
+// ハイフンは server 側の完全一致照合 (自前 verify kernel の等値比較 — ADR-0016) の一部で、落とすと必ず不一致。
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
   const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
   return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
@@ -34,8 +34,6 @@ const MESSAGE_BY_ERROR_CODE: Record<MfaErrorCode, string> = {
   rate_limited: "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
   already_enabled: "多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。",
   enrollment_changed: "登録情報が更新されました。もう一度登録を開始してください。",
-  temporarily_unavailable:
-    "別の多要素認証 (MFA) 操作を処理中です。しばらく待ってからやり直してください。",
   not_enabled: "多要素認証 (MFA) は有効になっていません。ページを再読み込みしてください。",
   invalid_argument: "コードの形式が正しくありません。",
   unauthorized: "ログイン状態が確認できませんでした。もう一度ログインしてください。",
