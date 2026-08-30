@@ -6,6 +6,7 @@ import {
   index,
   boolean,
   integer,
+  bigint,
   jsonb,
   check,
 } from "drizzle-orm/pg-core";
@@ -46,7 +47,7 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
     revision: integer("revision").notNull().default(0),
-    // MFA チャレンジ要否の唯一の判定源 (不変条件は twoFactor テーブル定義に記載)。
+    // 旧構成の判定源 (現構成は mfa_totp 行から導出 — ADR-0016)。デプロイ ② で削除する。
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     // 新規 session 確立時の default 候補事業所。削除済 company を参照しないよう ON DELETE SET NULL。
     lastUsedCompanyId: text("last_used_company_id").references(() => company.id, {
@@ -132,6 +133,8 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+// 旧構成 (twoFactor プラグイン) の遺物。ロールバック線の維持のため温存し、デプロイ ② で DROP する
+// (ADR-0016 §9)。以下は当時の設計メモ:
 // better-auth twoFactor プラグイン規定のスキーマと 1:1。読まない列も削るとプラグインのロック機構が
 // silent に死ぬ。export 名の camelCase は必須 (drizzle adapter が schema["twoFactor"] で引くため)。
 // 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified。プラグインの
@@ -158,6 +161,43 @@ export const twoFactor = pgTable(
     // 2 行になる窓があり、2 行では状態が一意に決まらない。UNIQUE で fail-closed (詳細: ADR-0013 §7)。
     uniqueIndex("two_factor_user_id_idx").on(table.userId),
   ],
+);
+
+// 自前 MFA (TOTP) の登録行。better-auth は複製しないため repository (db/repositories/mfa-totp.ts) 直書きが
+// 正 (db/CLAUDE.md ルール 2 の Session/User 例外の対象外)。状態は行が 3 値で表す: 行なし = 未登録 /
+// verified_at NULL = 登録済み未有効 / 非 NULL = 有効。flag 列は持たない (設計: ADR-0016)。
+export const mfaTotp = pgTable("mfa_totp", {
+  userId: text("user_id")
+    .primaryKey()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  // MFA 登録識別子。activate はこの一致を要求する (別タブの古い登録画面からの有効化を弾く)。
+  enrollmentId: text("enrollment_id").notNull(),
+  // AES-256-GCM (AAD = user_id)。列は base64 文字列 — repo に bytea の前例が無いため text を踏襲。
+  secretCiphertext: text("secret_ciphertext").notNull(),
+  secretIv: text("secret_iv").notNull(),
+  keyVersion: integer("key_version").notNull(),
+  verifiedAt: timestamp("verified_at"),
+  // 受理済み timestep の単調比較対象 (リプレイ拒否)。条件付き単文 UPDATE の WHERE がこの列を見る。
+  lastUsedTimestep: bigint("last_used_timestep", { mode: "number" }).default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const mfaRecoveryCode = pgTable(
+  "mfa_recovery_code",
+  {
+    // "NN-<uuid>"。先頭 2 桁 = 挿入順で、id 昇順の読み出しが再表示順を固定する。
+    id: text("id").primaryKey().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    codeCiphertext: text("code_ciphertext").notNull(),
+    codeIv: text("code_iv").notNull(),
+    keyVersion: integer("key_version").notNull(),
+    // 単回消費の条件列。消費は used_at IS NULL を WHERE に含む条件付き単文 UPDATE。
+    usedAt: timestamp("used_at"),
+  },
+  (table) => [index("mfa_recovery_code_user_id_idx").on(table.userId)],
 );
 
 export type MfaRegistrationOperationKind =
