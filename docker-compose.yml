@@ -87,6 +87,8 @@ services:
       AUTH_SERVICE_URL: http://auth.taimei-code.local:3100
       AUTH_COOKIE_DOMAIN: taimei-code.local
       AUTH_TRUSTED_ORIGINS: http://app.taimei-code.local:3001,http://auth.taimei-code.local:3100
+      # MFA secret/リカバリーコードの暗号鍵 ring (形式と手順の正本: README「MFA 暗号鍵」節)
+      MFA_TOTP_ENCRYPTION_KEYS: ${MFA_TOTP_ENCRYPTION_KEYS}
       APP_ENV: development
       APP_NAME: taimei
       # taimei (application) と Cookie 署名検証を一致させるため、両 compose で同じ dev secret を hardcoded。

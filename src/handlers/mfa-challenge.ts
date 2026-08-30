@@ -2,8 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 
 import { guardErrorResponse, resolveParseBody } from "../membership/guard";
-import { readChallenge } from "../mfa/challenge-store";
-import { completeChallenge } from "../mfa/complete-challenge";
+import { completeLoginChallengeOperation, readLoginChallengeState } from "../mfa/totp";
 import type {
   MatchesWireShape,
   MfaChallengeStateResponse,
@@ -14,8 +13,8 @@ import type {
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 
-// ログイン時 MFA チャレンジの通過 API。requireActor を通らず two_factor cookie を認証材料にする二本目の
-// 経路のため account-mfa.ts と file を分ける。登録も個別 app.route で行う。詳細: ADR-0013
+// ログイン時 MFA チャレンジの通過 API。requireActor を通らず mfa_login_challenge cookie を認証材料に
+// する二本目の経路のため account-mfa.ts と file を分ける。登録も個別 app.route で行う。詳細: ADR-0016
 export const mfaChallenge = new Hono();
 
 const verifyBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
@@ -27,7 +26,7 @@ const _verifyBodyMatchesWire: MatchesWireShape<
 
 // GET チャレンジの保留判定。返すのは boolean 1 つに限る — 他は cookie を拾った第三者への手掛かりになる。
 mfaChallenge.get("/api/mfa/challenge", async (c) => {
-  const challenge = await readChallenge(c.req.raw.headers);
+  const challenge = await readLoginChallengeState(c.req.raw.headers);
   return c.json({ pending: challenge.pending } satisfies MfaChallengeStateResponse);
 });
 
@@ -36,7 +35,7 @@ mfaChallenge.post("/api/mfa/challenge/verify", async (c) => {
   const parsed = await resolveParseBody(parseZodBody(c, verifyBody));
   if (!parsed.ok) return guardErrorResponse(parsed);
 
-  const result = await completeChallenge(c.req.raw.headers, parsed.data);
+  const result = await completeLoginChallengeOperation(c.req.raw.headers, parsed.data);
   if (!result.ok) return c.json({ error: result.error } satisfies MfaErrorResponse, result.status);
 
   return forwardSetCookie(

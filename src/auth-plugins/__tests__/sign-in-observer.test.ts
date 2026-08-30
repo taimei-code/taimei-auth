@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { user } from "@/db/schema";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
-import { completeChallenge } from "../../mfa/complete-challenge";
 import {
   actorOf,
   cleanupIssuedChallenges,
@@ -18,12 +17,11 @@ import {
   totpCode,
   WELCOME_EMAIL_LOG,
 } from "../../mfa/__tests__/helpers";
-import { activate, enroll } from "../../mfa/__tests__/registration-production-harness";
+import { activate, completeLoginChallengeOperation, enroll } from "../../mfa/totp";
 
 // sign-in 観測プラグイン (src/auth-plugins/sign-in-observer.ts) の統合テスト。
-// 移設前の写像は route パターン (`/callback/:id`) でなく実 path を見ており、magic link の
-// sign_in は 1 件も記録されていなかった。その回帰と、チャレンジ導入で記帳が二重化・欠落
-// していないことを固定する。
+// 観測対象は一次認証のみ — チャレンジ通過の sign_in は通過手続 (totp/complete-login-challenge) が
+// 記帳する (ADR-0016 §4.6)。1 ログイン = 1 記帳の不変条件をここで固定する。
 
 const P = "mfa-observer-";
 const { cleanup, seedUser } = createSeedHelpers(P);
@@ -89,11 +87,11 @@ describe("sign-in 観測プラグイン", () => {
       redirectUrl: CONSUMER_CALLBACK,
       method: "magic_link",
     });
-    const code = await totpCode(enabled.secret);
-    const completed = await runObserving(() =>
-      completeChallenge(challenge.headers, { code, kind: "totp" }),
-    );
-    expect(completed.value.ok).toBe(true);
+    const completed = await completeLoginChallengeOperation(challenge.headers, {
+      code: await totpCode(enabled.secret),
+      kind: "totp",
+    });
+    expect(completed.ok).toBe(true);
 
     const audits = await auditRowsFor(seeded.id, "sign_in");
     expect(audits.length).toBe(1);
@@ -119,23 +117,27 @@ describe("sign-in 観測プラグイン", () => {
     expect(welcomeEmailsIn(laterLogin.logs)).toEqual([]);
   });
 
-  test("QA-M-28 welcome 一次認証 path 限定", async () => {
-    // 作成直後 (welcome の対象年齢) のまま有効化まで進める。セッション rotate も
-    // 観測対象の path を通るため、path で絞れていないと 2 通目が飛ぶ。
+  test("QA-M-28 welcome もサインイン記帳も一次認証経路限定 (登録操作は auth route を通らない)", async () => {
+    // 作成直後 (welcome の対象年齢) のまま有効化まで進める。revoke も auth.api を通るため、
+    // 観測が path で絞れていないと 2 通目の welcome や偽の sign_in が積まれる。
     const seeded = await seedUser("m28");
     const session = await createSessionFor(seeded.id);
-    const enrolled = await enroll(actorOf(seeded), session.headers);
+    const enrolled = await enroll({ actor: actorOf(seeded) });
     expect(enrolled.ok).toBe(true);
     if (!enrolled.ok) return;
 
-    const code = await totpCode(secretFromTotpUri(enrolled.totpUri));
+    const code = await totpCode(secretFromTotpUri(enrolled.totpUri), -1);
     const activated = await runObserving(() =>
-      activate({ actor: actorOf(seeded), headers: session.headers, code }),
+      activate({
+        actor: actorOf(seeded),
+        headers: session.headers,
+        code,
+        enrollmentId: enrolled.enrollmentId,
+      }),
     );
 
     expect(activated.value.ok).toBe(true);
     expect(welcomeEmailsIn(activated.logs)).toEqual([]);
-    // rotate は「既存 user が第二要素を出した」だけなのでログインでもない。
     expect(await auditRowsFor(seeded.id, "sign_in")).toEqual([]);
   });
 });

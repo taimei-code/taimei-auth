@@ -13,7 +13,6 @@ export const MFA_WIRE_ERROR_CODES = [
   "invalid_argument",
   "unauthorized",
   "not_found",
-  "temporarily_unavailable",
 ] as const;
 
 export type MfaWireErrorCode = (typeof MFA_WIRE_ERROR_CODES)[number];
@@ -48,8 +47,8 @@ export type MatchesWireShape<A, B> = [A, keyof A] extends [B, keyof B]
     : never
   : never;
 
-// enrollment_id が optional なのは移行第 1 段階の旧 SPA 互換 (ADR-0013 §8)。第 2 段階で必須化する。
-export type MfaActivateRequest = { code: string; enrollment_id?: string };
+// enrollment_id は必須 (旧 SPA 互換の第 1 段階は終了 — ADR-0016 §5.4)。
+export type MfaActivateRequest = { code: string; enrollment_id: string };
 
 // disable と challenge verify は今は同形だが、endpoint ごとに独立して進化するため別宣言にする。
 export type MfaDisableRequest = { code: string; kind: MfaCodeKind };

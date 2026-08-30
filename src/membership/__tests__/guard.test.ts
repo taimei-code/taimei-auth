@@ -11,7 +11,6 @@ const anActor: Actor = {
   id: "u_1",
   email: "a@example.com",
   lastUsedCompanyId: null,
-  twoFactorEnabled: false,
 };
 const noHeaders = new Headers();
 

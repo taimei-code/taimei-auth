@@ -1,6 +1,6 @@
 import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { magicLink, twoFactor } from "better-auth/plugins";
+import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
 import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import * as schema from "@/db/schema";
@@ -22,8 +22,8 @@ function buildAuth() {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
-    // twoFactor.issuer は初回 enable にしか効かず、再開 (get-totp-uri) は appName へ落ちる
-    // (better-auth 1.6.23)。未設定だと再開時だけ別名 QR になり認証アプリが 2 エントリに割れる。
+    // 自前 MFA enroll の issuer 供給源 (src/mfa/totp/wiring.ts)。enroll と再表示で同じ issuer を
+    // 使うことが認証アプリのエントリが割れない条件。
     appName: getAppName(),
 
     secondaryStorage: redisStorage,
@@ -103,15 +103,6 @@ function buildAuth() {
         expiresIn: 300,
         // local は test 高速化で緩め、production は Hono middleware (src/rate-limit.ts) と独立した二重防御。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
-      }),
-      // allowPasswordless はパスワードレス構成では必須 (既定はパスワード再入力を要求し enable/disable が 400)。
-      // 残り 4 つは既定値と同値だが、既定の変化で不変条件 (two_factor_enabled ⇒ verified 行) が黙って壊れるため明示。
-      twoFactor({
-        allowPasswordless: true,
-        skipVerificationOnEnable: false,
-        issuer: getAppName(),
-        totpOptions: { period: 30, digits: 6 },
-        backupCodeOptions: { storeBackupCodes: "encrypted" },
       }),
       // この 2 つは登録順が正しさの前提 (詳細: src/auth-plugins/sign-in-observer.ts)。
       mfaChallenge(),

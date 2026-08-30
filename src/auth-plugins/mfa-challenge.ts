@@ -1,11 +1,10 @@
-import { APIError, type BetterAuthPlugin } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
-import { RAW_TWO_FACTOR_PATHS } from "../mfa/blocked-paths";
-import { issueChallenge, type ChallengeMethod } from "../mfa/challenge-store";
 import { isMfaChallengeEnabled } from "../mfa/kill-switch";
-import { requiresMfaChallenge } from "../mfa/policy";
 import { FALLBACK_REDIRECT } from "../mfa/redirect-guard";
+import { readMfaChallengeRequired } from "../mfa/totp/challenge-required";
+import { buildLoginChallengeCookie, type ChallengeMethod } from "../mfa/totp/login-challenge";
 import { Sentry } from "../sentry";
 import {
   isPrimaryAuthRoute,
@@ -13,12 +12,12 @@ import {
   type AuthRouteMatch,
 } from "./primary-auth-routes";
 
-// プラグインの after-hook が発火しない一次認証経路にチャレンジ強制を差し込む自前プラグイン
-// (ハイブリッド構成の理由と撤退線: ADR-0013 §1)。
+// 一次認証成功後の after-hook にチャレンジ強制を差し込む自前プラグイン (設計: ADR-0016)。
+// チャレンジ要否は自前 mfa_totp 行から導出する (+1 SELECT。secret 列に触れない射影 — D5)。
 
 const MFA_CHALLENGE_PAGE = "/auth/mfa";
 
-// 止めている間は鳴り続ける (1 回きりだと warm isolate が黙る: ADR-0013 Consequences)。
+// 止めている間は鳴り続ける (1 回きりだと warm isolate が黙る: ADR-0013 Consequences → 0016 が引き継ぐ)。
 // 6 時間はオンコール交代を必ず 1 回またぐ粒度。
 export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
@@ -46,12 +45,6 @@ function requirePrimaryAuthMethod(route: AuthRouteMatch): ChallengeMethod {
   return method;
 }
 
-// session user 型は plugin 由来の列を `Record<string, any>` でしか公開しないため、boolean への確定は
-// ここ 1 箇所で行う (判定は requiresMfaChallenge)。列を欠くのは古い payload だけで false 扱いが正しい。
-function asMfaPolicyUser(user: Record<string, unknown>): { twoFactorEnabled: boolean } {
-  return { twoFactorEnabled: Boolean(user.twoFactorEnabled) };
-}
-
 const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   const issuedSession = ctx.context.newSession;
   if (!issuedSession) return;
@@ -60,7 +53,16 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
     reportKillSwitchPeriodically();
     return;
   }
-  if (!requiresMfaChallenge(asMfaPolicyUser(issuedSession.user))) return;
+  // 判定の +1 SELECT が読めない時も fail-closed — throw を素通しすると after-hook が一次認証ごと
+  // 500 にする (MFA 無効ユーザー含む)。チャレンジ画面へ倒し、再ログインに誘導する。
+  let challengeRequired: boolean;
+  try {
+    challengeRequired = await readMfaChallengeRequired(issuedSession.user.id);
+  } catch (error) {
+    Sentry.captureException(error, { tags: { component: "mfa-challenge" } });
+    challengeRequired = true;
+  }
+  if (!challengeRequired) return;
 
   // 失敗しない cookie クリアを先頭に置き、後段 (Upstash REST の DEL、リトライ無し) が落ちてもブラウザに
   // 使えるセッション cookie を残さない。upstream より前に出すのは、後段が落ちた時に sign-in-observer が
@@ -71,14 +73,15 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   };
 
   // 介入を決めた後の失敗は全て fail-closed — セッション cookie を落としたまま同じチャレンジ画面へ
-  // 倒す (未成立なら画面が再ログイン導線を出す。判断の正本: ADR-0013 §1)。
+  // 倒す (未成立なら画面が再ログイン導線を出す。判断の正本: ADR-0013 §1 → 0016 が引き継ぐ)。
   const handOffToChallenge = async (): Promise<void> => {
     try {
-      await issueChallenge(ctx, {
+      const cookie = await buildLoginChallengeCookie({
         userId: issuedSession.user.id,
         redirectUrl: pendingRedirectTarget(ctx.context.responseHeaders),
         method: requirePrimaryAuthMethod(ctx),
       });
+      ctx.setCookie(cookie.name, cookie.value, cookie.attributes);
       dropIssuedSession();
       await ctx.context.internalAdapter.deleteSession(issuedSession.session.token);
     } catch (error) {
@@ -91,25 +94,9 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
 });
 
-// ブラウザ由来かの判定に path でなく `ctx.request` の有無を使う (originCheck と同じ discriminator)。
-// gateway は headers だけを渡すため、「生 path は遮断 / server-side 呼び出しは通る」が両立する。
-const blockRawTwoFactorRoutes = createAuthMiddleware(async (ctx) => {
-  if (!ctx.request) return;
-  throw new APIError("FORBIDDEN", {
-    code: "TWO_FACTOR_ROUTE_BLOCKED",
-    message: "この経路は利用できません。",
-  });
-});
-
 export const mfaChallenge = (): BetterAuthPlugin => ({
   id: "mfa-challenge",
   hooks: {
-    before: [
-      {
-        matcher: (ctx) => RAW_TWO_FACTOR_PATHS.some((path) => path === ctx.path),
-        handler: blockRawTwoFactorRoutes,
-      },
-    ],
     after: [
       {
         matcher: (ctx) => isPrimaryAuthRoute(ctx.path),

@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted (2026-08-09)。`feat/mfa-totp` で実装。
+Superseded by [ADR-0016](./0016-mfa-self-owned-totp.md) (2026-08-30)。kill-switch・redirect-guard・IP rate limit・sign-in 観測の判断は 0016 が引き継ぐ。
+
+(原文: Accepted (2026-08-09)。`feat/mfa-totp` で実装。)
 
 ## Context
 

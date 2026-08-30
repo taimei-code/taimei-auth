@@ -19,27 +19,10 @@ describe("toDisableUserMfaReport", () => {
   });
 
   test("not_found is stderr with the canonical error", () => {
-    expect(
-      toDisableUserMfaReport("user-1", { ok: false, error: "not_found", status: 404 }),
-    ).toEqual({
+    expect(toDisableUserMfaReport("user-1", { ok: false, error: "not_found" })).toEqual({
       stream: "stderr",
       exitCode: 1,
       body: { userId: "user-1", error: "not_found" },
-    });
-  });
-
-  test("busy adds retryAfterSeconds without changing existing keys", () => {
-    expect(
-      toDisableUserMfaReport("user-1", {
-        ok: false,
-        error: "temporarily_unavailable",
-        status: 503,
-        retryAfterSeconds: 10,
-      }),
-    ).toEqual({
-      stream: "stderr",
-      exitCode: 1,
-      body: { userId: "user-1", error: "temporarily_unavailable", retryAfterSeconds: 10 },
     });
   });
 });

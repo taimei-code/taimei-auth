@@ -1,9 +1,38 @@
-// MFA 運用救済 CLI (位置づけと手順: ADR-0013 Consequences / README.md の運用節)。
+// MFA 運用救済 CLI (位置づけと手順: ADR-0016 §8.1 / README.md の運用節)。
 //   bun run management/disable-user-mfa.ts <userId>
-// 解除・記帳・通知は bound management application が所有し、ここは引数の解釈と結果の報告に徹する。
-import { managementApplication } from "../src/mfa/registration/wiring";
+// 1 tx で mfa_totp 行とリカバリーコードを全削除する。guard 参加・protocol 照合は存在しない (ADR-0016)。
+import { recordMfaDisabled } from "../db/repositories/audit-log";
+import { deleteMfaTotp, deleteRecoveryCodesByUserId } from "../db/repositories/mfa-totp";
+import { findUserById } from "../db/repositories/user";
+import { runInTransaction } from "../db/transaction";
+import { captureAuditLogError } from "../src/audit-error";
+import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
 
-type ForceDisableResult = Awaited<ReturnType<typeof managementApplication.forceDisable>>;
+export type ForceDisableResult =
+  | { ok: false; error: "not_found" }
+  | { ok: true; changed: false }
+  | { ok: true; changed: true; notified: boolean };
+
+export async function forceDisableMfa(userId: string): Promise<ForceDisableResult> {
+  const user = await findUserById(userId);
+  if (!user) return { ok: false, error: "not_found" };
+
+  const deleted = await runInTransaction(async (tx) => {
+    const rows = await deleteMfaTotp(userId, tx);
+    await deleteRecoveryCodesByUserId(userId, tx);
+    return rows;
+  });
+  if (deleted === 0) return { ok: true, changed: false };
+
+  // 記帳は best-effort — 救済の成立 (行削除) を audit 失敗で取り消さない。
+  await recordMfaDisabled({
+    user_id: userId,
+    ip: null,
+    userAgent: "management/disable-user-mfa",
+  }).catch((error: unknown) => captureAuditLogError("mfa_disabled", error));
+  const notified = await notifyMfaDisabledForManagement(user.email);
+  return { ok: true, changed: true, notified };
+}
 
 type DisableUserMfaReport = {
   stream: "stdout" | "stderr";
@@ -17,18 +46,7 @@ export function toDisableUserMfaReport(
   result: ForceDisableResult,
 ): DisableUserMfaReport {
   if (!result.ok) {
-    return {
-      stream: "stderr",
-      exitCode: 1,
-      body: {
-        userId,
-        error: result.error,
-        // busy だけ additive に載せる。運用者が待つべき秒数を出力から読める状態にする。
-        ...(result.error === "temporarily_unavailable"
-          ? { retryAfterSeconds: result.retryAfterSeconds }
-          : {}),
-      },
-    };
+    return { stream: "stderr", exitCode: 1, body: { userId, error: result.error } };
   }
 
   // 既に無効なら何も変えずに成功で返す。再実行が「失敗」に見えると不要な次の手 (DB 直接操作等) を踏ませる。
@@ -54,7 +72,7 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  const report = toDisableUserMfaReport(userId, await managementApplication.forceDisable(userId));
+  const report = toDisableUserMfaReport(userId, await forceDisableMfa(userId));
   const json = JSON.stringify(report.body, null, 2);
   if (report.stream === "stdout") console.log(json);
   else console.error(json);

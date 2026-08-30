@@ -1,4 +1,4 @@
-import type { ChallengeMethod } from "../mfa/challenge-store";
+import type { ChallengeMethod } from "../mfa/totp/login-challenge";
 
 // better-auth の hook が受け取る `ctx.path` は route パターンで実 path ではない (OAuth callback は常に
 // "/callback/:id")。移設前の sign_in 写像は "/callback/github" 前置一致で 2 分岐とも空振りしていた。

@@ -71,6 +71,13 @@
       "when": 1786678771127,
       "tag": "0009_smart_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788090340925,
+      "tag": "0010_talented_lockheed",
+      "breakpoints": true
     }
   ]
 }

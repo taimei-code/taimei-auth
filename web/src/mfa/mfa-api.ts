@@ -19,8 +19,8 @@ export type { MfaCodeKind } from "@core/mfa/wire-contracts";
 
 export type MfaStatus = {
   enabled: boolean;
-  // two_factor 認証がまだ効いているか。enabled=false でも「中断した無効化」は true になり、
-  // その状態の唯一の出口は無効化操作 (enroll は 409 で拒まれる) なので disable を出す判定に使う。
+  // 旧 wire 互換 field。server 側は常に enabled と同値を返す (「中断した無効化」は
+  // 3 状態化で構造的に不在 — ADR-0016 §3.1)。
   inEffect: boolean;
   recoveryCodesRemaining: number;
 };

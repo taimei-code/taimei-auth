@@ -113,47 +113,35 @@ _Avoid_: app
 _Avoid_: メールリンク
 
 **多要素認証 (MFA)**:
-知識・所持・生体のうち 2 つ以上の要素で本人性を確認する仕組み。taimei-auth では認証アプリ (**TOTP**) を第二要素として提供し、一次認証 (**Magic Link** / GitHub OAuth) の成功後に **MFA チャレンジ** を要求する。user 単位の任意設定で、**事業所** による強制は持たない。有効化・無効化はいずれも本人へ通知メールを送る。詳細: ADR-0013。
+知識・所持・生体のうち 2 つ以上の要素で本人性を確認する仕組み。taimei-auth では認証アプリ (**TOTP**) を第二要素として提供し、一次認証 (**Magic Link** / GitHub OAuth) の成功後に **MFA チャレンジ** を要求する。user 単位の任意設定で、**事業所** による強制は持たない。有効化・無効化はいずれも本人へ通知メールを送る。詳細: ADR-0016。
 _Avoid_: 2FA / 二要素認証 (要素数を 2 に固定する語。第二要素が増えた時に破綻する), twoFactor (better-auth のプラグイン名・テーブル名・API 用語)
 
 **TOTP**:
-認証アプリが共有 secret と現在時刻から 30 秒ごとに生成する 6 桁のワンタイムコード (RFC 6238)。taimei-auth が提供する唯一の第二要素で、登録は QR コード (`otpauth://` URI) の読み取りまたは secret の手入力で行う。secret は `AUTH_SECRET` を鍵として暗号化保管されるため、鍵のローテーションが登録済みユーザー全員のロックアウトに直結する (制約と手順は ADR-0013)。詳細: ADR-0013。
+認証アプリが共有 secret と現在時刻から 30 秒ごとに生成する 6 桁のワンタイムコード (RFC 6238)。taimei-auth が提供する唯一の第二要素で、登録は QR コード (`otpauth://` URI) の読み取りまたは secret の手入力で行う。secret は専用の鍵 ring `MFA_TOTP_ENCRYPTION_KEYS` (key_version 付き AES-256-GCM) で暗号化保管され、鍵のローテーションは version 追記の手順で行える。詳細: ADR-0016。
 _Avoid_: OTP / ワンタイムパスワード (メール OTP・SMS OTP を含む広義語。いずれも提供しない), 認証コード (**Magic Link** の token と紛らわしい)
 
 **MFA チャレンジ**:
-一次認証は成功したが第二要素が未検証、という中間状態そのもの。署名付き cookie (`two_factor`) + secondaryStorage 上の verification value 群 + 有効期限 600 秒の 3 点で 1 チャレンジを構成し、cookie が持つ challengeId で識別する。発行時点で一次認証が作った **session** は破棄されるため、チャレンジ保留中の user は consumer app からは未認証に見える。通過手段は **TOTP** コードまたは **リカバリーコード**。詳細: ADR-0013。
+一次認証は成功したが第二要素が未検証、という中間状態そのもの。署名付き cookie `mfa_login_challenge` + Redis 1 key (TTL 600 秒) で 1 チャレンジを構成し、cookie が持つ challengeId で識別する。発行時点で一次認証が作った **session** は破棄されるため、チャレンジ保留中の user は consumer app からは未認証に見える。通過手段は **TOTP** コードまたは **リカバリーコード**。詳細: ADR-0016。
 _Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の一つに過ぎない), pending session (session は存在しないため誤り)
 
 **リカバリーコード**:
-認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**登録済み未有効**の間は同じ登録内容として再表示できるが、有効化後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0013。
+認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**登録済み未有効**の間は同じ登録内容として再表示できるが、有効化後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0016。
 _Avoid_: バックアップコード (better-auth の `backupCodes` は API 名・列名としてのみ使う), 復旧コード, 緊急コード
 
 **MFA 登録状態**:
-user のフラグ (`twoFactorEnabled`) と `two_factor` 行 (verified か否か) の組から一意に決まる、**多要素認証 (MFA)** の登録ライフサイクル状態。**未登録** / **登録済み未有効** (登録済み・有効化前) / **有効** / **中断した無効化** (フラグ降ろし後の行削除が中断した残骸。出口は無効化操作のみ) / **中断した有効化** (フラグは立ったが行が verified にならなかった状態。未 verified 行が残っていれば正しいコードの無効化操作で自己復旧でき、行ごと無い場合のみ救済は `management/disable-user-mfa.ts`) の 5 状態。詳細: ADR-0013。
+`mfa_totp` 行から一意に決まる、**多要素認証 (MFA)** の登録ライフサイクル状態。**未登録** (行なし) / **登録済み未有効** (行あり・未 verified) / **有効** (verified) の 3 状態。フラグ列は存在せず、旧構成の「中断した有効化 / 無効化」は構造的に不在。詳細: ADR-0016。
 _Avoid_: enrollment status (英語混在), MFA 状態 (画面表示用の `MfaStatus` と紛らわしい), 2FA 状態 (要素数を 2 に固定する語)
 
 **MFA 登録遷移**:
-user の **MFA 登録状態**を登録・有効化・無効化・運用救済のいずれかで移す試み。同じ user の遷移は一列に並び、各遷移は直前の結果を反映した最新状態で受理可否を決める。**登録済み未有効**で登録を再実行した場合は新しい secret を発行せず、同じ登録内容を返す。詳細: ADR-0013。
+user の **MFA 登録状態**を登録・有効化・無効化・運用救済のいずれかで移す試み。並行する遷移の決着は操作文そのもの (ON CONFLICT / 条件付き単文 UPDATE) が担い、勝者はちょうど 1 で敗者は既知の失敗または勝者の結果への収束になる。**登録済み未有効**で登録を再実行した場合は新しい secret を発行せず、同じ登録内容を返す。詳細: ADR-0016。
 _Avoid_: MFA transition (英語混在), MFA 操作 (状態を変えない参照まで含む広義語)
 
-**MFA 登録遷移 guard**:
-同じ user の **MFA 登録遷移** を一列に直列化する user 単位の占有札。遷移の開始時に取得し、結果が確定した (成功または既知の業務失敗) 場合にだけ解放する。結果不明 (crash・応答喪失・外部副作用の結果不明) では意図的に残置され、時間経過では解放されない。残置中は当該 user の全遷移が `temporarily_unavailable` になり、解除は **MFA 運用救済** の権限に限る。平常時は「作業中」の表示、残置後は「結果不明が起きた」の記録、という 2 つの局面で意味が変わる。詳細: ADR-0013 §8。
-_Avoid_: lock (接続断での自動解放を示唆), lease (期限による失効を示唆。TTL を持たないことが核心), 依頼中 (残置後は依頼がもう存在しない), **membership guard** (認可の門番。別概念)
-
-**MFA 登録遷移 guard hold**:
-**MFA 登録遷移 guard** を取得できた事実の証憑となる値。遷移の開始 1 箇所でのみ生まれ、解放時の照合 (取得者本人の解放であること) と、取得と同時に確定した最新状態の運搬を担う。遷移の中でだけ使える能力は、この証憑の提示によってのみ束ねられる。実装型は `GuardHold`。詳細: ADR-0013 §8。
-_Avoid_: lock handle (自動解放を示唆), lease (期限を示唆), token (**MFA 登録識別子** や session token と紛らわしい。guard 内部の operation token は構成要素に過ぎない)
-
 **MFA 登録識別子**:
-1 回の登録開始で生まれ、有効化が対象とする登録内容を識別する不透明な値。**登録済み未有効**で登録を再実行すると同じ値を返し、無効化後の新しい登録では別の値になる。詳細: ADR-0013。
+1 回の登録開始で生まれ、有効化が対象とする登録内容を識別する不透明な値。**登録済み未有効**で登録を再実行すると同じ値を返し、無効化後の新しい登録では別の値になる。有効化はこの値の一致を要求する。詳細: ADR-0016。
 _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続化形式を外向きへ漏らす語)
 
-**MFA 登録やり直し**:
-**登録済み未有効**の登録内容を明示的に破棄し、新しい TOTP secret・リカバリーコード・**MFA 登録識別子**へ置き換える **MFA 登録遷移**。通常の登録の再実行は同じ内容の再表示なので、登録内容を回転する意図と区別する。詳細: ADR-0013。
-_Avoid_: 再登録 (同じ登録内容の再表示と区別できない), reset (何を初期化するか曖昧)
-
 **MFA 運用救済**:
-認証アプリと **リカバリーコード** を両方失った user を、運用者が本人のコード検証なしに復帰可能な **MFA 登録状態**へ戻す **MFA 登録遷移**。user の session / Actor を使う self-service の無効化とは区別し、結果不明の遷移で残置された **MFA 登録遷移 guard** の解除も同じ運用権限に含む。詳細: ADR-0013。
+認証アプリと **リカバリーコード** を両方失った user を、運用者が本人のコード検証なしに復帰可能な **MFA 登録状態**へ戻す **MFA 登録遷移**。user の session / Actor を使う self-service の無効化とは区別する。詳細: ADR-0016。
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コード識別子としてのみ使う), 救済スクリプト (実装形態名)
 
 **session**:
@@ -177,7 +165,7 @@ user の意図ある action (**sign-in** / **sign-out** / account delete 等) �
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled` / `mfa_registration_guard_released`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。`mfa_registration_guard_released` は結果不明の MFA 登録遷移を停止確認後に運用解除した記録で、実行元・理由・停止確認だけを保存する。詳細: ADR-0012 / ADR-0013。
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012 / ADR-0016。
 _Avoid_: log entry, audit record
 
 ## Relationships
@@ -191,7 +179,7 @@ _Avoid_: log entry, audit record
 - **多要素認証 (MFA)** を有効にした user の一次認証 (**Magic Link** / GitHub OAuth) 成功は、**session** でなく **MFA チャレンジ** を生む。**session** はチャレンジ通過時に初めて確立される
 - **MFA チャレンジ** の通過手段は **TOTP** コードか **リカバリーコード** の 2 つ。どちらも同一チャレンジに対して単回のみ有効
 - **多要素認証 (MFA)** の有効化 / 無効化は、操作した **session** 以外を **session revoke** する
-- **MFA 登録状態** (5 状態) が MFA の登録 / 有効化 / 無効化の受理可否とセキュリティページの表示を一元に決める
+- **MFA 登録状態** (3 状態) が MFA の登録 / 有効化 / 無効化の受理可否とセキュリティページの表示を一元に決める
 
 ## Example dialogue
 

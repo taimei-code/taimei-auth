@@ -1,7 +1,7 @@
 {
   // Cloudflare Workers 設定。設計詳細: docs/adr/0011-cloudflare-workers-migration.md
   // 本番では hyperdrive.id を実 Hyperdrive config id に、vars を本番値に、
-  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN) は `wrangler secret put` で注入する。
+  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN / MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
   // ローカルは localConnectionString + .dev.vars (gitignore 済) を使う。
   "name": "taimei-auth",
   "main": "src/worker.ts",

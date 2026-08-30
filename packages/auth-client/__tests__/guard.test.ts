@@ -215,6 +215,8 @@ describe("createAuthGuard.getSession", () => {
 // MFA チャレンジ保留中の user は、一次認証の session が破棄済みで第二要素も未検証という
 // 中間状態にある。SDK はこの状態を表す新しい戻り値を持たず、consumer からは単に未認証に見える。
 describe("MFA チャレンジ保留中の consumer 表面", () => {
+  // MFA 材料の sentinel — SDK の whitelist 写像がこれらを consumer へ運ばないことを
+  // 下の leak 検査 (allKeys / should-not-leak) が実際に検証できる状態を保つ。
   const userWithMfaEnabled = {
     ...validUser,
     twoFactorEnabled: true,
