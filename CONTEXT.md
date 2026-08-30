@@ -157,11 +157,11 @@ _Avoid_: 再登録 (同じ登録内容の再表示と区別できない), reset 
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コード識別子としてのみ使う), 救済スクリプト (実装形態名)
 
 **session**:
-better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別、Redis (secondaryStorage) と Postgres (`session` テーブル) に二重保管。`auth.api.getSession({ headers })` で server-side 取得。
+better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別し、実体は Redis (secondaryStorage) のみに保管する。`session.storeSessionInDatabase` を有効にしていないため Postgres の `session` テーブルには行を書かない (テーブル定義は better-auth の schema 要求として残る)。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
 
 **sign-out**:
-ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie 削除 + Redis cookieCache invalidate + Postgres `session` 行削除を伴う。UI 文言は「ログアウト」(既存ボタンラベル・失敗トーストもこれに合わせる)。設計・コード語彙は sign-out。
+ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie (session token + cookieCache) の削除と Redis 上の session 削除を伴う (Postgres `session` 行は書かれていないので削除対象も無い)。UI 文言は「ログアウト」(既存ボタンラベル・失敗トーストもこれに合わせる)。設計・コード語彙は sign-out。
 _Avoid_: logout (英語混在を避ける), session 終了 (より広義)
 
 **session revoke**:
