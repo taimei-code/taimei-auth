@@ -18,8 +18,7 @@ import { SocialSignInSection } from "../SocialSignInSection";
 import { buildSignParams } from "../sign-params";
 import { useSignPage } from "../use-sign-page";
 
-// SignIn と同じ signIn.magicLink を呼ぶ (画面のみ分離)。詳細: docs/adr/0007-signin-signup-unified-api.md
-// 状態機械 (params 解析 / 招待分岐 / 送信) は useSignPage、SNS 区画は SocialSignInSection を共有する。
+// 状態機械は useSignPage、SNS 区画は SocialSignInSection を SignIn と共有する (ADR-0007: 画面のみ分離)。
 export const SignUp = () => {
   const [searchParams] = useSearchParams();
   const [name, setName] = useState("");

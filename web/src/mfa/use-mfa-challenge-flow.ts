@@ -15,8 +15,7 @@ type MfaChallengeCodeInput = Parameters<typeof verifyMfaChallenge>[0];
 type ChallengePort = MfaChallengePort<MfaChallengeCodeInput, MfaErrorCode>;
 
 // HTTP 応答・例外を flow 向けの観測結果 / 検証結果へ変換する唯一の production port (ADR-0013 §9)。
-// wire 形の検査 (空 redirect_url の拒否まで) は mfa-api の positive check が所有し、ここは
-// HTTP の成否を flow の語彙へ写すだけ。
+// wire 形の検査は mfa-api の positive check が所有し、ここは HTTP の成否を flow の語彙へ写すだけ。
 export const mfaChallengePort: ChallengePort = {
   observe: async (signal) => {
     try {
@@ -24,8 +23,7 @@ export const mfaChallengePort: ChallengePort = {
       return pending ? { kind: "present" } : { kind: "absent" };
     } catch (error) {
       if (signal.aborted) throw error;
-      // 形の崩れた 2xx (mfa-api の throw) も通信失敗と同じく、不存在を推測せず入力を許す
-      // — absent に倒すと生きているチャレンジで期限切れ画面に袋小路になる (ADR-0013 §9)。
+      // 形の崩れた 2xx も通信失敗と同じく不存在を推測せず入力を許す (ADR-0013 §9)。
       return { kind: "unavailable" };
     }
   },
@@ -40,8 +38,8 @@ export const mfaChallengePort: ChallengePort = {
   },
 };
 
-// 画面が受け取る表示区分。observing / redirecting は同じ spinner でも sr-only 文言が違うため
-// 区別を保つ。ready / verifying の差は entry.submitting が吸収するので entry に畳む。
+// 画面が受け取る表示区分。observing / redirecting は sr-only 文言が違うため区別を保ち、
+// ready / verifying の差は entry.submitting が吸収するので entry に畳む。
 type MfaChallengeViewKind = "observing" | "redirecting" | "expired" | "entry";
 
 export type MfaChallengeFlow = {
@@ -53,8 +51,8 @@ export type MfaChallengeFlow = {
 const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
   state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
-// port は test 注入用の seam。useEffect の依存のため参照安定な値 (module 定数等) を渡すこと —
-// render ごとに新しい object を渡すと観測 GET の abort → 再実行が render のたびに繰り返される。
+// port は test 注入用の seam。useEffect の依存のため参照安定な値を渡すこと — render ごとに新しい
+// object を渡すと観測 GET の abort → 再実行が render のたびに繰り返される。
 export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): MfaChallengeFlow {
   const [state, dispatch] = useReducer(
     reduceMfaChallengeFlow<MfaErrorCode>,
@@ -65,7 +63,7 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
 
   useEffect(() => {
     const controller = new AbortController();
-    // 中断対象は初期 GET と再照会だけ。POST 非中断の理由は ADR-0013 §9。
+    // 中断対象は初期 GET と再照会だけ (ADR-0013 §9)。
     readController.current = controller;
 
     void port
@@ -75,9 +73,8 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
           dispatch({ type: "observation_resolved", observation });
         }
       })
-      // HTTP 変換 port が reject する正常系は cleanup による Abort だけだが、この前提は
-      // MfaChallengePort 型に現れない。注入 port が想定外に reject しても observing で固まらず
-      // 入力を許す縮退 (AC-003 と同じ unavailable) へ倒す。
+      // port が reject する正常系は cleanup の Abort だけだが、その前提は型に現れない。想定外の
+      // reject でも observing で固まらせず、入力を許す縮退 (AC-003 と同じ unavailable) へ倒す。
       .catch(() => {
         if (!controller.signal.aborted) {
           dispatch({
@@ -112,9 +109,8 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
           dispatch({ type: "verification_resolved", verification });
         }
       })
-      // 縮退は "unknown" 固定にする — reject 経路の error を code へ写すと、注入 port が
-      // terminal な challenge_expired で reject した時に ready (入力可能) へ載り、
-      // 打ち直せない文言と生きた入力欄が並ぶ。
+      // 縮退は "unknown" 固定にする — reject 経路の error を code へ写すと、terminal な
+      // challenge_expired でも ready (入力可能) に載り、打ち直せない文言と生きた入力欄が並ぶ。
       .catch(() => {
         if (!controller.signal.aborted) {
           dispatch({
@@ -131,8 +127,8 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
   const entry = useMfaCodeInput({
     inputId: "mfa-challenge-code",
     submitting: state.phase === "verifying",
-    // ready 以外では error を出さない: チャレンジ消滅で expired に移った直後に直前の失敗文言が
-    // 残ると、「コードが違う」と「やり直し」が並んで打ち直せば通るように読めるため。
+    // ready 以外では error を出さない: expired へ移った直後に直前の失敗文言が残ると、
+    // 「コードが違う」と「やり直し」が並んで打ち直せば通るように読めるため。
     errorCode: state.phase === "ready" ? state.errorCode : null,
     submit,
     onKindChange: () => dispatch({ type: "error_cleared" }),

@@ -21,14 +21,12 @@ import { useMfaCodeEntry } from "./use-mfa-code-entry";
 const CODE_INPUT_ID = "mfa-disable-code";
 
 type Props = {
-  // 無効化の完了後に呼ぶ (セキュリティページの状態再取得)。
   onDisabled: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
-// 破壊的操作の確認ダイアログだが ConfirmDestructiveDialog は使わない — あちらは onConfirm の
-// 成否によらず閉じる契約で、コードの打ち間違いでも閉じてしまい入力をやり直させることになる。
-// 見た目と busy 中の扱いは同じ慣習に合わせ、閉じる条件だけを変えている。
+// ConfirmDestructiveDialog を使わない — あちらは onConfirm の成否によらず閉じる契約で、コードの
+// 打ち間違いでも閉じて入力をやり直させることになる。見た目と busy 中の扱いは揃え、閉じる条件だけ変える。
 export const MfaDisableDialog = ({ onDisabled, trigger }: Props) => {
   const [open, setOpen] = useState(false);
 

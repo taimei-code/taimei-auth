@@ -25,11 +25,8 @@ import { createCompany, type OrgCode } from "../company-api";
 
 type GuardStatus = "loading" | "needs-input" | "already-has-company";
 
-// signup フローの「事業所登録」ステップ。
-// 未認証 → /auth/、認証済 + membership ≥ 1 → 完了済として redirect。
-// 認証済 + membership = 0 のときだけ入力フォームを表示する。
-// この guard が本 route 唯一の client guard: server guard (auth-entry-redirect.ts) は redirect ループ
-// 回避のため本 path を意図的に除外し、SessionGuard も /auth/* を包まない。安易に削らないこと。
+// signup フローの「事業所登録」ステップ (未認証 → /auth/、membership ≥ 1 → 完了済として redirect)。
+// 本 route 唯一の client guard: server guard は redirect ループ回避で本 path を除外し、SessionGuard も /auth/* を包まない。
 export const SignUpCompany = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

@@ -27,8 +27,7 @@ export type CompanyState = {
 export const getCompanyState = (): Promise<CompanyState> =>
   getJson<CompanyState>("/api/account/memberships");
 
-// 事業所登録 guard 用の projection。current-company の取得を再利用し、memberships だけを返す
-// (専用 endpoint を足すと同じ state が 2 経路で読まれる)。
+// 事業所登録 guard 用の projection。専用 endpoint を足すと同じ state が 2 経路で読まれる。
 export const listMyMemberships = (): Promise<Membership[]> =>
   getCompanyState().then((state) => state.memberships);
 
@@ -38,11 +37,9 @@ export const setCurrentCompany = async (companyId: string): Promise<void> => {
 
 type CurrentCompanyContextValue = {
   loading: boolean;
-  // 初回ロードが 401 で失敗 = 未認証。SessionGuard がログイン画面へ倒すために参照する
-  // (memberships fetch 自体が認証を要求するため、別途 getSession を呼ぶ round trip を作らない)。
+  // 初回ロードが 401 で失敗 = 未認証。getSession の round trip を足さず SessionGuard がこれを参照する。
   unauthorized: boolean;
-  // 初回ロードが 401 以外で失敗 (一時的なネットワーク断等)。SessionGuard はこの場合
-  // 「membership 0 件 → signup 誘導」と誤判定せず guard を通過させる (誤遮断を避ける)。
+  // 401 以外の失敗。SessionGuard は「membership 0 件 → signup 誘導」と誤判定せず通過させる (誤遮断を避ける)。
   loadFailed: boolean;
   memberships: Membership[];
   currentCompanyId: string | null;
@@ -52,9 +49,8 @@ type CurrentCompanyContextValue = {
 
 const CurrentCompanyContext = createContext<CurrentCompanyContextValue | null>(null);
 
-// /account 配下で現在の事業所 + 所属一覧を共有する。事業所切替は呼び出し側が
-// setCurrentCompany (user.last_used_company_id の更新) → refresh の 2 段で行う。
-// window.location.reload は使わない (reload は入力中の未保存フォームを消失させるため)。
+// /account 配下で現在の事業所 + 所属一覧を共有する。切替は setCurrentCompany → refresh の 2 段で行い、
+// window.location.reload は使わない (入力中の未保存フォームが消えるため)。
 export const CurrentCompanyProvider = ({ children }: { children: ReactNode }) => {
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);

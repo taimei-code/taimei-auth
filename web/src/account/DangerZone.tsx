@@ -14,8 +14,7 @@ export const DangerZone = () => {
     setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
-      // toast にせず本セクション内の inline に固定する: 退会失敗は role=alert の即時読み上げを
-      // 保ちたい失敗で、e2e (danger-zone.e2e.ts) も alert role を契約にしている (shared/notify.tsx の経路規則)
+      // toast にせず inline 固定: role=alert の即時読み上げを保ち、e2e も alert role を契約にしている
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }

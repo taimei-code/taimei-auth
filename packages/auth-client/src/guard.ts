@@ -12,8 +12,7 @@ type CacheFn = <Args extends readonly unknown[], R>(
 type GuardOptions = {
   client: AuthClient;
   getSessionToken: () => Promise<string | undefined>;
-  // 1 request 内の多重呼出を dedup する memoize 関数 (Next.js consumer は React.cache を渡す)。
-  // 省略時は dedup 無しで毎回 VerifySession RPC が飛ぶ。
+  // 1 request 内の多重呼出を dedup する memoize (Next.js consumer は React.cache)。省略時は毎回 RPC が飛ぶ。
   cache?: CacheFn;
 };
 
@@ -30,8 +29,7 @@ const identity: CacheFn = (fn) => fn;
 const asExternalToken = (raw: string): ExternalToken => ({ raw }) as ExternalToken;
 const asInternalSession = (data: SessionData): InternalSession => data as InternalSession;
 
-// proto-es の oneof case は "ok" | "error" | undefined。case 欠損と user / session 欠損は
-// Result.UNSPECIFIED に倒す (fail-closed)。
+// case 欠損と user / session 欠損は Result.UNSPECIFIED に倒す (fail-closed)。
 const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
   switch (response.outcome.case) {
     case "error":

@@ -1,5 +1,4 @@
-// 共通ログイン URL を SDK 側で組み立てる (sign 流)。consumer 側で `redirect_url` 等のキー名 typo や
-// 順序の揺らぎが発生しないよう、URL 組み立てをこの helper に集約する
+// 共通ログイン URL の組み立てを SDK に集約する (consumer 側でのキー名 typo / 順序の揺らぎを防ぐ)
 export interface BuildAuthLoginUrlOptions {
   authBaseUrl: string;
   service: string;

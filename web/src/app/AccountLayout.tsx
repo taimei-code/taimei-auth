@@ -65,8 +65,7 @@ export const AccountLayout = () => {
         </div>
       </main>
 
-      {/* toast を使うのは /account 配下のみ。/auth (サインイン初期表示) に sonner を配らないよう
-          App でなくここにマウントする (chunk 分離は shared/notify.tsx 参照) */}
+      {/* /auth に sonner を配らないため App でなくここにマウントする (shared/notify.tsx) */}
       <Toaster />
     </div>
   );

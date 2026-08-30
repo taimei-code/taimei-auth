@@ -16,8 +16,7 @@ export const SignOutButton = () => {
     authClient
       .signOut()
       .then(({ error }) => {
-        // 失敗時に redirect すると server session が残ったまま SessionGuard 再 mount で再ログイン判定になり
-        // リダイレクトループに入る。失敗ケースは redirect せずユーザーに留まらせる
+        // 失敗時に redirect すると server session が残ったまま再ログイン判定になりループする。留まらせる
         if (error) {
           notifyError(SIGN_OUT_FAILED);
           return;

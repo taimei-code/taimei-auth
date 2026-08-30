@@ -90,8 +90,7 @@ export function MfaChallengeView({ view, entry }: MfaChallengeFlow) {
                 </Link>
               </p>
 
-              {/* verifying 中や expired で失敗文言を残さない規律は hook 側の errorCode 導出が持つ
-                  (use-mfa-challenge-flow.ts) — ここでは非 null をそのまま描画してよい */}
+              {/* 失敗文言を残さない規律は use-mfa-challenge-flow.ts の errorCode 導出が持つ */}
               {entry.errorMessage && (
                 <p id={entry.errorId} role="alert" className="text-sm text-destructive">
                   {entry.errorMessage}

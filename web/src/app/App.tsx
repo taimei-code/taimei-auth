@@ -18,8 +18,7 @@ import { MfaChallenge } from "../mfa/pages/MfaChallenge";
 import { AccountLayout } from "./AccountLayout";
 import { SessionGuard } from "./SessionGuard";
 
-// /auth/* と /account/* を 1 SPA で扱う。Vite base="/auth/" は asset URL prefix のみで Router path とは独立。
-// 詳細: docs/adr/0002-spa-routing-and-static-assets.md
+// /auth/* と /account/* を 1 SPA で扱う。詳細: docs/adr/0002-spa-routing-and-static-assets.md
 export const App = () => {
   return (
     <BrowserRouter>

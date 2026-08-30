@@ -1,13 +1,11 @@
-// session cookie 名と取り出し方を SDK 内に閉じ込める helper。
+// session cookie 名と取り出し方を SDK 内に閉じ込める helper (SESSION_COOKIE_NAMES は export しない)。
 // 詳細: docs/adr/0006-sdk-encapsulation.md / packages/auth-client/CLAUDE.md ルール 7
-// SESSION_COOKIE_NAMES は SDK 外部に export しないこと
 const SESSION_COOKIE_NAMES = [
   "better-auth.session_token",
   "__Secure-better-auth.session_token",
 ] as const;
 
-// 関数型に統一: consumer は framework ごと異なる cookie store shape (Next.js
-// `cookies()` / Hono `c.req.cookies` / Express `req.cookies` 等) を lambda で吸収する。
+// 関数型に統一: framework ごと異なる cookie store shape を consumer が lambda で吸収する (CLAUDE.md ルール 7 層 3)。
 export type CookieReader = (name: string) => string | undefined;
 
 export function getSessionToken(readCookie: CookieReader): string | undefined {

@@ -43,8 +43,7 @@ export const Members = () => {
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // 2 つの一覧は個別に反映する (片方が転んでも取得済みの側は捨てない)。招待一覧は
-  // ADMIN 未満だと server が 403 を返すため、権限が無ければ最初から叩かない
+  // 2 つの一覧は個別に反映する (片方が転んでも捨てない)。招待一覧は ADMIN 未満だと 403 なので叩かない
   const refresh = useCallback(() => {
     if (!companyId) return Promise.resolve();
     return Promise.all([

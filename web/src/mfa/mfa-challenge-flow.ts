@@ -18,8 +18,8 @@ export type MfaChallengeVerification<ErrorCode extends string> =
 
 export type MfaChallengePort<Input, ErrorCode extends string> = {
   observe(signal: AbortSignal): Promise<MfaChallengeObservation>;
-  // expired の終端判断は resolveMfaChallengeVerification が所有する。port が返せる形から
-  // Exclude で外し、「port が expired を宣言して flow の判断を迂回する」実装を型で塞ぐ。
+  // expired の終端判断は resolveMfaChallengeVerification が所有する。Exclude で port が返せる形から
+  // 外し、「port が expired を宣言して flow の判断を迂回する」実装を型で塞ぐ。
   verify(input: Input): Promise<Exclude<MfaChallengeVerification<ErrorCode>, { kind: "expired" }>>;
 };
 
@@ -77,8 +77,7 @@ export function reduceMfaChallengeFlow<ErrorCode extends string>(
       case "rejected":
         return { phase: "ready", errorCode: event.verification.errorCode };
       default:
-        // fall-through すると verifying に固まり画面が操作不能になる。verification の variant
-        // 追加漏れは実行時でなく typecheck で検出する。
+        // fall-through は verifying に固まり操作不能になる。variant 追加漏れは typecheck で検出する。
         return event.verification satisfies never;
     }
   }
