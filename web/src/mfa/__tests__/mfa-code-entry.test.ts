@@ -70,7 +70,6 @@ const ALL_ERROR_CODES: MfaErrorCode[] = [
   "rate_limited",
   "already_enabled",
   "enrollment_changed",
-  "temporarily_unavailable",
   "not_enabled",
   "invalid_argument",
   "unauthorized",

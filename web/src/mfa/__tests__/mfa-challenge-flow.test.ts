@@ -229,7 +229,6 @@ describe("resolveMfaChallengeVerification", () => {
     "rate_limited",
     "already_enabled",
     "enrollment_changed",
-    "temporarily_unavailable",
     "not_enabled",
     "invalid_argument",
     "unauthorized",
