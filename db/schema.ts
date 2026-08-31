@@ -8,9 +8,8 @@ import {
   integer,
   bigint,
   jsonb,
-  check,
 } from "drizzle-orm/pg-core";
-import { relations, sql } from "drizzle-orm";
+import { relations } from "drizzle-orm";
 
 // membership / invitation が共有する role 値集合の SSOT。CONTEXT.md 'role'
 export type Role = "OWNER" | "ADMIN" | "MEMBER";
@@ -47,8 +46,6 @@ export const user = pgTable(
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
     revision: integer("revision").notNull().default(0),
-    // 旧構成の判定源 (現構成は mfa_totp 行から導出 — ADR-0016)。デプロイ ② で削除する。
-    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     // 新規 session 確立時の default 候補事業所。削除済 company を参照しないよう ON DELETE SET NULL。
     lastUsedCompanyId: text("last_used_company_id").references(() => company.id, {
       onDelete: "set null",
@@ -133,36 +130,6 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-// 旧構成 (twoFactor プラグイン) の遺物。ロールバック線の維持のため温存し、デプロイ ② で DROP する
-// (ADR-0016 §9)。以下は当時の設計メモ:
-// better-auth twoFactor プラグイン規定のスキーマと 1:1。読まない列も削るとプラグインのロック機構が
-// silent に死ぬ。export 名の camelCase は必須 (drizzle adapter が schema["twoFactor"] で引くため)。
-// 不変条件: user.two_factor_enabled が true の期間、当該 user の行は 1 件かつ verified。プラグインの
-// verify-totp は非トランザクショナルな 2 書き込みのため中断で破れる (分類と復旧: ADR-0013 §7)。
-export const twoFactor = pgTable(
-  "two_factor",
-  {
-    id: text("id").primaryKey().notNull(),
-    // 実体は AUTH_SECRET 由来の鍵による可逆暗号。列名に反して平文では読めない。
-    secret: text("secret").notNull(),
-    backupCodes: text("backup_codes").notNull(),
-    // ADR-0010 の物理削除ライフサイクルに乗せ、退会時に道連れで消す。
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    verified: boolean("verified").default(true).notNull(),
-    // プラグインが SQL の +1 で更新するため、NULL を許すと加算結果が NULL になりロックが発火しない。
-    failedVerificationCount: integer("failed_verification_count").default(0).notNull(),
-    lockedUntil: timestamp("locked_until"),
-  },
-  (table) => [
-    index("two_factor_secret_idx").on(table.secret),
-    // user あたり 1 行を DB で強制する。プラグインの enable は deleteMany + create のため並行 enroll で
-    // 2 行になる窓があり、2 行では状態が一意に決まらない。UNIQUE で fail-closed (詳細: ADR-0013 §7)。
-    uniqueIndex("two_factor_user_id_idx").on(table.userId),
-  ],
-);
-
 // 自前 MFA (TOTP) の登録行。better-auth は複製しないため repository (db/repositories/mfa-totp.ts) 直書きが
 // 正 (db/CLAUDE.md ルール 2 の Session/User 例外の対象外)。状態は行が 3 値で表す: 行なし = 未登録 /
 // verified_at NULL = 登録済み未有効 / 非 NULL = 有効。flag 列は持たない (設計: ADR-0016)。
@@ -198,47 +165,6 @@ export const mfaRecoveryCode = pgTable(
     usedAt: timestamp("used_at"),
   },
   (table) => [index("mfa_recovery_code_user_id_idx").on(table.userId)],
-);
-
-export type MfaRegistrationOperationKind =
-  | "enroll"
-  | "restart"
-  | "activate"
-  | "disable"
-  | "force_disable";
-
-export const mfaRegistrationGuardProtocol = pgTable(
-  "mfa_registration_guard_protocol",
-  {
-    protocolKey: text("protocol_key").primaryKey().notNull(),
-    version: integer("version").notNull(),
-  },
-  (table) => [
-    check(
-      "mfa_registration_guard_protocol_key_check",
-      sql`${table.protocolKey} = 'mfa_registration_guard'`,
-    ),
-    check("mfa_registration_guard_protocol_version_check", sql`${table.version} > 0`),
-  ],
-);
-
-export const mfaRegistrationTransitionGuard = pgTable(
-  "mfa_registration_transition_guard",
-  {
-    userId: text("user_id")
-      .primaryKey()
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    operationToken: text("operation_token").notNull(),
-    operationKind: text("operation_kind").$type<MfaRegistrationOperationKind>().notNull(),
-    acquiredAt: timestamp("acquired_at").defaultNow().notNull(),
-  },
-  (table) => [
-    check(
-      "mfa_registration_guard_operation_kind_check",
-      sql`${table.operationKind} in ('enroll', 'restart', 'activate', 'disable', 'force_disable')`,
-    ),
-  ],
 );
 
 // account_delete 後も log を残すため意図的に user_id に FK を付けない。詳細: CONTEXT.md 'audit log'
