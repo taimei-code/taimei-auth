@@ -196,5 +196,5 @@ _Avoid_: log entry, audit record
 - 初期は「Layer A」「Layer B」と順序ラベルで server / client を区別していたが、内容を示さない抽象表現だったため廃止 — server 側は **auth ホスト**、client 側は **共通画面 SPA** に canonical 化
 - 「callbackURL」は better-auth API の引数名としてはそのまま使うが、設計議論では **redirect_url** を使う — better-auth 内部では callbackURL、外部 (URL クエリ) では redirect_url
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
-- 「twoFactor」「backupCodes」「`2fa-*`」は better-auth のテーブル名・列名・API 名・cookie 内識別子としてはそのまま使うが、設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 「callbackURL」↔ **redirect_url** と同じ運用 (借用語は境界の内側だけ、外向きの語彙は canonical 用語)
+- 「twoFactor」「backupCodes」「`2fa-*`」は twoFactor プラグイン撤去によりテーブル名・列名・API 名・cookie 内識別子としてはもはや存在しない。設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 残る借用はテスト内の語彙検査のみ
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化

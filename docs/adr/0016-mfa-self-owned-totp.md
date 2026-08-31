@@ -4,6 +4,8 @@
 
 Accepted (2026-08-30)。`mfa-totp-self-owned` ブランチで実装。ADR-0013 を supersede する。
 
+デプロイ ② (旧オブジェクト DROP) は 2026-08-31 適用済み。以降デプロイ ① 以前へはロールバック不可。
+
 ## Context
 
 ADR-0013 は better-auth の twoFactor プラグインを土台に、チャレンジ強制・封じ込め・登録遷移 guard を
