@@ -126,7 +126,7 @@ _Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の
 
 **リカバリーコード**:
 認証アプリを失った時に **MFA チャレンジ** を通過するための単回使用コード。**登録済み未有効**の間は同じ登録内容として再表示できるが、有効化後は残数のみ参照できる。1 本使うごとに残数が減り、再生成の導線は持たない (使い切った場合の救済は `management/disable-user-mfa.ts`)。詳細: ADR-0016。
-_Avoid_: バックアップコード (better-auth の `backupCodes` は API 名・列名としてのみ使う), 復旧コード, 緊急コード
+_Avoid_: バックアップコード (better-auth の旧 `backupCodes` — twoFactor プラグイン撤去によりもはや存在しない), 復旧コード, 緊急コード
 
 **MFA 登録状態**:
 `mfa_totp` 行から一意に決まる、**多要素認証 (MFA)** の登録ライフサイクル状態。**未登録** (行なし) / **登録済み未有効** (行あり・未 verified) / **有効** (verified) の 3 状態。フラグ列は存在せず、旧構成の「中断した有効化 / 無効化」は構造的に不在。詳細: ADR-0016。
@@ -196,5 +196,5 @@ _Avoid_: log entry, audit record
 - 初期は「Layer A」「Layer B」と順序ラベルで server / client を区別していたが、内容を示さない抽象表現だったため廃止 — server 側は **auth ホスト**、client 側は **共通画面 SPA** に canonical 化
 - 「callbackURL」は better-auth API の引数名としてはそのまま使うが、設計議論では **redirect_url** を使う — better-auth 内部では callbackURL、外部 (URL クエリ) では redirect_url
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
-- 「twoFactor」「backupCodes」「`2fa-*`」は better-auth のテーブル名・列名・API 名・cookie 内識別子としてはそのまま使うが、設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 「callbackURL」↔ **redirect_url** と同じ運用 (借用語は境界の内側だけ、外向きの語彙は canonical 用語)
+- 「twoFactor」「backupCodes」「`2fa-*`」は twoFactor プラグイン撤去によりテーブル名・列名・API 名・cookie 内識別子としてはもはや存在しない。設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 残る借用はテスト内の語彙検査のみ
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化
