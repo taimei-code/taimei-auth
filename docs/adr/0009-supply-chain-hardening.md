@@ -130,6 +130,15 @@ install 時 RCE は今回の TanStack worm のメインベクトル (payload は
 - direct dependency の nanoid 5.x は `5.1.16` で修正済みのため変更しない。リスク評価と利用経路は4回目対応から不変
 - 後始末 (任意): `3.3.18` が 7 日齢を超える 2026-08-15 01:41 JST 以降は `nanoid` 除外を外しても resolve を維持できる
 
+### audit gate 対応 6 回目 (2026-09-03, browserslist)
+
+`bun audit` のライブ DB に browserslist の新規 high advisory 2 件が出現し CI gate を落としたため対応。feature branch (Redis keep-alive の Cron Trigger) の実装差分とは無関係な依存側の変化。
+
+- **browserslist** `GHSA-c83g-rgw3-j3cx` (HIGH, `<=4.28.6`, query 結果 cache に eviction が無く distinct query の蓄積で OOM) / `GHSA-73wf-gq98-2v4g` (HIGH, `<=4.28.6`, 信頼できない `browserslist-stats.json` の custom stats 経由で crash / prototype 書込) → `autoprefixer › browserslist` の transitive を `bun.lock` で `4.28.8` (2026-08-08) に in-place 差し替え。7 日齢を満たすため `minimumReleaseAgeExcludes` 追加は不要
+- `4.28.8` は依存 range を引き上げているため、同 family の 5 entry も range を満たす 7 日齢以上の版へ in-place 差し替え: `baseline-browser-mapping` `2.11.19` (2026-08-24) / `caniuse-lite` `1.0.30001810` (2026-08-24) / `electron-to-chromium` `1.5.415` (2026-08-25) / `node-releases` `2.0.53` (2026-08-06) / `update-browserslist-db` `1.3.1` (2026-08-10)。`escalade` / `picocolors` は既存版が range を満たすため据え置き
+- リスク評価: browserslist は Tailwind / autoprefixer の build 時 (Vite build) にのみ使われ、本番 Worker bundle には同梱されない。query は本リポの固定設定のみで user 入力や外部 stats file は届かない
+- 手順は 3〜5 回目と同じ: `bun update` を使わず registry の実 metadata で `bun.lock` を差し替え → 非 clean `bun install` で当該 6 entry のみが差し替わることを確認 → `bun install --frozen-lockfile` (CI parity) / `bun audit` / `build:web` / typecheck / lint / 全 test の green を確認
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers

@@ -15,6 +15,10 @@
     "run_worker_first": true,
     "not_found_handling": "single-page-application"
   },
+  // Upstash free tier は 30 日間データ操作が無いと DB をアーカイブし endpoint が消える (2026-09-03 に本番で
+  // magic link 送信が 500 になった原因)。毎日 03:00 JST に worker.ts の scheduled handler で TTL 付き SET を
+  // 1 回打つ (src/redis-keepalive.ts)。週 1 回以上であることを src/__tests__/wrangler-cron-keepalive.test.ts が固定する。
+  "triggers": { "crons": ["0 18 * * *"] },
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

@@ -158,6 +158,13 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
   Workers 対応の DB verification 版を出した時。
 - **$0 は無料枠内で成立**: Workers / Neon / Upstash / Hyperdrive。日本単一・個人運用の低トラフィック
   前提で、launch 時に各枠の実数値を再確認する。
+- **Upstash free tier の無活動アーカイブ**: 30 日間データ操作 (PING 不算入) が無いと DB がアーカイブされ
+  REST endpoint が消える。session / verification は Redis のみに置くため、その時点で magic link 送信が
+  500 になる (2026-09-03 に本番で発生。`/health` の `redis: error` と `wrangler tail` の
+  `UpstashJSONParseError ... error code: 1016` が目印)。対策は Cron Trigger (`wrangler.jsonc`
+  `triggers.crons`) から `src/worker.ts` の `scheduled` が毎日 TTL 付き SET を打つ keep-alive
+  (`src/redis-keepalive.ts`)。復旧は Upstash Console で DB を復元/再作成し `wrangler secret put` で
+  `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` を更新する。
 - **本番 secret/設定**: `wrangler secret put` で `AUTH_SECRET` / `AUTH_SERVICE_KEY` / `UPSTASH_*` /
   `SENTRY_DSN` を注入。`hyperdrive.id` を実 config に、`vars` を本番値にする。DNS で `auth` subdomain
   を Workers に向ける。migration は CI から drizzle-kit で流す (Worker 内では実行しない)。
