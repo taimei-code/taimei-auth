@@ -1,12 +1,16 @@
+import { Effect } from "effect";
 import { findMembership } from "@/db/repositories/membership";
 import {
   type Actor,
   type Forbidden,
   guard,
   type InvalidArgument,
+  invalidArgument,
   type NotFound,
   type ParseBodyCallback,
-  resolveParseBody,
+  parseBody,
+  requireTargetMembership,
+  runGuard,
   type Unauthorized,
 } from "./core";
 
@@ -14,6 +18,8 @@ import {
 // self 委譲は zod pass 後の意味エラーだが handler 側と同じ 400 に倒す。
 
 export type ParsedTransferBody = { toUserId: string };
+
+type AlreadyOwner = { ok: false; error: "already_owner"; status: 400 };
 
 export type TransferOwnershipGuardResult =
   | {
@@ -25,39 +31,38 @@ export type TransferOwnershipGuardResult =
   | InvalidArgument
   | Forbidden
   | NotFound
-  | { ok: false; error: "already_owner"; status: 400 };
+  | AlreadyOwner;
+
+type TransferOwnershipOptions = {
+  headers: Headers;
+  companyId: string;
+  parseBody: ParseBodyCallback<ParsedTransferBody>;
+};
+
+const alreadyOwner = (): AlreadyOwner => ({ ok: false, error: "already_owner", status: 400 });
 
 export function makeRequireTransferOwnership(deps = { guard, findMembership }) {
-  return async (opts: {
-    headers: Headers;
-    companyId: string;
-    parseBody: ParseBodyCallback<ParsedTransferBody>;
-  }): Promise<TransferOwnershipGuardResult> => {
-    const actorResult = await deps.guard.requireActor(opts.headers);
-    if (!actorResult.ok) return actorResult;
+  const program = (opts: TransferOwnershipOptions) =>
+    Effect.gen(function* () {
+      const actor = yield* deps.guard.effect.requireActor(opts.headers);
+      const body = yield* parseBody(opts.parseBody);
+      // self 委譲は actor を無意味に降格し audit も誤解を生むため 400 で弾く (現行 handler と同義)。
+      if (body.toUserId === actor.id) return yield* Effect.fail(invalidArgument());
 
-    const parsed = await resolveParseBody(opts.parseBody);
-    if (!parsed.ok) return parsed;
-    // self 委譲は actor を無意味に降格し audit も誤解を生むため 400 で弾く (現行 handler と同義)。
-    if (parsed.data.toUserId === actorResult.actor.id) {
-      return { ok: false, error: "invalid_argument", status: 400 };
-    }
+      yield* deps.guard.effect.requireMembershipOf(actor, opts.companyId, "OWNER");
 
-    const membershipResult = await deps.guard.requireMembershipOf(
-      actorResult.actor,
-      opts.companyId,
-      "OWNER",
-    );
-    if (!membershipResult.ok) return membershipResult;
+      const target = yield* requireTargetMembership(
+        deps.findMembership,
+        body.toUserId,
+        opts.companyId,
+      );
+      if (target.role === "OWNER") return yield* Effect.fail(alreadyOwner());
 
-    const targetMembership = await deps.findMembership(parsed.data.toUserId, opts.companyId);
-    if (!targetMembership) return { ok: false, error: "not_found", status: 404 };
-    if (targetMembership.role === "OWNER") {
-      return { ok: false, error: "already_owner", status: 400 };
-    }
+      return { ok: true as const, actor, toUserId: body.toUserId };
+    });
 
-    return { ok: true, actor: actorResult.actor, toUserId: parsed.data.toUserId };
-  };
+  return (opts: TransferOwnershipOptions): Promise<TransferOwnershipGuardResult> =>
+    runGuard(program(opts));
 }
 
 export const requireTransferOwnership = makeRequireTransferOwnership();

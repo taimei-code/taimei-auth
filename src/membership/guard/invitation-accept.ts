@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import {
   findInvitationByToken,
   type InvitationRow,
@@ -10,8 +11,10 @@ import {
   guard,
   type InvalidArgument,
   type NotFound,
+  notFound,
   type ParseBodyCallback,
-  resolveParseBody,
+  parseBody,
+  runGuard,
   type Unauthorized,
 } from "./core";
 
@@ -19,6 +22,9 @@ import {
 // OWNER 招待の招待者再検証は降格 UPDATE との TOCTOU を避けるため entry でなく accept use-case の tx 内。
 
 export type ParsedAcceptBody = { token: string };
+
+type EmailMismatch = { ok: false; error: "email_mismatch"; status: 403 };
+type ExpiredOrUsed = { ok: false; error: "expired_or_used"; status: 410 };
 
 export type InvitationAcceptGuardResult =
   | {
@@ -33,41 +39,48 @@ export type InvitationAcceptGuardResult =
   | InvalidArgument
   | NotFound
   | Forbidden
-  | { ok: false; error: "email_mismatch"; status: 403 }
-  | { ok: false; error: "expired_or_used"; status: 410 };
+  | EmailMismatch
+  | ExpiredOrUsed;
+
+type InvitationAcceptOptions = {
+  headers: Headers;
+  parseBody: ParseBodyCallback<ParsedAcceptBody>;
+};
+
+const emailMismatch = (): EmailMismatch => ({ ok: false, error: "email_mismatch", status: 403 });
+const expiredOrUsed = (): ExpiredOrUsed => ({ ok: false, error: "expired_or_used", status: 410 });
 
 export function makeRequireInvitationAccept(
   deps = { guard, findInvitationByToken, findMembership },
 ) {
-  return async (opts: {
-    headers: Headers;
-    parseBody: ParseBodyCallback<ParsedAcceptBody>;
-  }): Promise<InvitationAcceptGuardResult> => {
-    const actorResult = await deps.guard.requireActor(opts.headers);
-    if (!actorResult.ok) return actorResult;
+  const program = (opts: InvitationAcceptOptions) =>
+    Effect.gen(function* () {
+      const actor = yield* deps.guard.effect.requireActor(opts.headers);
+      const body = yield* parseBody(opts.parseBody);
 
-    const parsed = await resolveParseBody(opts.parseBody);
-    if (!parsed.ok) return parsed;
+      // repository の throw は Effect.promise が defect にするため伝播し 500 になる (従来の await と同じ)。
+      const invitation = yield* Effect.promise(() => deps.findInvitationByToken(body.token));
+      if (!invitation) return yield* Effect.fail(notFound());
 
-    const invitation = await deps.findInvitationByToken(parsed.data.token);
-    if (!invitation) return { ok: false, error: "not_found", status: 404 };
+      if (invitation.email.toLowerCase() !== actor.email.toLowerCase()) {
+        return yield* Effect.fail(emailMismatch());
+      }
 
-    if (invitation.email.toLowerCase() !== actorResult.actor.email.toLowerCase()) {
-      return { ok: false, error: "email_mismatch", status: 403 };
-    }
+      // 既所属短絡 (isAcceptable より先) — 期限切れでも既所属なら 200 reused を返す冪等契約を保つ。
+      const already = yield* Effect.promise(() =>
+        deps.findMembership(actor.id, invitation.companyId),
+      );
+      if (already) {
+        return { ok: true as const, mode: "reused" as const, companyId: invitation.companyId };
+      }
 
-    // 既所属短絡 (isAcceptable より先) — 期限切れでも既所属なら 200 reused を返す冪等契約を保つ。
-    const already = await deps.findMembership(actorResult.actor.id, invitation.companyId);
-    if (already) {
-      return { ok: true, mode: "reused", companyId: invitation.companyId };
-    }
+      if (!isAcceptable(invitation)) return yield* Effect.fail(expiredOrUsed());
 
-    if (!isAcceptable(invitation)) {
-      return { ok: false, error: "expired_or_used", status: 410 };
-    }
+      return { ok: true as const, mode: "proceed" as const, actor, invitation };
+    });
 
-    return { ok: true, mode: "proceed", actor: actorResult.actor, invitation };
-  };
+  return (opts: InvitationAcceptOptions): Promise<InvitationAcceptGuardResult> =>
+    runGuard(program(opts));
 }
 
 export const requireInvitationAccept = makeRequireInvitationAccept();
