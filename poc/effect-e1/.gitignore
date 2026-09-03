@@ -1,0 +1,3 @@
+# PoC の実行生成物 (wrangler dev の状態、dry-run 出力) は commit しない
+.wrangler/
+dist/
