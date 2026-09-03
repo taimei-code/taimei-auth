@@ -1,12 +1,15 @@
+import { Effect } from "effect";
 import { canInviteRole } from "../policy";
 import type { Role } from "@/db/repositories/membership";
 import {
   type Actor,
   type Forbidden,
+  forbidden,
   guard,
   type InvalidArgument,
   type ParseBodyCallback,
-  resolveParseBody,
+  parseBody,
+  runGuard,
   type Unauthorized,
 } from "./core";
 
@@ -26,33 +29,27 @@ export type InviteGuardResult =
   | Forbidden
   | InvalidArgument;
 
+type InviteOptions = {
+  headers: Headers;
+  companyId: string;
+  parseBody: ParseBodyCallback<ParsedInviteBody>;
+};
+
 export function makeRequireInvite(deps = { guard }) {
-  return async (opts: {
-    headers: Headers;
-    companyId: string;
-    parseBody: ParseBodyCallback<ParsedInviteBody>;
-  }): Promise<InviteGuardResult> => {
-    const membershipResult = await deps.guard.requireMembership(
-      opts.headers,
-      opts.companyId,
-      "ADMIN",
-    );
-    if (!membershipResult.ok) return membershipResult;
+  const program = (opts: InviteOptions) =>
+    Effect.gen(function* () {
+      const { actor, role } = yield* deps.guard.effect.requireMembership(
+        opts.headers,
+        opts.companyId,
+        "ADMIN",
+      );
+      const body = yield* parseBody(opts.parseBody);
+      if (!canInviteRole(role, body.role)) return yield* Effect.fail(forbidden());
 
-    const parsed = await resolveParseBody(opts.parseBody);
-    if (!parsed.ok) return parsed;
+      return { ok: true as const, actor, email: body.email, role: body.role };
+    });
 
-    if (!canInviteRole(membershipResult.role, parsed.data.role)) {
-      return { ok: false, error: "forbidden", status: 403 };
-    }
-
-    return {
-      ok: true,
-      actor: membershipResult.actor,
-      email: parsed.data.email,
-      role: parsed.data.role,
-    };
-  };
+  return (opts: InviteOptions): Promise<InviteGuardResult> => runGuard(program(opts));
 }
 
 export const requireInvite = makeRequireInvite();
