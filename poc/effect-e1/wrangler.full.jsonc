@@ -1,0 +1,47 @@
+{
+  // Cloudflare Workers 設定。設計詳細: docs/adr/0011-cloudflare-workers-migration.md
+  // 本番では hyperdrive.id を実 Hyperdrive config id に、vars を本番値に、
+  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN / MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
+  // ローカルは localConnectionString + .dev.vars (gitignore 済) を使う。
+  "name": "poc-effect-e1-full",
+  "main": "./full-bundle-probe.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "../../web/dist",
+    "binding": "ASSETS",
+    // worker を常に先に走らせ (/ の loginShortcut 等が静的 index.html に吸われないように)、
+    // worker が該当しない path を env.ASSETS.fetch へ委譲する。deep link は SPA fallback。
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  // Upstash free tier は 30 日間データ操作が無いと DB をアーカイブし endpoint が消える (2026-09-03 に本番で
+  // magic link 送信が 500 になった原因)。毎日 03:00 JST に worker.ts の scheduled handler で TTL 付き SET を
+  // 1 回打つ (src/redis-keepalive.ts)。週 1 回以上であることを src/__tests__/wrangler-cron-keepalive.test.ts が固定する。
+  "triggers": { "crons": ["0 18 * * *"] },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "1c0d32b60a144a3cabc729bd83484276",
+      "localConnectionString": "postgres://postgres:password@127.0.0.1:5435/auth"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "production",
+    "APP_NAME": "taimei",
+    "AUTH_SERVICE_URL": "https://auth.taimei-code.com",
+    "AUTH_COOKIE_DOMAIN": "taimei-code.com",
+    "AUTH_TRUSTED_ORIGINS": "https://app.taimei-code.com,https://auth.taimei-code.com",
+    // from は Resend 検証済みドメイン (transactional.taimei-code.com) のアドレスにする。
+    // 未設定だと client.ts の default onboarding@resend.dev になり、Resend テストモードで
+    // アカウント所有者宛にしか送れず任意ユーザーへの magic-link が 403 になる。
+    "AUTH_FROM_EMAIL_MAGIC_LINK": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_WELCOME": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_INVITATION": "noreply@transactional.taimei-code.com",
+    "AUTH_FROM_EMAIL_SECURITY": "noreply@transactional.taimei-code.com"
+  },
+  // 本番ドメイン。custom_domain:true で Cloudflare が auth.taimei-code.com の DNS レコードと
+  // TLS 証明書を管理し Worker に紐付ける。cross-subdomain cookie (.taimei-code.com) のため
+  // workers.dev でなくこのホストで配信する必要がある (ADR-0004 / ADR-0011)。
+  "routes": [{ "pattern": "auth.taimei-code.com", "custom_domain": true }]
+}

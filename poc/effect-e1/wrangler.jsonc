@@ -1,0 +1,12 @@
+{
+  // PoC 専用の Worker。root wrangler.jsonc と同じ compatibility 設定で、Effect v4 + ALS + per-request
+  // pg Pool の共存を local workerd で観測する。DB は compose の auth-postgres (host 5435)。
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "poc-effect-e1",
+  "main": "./worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "DATABASE_URL": "postgres://postgres:password@127.0.0.1:5435/auth"
+  }
+}
