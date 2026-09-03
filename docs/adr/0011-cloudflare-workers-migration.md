@@ -165,6 +165,15 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
   `triggers.crons`) から `src/worker.ts` の `scheduled` が毎日 TTL 付き SET を打つ keep-alive
   (`src/redis-keepalive.ts`)。復旧は Upstash Console で DB を復元/再作成し `wrangler secret put` で
   `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` を更新する。
+- **Hyperdrive の query caching は無効にする**: Hyperdrive は既定で parameterized な SELECT の結果を
+  max_age 60s / stale-while-revalidate 15s で cache する (tx 内の読み取りと mutation は対象外)。本 service
+  の membership 読み取り (`findMembershipsByUserId`) は cacheable なので、signup → 事業所作成 → `/account`
+  の直後に `/api/account/memberships` が作成前の空結果を返し、SessionGuard が `/auth/signup/company` へ
+  戻す (2026-09-03 に本番で再現。約 60s 後に正しく 1 件返る)。認証 / membership の読み取りは stale を
+  許容できないため、本番 config は `wrangler hyperdrive update <id> --caching-disabled` で cache を切り、
+  `wrangler hyperdrive get <id>` の `caching.disabled: true` を確認する (analysis.md の spike-1 で
+  「本番 query caching の再確認」として持ち越していた項目の結論)。config を作り直す時は
+  `--caching-disabled` を付ける。回帰確認は QA-MR-10。
 - **本番 secret/設定**: `wrangler secret put` で `AUTH_SECRET` / `AUTH_SERVICE_KEY` / `UPSTASH_*` /
   `SENTRY_DSN` を注入。`hyperdrive.id` を実 config に、`vars` を本番値にする。DNS で `auth` subdomain
   を Workers に向ける。migration は CI から drizzle-kit で流す (Worker 内では実行しない)。

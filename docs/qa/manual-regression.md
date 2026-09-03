@@ -101,3 +101,14 @@
   2. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
   3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
 - **期待結果**: build が `Workspace dependency not found` 等で落ちず、`bunx drizzle-kit migrate` が完走して `/health` が 200 を返す
+
+## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
+
+- **契機**: 本番 Hyperdrive config の作り直し / `wrangler.jsonc` の `hyperdrive` を触る PR、`db/client.ts` / `db/repositories/membership.ts` の読み取り経路を触る PR、および本番デプロイ後
+- **前提**: production。Hyperdrive の query cache (既定 max_age 60s) が有効だと、作成前に cache された空の membership 一覧が作成直後の読み取りに返り、`/account` が `/auth/signup/company` へ戻す (2026-09-03 に本番で再現。ADR-0011 Consequences 参照)。local の Hyperdrive local mode は cache しないため再現せず、実 Hyperdrive でしか確認できない
+- **手順**:
+  1. `bunx wrangler hyperdrive get <hyperdrive.id>` で `caching.disabled` が `true` であることを確認する
+  2. 未使用のメールアドレスで `/auth/signup?service_name=accounts&redirect_url=<origin>/account` から Magic Link 登録し、事業所登録画面に着地する
+  3. 事業所名を入力して「事業所を作成」を押す
+  4. DevTools → Network で作成直後の `GET /api/account/memberships` の応答本文を確認する
+- **期待結果**: 作成の直後 (60 秒待たず) に `/account` が「現在の事業所」に作成した事業所を表示し、事業所登録画面へ戻らない。手順 4 の応答に作成した membership が 1 件含まれる
