@@ -6,7 +6,12 @@ import { signInParamsSchema } from "@core/sign-in-params";
 
 import { listMyMemberships } from "../../account/current-company";
 import { authClient } from "../../auth/auth-client";
-import { redirectToSignIn, signInLandingUrl } from "../../auth/auth-redirect";
+import {
+  discardStaleSession,
+  isStaleSessionError,
+  redirectToSignIn,
+  signInLandingUrl,
+} from "../../auth/auth-redirect";
 import { FullScreenLoader } from "../../shared/FullScreenLoader";
 import { RequestJsonError } from "../../shared/request-json";
 import { Button } from "../../shared/ui/button";
@@ -64,6 +69,11 @@ export const SignUpCompany = () => {
         setStatus("needs-input");
       })
       .catch((e) => {
+        // フォームを出しても送信で再び 401 になるため session を破棄する。
+        if (isStaleSessionError(e)) {
+          discardStaleSession(() => authClient.signOut());
+          return;
+        }
         console.error("listMyMemberships failed", e);
         setStatus("needs-input");
       });

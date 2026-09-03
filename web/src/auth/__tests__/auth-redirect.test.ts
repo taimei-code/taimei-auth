@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { signInParamsSchema } from "@core/sign-in-params";
-import { redirectAfterAuthChange } from "../auth-redirect";
+import { RequestJsonError } from "../../shared/request-json";
+import {
+  discardStaleSession,
+  isStaleSessionError,
+  redirectAfterAuthChange,
+} from "../auth-redirect";
 
 const originalWindow = globalThis.window;
 
@@ -44,5 +49,63 @@ describe("redirectAfterAuthChange", () => {
     const url = new URL(stub.location.href, "http://auth.taimei-code.local:3100");
     const parsed = signInParamsSchema.safeParse(Object.fromEntries(url.searchParams));
     expect(parsed.success).toBe(true);
+  });
+});
+
+describe("isStaleSessionError", () => {
+  test("account API の 401 は stale session (session cookie は有効なのに server guard が拒否) と判定する", () => {
+    expect(
+      isStaleSessionError(new RequestJsonError(401, "GET /api/account/memberships failed: 401")),
+    ).toBe(true);
+  });
+
+  test("401 以外の RequestJsonError や一般 Error は stale session ではない", () => {
+    expect(isStaleSessionError(new RequestJsonError(403, "forbidden"))).toBe(false);
+    expect(isStaleSessionError(new RequestJsonError(500, "boom"))).toBe(false);
+    expect(isStaleSessionError(new Error("network"))).toBe(false);
+  });
+});
+
+describe("discardStaleSession", () => {
+  const stubReplaceableWindow = (origin: string) => {
+    const replaced: string[] = [];
+    const stub = {
+      location: {
+        href: `${origin}/auth/signup/company`,
+        origin,
+        replace: (url: string) => {
+          replaced.push(url);
+        },
+      },
+    };
+    globalThis.window = stub as unknown as typeof globalThis.window;
+    return replaced;
+  };
+
+  test("signOut を完了してから /auth (末尾スラッシュ無し) の sign-in landing へ replace 遷移する", async () => {
+    const replaced = stubReplaceableWindow("http://auth.taimei-code.local:3100");
+    const order: string[] = [];
+
+    await discardStaleSession(async () => {
+      order.push("signOut");
+    });
+
+    expect(order).toEqual(["signOut"]);
+    expect(replaced).toHaveLength(1);
+    const url = new URL(replaced[0] ?? "", "http://auth.taimei-code.local:3100");
+    // /auth/ (末尾スラッシュ付き) は auth-entry-redirect の対象で、同じ session が事業所登録へ送り返される。
+    expect(url.pathname).toBe("/auth");
+    expect(url.searchParams.get("service_name")).toBe("accounts");
+    expect(url.searchParams.get("redirect_url")).toBe("http://auth.taimei-code.local:3100/account");
+  });
+
+  test("signOut が失敗しても sign-in landing へ遷移する (画面に留めない)", async () => {
+    const replaced = stubReplaceableWindow("http://auth.taimei-code.local:3100");
+
+    await discardStaleSession(async () => {
+      throw new Error("sign-out failed");
+    });
+
+    expect(replaced).toHaveLength(1);
   });
 });

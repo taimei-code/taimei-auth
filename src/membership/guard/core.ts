@@ -1,4 +1,5 @@
 import { auth } from "../../auth";
+import { Sentry } from "../../sentry";
 import { isAtLeast } from "../policy";
 import { findMembership, type Role } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
@@ -61,9 +62,13 @@ export function createMembershipGuard(deps: GuardDeps) {
   const requireActor = async (headers: Headers): Promise<ActorResult> => {
     // getActor の失敗は null に倒し 401 にする (auth は fail-closed)。.then に包むのは非 async な
     // getActor の同期 throw も拾うため — 直接 .catch() だと装着前に伝播して 500 = fail-open になる。
+    // 障害と未認証が同じ 401 になるため、障害側は Sentry に残す。
     const actor = await Promise.resolve()
       .then(() => deps.getActor(headers))
-      .catch(() => null);
+      .catch((error: unknown) => {
+        Sentry.captureException(error, { tags: { component: "membership-guard" } });
+        return null;
+      });
     if (!actor) return { ok: false, error: "unauthorized", status: 401 };
     return { ok: true, actor };
   };

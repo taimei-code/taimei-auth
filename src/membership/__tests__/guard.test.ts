@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import type { MembershipRow, Role } from "@/db/repositories/membership";
+import { type CaptureContext, setSentryBackend } from "../../sentry";
 import { type Actor, createMembershipGuard } from "../guard";
 
 const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
@@ -20,6 +21,32 @@ const buildGuard = (opts: { actor?: Actor | null; membershipRole?: Role | null }
     findMembership: async () =>
       opts.membershipRole ? fakeMembership(opts.membershipRole) : undefined,
   });
+
+// Sentry backend は module-global のため、spy 注入後は console fallback 相当へ戻して後続 test file に漏らさない。
+type CapturedException = { error: unknown; context?: CaptureContext };
+let capturedExceptions: CapturedException[] = [];
+
+const spyBackend = {
+  captureException: (error: unknown, context?: CaptureContext) => {
+    capturedExceptions.push({ error, context });
+  },
+  captureMessage: () => {},
+};
+
+const consoleFallback = {
+  captureException: (error: unknown) => console.error("[sentry:noop] captureException", error),
+  captureMessage: (message: string, context?: CaptureContext) =>
+    console.warn("[sentry:noop] captureMessage", message, context?.tags),
+};
+
+beforeEach(() => {
+  capturedExceptions = [];
+  setSentryBackend(spyBackend);
+});
+
+afterAll(() => {
+  setSentryBackend(consoleFallback);
+});
 
 describe("requireActor", () => {
   test("actor null → 401 unauthorized", async () => {
@@ -48,6 +75,30 @@ describe("requireActor", () => {
       error: "unauthorized",
       status: 401,
     });
+  });
+
+  test("getActor が throw → 401 にする前に Sentry へ例外を記録する", async () => {
+    const failure = new Error("db timeout");
+    const { requireActor } = createMembershipGuard({
+      getActor: async () => {
+        throw failure;
+      },
+      findMembership: async () => undefined,
+    });
+
+    await requireActor(noHeaders);
+
+    expect(capturedExceptions).toHaveLength(1);
+    expect(capturedExceptions[0]?.error).toBe(failure);
+    expect(capturedExceptions[0]?.context?.tags?.component).toBe("membership-guard");
+  });
+
+  test("getActor が null (未認証) → Sentry には記録しない", async () => {
+    const { requireActor } = buildGuard({ actor: null });
+
+    await requireActor(noHeaders);
+
+    expect(capturedExceptions).toHaveLength(0);
   });
 
   // async の rejection だけでなく、非 async の同期 throw も requireActor 側の .catch で 401 に落ちる。
