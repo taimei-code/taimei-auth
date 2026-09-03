@@ -1,3 +1,5 @@
+import { RequestJsonError } from "../shared/request-json";
+
 // SessionGuard は初回 mount のみで session を再評価するため、navigate ではなく full reload で副作用を断つ。
 // deleteAccount は退会・最終事業所削除・最終所属離脱によるアカウント連動削除を指す。
 export type AuthChange = "signOut" | "deleteAccount";
@@ -24,3 +26,14 @@ export const redirectToSignIn = () => redirectToAuthFlow("/auth/");
 
 // 事業所未確定 (membership 0 件) の user を /account 操作の前に事業所作成へ誘導する。
 export const redirectToCompanySignup = () => redirectToAuthFlow("/auth/signup/company");
+
+// getSession は通るのに account API が 401 = Redis の session と DB の user 行が食い違う stale session。
+export const isStaleSessionError = (error: unknown): boolean =>
+  error instanceof RequestJsonError && error.status === 401;
+
+// redirectToSignIn だと auth-entry-redirect が同じ session で事業所登録へ送り返しループするため、
+// session を破棄してから entry redirect 非対象の sign-in landing へ送る。
+export const discardStaleSession = (signOut: () => Promise<unknown>): Promise<void> =>
+  signOut()
+    .catch((e) => console.error("signOut failed:", e))
+    .then(() => window.location.replace(signInLandingUrl()));
