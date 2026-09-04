@@ -14,7 +14,7 @@ drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/
 
 `/db/` を別プロセスに剥がして RPC 越しに呼ぶ形にすることが将来の分離方法。`/db/` の外から drizzle に触らせない。
 
-`src/rpc/*` 配下からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (PR #34 → #35)。
+`src/**` (test と `src/auth.ts` を除く) からの `drizzle-orm` / `@/db/schema` / `@/db/client` import は `biome.json` の `noRestrictedImports` で機械的に block される (PR #34 → #35)。`web/` と `packages/` からの import は lint では block されないため、review で守る。
 
 ### 例外 path (正本)
 
@@ -62,7 +62,7 @@ PL/pgSQL trigger / VIEW / FUNCTION / custom DDL など、`db/schema.ts` のス�
 理由: drizzle-kit は `drizzle/` 配下を生成物として扱う。手書き SQL を `drizzle/` 直下に置くと、`db/schema.ts` 変更で `bun run db:generate` を走らせた時に再生成衝突 / 意図しない差分検知が起きる。`drizzle/manual/` への隔離で再生成境界を物理的に分離する。
 
 適用フロー:
-- compose の `auth-migrate` service が `bun run db:migrate && bun run db:migrate-manual` の順で実行 (`docker-compose.yml:55`)
+- compose の `auth-migrate` service が `bun run db:migrate && bun run db:migrate-manual` の順で実行する (`docker-compose.yml`)
 - `db/migrate-manual.ts` が `drizzle/manual/*.sql` を `db.transaction` 内で順次適用
 - 複数 file の部分適用を防ぐため transaction 内に閉じている (例: `0001` 成功 / `0002` 失敗で全 rollback)
 
