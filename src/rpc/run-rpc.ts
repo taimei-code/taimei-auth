@@ -3,13 +3,12 @@ import type { Cause, Effect } from "effect";
 import { Data, Exit } from "effect";
 import {
   classifyCause,
-  type InternalReport,
   isWireShaped,
+  reportInternalFailures,
   type RouteError,
   type WireError,
 } from "../handlers/wire-error";
 import { type AppServices, getRuntime } from "../runtime";
-import { Sentry } from "../sentry";
 
 // ConnectRPC 側の Transport adapter (ADR-0017 Decision の境界表 2 行目と Sentry 項)。runRoute と同じ catalog を Connect の Code に写像する
 // 唯一の点。rpc handler 固有の (message 付き) 失敗は RpcError で運び、message と Code をそのまま保つ。
@@ -49,19 +48,10 @@ const canSerializeToConnect = (e: unknown): boolean => e instanceof RpcError || 
 
 function causeToConnectError(cause: Cause.Cause<RouteError | RpcError>): ConnectError {
   const { failure, reports } = classifyCause<WireError | RpcError>(cause, canSerializeToConnect);
-  for (const report of reports) reportInternalFailure(report);
+  reportInternalFailures(reports, "[runRpc]", { tags: { handler: "runRpc" } });
   if (failure instanceof RpcError) return new ConnectError(failure.message, failure.code);
   if (failure) return new ConnectError(failure.error, statusToCode(failure.status));
   // 旧経路 (handler の throw を ConnectRPC adapter が Code.Unknown + 元 message に写像) と同じ契約を保つ。
   // consumer (packages/auth-client) は message を表示に使うため、"internal error" に潰さない。
   return ConnectError.from(reports[0]?.error);
-}
-
-// Sentry に加えて console にも出す (runRoute と同じ理由: Sentry が落ちている時の観測手段)。
-function reportInternalFailure(report: InternalReport): void {
-  console.error("[runRpc]", report.error);
-  Sentry.captureException(report.error, {
-    level: report.boundary ? "warning" : "error",
-    tags: { handler: "runRpc" },
-  });
 }

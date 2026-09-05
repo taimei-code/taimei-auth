@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { grepFiles, REPO_ROOT } from "./grep-files";
+import { type GrepOptions, grepFiles, REPO_ROOT } from "./grep-files";
 
 // ADR-0017 / design §4 の import 境界 (I2): Repository 境界 db/ と 共通画面 SPA web/ は effect を持ち込まない。
 // biome の noRestrictedImports は override の「最後に一致した copy が勝つ」semantics のため db/** 専用 override を
@@ -58,32 +58,68 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("runBackground\\(").filter((f) => f !== "src/background.ts")).toEqual([]);
   });
 
-  test("Sentry facade の直呼びは src/sentry.ts と adapter (run-route / run-rpc) だけ", () => {
-    const allowed = new Set(["src/sentry.ts", "src/handlers/run-route.ts", "src/rpc/run-rpc.ts"]);
+  test("Sentry facade の直呼びは src/sentry.ts と reportInternalFailures (wire-error) だけ", () => {
+    const allowed = new Set(["src/sentry.ts", "src/handlers/wire-error.ts"]);
     expect(
       srcFiles("Sentry\\.capture(Exception|Message)\\(").filter((f) => !allowed.has(f)),
+    ).toEqual([]);
+  });
+
+  // wire-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
+  // (use-case / handler は SentryService を yield* する: src/CLAUDE.md「Effect様式」)。
+  test("reportInternalFailures / captureThrown の呼び出しは adapter (run-route / run-rpc) と better-auth の結線 (auth.ts / app.ts) だけ", () => {
+    const allowed = new Set([
+      "src/handlers/wire-error.ts",
+      "src/handlers/run-route.ts",
+      "src/rpc/run-rpc.ts",
+      "src/auth.ts",
+      "src/app.ts",
+    ]);
+    expect(
+      srcFiles("(reportInternalFailures|captureThrown)\\(").filter((f) => !allowed.has(f)),
     ).toEqual([]);
   });
 });
 
 // ---- test の DB 接触 (08-liftall-and-test-seeds §3.3): src の test と e2e は db/testing/* だけを runtime import する ----
 
-// 静的 import (named / namespace) と動的 import (import 関数呼び出し) を拾い、`import type` / `export type` は除く。
-// 1 行の形は grep で拾う。biome (lineWidth 100) が折り返した複数行の形は `} from "@/db/…"` の行を grep で拾い、
-// その statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が素通りする)。
-const DB_SPECIFIER = String.raw`["']@/db/[^"']*["']`;
-const DB_IMPORT_ONE_LINE = String.raw`(^import (\{|\*) .* from|import\()\s*${DB_SPECIFIER}`;
-const DB_IMPORT_CLOSING = String.raw`^\} from\s*${DB_SPECIFIER}`;
+// 静的 import (named / namespace / default / side-effect / re-export) と、gate が禁じる場合は動的 import (import 関数
+// 呼び出し) も拾い、`import type` / `export type` は除く。1 行の形は grep で拾う (default import の識別子は `type` にも
+// 当たるので、hit 行を読んで型 import を落とす)。biome (lineWidth 100) が折り返した複数行の形は `} from "…"` の行を
+// grep で拾い、その statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が
+// 素通りする)。DB 境界は動的 import も禁じ、runtime の TDZ gate は動的 import を正規の形として許可する。
+type ImportGate = {
+  readonly specifier: RegExp;
+  readonly oneLine: string;
+  readonly closing: string;
+};
+// `import { x } from` / `import * as x from` / `import x from` / `import x, { y } from` / `export { x } from` /
+// `export * from` と side-effect の `import "…"`。
+const STATIC_FORMS = String.raw`^(import|export) (\{|\*|[A-Za-z_$][A-Za-z0-9_$]*).* from|^import`;
+const TYPE_ONLY = /^(import|export) type\b/;
+const gateFor = (specifier: string, opts: { includeDynamic: boolean }): ImportGate => ({
+  specifier: new RegExp(specifier),
+  oneLine: opts.includeDynamic
+    ? String.raw`(${STATIC_FORMS}|import\()\s*${specifier}`
+    : String.raw`(${STATIC_FORMS})\s*${specifier}`,
+  closing: String.raw`^\} from\s*${specifier}`,
+});
+const DB_IMPORTS = gateFor(`["']@/db/[^"']*["']`, { includeDynamic: true });
+// 相対 path (`./runtime` / `../runtime`)、tsconfig paths の `@core/runtime`、拡張子付きの `.js` を同じ module として拾う。
+const RUNTIME_IMPORTS = gateFor(String.raw`["'](@core/|(\./|\.\./)+)runtime(\.js)?["']`, {
+  includeDynamic: false,
+});
 const TS_FILES = ["*.ts", "*.tsx"];
+type ScanOptions = Pick<GrepOptions, "onlyTests" | "excludeTests">;
 
-type DbImport = { file: string; specifier: string };
+type ImportHit = { file: string; specifier: string };
 
-const specifierOf = (text: string): string =>
-  /["']@\/db\/[^"']*["']/.exec(text)?.[0].slice(1, -1) ?? "";
+const specifierOf = (gate: ImportGate, text: string): string =>
+  gate.specifier.exec(text)?.[0].slice(1, -1) ?? "";
 
-const multiLineImports = (file: string): DbImport[] => {
+const multiLineImports = (gate: ImportGate, file: string): ImportHit[] => {
   const lines = readFileSync(isAbsolute(file) ? file : join(REPO_ROOT, file), "utf8").split("\n");
-  const closing = new RegExp(DB_IMPORT_CLOSING);
+  const closing = new RegExp(gate.closing);
   return lines.flatMap((line, i) => {
     if (!closing.test(line)) return [];
     const head =
@@ -91,39 +127,44 @@ const multiLineImports = (file: string): DbImport[] => {
         .slice(0, i)
         .reverse()
         .find((l) => /^(import|export)\b/.test(l)) ?? "";
-    return /^(import|export) type\b/.test(head) ? [] : [{ file, specifier: specifierOf(line) }];
+    return TYPE_ONLY.test(head) ? [] : [{ file, specifier: specifierOf(gate, line) }];
   });
 };
 
-const dbRuntimeImports = (target: string, opts: { onlyTests?: boolean } = {}): DbImport[] => {
-  const oneLine = grepFiles(DB_IMPORT_ONE_LINE, target, {
+const valueImports = (gate: ImportGate, target: string, opts: ScanOptions = {}): ImportHit[] => {
+  const oneLine = grepFiles(gate.oneLine, target, {
     ...opts,
     include: TS_FILES,
     lines: true,
-  }).map((hit) => {
+  }).flatMap((hit) => {
     const sep = hit.indexOf(":");
-    return { file: hit.slice(0, sep), specifier: specifierOf(hit.slice(sep + 1)) };
+    const line = hit.slice(sep + 1);
+    return TYPE_ONLY.test(line)
+      ? []
+      : [{ file: hit.slice(0, sep), specifier: specifierOf(gate, line) }];
   });
-  const multi = grepFiles(DB_IMPORT_CLOSING, target, { ...opts, include: TS_FILES }).flatMap(
-    multiLineImports,
+  const multi = grepFiles(gate.closing, target, { ...opts, include: TS_FILES }).flatMap((file) =>
+    multiLineImports(gate, file),
   );
   return [...oneLine, ...multi];
 };
 
-const dbImportFiles = (target: string, opts?: { onlyTests?: boolean }): string[] =>
-  [...new Set(dbRuntimeImports(target, opts).map((i) => i.file))].sort();
+const valueImportFiles = (gate: ImportGate, target: string, opts?: ScanOptions): string[] =>
+  [...new Set(valueImports(gate, target, opts).map((i) => i.file))].sort();
 
-const dbImportsOutsideTesting = (target: string): DbImport[] =>
-  dbRuntimeImports(target).filter((i) => !i.specifier.startsWith("@/db/testing/"));
+const dbImportsOutsideTesting = (target: string): ImportHit[] =>
+  valueImports(DB_IMPORTS, target).filter((i) => !i.specifier.startsWith("@/db/testing/"));
 
 describe("test の DB 接触は db/testing/* に閉じる", () => {
   test("src の test の @/db runtime import は TestDb の face (src/__tests__/test-db.ts) のみ", () => {
-    expect(dbImportFiles("src", { onlyTests: true })).toEqual(["src/__tests__/test-db.ts"]);
+    expect(valueImportFiles(DB_IMPORTS, "src", { onlyTests: true })).toEqual([
+      "src/__tests__/test-db.ts",
+    ]);
   });
 
   test("e2e の @/db runtime import は e2e/fixtures.ts の @/db/testing/* のみ", () => {
     expect(dbImportsOutsideTesting("e2e")).toEqual([]);
-    expect(dbImportFiles("e2e")).toEqual(["e2e/fixtures.ts"]);
+    expect(valueImportFiles(DB_IMPORTS, "e2e")).toEqual(["e2e/fixtures.ts"]);
   });
 
   test("positive control: 静的 (1 行 / 複数行) と動的 import は検出され、型 import は検出されない", () => {
@@ -143,9 +184,44 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         'import type {\n  UserRow,\n  SessionRow,\n} from "@/db/schema";\n',
       );
       writeFileSync(join(dir, "testing.ts"), 'import { createSeed } from "@/db/testing/seed";\n');
-      expect(dbImportFiles(dir)).toEqual([
+      writeFileSync(join(dir, "side-effect.ts"), 'import "@/db/client";\n');
+      writeFileSync(join(dir, "default.ts"), 'import db from "@/db/client";\n');
+      writeFileSync(join(dir, "re-export.ts"), 'export { db } from "@/db/client";\n');
+      writeFileSync(
+        join(dir, "re-export-type.ts"),
+        'export type { DbTx } from "@/db/transaction";\n',
+      );
+      writeFileSync(join(dir, "rt-static.ts"), 'import { getRuntime } from "./runtime";\n');
+      writeFileSync(
+        join(dir, "rt-multi.ts"),
+        'import {\n  type AppServices,\n  getRuntime,\n} from "../runtime";\n',
+      );
+      writeFileSync(join(dir, "rt-type.ts"), 'import type { AppServices } from "../runtime";\n');
+      writeFileSync(
+        join(dir, "rt-multi-type.ts"),
+        'import type {\n  AppServices,\n} from "../runtime";\n',
+      );
+      writeFileSync(
+        join(dir, "rt-dynamic.ts"),
+        `const { getRuntime } = await ${dynamicImport}"./runtime");\n`,
+      );
+      writeFileSync(join(dir, "rt-side-effect.ts"), 'import "./runtime";\n');
+      writeFileSync(join(dir, "rt-default.ts"), 'import rt from "../runtime";\n');
+      writeFileSync(join(dir, "rt-mixed.ts"), 'import rt, { getRuntime } from "./runtime";\n');
+      writeFileSync(join(dir, "rt-re-export.ts"), 'export { getRuntime } from "../runtime";\n');
+      writeFileSync(join(dir, "rt-re-export-star.ts"), 'export * from "./runtime";\n');
+      writeFileSync(join(dir, "rt-alias.ts"), 'import { getRuntime } from "@core/runtime";\n');
+      writeFileSync(join(dir, "rt-js.ts"), 'import { getRuntime } from "./runtime.js";\n');
+      writeFileSync(
+        join(dir, "rt-re-export-type.ts"),
+        'export type { AppServices } from "./runtime";\n',
+      );
+      expect(valueImportFiles(DB_IMPORTS, dir)).toEqual([
+        join(dir, "default.ts"),
         join(dir, "dynamic.ts"),
         join(dir, "multi.ts"),
+        join(dir, "re-export.ts"),
+        join(dir, "side-effect.ts"),
         join(dir, "static.ts"),
         join(dir, "testing.ts"),
       ]);
@@ -153,7 +229,26 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         dbImportsOutsideTesting(dir)
           .map((i) => i.file)
           .sort(),
-      ).toEqual([join(dir, "dynamic.ts"), join(dir, "multi.ts"), join(dir, "static.ts")]);
+      ).toEqual([
+        join(dir, "default.ts"),
+        join(dir, "dynamic.ts"),
+        join(dir, "multi.ts"),
+        join(dir, "re-export.ts"),
+        join(dir, "side-effect.ts"),
+        join(dir, "static.ts"),
+      ]);
+      // runtime gate は動的 import を許可する (TDZ を避ける正規の形) ので静的 import の file だけ。
+      expect(valueImportFiles(RUNTIME_IMPORTS, dir)).toEqual([
+        join(dir, "rt-alias.ts"),
+        join(dir, "rt-default.ts"),
+        join(dir, "rt-js.ts"),
+        join(dir, "rt-mixed.ts"),
+        join(dir, "rt-multi.ts"),
+        join(dir, "rt-re-export-star.ts"),
+        join(dir, "rt-re-export.ts"),
+        join(dir, "rt-side-effect.ts"),
+        join(dir, "rt-static.ts"),
+      ]);
     } finally {
       rmSync(dir, { recursive: true });
     }
@@ -169,5 +264,32 @@ describe("revokeAllSessionsForUser の窓口", () => {
       grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
     );
     expect(offenders).toEqual(["src/account/revoke-sessions.ts"]);
+  });
+});
+
+// ---- AppLayer の構築失敗経路が無い (ADR-0017 Decision の runtime 項): ManagedRuntime.make は Layer を初回 run で構築するため、
+// 構築で失敗しうる Layer (Layer.effect / scoped / unwrap 等) を足すと bootstrap でなく本番の初回 request で落ちる。
+// Layer.succeed / mergeAll に限る間はその経路が無い。必要になったら、この gate と一緒に bootstrap の eager 構築を戻す ----
+
+describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {
+    const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
+      excludeTests: true,
+      lines: true,
+    });
+    expect(hits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
+  });
+});
+
+// ---- runtime.ts の静的 import (src/CLAUDE.md「Effect様式」の TDZ 規則): auth.ts から静的に辿れる module に生えると環で TDZ になる ----
+
+describe("runtime.ts の静的 import", () => {
+  test("adapter (run-route / run-rpc) と entry (index / worker) に限る", () => {
+    expect(valueImportFiles(RUNTIME_IMPORTS, "src", { excludeTests: true })).toEqual([
+      "src/handlers/run-route.ts",
+      "src/index.ts",
+      "src/rpc/run-rpc.ts",
+      "src/worker.ts",
+    ]);
   });
 });

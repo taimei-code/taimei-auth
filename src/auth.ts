@@ -1,4 +1,5 @@
 import { betterAuth, APIError } from "better-auth";
+import { isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
@@ -9,6 +10,7 @@ import { getAppName } from "./email/client";
 import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
+import { captureThrown } from "./handlers/wire-error";
 import { MembershipRepo } from "./membership/ports";
 import { redisStorage } from "./redis";
 
@@ -38,6 +40,19 @@ function buildAuth() {
     },
 
     trustedOrigins: getTrustedOrigins(),
+
+    // better-auth の router は processRequest 内の throw を握って 500 にし Hono にも adapter にも届かない
+    // (dist/api/index.mjs の onError)。ここに来るのは hook / endpoint / middleware の非 APIError の throw と、router
+    // middleware (originCheck) の APIError。endpoint 内で throw した APIError は 5xx でも dispatch が Response に変換して
+    // 来ない。onRequest 段 (rate limiter) の throw は auth.handler の reject になるため src/app.ts の mount が拾う。
+    // 4xx の APIError は意図した wire failure。戻りは await されないので同期で完結させ runtime は引かない。
+    // throw: true は Hono 既定の 500 になるだけで Sentry に届かず Set-Cookie 合流も失う。
+    onAPIError: {
+      onError: (error) => {
+        if (isAPIError(error) && error.statusCode < 500) return;
+        captureThrown(error, "better-auth");
+      },
+    },
 
     database: drizzleAdapter(db, {
       provider: "pg",

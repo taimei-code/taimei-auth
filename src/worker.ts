@@ -33,17 +33,15 @@ function copyEnvToProcess(env: Env): void {
   }
 }
 
-// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → getRuntime → buildApp (buildAuth が db /
-// redisStorage を、buildApp が process.env を読む)。getRuntime は Layer が I/O resource を持たないため順序に依存
-// しないが、Layer 構築の失敗を最初の request でなく bootstrap で出すために app を memo する前に 1 回呼ぶ
-// (ADR-0017 Decision の runtime 項)。実 Pool は fetch ごとに runWithRequestPool で供給。
+// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → buildApp (buildAuth が db / redisStorage を、
+// buildApp が process.env を読む)。runtime は最初の adapter / hook 呼び出しで作る (AppLayer は全部 Layer.succeed で
+// 構築で失敗する経路が無い。詳細: src/runtime.ts)。実 Pool は fetch ごとに runWithRequestPool で供給。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
   initRedis();
   initAuth();
-  getRuntime();
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
       app.all("*", (c) => {
@@ -95,7 +93,9 @@ const handler = {
 
 // withSentry が fetch をラップし request スコープで Sentry client を初期化する (DSN 未設定なら no-op)。
 // route handler の例外は Hono が飲み込んで 500 にするためここには届かず、adapter (src/handlers/run-route.ts)
-// が Sentry に送る。ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。詳細: ADR-0011 / ADR-0017
+// が Sentry に送る。/api/auth/* は better-auth の onError (auth.ts の onAPIError) と、onRequest 段の reject を拾う
+// src/app.ts の mount が Sentry へ送る。ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。
+// 詳細: ADR-0011 / ADR-0017
 export default Sentry.withSentry(
   (env: Env) => ({
     dsn: env.SENTRY_DSN,

@@ -16,6 +16,7 @@ import { canaryToken } from "./handlers/canary-token";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { runMiddleware, runRoute } from "./handlers/run-route";
+import { captureThrown, internalErrorResponse } from "./handlers/wire-error";
 import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
@@ -157,16 +158,24 @@ export function buildApp(options: AppOptions): Hono {
 
   // GET/POST のみ better-auth に渡す。将来 better-auth が DELETE/PATCH route を増やしたら広げる
   // — でないと static fallback に落ちて 200 HTML が返り silent に壊れる。body は cache から再構築する。
+  // better-auth の router が onError (auth.ts の onAPIError) に渡すのは processRequest の throw だけで、onRequest 段
+  // (rate limiter が secondaryStorage = Redis を読む) の throw は auth.handler の reject として素通しする
+  // (better-call の router handler)。Hono 既定の 500 は Sentry に届かないので、ここで拾って同じ報告口に送る。
+  // onError が発火した request は Response で返り reject しないため二重報告にならない。
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
-    if (c.req.method === "GET") return auth.handler(c.req.raw);
-    const body = await c.req.arrayBuffer();
-    return auth.handler(
-      new Request(c.req.raw.url, {
-        method: c.req.method,
-        headers: c.req.raw.headers,
-        body: body.byteLength ? body : undefined,
-      }),
-    );
+    const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();
+    const request =
+      body === undefined
+        ? c.req.raw
+        : new Request(c.req.raw.url, {
+            method: c.req.method,
+            headers: c.req.raw.headers,
+            body: body.byteLength ? body : undefined,
+          });
+    return auth.handler(request).catch((error: unknown) => {
+      captureThrown(error, "better-auth");
+      return internalErrorResponse();
+    });
   });
 
   // MFA 状態変更 3 route の試行制限 (軸の理由は rate-limit.ts の mfaAttemptKey)。wildcard にしないのは

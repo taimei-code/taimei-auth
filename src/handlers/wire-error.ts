@@ -1,5 +1,6 @@
 import { Cause } from "effect";
 import { type BoundaryError, isBoundaryError } from "../errors";
+import { type CaptureContext, Sentry } from "../sentry";
 import type { CompanyError } from "../company/errors";
 import type { InvitationError } from "../invitation/errors";
 import type { MembershipError } from "../membership/errors";
@@ -9,7 +10,8 @@ import type { MfaWireErrorCode } from "../mfa/wire-contracts";
 
 // Transport の wire 直列化 (ADR-0017 Decision の境界表 2 行目)。旧 membership/guard/respond.ts の error response 生成を
 // 引き継ぎ、明示 header で charset 無しの application/json を付けて成功 response と byte-invariant を保つ。
-// Web 標準 Response だけを組み、hono には依存しない。
+// Web 標準 Response だけを組み、hono には依存しない。末尾の reportInternalFailures と captureThrown だけは Sentry への
+// 報告口で副作用 (console.error + Sentry) を持つ。
 
 // domain failure (use-case が返す) も wire code / status を自身で持つ (各 domain の errors.ts)。
 export type DomainError = MembershipError | CompanyError | InvitationError;
@@ -86,4 +88,39 @@ export function classifyCause<E>(
     reports.push({ error: new Error(Cause.pretty(cause)), boundary: false });
   }
   return { failure, reports };
+}
+
+// adapter と captureThrown が共有する報告口。Sentry に加えて console にも出す (Hono 既定の errorHandler が
+// console.error していた観測手段を Sentry が落ちている時のために残す)。境界障害は warning (バグと区別)。
+export function reportInternalFailures(
+  reports: InternalReport[],
+  label: string,
+  context: Pick<CaptureContext, "tags" | "extra">,
+): void {
+  for (const report of reports) {
+    console.error(label, report.error);
+    Sentry.captureException(report.error, {
+      ...context,
+      level: report.boundary ? "warning" : "error",
+    });
+  }
+}
+
+// Effect の外 (better-auth の onAPIError.onError / src/app.ts の auth.handler 呼び出し) で受けた thrown value を
+// adapter と同じ規則で Sentry に送る。wire は無いので canSerializeToWire を常に false にし、boundary error は cause を
+// warning、それ以外は error にする。観測自体の失敗 (Sentry backend の throw) は握る: better-call は onError の throw を
+// auth.handler の reject にし、better-auth が組んだ 500 応答 (Set-Cookie 合流) を失わせる (mfa-challenge.ts の report と
+// 同じ規則)。元の error は reportInternalFailures が Sentry より先に console.error するので痕跡は残る。
+export function captureThrown(error: unknown, component: string): void {
+  try {
+    reportInternalFailures(
+      classifyCause(Cause.fail(error), () => false).reports,
+      `[${component}]`,
+      {
+        tags: { component },
+      },
+    );
+  } catch (reportError) {
+    console.error(`[${component}] failed to report to Sentry`, reportError);
+  }
 }
