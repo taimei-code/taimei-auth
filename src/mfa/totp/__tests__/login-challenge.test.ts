@@ -1,6 +1,10 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { Effect, Layer } from "effect";
+import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
+import { AuthApiError } from "../../../errors";
 import { auditRowsFor, createSeedHelpers } from "../../../handlers/__tests__/helpers";
+import { getRedis } from "../../../redis";
 import {
   browserCookieHeaders,
   cleanupIssuedChallenges,
@@ -12,22 +16,21 @@ import {
   totpCode,
   wrongTotpCode,
 } from "../../__tests__/helpers";
-import { getRedis } from "../../../redis";
-import { attemptsKey as attemptsKeyOf } from "../login-challenge";
-import { completeLoginChallengeOperation } from "../wiring";
-import { createLoginChallengeCompletion } from "../complete-login-challenge";
-import { parseMfaKeyRing } from "../cipher";
+import { flipMfa, partial, runMfa, runMfaResult } from "../../__tests__/test-layers";
+import { completeLoginChallenge } from "../complete-login-challenge";
 import {
+  attemptsKey as attemptsKeyOf,
+  buildLoginChallengeCookie,
   challengeKey,
-  issueLoginChallenge,
   peekLoginChallenge,
   readLoginChallengeState,
 } from "../login-challenge";
+import { MfaSessions } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 
-// ログインチャレンジの発行 → 通過 (§10-4)。実 Redis + 実 gateway.issueSessionFor。
-// sign_in audit は production 結線 (wiring) の実書き込みを実 DB で観測する。
+// ログインチャレンジの発行 → 通過 (§10-4)。実 Redis + 実 gateway (issueSessionFor)。
+// sign_in audit は live Layer の実書き込みを実 DB で観測する。
 
 const P = "mfa-lc-";
 const { cleanup, seedUser } = createSeedHelpers(P);
@@ -40,11 +43,11 @@ const cleanupAll = async (): Promise<void> => {
   await cleanup();
 };
 
-const verify = (
-  headers: Headers,
-  input: { code: string; kind: "totp" | "recovery_code" },
-): ReturnType<typeof completeLoginChallengeOperation> =>
-  completeLoginChallengeOperation(headers, input);
+const verify = (headers: Headers, input: { code: string; kind: "totp" | "recovery_code" }) =>
+  runMfaResult(completeLoginChallenge(headers, input));
+
+const challengeState = (headers: Headers): Promise<{ pending: boolean }> =>
+  runMfa(readLoginChallengeState(headers));
 
 describe("ログインチャレンジ", () => {
   beforeEach(async () => {
@@ -65,12 +68,14 @@ describe("ログインチャレンジ", () => {
       method: "magic_link",
     });
 
-    // 発行 (issueLoginChallenge) の Set-Cookie 属性の形をここで固定する。
-    const reissued = await issueLoginChallenge({
+    // 発行 (buildLoginChallengeCookie) の cookie 素材が載る Set-Cookie の形をここで固定する。
+    const issued = await buildLoginChallengeCookie({
       userId: user.id,
       redirectUrl: CONSUMER_CALLBACK,
       method: "github",
     });
+    const reissued = new Headers();
+    reissued.append("set-cookie", serializeSetCookie(issued.name, issued.value, issued.attributes));
     const setCookie = reissued.getSetCookie();
     expect(setCookie.length).toBe(1);
     expect(setCookie[0]).toContain("mfa_login_challenge=");
@@ -79,17 +84,17 @@ describe("ログインチャレンジ", () => {
     expect(setCookie[0]).toContain("SameSite=Lax");
     expect(setCookie[0]).not.toContain("Domain=");
     // 後片付け対象に載せる。
-    const opened = await peekLoginChallenge(
-      browserCookieHeaders(new Response(null, { headers: reissued })),
+    const opened = await runMfa(
+      peekLoginChallenge(browserCookieHeaders(new Response(null, { headers: reissued }))),
     );
     if (opened) await (await getRedis()).del(challengeKey(opened.challengeId));
 
-    expect(await readLoginChallengeState(challenge.headers)).toEqual({ pending: true });
-    expect(await readLoginChallengeState(requestHeaders())).toEqual({ pending: false });
+    expect(await challengeState(challenge.headers)).toEqual({ pending: true });
+    expect(await challengeState(requestHeaders())).toEqual({ pending: false });
     const tampered = requestHeaders({
       [challenge.cookieName]: encodeURIComponent(tamperCookieSignature(challenge.signedValue)),
     });
-    expect(await readLoginChallengeState(tampered)).toEqual({ pending: false });
+    expect(await challengeState(tampered)).toEqual({ pending: false });
   });
 
   test("AC-134/135/137 TOTP 通過: session 発行・audit・単回消費", async () => {
@@ -147,7 +152,7 @@ describe("ログインチャレンジ", () => {
     expect(replayed).toEqual(
       expect.objectContaining({ ok: false, error: "challenge_expired", status: 401 }),
     );
-    expect(await readLoginChallengeState(challenge.headers)).toEqual({ pending: false });
+    expect(await challengeState(challenge.headers)).toEqual({ pending: false });
   });
 
   test("AC-136 リカバリーコード通過: 成功 + 残数減", async () => {
@@ -165,7 +170,9 @@ describe("ログインチャレンジ", () => {
     });
 
     expect(passed.ok).toBe(true);
-    expect((await readOwnedMfaStatus(enabled.actor)).recoveryCodesRemaining).toBe(9);
+    expect(await runMfa(readOwnedMfaStatus(enabled.actor))).toMatchObject({
+      recoveryCodesRemaining: 9,
+    });
     const audits = await auditRowsFor(user.id, "sign_in");
     expect(audits[0]?.payload).toMatchObject({ method: "github" });
   });
@@ -187,7 +194,7 @@ describe("ログインチャレンジ", () => {
       expect(rejected).toEqual(
         expect.objectContaining({ ok: false, error: "invalid_code", status: 400 }),
       );
-      expect(await readLoginChallengeState(challenge.headers)).toEqual({ pending: true });
+      expect(await challengeState(challenge.headers)).toEqual({ pending: true });
     }
 
     // 6 回目: 400 のままチャレンジ破棄 (SPA の invalid_code → 再照会 → expired 契約を保存)。
@@ -196,7 +203,7 @@ describe("ログインチャレンジ", () => {
       kind: "totp",
     });
     expect(exhausted).toEqual(expect.objectContaining({ ok: false, error: "invalid_code" }));
-    expect(await readLoginChallengeState(challenge.headers)).toEqual({ pending: false });
+    expect(await challengeState(challenge.headers)).toEqual({ pending: false });
     expect(sentry.messages.some((m) => m.message.includes("attempt budget exhausted"))).toBe(true);
 
     // 以後は 401。正しいコードでも通れない。audit は 0 件。
@@ -226,7 +233,7 @@ describe("ログインチャレンジ", () => {
     });
 
     expect(rejected).toEqual(expect.objectContaining({ ok: false, error: "locked", status: 429 }));
-    expect(await readLoginChallengeState(challenge.headers)).toEqual({ pending: true });
+    expect(await challengeState(challenge.headers)).toEqual({ pending: true });
   });
 
   test("AC-141 チャレンジ発行後の無効化交差 → 401 (not_enabled を漏らさない)", async () => {
@@ -238,12 +245,14 @@ describe("ログインチャレンジ", () => {
       method: "magic_link",
     });
 
-    const disabled = await disable({
-      actor: enabled.actor,
-      headers: enabled.session.headers,
-      code: await totpCode(enabled.secret),
-      kind: "totp",
-    });
+    const disabled = await runMfaResult(
+      disable({
+        actor: enabled.actor,
+        headers: enabled.session.headers,
+        code: await totpCode(enabled.secret),
+        kind: "totp",
+      }),
+    );
     expect(disabled.ok).toBe(true);
 
     const rejected = await verify(challenge.headers, {
@@ -274,7 +283,7 @@ describe("ログインチャレンジ", () => {
     expect(passed.redirectUrl).toBe("/account");
   });
 
-  test("AC-158 session 発行 throw はチャレンジ消費後 — 再 verify は 401 (fail-closed)", async () => {
+  test("AC-158 session 発行失敗はチャレンジ消費後 — 再 verify は 401 (fail-closed)", async () => {
     const user = await seedUser("issue-fail");
     const enabled = await enableMfaFor(user);
     const challenge = await issueTestChallenge({
@@ -282,16 +291,22 @@ describe("ログインチャレンジ", () => {
       redirectUrl: CONSUMER_CALLBACK,
       method: "magic_link",
     });
-    const failing = createLoginChallengeCompletion({
-      ring: () => parseMfaKeyRing(process.env.MFA_TOTP_ENCRYPTION_KEYS),
-      issueSession: () => Promise.reject(new Error("session store unavailable")),
-      writeSignInAudit: () => Promise.resolve(),
-      observeAuditError: () => {},
-    });
+    const failingSessions = Layer.succeed(
+      MfaSessions,
+      partial<MfaSessions["Service"]>({
+        issueSession: () =>
+          Effect.fail(new AuthApiError({ cause: new Error("session store unavailable") })),
+      }),
+    );
 
-    await expect(
-      failing(challenge.headers, { code: await totpCode(enabled.secret), kind: "totp" }),
-    ).rejects.toThrow("session store unavailable");
+    // boundary error (AuthApiError) として E channel に載る = 成功応答にならない (adapter は 500)。
+    const failed = await flipMfa(
+      completeLoginChallenge(challenge.headers, {
+        code: await totpCode(enabled.secret),
+        kind: "totp",
+      }).pipe(Effect.provide(failingSessions)),
+    );
+    expect(failed).toBeInstanceOf(AuthApiError);
 
     // 消費済み fail-closed = 再ログイン導線 (成功扱いにすると session 無しの成功応答になる)。
     const after = await verify(challenge.headers, {

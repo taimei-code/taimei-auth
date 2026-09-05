@@ -5,6 +5,7 @@ import { generateCompanyId, insertCompany } from "@/db/repositories/company";
 import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
 import { company, membership, session, user } from "@/db/schema";
 import { removeMember } from "../remove";
+import { runLiveResult } from "../../__tests__/live-runner";
 
 const P = "rmmem-test-";
 
@@ -61,7 +62,14 @@ describe("removeMember", () => {
     await join(ownerId, companyId, "OWNER");
     await join(memberId, companyId, "MEMBER");
 
-    const result = await removeMember(ownerId, memberId, companyId, "MEMBER");
+    const result = await runLiveResult(
+      removeMember({
+        actorUserId: ownerId,
+        targetUserId: memberId,
+        companyId,
+        targetRole: "MEMBER",
+      }),
+    );
 
     expect(result).toEqual({ ok: true, accountDeleted: true });
     expect(await membershipExists(memberId, companyId)).toBe(false);
@@ -77,7 +85,14 @@ describe("removeMember", () => {
     await join(memberId, target, "MEMBER");
     await join(memberId, other, "MEMBER");
 
-    const result = await removeMember(ownerId, memberId, target, "MEMBER");
+    const result = await runLiveResult(
+      removeMember({
+        actorUserId: ownerId,
+        targetUserId: memberId,
+        companyId: target,
+        targetRole: "MEMBER",
+      }),
+    );
 
     expect(result).toEqual({ ok: true, accountDeleted: false });
     expect(await membershipExists(memberId, target)).toBe(false);
@@ -90,7 +105,9 @@ describe("removeMember", () => {
     const companyId = await seedCompany("last");
     await join(ownerId, companyId, "OWNER");
 
-    const result = await removeMember(ownerId, ownerId, companyId, "OWNER");
+    const result = await runLiveResult(
+      removeMember({ actorUserId: ownerId, targetUserId: ownerId, companyId, targetRole: "OWNER" }),
+    );
 
     expect(result).toEqual({ ok: false, reason: "last_owner" });
     expect(await membershipExists(ownerId, companyId)).toBe(true);
@@ -104,7 +121,14 @@ describe("removeMember", () => {
     await join(ownerId, companyId, "OWNER");
     await join(memberId, companyId, "MEMBER");
 
-    const result = await removeMember(memberId, memberId, companyId, "MEMBER");
+    const result = await runLiveResult(
+      removeMember({
+        actorUserId: memberId,
+        targetUserId: memberId,
+        companyId,
+        targetRole: "MEMBER",
+      }),
+    );
 
     expect(result).toEqual({ ok: true, accountDeleted: true });
     expect(await userExists(memberId)).toBe(false);

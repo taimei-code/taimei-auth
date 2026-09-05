@@ -1,216 +1,197 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import type { MembershipRow, Role } from "@/db/repositories/membership";
-import { type CaptureContext, setSentryBackend } from "../../sentry";
-import { type Actor, createMembershipGuard } from "../guard";
+import { describe, expect, test } from "bun:test";
+import { Effect, Layer } from "effect";
+import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { DbError, tryAuthApi } from "../../errors";
+import { requireActor, requireMembership, requireMembershipOf } from "../guard";
+import {
+  authFailing,
+  authLayer,
+  membershipRepoFailing,
+  membershipRepoLayer,
+  run,
+  runOk,
+  sessionOf,
+  signedIn,
+  signedOut,
+  userRepoFailing,
+  userRepoLayer,
+} from "./test-layers";
 
-const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
-
-// guard が row から読むのは role のみなので、テストは role だけ持つ最小 fake で足りる。
-const fakeMembership = (role: Role): MembershipRow => ({ role }) as unknown as MembershipRow;
-
-const anActor: Actor = {
-  id: "u_1",
-  email: "a@example.com",
-  lastUsedCompanyId: null,
-};
-const noHeaders = new Headers();
-
-const buildGuard = (opts: { actor?: Actor | null; membershipRole?: Role | null }) =>
-  createMembershipGuard({
-    getActor: async () => opts.actor ?? null,
-    findMembership: async () =>
-      opts.membershipRole ? fakeMembership(opts.membershipRole) : undefined,
-  });
-
-// Sentry backend は module-global のため、spy 注入後は console fallback 相当へ戻して後続 test file に漏らさない。
-type CapturedException = { error: unknown; context?: CaptureContext };
-let capturedExceptions: CapturedException[] = [];
-
-const spyBackend = {
-  captureException: (error: unknown, context?: CaptureContext) => {
-    capturedExceptions.push({ error, context });
-  },
-  captureMessage: () => {},
-};
-
-const consoleFallback = {
-  captureException: (error: unknown) => console.error("[sentry:noop] captureException", error),
-  captureMessage: (message: string, context?: CaptureContext) =>
-    console.warn("[sentry:noop] captureMessage", message, context?.tags),
-};
-
-beforeEach(() => {
-  capturedExceptions = [];
-  setSentryBackend(spyBackend);
-});
-
-afterAll(() => {
-  setSentryBackend(consoleFallback);
-});
+// 判定・fail-closed・Sentry の観測を旧 guard.test.ts (Promise / deps factory、19 test) から引き継ぐ (AC-036)。
+const captured = recordSentryExceptions();
+const headers = new Headers();
 
 describe("requireActor", () => {
-  test("actor null → 401 unauthorized", async () => {
-    const { requireActor } = buildGuard({ actor: null });
-    expect(await requireActor(noHeaders)).toEqual({
-      ok: false,
-      error: "unauthorized",
-      status: 401,
-    });
+  test("session 無し → Unauthorized (401)", async () => {
+    const e = await run(requireActor(headers).pipe(Effect.provide(signedOut())));
+    expect([e._tag, e.status]).toEqual(["Unauthorized", 401]);
   });
 
-  test("actor 有り → ok + actor", async () => {
-    const { requireActor } = buildGuard({ actor: anActor });
-    expect(await requireActor(noHeaders)).toEqual({ ok: true, actor: anActor });
+  test("session + user 行 → Actor (id / email / lastUsedCompanyId)", async () => {
+    const actor = await runOk(requireActor(headers).pipe(Effect.provide(signedIn("u1", "a@x.jp"))));
+    expect(actor).toEqual({ id: "u1", email: "a@x.jp", lastUsedCompanyId: null });
   });
 
-  test("getActor が throw → 401 (fail-closed: 誤って通さず拒否)", async () => {
-    const { requireActor } = createMembershipGuard({
-      getActor: async () => {
-        throw new Error("redis down");
-      },
-      findMembership: async () => undefined,
-    });
-    expect(await requireActor(noHeaders)).toEqual({
-      ok: false,
-      error: "unauthorized",
-      status: 401,
-    });
+  test("session はあるが user 行が無い (cookieCache 残留) → Unauthorized (fail-closed)", async () => {
+    const layer = Layer.mergeAll(
+      authLayer(() => sessionOf("gone")),
+      userRepoLayer([]),
+    );
+    const e = await run(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Unauthorized");
   });
 
-  test("getActor が throw → 401 にする前に Sentry へ例外を記録する", async () => {
-    const failure = new Error("db timeout");
-    const { requireActor } = createMembershipGuard({
-      getActor: async () => {
-        throw failure;
-      },
-      findMembership: async () => undefined,
-    });
-
-    await requireActor(noHeaders);
-
-    expect(capturedExceptions).toHaveLength(1);
-    expect(capturedExceptions[0]?.error).toBe(failure);
-    expect(capturedExceptions[0]?.context?.tags?.component).toBe("membership-guard");
+  test("Auth が AuthApiError → Unauthorized (fail-closed: 誤って通さず拒否)", async () => {
+    const layer = Layer.mergeAll(authFailing(new Error("redis down")), userRepoLayer([]));
+    const e = await run(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Unauthorized");
   });
 
-  test("getActor が null (未認証) → Sentry には記録しない", async () => {
-    const { requireActor } = buildGuard({ actor: null });
-
-    await requireActor(noHeaders);
-
-    expect(capturedExceptions).toHaveLength(0);
+  test("Auth が AuthApiError → Sentry に cause を component=membership-guard で記録する", async () => {
+    captured.length = 0;
+    const cause = new Error("redis down");
+    const layer = Layer.mergeAll(authFailing(cause), userRepoLayer([]));
+    await run(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(captured.length).toBe(1);
+    expect(captured[0]?.[0]).toBe(cause);
+    expect(captured[0]?.[1]?.tags).toEqual({ component: "membership-guard" });
   });
 
-  // async の rejection だけでなく、非 async の同期 throw も requireActor 側の .catch で 401 に落ちる。
-  test("getActor が同期 throw (非 async) → 401 (fail-closed)", async () => {
-    const { requireActor } = createMembershipGuard({
-      getActor: () => {
-        throw new Error("sync throw");
-      },
-      findMembership: async () => undefined,
-    });
-    expect(await requireActor(noHeaders)).toEqual({
-      ok: false,
-      error: "unauthorized",
-      status: 401,
-    });
+  test("session 無し (未認証) → Sentry には記録しない", async () => {
+    captured.length = 0;
+    await run(requireActor(headers).pipe(Effect.provide(signedOut())));
+    expect(captured.length).toBe(0);
+  });
+
+  test("AuthApi の thunk が同期 throw → Unauthorized (fail-closed、tryAuthApi が E に載せる)", async () => {
+    captured.length = 0;
+    const boom = new Error("sync throw");
+    const layer = Layer.mergeAll(
+      authLayer(() =>
+        tryAuthApi(() => {
+          throw boom;
+        }),
+      ),
+      userRepoLayer([]),
+    );
+    const e = await run(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Unauthorized");
+    expect(captured[0]?.[0]).toBe(boom);
+  });
+
+  test("UserRepo が DbError → Unauthorized (fail-closed、Sentry 記録あり)", async () => {
+    captured.length = 0;
+    const cause = new Error("db down");
+    const layer = Layer.mergeAll(
+      authLayer(() => sessionOf("u1")),
+      userRepoFailing(cause),
+    );
+    const e = await run(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Unauthorized");
+    expect(captured[0]?.[0]).toBe(cause);
   });
 });
 
+const actor = { id: "u1", email: "u1@example.com", lastUsedCompanyId: null };
+
 describe("requireMembershipOf", () => {
-  test("非所属 → 403 forbidden", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: null });
-    expect(await requireMembershipOf(anActor, "co_1")).toEqual({
-      ok: false,
-      error: "forbidden",
-      status: 403,
-    });
+  const rows = (role: string) => membershipRepoLayer([{ userId: "u1", companyId: "c1", role }]);
+
+  test("非所属 → Forbidden (403)", async () => {
+    const e = await run(
+      requireMembershipOf(actor, "c1").pipe(Effect.provide(membershipRepoLayer([]))),
+    );
+    expect([e._tag, e.status]).toEqual(["Forbidden", 403]);
   });
 
-  test("所属あり minRole 省略 → ok (MEMBER でも通る)", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "MEMBER" });
-    expect((await requireMembershipOf(anActor, "co_1")).ok).toBe(true);
+  test("所属あり minRole 省略 → role (MEMBER でも通る)", async () => {
+    expect(await runOk(requireMembershipOf(actor, "c1").pipe(Effect.provide(rows("MEMBER"))))).toBe(
+      "MEMBER",
+    );
   });
 
-  test("MEMBER が ADMIN 要求 → 403", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "MEMBER" });
-    expect((await requireMembershipOf(anActor, "co_1", "ADMIN")).ok).toBe(false);
+  test("MEMBER が ADMIN 要求 → Forbidden", async () => {
+    const e = await run(
+      requireMembershipOf(actor, "c1", "ADMIN").pipe(Effect.provide(rows("MEMBER"))),
+    );
+    expect(e._tag).toBe("Forbidden");
   });
 
   test("ADMIN が ADMIN 要求 → ok", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "ADMIN" });
-    expect((await requireMembershipOf(anActor, "co_1", "ADMIN")).ok).toBe(true);
+    expect(
+      await runOk(requireMembershipOf(actor, "c1", "ADMIN").pipe(Effect.provide(rows("ADMIN")))),
+    ).toBe("ADMIN");
   });
 
-  test("ADMIN が OWNER 要求 → 403", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "ADMIN" });
-    expect((await requireMembershipOf(anActor, "co_1", "OWNER")).ok).toBe(false);
+  test("ADMIN が OWNER 要求 → Forbidden", async () => {
+    const e = await run(
+      requireMembershipOf(actor, "c1", "OWNER").pipe(Effect.provide(rows("ADMIN"))),
+    );
+    expect(e._tag).toBe("Forbidden");
   });
 
   test("OWNER は全 minRole を満たす", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "OWNER" });
-    for (const minRole of ROLES) {
-      expect((await requireMembershipOf(anActor, "co_1", minRole)).ok).toBe(true);
+    for (const min of ["MEMBER", "ADMIN", "OWNER"] as const) {
+      expect(
+        await runOk(requireMembershipOf(actor, "c1", min).pipe(Effect.provide(rows("OWNER")))),
+      ).toBe("OWNER");
     }
   });
 
-  // DB の role 列は text で ROLE_LEVEL に無い文字列が入りうる。minRole 比較時は fail-closed で 403、
-  // minRole 省略時は role を見ない旧挙動 (members 一覧) を維持する。
-  test("minRole 指定 + 想定外 role 文字列 → 403 (fail-closed)", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "SUPERVISOR" as Role });
-    expect((await requireMembershipOf(anActor, "co_1", "MEMBER")).ok).toBe(false);
+  test("minRole 指定 + 想定外 role 文字列 → Forbidden (fail-closed)", async () => {
+    const e = await run(
+      requireMembershipOf(actor, "c1", "MEMBER").pipe(Effect.provide(rows("SUPERUSER"))),
+    );
+    expect(e._tag).toBe("Forbidden");
   });
 
-  test("minRole 省略なら 想定外 role でも通る (旧挙動等価)", async () => {
-    const { requireMembershipOf } = buildGuard({ membershipRole: "SUPERVISOR" as Role });
-    expect((await requireMembershipOf(anActor, "co_1")).ok).toBe(true);
+  test("minRole 省略なら想定外 role でも通る (旧挙動等価)", async () => {
+    const role: string = await runOk(
+      requireMembershipOf(actor, "c1").pipe(Effect.provide(rows("SUPERUSER"))),
+    );
+    expect(role).toBe("SUPERUSER");
   });
 });
 
 describe("requireMembership (requireActor + requireMembershipOf の合成)", () => {
-  test("未認証 → 401 (membership を問わない)", async () => {
-    const { requireMembership } = buildGuard({ actor: null, membershipRole: "OWNER" });
-    expect(await requireMembership(noHeaders, "co_1")).toEqual({
-      ok: false,
-      error: "unauthorized",
-      status: 401,
-    });
+  test("未認証 → Unauthorized (membership を問わない)", async () => {
+    const layer = Layer.mergeAll(
+      signedOut(),
+      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "OWNER" }]),
+    );
+    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Unauthorized");
   });
 
-  test("認証済・非所属 → 403 (requireMembershipOf に委譲)", async () => {
-    const { requireMembership } = buildGuard({ actor: anActor, membershipRole: null });
-    expect(await requireMembership(noHeaders, "co_1")).toEqual({
-      ok: false,
-      error: "forbidden",
-      status: 403,
-    });
+  test("認証済・非所属 → Forbidden", async () => {
+    const layer = Layer.mergeAll(signedIn(), membershipRepoLayer([]));
+    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Forbidden");
   });
 
-  test("認証済・minRole 不足 → 403", async () => {
-    const { requireMembership } = buildGuard({ actor: anActor, membershipRole: "MEMBER" });
-    expect((await requireMembership(noHeaders, "co_1", "ADMIN")).ok).toBe(false);
+  test("認証済・minRole 不足 → Forbidden", async () => {
+    const layer = Layer.mergeAll(
+      signedIn(),
+      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "MEMBER" }]),
+    );
+    const e = await run(requireMembership(headers, "c1", "ADMIN").pipe(Effect.provide(layer)));
+    expect(e._tag).toBe("Forbidden");
   });
 
-  test("認証済・minRole 充足 → ok + actor + role", async () => {
-    const { requireMembership } = buildGuard({ actor: anActor, membershipRole: "ADMIN" });
-    const result = await requireMembership(noHeaders, "co_1", "ADMIN");
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.actor).toEqual(anActor);
-      expect(result.role).toBe("ADMIN");
-    }
+  test("認証済・minRole 充足 → { actor, role }", async () => {
+    const layer = Layer.mergeAll(
+      signedIn(),
+      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "ADMIN" }]),
+    );
+    const r = await runOk(requireMembership(headers, "c1", "ADMIN").pipe(Effect.provide(layer)));
+    expect(r).toEqual({ actor, role: "ADMIN" });
   });
 
-  // QA-R-05: findMembership の throw は伝播させ 500 になる (fail-closed 対象は session 解決のみ、
-  // I/O 失敗は正しく 500 に上げる)。この不変条件は identity DB を将来 RPC 化して findMembership が
-  // RPC になった時にも守るべき境界のため、guard/core.ts 側で pin する。
-  test("QA-R-05 findMembership の throw は捕捉せず伝播する (fail-closed の対象は session 解決のみ)", async () => {
-    const { requireMembership } = createMembershipGuard({
-      getActor: async () => anActor,
-      findMembership: async () => {
-        throw new Error("db timeout");
-      },
-    });
-    await expect(requireMembership(noHeaders, "co_1")).rejects.toThrow("db timeout");
+  test("QA-R-05 MembershipRepo の DbError は捕捉せず伝播する (fail-closed の対象は session 解決のみ)", async () => {
+    const cause = new Error("db timeout");
+    const layer = Layer.mergeAll(signedIn(), membershipRepoFailing(cause));
+    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
+    expect(e).toBeInstanceOf(DbError);
+    expect((e as DbError).cause).toBe(cause);
   });
 });

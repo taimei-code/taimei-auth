@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { isLocalEnvironment } from "../env";
 import {
   getAbuseInfoUrl,
@@ -19,9 +20,13 @@ export type InvitationEmailParams = {
 };
 
 // 招待メール送信。local は console.log fallback (Magic Link / Welcome と同パターン)。
-export async function sendInvitationEmail(params: InvitationEmailParams): Promise<void> {
+export const sendInvitationEmail = Effect.fn("email.sendInvitation")(function* (
+  params: InvitationEmailParams,
+) {
   if (isLocalEnvironment()) {
-    console.log(`[TEST] Invitation email for ${params.inviteeEmail}: ${params.url}`);
+    yield* Effect.sync(() =>
+      console.log(`[TEST] Invitation email for ${params.inviteeEmail}: ${params.url}`),
+    );
     return;
   }
 
@@ -29,7 +34,7 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
   // 件名は SMTP ヘッダに入るため CR/LF を含む user 入力を sanitize しヘッダインジェクションを防ぐ。
   const headerSafeInviterName = sanitizeDisplayText(params.inviterName);
   const headerSafeCompanyName = sanitizeDisplayText(params.companyName);
-  await renderAndSendEmail({
+  yield* renderAndSendEmail({
     from: getInvitationFromEmail(),
     to: params.inviteeEmail,
     subject: `[${appName}] ${headerSafeInviterName} さんから「${headerSafeCompanyName}」への招待`,
@@ -46,4 +51,4 @@ export async function sendInvitationEmail(params: InvitationEmailParams): Promis
     }),
     kind: "invitation",
   });
-}
+});

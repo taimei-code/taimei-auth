@@ -5,10 +5,11 @@ import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: 上記のとおり Workers の per-request pool 供給のみ許可
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
-import { initRedis, redisStorage } from "./redis";
-import { touchRedisKeepAlive } from "./redis-keepalive";
+import { initRedis } from "./redis";
+import { touchRedisKeepAliveProgram } from "./redis-keepalive";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
+import { getRuntime } from "./runtime";
 import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
 
@@ -22,8 +23,8 @@ type Env = {
 
 type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
 
-// isolate ごとに 1 度だけ bootstrap し、構築済み app を返す (app 非 null が「init 済み」フラグを兼ねる)。
-let app: Hono | null = null;
+// isolate ごとに 1 度だけ bootstrap し、構築済み app を返す (非 null が「init 済み」フラグを兼ねる)。
+let bootstrappedApp: Hono | null = null;
 
 // 文字列 vars/secrets を process.env に写し、既存の process.env.* 参照を Workers でも有効化する。
 function copyEnvToProcess(env: Env): void {
@@ -32,17 +33,20 @@ function copyEnvToProcess(env: Env): void {
   }
 }
 
-// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → buildApp (buildAuth が db /
-// redisStorage を、buildApp が process.env を読む)。実 Pool は fetch ごとに runWithRequestPool で供給。
+// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → getRuntime → buildApp (buildAuth が db /
+// redisStorage を、buildApp が process.env を読む)。getRuntime は Layer が I/O resource を持たないため順序に依存
+// しないが、Layer 構築の失敗を最初の request でなく bootstrap で出すために app を memo する前に 1 回呼ぶ
+// (ADR-0017 Decision の runtime 項)。実 Pool は fetch ごとに runWithRequestPool で供給。
 function bootstrap(env: Env): Hono {
-  if (app) return app;
+  if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
   initRedis();
   initAuth();
-  app = buildApp({
-    mountStatic: (a) => {
-      a.all("*", (c) => {
+  getRuntime();
+  bootstrappedApp = buildApp({
+    mountStatic: (app) => {
+      app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
         // vite base=/auth/ の index.html は /auth/assets/* を参照するが Static Assets は / 直下配信のため
@@ -56,7 +60,7 @@ function bootstrap(env: Env): Hono {
       });
     },
   });
-  return app;
+  return bootstrappedApp;
 }
 
 const handler = {
@@ -80,17 +84,18 @@ const handler = {
   },
 
   // Cron Trigger (wrangler.jsonc triggers.crons)。Upstash free tier の無活動アーカイブ防止のため Redis に
-  // データ操作を 1 回打つ (理由: src/redis-keepalive.ts)。DB は触らないので Pool は作らず、init は
-  // fetch と同じ idempotent な経路 (initRedis は 2 回目以降 no-op) を通す。失敗は throw して Sentry に載せる。
+  // データ操作を 1 回打つ (理由: src/redis-keepalive.ts)。Redis しか触らないので Pool も better-auth も作らない
+  // (initRedis は 2 回目以降 no-op)。失敗は throw して Sentry に載せる。
   async scheduled(_controller: unknown, env: Env, _ctx: ExecutionCtx): Promise<void> {
     copyEnvToProcess(env);
     initRedis();
-    await touchRedisKeepAlive(redisStorage);
+    await getRuntime().runPromise(touchRedisKeepAliveProgram);
   },
 };
 
 // withSentry が fetch をラップし request スコープで Sentry client を初期化する (DSN 未設定なら no-op)。
-// handler の未捕捉例外はここで自動送信される。詳細: ADR-0011
+// route handler の例外は Hono が飲み込んで 500 にするためここには届かず、adapter (src/handlers/run-route.ts)
+// が Sentry に送る。ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。詳細: ADR-0011 / ADR-0017
 export default Sentry.withSentry(
   (env: Env) => ({
     dsn: env.SENTRY_DSN,

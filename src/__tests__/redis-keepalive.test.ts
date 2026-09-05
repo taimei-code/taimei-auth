@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { getRedis, redisStorage } from "../redis";
-import { REDIS_KEEPALIVE_KEY, touchRedisKeepAlive } from "../redis-keepalive";
+import { REDIS_KEEPALIVE_KEY, touchRedisKeepAliveProgram } from "../redis-keepalive";
+import { runLive } from "./live-runner";
 
 // Upstash free tier は PING を活動に数えず、SET/GET 等のデータ操作が 30 日無いと DB をアーカイブする
 // (endpoint が消え magic link 送信が 500 になる。2026-09-03 に本番で発生)。keep-alive は「TTL 付き
@@ -10,7 +11,7 @@ describe("Redis keep-alive", () => {
     await redisStorage.delete(REDIS_KEEPALIVE_KEY);
     const before = Date.now();
 
-    await touchRedisKeepAlive(redisStorage);
+    await runLive(touchRedisKeepAliveProgram);
 
     const redis = await getRedis();
     const value = await redis.get(REDIS_KEEPALIVE_KEY);

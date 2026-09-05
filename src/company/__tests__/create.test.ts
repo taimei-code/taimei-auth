@@ -6,6 +6,7 @@ import { auditLog, company, membership, user } from "@/db/schema";
 import { softDeleteCompany } from "@/db/repositories/company";
 import { findMembershipsByUserId } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
+import { runLive, runLiveResult } from "../../__tests__/live-runner";
 import { addCompany, createSignupCompany } from "../create";
 
 const USER_ID_PREFIX = "create-test-user-";
@@ -55,7 +56,9 @@ describe("createSignupCompany", () => {
 
   test("membership 0 件なら作成し OWNER + last_used + audit を残す", async () => {
     const userId = await seedUser("signup-ok");
-    const result = await createSignupCompany(userId, { name: "Signup Co", orgCode: "CORPORATE" });
+    const result = await runLiveResult(
+      createSignupCompany(userId, { name: "Signup Co", orgCode: "CORPORATE" }),
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -69,10 +72,14 @@ describe("createSignupCompany", () => {
 
   test("既に membership があれば already_exists を返し新規作成しない", async () => {
     const userId = await seedUser("signup-dup");
-    const first = await createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" });
+    const first = await runLiveResult(
+      createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" }),
+    );
     expect(first.ok).toBe(true);
 
-    const second = await createSignupCompany(userId, { name: "Second", orgCode: "PERSONAL" });
+    const second = await runLiveResult(
+      createSignupCompany(userId, { name: "Second", orgCode: "PERSONAL" }),
+    );
     expect(second.ok).toBe(false);
     if (second.ok) return;
     expect(second.reason).toBe("already_exists");
@@ -86,13 +93,17 @@ describe("createSignupCompany", () => {
   // /account ⇄ signup/company の redirect loop に陥る。
   test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", async () => {
     const userId = await seedUser("signup-after-delete");
-    const first = await createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" });
+    const first = await runLiveResult(
+      createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" }),
+    );
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
     await softDeleteCompany(first.company.id);
 
-    const second = await createSignupCompany(userId, { name: "Second", orgCode: "CORPORATE" });
+    const second = await runLiveResult(
+      createSignupCompany(userId, { name: "Second", orgCode: "CORPORATE" }),
+    );
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.membership.role).toBe("OWNER");
@@ -112,10 +123,12 @@ describe("addCompany", () => {
 
   test("既存 membership があっても作成し OWNER + last_used 更新 + audit を残す", async () => {
     const userId = await seedUser("add-existing");
-    const first = await createSignupCompany(userId, { name: "Base", orgCode: "CORPORATE" });
+    const first = await runLiveResult(
+      createSignupCompany(userId, { name: "Base", orgCode: "CORPORATE" }),
+    );
     expect(first.ok).toBe(true);
 
-    const added = await addCompany(userId, { name: "Added", orgCode: "CORPORATE" });
+    const added = await runLive(addCompany(userId, { name: "Added", orgCode: "CORPORATE" }));
     expect(added.membership.role).toBe("OWNER");
 
     const userRow = await findUserById(userId);
@@ -128,8 +141,8 @@ describe("addCompany", () => {
 
   test("個人事業主を 2 つ作れる (制限なし)", async () => {
     const userId = await seedUser("add-personal-dup");
-    const one = await addCompany(userId, { name: "Personal 1", orgCode: "PERSONAL" });
-    const two = await addCompany(userId, { name: "Personal 2", orgCode: "PERSONAL" });
+    const one = await runLive(addCompany(userId, { name: "Personal 1", orgCode: "PERSONAL" }));
+    const two = await runLive(addCompany(userId, { name: "Personal 2", orgCode: "PERSONAL" }));
 
     expect(one.company.id).not.toBe(two.company.id);
     expect(one.company.orgCode).toBe("PERSONAL");

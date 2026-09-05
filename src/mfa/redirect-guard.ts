@@ -1,5 +1,6 @@
+import { Effect } from "effect";
 import { getTrustedOrigins } from "../env";
-import { Sentry } from "../sentry";
+import { SentryService } from "../sentry";
 
 // チャレンジ成功時に返す遷移先の出口検証 (検証ポリシーの位置づけ: ADR-0003)。
 // src/url-allowlist.ts の validateRedirectUrl を使えないのはチャレンジ介入点に service_name が
@@ -35,19 +36,27 @@ function parseUrl(candidate: string): URL | null {
 }
 
 // 拒否を silent にしない。「ログインはできるが元の画面に戻れない」の唯一の手掛かりがこの 1 件。
-function fallBackAndReport(rejected: string, reason: RejectionReason): string {
-  Sentry.captureMessage("mfa: challenge redirect rejected", {
+const fallBackAndReport = Effect.fn("mfa.rejectChallengeRedirect")(function* (
+  rejected: string,
+  reason: RejectionReason,
+) {
+  const sentry = yield* SentryService;
+  yield* sentry.captureMessage("mfa: challenge redirect rejected", {
     level: "warning",
     tags: { component: "mfa-redirect-guard", reason },
     extra: { rejected },
   });
   return FALLBACK_REDIRECT;
-}
+});
 
-export function validateChallengeRedirect(raw: string | undefined): string {
+export const validateChallengeRedirect = Effect.fn("mfa.validateChallengeRedirect")(function* (
+  raw: string | undefined,
+) {
   if (!raw) return FALLBACK_REDIRECT;
   if (raw.startsWith("/")) {
-    return SAME_ORIGIN_PATH.test(raw) ? raw : fallBackAndReport(raw, "not_a_same_origin_path");
+    return SAME_ORIGIN_PATH.test(raw)
+      ? raw
+      : yield* fallBackAndReport(raw, "not_a_same_origin_path");
   }
-  return isTrustedAbsoluteUrl(raw) ? raw : fallBackAndReport(raw, "origin_not_trusted");
-}
+  return isTrustedAbsoluteUrl(raw) ? raw : yield* fallBackAndReport(raw, "origin_not_trusted");
+});

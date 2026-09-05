@@ -1,29 +1,39 @@
 import { makeSignature } from "better-auth/crypto";
+import { Clock, Effect } from "effect";
 import { auth } from "../auth";
-import { Sentry } from "../sentry";
-import { CHALLENGE_EXPIRED, failure, type MfaFailure } from "./error-mapping";
+import { type AuthApiError, tryAuthApi } from "../errors";
+import { captureCause, type SentryService } from "../sentry";
+import { ChallengeExpired } from "./error-mapping";
 
 // better-auth (auth.api / auth.$context) への唯一の正規窓口 (縮退後の残置面: ADR-0016)。
 // すべての呼び出しで headers のみを渡し request を渡さないこと (originCheck と同じ discriminator を
-// 自分の呼び出しで踏まないため)。
-
-export type SessionRevocationResult = { ok: true; headers: Headers } | MfaFailure;
+// 自分の呼び出しで踏まないため)。better-auth は Promise / throw 規約の境界なので、失敗は
+// AuthApiError (cause: unknown) に包んで E channel に載せる (ADR-0017 Decision の boundary error 項)。
 
 // secondaryStorage 構成では session 実体が Redis にしか無いため、これが既存セッション失効の唯一の経路。
-// better-auth 由来 (body.code 持ち APIError) は fail-closed に challenge_expired へ畳んで観測し、
-// それ以外は rethrow する。写像表は持たない — 発生源の twoFactor プラグインが消えたため。
-export function revokeOtherSessions(headers: Headers): Promise<SessionRevocationResult> {
-  return auth.api
-    .revokeOtherSessions({ headers, returnHeaders: true })
-    .then(({ headers: revoked }) => ({ ok: true as const, headers: revoked ?? new Headers() }))
-    .catch((error: unknown) => {
-      if (!hasApiErrorBody(error)) throw error;
-      Sentry.captureException(error, { tags: { component: "mfa-gateway" } });
-      return failure(CHALLENGE_EXPIRED);
-    });
-}
+export const revokeOtherSessions = Effect.fn("mfa.revokeOtherSessions")(function* (
+  headers: Headers,
+) {
+  return yield* tryAuthApi(() =>
+    auth.api
+      .revokeOtherSessions({ headers, returnHeaders: true })
+      .then(({ headers: revoked }) => revoked ?? new Headers()),
+  ).pipe(Effect.catchTag("AuthApiError", foldToChallengeExpired));
+});
 
-// body.code を構造的に読む — catch した値が本当に APIError である保証は型に無い。
+// better-auth 由来 (body.code 持ち APIError) は fail-closed に challenge_expired へ畳んで観測し、それ以外は boundary
+// error のまま adapter (500 + Sentry) に渡す。写像表は持たない — 発生源の twoFactor プラグインが消えたため。
+const foldToChallengeExpired = (
+  error: AuthApiError,
+): Effect.Effect<never, ChallengeExpired | AuthApiError, SentryService> =>
+  Effect.gen(function* () {
+    if (!hasApiErrorBody(error.cause)) return yield* Effect.fail(error);
+    yield* captureCause({ tags: { component: "mfa-gateway" } })(error);
+    return yield* new ChallengeExpired();
+  });
+
+// body.code を構造的に読む — catch した値が本当に APIError である保証は型に無い (better-auth の isAPIError は
+// body.code を持たない APIError も真にするため、写像対象を「code 付き」に限る現行の判定を保つ)。
 function hasApiErrorBody(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const { body } = error as { body?: unknown };
@@ -35,16 +45,19 @@ function hasApiErrorBody(error: unknown): boolean {
 // 確定した後」に限る契約 (ADR-0016 / PoC 0003)。Max-Age を明示付与しないと browser-session cookie に
 // なり通常ログインと寿命が揺れる。cookieCache (session_data) は発行時に作らない (次リクエストの
 // getSession が担う。機能差なし)。
-export async function issueSessionFor(userId: string): Promise<Headers> {
-  const authContext = await auth.$context;
-  const session = await authContext.internalAdapter.createSession(userId);
-  const maxAge = Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000);
-  const cookie = authContext.createAuthCookie("session_token", { maxAge });
-  const signed = `${session.token}.${await makeSignature(session.token, authContext.secret)}`;
-  const headers = new Headers();
-  headers.append("set-cookie", serializeRawSessionCookie(cookie.name, signed, cookie.attributes));
-  return headers;
-}
+export const issueSessionFor = Effect.fn("mfa.issueSessionFor")(function* (userId: string) {
+  const now = yield* Clock.currentTimeMillis;
+  return yield* tryAuthApi(async () => {
+    const authContext = await auth.$context;
+    const session = await authContext.internalAdapter.createSession(userId);
+    const maxAge = Math.floor((new Date(session.expiresAt).getTime() - now) / 1000);
+    const cookie = authContext.createAuthCookie("session_token", { maxAge });
+    const signed = `${session.token}.${await makeSignature(session.token, authContext.secret)}`;
+    const headers = new Headers();
+    headers.append("set-cookie", serializeRawSessionCookie(cookie.name, signed, cookie.attributes));
+    return headers;
+  });
+});
 
 type SessionCookieAttributes = {
   path?: string;

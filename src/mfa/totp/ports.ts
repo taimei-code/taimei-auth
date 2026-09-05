@@ -1,31 +1,75 @@
-import type { MfaFailure } from "../error-mapping";
+import type { Effect } from "effect";
+import { Context } from "effect";
+import type * as repo from "@/db/repositories/mfa-totp";
+import type { Background } from "../../background";
+import type { EmailSender } from "../../email/ports";
+import type { AuthApiError, Lifted } from "../../errors";
+import type { Redis } from "../../redis-service";
+import type { SentryService } from "../../sentry";
+import type { ChallengeExpired, Locked } from "../error-mapping";
 import type { MfaKeyRing } from "./cipher";
 
-// use-case が受け取る依存の型 (A-6)。結線は wiring.ts のみが行う。
+// MFA domain の ports (ADR-0017 Decision の境界表 1 行目と依存注入項)。use-case はこの service を yield* し、
+// db/repositories・gateway・notification-adapter を直接 import しない (結線は wiring.ts のみ)。
 
-export type SessionMutationResult = { ok: true; headers: Headers } | MfaFailure;
+// Repository (db/repositories/mfa-totp、Promise) の Effect face。identity DB を別 process (RPC) へ
+// 分離する時はこの interface の live 実装だけを差し替える。
+export class MfaTotpRepo extends Context.Service<
+  MfaTotpRepo,
+  {
+    findMfaTotp: Lifted<typeof repo.findMfaTotp>;
+    readMfaVerification: Lifted<typeof repo.readMfaVerification>;
+    readMfaStatusRow: Lifted<typeof repo.readMfaStatusRow>;
+    insertMfaTotpEnrollment: Lifted<typeof repo.insertMfaTotpEnrollment>;
+    activateMfaTotp: Lifted<typeof repo.activateMfaTotp>;
+    consumeTotpTimestep: Lifted<typeof repo.consumeTotpTimestep>;
+    deleteMfaTotp: Lifted<typeof repo.deleteMfaTotp>;
+    insertRecoveryCodes: Lifted<typeof repo.insertRecoveryCodes>;
+    listUnusedRecoveryCodes: Lifted<typeof repo.listUnusedRecoveryCodes>;
+    consumeRecoveryCode: Lifted<typeof repo.consumeRecoveryCode>;
+    deleteRecoveryCodesByUserId: Lifted<typeof repo.deleteRecoveryCodesByUserId>;
+  }
+>()("taimei/MfaTotpRepo") {}
 
-// port 名を revokeOthers にするのは gateway 名 (revokeOtherSessions) の出現を wiring に閉じるため。
-export type SessionControl = { revokeOthers(headers: Headers): Promise<SessionMutationResult> };
+// 鍵 ring は env から遅延解決する — import 時に throw させない (kill-switch と同じ方針)。
+// 解決失敗 (env 不正) は業務失敗ではないため E channel に載せず defect のままにする。
+export class MfaKeyring extends Context.Service<
+  MfaKeyring,
+  { readonly ring: Effect.Effect<MfaKeyRing> }
+>()("taimei/MfaKeyring") {}
 
-export type AuditInput = { userId: string; ip: string | null; userAgent: string };
+// otpauth URI に載る発行者名 (認証アプリの表示名)。
+export class MfaIssuer extends Context.Service<
+  MfaIssuer,
+  { readonly appName: Effect.Effect<string> }
+>()("taimei/MfaIssuer") {}
 
-// env 読みを import 時に走らせない遅延解決 (kill-switch と同じ方針)。
-export type KeyRingSource = () => MfaKeyRing;
+// port 名を revokeOthers / issueSession にするのは gateway 名 (revokeOtherSessions / issueSessionFor) の
+// 出現を wiring に閉じるため。
+export class MfaSessions extends Context.Service<
+  MfaSessions,
+  {
+    revokeOthers(
+      headers: Headers,
+    ): Effect.Effect<Headers, ChallengeExpired | AuthApiError, SentryService>;
+    issueSession(userId: string): Effect.Effect<Headers, AuthApiError>;
+  }
+>()("taimei/MfaSessions") {}
 
-export type EnrollMfaDependencies = { ring: KeyRingSource; issuer(): string };
+// 通知は失敗しない契約 (notification-adapter が catch を内蔵する)。
+export class MfaNotifier extends Context.Service<
+  MfaNotifier,
+  {
+    notifyEnabled(email: string): Effect.Effect<void, never, EmailSender | Background>;
+    notifyDisabled(email: string): Effect.Effect<void, never, EmailSender | Background>;
+  }
+>()("taimei/MfaNotifier") {}
 
-export type ActivateMfaDependencies = {
-  ring: KeyRingSource;
-  sessions: SessionControl;
-  writeAudit(input: AuditInput): Promise<void>;
-  observeAuditError(error: unknown): void;
-  // adapter は投げない契約 (notification-adapter が catch を内蔵する)。
-  notifyEnabled(email: string): void;
-};
-
-export type DisableMfaDependencies = Omit<ActivateMfaDependencies, "notifyEnabled"> & {
-  notifyDisabled(email: string): void;
-  spendAttempt(userId: string): Promise<MfaFailure | undefined>;
-  resetAttempts(userId: string): Promise<void>;
-};
+// 無効化の総当たり防御 (Redis 計数)。fail-closed = 数えられない時も Locked。
+export class MfaDisableBudget extends Context.Service<
+  MfaDisableBudget,
+  {
+    spend(userId: string): Effect.Effect<void, Locked, Redis | SentryService>;
+    reset(userId: string): Effect.Effect<void, never, Redis | SentryService>;
+  }
+>()("taimei/MfaDisableBudget") {}

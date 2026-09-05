@@ -1,7 +1,9 @@
 import { getSessionCookie } from "better-auth/cookies";
+import { Effect } from "effect";
 import type { Context, MiddlewareHandler } from "hono";
-import { incrementRateWindow } from "./redis";
-import { Sentry } from "./sentry";
+import { runMiddleware } from "./handlers/run-route";
+import { Redis } from "./redis-service";
+import { captureCause } from "./sentry";
 
 export type RateLimitOptions = {
   keyFn: (c: Context) => string | Promise<string>;
@@ -28,22 +30,34 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-// Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。Sentry capture で可観測性確保。
+// Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。RedisError は Sentry (warning) に残す。
 // EXPIRE を毎回呼ぶため「最後の req から windowSec」semantic になる (固定 window ではない — 差は許容)。
+// 本体は Effect program (Redis service 経由)、runMiddleware が Response → 短絡 / undefined → next() に写像する。
 export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {
-  return async (c, next) => {
-    const key = await options.keyFn(c);
-    const result = await incrementRateWindow(key, options.windowSec).catch((error) => {
-      Sentry.captureException(error, { tags: { component: "rate-limit" } });
-      return null;
-    });
-    if (!result) return next();
-    const { count, ttl } = result;
-    if (count > options.limit) {
-      return c.json({ error: "Too Many Requests" }, 429, {
-        "Retry-After": String(Math.max(ttl, 1)),
-      });
-    }
-    return next();
-  };
+  return (c, next) =>
+    runMiddleware(
+      c,
+      next,
+      Effect.gen(function* () {
+        const redis = yield* Redis;
+        const key = yield* Effect.promise(async () => options.keyFn(c));
+        const result = yield* redis
+          .incrementRateWindow(key, options.windowSec)
+          .pipe(
+            Effect.catchTag("RedisError", (failure) =>
+              captureCause({ level: "warning", tags: { component: "rate-limit" } })(failure).pipe(
+                Effect.as(null),
+              ),
+            ),
+          );
+        if (!result) return undefined;
+        const { count, ttl } = result;
+        if (count > options.limit) {
+          return c.json({ error: "Too Many Requests" }, 429, {
+            "Retry-After": String(Math.max(ttl, 1)),
+          });
+        }
+        return undefined;
+      }),
+    );
 }

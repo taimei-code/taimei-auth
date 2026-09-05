@@ -17,6 +17,11 @@ export function toProtoUser(userRow: UserRow) {
   };
 }
 
+// user を返す 3 method (findUserByEmail / findUserById / getUser) の応答は同形。
+export function userResponse(row: UserRow | undefined) {
+  return { user: row ? toProtoUser(row) : undefined };
+}
+
 // session_kind は現状 "user" 固定。session repository を作らない方針 (db/CLAUDE.md ルール 2 例外) のため
 // better-auth Session 型から Pick で派生し型変更を compile-time に検出する。company_id は埋めない。
 type SessionRowLike = Pick<Session["session"], "id" | "expiresAt">;

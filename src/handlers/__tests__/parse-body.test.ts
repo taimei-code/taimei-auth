@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { Hono } from "hono";
 import { z } from "zod";
 import { parseZodBody } from "../parse-body";
 
-// parseZodBody は Hono Context に依存するため、実 route 経由で callback を実行して検証する。
-// 400 への変換は呼び出し元 route の責務 (account-routes-migrated.test.ts がカバー) で、
-// ここは callback が返す { ok, data, details } のユニット境界のみを固定する。
+// parseZodBody は Hono Context に依存するため、実 route 経由で Effect を実行して検証する。
+// 400 への変換は adapter (run-route.ts) の責務 (account-routes-migrated.test.ts がカバー) で、
+// ここは Effect が返す data / InvalidArgument.details のユニット境界のみを固定する (AC-035)。
 
 const schema = z.object({ name: z.string().min(1) });
 
@@ -19,7 +20,15 @@ const runParse = async (
   const app = new Hono();
   let captured: ParseResult | null = null;
   app.post("/t", async (c) => {
-    captured = await parseZodBody(c, schema, opts)();
+    captured = await Effect.runPromise(
+      Effect.match(parseZodBody(c, schema, opts), {
+        onFailure: (e) =>
+          e.details === undefined
+            ? { ok: false as const }
+            : { ok: false as const, details: e.details },
+        onSuccess: (data) => ({ ok: true as const, data }),
+      }),
+    );
     return c.json({ ok: true });
   });
   await app.request("/t", { method: "POST", body, headers });

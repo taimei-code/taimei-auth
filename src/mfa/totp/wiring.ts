@@ -1,57 +1,79 @@
-import { appendAuditLog, recordMfaDisabled, recordMfaEnabled } from "@/db/repositories/audit-log";
-import { captureAuditLogError } from "../../audit-error";
+import { Effect, Layer } from "effect";
+import * as repo from "@/db/repositories/mfa-totp";
 import { getAppName } from "../../email/client";
+import { liftDb } from "../../errors";
 import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
 import { issueSessionFor, revokeOtherSessions } from "../gateway";
 import { notifyMfaDisabled, notifyMfaEnabled } from "../notification-adapter";
-import { createMfaActivation } from "./activate-mfa";
-import { parseMfaKeyRing, type MfaKeyRing } from "./cipher";
-import { createLoginChallengeCompletion } from "./complete-login-challenge";
-import { createMfaDisable } from "./disable-mfa";
-import { createMfaEnrollment } from "./enroll-mfa";
-import type { SessionControl } from "./ports";
+import { type MfaKeyRing, parseMfaKeyRing } from "./cipher";
+import {
+  MfaDisableBudget,
+  MfaIssuer,
+  MfaKeyring,
+  MfaNotifier,
+  MfaSessions,
+  MfaTotpRepo,
+} from "./ports";
 
 // production 結線 (A-11)。gateway 名 (revokeOtherSessions / issueSessionFor) の出現はこのファイルに閉じる。
+// module ロード時 bind の根拠は src/membership/wiring.ts と同じ (db/CLAUDE.md の workerd gotcha)。
+
+export const MfaTotpRepoLive = Layer.succeed(
+  MfaTotpRepo,
+  MfaTotpRepo.of({
+    findMfaTotp: liftDb(repo.findMfaTotp),
+    readMfaVerification: liftDb(repo.readMfaVerification),
+    readMfaStatusRow: liftDb(repo.readMfaStatusRow),
+    insertMfaTotpEnrollment: liftDb(repo.insertMfaTotpEnrollment),
+    activateMfaTotp: liftDb(repo.activateMfaTotp),
+    consumeTotpTimestep: liftDb(repo.consumeTotpTimestep),
+    deleteMfaTotp: liftDb(repo.deleteMfaTotp),
+    insertRecoveryCodes: liftDb(repo.insertRecoveryCodes),
+    listUnusedRecoveryCodes: liftDb(repo.listUnusedRecoveryCodes),
+    consumeRecoveryCode: liftDb(repo.consumeRecoveryCode),
+    deleteRecoveryCodesByUserId: liftDb(repo.deleteRecoveryCodesByUserId),
+  }),
+);
 
 // 鍵 ring は env から遅延解決する — import 時に throw させない (kill-switch と同じ方針)。
 let cached: MfaKeyRing | undefined;
-const ring = (): MfaKeyRing => (cached ??= parseMfaKeyRing(process.env.MFA_TOTP_ENCRYPTION_KEYS));
 
-const sessions: SessionControl = {
-  revokeOthers: async (headers) => {
-    const revoked = await revokeOtherSessions(headers);
-    return revoked.ok ? { ok: true, headers: revoked.headers } : revoked;
-  },
-};
+export const MfaKeyringLive = Layer.succeed(
+  MfaKeyring,
+  MfaKeyring.of({
+    ring: Effect.sync(() => (cached ??= parseMfaKeyRing(process.env.MFA_TOTP_ENCRYPTION_KEYS))),
+  }),
+);
 
-export const enrollOperation = createMfaEnrollment({ ring, issuer: getAppName });
+export const MfaIssuerLive = Layer.succeed(
+  MfaIssuer,
+  MfaIssuer.of({ appName: Effect.sync(getAppName) }),
+);
 
-export const activateOperation = createMfaActivation({
-  ring,
-  sessions,
-  writeAudit: (input) =>
-    recordMfaEnabled({ user_id: input.userId, ip: input.ip, userAgent: input.userAgent }),
-  observeAuditError: (error) => captureAuditLogError("mfa_enabled", error),
-  notifyEnabled: notifyMfaEnabled,
-});
+export const MfaSessionsLive = Layer.succeed(
+  MfaSessions,
+  MfaSessions.of({ revokeOthers: revokeOtherSessions, issueSession: issueSessionFor }),
+);
 
-export const disableOperation = createMfaDisable({
-  ring,
-  sessions,
-  writeAudit: (input) =>
-    recordMfaDisabled({ user_id: input.userId, ip: input.ip, userAgent: input.userAgent }),
-  observeAuditError: (error) => captureAuditLogError("mfa_disabled", error),
-  notifyDisabled: notifyMfaDisabled,
-  spendAttempt: spendDisableAttempt,
-  resetAttempts: resetDisableAttempts,
-});
+// 有効化 / 無効化の通知の取り違えは「無効化したのに有効化メールが届く」で、利用者からは乗っ取りに見える。
+export const MfaNotifierLive = Layer.succeed(
+  MfaNotifier,
+  MfaNotifier.of({
+    notifyEnabled: notifyMfaEnabled,
+    notifyDisabled: notifyMfaDisabled,
+  }),
+);
 
-// sign_in audit は通過手続が記帳する (§4.6) — plugin verify 経路が消え observer の completion
-// matcher は存在しないため。method はチャレンジ発行時に控えた値。
-export const completeLoginChallengeOperation = createLoginChallengeCompletion({
-  ring,
-  issueSession: issueSessionFor,
-  writeSignInAudit: ({ userId, method, ip, userAgent }) =>
-    appendAuditLog({ eventType: "sign_in", userId, payload: { method, ip, userAgent } }),
-  observeAuditError: (error) => captureAuditLogError("sign_in", error),
-});
+export const MfaDisableBudgetLive = Layer.succeed(
+  MfaDisableBudget,
+  MfaDisableBudget.of({ spend: spendDisableAttempt, reset: resetDisableAttempts }),
+);
+
+export const MfaLayers = Layer.mergeAll(
+  MfaTotpRepoLive,
+  MfaKeyringLive,
+  MfaIssuerLive,
+  MfaSessionsLive,
+  MfaNotifierLive,
+  MfaDisableBudgetLive,
+);

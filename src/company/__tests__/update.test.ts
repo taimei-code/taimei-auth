@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findCompanyById, softDeleteCompany } from "@/db/repositories/company";
+import { runLiveResult } from "../../__tests__/live-runner";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { updateCompanyInfo } from "../update";
 
@@ -21,11 +22,13 @@ describe("updateCompanyInfo", () => {
     const before = await findCompanyById(co);
     if (!before) throw new Error("seed failed");
 
-    const result = await updateCompanyInfo({
-      actorUserId: owner.id,
-      companyId: co,
-      input: { name: `${P}renamed`, orgCode: "CORPORATE" },
-    });
+    const result = await runLiveResult(
+      updateCompanyInfo({
+        actorUserId: owner.id,
+        companyId: co,
+        input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+      }),
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.company.name).toBe(`${P}renamed`);
@@ -50,11 +53,13 @@ describe("updateCompanyInfo", () => {
     await seedMembership(owner.id, co, "OWNER");
     await softDeleteCompany(co);
 
-    const result = await updateCompanyInfo({
-      actorUserId: owner.id,
-      companyId: co,
-      input: { name: `${P}renamed`, orgCode: "CORPORATE" },
-    });
+    const result = await runLiveResult(
+      updateCompanyInfo({
+        actorUserId: owner.id,
+        companyId: co,
+        input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found" });
 
     // rollback: audit 発火なし + company 状態 unchanged (name / orgCode)
@@ -70,11 +75,13 @@ describe("updateCompanyInfo", () => {
     const co = await seedCompany("e11-existing");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await updateCompanyInfo({
-      actorUserId: owner.id,
-      companyId: `${P}nonexistent`,
-      input: { name: `${P}renamed`, orgCode: "CORPORATE" },
-    });
+    const result = await runLiveResult(
+      updateCompanyInfo({
+        actorUserId: owner.id,
+        companyId: `${P}nonexistent`,
+        input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found" });
     expect((await auditRowsFor(owner.id, "company_updated")).length).toBe(0);
   });
@@ -87,11 +94,13 @@ describe("updateCompanyInfo", () => {
     const co = await seedCompany("h12", "PERSONAL");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await updateCompanyInfo({
-      actorUserId: owner.id,
-      companyId: co,
-      input: { name: `${P}h12-renamed`, orgCode: "CORPORATE" },
-    });
+    const result = await runLiveResult(
+      updateCompanyInfo({
+        actorUserId: owner.id,
+        companyId: co,
+        input: { name: `${P}h12-renamed`, orgCode: "CORPORATE" },
+      }),
+    );
     expect(result.ok).toBe(true);
 
     const after = await findCompanyById(co);

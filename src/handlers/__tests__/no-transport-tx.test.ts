@@ -1,17 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { execSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { grepFiles, REPO_ROOT } from "../../__tests__/grep-files";
 
-// ADR-0012 の Transport 禁止事項を静的に固定するリグレッションガード。
+// ADR-0012 の Transport 禁止事項と ADR-0017 の Stage 完了ゲートを静的に固定するリグレッションガード
+// (design §4 I5: Stage ごとの ban をこの file に累積する)。
 // (1) handlers/ (テスト除外) は runInTransaction を持たない = tx orchestration は Use-case 層のみ
 // (2) 3 handler ファイル (account-{company,invitation,membership}.ts) の error return は
-//     guardErrorResponse 経由に統一済 (raw c.json({error:...}) が 0 件)
-// (3) 上記 3 ファイルは use-case Result → GuardErrorResult 写像に reasonToGuardError を使う
-//     (少なくとも 6 出現 — 6 route の envelope 統一の下限を弱検査で pin)
-// test 自身が該当 pattern を含むと self-hit するため grep は execSync でシェルに投げる。
+//     runRoute (adapter) 経由に統一済 (raw c.json({error:...}) が 0 件)
+// (3) Stage 1 ゲート: 上記 3 ファイルは route を runRoute で走らせ (14 route 以上)、旧 API
+//     (guardErrorResponse / reasonToGuardError / resolveParseBody) を handlers/ から呼ばない
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const HANDLERS_DIR = join(REPO_ROOT, "src/handlers");
 const THREE_TARGET_FILES = [
   join(HANDLERS_DIR, "account-company.ts"),
@@ -19,55 +17,33 @@ const THREE_TARGET_FILES = [
   join(HANDLERS_DIR, "account-membership.ts"),
 ];
 
-function grepCount(pattern: string, path: string, extra: string = ""): number {
-  try {
-    const out = execSync(`grep -rEc ${extra} ${JSON.stringify(pattern)} ${JSON.stringify(path)}`, {
-      encoding: "utf8",
-    });
-    // grep -c は各 file の hit 数を "path:N" 形式で返す。単一 file なら数字のみ。
-    // -r で複数 file 走査の場合は path:N 行を全 file 分足して総和にする。
-    return out
-      .trim()
-      .split("\n")
-      .reduce((acc, line) => {
-        const n = Number(line.includes(":") ? line.split(":").pop() : line);
-        return acc + (Number.isFinite(n) ? n : 0);
-      }, 0);
-  } catch (_) {
-    // no match → grep exit 1 → treat as 0.
-    return 0;
-  }
-}
-
 describe("Transport 層の禁止事項 (ADR-0012 の regression ガード)", () => {
   test("QA-H-10 / QA-E-10 handlers/ (テスト除外) に runInTransaction 出現なし", () => {
     // handlers/ から runInTransaction を除去 = tx orchestration は Use-case 層のみが所有。
-    const count = grepCount(
-      "runInTransaction",
-      HANDLERS_DIR,
-      "--include=*.ts --exclude-dir=__tests__",
-    );
-    expect({ handlersDir: HANDLERS_DIR, runInTransactionCount: count }).toEqual({
-      handlersDir: HANDLERS_DIR,
-      runInTransactionCount: 0,
-    });
+    expect(grepFiles("runInTransaction", HANDLERS_DIR, { excludeTests: true })).toEqual([]);
   });
 
   test("QA-M-01 3 handler ファイル (account-*.ts) に c.json({error 出現なし (envelope 統一)", () => {
     // grep 対象は 3 file に限定 — スコープ外の avatar-upload.ts 等は独自の error return を持つ。
-    for (const file of THREE_TARGET_FILES) {
-      const count = grepCount("c\\.json\\(\\{\\s*error", file);
-      expect({ file, cJsonErrorCount: count }).toEqual({ file, cJsonErrorCount: 0 });
-    }
+    const offenders = THREE_TARGET_FILES.flatMap((file) =>
+      grepFiles("c\\.json\\(\\{\\s*error", file),
+    );
+    expect(offenders).toEqual([]);
   });
 
-  test("QA-H-11 3 handler ファイルで reasonToGuardError が最低 6 回出現 (6 route の envelope 統一の下限)", () => {
-    // 6 route が use-case Result → GuardErrorResult 写像に reasonToGuardError を使う下限を弱検査。
-    // AST 厳密検査はスコープ外 (実装者判断)。加算方式で 3 file 合計を数える。
+  test("QA-H-11 3 handler ファイルで runRoute が最低 14 回出現 (14 route の adapter 統一の下限)", () => {
     const total = THREE_TARGET_FILES.reduce(
-      (acc, f) => acc + grepCount("reasonToGuardError", f),
+      (acc, f) => acc + grepFiles("runRoute\\(", f, { lines: true }).length,
       0,
     );
-    expect(total).toBeGreaterThanOrEqual(6);
+    expect(total).toBeGreaterThanOrEqual(14);
+  });
+
+  test("Stage 1 ゲート: handlers/ (テスト除外) に旧 guard API の呼び出しが無い", () => {
+    const legacyApis = ["guardErrorResponse", "reasonToGuardError", "resolveParseBody"];
+    const offenders = legacyApis.filter(
+      (legacy) => grepFiles(legacy, HANDLERS_DIR, { excludeTests: true }).length > 0,
+    );
+    expect(offenders).toEqual([]);
   });
 });

@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import type { Context } from "hono";
 import { z } from "zod";
 import type { Role } from "@/db/repositories/membership";
-import type { ParseBodyCallback } from "../membership/guard";
+import type { ParseBody } from "../membership/guard";
+import { InvalidArgument } from "../membership/guard/errors";
 import type { MfaCodeKind } from "../mfa/wire-contracts";
 
 // role を body で受ける 2 route が同じ値集合を受理するための共有 schema (片方だけ受理する非対称を防ぐ)。
@@ -26,19 +28,24 @@ type ParseZodBodyOptions<S extends z.ZodTypeAny, Out> = {
   transform?: (data: z.infer<S>) => Out;
 };
 
-// c.req.json() + zod safeParse を entry の parseBody callback に接続する adapter。「.catch を safeParse
-// より先に置く」不変条件を隠蔽する。withDetails は details 付き 400 を返す 3 route 向け。
+// c.req.json() + zod safeParse を guard の ParseBody (Effect<T, InvalidArgument>) に接続する adapter。
+// Effect 値なので guard が yield* するまで body を読まない (401 / 403 先行時に parse しない)。
+// zod を残すのは 400 の details (zod flatten の message 文字列) が wire 契約だから (ADR-0017 Decision の zod 項)。
+// withDetails は details 付き 400 を返す 3 route 向け。
 export function parseZodBody<S extends z.ZodTypeAny, Out = z.infer<S>>(
   c: Context,
   schema: S,
   opts: ParseZodBodyOptions<S, Out> = {},
-): ParseBodyCallback<Out> {
-  return async () => {
-    const parsed = schema.safeParse(await c.req.json().catch(() => null));
-    if (!parsed.success) {
-      return opts.withDetails ? { ok: false, details: parsed.error.flatten() } : { ok: false };
-    }
-    const data = (opts.transform ? opts.transform(parsed.data) : parsed.data) as Out;
-    return { ok: true, data };
-  };
+): ParseBody<Out> {
+  return Effect.promise(async () => schema.safeParse(await c.req.json().catch(() => null))).pipe(
+    Effect.flatMap((parsed) => {
+      if (!parsed.success) {
+        return Effect.fail(
+          new InvalidArgument(opts.withDetails ? { details: parsed.error.flatten() } : {}),
+        );
+      }
+      const data = (opts.transform ? opts.transform(parsed.data) : parsed.data) as Out;
+      return Effect.succeed(data);
+    }),
+  );
 }

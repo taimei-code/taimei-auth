@@ -35,7 +35,7 @@ export type MfaChallengeStateResponse = { pending: boolean };
 
 export type MfaChallengeVerifyResponse = { redirect_url: string };
 
-// use-case 由来の error envelope。guard 層の envelope は membership/guard/respond.ts が正本で本型の外 —
+// use-case 由来の error envelope。guard 層の envelope は membership/guard/errors.ts が正本で本型の外 —
 // そこから MFA route に到達する code (unauthorized / invalid_argument) だけ wire 語彙側に含める。
 export type MfaErrorResponse = { error: MfaWireErrorCode };
 
@@ -50,7 +50,7 @@ export type MatchesWireShape<A, B> = [A, keyof A] extends [B, keyof B]
 // enrollment_id は必須 (旧 SPA 互換の第 1 段階は終了 — ADR-0016 §5.4)。
 export type MfaActivateRequest = { code: string; enrollment_id: string };
 
-// disable と challenge verify は今は同形だが、endpoint ごとに独立して進化するため別宣言にする。
 export type MfaDisableRequest = { code: string; kind: MfaCodeKind };
 
+// disable と challenge verify は今は同形だが、endpoint ごとに独立して進化するため別宣言にする。
 export type MfaChallengeVerifyRequest = { code: string; kind: MfaCodeKind };

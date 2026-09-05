@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { runLive } from "../../__tests__/live-runner";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { acceptInvitationPath } from "../accept-path";
 import { resolveInvitationEmailContext } from "../resolve-email-context";
@@ -35,8 +36,8 @@ describe("resolveInvitationEmailContext", () => {
   test("有効な invitation_token は company 名 / 招待者 / roleLabel を解決する", async () => {
     const { inviter, invitation } = await seedInvite("ADMIN");
 
-    const context = await resolveInvitationEmailContext(
-      magicLinkUrl(inviteCallback(invitation.token)),
+    const context = await runLive(
+      resolveInvitationEmailContext(magicLinkUrl(inviteCallback(invitation.token))),
     );
 
     expect(context).toEqual({
@@ -53,29 +54,46 @@ describe("resolveInvitationEmailContext", () => {
   ] as const)("role %s の roleLabel は %s", async (role, label) => {
     const { invitation } = await seedInvite(role);
 
-    const context = await resolveInvitationEmailContext(
-      magicLinkUrl(inviteCallback(invitation.token)),
+    const context = await runLive(
+      resolveInvitationEmailContext(magicLinkUrl(inviteCallback(invitation.token))),
     );
     expect(context?.roleLabel).toBe(label);
   });
 
   test("callbackURL に invitation_token が無ければ null (通常 magic link メール)", async () => {
-    expect(await resolveInvitationEmailContext(magicLinkUrl("/account"))).toBeNull();
+    expect(await runLive(resolveInvitationEmailContext(magicLinkUrl("/account")))).toBeNull();
   });
 
   test("invitation_token が DB に存在しなければ null", async () => {
     expect(
-      await resolveInvitationEmailContext(magicLinkUrl(inviteCallback("no-such-token"))),
+      await runLive(resolveInvitationEmailContext(magicLinkUrl(inviteCallback("no-such-token")))),
     ).toBeNull();
   });
 
   test("javascript: スキームの callbackURL は invitation 文脈として扱わない", async () => {
     const { invitation } = await seedInvite("MEMBER");
 
-    const context = await resolveInvitationEmailContext(
-      magicLinkUrl(`javascript:alert(1)?invitation_token=${invitation.token}`),
+    const context = await runLive(
+      resolveInvitationEmailContext(
+        magicLinkUrl(`javascript:alert(1)?invitation_token=${invitation.token}`),
+      ),
     );
     expect(context).toBeNull();
+  });
+
+  test("ADMIN 招待は roleLabel が管理者になる", async () => {
+    const { inviter, invitation } = await seedInvite("ADMIN");
+
+    const context = await runLive(
+      resolveInvitationEmailContext(magicLinkUrl(inviteCallback(invitation.token))),
+    );
+
+    expect(context).toEqual({
+      companyName: `${P}co-main`,
+      inviterName: "招待 花子",
+      inviterEmail: inviter.email,
+      roleLabel: "管理者",
+    });
   });
 
   // inviter 不在時の空文字継続 / company 不在時の null は、invitation の FK (invited_by_user_id /

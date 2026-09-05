@@ -1,7 +1,9 @@
+import { Effect } from "effect";
 import { serveStatic } from "hono/bun";
 import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "./app";
 import { pingRedis } from "./redis";
+import { getRuntime } from "./runtime";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { parseTrustedProxyHops } from "./request-context";
 
@@ -27,16 +29,16 @@ const spaFallback = buildSpaFallbackHandler(`${WEB_DIST}/index.html`);
 
 // `app` は test (routes-integration.test.ts) から import するため named export する。
 export const app = buildApp({
-  mountStatic: (app) => {
-    app.use(
+  mountStatic: (honoApp) => {
+    honoApp.use(
       "/auth/*",
       serveStatic({
         root: WEB_DIST,
         rewriteRequestPath: (path) => path.replace(/^\/auth/, ""),
       }),
     );
-    app.get("/auth/*", spaFallback);
-    app.get("/account/*", spaFallback);
+    honoApp.get("/auth/*", spaFallback);
+    honoApp.get("/account/*", spaFallback);
   },
 });
 
@@ -44,11 +46,15 @@ export const app = buildApp({
 const REDIS_BOOT_TIMEOUT_MS = 10_000;
 
 // session 実体と rate-limit が Redis 前提のため、疎通不能なら「起動はしたが認証できない」プロセスを
-// 作らず boot で止める。race による打ち切りは必須 — redis 断のとき pingRedis は resolve しない。
-const redisReachable = await Promise.race([
-  pingRedis(),
-  new Promise<false>((resolve) => setTimeout(() => resolve(false), REDIS_BOOT_TIMEOUT_MS)),
-]);
+// 作らず boot で止める。timeout による打ち切りは必須 — redis 断のとき ping は resolve しない。
+// Redis service の ping は /health 向けに 2s で切るため、10s 待つ boot は生の pingRedis に timeout を掛ける
+// (ADR-0017 Decision の非同期項「Bun 起動の Redis ping 10s」)。
+const redisReachable = await getRuntime().runPromise(
+  Effect.promise(() => pingRedis()).pipe(
+    Effect.timeout(REDIS_BOOT_TIMEOUT_MS),
+    Effect.orElseSucceed(() => false),
+  ),
+);
 if (!redisReachable) {
   console.error("FATAL: Redis is unreachable at boot.");
   process.exit(1);

@@ -75,14 +75,13 @@ describe("MFA totp module boundary", () => {
   });
 
   test("AC-150b db/repositories/mfa-totp の production importer 列挙", () => {
+    // repository の Effect face は ports (型) + wiring (結線) に閉じ、use-case と management CLI は
+    // service を yield* する (ADR-0017 Stage 3)。id-generator は採番関数の正本。
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src management")).toEqual([
-      "management/disable-user-mfa.ts",
-      "src/mfa/totp/activate-mfa.ts",
-      "src/mfa/totp/challenge-required.ts",
-      "src/mfa/totp/disable-mfa.ts",
+      "src/id-generator.ts",
       "src/mfa/totp/enroll-mfa.ts",
-      "src/mfa/totp/read-status.ts",
-      "src/mfa/totp/verify-code.ts",
+      "src/mfa/totp/ports.ts",
+      "src/mfa/totp/wiring.ts",
     ]);
   });
 
@@ -93,12 +92,15 @@ describe("MFA totp module boundary", () => {
   });
 
   test("AC-150e secret 材料を返す findMfaTotp の importer 列挙", () => {
-    // findMfaTotp は secret 列を含む全射影 — 復号材料を扱ってよいのは use-case の 3 file に限る。
+    // findMfaTotp は secret 列を含む全射影 — 復号材料を扱ってよいのは use-case の 3 file に限る
+    // (ports / wiring は service の型と結線で、平文には触れない)。
     expect(filesWithCodeLiteral("findMfaTotp", "src db management")).toEqual([
       "db/repositories/mfa-totp.ts",
       "src/mfa/totp/activate-mfa.ts",
       "src/mfa/totp/enroll-mfa.ts",
+      "src/mfa/totp/ports.ts",
       "src/mfa/totp/verify-code.ts",
+      "src/mfa/totp/wiring.ts",
     ]);
   });
 
@@ -106,11 +108,11 @@ describe("MFA totp module boundary", () => {
     const facade = await import("../totp");
     expect(Object.keys(facade).sort()).toEqual([
       "activate",
-      "completeLoginChallengeOperation",
+      "completeLoginChallenge",
       "disable",
       "enroll",
-      "getStatus",
       "readLoginChallengeState",
+      "readOwnedMfaStatus",
     ]);
   });
 
@@ -126,13 +128,16 @@ describe("MFA totp module boundary", () => {
   test("QA-E-03 management/ の import 面は全列挙で固定する", () => {
     expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
       `management/backfill-orphan-cleanup.ts:from "../src/account/backfill-orphan-cleanup"`,
-      `management/disable-user-mfa.ts:from "../db/repositories/audit-log"`,
-      `management/disable-user-mfa.ts:from "../db/repositories/mfa-totp"`,
-      `management/disable-user-mfa.ts:from "../db/repositories/user"`,
-      `management/disable-user-mfa.ts:from "../db/transaction"`,
-      `management/disable-user-mfa.ts:from "../src/audit-error"`,
+      `management/backfill-orphan-cleanup.ts:from "../src/runtime"`,
+      `management/disable-user-mfa.ts:from "../src/account/ports"`,
+      `management/disable-user-mfa.ts:from "../src/audit/ports"`,
+      `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
       `management/disable-user-mfa.ts:from "../src/mfa/notification-adapter"`,
+      `management/disable-user-mfa.ts:from "../src/mfa/totp/ports"`,
+      `management/disable-user-mfa.ts:from "../src/runtime"`,
+      `management/disable-user-mfa.ts:from "../src/transaction"`,
       `management/sweep-abandoned-signups.ts:from "../src/account/sweep-abandoned-signups"`,
+      `management/sweep-abandoned-signups.ts:from "../src/runtime"`,
     ]);
   });
 

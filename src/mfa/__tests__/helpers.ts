@@ -7,7 +7,6 @@ import { mfaRecoveryCode, mfaTotp } from "@/db/schema";
 import { auth } from "../../auth";
 import { withWaitUntil } from "../../background";
 import { getRedis } from "../../redis";
-import { setSentryBackend, type CaptureContext } from "../../sentry";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
 import type { MfaTotpActor } from "../totp/contracts";
@@ -17,6 +16,7 @@ import {
   challengeKey,
   type ChallengeMethod,
 } from "../totp/login-challenge";
+import { runMfa, runMfaResult } from "./test-layers";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
 // 状態を DB へ直接捏造すると、暗号化 secret とコードの対応が伴わず以降の検証がすべて偽陽性になる
@@ -161,22 +161,24 @@ export type EnabledMfaUser = {
 export async function enableMfaFor(user: { id: string; email: string }): Promise<EnabledMfaUser> {
   const session = await createSessionFor(user.id);
   const actor = actorOf(user);
-  const enrolled = await enroll({ actor });
+  const enrolled = await runMfaResult(enroll({ actor }));
   if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
 
   const secret = secretFromTotpUri(enrolled.totpUri);
   // 前 step のコードで有効化し、現 step 以降を後続の検証に残す (timestep は単調消費のため)。
-  const activated = await activate({
-    actor,
-    headers: session.headers,
-    code: await totpCode(secret, -1),
-    enrollmentId: enrolled.enrollmentId,
-  });
+  const activated = await runMfaResult(
+    activate({
+      actor,
+      headers: session.headers,
+      code: await totpCode(secret, -1),
+      enrollmentId: enrolled.enrollmentId,
+    }),
+  );
   if (!activated.ok) throw new Error(`activate failed: ${activated.error}`);
 
   // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
   // 「有効化直後は枠が空」を fixture 側で保証する。
-  await resetDisableAttempts(user.id);
+  await runMfa(resetDisableAttempts(user.id));
 
   return {
     actor,
@@ -249,8 +251,8 @@ export type PrimaryAuthLogin = { response: Response; location: URL | null; logs:
 
 export type ObservedRun<T> = { value: T; logs: string[] };
 
-// audit 記帳と通知メールは runBackground の fire-and-forget。worker entry と同じ withWaitUntil で
-// 拾って完走を待つことで、記帳の観測が時間依存にならない。
+// 通知メールは Background service の fire-and-forget。worker entry と同じ withWaitUntil で拾って
+// 完走を待つことで、送信ログの観測が時間依存にならない。
 export async function runObserving<T>(fn: () => Promise<T>): Promise<ObservedRun<T>> {
   const logs: string[] = [];
   const background: Promise<unknown>[] = [];
@@ -326,35 +328,5 @@ export function browserCookieHeaders(response: Response): Headers {
   );
 }
 
-export type SentryCapture = { message: string; context?: CaptureContext };
-
-// MFA の失敗経路は「握り潰さず観測へ回す」ことが仕様の一部なので、captureMessage /
-// captureException の発火はテストの検証対象になる。backend は module-global のため、
-// install した test file は必ず restore して後続ファイルへ spy を漏らさない。
-export function installSentryRecorder(): {
-  messages: SentryCapture[];
-  exceptions: SentryCapture[];
-  reset(): void;
-  restore(): void;
-} {
-  const messages: SentryCapture[] = [];
-  const exceptions: SentryCapture[] = [];
-  setSentryBackend({
-    captureMessage: (message, context) => messages.push({ message, context }),
-    captureException: (error, context) => exceptions.push({ message: String(error), context }),
-  });
-  return {
-    messages,
-    exceptions,
-    reset: () => {
-      messages.length = 0;
-      exceptions.length = 0;
-    },
-    restore: () =>
-      setSentryBackend({
-        captureException: (error) => console.error("[sentry:noop] captureException", error),
-        captureMessage: (message, context) =>
-          console.warn("[sentry:noop] captureMessage", message, context?.tags),
-      }),
-  };
-}
+// Sentry recorder は MFA 以外 (adapter / guard) の test も使うため src/__tests__ へ移した。
+export { installSentryRecorder, type SentryCapture } from "../../__tests__/sentry-recorder";

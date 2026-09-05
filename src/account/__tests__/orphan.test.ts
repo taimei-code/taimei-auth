@@ -5,8 +5,8 @@ import { generateCompanyId, insertCompany, softDeleteCompany } from "@/db/reposi
 import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
 import { auditLog, company, membership, session, user } from "@/db/schema";
-import { runInTransaction } from "@/db/transaction";
 import { getRedis } from "../../redis";
+import { runInTx } from "../../__tests__/live-runner";
 import { deleteAccountIfOrphaned } from "../orphan";
 
 const P = "orphan-test-";
@@ -76,7 +76,7 @@ describe("deleteAccountIfOrphaned", () => {
   test("active membership 0 件なら account を削除し session 消滅 + audit を残す (true)", async () => {
     const userId = await seedUser("orphan");
 
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
     expect(deleted).toBe(true);
     expect(await findUserById(userId)).toBeUndefined();
@@ -90,7 +90,7 @@ describe("deleteAccountIfOrphaned", () => {
     const companyId = await seedCompany("kept");
     await insertMembership({ id: generateMembershipId(), userId, companyId, role: "OWNER" });
 
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
     expect(deleted).toBe(false);
     expect(await findUserById(userId)).toBeDefined();
@@ -103,7 +103,7 @@ describe("deleteAccountIfOrphaned", () => {
     await insertMembership({ id: generateMembershipId(), userId, companyId, role: "OWNER" });
     await softDeleteCompany(companyId);
 
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
     expect(deleted).toBe(true);
     expect(await findUserById(userId)).toBeUndefined();
@@ -111,7 +111,7 @@ describe("deleteAccountIfOrphaned", () => {
 
   test("既に存在しない user への適用は二重削除せず安全 (true / no-op)", async () => {
     const userId = `${P}u-absent`;
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
     expect(deleted).toBe(true);
   });
 
@@ -123,7 +123,7 @@ describe("deleteAccountIfOrphaned", () => {
     const tokens = [`${P}rtok-1`, `${P}rtok-2`];
     await seedRedisSessions(userId, tokens);
 
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
     const redis = await getRedis();
     expect(deleted).toBe(true);
@@ -138,7 +138,7 @@ describe("deleteAccountIfOrphaned", () => {
     await insertMembership({ id: generateMembershipId(), userId, companyId, role: "OWNER" });
     await seedRedisSessions(userId, [`${P}rtok-kept`]);
 
-    const deleted = await runInTransaction((tx) => deleteAccountIfOrphaned(userId, tx));
+    const deleted = await runInTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
     const redis = await getRedis();
     expect(deleted).toBe(false);

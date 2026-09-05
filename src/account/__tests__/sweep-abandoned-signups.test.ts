@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { generateCompanyId, insertCompany } from "@/db/repositories/company";
 import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
 import { company, membership, session, user } from "@/db/schema";
+import { runLive } from "../../__tests__/live-runner";
 import { sweepAbandonedSignups } from "../sweep-abandoned-signups";
 
 const TTL_MS = 24 * 60 * 60 * 1000;
@@ -62,7 +63,7 @@ describe("sweepAbandonedSignups", () => {
   test("dry-run: 24h 超過 + 所属 0 件のみ候補に挙げ mutate しない", async () => {
     const { oldOrphan, recentOrphan, oldWithCompany } = await seedScenario();
 
-    const report = await sweepAbandonedSignups({ olderThanMs: TTL_MS, execute: false });
+    const report = await runLive(sweepAbandonedSignups({ olderThanMs: TTL_MS, execute: false }));
 
     expect(report.executed).toBe(false);
     expect(report.deletedUserIds).toContain(oldOrphan);
@@ -74,7 +75,7 @@ describe("sweepAbandonedSignups", () => {
   test("execute: 古い orphan を削除し、24h 内 / 所属あり は残す", async () => {
     const { oldOrphan, recentOrphan, oldWithCompany } = await seedScenario();
 
-    const report = await sweepAbandonedSignups({ olderThanMs: TTL_MS, execute: true });
+    const report = await runLive(sweepAbandonedSignups({ olderThanMs: TTL_MS, execute: true }));
 
     expect(report.executed).toBe(true);
     expect(report.deletedUserIds).toContain(oldOrphan);
