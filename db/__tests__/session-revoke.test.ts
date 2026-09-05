@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../client";
 import { findSessionRevokedAt, revokeAllSessionsForUser } from "../repositories/session";
 import { deleteUser as deleteUserRepo } from "../repositories/user";
@@ -48,7 +48,14 @@ describe("session revoke repository", () => {
     const revokedB = await findSessionRevokedAt(testSessionB);
     expect(revokedA).not.toBeNull();
     expect(revokedB).not.toBeNull();
-    expect(revokedA!.getTime()).toBeLessThanOrEqual(Date.now());
+    // revoked_at は DB の NOW() で書かれるため、上限も DB の時計で取る。host の Date.now() と比べると
+    // DB (Docker VM) の時計が数 ms 進んでいるだけで落ちる (時計の違いであって revoke の欠陥ではない)。
+    const { rows } = await db.execute<{ now_ms: number }>(
+      sql`select extract(epoch from now()) * 1000 as now_ms`,
+    );
+    expect(revokedA!.getTime()).toBeLessThanOrEqual(Number(rows[0]!.now_ms));
+    // 桁違いにずれた値 (未来や epoch) を書いていないことは host の時計で粗く確認する。
+    expect(Math.abs(revokedA!.getTime() - Date.now())).toBeLessThan(60_000);
   });
 
   test("revokeAllSessionsForUser is idempotent (re-running does not overwrite older revoked_at)", async () => {
