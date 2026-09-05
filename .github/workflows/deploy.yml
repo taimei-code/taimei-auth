@@ -5,13 +5,19 @@ name: Deploy
 # failure でなく skipped になる (通知が出ないため「merge したのに出ていない」は CI failure 通知で気づく)。
 # 緊急時の escape hatch は下の workflow_dispatch。
 # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md の Consequences
-# 手順: build (auth-client SDK + web assets) -> migration (drizzle/*.sql があれば) -> wrangler deploy。
+# 手順: build (auth-client SDK + web assets) -> migration (drizzle/*.sql があれば) -> versions upload
+# -> preview smoke -> versions deploy。
 # migration を deploy より先に行い、新コードが未 migrate の DB に当たらないようにする
 # (compose の auth-migrate -> auth-service と同じ順序: docker-compose.yml)。
+# `wrangler deploy` を versions upload / deploy の 2 段に割るのは、本番 traffic に乗せる前に実 workerd +
+# 実 binding で新 version を叩く gate (scripts/preview-smoke.sh) を挟むため。smoke が落ちたら deploy step に
+# 進まず、本番は前の version のまま残る (旧 QA-MR-03 / QA-MR-11 の手動 remote 確認をここで自動化した)。
+# preview URL は Worker 設定の Preview URLs (previews_enabled) が on であることが前提 (workers.dev の route は
+# off のまま)。off にすると smoke が到達不能で常に fail する。
 #
 # 必要な repo secret:
-#   - CLOUDFLARE_API_TOKEN  : Workers Scripts:Edit 権限の API token (wrangler deploy 用)
-#   - CLOUDFLARE_ACCOUNT_ID : 対象アカウント ID (token が複数アカウントに紐づく場合に必須)
+#   - CLOUDFLARE_API_TOKEN  : Workers Scripts:Edit 権限の API token (versions upload / deploy と subdomain 取得用)
+#   - CLOUDFLARE_ACCOUNT_ID : 対象アカウント ID (token が複数アカウントに紐づく場合に必須。preview URL の組み立てにも使う)
 #   - DATABASE_URL          : 本番 Neon の「直接接続」文字列 (Hyperdrive 経由ではなく direct。DDL 用)
 
 on:
@@ -79,9 +85,38 @@ jobs:
           fi
 
       # vars は wrangler.jsonc、secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN) は
-      # 事前に wrangler secret put 済み。deploy は API token (+ account id) のみ必要。
-      - name: Deploy to Cloudflare Workers
+      # 事前に wrangler secret put 済みで、新 version にも継承される。version はまだ本番 traffic に乗らない。
+      - name: Upload Worker version (not yet deployed)
+        id: upload
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bunx wrangler deploy
+        run: |
+          set -euo pipefail
+          bunx wrangler versions upload --tag "ci-${GITHUB_SHA::7}" --message "deploy.yml ${GITHUB_RUN_ID}" | tee upload.log
+          version_id=$(sed -n 's/^Worker Version ID: *//p' upload.log | tr -d '[:space:]')
+          [ -n "$version_id" ] || { echo "version id not found in wrangler output" >&2; exit 1; }
+          echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
+
+      # preview URL は <version-id 先頭 8 桁>-<worker 名>.<account の workers.dev subdomain>.workers.dev。
+      # worker 名は wrangler.jsonc の name と揃える。subdomain は API から取る (account 固有値を repo に書かない)。
+      - name: Preview smoke (gate)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WORKER_NAME: taimei-auth
+          VERSION_ID: ${{ steps.upload.outputs.version_id }}
+        run: |
+          set -euo pipefail
+          subdomain=$(curl -sSf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain')
+          [ -n "$subdomain" ] && [ "$subdomain" != "null" ] || { echo "workers.dev subdomain not found" >&2; exit 1; }
+          bash scripts/preview-smoke.sh "https://${VERSION_ID::8}-${WORKER_NAME}.${subdomain}.workers.dev"
+
+      # smoke を通った version だけを 100% に割り当てる。ここで初めて本番 traffic が新コードを通る。
+      - name: Deploy version to production traffic
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          VERSION_ID: ${{ steps.upload.outputs.version_id }}
+        run: bunx wrangler versions deploy "${VERSION_ID}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} (${GITHUB_SHA::7})"
