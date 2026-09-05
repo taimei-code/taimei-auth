@@ -93,7 +93,7 @@ rc.112 → 4.0.0 を 1 PR で上げ、全テスト + typecheck で API 差を検
 - Stage 1 の `fromResult` (use-case の Promise<Result> 橋渡し) で reject を `DbError` に分類する: use-case の reject にはバグも含まれ、一律 `DbError` にすると Sentry の warning に紛れる。defect のまま扱い、Stage 2 で use-case が typed failure になった時点で橋渡しごと消した (`WireFailure` / `fromResult` は存在しない)
 - request-scoped の `RequestContext` service (headers / client を adapter が provideService する): Guard と use-case は `Headers` を引数に取る現行 API で足り、consumer の無いまま毎 request `getClientContext` を計算して provide するだけになった。service は置かず、`getClientContext(headers)` の直接呼び出しを維持する
 - `Effect.log*` で既存の `console.warn` / `console.error` を全置換する: 出力行の形が変わり、ADR-0012 の運用契約 (log filter が JSON から `invitation_id` を抽出する) と e2e / QA が拾う local の `[TEST] ...` 行が外れる。運用契約のある行は `Effect.sync(() => console.*)` のまま置く
-- `auth.ts` から静的に辿れる module (`auth-plugins/*`、better-auth callback、`mfa/totp/challenge-required.ts`) が `runtime.ts` を静的 import する: `runtime → auth-service → auth → plugins → runtime` の環で `AuthApiLive` が TDZ になる。関数内の `await import("./runtime")` に限る
+- `auth.ts` から静的に辿れる module (`auth-plugins/*`、better-auth callback、`handlers/wire-error.ts`、それらが呼ぶ `mfa/totp/challenge-required.ts` と `mfa/totp/login-challenge.ts`) が `runtime.ts` を静的 import する: `runtime → auth-service → auth → plugins → runtime` の環で `AuthApiLive` が TDZ になる。関数内の `await import("./runtime")` に限る。`runtime.ts` を直接静的 import する file の集合は `src/__tests__/effect-boundary.test.ts` が固定する (`auth.ts` からの到達可能性そのものは固定しない)
 
 ## Consequences
 
