@@ -159,3 +159,15 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
     }
   });
 });
+
+// ---- revokeAllSessionsForUser の窓口 (08 設計 A): ports が repository の全 export を公開するため、呼び出しを grep で閉じる ----
+
+describe("revokeAllSessionsForUser の窓口", () => {
+  test("port 経由の呼び出しは src/account/revoke-sessions.ts に限る (Redis 側の失効を伴う唯一の窓口)", () => {
+    // biome の importNames ban は src/** だけに効くため、ports を組める management / e2e も同じ gate で閉じる。
+    const offenders = ["src", "management", "e2e"].flatMap((dir) =>
+      grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
+    );
+    expect(offenders).toEqual(["src/account/revoke-sessions.ts"]);
+  });
+});

@@ -25,7 +25,7 @@ export const switchCompany = Effect.fn("account.switchCompany")(function* (param
     Effect.fn("account.switchCompany.apply")(function* (t) {
       const targetMembership = yield* memberships.findMembership(actorUserId, targetCompanyId, t);
       if (!targetMembership) return yield* new Forbidden();
-      yield* users.updateLastUsedCompany(actorUserId, targetCompanyId, t);
+      yield* users.updateUserLastUsedCompany(actorUserId, targetCompanyId, t);
       yield* audit.recordCompanySwitched(
         {
           actor_user_id: actorUserId,

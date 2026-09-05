@@ -22,7 +22,7 @@ export const requireInvitationAccept = (opts: {
     const actor = yield* requireActor(opts.headers);
     const parsed = yield* opts.parseBody;
     const invitations = yield* InvitationRepo;
-    const invitation = yield* invitations.findByToken(parsed.token);
+    const invitation = yield* invitations.findInvitationByToken(parsed.token);
     if (!invitation) return yield* new NotFound();
     if (invitation.email.toLowerCase() !== actor.email.toLowerCase())
       return yield* new EmailMismatch();

@@ -67,7 +67,7 @@ const purgeGhostMemberships = Effect.fn("account.purgeGhostMemberships")(functio
 
   return yield* tx.run(
     Effect.fn("account.purgeGhostMemberships.apply")(function* (t) {
-      yield* invitations.revokePendingOfCompany(companyId, t);
+      yield* invitations.revokePendingInvitationsOfCompany(companyId, t);
       const removed = yield* memberships.removeMembershipsOfCompany(companyId, t);
       yield* users.reassignLastUsedCompanyForDeletedCompany(companyId, t);
       const orphanUserIds: string[] = [];

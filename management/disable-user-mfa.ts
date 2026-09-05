@@ -23,7 +23,7 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
   const mfa = yield* MfaTotpRepo;
   const tx = yield* Transaction;
 
-  const user = yield* users.findById(userId);
+  const user = yield* users.findUserById(userId);
   if (!user) return { ok: false, error: "not_found" } satisfies ForceDisableResult;
 
   const deleted = yield* tx.run((t) =>

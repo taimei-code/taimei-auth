@@ -77,7 +77,7 @@ rc.112 → 4.0.0 を 1 PR で上げ、全テスト + typecheck で API 差を検
 
 - Transport に adapter が加わり (Decision の境界表 2 行目)、失敗の写像点はその 3 つに閉じる。`membership/guard/respond.ts` (`guardErrorResponse` / `reasonToGuardError`) は廃止
 - Guard の公開 API は `Effect<A, GuardError, R>`。deps factory (`createMembershipGuard` / `makeRequireX`) は廃止し、依存は ports の service を `yield*` する。判定順 (401 → 400 → 403 → 404 → ...) と fail-closed (session 解決だけ 401、membership 断は 500) は不変
-- Use-case が ports (`src/<domain>/ports.ts`) を所有し、Repository の Effect face は src 側に置く。`db/repositories/` は薄い Promise のまま
+- Use-case が ports (`src/<domain>/ports.ts`) を所有し、Repository の Effect face は src 側に置く。`db/repositories/` は薄い Promise のまま。port の method 名は repository の関数名と同一で、ports は `LiftedModule<typeof repo>`、wiring は `liftAll(repo)` として repository module から導出する (port 側で名前を付け替えない。同期 helper `generate*` / `isAcceptable` は `liftAll` の対象外で、必要な側が直接 import する)
 - 1 file ≤200 行、1 操作 1 file、Guard は hono 非依存、Transport は tx を所有しない (`src/rpc/user-handler.ts` の既存 Scope out は Stage 1 で動かさない) は維持
 
 ## Did not adopt

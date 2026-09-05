@@ -3,7 +3,7 @@ import { Context } from "effect";
 import type * as repo from "@/db/repositories/mfa-totp";
 import type { Background } from "../../background";
 import type { EmailSender } from "../../email/ports";
-import type { AuthApiError, Lifted } from "../../errors";
+import type { AuthApiError, LiftedModule } from "../../errors";
 import type { Redis } from "../../redis-service";
 import type { SentryService } from "../../sentry";
 import type { ChallengeExpired, Locked } from "../error-mapping";
@@ -13,23 +13,10 @@ import type { MfaKeyRing } from "./cipher";
 // db/repositories・gateway・notification-adapter を直接 import しない (結線は wiring.ts のみ)。
 
 // Repository (db/repositories/mfa-totp、Promise) の Effect face。identity DB を別 process (RPC) へ
-// 分離する時はこの interface の live 実装だけを差し替える。
-export class MfaTotpRepo extends Context.Service<
-  MfaTotpRepo,
-  {
-    findMfaTotp: Lifted<typeof repo.findMfaTotp>;
-    readMfaVerification: Lifted<typeof repo.readMfaVerification>;
-    readMfaStatusRow: Lifted<typeof repo.readMfaStatusRow>;
-    insertMfaTotpEnrollment: Lifted<typeof repo.insertMfaTotpEnrollment>;
-    activateMfaTotp: Lifted<typeof repo.activateMfaTotp>;
-    consumeTotpTimestep: Lifted<typeof repo.consumeTotpTimestep>;
-    deleteMfaTotp: Lifted<typeof repo.deleteMfaTotp>;
-    insertRecoveryCodes: Lifted<typeof repo.insertRecoveryCodes>;
-    listUnusedRecoveryCodes: Lifted<typeof repo.listUnusedRecoveryCodes>;
-    consumeRecoveryCode: Lifted<typeof repo.consumeRecoveryCode>;
-    deleteRecoveryCodesByUserId: Lifted<typeof repo.deleteRecoveryCodesByUserId>;
-  }
->()("taimei/MfaTotpRepo") {}
+// 分離する時はこの interface の live 実装だけを差し替える (型導出の規則は src/CLAUDE.md の Effect様式)。
+export class MfaTotpRepo extends Context.Service<MfaTotpRepo, LiftedModule<typeof repo>>()(
+  "taimei/MfaTotpRepo",
+) {}
 
 // 鍵 ring は env から遅延解決する — import 時に throw させない (kill-switch と同じ方針)。
 // 解決失敗 (env 不正) は業務失敗ではないため E channel に載せず defect のままにする。

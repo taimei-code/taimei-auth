@@ -217,17 +217,6 @@ export class OwnerInvariantViolation extends Error {
   }
 }
 
-// OwnerInvariantViolation を last_owner reason に写像し他は再 throw する catch を 1 箇所に閉じる。
-// コピペすると片方だけ import を忘れて silent に 500 化する regression が起きるため helper 側で fail-closed。
-export function catchOwnerInvariant<T>(
-  p: Promise<T>,
-): Promise<T | { ok: false; reason: "last_owner" }> {
-  return p.catch((e: unknown) => {
-    if (e instanceof OwnerInvariantViolation) return { ok: false, reason: "last_owner" } as const;
-    throw e;
-  });
-}
-
 export type BlockingCompany = { companyId: string; companyName: string };
 
 // DeleteUser pre-check (Q24): user が唯一の OWNER である ACTIVE company を返す。残る限り退会できない

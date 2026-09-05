@@ -19,7 +19,7 @@ export const revokeInvitation = Effect.fn("invitation.revoke")(function* (params
 
   yield* tx.run(
     Effect.fn("invitation.revoke.apply")(function* (t: DbTx) {
-      const row = yield* invitations.markRevoked(invitationId, companyId, t);
+      const row = yield* invitations.markInvitationRevoked(invitationId, companyId, t);
       if (!row) return yield* new NotFoundOrNotPending();
       yield* audit.recordInvitationRevoked(
         { actor_user_id: actorUserId, invitation_id: row.id, company_id: companyId },

@@ -1,7 +1,7 @@
 import { Effect, Layer } from "effect";
 import * as repo from "@/db/repositories/mfa-totp";
 import { getAppName } from "../../email/client";
-import { liftDb } from "../../errors";
+import { liftAll } from "../../errors";
 import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
 import { issueSessionFor, revokeOtherSessions } from "../gateway";
 import { notifyMfaDisabled, notifyMfaEnabled } from "../notification-adapter";
@@ -18,22 +18,7 @@ import {
 // production 結線 (A-11)。gateway 名 (revokeOtherSessions / issueSessionFor) の出現はこのファイルに閉じる。
 // module ロード時 bind の根拠は src/membership/wiring.ts と同じ (db/CLAUDE.md の workerd gotcha)。
 
-export const MfaTotpRepoLive = Layer.succeed(
-  MfaTotpRepo,
-  MfaTotpRepo.of({
-    findMfaTotp: liftDb(repo.findMfaTotp),
-    readMfaVerification: liftDb(repo.readMfaVerification),
-    readMfaStatusRow: liftDb(repo.readMfaStatusRow),
-    insertMfaTotpEnrollment: liftDb(repo.insertMfaTotpEnrollment),
-    activateMfaTotp: liftDb(repo.activateMfaTotp),
-    consumeTotpTimestep: liftDb(repo.consumeTotpTimestep),
-    deleteMfaTotp: liftDb(repo.deleteMfaTotp),
-    insertRecoveryCodes: liftDb(repo.insertRecoveryCodes),
-    listUnusedRecoveryCodes: liftDb(repo.listUnusedRecoveryCodes),
-    consumeRecoveryCode: liftDb(repo.consumeRecoveryCode),
-    deleteRecoveryCodesByUserId: liftDb(repo.deleteRecoveryCodesByUserId),
-  }),
-);
+export const MfaTotpRepoLive = Layer.succeed(MfaTotpRepo, liftAll(repo));
 
 // 鍵 ring は env から遅延解決する — import 時に throw させない (kill-switch と同じ方針)。
 let cached: MfaKeyRing | undefined;

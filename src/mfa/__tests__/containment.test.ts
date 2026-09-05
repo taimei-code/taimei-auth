@@ -93,14 +93,12 @@ describe("MFA totp module boundary", () => {
 
   test("AC-150e secret 材料を返す findMfaTotp の importer 列挙", () => {
     // findMfaTotp は secret 列を含む全射影 — 復号材料を扱ってよいのは use-case の 3 file に限る
-    // (ports / wiring は service の型と結線で、平文には触れない)。
+    // (ports / wiring は LiftedModule / liftAll で repository module から導出するため、関数名を持たない)。
     expect(filesWithCodeLiteral("findMfaTotp", "src db management")).toEqual([
       "db/repositories/mfa-totp.ts",
       "src/mfa/totp/activate-mfa.ts",
       "src/mfa/totp/enroll-mfa.ts",
-      "src/mfa/totp/ports.ts",
       "src/mfa/totp/verify-code.ts",
-      "src/mfa/totp/wiring.ts",
     ]);
   });
 

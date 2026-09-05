@@ -49,7 +49,7 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
   const users = yield* UserRepo;
   const sessions = yield* SessionRepo;
   const [dbUser, revokedAt] = yield* Effect.all(
-    [users.findById(result.user.id), sessions.findSessionRevokedAt(result.session.id)],
+    [users.findUserById(result.user.id), sessions.findSessionRevokedAt(result.session.id)],
     { concurrency: "unbounded" },
   );
   if (!dbUser) {
@@ -92,11 +92,13 @@ export function registerAuthService(router: ConnectRouter) {
     verifySession: (req) => runRpc(verifySessionProgram(req)),
 
     getUser: (req) =>
-      runRpc(UserRepo.use((users) => users.findById(req.userId)).pipe(Effect.map(userResponse))),
+      runRpc(
+        UserRepo.use((users) => users.findUserById(req.userId)).pipe(Effect.map(userResponse)),
+      ),
 
     findAccountByUserId: (req) =>
       runRpc(
-        AccountRepo.use((accounts) => accounts.findByUserId(req.userId)).pipe(
+        AccountRepo.use((accounts) => accounts.findAccountByUserId(req.userId)).pipe(
           Effect.map((row) => ({ account: row ? toProtoAccount(row) : undefined })),
         ),
       ),
@@ -118,7 +120,7 @@ export function registerAuthService(router: ConnectRouter) {
             const background = yield* Background;
             yield* background.run(
               audit
-                .append({
+                .appendAuditLog({
                   eventType: "sign_out",
                   userId,
                   payload: { ip: "unknown", userAgent: "unknown" },

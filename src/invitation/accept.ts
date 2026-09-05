@@ -36,7 +36,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
   const tx = yield* Transaction;
 
   const apply = Effect.fn("invitation.accept.apply")(function* (t: DbTx) {
-    const accepted = yield* invitations.markAccepted(invitation.id, t);
+    const accepted = yield* invitations.markInvitationAccepted(invitation.id, t);
     // 並行 accept / revoke で PENDING が消えた。expired_or_used と同義。
     if (!accepted) return yield* new RejectAccept({ reason: "double_accept", inviterRole: null });
 
