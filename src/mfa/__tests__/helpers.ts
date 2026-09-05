@@ -1,12 +1,9 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { makeSignature } from "better-auth/crypto";
-import { eq } from "drizzle-orm";
-import { db } from "@/db/client";
-import { mfaRecoveryCode, mfaTotp } from "@/db/schema";
+import { Effect } from "effect";
 import { auth } from "../../auth";
-import { withWaitUntil } from "../../background";
-import { getRedis } from "../../redis";
+import { Redis } from "../../redis-service";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
 import type { MfaTotpActor } from "../totp/contracts";
@@ -16,11 +13,14 @@ import {
   challengeKey,
   type ChallengeMethod,
 } from "../totp/login-challenge";
-import { runMfa, runMfaResult } from "./test-layers";
+import { observing } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
 
 // MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
 // 状態を DB へ直接捏造すると、暗号化 secret とコードの対応が伴わず以降の検証がすべて偽陽性になる
 // ため、生成はいずれも production と同じ経路 (internalAdapter / totp façade) を通す。
+// 公開 API は Effect。better-auth と raw Redis は非 DB の Promise 境界で、呼び出し点で Effect.promise に包む
+// (DB は TestDb のみ)。
 
 // テスト実行時の鍵 ring 既定値 (.env に無くても bun test が自走できるようにする)。
 // 値は "0123456789abcdef0123456789abcdef" (32byte) の base64 — production と共有しない固定ダミー。
@@ -32,14 +32,14 @@ export const TEST_USER_AGENT = "mfa-integration-test";
 // src/mfa/totp/totp-engine.ts の PERIOD と同値。検証は独立実装 (@better-auth/utils) で行う (§10)。
 const TOTP_PERIOD_SECONDS = 30;
 
-export type { MfaTotpRow } from "@/db/repositories/mfa-totp";
-import type { MfaTotpRow } from "@/db/repositories/mfa-totp";
+export type { MfaTotpRow } from "@/db/testing/read";
 
 // better-auth の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる。
-async function signCookieValue(value: string): Promise<string> {
-  const { secret } = await auth.$context;
-  return `${value}.${await makeSignature(value, secret)}`;
-}
+const signCookieValue = (value: string): Effect.Effect<string> =>
+  Effect.promise(async () => {
+    const { secret } = await auth.$context;
+    return `${value}.${await makeSignature(value, secret)}`;
+  });
 
 // 署名の**末尾**を書き換えても改ざんにならない。標準 base64 の最終文字は下位ビットがパディングで、
 // atob が捨てるため復号後のバイト列が変わらず署名が通ってしまう。6 ビットすべてが有効な先頭文字を
@@ -66,23 +66,29 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
 
 export type TestSession = { token: string; headers: Headers };
 
-export async function sessionHeaders(token: string): Promise<Headers> {
-  const { authCookies } = await auth.$context;
-  return requestHeaders({ [authCookies.sessionToken.name]: await signCookieValue(token) });
-}
+const sessionHeaders = (token: string): Effect.Effect<Headers> =>
+  Effect.gen(function* () {
+    const name = yield* Effect.promise(
+      async () => (await auth.$context).authCookies.sessionToken.name,
+    );
+    return requestHeaders({ [name]: yield* signCookieValue(token) });
+  });
 
 // secondaryStorage 構成ではセッション実体が Redis にしか無く、DB へ session 行を挿しても
 // getSession は解決できない。
-export async function createSessionFor(userId: string): Promise<TestSession> {
-  const ctx = await auth.$context;
-  const session = await ctx.internalAdapter.createSession(userId);
-  return { token: session.token, headers: await sessionHeaders(session.token) };
-}
+export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
+  Effect.gen(function* () {
+    const session = yield* Effect.promise(async () =>
+      (await auth.$context).internalAdapter.createSession(userId),
+    );
+    return { token: session.token, headers: yield* sessionHeaders(session.token) };
+  });
 
-export async function issuedSessionCookieCount(forwarded: Headers): Promise<number> {
-  const { authCookies } = await auth.$context;
-  return issuedSessionCookieValues(forwarded, authCookies.sessionToken.name).length;
-}
+export const issuedSessionCookieCount = (forwarded: Headers): Effect.Effect<number> =>
+  Effect.promise(async () => {
+    const { authCookies } = await auth.$context;
+    return issuedSessionCookieValues(forwarded, authCookies.sessionToken.name).length;
+  });
 
 // 失効指示 (空値 / Max-Age=0) は「発行された cookie」に数えない。
 function issuedSessionCookieValues(forwarded: Headers, cookieName: string): string[] {
@@ -106,47 +112,36 @@ export function secretFromTotpUri(totpUri: string): string {
   return new TextDecoder().decode(base32.decode(encoded));
 }
 
-export function totpCode(secret: string, stepOffset = 0): Promise<string> {
-  const otp = createOTP(secret, { period: TOTP_PERIOD_SECONDS, digits: 6 });
-  if (stepOffset === 0) return otp.totp();
-  const counter = Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset;
-  return otp.hotp(counter);
-}
+export const totpCode = (secret: string, stepOffset = 0): Effect.Effect<string> =>
+  Effect.promise(() => {
+    const otp = createOTP(secret, { period: TOTP_PERIOD_SECONDS, digits: 6 });
+    if (stepOffset === 0) return otp.totp();
+    const counter = Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset;
+    return otp.hotp(counter);
+  });
 
 // 固定の誤コードは 6 桁の一様分布に対し窓 5 本ぶんの確率で偶然一致し、間欠的に緑になる。
 // 窓の前後まで含めて実際に生成し、それらを避ける。
-export async function wrongTotpCode(secret: string): Promise<string> {
-  const rejected = await Promise.all([-2, -1, 0, 1, 2].map((offset) => totpCode(secret, offset)));
-  for (let candidate = 0; candidate < 1000; candidate++) {
-    const code = String(candidate).padStart(6, "0");
-    if (!rejected.includes(code)) return code;
-  }
-  throw new Error("failed to find a code outside the verification window");
-}
+export const wrongTotpCode = (secret: string): Effect.Effect<string> =>
+  Effect.gen(function* () {
+    const rejected = yield* Effect.all(
+      [-2, -1, 0, 1, 2].map((offset) => totpCode(secret, offset)),
+      { concurrency: "unbounded" },
+    );
+    for (let candidate = 0; candidate < 1000; candidate++) {
+      const code = String(candidate).padStart(6, "0");
+      if (!rejected.includes(code)) return code;
+    }
+    return yield* Effect.die(new Error("failed to find a code outside the verification window"));
+  });
 
-export function findMfaTotpRow(userId: string): Promise<MfaTotpRow | undefined> {
-  return db
-    .select()
-    .from(mfaTotp)
-    .where(eq(mfaTotp.userId, userId))
-    .then((rows) => rows.at(0));
-}
+export const findMfaTotpRow = (userId: string) => TestDb.use((db) => db.readMfaTotp(userId));
 
-export function countMfaTotpRows(userId: string): Promise<number> {
-  return db
-    .select()
-    .from(mfaTotp)
-    .where(eq(mfaTotp.userId, userId))
-    .then((rows) => rows.length);
-}
+export const countMfaTotpRows = (userId: string) =>
+  findMfaTotpRow(userId).pipe(Effect.map((row) => (row ? 1 : 0)));
 
-export function countRecoveryCodeRows(userId: string): Promise<number> {
-  return db
-    .select()
-    .from(mfaRecoveryCode)
-    .where(eq(mfaRecoveryCode.userId, userId))
-    .then((rows) => rows.length);
-}
+export const countRecoveryCodeRows = (userId: string) =>
+  TestDb.use((db) => db.readRecoveryCodes(userId)).pipe(Effect.map((rows) => rows.length));
 
 export type EnabledMfaUser = {
   actor: MfaTotpActor;
@@ -158,36 +153,30 @@ export type EnabledMfaUser = {
   session: TestSession;
 };
 
-export async function enableMfaFor(user: { id: string; email: string }): Promise<EnabledMfaUser> {
-  const session = await createSessionFor(user.id);
-  const actor = actorOf(user);
-  const enrolled = await runMfaResult(enroll({ actor }));
-  if (!enrolled.ok) throw new Error(`enroll failed: ${enrolled.error}`);
-
-  const secret = secretFromTotpUri(enrolled.totpUri);
-  // 前 step のコードで有効化し、現 step 以降を後続の検証に残す (timestep は単調消費のため)。
-  const activated = await runMfaResult(
-    activate({
+export const enableMfaFor = (user: { id: string; email: string }) =>
+  Effect.gen(function* () {
+    const session = yield* createSessionFor(user.id);
+    const actor = actorOf(user);
+    const enrolled = yield* enroll({ actor });
+    const secret = secretFromTotpUri(enrolled.totpUri);
+    // 前 step のコードで有効化し、現 step 以降を後続の検証に残す (timestep は単調消費のため)。
+    yield* activate({
       actor,
       headers: session.headers,
-      code: await totpCode(secret, -1),
+      code: yield* totpCode(secret, -1),
       enrollmentId: enrolled.enrollmentId,
-    }),
-  );
-  if (!activated.ok) throw new Error(`activate failed: ${activated.error}`);
-
-  // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
-  // 「有効化直後は枠が空」を fixture 側で保証する。
-  await runMfa(resetDisableAttempts(user.id));
-
-  return {
-    actor,
-    secret,
-    recoveryCodes: enrolled.recoveryCodes,
-    enrollmentId: enrolled.enrollmentId,
-    session,
-  };
-}
+    });
+    // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
+    // 「有効化直後は枠が空」を fixture 側で保証する。
+    yield* resetDisableAttempts(user.id);
+    return {
+      actor,
+      secret,
+      recoveryCodes: enrolled.recoveryCodes,
+      enrollmentId: enrolled.enrollmentId,
+      session,
+    } satisfies EnabledMfaUser;
+  });
 
 export type IssuedChallenge = {
   challengeId: string;
@@ -201,43 +190,61 @@ export type IssuedChallenge = {
 const issuedChallengeIds: string[] = [];
 
 // 実 store (buildLoginChallengeCookie) で発行し、cookie 素材をそのまま headers に載せる。
-export async function issueTestChallenge(challenge: {
+export const issueTestChallenge = (challenge: {
   userId: string;
   redirectUrl: string;
   method: ChallengeMethod;
-}): Promise<IssuedChallenge> {
-  const cookie = await buildLoginChallengeCookie(challenge);
-  const challengeId = cookie.value.slice(0, cookie.value.lastIndexOf("."));
-  issuedChallengeIds.push(challengeId);
-  return {
-    challengeId,
-    cookieName: cookie.name,
-    signedValue: cookie.value,
-    headers: requestHeaders({ [cookie.name]: encodeURIComponent(cookie.value) }),
-  };
-}
+}): Effect.Effect<IssuedChallenge> =>
+  Effect.promise(() => buildLoginChallengeCookie(challenge)).pipe(
+    Effect.map((cookie) => {
+      const challengeId = cookie.value.slice(0, cookie.value.lastIndexOf("."));
+      issuedChallengeIds.push(challengeId);
+      return {
+        challengeId,
+        cookieName: cookie.name,
+        signedValue: cookie.value,
+        headers: requestHeaders({ [cookie.name]: encodeURIComponent(cookie.value) }),
+      };
+    }),
+  );
+
+// チャレンジの Redis state (本体 + 試行枠) を消す。TTL 待ちにせず、test が発行した分を明示的に片付ける。
+export const deleteChallengeState = (challengeIds: readonly string[]) =>
+  Effect.gen(function* () {
+    const redis = yield* Redis;
+    yield* Effect.forEach(
+      challengeIds.flatMap((id) => [challengeKey(id), attemptsKey(id)]),
+      (key) => redis.delete(key),
+      { concurrency: "unbounded" },
+    );
+  });
 
 // TTL 前に消し損ねた state が後続テストへ漏れないよう、テストが発行したチャレンジは明示的に消す。
-export async function cleanupIssuedChallenges(): Promise<void> {
-  const redis = await getRedis();
-  await Promise.all(
-    issuedChallengeIds.flatMap((id) => [redis.del(challengeKey(id)), redis.del(attemptsKey(id))]),
+export const cleanupIssuedChallenges = () =>
+  deleteChallengeState(issuedChallengeIds).pipe(
+    Effect.tap(() =>
+      Effect.sync(() => {
+        issuedChallengeIds.length = 0;
+      }),
+    ),
   );
-  issuedChallengeIds.length = 0;
-}
 
 // revoke の実効性は DB では観測できない (secondaryStorage 構成では session 行が存在しない)。
 // Redis 上の実体そのものを数える。
-export async function countLiveSessions(tokens: string[]): Promise<number> {
-  const redis = await getRedis();
-  const entities = await Promise.all(tokens.map((token) => redis.get(token)));
-  return entities.filter((entity) => entity !== null).length;
-}
+export const countLiveSessions = (tokens: string[]) =>
+  Effect.gen(function* () {
+    const redis = yield* Redis;
+    const entities = yield* Effect.forEach(tokens, (token) => redis.get(token), {
+      concurrency: "unbounded",
+    });
+    return entities.filter((entity) => entity !== null).length;
+  });
 
-export async function deleteSessionEntities(tokens: string[]): Promise<void> {
-  const redis = await getRedis();
-  await Promise.all(tokens.map((token) => redis.del(token)));
-}
+export const deleteSessionEntities = (tokens: string[]) =>
+  Effect.gen(function* () {
+    const redis = yield* Redis;
+    yield* Effect.forEach(tokens, (token) => redis.delete(token), { concurrency: "unbounded" });
+  });
 
 // baseURL 未設定時 better-auth は request の origin を baseURL として使うため、テストは
 // 一次認証を絶対 URL のリクエストで駆動する。
@@ -249,69 +256,46 @@ export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
 
 export type PrimaryAuthLogin = { response: Response; location: URL | null; logs: string[] };
 
-export type ObservedRun<T> = { value: T; logs: string[] };
-
 // 通知メールは Background service の fire-and-forget。worker entry と同じ withWaitUntil で拾って
 // 完走を待つことで、送信ログの観測が時間依存にならない。
-export async function runObserving<T>(fn: () => Promise<T>): Promise<ObservedRun<T>> {
-  const logs: string[] = [];
-  const background: Promise<unknown>[] = [];
-  const originalLog = console.log;
-  console.log = (...args: unknown[]) => logs.push(args.map(String).join(" "));
-  try {
-    const value = await withWaitUntil((promise) => background.push(promise), fn);
-    await Promise.allSettled(background);
-    return { value, logs };
-  } finally {
-    console.log = originalLog;
-  }
-}
-
-const handleWithBackgroundTasks = async (
-  request: Request,
-): Promise<{ response: Response; logs: string[] }> =>
-  runObserving(() => auth.handler(request)).then(({ value, logs }) => ({
-    response: value,
-    logs,
-  }));
-
-export async function requestMagicLink(input: {
-  email: string;
-  callbackURL: string;
-}): Promise<string> {
-  const { logs } = await handleWithBackgroundTasks(
-    new Request(`${AUTH_ORIGIN}/api/auth/sign-in/magic-link`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: input.email, callbackURL: input.callbackURL }),
-    }),
+const handleWithBackgroundTasks = (request: Request) =>
+  observing(Effect.promise(() => auth.handler(request))).pipe(
+    Effect.map(({ value, logs }) => ({ response: value, logs })),
   );
-  const emailed = logs.find((line) => line.includes(MAGIC_LINK_LOG));
-  if (!emailed) throw new Error(`no magic link was sent to ${input.email}`);
-  return emailed.slice(emailed.indexOf("http"));
-}
+
+export const requestMagicLink = (input: { email: string; callbackURL: string }) =>
+  Effect.gen(function* () {
+    const { logs } = yield* handleWithBackgroundTasks(
+      new Request(`${AUTH_ORIGIN}/api/auth/sign-in/magic-link`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: input.email, callbackURL: input.callbackURL }),
+      }),
+    );
+    const emailed = logs.find((line) => line.includes(MAGIC_LINK_LOG));
+    if (!emailed) return yield* Effect.die(new Error(`no magic link was sent to ${input.email}`));
+    return emailed.slice(emailed.indexOf("http"));
+  });
 
 // リンクを踏む側だけを分けているのは、チャレンジ発行の失敗を注入するテストが「リンク発行は
 // 成功させたまま発行だけ壊す」必要があるため。
-export async function followMagicLink(link: string): Promise<PrimaryAuthLogin> {
-  const { response, logs } = await handleWithBackgroundTasks(
+export const followMagicLink = (link: string) =>
+  handleWithBackgroundTasks(
     new Request(link, {
       headers: { "user-agent": TEST_USER_AGENT, "x-forwarded-for": TEST_CLIENT_IP },
       redirect: "manual",
     }),
+  ).pipe(
+    Effect.map(({ response, logs }): PrimaryAuthLogin => {
+      const location = response.headers.get("location");
+      return { response, location: location ? new URL(location) : null, logs };
+    }),
   );
-  const location = response.headers.get("location");
-  return { response, location: location ? new URL(location) : null, logs };
-}
 
 // 一次認証の実 HTTP 経路。after-hook は一次認証が newSession を積んだ後にしか走らないため、
 // 合成 ctx で代用すると「介入したつもり」のテストになる。
-export async function loginWithMagicLink(input: {
-  email: string;
-  callbackURL: string;
-}): Promise<PrimaryAuthLogin> {
-  return followMagicLink(await requestMagicLink(input));
-}
+export const loginWithMagicLink = (input: { email: string; callbackURL: string }) =>
+  requestMagicLink(input).pipe(Effect.flatMap(followMagicLink));
 
 // ブラウザが次のリクエストで送り返す cookie に相当する headers。失効指示 (空値 / Max-Age=0) は
 // ブラウザが破棄するので載せない。
@@ -327,6 +311,20 @@ export function browserCookieHeaders(response: Response): Headers {
     ),
   );
 }
+
+// 公開 API が Effect であることの型 assert (AC-218)。
+export const mfaTestApi = {
+  enableMfaFor,
+  createSessionFor,
+  issueTestChallenge,
+  cleanupIssuedChallenges,
+  countLiveSessions,
+  deleteSessionEntities,
+  requestMagicLink,
+  followMagicLink,
+  loginWithMagicLink,
+  observing,
+} satisfies Record<string, (...args: never[]) => Effect.Effect<unknown, unknown, unknown>>;
 
 // Sentry recorder は MFA 以外 (adapter / guard) の test も使うため src/__tests__ へ移した。
 export { installSentryRecorder, type SentryCapture } from "../../__tests__/sentry-recorder";

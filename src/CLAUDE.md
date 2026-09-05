@@ -31,7 +31,7 @@ ADR-0012のScope outに記録された既存経路は、独立した抽出作業
 
 理由と境界表は [`docs/adr/0017-effect-v4-full-adoption.md`](../docs/adr/0017-effect-v4-full-adoption.md) を正本とする。
 
-- 各domainは `ports.ts` にRepositoryのEffect面 (`Context.Service`) を、`wiring.ts` にproduction結線 (`liftDb`) を置く。`db/repositories/*` と `db/transaction` のruntime importは `*/wiring.ts`、`id-generator.ts`、`transaction.ts`、`auth.ts` に限り、他は `import type` だけを使う。
+- 各domainは `ports.ts` にRepositoryのEffect面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` にproduction結線 (`liftAll(repo)`) を置く。portのmethod名はrepositoryの関数名と同一にし、port側で名前を付け替えない。同期helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側 (`id-generator.ts`、`db/testing/*`) が直接importする。`db/repositories/*` と `db/transaction` のruntime importは `*/wiring.ts`、`id-generator.ts`、`transaction.ts`、`auth.ts` に限り、他は `import type` だけを使う。
 - transactionは `Transaction.run` で取り、`runInTransaction` を直接呼ばない。tx内のfailureとdefectは常にrollbackされ、tx後の副作用は `tapError` や `catchTag` でtxの外に置く。
 - 時刻は `Clock.currentTimeMillis`、IDは `IdGenerator`、better-auth APIは `AuthApi`、Redisは `Redis`、Sentryは `SentryService`、メールは `EmailSender`、fire-and-forgetは `Background.run` のserviceを通す。`Date.now()`、`Sentry.capture*`、`runBackground`、`Promise.all` をuse-caseやhandlerに直接書かない。
 - サードパーティ境界の失敗は `errors.ts` の `DbError`、`AuthApiError`、`RedisError`、`EmailError` (`cause: unknown`) で運び、producerは `tryDb`、`tryAuthApi`、`tryRedis`、`tryEmail` だけを使う。
@@ -42,7 +42,7 @@ ADR-0012のScope outに記録された既存経路は、独立した抽出作業
 
 productionのdomain、Guard、Transportはrepository関数とtransaction helperを利用し、`drizzle-orm` または `pg` を直接importしない。
 
-境界規則と例外pathの正本は [`db/CLAUDE.md`](../db/CLAUDE.md) とする。`src/` の既存例外はそこに記録された `src/auth.ts`、`src/worker.ts`、test fixtureで、追加する変更はDB境界の設計変更としてreviewする。
+境界規則と例外pathの正本は [`db/CLAUDE.md`](../db/CLAUDE.md) の「例外 path (正本)」とする。例外を追加する変更はDB境界の設計変更としてreviewする。
 
 ## ファイル配置
 
@@ -63,6 +63,7 @@ productionのdomain、Guard、Transportはrepository関数とtransaction helper�
 - Transport testは `handlers/__tests__/` または `rpc/__tests__/` に置く。
 - 複数domainまたはrepository全体のinvariantは `src/__tests__/` に置く。
 - DBへ接触するtestは接触をfixture setupと事後状態の観測に限定し、production境界の例外根拠にしない。
+- DBへ接触するsrcのtestは `TestDb` service (`src/__tests__/test-db.ts`、実体は `db/testing/*`) を `yield*` し、`@/db/*` をruntime importしない (型importは可)。test本体は `runTest(prefix)` に渡す1つの `Effect.gen` で、失敗は `Effect.flip` / `Effect.exit` でfailure classとして観測する。理由の正本はADR-0017 Decisionの依存注入項。
 
 ## 実装時のgotcha
 

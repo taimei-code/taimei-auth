@@ -45,7 +45,7 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
   const { ip, userAgent } = getClientContext(input.headers);
   yield* background.run(
     audit
-      .append({ eventType: "sign_in", userId: user.id, payload: { method, ip, userAgent } })
+      .appendAuditLog({ eventType: "sign_in", userId: user.id, payload: { method, ip, userAgent } })
       .pipe(swallowAuditFailure("sign_in")),
   );
 });

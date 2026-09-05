@@ -20,13 +20,16 @@ export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailC
   if (!token) return null;
 
   const invitations = yield* InvitationRepo;
-  const invitation = yield* invitations.findByToken(token);
+  const invitation = yield* invitations.findInvitationByToken(token);
   if (!invitation) return null;
 
   const companies = yield* CompanyRepo;
   const users = yield* UserRepo;
   const [company, inviter] = yield* Effect.all(
-    [companies.findById(invitation.companyId), users.findById(invitation.invitedByUserId)] as const,
+    [
+      companies.findCompanyById(invitation.companyId),
+      users.findUserById(invitation.invitedByUserId),
+    ] as const,
     { concurrency: "unbounded" },
   );
   if (!company) return null;

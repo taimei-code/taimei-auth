@@ -22,7 +22,7 @@ drizzle の client / schema / クエリ実装は `/db/` 配下に置く。`/src/
 
 - `src/auth.ts` … better-auth integration が DB adapter と schema を結線する (ルール 2 の例外も参照)
 - `src/worker.ts` … Workers entry が per-request pool を供給する `@/db/client` import のみ。`biome-ignore` で個別に許可
-- test fixture … setup と事後状態の観測に DB client / schema を利用する
+- test の seed (前提状態の書き込み) / 観測 (事後状態の読み取り) / cleanup … 実体は `db/testing/*` (Promise) に閉じる。src の test は `TestDb` service (`src/__tests__/test-db.ts`) 経由、`e2e/fixtures.ts` は直接使う。理由の正本は ADR-0017 Decision の依存注入項
 - `e2e/fixtures.ts` … e2e fixture 再生成に限る (spec からは `e2e/seed.ts` の子プロセス経由でのみ呼ぶ。`biome.json` の e2e override が spec からの直接 import を block する)
 
 ## ルール 2: 認証ドメインのモデルは repository 経由でのみ触る

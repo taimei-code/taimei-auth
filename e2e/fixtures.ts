@@ -1,15 +1,22 @@
-import { eq, inArray, like } from "drizzle-orm";
-import { db } from "@/db/client";
-import { auditLog, company, invitation, user } from "@/db/schema";
-import { generateCompanyId, insertCompany } from "@/db/repositories/company";
-import { generateInvitationId, insertInvitation } from "@/db/repositories/invitation";
-import { generateMembershipId, insertMembership, type Role } from "@/db/repositories/membership";
-import { updateUserLastUsedCompany } from "@/db/repositories/user";
+import {
+  deleteAuditByUserIds,
+  deleteCompaniesByNames,
+  deleteInvitationByToken,
+  deleteUsersByIds,
+} from "@/db/testing/cleanup";
+import {
+  readCompanyIdsByName,
+  readUser,
+  readUserIdsByEmailPrefix,
+  readUserIdsByEmails,
+} from "@/db/testing/read";
+import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
+
+type Role = SeedInvitationOptions["role"];
 
 // e2e spec が前提にする固定ユーザー・事業所 (fixture) の作成・削除を担う唯一のモジュール。
-// db/CLAUDE.md ルール 1 の例外はこのファイルの fixture 再生成に限る。spec からの直接 import は
-// biome の e2e override が block する — DB 接触を spec プロセスへ持ち込ませないため、spec は
-// helpers.ts の reseedFixture (子プロセス) 経由で e2e/seed.ts を呼ぶ。
+// DB 接触の例外 path は db/CLAUDE.md の「例外 path (正本)」のとおり fixture 再生成に限り、実体は db/testing/* (Promise) を使う。
+// DB 接触を spec プロセスへ持ち込ませないため、spec は helpers.ts の reseedFixture (子プロセス) 経由で e2e/seed.ts を呼ぶ。
 
 // 破壊的 cleanup を伴う全操作の前提条件: 接続先がローカル DB であること。
 // 判定材料は APP_ENV でなく DATABASE_URL — 想定する操作ミス「本番 DATABASE_URL を export
@@ -31,33 +38,23 @@ function assertLocalDatabase(): void {
   }
 }
 
-// fixture の識別子は全てこの 3 つの規約から導出する。seed と cleanup が同じ導出を共有する
-// ことで、リテラルの手写しずれ (typo した側だけ削除が 0 件になり、次 run の duplicate key
+// fixture の識別子は db/testing/seed.ts の ids(prefix) から導出する。seed と cleanup が同じ導出を
+// 共有することで、リテラルの手写しずれ (typo した側だけ削除が 0 件になり、次 run の duplicate key
 // として別の場所で落ちる) を構造的に防ぐ。
-const fixtureEmail = (suffix: string): string => `e2e-${suffix}@example.com`;
-const seededUserId = (suffix: string): string => `e2e-u-${suffix}`;
-const fixtureCompanyName = (suffix: string): string => `e2e-co-${suffix}`;
+const E2E_PREFIX = "e2e-";
+const fixtureIds = ids(E2E_PREFIX);
+const seed = createSeed(E2E_PREFIX);
+const fixtureEmail = fixtureIds.email;
+const seededUserId = fixtureIds.userId;
+const fixtureCompanyName = fixtureIds.companyName;
 
-const seedUser = async (suffix: string, name: string): Promise<string> => {
-  const id = seededUserId(suffix);
-  await db.insert(user).values({
-    id,
-    name,
-    email: fixtureEmail(suffix),
-    emailVerified: true,
-  });
-  return id;
-};
+const seedUser = (suffix: string, name: string): Promise<string> =>
+  seed.seedUser(suffix, { name }).then((u) => u.id);
 
-const seedCompany = async (suffix: string): Promise<string> => {
-  const id = generateCompanyId();
-  await insertCompany({ id, name: fixtureCompanyName(suffix), orgCode: "PERSONAL" });
-  return id;
-};
+const seedCompany = (suffix: string): Promise<string> => seed.seedCompany(suffix);
 
-const seedMembership = async (userId: string, companyId: string, role: Role): Promise<void> => {
-  await insertMembership({ id: generateMembershipId(), userId, companyId, role });
-};
+const seedMembership = (userId: string, companyId: string, role: Role): Promise<void> =>
+  seed.seedMembership(userId, companyId, role).then(() => undefined);
 
 // 自 fixture の行だけを消して冪等な作り直しを可能にする (user.email は unique、company.name は
 // 非 unique のため、削除なしの再実行は duplicate key / 同名 company の重複になる)。
@@ -69,21 +66,12 @@ async function removeFixtureRows(rows: {
   userSuffixes: string[];
   companySuffixes?: string[];
 }): Promise<void> {
-  const existing = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(inArray(user.email, rows.userSuffixes.map(fixtureEmail)));
-  const userIds = [
-    ...new Set([...existing.map((u) => u.id), ...rows.userSuffixes.map(seededUserId)]),
-  ];
-  if (userIds.length > 0) {
-    await db.delete(auditLog).where(inArray(auditLog.userId, userIds));
-    await db.delete(user).where(inArray(user.id, userIds));
-  }
+  const existing = await readUserIdsByEmails(rows.userSuffixes.map(fixtureEmail));
+  const userIds = [...new Set([...existing, ...rows.userSuffixes.map(seededUserId)])];
+  await deleteAuditByUserIds(userIds);
+  await deleteUsersByIds(userIds);
   if (rows.companySuffixes !== undefined) {
-    await db
-      .delete(company)
-      .where(inArray(company.name, rows.companySuffixes.map(fixtureCompanyName)));
+    await deleteCompaniesByNames(rows.companySuffixes.map(fixtureCompanyName));
   }
 }
 
@@ -165,7 +153,7 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   const currentCompanyId = await seedCompany(DELETE_MULTI_CURRENT_COMPANY);
   await seedMembership(userId, currentCompanyId, "OWNER");
   await seedMembership(userId, await seedCompany(DELETE_MULTI_OTHER_COMPANY), "OWNER");
-  await updateUserLastUsedCompany(userId, currentCompanyId);
+  await seed.setLastUsedCompany(userId, currentCompanyId);
 }
 
 // mfa-flow 用 (消費型): 単一 OWNER。認証アプリの secret は server が enroll 時に生成し事前 seed
@@ -180,19 +168,19 @@ const MFA_FIXTURE: FixtureSpec = {
 // invitation-flow 用 (消費型): e2e-invitee 宛の PENDING 招待。受諾すると招待行は ACCEPTED に
 // 落ち、invitee は signup で main のメンバーになるため、作り直しは invitee ユーザーの削除
 // (membership も cascade で消える) と PENDING 行の再作成の両方を含む。
+const INVITATION_TOKEN = "e2e-invitation-token";
+
 async function ensureInvitationFixture(): Promise<void> {
   assertLocalDatabase();
   // main の検証は破壊 (invitee / 招待行の削除) より先 — 不整合時に消すだけ消して abort しない
   const main = await findTheMainCompany();
   await removeFixtureRows({ userSuffixes: ["invitee"] });
-  await db.delete(invitation).where(eq(invitation.token, "e2e-invitation-token"));
-  await insertInvitation({
-    id: generateInvitationId(),
+  await deleteInvitationByToken(INVITATION_TOKEN);
+  await seed.seedInvitation({
     companyId: main.companyId,
     email: fixtureEmail("invitee"),
     role: "MEMBER",
-    token: "e2e-invitation-token",
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    token: INVITATION_TOKEN,
     invitedByUserId: main.invitedByUserId,
   });
 }
@@ -202,23 +190,17 @@ async function ensureInvitationFixture(): Promise<void> {
 // 「ちょうど 1 行」でなければ即 fail する — 2 件ヒットをどちらか silent に掴むと招待が誤った
 // 事業所へ入り、spec が無関係な文言で落ちる (本 fixture 分離が消したい症状そのもの)。
 async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserId: string }> {
-  const [companies, inviters] = await Promise.all([
-    db
-      .select({ id: company.id })
-      .from(company)
-      .where(eq(company.name, fixtureCompanyName("main"))),
-    db
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.id, seededUserId("signin"))),
+  const [companies, inviter] = await Promise.all([
+    readCompanyIdsByName(fixtureCompanyName("main")),
+    readUser(seededUserId("signin")),
   ]);
-  if (companies.length !== 1 || inviters.length !== 1) {
+  if (companies.length !== 1 || !inviter) {
     console.error(
-      `[e2e-seed] abort: main fixture が不整合 (e2e-co-main: ${companies.length} 件 / e2e-u-signin: ${inviters.length} 件)。全体 seed (bun run e2e/seed.ts) を先に実行すること`,
+      `[e2e-seed] abort: main fixture が不整合 (e2e-co-main: ${companies.length} 件 / e2e-u-signin: ${inviter ? 1 : 0} 件)。全体 seed (bun run e2e/seed.ts) を先に実行すること`,
     );
     process.exit(1);
   }
-  return { companyId: companies[0].id, invitedByUserId: inviters[0].id };
+  return { companyId: companies[0], invitedByUserId: inviter.id };
 }
 
 // 消費型 fixture (spec 実行が消費する) の registry — 単一 fixture 再生成で指定できる名前の正本。
@@ -238,16 +220,12 @@ export const consumableFixtures = new Map<string, () => Promise<void>>([
 // 巻き込むため。
 export async function resetAllFixtures(): Promise<void> {
   assertLocalDatabase();
-  const staleUsers = await db.select({ id: user.id }).from(user).where(like(user.email, "e2e-%"));
-  const staleIds = staleUsers.map((u) => u.id);
-  if (staleIds.length > 0) {
-    await db.delete(auditLog).where(inArray(auditLog.userId, staleIds));
-    await db.delete(user).where(inArray(user.id, staleIds));
-  }
+  const staleIds = await readUserIdsByEmailPrefix(E2E_PREFIX);
+  await deleteAuditByUserIds(staleIds);
+  await deleteUsersByIds(staleIds);
   // アカウント連動削除で消えた seed user は user 行が残らず staleIds に入らないため、
-  // その audit だけ固定 id prefix で回収する
-  await db.delete(auditLog).where(like(auditLog.userId, "e2e-u-%"));
-  await db.delete(company).where(like(company.name, "e2e-co-%"));
+  // その audit だけ固定 id prefix で回収する。company も prefix で回収する
+  await seed.cleanup();
 
   // 生成順は依存順: invitation が main の company / user を FK 参照する
   await ensureFixture(MAIN_FIXTURE);

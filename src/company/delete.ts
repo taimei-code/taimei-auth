@@ -26,7 +26,7 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
 
   return yield* tx.run(
     Effect.fn("company.deleteCompany.apply")(function* (t: DbTx) {
-      const target = yield* companies.findById(companyId, t);
+      const target = yield* companies.findCompanyById(companyId, t);
       if (!target) return yield* new NotFoundOrAlreadyDeleted();
       // 既に削除済みなら冪等成功 (membership も orphan も処理済み)。再削除で二重 audit しない。
       if (target.activationStatus !== "ACTIVE") return { actorDeleted: false };
@@ -35,13 +35,13 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
       yield* memberships.lockOwnerMembershipsOfCompany(t, companyId);
       // lock 後に先着削除済みなら冪等成功。authz の membership 読みを lock 後に置くのは、並行削除との間で
       // 「company は ACTIVE と読んだ直後に自分の membership だけ cascade 済」の誤 forbidden を防ぐため。
-      const locked = yield* companies.findById(companyId, t);
+      const locked = yield* companies.findCompanyById(companyId, t);
       if (!locked || locked.activationStatus !== "ACTIVE") return { actorDeleted: false };
 
       const actorMembership = yield* memberships.findMembership(actorUserId, companyId, t);
       if (!actorMembership || actorMembership.role !== "OWNER") return yield* new Forbidden();
 
-      const revokedInvitations = yield* invitations.revokePendingOfCompany(companyId, t);
+      const revokedInvitations = yield* invitations.revokePendingInvitationsOfCompany(companyId, t);
       yield* audit.recordInvitationsRevoked(
         {
           actor_user_id: actorUserId,
@@ -70,7 +70,7 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
         if (deleted && userId === actorUserId) actorDeleted = true;
       }
 
-      yield* companies.softDelete(companyId, t);
+      yield* companies.softDeleteCompany(companyId, t);
       yield* audit.recordCompanyDeleted(
         { actor_user_id: actorUserId, company_id: companyId, name_at_deletion: target.name },
         t,

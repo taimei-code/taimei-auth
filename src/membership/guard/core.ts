@@ -43,7 +43,7 @@ export const requireActor = (
     const users = yield* UserRepo;
     const session = yield* authApi.getSession(headers);
     if (!session?.user?.id) return yield* new Unauthorized();
-    const dbUser = yield* users.findById(session.user.id);
+    const dbUser = yield* users.findUserById(session.user.id);
     if (!dbUser) return yield* new Unauthorized();
     return { id: dbUser.id, email: dbUser.email, lastUsedCompanyId: dbUser.lastUsedCompanyId };
   }).pipe(

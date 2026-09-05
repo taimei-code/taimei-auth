@@ -26,7 +26,7 @@ export const createInvitation = Effect.fn("invitation.create")(function* (params
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
-  const existing = yield* invitations.findActivePending(companyId, email);
+  const existing = yield* invitations.findActivePendingInvitation(companyId, email);
   if (existing) return { invitation: existing, reused: true };
 
   const withinLimit = yield* tryConsumeInvitationQuota(companyId);
@@ -35,7 +35,7 @@ export const createInvitation = Effect.fn("invitation.create")(function* (params
   const nowMillis = yield* Clock.currentTimeMillis;
   const inserted = yield* tx.run(
     Effect.fn("invitation.create.apply")(function* (t: DbTx) {
-      const row = yield* invitations.insert(
+      const row = yield* invitations.insertInvitation(
         {
           id: ids.invitationId(),
           companyId,

@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { grepFiles } from "./grep-files";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join } from "node:path";
+import { grepFiles, REPO_ROOT } from "./grep-files";
 
 // ADR-0017 / design §4 の import 境界 (I2): Repository 境界 db/ と 共通画面 SPA web/ は effect を持ち込まない。
 // biome の noRestrictedImports は override の「最後に一致した copy が勝つ」semantics のため db/** 専用 override を
@@ -60,5 +63,111 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(
       srcFiles("Sentry\\.capture(Exception|Message)\\(").filter((f) => !allowed.has(f)),
     ).toEqual([]);
+  });
+});
+
+// ---- test の DB 接触 (08-liftall-and-test-seeds §3.3): src の test と e2e は db/testing/* だけを runtime import する ----
+
+// 静的 import (named / namespace) と動的 import (import 関数呼び出し) を拾い、`import type` / `export type` は除く。
+// 1 行の形は grep で拾う。biome (lineWidth 100) が折り返した複数行の形は `} from "@/db/…"` の行を grep で拾い、
+// その statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が素通りする)。
+const DB_SPECIFIER = String.raw`["']@/db/[^"']*["']`;
+const DB_IMPORT_ONE_LINE = String.raw`(^import (\{|\*) .* from|import\()\s*${DB_SPECIFIER}`;
+const DB_IMPORT_CLOSING = String.raw`^\} from\s*${DB_SPECIFIER}`;
+const TS_FILES = ["*.ts", "*.tsx"];
+
+type DbImport = { file: string; specifier: string };
+
+const specifierOf = (text: string): string =>
+  /["']@\/db\/[^"']*["']/.exec(text)?.[0].slice(1, -1) ?? "";
+
+const multiLineImports = (file: string): DbImport[] => {
+  const lines = readFileSync(isAbsolute(file) ? file : join(REPO_ROOT, file), "utf8").split("\n");
+  const closing = new RegExp(DB_IMPORT_CLOSING);
+  return lines.flatMap((line, i) => {
+    if (!closing.test(line)) return [];
+    const head =
+      lines
+        .slice(0, i)
+        .reverse()
+        .find((l) => /^(import|export)\b/.test(l)) ?? "";
+    return /^(import|export) type\b/.test(head) ? [] : [{ file, specifier: specifierOf(line) }];
+  });
+};
+
+const dbRuntimeImports = (target: string, opts: { onlyTests?: boolean } = {}): DbImport[] => {
+  const oneLine = grepFiles(DB_IMPORT_ONE_LINE, target, {
+    ...opts,
+    include: TS_FILES,
+    lines: true,
+  }).map((hit) => {
+    const sep = hit.indexOf(":");
+    return { file: hit.slice(0, sep), specifier: specifierOf(hit.slice(sep + 1)) };
+  });
+  const multi = grepFiles(DB_IMPORT_CLOSING, target, { ...opts, include: TS_FILES }).flatMap(
+    multiLineImports,
+  );
+  return [...oneLine, ...multi];
+};
+
+const dbImportFiles = (target: string, opts?: { onlyTests?: boolean }): string[] =>
+  [...new Set(dbRuntimeImports(target, opts).map((i) => i.file))].sort();
+
+const dbImportsOutsideTesting = (target: string): DbImport[] =>
+  dbRuntimeImports(target).filter((i) => !i.specifier.startsWith("@/db/testing/"));
+
+describe("test の DB 接触は db/testing/* に閉じる", () => {
+  test("src の test の @/db runtime import は TestDb の face (src/__tests__/test-db.ts) のみ", () => {
+    expect(dbImportFiles("src", { onlyTests: true })).toEqual(["src/__tests__/test-db.ts"]);
+  });
+
+  test("e2e の @/db runtime import は e2e/fixtures.ts の @/db/testing/* のみ", () => {
+    expect(dbImportsOutsideTesting("e2e")).toEqual([]);
+    expect(dbImportFiles("e2e")).toEqual(["e2e/fixtures.ts"]);
+  });
+
+  test("positive control: 静的 (1 行 / 複数行) と動的 import は検出され、型 import は検出されない", () => {
+    const dir = mkdtempSync(join(tmpdir(), "db-import-gate-"));
+    try {
+      // 本 file 自身が gate に当たらないよう、動的 import の形は文字列連結で組む。
+      const dynamicImport = ["imp", "ort("].join("");
+      writeFileSync(join(dir, "static.ts"), 'import { db } from "@/db/client";\n');
+      writeFileSync(join(dir, "multi.ts"), 'import {\n  db,\n  schema,\n} from "@/db/client";\n');
+      writeFileSync(
+        join(dir, "dynamic.ts"),
+        `const { db } = await ${dynamicImport}"@/db/client");\n`,
+      );
+      writeFileSync(join(dir, "type-only.ts"), 'import type { UserRow } from "@/db/schema";\n');
+      writeFileSync(
+        join(dir, "multi-type.ts"),
+        'import type {\n  UserRow,\n  SessionRow,\n} from "@/db/schema";\n',
+      );
+      writeFileSync(join(dir, "testing.ts"), 'import { createSeed } from "@/db/testing/seed";\n');
+      expect(dbImportFiles(dir)).toEqual([
+        join(dir, "dynamic.ts"),
+        join(dir, "multi.ts"),
+        join(dir, "static.ts"),
+        join(dir, "testing.ts"),
+      ]);
+      expect(
+        dbImportsOutsideTesting(dir)
+          .map((i) => i.file)
+          .sort(),
+      ).toEqual([join(dir, "dynamic.ts"), join(dir, "multi.ts"), join(dir, "static.ts")]);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+});
+
+// ---- revokeAllSessionsForUser の窓口 (08 設計 A): ports が repository の全 export を公開するため、呼び出しを grep で閉じる ----
+
+describe("revokeAllSessionsForUser の窓口", () => {
+  test("port 経由の呼び出しは src/account/revoke-sessions.ts に限る (Redis 側の失効を伴う唯一の窓口)", () => {
+    // biome の importNames ban は src/** だけに効くため、ports を組める management / e2e も同じ gate で閉じる。
+    const offenders = ["src", "management", "e2e"].flatMap((dir) =>
+      grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
+    );
+    expect(offenders).toEqual(["src/account/revoke-sessions.ts"]);
   });
 });

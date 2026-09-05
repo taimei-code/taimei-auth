@@ -9,6 +9,8 @@ export type GrepOptions = {
   readonly include?: readonly string[];
   /** __tests__ を除外する。 */
   readonly excludeTests?: boolean;
+  /** path に /__tests__/ を含む file だけを返す (test 側の gate 用)。 */
+  readonly onlyTests?: boolean;
   /** file 一覧 (-l) でなく hit 行を返す。出現「回数」を数える gate 用。 */
   readonly lines?: boolean;
 };
@@ -30,7 +32,8 @@ export function grepFiles(pattern: string, target: string, opts: GrepOptions = {
       .trim()
       .split("\n")
       .filter(Boolean)
-      .map((line) => line.replace(`${REPO_ROOT}/`, ""));
+      .map((line) => line.replace(`${REPO_ROOT}/`, ""))
+      .filter((line) => !opts.onlyTests || line.includes("/__tests__/"));
   } catch (error) {
     // grep は「一致なし」で exit 1、path 不在や引数不正で exit 2 以上。後者を 0 件と読むと検査が fail-open になる。
     if ((error as { status?: number }).status === 1) return [];

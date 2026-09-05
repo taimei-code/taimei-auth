@@ -6,7 +6,7 @@ import { UserRepoLive } from "../wiring";
 describe("UserRepoLive", () => {
   test("存在しない user は undefined を返す (compose Postgres)", () =>
     expectLiveMiss(
-      UserRepo.use((repo) => repo.findById("no-such-user")),
+      UserRepo.use((repo) => repo.findUserById("no-such-user")),
       UserRepoLive,
     ));
 });

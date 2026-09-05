@@ -24,9 +24,9 @@ export const updateCompanyInfo = Effect.fn("company.updateCompanyInfo")(function
 
   return yield* tx.run(
     Effect.fn("company.updateCompanyInfo.apply")(function* (t: DbTx) {
-      const before = yield* companies.findById(companyId, t);
+      const before = yield* companies.findCompanyById(companyId, t);
       if (!before || before.activationStatus !== "ACTIVE") return yield* new NotFound();
-      const row = yield* companies.update(companyId, input, t);
+      const row = yield* companies.updateCompany(companyId, input, t);
       if (!row) return yield* new NotFound();
       yield* audit.recordCompanyUpdated(
         {

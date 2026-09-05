@@ -55,7 +55,7 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   const { ip, userAgent } = getClientContext(headers);
   const audit = yield* AuditLog;
   yield* audit
-    .append({
+    .appendAuditLog({
       eventType: "sign_in",
       userId: challenge.userId,
       payload: { method: challenge.method, ip, userAgent },

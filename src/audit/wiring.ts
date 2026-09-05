@@ -4,9 +4,4 @@ import { liftAll } from "../errors";
 import { AuditLog } from "./ports";
 
 // production 結線 (module ロード時 bind の根拠は src/membership/wiring.ts と同じ: db/CLAUDE.md の workerd gotcha)。
-const lifted = liftAll(repo);
-
-export const AuditLogLive = Layer.succeed(
-  AuditLog,
-  AuditLog.of({ ...lifted, append: lifted.appendAuditLog }),
-);
+export const AuditLogLive = Layer.succeed(AuditLog, liftAll(repo));

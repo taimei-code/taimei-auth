@@ -13,10 +13,14 @@ import { RpcError, runRpc } from "./run-rpc";
 export function registerUserService(router: ConnectRouter) {
   router.service(UserService, {
     findUserByEmail: (req) =>
-      runRpc(UserRepo.use((users) => users.findByEmail(req.email)).pipe(Effect.map(userResponse))),
+      runRpc(
+        UserRepo.use((users) => users.findUserByEmail(req.email)).pipe(Effect.map(userResponse)),
+      ),
 
     findUserById: (req) =>
-      runRpc(UserRepo.use((users) => users.findById(req.userId)).pipe(Effect.map(userResponse))),
+      runRpc(
+        UserRepo.use((users) => users.findUserById(req.userId)).pipe(Effect.map(userResponse)),
+      ),
 
     updateUser: (req) =>
       runRpc(
@@ -38,7 +42,7 @@ export function registerUserService(router: ConnectRouter) {
           }
 
           const users = yield* UserRepo;
-          const row = yield* users.update(req.userId, updates);
+          const row = yield* users.updateUser(req.userId, updates);
           if (!row) return yield* new RpcError({ code: Code.NotFound, message: "User not found" });
 
           return { user: toProtoUser(row) };

@@ -31,7 +31,7 @@ const createCompanyWithOwner = Effect.fn("company.createCompanyWithOwner")(funct
   const ids = yield* IdGenerator;
 
   const companyId = ids.companyId();
-  const created = yield* companies.insert(
+  const created = yield* companies.insertCompany(
     { id: companyId, name: input.name, orgCode: input.orgCode },
     tx,
   );
@@ -39,7 +39,7 @@ const createCompanyWithOwner = Effect.fn("company.createCompanyWithOwner")(funct
     { id: ids.membershipId(), userId, companyId, role: "OWNER" },
     tx,
   );
-  yield* users.updateLastUsedCompany(userId, companyId, tx);
+  yield* users.updateUserLastUsedCompany(userId, companyId, tx);
   yield* audit.recordCompanyCreated(
     { actor_user_id: userId, company_id: companyId, name: input.name, org_code: input.orgCode },
     tx,

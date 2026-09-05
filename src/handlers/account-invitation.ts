@@ -57,7 +57,7 @@ accountInvitation.get("/api/account/companies/:companyId/invitations", (c) =>
       const companyId = c.req.param("companyId");
       yield* requireMembership(c.req.raw.headers, companyId, "ADMIN");
       const invitationRepo = yield* InvitationRepo;
-      const invitations = yield* invitationRepo.listPending(companyId);
+      const invitations = yield* invitationRepo.listPendingInvitations(companyId);
       return c.json({
         invitations: invitations.map((inv) => ({
           id: inv.id,
