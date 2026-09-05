@@ -2,11 +2,10 @@ import type { Cause } from "effect";
 import { Effect, Exit } from "effect";
 import type { Context, Next } from "hono";
 import { type AppServices, getRuntime } from "../runtime";
-import { Sentry } from "../sentry";
 import {
   classifyCause,
-  type InternalReport,
   internalErrorResponse,
+  reportInternalFailures,
   type RouteError,
   type WireError,
   wireErrorResponse,
@@ -45,20 +44,12 @@ type Adapter = "runRoute" | "runMiddleware";
 
 function causeToResponse(c: Context, cause: Cause.Cause<RouteError>, adapter: Adapter): Response {
   const { failure, reports } = classifyCause<WireError>(cause);
-  for (const report of reports) reportInternalFailure(c, report, adapter);
+  reportInternalFailures(reports, `[${adapter}] ${c.req.method} ${c.req.path}`, {
+    tags: { handler: adapter },
+    extra: { method: c.req.method, path: c.req.path },
+  });
   const res = failure ? wireErrorResponse(failure) : internalErrorResponse();
   // program が c.header() で staged した header (login-shortcut の Cache-Control / Vary 等) を error 応答にも
   // 載せる。c.newResponse は staged header に res の header と status を重ねる (Hono 既定 errorHandler と同じ形)。
   return c.newResponse(res.body, res);
-}
-
-// Sentry に加えて console にも出す。Hono 既定の errorHandler が `console.error(err)` していた観測手段
-// (wrangler tail / container log) を、Sentry が落ちている時のために残す。境界障害は warning (バグと区別)。
-function reportInternalFailure(c: Context, report: InternalReport, adapter: Adapter): void {
-  console.error(`[${adapter}] ${c.req.method} ${c.req.path}`, report.error);
-  Sentry.captureException(report.error, {
-    level: report.boundary ? "warning" : "error",
-    tags: { handler: adapter },
-    extra: { method: c.req.method, path: c.req.path },
-  });
 }

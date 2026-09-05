@@ -58,8 +58,8 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("runBackground\\(").filter((f) => f !== "src/background.ts")).toEqual([]);
   });
 
-  test("Sentry facade の直呼びは src/sentry.ts と adapter (run-route / run-rpc) だけ", () => {
-    const allowed = new Set(["src/sentry.ts", "src/handlers/run-route.ts", "src/rpc/run-rpc.ts"]);
+  test("Sentry facade の直呼びは src/sentry.ts と reportInternalFailures (wire-error) だけ", () => {
+    const allowed = new Set(["src/sentry.ts", "src/handlers/wire-error.ts"]);
     expect(
       srcFiles("Sentry\\.capture(Exception|Message)\\(").filter((f) => !allowed.has(f)),
     ).toEqual([]);
