@@ -64,6 +64,20 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
       srcFiles("Sentry\\.capture(Exception|Message)\\(").filter((f) => !allowed.has(f)),
     ).toEqual([]);
   });
+  // wire-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
+  // (use-case / handler は SentryService を yield* する: src/CLAUDE.md「Effect様式」)。
+  test("reportInternalFailures / captureThrown の呼び出しは adapter (run-route / run-rpc) と better-auth の結線 (auth.ts / app.ts) だけ", () => {
+    const allowed = new Set([
+      "src/handlers/wire-error.ts",
+      "src/handlers/run-route.ts",
+      "src/rpc/run-rpc.ts",
+      "src/auth.ts",
+      "src/app.ts",
+    ]);
+    expect(
+      srcFiles("(reportInternalFailures|captureThrown)\\(").filter((f) => !allowed.has(f)),
+    ).toEqual([]);
+  });
 });
 
 // ---- test の DB 接触 (08-liftall-and-test-seeds §3.3): src の test と e2e は db/testing/* だけを runtime import する ----

@@ -95,7 +95,9 @@ const handler = {
 
 // withSentry が fetch をラップし request スコープで Sentry client を初期化する (DSN 未設定なら no-op)。
 // route handler の例外は Hono が飲み込んで 500 にするためここには届かず、adapter (src/handlers/run-route.ts)
-// が Sentry に送る。ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。詳細: ADR-0011 / ADR-0017
+// が Sentry に送る。/api/auth/* は better-auth の onError (auth.ts の onAPIError) と、onRequest 段の reject を拾う
+// src/app.ts の mount が Sentry へ送る。ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。
+// 詳細: ADR-0011 / ADR-0017
 export default Sentry.withSentry(
   (env: Env) => ({
     dsn: env.SENTRY_DSN,
