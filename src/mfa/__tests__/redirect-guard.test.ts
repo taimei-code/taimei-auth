@@ -1,6 +1,12 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { setSentryBackend, type CaptureContext } from "../../sentry";
-import { FALLBACK_REDIRECT, validateChallengeRedirect } from "../redirect-guard";
+import { Effect } from "effect";
+import {
+  SentryLive,
+  consoleSentryBackend,
+  setSentryBackend,
+  type CaptureContext,
+} from "../../sentry";
+import { FALLBACK_REDIRECT, validateChallengeRedirect as validateEffect } from "../redirect-guard";
 import maliciousUrlsRaw from "./fixtures/malicious-callback-urls.json";
 
 type CallbackUrlCase = { name: string; url: string; expected: boolean };
@@ -18,11 +24,9 @@ const spyBackend = {
 };
 
 // Sentry backend も AUTH_TRUSTED_ORIGINS も module-global で、戻し忘れは後続 test file に漏れる。
-const consoleFallback = {
-  captureException: (error: unknown) => console.error("[sentry:noop] captureException", error),
-  captureMessage: (message: string, context?: CaptureContext) =>
-    console.warn("[sentry:noop] captureMessage", message, context?.tags),
-};
+// 出口検証は同期のまま (Sentry 報告も Effect.sync) なので runSync で観測できる。
+const validateChallengeRedirect = (raw: string | undefined): string =>
+  Effect.runSync(Effect.provide(validateEffect(raw), SentryLive));
 
 const originalTrustedOrigins = process.env.AUTH_TRUSTED_ORIGINS;
 
@@ -38,7 +42,7 @@ describe("validateChallengeRedirect", () => {
   });
 
   afterAll(() => {
-    setSentryBackend(consoleFallback);
+    setSentryBackend(consoleSentryBackend);
     if (originalTrustedOrigins === undefined) delete process.env.AUTH_TRUSTED_ORIGINS;
     else process.env.AUTH_TRUSTED_ORIGINS = originalTrustedOrigins;
   });

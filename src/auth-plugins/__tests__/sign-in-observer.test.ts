@@ -17,7 +17,8 @@ import {
   totpCode,
   WELCOME_EMAIL_LOG,
 } from "../../mfa/__tests__/helpers";
-import { activate, completeLoginChallengeOperation, enroll } from "../../mfa/totp";
+import { runMfaResult } from "../../mfa/__tests__/test-layers";
+import { activate, completeLoginChallenge, enroll } from "../../mfa/totp";
 
 // sign-in 観測プラグイン (src/auth-plugins/sign-in-observer.ts) の統合テスト。
 // 観測対象は一次認証のみ — チャレンジ通過の sign_in は通過手続 (totp/complete-login-challenge) が
@@ -87,10 +88,12 @@ describe("sign-in 観測プラグイン", () => {
       redirectUrl: CONSUMER_CALLBACK,
       method: "magic_link",
     });
-    const completed = await completeLoginChallengeOperation(challenge.headers, {
-      code: await totpCode(enabled.secret),
-      kind: "totp",
-    });
+    const completed = await runMfaResult(
+      completeLoginChallenge(challenge.headers, {
+        code: await totpCode(enabled.secret),
+        kind: "totp",
+      }),
+    );
     expect(completed.ok).toBe(true);
 
     const audits = await auditRowsFor(seeded.id, "sign_in");
@@ -122,18 +125,20 @@ describe("sign-in 観測プラグイン", () => {
     // 観測が path で絞れていないと 2 通目の welcome や偽の sign_in が積まれる。
     const seeded = await seedUser("m28");
     const session = await createSessionFor(seeded.id);
-    const enrolled = await enroll({ actor: actorOf(seeded) });
+    const enrolled = await runMfaResult(enroll({ actor: actorOf(seeded) }));
     expect(enrolled.ok).toBe(true);
     if (!enrolled.ok) return;
 
     const code = await totpCode(secretFromTotpUri(enrolled.totpUri), -1);
     const activated = await runObserving(() =>
-      activate({
-        actor: actorOf(seeded),
-        headers: session.headers,
-        code,
-        enrollmentId: enrolled.enrollmentId,
-      }),
+      runMfaResult(
+        activate({
+          actor: actorOf(seeded),
+          headers: session.headers,
+          code,
+          enrollmentId: enrolled.enrollmentId,
+        }),
+      ),
     );
 
     expect(activated.value.ok).toBe(true);

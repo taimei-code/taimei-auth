@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { findMembership } from "@/db/repositories/membership";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { changeRole } from "../change-role";
+import { runLiveResult } from "../../__tests__/live-runner";
 
 // change-role use-case (src/membership/change-role.ts) の DB 統合テスト。
 // Result 契約 / 200 短絡 (tx open せず audit 発火なし) / OwnerInvariantViolation → last_owner /
@@ -24,13 +25,15 @@ describe("changeRole", () => {
     await seedMembership(owner.id, co, "OWNER");
     await seedMembership(target.id, co, "MEMBER");
 
-    const result = await changeRole({
-      actorUserId: owner.id,
-      targetUserId: target.id,
-      companyId: co,
-      beforeRole: "MEMBER",
-      nextRole: "ADMIN",
-    });
+    const result = await runLiveResult(
+      changeRole({
+        actorUserId: owner.id,
+        targetUserId: target.id,
+        companyId: co,
+        beforeRole: "MEMBER",
+        nextRole: "ADMIN",
+      }),
+    );
     expect(result).toEqual({ ok: true });
     expect((await findMembership(target.id, co))?.role).toBe("ADMIN");
 
@@ -54,13 +57,15 @@ describe("changeRole", () => {
 
     const txSpy = spyOn(db, "transaction");
     try {
-      const result = await changeRole({
-        actorUserId: owner.id,
-        targetUserId: target.id,
-        companyId: co,
-        beforeRole: "MEMBER",
-        nextRole: "MEMBER",
-      });
+      const result = await runLiveResult(
+        changeRole({
+          actorUserId: owner.id,
+          targetUserId: target.id,
+          companyId: co,
+          beforeRole: "MEMBER",
+          nextRole: "MEMBER",
+        }),
+      );
       expect(result).toEqual({ ok: true });
       // no-op 短絡なので runInTransaction (= db.transaction) は呼ばれない。
       expect(txSpy).not.toHaveBeenCalled();
@@ -76,13 +81,15 @@ describe("changeRole", () => {
     const co = await seedCompany("e01");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await changeRole({
-      actorUserId: owner.id,
-      targetUserId: owner.id,
-      companyId: co,
-      beforeRole: "OWNER",
-      nextRole: "MEMBER",
-    });
+    const result = await runLiveResult(
+      changeRole({
+        actorUserId: owner.id,
+        targetUserId: owner.id,
+        companyId: co,
+        beforeRole: "OWNER",
+        nextRole: "MEMBER",
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "last_owner" });
     expect((await findMembership(owner.id, co))?.role).toBe("OWNER");
     expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
@@ -93,13 +100,15 @@ describe("changeRole", () => {
     const co = await seedCompany("e06");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await changeRole({
-      actorUserId: owner.id,
-      targetUserId: `${P}nonexistent-user`,
-      companyId: co,
-      beforeRole: "MEMBER",
-      nextRole: "ADMIN",
-    });
+    const result = await runLiveResult(
+      changeRole({
+        actorUserId: owner.id,
+        targetUserId: `${P}nonexistent-user`,
+        companyId: co,
+        beforeRole: "MEMBER",
+        nextRole: "ADMIN",
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found" });
     expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
@@ -112,13 +121,15 @@ describe("changeRole", () => {
     const co = await seedCompany("e09");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await changeRole({
-      actorUserId: owner.id,
-      targetUserId: owner.id,
-      companyId: co,
-      beforeRole: "OWNER",
-      nextRole: "ADMIN",
-    });
+    const result = await runLiveResult(
+      changeRole({
+        actorUserId: owner.id,
+        targetUserId: owner.id,
+        companyId: co,
+        beforeRole: "OWNER",
+        nextRole: "ADMIN",
+      }),
+    );
     expect(result.ok).toBe(false);
     expect((await auditRowsFor(owner.id, "role_changed")).length).toBe(0);
   });
@@ -133,13 +144,15 @@ describe("changeRole", () => {
     await seedMembership(owner.id, co, "OWNER");
     await seedMembership(target.id, co, "MEMBER");
 
-    const result = await changeRole({
-      actorUserId: owner.id,
-      targetUserId: target.id,
-      companyId: co,
-      beforeRole: "MEMBER",
-      nextRole: "ADMIN",
-    });
+    const result = await runLiveResult(
+      changeRole({
+        actorUserId: owner.id,
+        targetUserId: target.id,
+        companyId: co,
+        beforeRole: "MEMBER",
+        nextRole: "ADMIN",
+      }),
+    );
     expect(result.ok).toBe(true);
     const finalRole = (await findMembership(target.id, co))?.role;
     const audits = await auditRowsFor(owner.id, "role_changed");

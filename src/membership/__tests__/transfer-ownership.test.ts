@@ -5,6 +5,7 @@ import { findMembership } from "@/db/repositories/membership";
 import { membership } from "@/db/schema";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { transferOwnership } from "../transfer-ownership";
+import { runLiveResult } from "../../__tests__/live-runner";
 
 // transfer-ownership use-case (src/membership/transfer-ownership.ts) の DB 統合テスト。
 // 委譲 + audit の from/to / 二段委譲 / withOwnerLockGuard FOR UPDATE の並行直列化 semantic を検証。
@@ -24,11 +25,13 @@ describe("transferOwnership", () => {
     await seedMembership(owner.id, co, "OWNER");
     await seedMembership(admin.id, co, "ADMIN");
 
-    const result = await transferOwnership({
-      actorUserId: owner.id,
-      toUserId: admin.id,
-      companyId: co,
-    });
+    const result = await runLiveResult(
+      transferOwnership({
+        actorUserId: owner.id,
+        toUserId: admin.id,
+        companyId: co,
+      }),
+    );
     expect(result).toEqual({ ok: true });
     expect((await findMembership(admin.id, co))?.role).toBe("OWNER");
     expect((await findMembership(owner.id, co))?.role).toBe("ADMIN");
@@ -52,18 +55,22 @@ describe("transferOwnership", () => {
     await seedMembership(B.id, co, "ADMIN");
     await seedMembership(C.id, co, "ADMIN");
 
-    const first = await transferOwnership({
-      actorUserId: A.id,
-      toUserId: B.id,
-      companyId: co,
-    });
+    const first = await runLiveResult(
+      transferOwnership({
+        actorUserId: A.id,
+        toUserId: B.id,
+        companyId: co,
+      }),
+    );
     expect(first).toEqual({ ok: true });
 
-    const second = await transferOwnership({
-      actorUserId: B.id,
-      toUserId: C.id,
-      companyId: co,
-    });
+    const second = await runLiveResult(
+      transferOwnership({
+        actorUserId: B.id,
+        toUserId: C.id,
+        companyId: co,
+      }),
+    );
     expect(second).toEqual({ ok: true });
 
     expect((await findMembership(A.id, co))?.role).toBe("ADMIN");
@@ -86,8 +93,8 @@ describe("transferOwnership", () => {
     await seedMembership(b.id, co, "ADMIN");
 
     const settled = await Promise.allSettled([
-      transferOwnership({ actorUserId: owner.id, toUserId: a.id, companyId: co }),
-      transferOwnership({ actorUserId: owner.id, toUserId: b.id, companyId: co }),
+      runLiveResult(transferOwnership({ actorUserId: owner.id, toUserId: a.id, companyId: co })),
+      runLiveResult(transferOwnership({ actorUserId: owner.id, toUserId: b.id, companyId: co })),
     ]);
     for (const s of settled) {
       if (s.status === "rejected") throw s.reason;
@@ -106,11 +113,13 @@ describe("transferOwnership", () => {
     await seedMembership(owner.id, co, "OWNER");
     await seedMembership(to.id, co, "ADMIN");
 
-    const result = await transferOwnership({
-      actorUserId: owner.id,
-      toUserId: to.id,
-      companyId: co,
-    });
+    const result = await runLiveResult(
+      transferOwnership({
+        actorUserId: owner.id,
+        toUserId: to.id,
+        companyId: co,
+      }),
+    );
     expect(result.ok).toBe(true);
     const audits = await auditRowsFor(owner.id, "ownership_transferred");
     const finalOwnerId = (await findMembership(to.id, co))?.role === "OWNER" ? to.id : null;

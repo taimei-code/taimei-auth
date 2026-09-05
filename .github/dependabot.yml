@@ -12,6 +12,12 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # effect は 4.0.0-rc.112 に exact pin (ADR-0017)。RC は 2〜5 日周期で publish されるため追従 PR を
+      # 出すと毎週 minimumReleaseAge (7 日、ADR-0009 §H) に block されて CI が落ちる。range を RC (< 4.0.0) に
+      # 限定し、stable 4.0.0 以降の version / security update は Dependabot に出るようにする。stable 化時に外す。
+      - dependency-name: "effect"
+        versions: ["< 4.0.0"]
     groups:
       dev-dependencies:
         dependency-type: "development"

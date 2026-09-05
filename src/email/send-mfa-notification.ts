@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import type { ReactElement } from "react";
 import { isLocalEnvironment } from "../env";
 import {
@@ -12,19 +13,19 @@ import MfaEnabledEmail from "./mfa-enabled";
 
 const SECURITY_PAGE_PATH = "/account/security";
 
-async function sendMfaNotification(params: {
+const sendMfaNotification = Effect.fn("email.sendMfaNotification")(function* (params: {
   email: string;
   subject: string;
   render: (props: { appName: string; securityUrl: string; supportEmail: string }) => ReactElement;
   kind: "mfa enabled" | "mfa disabled";
-}): Promise<void> {
+}) {
   if (isLocalEnvironment()) {
-    console.log(`[TEST] ${params.kind} email for ${params.email}`);
+    yield* Effect.sync(() => console.log(`[TEST] ${params.kind} email for ${params.email}`));
     return;
   }
 
   const appName = getAppName();
-  await renderAndSendEmail({
+  yield* renderAndSendEmail({
     from: getSecurityFromEmail(),
     to: params.email,
     subject: `[${appName}] ${params.subject}`,
@@ -35,22 +36,20 @@ async function sendMfaNotification(params: {
     }),
     kind: params.kind,
   });
-}
+});
 
-export function sendMfaEnabledEmail(email: string): Promise<void> {
-  return sendMfaNotification({
+export const sendMfaEnabledEmail = (email: string) =>
+  sendMfaNotification({
     email,
     subject: "多要素認証 (MFA) を有効にしました",
     render: MfaEnabledEmail,
     kind: "mfa enabled",
   });
-}
 
-export function sendMfaDisabledEmail(email: string): Promise<void> {
-  return sendMfaNotification({
+export const sendMfaDisabledEmail = (email: string) =>
+  sendMfaNotification({
     email,
     subject: "多要素認証 (MFA) を無効にしました",
     render: MfaDisabledEmail,
     kind: "mfa disabled",
   });
-}

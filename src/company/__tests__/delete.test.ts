@@ -10,6 +10,7 @@ import {
 import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
 import { auditLog, company, invitation, membership, session, user } from "@/db/schema";
+import { runLiveResult } from "../../__tests__/live-runner";
 import { deleteCompany } from "../delete";
 
 const P = "delco-test-";
@@ -77,7 +78,7 @@ describe("deleteCompany", () => {
     const companyId = await seedCompany("sole");
     await join(ownerId, companyId);
 
-    const result = await deleteCompany(ownerId, companyId);
+    const result = await runLiveResult(deleteCompany(ownerId, companyId));
 
     expect(result).toEqual({ ok: true, actorDeleted: true });
     expect((await findCompanyById(companyId))?.activationStatus).toBe("DELETED");
@@ -97,7 +98,7 @@ describe("deleteCompany", () => {
     await join(ownerId, target);
     await join(ownerId, other);
 
-    const result = await deleteCompany(ownerId, target);
+    const result = await runLiveResult(deleteCompany(ownerId, target));
 
     expect(result).toEqual({ ok: true, actorDeleted: false });
     expect(await findUserById(ownerId)).toBeDefined();
@@ -116,7 +117,7 @@ describe("deleteCompany", () => {
     await join(survivor, target, "MEMBER");
     await join(survivor, other, "OWNER");
 
-    await deleteCompany(ownerId, target);
+    await runLiveResult(deleteCompany(ownerId, target));
 
     expect(await findUserById(orphanMember)).toBeUndefined();
     expect(await findUserById(survivor)).toBeDefined();
@@ -132,7 +133,7 @@ describe("deleteCompany", () => {
     await join(survivor, target, "MEMBER");
     await join(survivor, other, "MEMBER");
 
-    await deleteCompany(ownerId, target);
+    await runLiveResult(deleteCompany(ownerId, target));
 
     expect((await findUserById(survivor))?.lastUsedCompanyId).toBe(other);
   });
@@ -153,7 +154,7 @@ describe("deleteCompany", () => {
       invitedByUserId: ownerId,
     });
 
-    await deleteCompany(ownerId, target);
+    await runLiveResult(deleteCompany(ownerId, target));
 
     const row = await db
       .select()
@@ -170,7 +171,7 @@ describe("deleteCompany", () => {
     await join(ownerId, companyId);
     await join(memberId, companyId, "MEMBER");
 
-    const result = await deleteCompany(memberId, companyId);
+    const result = await runLiveResult(deleteCompany(memberId, companyId));
 
     expect(result).toEqual({ ok: false, reason: "forbidden" });
     expect((await findCompanyById(companyId))?.activationStatus).toBe("ACTIVE");
@@ -179,7 +180,7 @@ describe("deleteCompany", () => {
 
   test("存在しない companyId は not_found_or_already_deleted", async () => {
     const ownerId = await seedUser("nf");
-    const result = await deleteCompany(ownerId, "cmp_does_not_exist");
+    const result = await runLiveResult(deleteCompany(ownerId, "cmp_does_not_exist"));
     expect(result).toEqual({ ok: false, reason: "not_found_or_already_deleted" });
   });
 
@@ -190,8 +191,8 @@ describe("deleteCompany", () => {
     await join(ownerId, target);
     await join(ownerId, other);
 
-    await deleteCompany(ownerId, target);
-    const second = await deleteCompany(ownerId, target);
+    await runLiveResult(deleteCompany(ownerId, target));
+    const second = await runLiveResult(deleteCompany(ownerId, target));
 
     expect(second).toEqual({ ok: true, actorDeleted: false });
   });
@@ -204,8 +205,8 @@ describe("deleteCompany", () => {
     await join(ownerId, other); // owner を生存させ audit を観測する
 
     const results = await Promise.all([
-      deleteCompany(ownerId, target),
-      deleteCompany(ownerId, target),
+      runLiveResult(deleteCompany(ownerId, target)),
+      runLiveResult(deleteCompany(ownerId, target)),
     ]);
 
     expect(results.every((r) => r.ok)).toBe(true);

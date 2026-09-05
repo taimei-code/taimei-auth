@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { createRateLimitMiddleware } from "../../rate-limit";
-import { setSentryBackend, type CaptureContext } from "../../sentry";
+import { consoleSentryBackend, setSentryBackend, type CaptureContext } from "../../sentry";
 import { canaryToken } from "../canary-token";
 
 // Sentry backend は module-global のため、spy 注入後は console fallback 相当へ戻して
@@ -18,12 +18,6 @@ const spyBackend = {
   },
 };
 
-const consoleFallback = {
-  captureException: (error: unknown) => console.error("[sentry:noop] captureException", error),
-  captureMessage: (message: string, context?: CaptureContext) =>
-    console.warn("[sentry:noop] captureMessage", message, context?.tags),
-};
-
 const buildApp = () => {
   const app = new Hono();
   app.route("/", canaryToken);
@@ -37,7 +31,7 @@ describe("canary token endpoint", () => {
   });
 
   afterAll(() => {
-    setSentryBackend(consoleFallback);
+    setSentryBackend(consoleSentryBackend);
   });
 
   test("GET /auth/canary-token/abc123 は 204 + token_id/embed_type を Sentry に送る", async () => {
@@ -88,7 +82,7 @@ describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
   });
 
   afterAll(() => {
-    setSentryBackend(consoleFallback);
+    setSentryBackend(consoleSentryBackend);
   });
 
   test("上限超過は 429 になり Sentry 送信自体が止まる (quota 保護)", async () => {

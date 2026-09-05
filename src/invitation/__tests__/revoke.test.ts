@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { findInvitationById } from "@/db/repositories/invitation";
+import { runLiveResult } from "../../__tests__/live-runner";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
 import { revokeInvitation } from "../revoke";
 
@@ -25,11 +26,9 @@ describe("revokeInvitation", () => {
       invitedByUserId: owner.id,
     });
 
-    const result = await revokeInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      invitationId: inv.id,
-    });
+    const result = await runLiveResult(
+      revokeInvitation({ actorUserId: owner.id, companyId: co, invitationId: inv.id }),
+    );
     expect(result).toEqual({ ok: true });
     const persisted = await findInvitationById(inv.id);
     expect(persisted?.status).toBe("REVOKED");
@@ -48,11 +47,13 @@ describe("revokeInvitation", () => {
     const co = await seedCompany("nf");
     await seedMembership(owner.id, co, "OWNER");
 
-    const result = await revokeInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      invitationId: `${P}inv-nonexistent`,
-    });
+    const result = await runLiveResult(
+      revokeInvitation({
+        actorUserId: owner.id,
+        companyId: co,
+        invitationId: `${P}inv-nonexistent`,
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found_or_not_pending" });
     expect((await auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
   });
@@ -69,11 +70,9 @@ describe("revokeInvitation", () => {
       status: "REVOKED",
     });
 
-    const result = await revokeInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      invitationId: inv.id,
-    });
+    const result = await runLiveResult(
+      revokeInvitation({ actorUserId: owner.id, companyId: co, invitationId: inv.id }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found_or_not_pending" });
     expect((await auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
   });
@@ -92,11 +91,9 @@ describe("revokeInvitation", () => {
     });
 
     // co2 で co1 の invitation を revoke しようとしても markInvitationRevoked が 0 件更新。
-    const result = await revokeInvitation({
-      actorUserId: owner.id,
-      companyId: co2,
-      invitationId: inv.id,
-    });
+    const result = await runLiveResult(
+      revokeInvitation({ actorUserId: owner.id, companyId: co2, invitationId: inv.id }),
+    );
     expect(result).toEqual({ ok: false, reason: "not_found_or_not_pending" });
     // 元の invitation は影響なし (PENDING のまま)。
     const persisted = await findInvitationById(inv.id);

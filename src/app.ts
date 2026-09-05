@@ -1,9 +1,10 @@
+import { Effect } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { getSessionCookie } from "better-auth/cookies";
 import { auth } from "./auth";
-import { pingDatabase } from "@/db/repositories/health";
-import { pingRedis } from "./redis";
+import { HealthRepo } from "./health/ports";
+import { Redis } from "./redis-service";
 import { handleRpc } from "./rpc/fetch-handler";
 import { buildLoginShortcut } from "./handlers/login-shortcut";
 import { accountAvatar } from "./handlers/avatar-upload";
@@ -14,6 +15,7 @@ import { accountMfa } from "./handlers/account-mfa";
 import { canaryToken } from "./handlers/canary-token";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
+import { runMiddleware, runRoute } from "./handlers/run-route";
 import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";
@@ -38,24 +40,30 @@ export function mountAccountRoutes(app: Hono): void {
 // local (dev / e2e) は同一 key 連投が常態で、production limit だと自テストが 429 を踏むため緩める。
 const LOCAL_RELAXED_LIMIT = 1000;
 
-const requireServiceKey: MiddlewareHandler = async (c, next) => {
-  const serviceKey = c.req.header("X-Service-Key");
-  const acceptedServiceKeys = getValidServiceKeys();
-  if (acceptedServiceKeys.length === 0) {
-    // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。ここは二重防御。
-    if (process.env.APP_ENV === "production") {
-      return c.json({ error: "Service Key not configured (production)" }, 503);
-    }
-    console.warn(
-      "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
-    );
-    return next();
-  }
-  if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
-    return c.json({ error: "Unauthorized: invalid service key" }, 401);
-  }
-  return next();
-};
+// RPC の service key 検査。本体は Effect program、runMiddleware が Response → 短絡 / undefined → next() に写像する。
+const requireServiceKey: MiddlewareHandler = (c, next) =>
+  runMiddleware(
+    c,
+    next,
+    Effect.sync(() => {
+      const serviceKey = c.req.header("X-Service-Key");
+      const acceptedServiceKeys = getValidServiceKeys();
+      if (acceptedServiceKeys.length === 0) {
+        // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。ここは二重防御。
+        if (process.env.APP_ENV === "production") {
+          return c.json({ error: "Service Key not configured (production)" }, 503);
+        }
+        console.warn(
+          "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
+        );
+        return undefined;
+      }
+      if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
+        return c.json({ error: "Unauthorized: invalid service key" }, 401);
+      }
+      return undefined;
+    }),
+  );
 
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
@@ -177,13 +185,26 @@ export function buildApp(options: AppOptions): Hono {
   // session-aware redirect を静的配信より前に登録する。詳細: docs/adr/0002-spa-routing-and-static-assets.md
   app.use("/auth/*", authEntryRedirect);
 
-  app.get("/health", async (c) => {
-    // db/CLAUDE.md ルール 1: drizzle / @/db/client を直接 import せず repository 経由で ping する。
-    const [dbOk, redisOk] = await Promise.all([pingDatabase(), pingRedis()]);
-    const checks = { db: dbOk ? "ok" : "error", redis: redisOk ? "ok" : "error" };
-    const healthy = dbOk && redisOk;
-    return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
-  });
+  // 2 つの ping は独立なので Effect.all で並行。どちらの障害も failure にせず false (degraded) に畳む。
+  app.get("/health", (c) =>
+    runRoute(
+      c,
+      Effect.gen(function* () {
+        const health = yield* HealthRepo;
+        const redis = yield* Redis;
+        const [dbOk, redisOk] = yield* Effect.all(
+          [
+            health.pingDatabase().pipe(Effect.orElseSucceed(() => false)),
+            redis.ping().pipe(Effect.orElseSucceed(() => false)),
+          ],
+          { concurrency: "unbounded" },
+        );
+        const checks = { db: dbOk ? "ok" : "error", redis: redisOk ? "ok" : "error" };
+        const healthy = dbOk && redisOk;
+        return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
+      }),
+    ),
+  );
 
   options.mountStatic(app);
 

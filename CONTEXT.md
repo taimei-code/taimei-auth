@@ -157,7 +157,7 @@ better-auth lifecycle hook や admin 操作によって、user 自身の意思�
 _Avoid_: invalidate (より広義), terminate, kill
 
 **membership guard**:
-**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は `if (!r.ok) return guardErrorResponse(r)` の 1 行で HTTP に写像する。詳細: ADR-0012。
+**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は Effect program として合成した結果を adapter (`runRoute`) が HTTP に写像する。詳細: ADR-0012 / ADR-0017。
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)
 
 **audit log**:
@@ -197,4 +197,5 @@ _Avoid_: log entry, audit record
 - 「callbackURL」は better-auth API の引数名としてはそのまま使うが、設計議論では **redirect_url** を使う — better-auth 内部では callbackURL、外部 (URL クエリ) では redirect_url
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
 - 「twoFactor」「backupCodes」「`2fa-*`」は twoFactor プラグイン撤去によりテーブル名・列名・API 名・cookie 内識別子としてはもはや存在しない。設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 残る借用はテスト内の語彙検査のみ
+- 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた — resolved: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないため本 glossary に置かず、正本は ADR-0017
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化

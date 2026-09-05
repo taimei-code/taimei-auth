@@ -3,6 +3,7 @@ import { db } from "@/db/client";
 import { deleteMembership } from "@/db/repositories/membership";
 import { findUserById } from "@/db/repositories/user";
 import { auditRowsFor, createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { runLiveResult } from "../../__tests__/live-runner";
 import { switchCompany } from "../switch-company";
 
 // switch-company use-case (src/account/switch-company.ts) の DB 統合テスト。
@@ -23,11 +24,13 @@ describe("switchCompany", () => {
     await seedMembership(u.id, co1, "OWNER");
     await seedMembership(u.id, co2, "MEMBER");
 
-    const result = await switchCompany({
-      actorUserId: u.id,
-      fromCompanyId: co1,
-      targetCompanyId: co2,
-    });
+    const result = await runLiveResult(
+      switchCompany({
+        actorUserId: u.id,
+        fromCompanyId: co1,
+        targetCompanyId: co2,
+      }),
+    );
     expect(result).toEqual({ ok: true, companyId: co2 });
     expect((await findUserById(u.id))?.lastUsedCompanyId).toBe(co2);
 
@@ -43,11 +46,13 @@ describe("switchCompany", () => {
 
     const txSpy = spyOn(db, "transaction");
     try {
-      const result = await switchCompany({
-        actorUserId: u.id,
-        fromCompanyId: co,
-        targetCompanyId: co,
-      });
+      const result = await runLiveResult(
+        switchCompany({
+          actorUserId: u.id,
+          fromCompanyId: co,
+          targetCompanyId: co,
+        }),
+      );
       expect(result).toEqual({ ok: true, companyId: co });
       expect(txSpy).not.toHaveBeenCalled();
     } finally {
@@ -64,11 +69,13 @@ describe("switchCompany", () => {
     await seedMembership(u.id, co1, "OWNER");
     // co2 には所属していない。
 
-    const result = await switchCompany({
-      actorUserId: u.id,
-      fromCompanyId: co1,
-      targetCompanyId: co2,
-    });
+    const result = await runLiveResult(
+      switchCompany({
+        actorUserId: u.id,
+        fromCompanyId: co1,
+        targetCompanyId: co2,
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "forbidden" });
     expect((await findUserById(u.id))?.lastUsedCompanyId).toBe(co1);
     expect((await auditRowsFor(u.id, "company_switched")).length).toBe(0);
@@ -89,11 +96,13 @@ describe("switchCompany", () => {
     // 「tx 開始時点で既に不在」で同じ経路に落ちるため、この simulation で契約検証が成立する)。
     await deleteMembership(u.id, co2);
 
-    const result = await switchCompany({
-      actorUserId: u.id,
-      fromCompanyId: co1,
-      targetCompanyId: co2,
-    });
+    const result = await runLiveResult(
+      switchCompany({
+        actorUserId: u.id,
+        fromCompanyId: co1,
+        targetCompanyId: co2,
+      }),
+    );
     expect(result).toEqual({ ok: false, reason: "forbidden" });
     expect((await findUserById(u.id))?.lastUsedCompanyId).toBe(co1);
     expect((await auditRowsFor(u.id, "company_switched")).length).toBe(0);
@@ -104,11 +113,13 @@ describe("switchCompany", () => {
     const u = await seedUser("d02");
     await seedMembership(u.id, co, "OWNER");
 
-    const result = await switchCompany({
-      actorUserId: u.id,
-      fromCompanyId: null,
-      targetCompanyId: co,
-    });
+    const result = await runLiveResult(
+      switchCompany({
+        actorUserId: u.id,
+        fromCompanyId: null,
+        targetCompanyId: co,
+      }),
+    );
     expect(result).toEqual({ ok: true, companyId: co });
     const audits = await auditRowsFor(u.id, "company_switched");
     expect(audits.length).toBe(1);
@@ -123,11 +134,13 @@ describe("switchCompany", () => {
     await seedMembership(u.id, co1, "OWNER");
     await seedMembership(u.id, co2, "MEMBER");
 
-    const result = await switchCompany({
-      actorUserId: u.id,
-      fromCompanyId: co1,
-      targetCompanyId: co2,
-    });
+    const result = await runLiveResult(
+      switchCompany({
+        actorUserId: u.id,
+        fromCompanyId: co1,
+        targetCompanyId: co2,
+      }),
+    );
     expect(result.ok).toBe(true);
     const finalLastUsed = (await findUserById(u.id))?.lastUsedCompanyId;
     const payload = (await auditRowsFor(u.id, "company_switched"))[0]?.payload as Record<

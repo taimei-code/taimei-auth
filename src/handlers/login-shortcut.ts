@@ -1,8 +1,10 @@
+import { buildAuthLoginUrl } from "@taimei-code/auth-client";
+import { Effect } from "effect";
 import { Hono } from "hono";
 import type { Context } from "hono";
-import { buildAuthLoginUrl } from "@taimei-code/auth-client";
 
-import { Sentry } from "../sentry";
+import { captureCause } from "../sentry";
+import { runRoute } from "./run-route";
 
 // 未知のクエリは破棄し、allowlist 経由のみ /auth/ に渡す (パラメータ汚染防止)
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
@@ -32,24 +34,34 @@ export type IsAuthenticated = (headers: Headers) => Promise<boolean>;
 export const buildLoginShortcut = (isAuthenticated: IsAuthenticated) => {
   const app = new Hono();
 
-  const handler = async (c: Context) => {
-    const url = new URL(c.req.url);
+  const handler = (c: Context) =>
+    runRoute(
+      c,
+      Effect.gen(function* () {
+        const url = new URL(c.req.url);
 
-    const authenticated = await isAuthenticated(c.req.raw.headers).catch((err) => {
-      // Redis transient 失敗は 5xx にせず未認証扱いで共通ログイン画面に流す。Sentry warning で観測のみ
-      Sentry.captureException(err, { level: "warning", tags: { handler: "loginShortcut" } });
-      return false;
-    });
+        // Redis transient 失敗は 5xx にせず未認証扱いで共通ログイン画面に流す (fail-open)。Sentry warning で観測のみ
+        const authenticated = yield* Effect.tryPromise({
+          try: () => isAuthenticated(c.req.raw.headers),
+          catch: (err) => err,
+        }).pipe(
+          Effect.catch((err) =>
+            captureCause({ level: "warning", tags: { handler: "loginShortcut" } })({
+              cause: err,
+            }).pipe(Effect.as(false)),
+          ),
+        );
 
-    // 302 Location が Cookie で分岐するため CDN/proxy の共有 cache を禁止 (session-leak 防止)
-    c.header("Cache-Control", "private, no-store");
-    c.header("Vary", "Cookie");
+        // 302 Location が Cookie で分岐するため CDN/proxy の共有 cache を禁止 (session-leak 防止)
+        c.header("Cache-Control", "private, no-store");
+        c.header("Vary", "Cookie");
 
-    if (authenticated) {
-      return c.redirect(`${url.origin}/account`, 302);
-    }
-    return c.redirect(buildLoginRedirect(url).toString(), 302);
-  };
+        if (authenticated) {
+          return c.redirect(`${url.origin}/account`, 302);
+        }
+        return c.redirect(buildLoginRedirect(url).toString(), 302);
+      }),
+    );
 
   app.get("/", handler);
   app.get("/login", handler);

@@ -2,22 +2,20 @@ import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
-import { findCompaniesBlockingUserDeletion } from "@/db/repositories/membership";
 import * as schema from "@/db/schema";
 import { mfaChallenge } from "./auth-plugins/mfa-challenge";
 import { signInObserver } from "./auth-plugins/sign-in-observer";
 import { getAppName } from "./email/client";
-import { sendInvitationEmail } from "./email/send-invitation";
-import { sendMagicLinkEmail } from "./email/send-magic-link";
-import { resolveInvitationEmailContext } from "./invitation/resolve-email-context";
+import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
+import { MembershipRepo } from "./membership/ports";
 import { redisStorage } from "./redis";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
 // Workers は per-request env のため module ロード時でなく initAuth() で構築する
-// (Workers は worker entry が initDb→initRedis→initAuth の順で呼ぶ)。詳細: ADR-0011
+// (Workers は worker entry が initRedis→initAuth の順で呼び、実 Pool は request ごとに供給する)。詳細: ADR-0011
 function buildAuth() {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
@@ -62,7 +60,12 @@ function buildAuth() {
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
-          const blocking = await findCompaniesBlockingUserDeletion(user.id);
+          // better-auth の callback は Promise / throw 規約の境界。判定は runtime で走らせ、結果を APIError に戻す。
+          // runtime は AuthApiLive 経由で本 module を import するため、循環を避けて呼び出し時に読み込む。
+          const { getRuntime } = await import("./runtime");
+          const blocking = await getRuntime().runPromise(
+            MembershipRepo.use((m) => m.findCompaniesBlockingUserDeletion(user.id)),
+          );
           if (blocking.length > 0) {
             throw new APIError("PRECONDITION_FAILED", {
               code: "OWNER_OF_ACTIVE_COMPANY",
@@ -92,13 +95,10 @@ function buildAuth() {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // callbackURL に invitation_token があれば事業所名 / 招待者を載せた招待メールを送る。
-          const invitationContext = await resolveInvitationEmailContext(url);
-          if (invitationContext) {
-            await sendInvitationEmail({ inviteeEmail: email, url, ...invitationContext });
-            return;
-          }
-          await sendMagicLinkEmail(email, url);
+          // better-auth callback は throw 契約 (ADR-0017 の物理境界)。runtime は import 環
+          // (runtime → auth-service → auth) を避けるため関数内で lazy import する。
+          const { getRuntime } = await import("./runtime");
+          await getRuntime().runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: 300,
         // local は test 高速化で緩め、production は Hono middleware (src/rate-limit.ts) と独立した二重防御。

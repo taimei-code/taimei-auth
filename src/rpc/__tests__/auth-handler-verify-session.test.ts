@@ -1,108 +1,112 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
-import { findAccountByUserId } from "@/db/repositories/account";
-import { findUserById } from "@/db/repositories/user";
-import { auth } from "../../auth";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { Effect, Layer } from "effect";
+import type { UserRow } from "@/db/repositories/user";
+import { SessionRepo, UserRepo } from "../../account/ports";
+import type { Session } from "../../auth";
+import { AuthApi } from "../../auth-service";
+import { AuthApiError } from "../../errors";
+import {
+  authLayer as sharedAuthLayer,
+  userRepoLayer,
+} from "../../membership/__tests__/test-layers";
 import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
+import { verifySessionProgram } from "../auth-handler";
 
-// bun の mock.module はプロセス全体に効き、mock.restore() でも実装は戻らない。mock 適用前の
-// 実 module をここで捕捉し、afterAll で貼り直して後続テストファイルへの mock 漏れを防ぐ。
-const realModules = {
-  auth: { auth },
-  userRepository: { findUserById },
-  accountRepository: { findAccountByUserId },
-};
-
-const mockGetSession = mock();
+// better-auth (getSession / signOut) と DB (UserRepo / SessionRepo) はすべて test Layer で差し替える
+// (mock.module はプロセス全体に効いて後続 file に漏れるため使わない)。
 const mockSignOut = mock();
-const mockFindUserById = mock();
 
-type VerifySessionFn = (req: { sessionToken: string }) => Promise<VerifySessionResponse>;
-
-let verifySession: VerifySessionFn;
-
-beforeEach(async () => {
-  mockGetSession.mockReset();
+beforeEach(() => {
   mockSignOut.mockReset();
-  mockFindUserById.mockReset();
-
-  mock.module("../../auth", () => ({
-    auth: {
-      api: {
-        getSession: mockGetSession,
-        signOut: mockSignOut,
-      },
-    },
-  }));
-  mock.module("@/db/repositories/user", () => ({
-    findUserById: mockFindUserById,
-  }));
-  mock.module("@/db/repositories/account", () => ({
-    findAccountByUserId: mock(),
-  }));
-
-  // dynamic import after mock.module so handler picks up the mocks
-  const handlerModule = await import("../auth-handler");
-  let captured: { verifySession?: VerifySessionFn } = {};
-  const fakeRouter = {
-    service: (_svc: unknown, impl: { verifySession: VerifySessionFn }) => {
-      captured = impl;
-    },
-  };
-  handlerModule.registerAuthService(
-    fakeRouter as unknown as Parameters<typeof handlerModule.registerAuthService>[0],
-  );
-  if (!captured.verifySession) throw new Error("handler not captured");
-  verifySession = captured.verifySession;
 });
 
-afterEach(() => {
-  mock.restore();
-});
+// 共有 authLayer の signOut を mock に差し替える (既定は Effect.void)。
+const signOut = () =>
+  Effect.tryPromise({
+    try: () => Promise.resolve(mockSignOut()),
+    catch: (cause) => new AuthApiError({ cause }),
+  });
 
-afterAll(() => {
-  mock.module("../../auth", () => realModules.auth);
-  mock.module("@/db/repositories/user", () => realModules.userRepository);
-  mock.module("@/db/repositories/account", () => realModules.accountRepository);
-});
+const authLayer = (getSession: () => Session | null): Layer.Layer<AuthApi> =>
+  sharedAuthLayer(getSession, signOut);
+
+const sessionOf = (user: Record<string, unknown> | undefined, sessionId = "s1"): Session =>
+  ({
+    user,
+    session: { id: sessionId, expiresAt: new Date("2030-01-01") },
+  }) as unknown as Session;
+
+const userRow = (revision: number): UserRow =>
+  ({
+    id: "u1",
+    name: "n",
+    email: "e",
+    emailVerified: true,
+    image: null,
+    revision,
+    createdAt: new Date("2025-01-01"),
+    updatedAt: new Date("2025-01-01"),
+  }) as unknown as UserRow;
+
+const sessionRepoLayer = (revokedAt: Date | null): Layer.Layer<SessionRepo> =>
+  Layer.succeed(SessionRepo, {
+    findSessionRevokedAt: () => Effect.succeed(revokedAt),
+  } as unknown as SessionRepo["Service"]);
+
+const run = (
+  layers: Layer.Layer<AuthApi | UserRepo | SessionRepo>,
+): Promise<VerifySessionResponse> =>
+  Effect.runPromise(Effect.provide(verifySessionProgram({ sessionToken: "x" }), layers));
 
 describe("verifySession outcome", () => {
   test("returns SESSION_NOT_FOUND when getSession returns null", async () => {
-    mockGetSession.mockResolvedValue(null);
-    const res = await verifySession({ sessionToken: "x" });
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => null),
+        userRepoLayer([]),
+        sessionRepoLayer(null),
+      ),
+    );
     expect(res.outcome.case).toBe("error");
     if (res.outcome.case !== "error") throw new Error();
     expect(res.outcome.value.reason).toBe(Result.SESSION_NOT_FOUND);
   });
 
   test("returns USER_DELETED when DB user is gone", async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: "u1", revision: 0 },
-      session: { id: "s1", expiresAt: new Date() },
-    });
-    mockFindUserById.mockResolvedValue(undefined);
-    const res = await verifySession({ sessionToken: "x" });
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 0 })),
+        userRepoLayer([]),
+        sessionRepoLayer(null),
+      ),
+    );
     expect(res.outcome.case).toBe("error");
     if (res.outcome.case !== "error") throw new Error();
     expect(res.outcome.value.reason).toBe(Result.USER_DELETED);
   });
 
+  test("returns REVOKED when the session row is revoked", async () => {
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 5 })),
+        userRepoLayer([userRow(5)]),
+        sessionRepoLayer(new Date("2025-01-01")),
+      ),
+    );
+    expect(res.outcome.case).toBe("error");
+    if (res.outcome.case !== "error") throw new Error();
+    expect(res.outcome.value.reason).toBe(Result.REVOKED);
+  });
+
   test("returns REVISION_OUTDATED and calls signOut on revision mismatch", async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: "u1", revision: 3 },
-      session: { id: "s1", expiresAt: new Date() },
-    });
-    mockFindUserById.mockResolvedValue({
-      id: "u1",
-      name: "n",
-      email: "e",
-      emailVerified: true,
-      image: null,
-      revision: 5,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
     mockSignOut.mockResolvedValue(undefined);
-    const res = await verifySession({ sessionToken: "x" });
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 3 })),
+        userRepoLayer([userRow(5)]),
+        sessionRepoLayer(null),
+      ),
+    );
     expect(res.outcome.case).toBe("error");
     if (res.outcome.case !== "error") throw new Error();
     expect(res.outcome.value.reason).toBe(Result.REVISION_OUTDATED);
@@ -110,21 +114,13 @@ describe("verifySession outcome", () => {
   });
 
   test("returns ok with user/session when revision matches", async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: "u1", revision: 7 },
-      session: { id: "s1", expiresAt: new Date("2030-01-01") },
-    });
-    mockFindUserById.mockResolvedValue({
-      id: "u1",
-      name: "n",
-      email: "e",
-      emailVerified: true,
-      image: null,
-      revision: 7,
-      createdAt: new Date("2025-01-01"),
-      updatedAt: new Date("2025-01-01"),
-    });
-    const res = await verifySession({ sessionToken: "x" });
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 7 })),
+        userRepoLayer([userRow(7)]),
+        sessionRepoLayer(null),
+      ),
+    );
     expect(res.outcome.case).toBe("ok");
     if (res.outcome.case !== "ok") throw new Error();
     expect(res.outcome.value.user?.id).toBe("u1");
@@ -133,47 +129,31 @@ describe("verifySession outcome", () => {
   });
 
   test("cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
-    mockGetSession.mockResolvedValue({
-      // legacy session payload (deploy 前に発行されて revision フィールドがない)
-      user: { id: "u1" },
-      session: { id: "s1", expiresAt: new Date("2030-01-01") },
-    });
-    mockFindUserById.mockResolvedValue({
-      id: "u1",
-      name: "n",
-      email: "e",
-      emailVerified: true,
-      image: null,
-      revision: 5,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    const res = await verifySession({ sessionToken: "x" });
+    // legacy session payload (deploy 前に発行されて revision フィールドがない)
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1" })),
+        userRepoLayer([userRow(5)]),
+        sessionRepoLayer(null),
+      ),
+    );
     expect(res.outcome.case).toBe("ok");
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
   test("signOut throws → still returns REVISION_OUTDATED", async () => {
-    mockGetSession.mockResolvedValue({
-      user: { id: "u1", revision: 3 },
-      session: { id: "s1", expiresAt: new Date() },
-    });
-    mockFindUserById.mockResolvedValue({
-      id: "u1",
-      name: "n",
-      email: "e",
-      emailVerified: true,
-      image: null,
-      revision: 5,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
     mockSignOut.mockRejectedValue(new Error("redis down"));
     const warnSpy = mock();
     const originalWarn = console.warn;
     console.warn = warnSpy;
     try {
-      const res = await verifySession({ sessionToken: "x" });
+      const res = await run(
+        Layer.mergeAll(
+          authLayer(() => sessionOf({ id: "u1", revision: 3 })),
+          userRepoLayer([userRow(5)]),
+          sessionRepoLayer(null),
+        ),
+      );
       expect(res.outcome.case).toBe("error");
       if (res.outcome.case !== "error") throw new Error();
       expect(res.outcome.value.reason).toBe(Result.REVISION_OUTDATED);

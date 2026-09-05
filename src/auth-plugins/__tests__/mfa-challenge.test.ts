@@ -12,6 +12,7 @@ import {
   loginWithMagicLink,
   requestMagicLink,
 } from "../../mfa/__tests__/helpers";
+import { runMfa } from "../../mfa/__tests__/test-layers";
 import {
   attemptsKey,
   challengeKey,
@@ -38,7 +39,7 @@ const AUTH_ORIGIN = "http://localhost:3100";
 // テストが発行させたチャレンジの Redis state を明示的に消す (TTL 待ちにしない)。
 const issuedIds: string[] = [];
 const trackChallengeFrom = async (headers: Headers): Promise<void> => {
-  const opened = await peekLoginChallenge(headers);
+  const opened = await runMfa(peekLoginChallenge(headers));
   if (opened) issuedIds.push(opened.challengeId);
 };
 const cleanupTrackedChallenges = async (): Promise<void> => {
@@ -129,8 +130,10 @@ describe("チャレンジ強制プラグイン", () => {
     // 一次認証だけでセッションが立つと MFA が飾りになる。cookie が 1 本も出ていないことが核。
     expect(await issuedSessionCookieCount(login.response.headers)).toBe(0);
     // チャレンジ cookie の実在は「名前があるか」でなく「そのまま読み戻せるか」で見る。
-    expect(await readLoginChallengeState(browserHeaders)).toEqual({ pending: true });
-    expect(await peekLoginChallenge(browserHeaders)).toMatchObject({
+    expect(await runMfa(readLoginChallengeState(browserHeaders))).toEqual({
+      pending: true,
+    });
+    expect(await runMfa(peekLoginChallenge(browserHeaders))).toMatchObject({
       userId: user.id,
       redirectUrl: CONSUMER_CALLBACK,
       method: "magic_link",
@@ -145,7 +148,7 @@ describe("チャレンジ強制プラグイン", () => {
     expect(login.response.status).toBe(302);
     expect(login.location?.toString()).toBe(CONSUMER_CALLBACK);
     expect(await issuedSessionCookieCount(login.response.headers)).toBe(1);
-    expect(await readLoginChallengeState(browserCookieHeaders(login.response))).toEqual({
+    expect(await runMfa(readLoginChallengeState(browserCookieHeaders(login.response)))).toEqual({
       pending: false,
     });
   });

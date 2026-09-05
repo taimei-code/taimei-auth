@@ -90,11 +90,11 @@ export async function decryptValue(
   const plaintext = await crypto.subtle.decrypt(
     {
       name: AES_GCM,
-      iv: asBufferSource(decodeBase64(value.iv)),
+      iv: decodeBase64(value.iv),
       additionalData: ENCODER.encode(aad),
     },
     key,
-    asBufferSource(decodeBase64(value.ciphertext)),
+    decodeBase64(value.ciphertext),
   );
   return new Uint8Array(plaintext);
 }

@@ -16,18 +16,10 @@ export function isPrimaryAuthRoute(path: string | undefined): boolean {
   return PRIMARY_AUTH_ROUTES.some((route) => route === path);
 }
 
-// provider id は外部入力。index lookup は prototype chain 経由で未知 provider を通すため hasOwn で足切りする。
-const CHALLENGE_METHOD_BY_PROVIDER: Record<string, ChallengeMethod> = {
-  github: "github",
-};
-
 // 未知の route / provider で既定値に寄せないのは、provider 追加時に誤った method の sign_in audit が黙って
 // 積まれるため。undefined を返し呼び出し側を「チャレンジは fail-closed、audit は記帳しない」へ倒す。
 export function resolvePrimaryAuthMethod(route: AuthRouteMatch): ChallengeMethod | undefined {
   if (route.path === MAGIC_LINK_VERIFY_ROUTE) return "magic_link";
   if (route.path !== OAUTH_CALLBACK_ROUTE) return undefined;
-
-  const provider = route.params?.id;
-  if (!provider || !Object.hasOwn(CHALLENGE_METHOD_BY_PROVIDER, provider)) return undefined;
-  return CHALLENGE_METHOD_BY_PROVIDER[provider];
+  return route.params?.id === "github" ? "github" : undefined;
 }

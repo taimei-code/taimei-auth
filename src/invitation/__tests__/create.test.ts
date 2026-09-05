@@ -5,6 +5,7 @@ import { db } from "@/db/client";
 import { findActivePendingInvitation } from "@/db/repositories/invitation";
 import { invitation as invitationTable } from "@/db/schema";
 import {
+  TEST_PREFIX,
   auditRowsFor,
   buildTestApp,
   cleanupTestData,
@@ -14,8 +15,9 @@ import {
   seedMembership,
   seedUser,
   stubActor,
-  TEST_PREFIX,
+  withBackgroundDrained,
 } from "../../handlers/__tests__/helpers";
+import { runLiveResult } from "../../__tests__/live-runner";
 import { getRedis } from "../../redis";
 import { createInvitation } from "../create";
 
@@ -68,12 +70,9 @@ describe("createInvitation (use-case)", () => {
     const email = `${TEST_PREFIX}h07-invitee@example.com`;
 
     const before = await rateCount(co);
-    const result = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const result = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     const after = await rateCount(co);
 
     expect(result.ok).toBe(true);
@@ -110,12 +109,9 @@ describe("createInvitation (use-case)", () => {
     await clearRateKey(co);
 
     const before = await rateCount(co);
-    const result = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const result = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     const after = await rateCount(co);
 
     expect(result.ok).toBe(true);
@@ -139,12 +135,9 @@ describe("createInvitation (use-case)", () => {
     const redis = await getRedis();
     await redis.set(`invitation_rate:${co}:${bucket}`, "50", { EX: 3600 });
 
-    const result = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const result = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     expect(result).toEqual({ ok: false, reason: "rate_limited" });
     expect((await invitationRowsByEmail(co, email)).length).toBe(0);
     expect((await auditRowsFor(owner.id, "invitation_sent")).length).toBe(0);
@@ -168,12 +161,9 @@ describe("createInvitation (use-case)", () => {
     const redis = await getRedis();
     await redis.set(`invitation_rate:${co}:${bucket}`, "999", { EX: 3600 });
 
-    const result = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const result = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.reused).toBe(true);
@@ -188,24 +178,18 @@ describe("createInvitation (use-case)", () => {
     const email = `${TEST_PREFIX}h13-invitee@example.com`;
 
     const before = await rateCount(co);
-    const first = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const first = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     expect(first.reused).toBe(false);
     const afterFirst = await rateCount(co);
     expect(afterFirst - before).toBe(1);
 
-    const second = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "MEMBER",
-    });
+    const second = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+    );
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.reused).toBe(true);
@@ -225,12 +209,9 @@ describe("createInvitation (use-case)", () => {
     await clearRateKey(co);
     const email = `${TEST_PREFIX}h12-invitee@example.com`;
 
-    const result = await createInvitation({
-      actorUserId: owner.id,
-      companyId: co,
-      email,
-      role: "ADMIN",
-    });
+    const result = await runLiveResult(
+      createInvitation({ actorUserId: owner.id, companyId: co, email, role: "ADMIN" }),
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const persisted = await findActivePendingInvitation(co, email);
@@ -261,11 +242,13 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
     const spy = spyOn(auth.api, "signInMagicLink");
     try {
       const app = buildTestApp();
-      const res = await app.request(`http://localhost/api/account/companies/${co}/invitations`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, role: "MEMBER" }),
-      });
+      const res = await withBackgroundDrained(async () =>
+        app.request(`http://localhost/api/account/companies/${co}/invitations`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, role: "MEMBER" }),
+        }),
+      );
       expect(res.status).toBe(200);
       const body = (await res.json()) as { reused: boolean };
       expect(body.reused).toBe(false);
@@ -286,11 +269,13 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
     const spy = spyOn(auth.api, "signInMagicLink");
     try {
       const app = buildTestApp();
-      const res = await app.request(`http://localhost/api/account/companies/${co}/invitations`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, role: "MEMBER" }),
-      });
+      const res = await withBackgroundDrained(async () =>
+        app.request(`http://localhost/api/account/companies/${co}/invitations`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email, role: "MEMBER" }),
+        }),
+      );
       expect(res.status).toBe(200);
       const body = (await res.json()) as { reused: boolean };
       expect(body.reused).toBe(true);

@@ -1,13 +1,11 @@
-import { recordInvitationSent } from "@/db/repositories/audit-log";
-import {
-  findActivePendingInvitation,
-  generateInvitationId,
-  generateInvitationToken,
-  insertInvitation,
-  type InvitationRow,
-  type Role,
-} from "@/db/repositories/invitation";
-import { runInTransaction } from "@/db/transaction";
+import { Clock, Effect } from "effect";
+import type { Role } from "@/db/repositories/invitation";
+import type { DbTx } from "@/db/transaction";
+import { AuditLog } from "../audit/ports";
+import { IdGenerator } from "../id-generator";
+import { Transaction } from "../transaction";
+import { RateLimited } from "./errors";
+import { InvitationRepo } from "./ports";
 import { tryConsumeInvitationQuota } from "./rate-limit";
 
 // ADR-0012 (Use-case 層): 招待作成手続 (idempotency + rate-limit + INSERT + audit)。rate-limit を tx 内へ
@@ -16,53 +14,52 @@ import { tryConsumeInvitationQuota } from "./rate-limit";
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // invitation は 24h 有効 (CONTEXT.md 'invitation')
 
-export type CreateInvitationResult =
-  | { ok: true; invitation: InvitationRow; reused: boolean }
-  | { ok: false; reason: "rate_limited" };
-
-export const createInvitation = async (params: {
+export const createInvitation = Effect.fn("invitation.create")(function* (params: {
   actorUserId: string;
   companyId: string;
   email: string;
   role: Role;
-}): Promise<CreateInvitationResult> => {
+}) {
   const { actorUserId, companyId, email, role } = params;
+  const invitations = yield* InvitationRepo;
+  const audit = yield* AuditLog;
+  const ids = yield* IdGenerator;
+  const tx = yield* Transaction;
 
-  const existing = await findActivePendingInvitation(companyId, email);
-  if (existing) {
-    return { ok: true, invitation: existing, reused: true };
-  }
+  const existing = yield* invitations.findActivePending(companyId, email);
+  if (existing) return { invitation: existing, reused: true };
 
-  const withinLimit = await tryConsumeInvitationQuota(companyId);
-  if (!withinLimit) {
-    return { ok: false, reason: "rate_limited" };
-  }
+  const withinLimit = yield* tryConsumeInvitationQuota(companyId);
+  if (!withinLimit) return yield* new RateLimited();
 
-  const row = await runInTransaction(async (tx) => {
-    const inserted = await insertInvitation(
-      {
-        id: generateInvitationId(),
-        companyId,
-        email,
-        role,
-        token: generateInvitationToken(),
-        expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-        invitedByUserId: actorUserId,
-      },
-      tx,
-    );
-    await recordInvitationSent(
-      {
-        actor_user_id: actorUserId,
-        invitation_id: inserted.id,
-        company_id: companyId,
-        invited_email: email,
-        role,
-      },
-      tx,
-    );
-    return inserted;
-  });
+  const nowMillis = yield* Clock.currentTimeMillis;
+  const inserted = yield* tx.run(
+    Effect.fn("invitation.create.apply")(function* (t: DbTx) {
+      const row = yield* invitations.insert(
+        {
+          id: ids.invitationId(),
+          companyId,
+          email,
+          role,
+          token: ids.invitationToken(),
+          expiresAt: new Date(nowMillis + INVITE_TTL_MS),
+          invitedByUserId: actorUserId,
+        },
+        t,
+      );
+      yield* audit.recordInvitationSent(
+        {
+          actor_user_id: actorUserId,
+          invitation_id: row.id,
+          company_id: companyId,
+          invited_email: email,
+          role,
+        },
+        t,
+      );
+      return row;
+    }),
+  );
 
-  return { ok: true, invitation: row, reused: false };
-};
+  return { invitation: inserted, reused: false };
+});

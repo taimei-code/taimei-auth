@@ -4,6 +4,7 @@ import { db } from "@/db/client";
 import { generateCompanyId, insertCompany, softDeleteCompany } from "@/db/repositories/company";
 import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
 import { company, membership, session, user } from "@/db/schema";
+import { runLive } from "../../__tests__/live-runner";
 import { backfillOrphanCleanup } from "../backfill-orphan-cleanup";
 
 const P = "backfill-test-";
@@ -69,7 +70,7 @@ describe("backfillOrphanCleanup", () => {
   test("dry-run: 対象を集計するが一切 mutate しない", async () => {
     const { deleted, orphan, survivor } = await seedGhostScenario();
 
-    const report = await backfillOrphanCleanup({ execute: false });
+    const report = await runLive(backfillOrphanCleanup({ execute: false }));
 
     expect(report.executed).toBe(false);
     expect(report.deletedUserIds).toContain(orphan);
@@ -82,7 +83,7 @@ describe("backfillOrphanCleanup", () => {
   test("execute: ghost membership を物理削除し orphan を連動削除、survivor と ACTIVE 事業所は維持", async () => {
     const { deleted, active, orphan, survivor } = await seedGhostScenario();
 
-    const report = await backfillOrphanCleanup({ execute: true });
+    const report = await runLive(backfillOrphanCleanup({ execute: true }));
 
     expect(report.executed).toBe(true);
     expect(report.deletedUserIds).toContain(orphan);
@@ -98,7 +99,7 @@ describe("backfillOrphanCleanup", () => {
     const u = await seedUser("only");
     await join(u, active, "OWNER");
 
-    const report = await backfillOrphanCleanup({ execute: true });
+    const report = await runLive(backfillOrphanCleanup({ execute: true }));
 
     expect(report.deletedUserIds).not.toContain(u);
     expect(await userExists(u)).toBe(true);

@@ -8,7 +8,9 @@ import {
 } from "@/db/repositories/invitation";
 import { findMembership, type Role, updateMembershipRole } from "@/db/repositories/membership";
 import { auditLog, invitation, membership } from "@/db/schema";
+import { flipLive, runLive, runLiveResult } from "../../__tests__/live-runner";
 import { createSeedHelpers } from "../../handlers/__tests__/helpers";
+import { ExpiredOrUsed } from "../../membership/guard/errors";
 import { acceptInvitation } from "../accept";
 
 // invitation accept use-case (src/invitation/accept.ts) の DB 統合テスト。
@@ -59,10 +61,12 @@ describe("acceptInvitation", () => {
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const result = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: invitationRow,
-      });
+      const result = await runLiveResult(
+        acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        }),
+      );
       expect(result).toEqual({ ok: true, companyId: co });
     } finally {
       warn.mockRestore();
@@ -96,13 +100,15 @@ describe("acceptInvitation", () => {
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       // 契約: entry が reused に振り分けた後は use-case 呼ばない。誤って呼ぶと INSERT が unique 制約
-      // 違反で throw する。この throw 自体を handler 側で握るのは責務外なので、ここでは throw を許容
-      // することだけを固定する (fail-closed で運用ミスを検知する仕組み)。
+      // 違反となり DbError が E に載る (runLive は reject)。この失敗を handler 側で握るのは責務外なので、
+      // ここでは失敗することだけを固定する (fail-closed で運用ミスを検知する仕組み)。
       await expect(
-        acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        }),
+        runLive(
+          acceptInvitation({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        ),
       ).rejects.toThrow();
     } finally {
       warn.mockRestore();
@@ -131,21 +137,22 @@ describe("acceptInvitation", () => {
     // mockRestore 前に済ませてから spy を戻す (実測: PR #109)。
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     let warnCalls: unknown[][] = [];
-    let acceptResult: Awaited<ReturnType<typeof acceptInvitation>>;
+    let acceptFailure: unknown;
     try {
-      acceptResult = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: invitationRow,
-      });
+      acceptFailure = await flipLive(
+        acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        }),
+      );
       warnCalls = warn.mock.calls.map((c) => Array.from(c));
     } finally {
       warn.mockRestore();
     }
-    expect(acceptResult.ok).toBe(false);
-    if (!acceptResult.ok) {
-      expect(acceptResult.reason).toBe("expired_or_used");
-      expect(acceptResult.audit).toBe("inviter_not_owner_or_missing");
-    }
+    // 拒否は E channel の ExpiredOrUsed (410 / expired_or_used)。内訳は下の audit payload の reason が持つ。
+    expect(acceptFailure).toBeInstanceOf(ExpiredOrUsed);
+    const rejected = acceptFailure as ExpiredOrUsed;
+    expect([rejected.error, rejected.status]).toEqual(["expired_or_used", 410]);
 
     // reject 経路は tx を rollback させるため、invitation は PENDING のまま (accept 誤 commit の regression 検知)。
     expect((await reloadInvitation(inv.token))?.status).toBe("PENDING");
@@ -195,11 +202,13 @@ describe("acceptInvitation", () => {
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const result = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: invitationRow,
-      });
-      expect(result.ok).toBe(false);
+      const failure = await flipLive(
+        acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        }),
+      );
+      expect(failure).toBeInstanceOf(ExpiredOrUsed);
     } finally {
       warn.mockRestore();
     }
@@ -224,10 +233,12 @@ describe("acceptInvitation", () => {
     if (!invitationRow) throw new Error("seed failed");
 
     // 1 度 accept で PENDING を消費する。
-    const first = await acceptInvitation({
-      actor: { id: invitee.id, email: invitee.email },
-      invitation: invitationRow,
-    });
+    const first = await runLiveResult(
+      acceptInvitation({
+        actor: { id: invitee.id, email: invitee.email },
+        invitation: invitationRow,
+      }),
+    );
     expect(first.ok).toBe(true);
 
     // 再度同じ invitation を渡すと markInvitationAccepted が 0 件更新 → double_accept で reject。
@@ -236,15 +247,15 @@ describe("acceptInvitation", () => {
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const second = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: stale,
-      });
-      expect(second.ok).toBe(false);
-      if (!second.ok) expect(second.audit).toBe("double_accept");
+      const second = await flipLive(
+        acceptInvitation({ actor: { id: invitee.id, email: invitee.email }, invitation: stale }),
+      );
+      expect(second).toBeInstanceOf(ExpiredOrUsed);
     } finally {
       warn.mockRestore();
     }
+    const audit = await firstAudit(invitee.id, "invitation_accept_rejected");
+    expect((audit?.payload as Record<string, unknown>).reason).toBe("double_accept");
   });
 
   test("QA-D-03 / QA-M-06 unknown invitation.role (直 INSERT 由来) → 410 + reject audit (attempted_role が unknown 文字列)", async () => {
@@ -272,18 +283,20 @@ describe("acceptInvitation", () => {
 
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      const result = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: invitationRow,
-      });
-      expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.audit).toBe("unknown_invited_role");
+      const failure = await flipLive(
+        acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        }),
+      );
+      expect(failure).toBeInstanceOf(ExpiredOrUsed);
     } finally {
       warn.mockRestore();
     }
     const audit = await firstAudit(invitee.id, "invitation_accept_rejected");
     const payload = audit?.payload as Record<string, unknown>;
     expect(payload.attempted_role).toBe("SUPERVISOR");
+    expect(payload.reason).toBe("unknown_invited_role");
   });
 
   test("QA-M-07 double-accept 並行 (同 token へ 2 client 同時) → 片方のみ ok、他方 410 + double_accept audit", async () => {
@@ -303,18 +316,23 @@ describe("acceptInvitation", () => {
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const results = await Promise.allSettled([
-        acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        }),
-        acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        }),
+        runLive(
+          acceptInvitation({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        ),
+        runLive(
+          acceptInvitation({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        ),
       ]);
       const outcomes = results.map((r) => (r.status === "fulfilled" ? r.value : "throw"));
-      // 片方は ok、もう片方は 410 or unique 制約で throw (どちらも membership を重複作らない)。
-      const oks = outcomes.filter((o) => typeof o === "object" && o.ok);
+      // 片方は成功、もう片方は ExpiredOrUsed (410) か unique 制約の DbError で reject
+      // (どちらも membership を重複作らない)。
+      const oks = outcomes.filter((o) => typeof o === "object");
       expect(oks.length).toBe(1);
     } finally {
       warn.mockRestore();
@@ -347,11 +365,13 @@ describe("acceptInvitation", () => {
       if (!invitationRow) throw new Error("seed failed");
       const warn = spyOn(console, "warn").mockImplementation(() => {});
       try {
-        const result = await acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        });
-        expect(result.ok).toBe(false);
+        const failure = await flipLive(
+          acceptInvitation({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        );
+        expect(failure).toBeInstanceOf(ExpiredOrUsed);
       } finally {
         warn.mockRestore();
       }
@@ -374,11 +394,13 @@ describe("acceptInvitation", () => {
       });
       const invitationRow = await reloadInvitation(inv.token);
       if (!invitationRow) throw new Error("seed failed");
-      const acceptResult = await acceptInvitation({
-        actor: { id: invitee.id, email: invitee.email },
-        invitation: invitationRow,
-      });
-      expect(acceptResult.ok).toBe(true);
+      const acceptResult = await runLive(
+        acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        }),
+      );
+      expect(acceptResult.companyId).toBe(co);
       expect((await findMembership(invitee.id, co))?.role).toBe("OWNER");
       // accept 後の降格は通常通り適用可能 (別 OWNER 残存)。
       await updateMembershipRole(inviter.id, co, "ADMIN");

@@ -1,38 +1,47 @@
 // MFA 運用救済 CLI (位置づけと手順: ADR-0016 §8.1 / README.md の運用節)。
 //   bun run management/disable-user-mfa.ts <userId>
 // 1 tx で mfa_totp 行とリカバリーコードを全削除する。guard 参加・protocol 照合は存在しない (ADR-0016)。
-import { recordMfaDisabled } from "../db/repositories/audit-log";
-import { deleteMfaTotp, deleteRecoveryCodesByUserId } from "../db/repositories/mfa-totp";
-import { findUserById } from "../db/repositories/user";
-import { runInTransaction } from "../db/transaction";
-import { captureAuditLogError } from "../src/audit-error";
+import { Effect } from "effect";
+import { UserRepo } from "../src/account/ports";
+import { AuditLog } from "../src/audit/ports";
+import { swallowAuditFailure } from "../src/audit/report-failure";
 import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
+import { MfaTotpRepo } from "../src/mfa/totp/ports";
+import { getRuntime } from "../src/runtime";
+import { Transaction } from "../src/transaction";
 
+// CLI の出力形 (wire ではない)。失敗 class ではなく Result のまま持つのは toDisableUserMfaReport が
+// stream / exit code / JSON キーへ写す純関数だから。
 export type ForceDisableResult =
   | { ok: false; error: "not_found" }
   | { ok: true; changed: false }
   | { ok: true; changed: true; notified: boolean };
 
-export async function forceDisableMfa(userId: string): Promise<ForceDisableResult> {
-  const user = await findUserById(userId);
-  if (!user) return { ok: false, error: "not_found" };
+export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function* (userId: string) {
+  const users = yield* UserRepo;
+  const audit = yield* AuditLog;
+  const mfa = yield* MfaTotpRepo;
+  const tx = yield* Transaction;
 
-  const deleted = await runInTransaction(async (tx) => {
-    const rows = await deleteMfaTotp(userId, tx);
-    await deleteRecoveryCodesByUserId(userId, tx);
-    return rows;
-  });
-  if (deleted === 0) return { ok: true, changed: false };
+  const user = yield* users.findById(userId);
+  if (!user) return { ok: false, error: "not_found" } satisfies ForceDisableResult;
+
+  const deleted = yield* tx.run((t) =>
+    Effect.gen(function* () {
+      const rows = yield* mfa.deleteMfaTotp(userId, t);
+      yield* mfa.deleteRecoveryCodesByUserId(userId, t);
+      return rows;
+    }),
+  );
+  if (deleted === 0) return { ok: true, changed: false } satisfies ForceDisableResult;
 
   // 記帳は best-effort — 救済の成立 (行削除) を audit 失敗で取り消さない。
-  await recordMfaDisabled({
-    user_id: userId,
-    ip: null,
-    userAgent: "management/disable-user-mfa",
-  }).catch((error: unknown) => captureAuditLogError("mfa_disabled", error));
-  const notified = await notifyMfaDisabledForManagement(user.email);
-  return { ok: true, changed: true, notified };
-}
+  yield* audit
+    .recordMfaDisabled({ user_id: userId, ip: null, userAgent: "management/disable-user-mfa" })
+    .pipe(swallowAuditFailure("mfa_disabled"));
+  const notified = yield* notifyMfaDisabledForManagement(user.email);
+  return { ok: true, changed: true, notified } satisfies ForceDisableResult;
+});
 
 type DisableUserMfaReport = {
   stream: "stdout" | "stderr";
@@ -72,7 +81,11 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  const report = toDisableUserMfaReport(userId, await forceDisableMfa(userId));
+  // use-case は Effect (ADR-0017)。CLI も app と同じ runtime (AppLayer) で走らせ、live ports を共有する。
+  const report = toDisableUserMfaReport(
+    userId,
+    await getRuntime().runPromise(forceDisableMfa(userId)),
+  );
   const json = JSON.stringify(report.body, null, 2);
   if (report.stream === "stdout") console.log(json);
   else console.error(json);

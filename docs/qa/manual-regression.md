@@ -36,12 +36,12 @@
 ## QA-MR-03: workerd 固有挙動 — Worker hung 非再発 (#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
-- **前提**: `wrangler dev --remote` (実 workerd + 実バインディング。local の miniflare では再現しない — ルート CLAUDE.md の gotcha 参照)
+- **前提**: 実 workerd + 実バインディングでしか再現しない (local の miniflare では出ない — ルート CLAUDE.md の gotcha 参照)。このため確認は手動でなく `deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う: `wrangler versions upload` した未 deploy の version の preview URL に `/health` を 20 連打し、全部 200 でなければ `wrangler versions deploy` に進まない
 - **手順**:
-  1. `wrangler dev --remote` で起動する
-  2. DB を踏む endpoint (`/health`) を 20 回程度連打する (warm isolate に前 request のアイドル接続を掴ませる)
-  3. `wrangler tail` で `outcome: exception` が出ていないことを確認する
-- **期待結果**: すべて 200 (または正しい degraded 応答) で、"Worker hung" による 500 が発生しない
+  1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
+  2. step のログで `/health: 20 / 20 returned 200` を確認する
+  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID の先頭 8 桁で `bash scripts/preview-smoke.sh https://<先頭8桁>-taimei-auth.<subdomain>.workers.dev` を実行する (`wrangler dev --remote` でも同じ観測になる。preview URL の呼び出しは `wrangler tail` に流れないため、例外の不在は応答が 1101 の 500 でないことで判定する)
+- **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 
 ## QA-MR-04: Resend 実メールのレンダリング
 
@@ -112,3 +112,14 @@
   3. 事業所名を入力して「事業所を作成」を押す
   4. DevTools → Network で作成直後の `GET /api/account/memberships` の応答本文を確認する
 - **期待結果**: 作成の直後 (60 秒待たず) に `/account` が「現在の事業所」に作成した事業所を表示し、事業所登録画面へ戻らない。手順 4 の応答に作成した membership が 1 件含まれる
+
+## QA-MR-11: Effect runtime と ALS の共存 (remote workerd、ADR-0017)
+
+- **契機**: `effect` の version 変更、ADR-0017 の Stage 完了 PR (runtime / adapter / ports / Guard / Use-case を Effect 様式へ切り替える PR)、および本番デプロイ後
+- **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd + 実 binding で動くことと、guard の failure が wire に写像されることは `deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` 20 連打と未認証 `GET /api/account/memberships` の 401 `{"error":"unauthorized"}`)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime 機構は `/health` と同じ。残るリスクは adapter が Sentry に送る 500 と `wrangler rollback` で受ける)
+- **手順**:
+  1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"error":"unauthorized"}` が出ていることを確認する
+  2. デプロイ後、本番にブラウザでログインして `/account` を開き、現在の事業所と所属一覧が表示されることを確認する (guard の actor 解決 → ports → RoutingPool が Effect runtime 上で動くことの観測)
+  3. `/account/members` で自分以外の member の役割を 1 段変えて戻す (use-case の tx が request の ALS pool で commit することの観測。変更は元に戻す)
+  4. Sentry に `handler: runRoute` / `runMiddleware` / `runRpc` tag の新規 event が出ていないことを確認する
+- **期待結果**: 1 が緑、2〜3 が期待どおり、4 に新規 event が無い (用語は ADR-0017 の Decision)
