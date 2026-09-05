@@ -33,17 +33,15 @@ function copyEnvToProcess(env: Env): void {
   }
 }
 
-// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → getRuntime → buildApp (buildAuth が db /
-// redisStorage を、buildApp が process.env を読む)。getRuntime は Layer が I/O resource を持たないため順序に依存
-// しないが、Layer 構築の失敗を最初の request でなく bootstrap で出すために app を memo する前に 1 回呼ぶ
-// (ADR-0017 Decision の runtime 項)。実 Pool は fetch ごとに runWithRequestPool で供給。
+// 順序は load-bearing: env→process.env コピー → initRedis → initAuth → buildApp (buildAuth が db / redisStorage を、
+// buildApp が process.env を読む)。runtime は最初の adapter / hook 呼び出しで作る (AppLayer は全部 Layer.succeed で
+// 構築で失敗する経路が無い。詳細: src/runtime.ts)。実 Pool は fetch ごとに runWithRequestPool で供給。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
   initRedis();
   initAuth();
-  getRuntime();
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
       app.all("*", (c) => {

@@ -185,3 +185,17 @@ describe("revokeAllSessionsForUser の窓口", () => {
     expect(offenders).toEqual(["src/account/revoke-sessions.ts"]);
   });
 });
+
+// ---- AppLayer の構築失敗経路が無い (ADR-0017 Decision の runtime 項): ManagedRuntime.make は Layer を初回 run で構築するため、
+// 構築で失敗しうる Layer (Layer.effect / scoped / unwrap 等) を足すと bootstrap でなく本番の初回 request で落ちる。
+// Layer.succeed / mergeAll に限る間はその経路が無い。必要になったら、この gate と一緒に bootstrap の eager 構築を戻す ----
+
+describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {
+    const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
+      excludeTests: true,
+      lines: true,
+    });
+    expect(hits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
+  });
+});
