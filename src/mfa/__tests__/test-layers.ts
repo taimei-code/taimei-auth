@@ -1,39 +1,11 @@
 import { Effect, Layer } from "effect";
 import { AuditLog } from "../../audit/ports";
 import { DbError } from "../../errors";
-import { AppLayer, type AppServices } from "../../runtime";
-import { flipLive, partial, runLive } from "../../__tests__/live-runner";
+import { partial } from "../../__tests__/live-runner";
 import { Locked } from "../error-mapping";
 import { MfaDisableBudget, MfaIssuer, MfaNotifier, MfaSessions } from "../totp/ports";
 
-// MFA の use-case テスト用 test Layer (design §3.14)。runner は live-runner.ts と同一のものを別名で使う。
-export { partial, runLive as runMfa, flipLive as flipMfa };
-
-export type MfaResult<A> =
-  | ({ ok: true } & (A extends object ? A : Record<never, never>))
-  | { ok: false; error: string; status: number | undefined };
-
-// 旧 use-case の Result 形 ({ ok, error, status }) に写像する。既存 DB 統合テストの assertion を保つ shim で、
-// failure class の error / status が旧定数と一致することも同時に検査している。
-export const runMfaResult = <A, E>(
-  program: Effect.Effect<A, E, AppServices>,
-): Promise<MfaResult<A>> =>
-  Effect.runPromise(
-    Effect.provide(
-      Effect.match(program, {
-        onFailure: (e) => ({
-          ok: false as const,
-          error: (e as { error?: string }).error ?? String(e),
-          status: (e as { status?: number }).status,
-        }),
-        onSuccess: (a) =>
-          ({ ok: true as const, ...(typeof a === "object" && a !== null ? a : {}) }) as {
-            ok: true;
-          } & (A extends object ? A : Record<never, never>),
-      }),
-      AppLayer,
-    ),
-  );
+// MFA の use-case テスト用 test Layer (design §3.14)。runner は live-runner.ts の runTest を使う。
 
 export const issuerLayer = (appName: string): Layer.Layer<MfaIssuer> =>
   Layer.succeed(MfaIssuer, MfaIssuer.of({ appName: Effect.succeed(appName) }));
@@ -85,6 +57,6 @@ export const auditFailingLayer = (cause: unknown): Layer.Layer<AuditLog> =>
     partial<AuditLog["Service"]>({
       recordMfaEnabled: () => Effect.fail(new DbError({ cause })),
       recordMfaDisabled: () => Effect.fail(new DbError({ cause })),
-      append: () => Effect.fail(new DbError({ cause })),
+      appendAuditLog: () => Effect.fail(new DbError({ cause })),
     }),
   );

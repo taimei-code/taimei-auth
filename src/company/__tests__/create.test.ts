@@ -1,157 +1,159 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, eq, like } from "drizzle-orm";
-
-import { db } from "@/db/client";
-import { auditLog, company, membership, user } from "@/db/schema";
-import { softDeleteCompany } from "@/db/repositories/company";
-import { findMembershipsByUserId } from "@/db/repositories/membership";
-import { findUserById } from "@/db/repositories/user";
-import { runLive, runLiveResult } from "../../__tests__/live-runner";
+import { Effect } from "effect";
+import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
 import { addCompany, createSignupCompany } from "../create";
+import { AlreadyExists } from "../errors";
 
-const USER_ID_PREFIX = "create-test-user-";
+// use-case が作る company も prefix 名 (db.ids.companyName) にして cleanup の対象に載せる。
+const P = "create-test-";
+const { run, cleanup } = dbTest(P);
+const seedUser = (suffix: string) =>
+  TestDb.use((db) => db.seedUser(suffix, { emailVerified: false })).pipe(Effect.map((u) => u.id));
 
-// この test が作る company は random id なので、対象 user の membership 経由で特定して掃除する。
-// FK 制約: membership.company_id は ON DELETE RESTRICT なので company より先に membership を消す。
-async function cleanup() {
-  const users = await db
-    .select({ id: user.id })
-    .from(user)
-    .where(like(user.id, `${USER_ID_PREFIX}%`));
-  const companyIds = new Set<string>();
-  for (const u of users) {
-    const ms = await db.select().from(membership).where(eq(membership.userId, u.id));
-    for (const m of ms) companyIds.add(m.companyId);
-  }
-  await db.delete(auditLog).where(like(auditLog.userId, `${USER_ID_PREFIX}%`));
-  await db.delete(membership).where(like(membership.userId, `${USER_ID_PREFIX}%`));
-  for (const id of companyIds) {
-    await db.delete(company).where(eq(company.id, id)); // user.last_used は ON DELETE SET NULL
-  }
-  await db.delete(user).where(like(user.id, `${USER_ID_PREFIX}%`));
-}
+const countCompanyCreatedAudit = (userId: string, companyId: string) =>
+  auditRowsFor(userId, "company_created").pipe(
+    Effect.map(
+      (rows) =>
+        rows.filter((r) => (r.payload as { company_id?: string }).company_id === companyId).length,
+    ),
+  );
 
-async function seedUser(suffix: string): Promise<string> {
-  const userId = `${USER_ID_PREFIX}${suffix}`;
-  await db.insert(user).values({
-    id: userId,
-    name: `Test ${suffix}`,
-    email: `${userId}@example.com`,
-    emailVerified: false,
+const activeMemberships = (userId: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const rows = yield* db.readMemberships(userId);
+    const active = [];
+    for (const m of rows) {
+      if ((yield* db.readCompany(m.companyId))?.activationStatus === "ACTIVE") active.push(m);
+    }
+    return active;
   });
-  return userId;
-}
-
-async function countCompanyCreatedAudit(userId: string, companyId: string): Promise<number> {
-  const rows = await db
-    .select()
-    .from(auditLog)
-    .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, "company_created")));
-  return rows.filter((r) => (r.payload as { company_id?: string }).company_id === companyId).length;
-}
 
 describe("createSignupCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("membership 0 件なら作成し OWNER + last_used + audit を残す", async () => {
-    const userId = await seedUser("signup-ok");
-    const result = await runLiveResult(
-      createSignupCompany(userId, { name: "Signup Co", orgCode: "CORPORATE" }),
-    );
+  test("membership 0 件なら作成し OWNER + last_used + audit を残す", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("signup-ok");
+        const result = yield* createSignupCompany(userId, {
+          name: db.ids.companyName("signup"),
+          orgCode: "CORPORATE",
+        });
 
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.membership.role).toBe("OWNER");
-    expect(result.company.activationStatus).toBe("ACTIVE");
+        expect(result.membership.role).toBe("OWNER");
+        expect(result.company.activationStatus).toBe("ACTIVE");
 
-    const userRow = await findUserById(userId);
-    expect(userRow?.lastUsedCompanyId).toBe(result.company.id);
-    expect(await countCompanyCreatedAudit(userId, result.company.id)).toBe(1);
-  });
+        const userRow = yield* db.readUser(userId);
+        expect(userRow?.lastUsedCompanyId).toBe(result.company.id);
+        expect(yield* countCompanyCreatedAudit(userId, result.company.id)).toBe(1);
+      }),
+    ));
 
-  test("既に membership があれば already_exists を返し新規作成しない", async () => {
-    const userId = await seedUser("signup-dup");
-    const first = await runLiveResult(
-      createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" }),
-    );
-    expect(first.ok).toBe(true);
+  test("既に membership があれば already_exists を返し新規作成しない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("signup-dup");
+        yield* createSignupCompany(userId, {
+          name: db.ids.companyName("first"),
+          orgCode: "PERSONAL",
+        });
 
-    const second = await runLiveResult(
-      createSignupCompany(userId, { name: "Second", orgCode: "PERSONAL" }),
-    );
-    expect(second.ok).toBe(false);
-    if (second.ok) return;
-    expect(second.reason).toBe("already_exists");
+        const e = yield* Effect.flip(
+          createSignupCompany(userId, { name: db.ids.companyName("second"), orgCode: "PERSONAL" }),
+        );
+        expectFailure(e, AlreadyExists, "already_exists", 409);
 
-    const memberships = await findMembershipsByUserId(userId);
-    expect(memberships.length).toBe(1);
-  });
+        const memberships = yield* db.readMemberships(userId);
+        expect(memberships.length).toBe(1);
+      }),
+    ));
 
   // 0 件ガードが ACTIVE 基準であること (根拠: src/company/create.ts) を固定する。
   // 全 membership 基準に退化すると、全削除した user の再 signup が残存 membership に弾かれ
   // /account ⇄ signup/company の redirect loop に陥る。
-  test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", async () => {
-    const userId = await seedUser("signup-after-delete");
-    const first = await runLiveResult(
-      createSignupCompany(userId, { name: "First", orgCode: "PERSONAL" }),
-    );
-    expect(first.ok).toBe(true);
-    if (!first.ok) return;
+  test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("signup-after-delete");
+        const first = yield* createSignupCompany(userId, {
+          name: db.ids.companyName("first"),
+          orgCode: "PERSONAL",
+        });
 
-    await softDeleteCompany(first.company.id);
+        yield* db.markCompanyDeleted(first.company.id);
 
-    const second = await runLiveResult(
-      createSignupCompany(userId, { name: "Second", orgCode: "CORPORATE" }),
-    );
-    expect(second.ok).toBe(true);
-    if (!second.ok) return;
-    expect(second.membership.role).toBe("OWNER");
-    expect(second.company.activationStatus).toBe("ACTIVE");
+        const second = yield* createSignupCompany(userId, {
+          name: db.ids.companyName("second"),
+          orgCode: "CORPORATE",
+        });
+        expect(second.membership.role).toBe("OWNER");
+        expect(second.company.activationStatus).toBe("ACTIVE");
 
-    const active = (await findMembershipsByUserId(userId)).filter(
-      (m) => m.companyActivationStatus === "ACTIVE",
-    );
-    expect(active.length).toBe(1);
-    expect(active.at(0)?.companyId).toBe(second.company.id);
-  });
+        const active = yield* activeMemberships(userId);
+        expect(active.length).toBe(1);
+        expect(active.at(0)?.companyId).toBe(second.company.id);
+      }),
+    ));
 });
 
 describe("addCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("既存 membership があっても作成し OWNER + last_used 更新 + audit を残す", async () => {
-    const userId = await seedUser("add-existing");
-    const first = await runLiveResult(
-      createSignupCompany(userId, { name: "Base", orgCode: "CORPORATE" }),
-    );
-    expect(first.ok).toBe(true);
+  test("既存 membership があっても作成し OWNER + last_used 更新 + audit を残す", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("add-existing");
+        yield* createSignupCompany(userId, {
+          name: db.ids.companyName("base"),
+          orgCode: "CORPORATE",
+        });
 
-    const added = await runLive(addCompany(userId, { name: "Added", orgCode: "CORPORATE" }));
-    expect(added.membership.role).toBe("OWNER");
+        const added = yield* addCompany(userId, {
+          name: db.ids.companyName("added"),
+          orgCode: "CORPORATE",
+        });
+        expect(added.membership.role).toBe("OWNER");
 
-    const userRow = await findUserById(userId);
-    expect(userRow?.lastUsedCompanyId).toBe(added.company.id); // 新事業所へ切替
-    expect(await countCompanyCreatedAudit(userId, added.company.id)).toBe(1);
+        const userRow = yield* db.readUser(userId);
+        expect(userRow?.lastUsedCompanyId).toBe(added.company.id); // 新事業所へ切替
+        expect(yield* countCompanyCreatedAudit(userId, added.company.id)).toBe(1);
 
-    const memberships = await findMembershipsByUserId(userId);
-    expect(memberships.length).toBe(2);
-  });
+        const memberships = yield* db.readMemberships(userId);
+        expect(memberships.length).toBe(2);
+      }),
+    ));
 
-  test("個人事業主を 2 つ作れる (制限なし)", async () => {
-    const userId = await seedUser("add-personal-dup");
-    const one = await runLive(addCompany(userId, { name: "Personal 1", orgCode: "PERSONAL" }));
-    const two = await runLive(addCompany(userId, { name: "Personal 2", orgCode: "PERSONAL" }));
+  test("個人事業主を 2 つ作れる (制限なし)", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("add-personal-dup");
+        const one = yield* addCompany(userId, {
+          name: db.ids.companyName("personal-1"),
+          orgCode: "PERSONAL",
+        });
+        const two = yield* addCompany(userId, {
+          name: db.ids.companyName("personal-2"),
+          orgCode: "PERSONAL",
+        });
 
-    expect(one.company.id).not.toBe(two.company.id);
-    expect(one.company.orgCode).toBe("PERSONAL");
-    expect(two.company.orgCode).toBe("PERSONAL");
+        expect(one.company.id).not.toBe(two.company.id);
+        expect(one.company.orgCode).toBe("PERSONAL");
+        expect(two.company.orgCode).toBe("PERSONAL");
 
-    const memberships = await findMembershipsByUserId(userId);
-    expect(memberships.length).toBe(2);
+        const memberships = yield* db.readMemberships(userId);
+        expect(memberships.length).toBe(2);
 
-    const userRow = await findUserById(userId);
-    expect(userRow?.lastUsedCompanyId).toBe(two.company.id); // 最後に作った方が current
-  });
+        const userRow = yield* db.readUser(userId);
+        expect(userRow?.lastUsedCompanyId).toBe(two.company.id); // 最後に作った方が current
+      }),
+    ));
 });

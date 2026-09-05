@@ -1,216 +1,204 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { and, eq, like } from "drizzle-orm";
-import { db } from "@/db/client";
-import { findCompanyById, generateCompanyId, insertCompany } from "@/db/repositories/company";
-import {
-  generateInvitationId,
-  generateInvitationToken,
-  insertInvitation,
-} from "@/db/repositories/invitation";
-import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
-import { findUserById } from "@/db/repositories/user";
-import { auditLog, company, invitation, membership, session, user } from "@/db/schema";
-import { runLiveResult } from "../../__tests__/live-runner";
+import { Effect, Exit } from "effect";
+import { Forbidden } from "../../membership/guard/errors";
+import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
 import { deleteCompany } from "../delete";
+import { NotFoundOrAlreadyDeleted } from "../errors";
 
 const P = "delco-test-";
+const { run, cleanup } = dbTest(P);
 
-async function cleanup() {
-  await db.delete(auditLog).where(like(auditLog.userId, `${P}%`));
-  await db.delete(invitation).where(like(invitation.email, `${P}%`));
-  await db.delete(session).where(like(session.userId, `${P}%`));
-  await db.delete(membership).where(like(membership.userId, `${P}%`));
-  await db.delete(company).where(like(company.name, `${P}%`));
-  await db.delete(user).where(like(user.id, `${P}%`));
-}
-
-async function seedUser(suffix: string, lastUsedCompanyId?: string): Promise<string> {
-  const id = `${P}u-${suffix}`;
-  await db.insert(user).values({
-    id,
-    name: `U ${suffix}`,
-    email: `${P}${suffix}@example.com`,
-    emailVerified: false,
-    lastUsedCompanyId: lastUsedCompanyId ?? null,
+const seedUser = (suffix: string, lastUsedCompanyId?: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const u = yield* db.seedUser(suffix, {
+      emailVerified: false,
+      lastUsedCompanyId: lastUsedCompanyId ?? null,
+    });
+    yield* db.seedSession(u.id, suffix);
+    return u.id;
   });
-  await db.insert(session).values({
-    id: `${P}s-${suffix}`,
-    token: `${P}tok-${suffix}`,
-    userId: id,
-    expiresAt: new Date(Date.now() + 86_400_000),
-  });
-  return id;
-}
 
-async function seedCompany(suffix: string): Promise<string> {
-  const id = generateCompanyId();
-  await insertCompany({ id, name: `${P}co-${suffix}`, orgCode: "PERSONAL" });
-  return id;
-}
+const seedCompany = (suffix: string) => TestDb.use((db) => db.seedCompany(suffix));
 
-async function join(
-  userId: string,
-  companyId: string,
-  role: "OWNER" | "ADMIN" | "MEMBER" = "OWNER",
-) {
-  await insertMembership({ id: generateMembershipId(), userId, companyId, role });
-}
+const join = (userId: string, companyId: string, role: "OWNER" | "ADMIN" | "MEMBER" = "OWNER") =>
+  TestDb.use((db) => db.seedMembership(userId, companyId, role));
 
-async function membershipCount(companyId: string): Promise<number> {
-  return (await db.select().from(membership).where(eq(membership.companyId, companyId))).length;
-}
+const membershipCount = (companyId: string) => TestDb.use((db) => db.countMemberships(companyId));
 
-async function auditCount(userId: string, eventType: string): Promise<number> {
-  return (
-    await db
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.userId, userId), eq(auditLog.eventType, eventType)))
-  ).length;
-}
+const auditCount = (userId: string, eventType: string) =>
+  auditRowsFor(userId, eventType).pipe(Effect.map((rows) => rows.length));
 
 describe("deleteCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("唯一の事業所を sole OWNER が削除 → company DELETED / membership 0 / actor も削除", async () => {
-    const ownerId = await seedUser("sole");
-    const companyId = await seedCompany("sole");
-    await join(ownerId, companyId);
+  test("唯一の事業所を sole OWNER が削除 → company DELETED / membership 0 / actor も削除", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("sole");
+        const companyId = yield* seedCompany("sole");
+        yield* join(ownerId, companyId);
 
-    const result = await runLiveResult(deleteCompany(ownerId, companyId));
+        const result = yield* deleteCompany(ownerId, companyId);
 
-    expect(result).toEqual({ ok: true, actorDeleted: true });
-    expect((await findCompanyById(companyId))?.activationStatus).toBe("DELETED");
-    expect(await membershipCount(companyId)).toBe(0);
-    expect(await findUserById(ownerId)).toBeUndefined();
-    expect(await auditCount(ownerId, "company_deleted")).toBe(1);
-    expect(await auditCount(ownerId, "membership_removed")).toBe(1);
-    expect(await auditCount(ownerId, "account_delete")).toBe(1);
-    const sessions = await db.select().from(session).where(eq(session.userId, ownerId));
-    expect(sessions.length).toBe(0);
-  });
+        expect(result).toEqual({ actorDeleted: true });
+        expect((yield* db.readCompany(companyId))?.activationStatus).toBe("DELETED");
+        expect(yield* membershipCount(companyId)).toBe(0);
+        expect(yield* db.readUser(ownerId)).toBeUndefined();
+        expect(yield* auditCount(ownerId, "company_deleted")).toBe(1);
+        expect(yield* auditCount(ownerId, "membership_removed")).toBe(1);
+        expect(yield* auditCount(ownerId, "account_delete")).toBe(1);
+        expect((yield* db.readSessions(ownerId)).length).toBe(0);
+      }),
+    ));
 
-  test("複数所属の OWNER が 1 事業所を削除 → actor は残り他事業所所属も無傷", async () => {
-    const ownerId = await seedUser("multi");
-    const target = await seedCompany("multi-target");
-    const other = await seedCompany("multi-other");
-    await join(ownerId, target);
-    await join(ownerId, other);
+  test("複数所属の OWNER が 1 事業所を削除 → actor は残り他事業所所属も無傷", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("multi");
+        const target = yield* seedCompany("multi-target");
+        const other = yield* seedCompany("multi-other");
+        yield* join(ownerId, target);
+        yield* join(ownerId, other);
 
-    const result = await runLiveResult(deleteCompany(ownerId, target));
+        const result = yield* deleteCompany(ownerId, target);
 
-    expect(result).toEqual({ ok: true, actorDeleted: false });
-    expect(await findUserById(ownerId)).toBeDefined();
-    expect(await membershipCount(target)).toBe(0);
-    expect(await membershipCount(other)).toBe(1);
-  });
+        expect(result).toEqual({ actorDeleted: false });
+        expect(yield* db.readUser(ownerId)).toBeDefined();
+        expect(yield* membershipCount(target)).toBe(0);
+        expect(yield* membershipCount(other)).toBe(1);
+      }),
+    ));
 
-  test("他に所属の無いメンバーは連動削除、他事業所所属メンバーは残る", async () => {
-    const ownerId = await seedUser("mix-owner");
-    const orphanMember = await seedUser("mix-orphan");
-    const survivor = await seedUser("mix-survivor");
-    const target = await seedCompany("mix-target");
-    const other = await seedCompany("mix-other");
-    await join(ownerId, target);
-    await join(orphanMember, target, "MEMBER");
-    await join(survivor, target, "MEMBER");
-    await join(survivor, other, "OWNER");
+  test("他に所属の無いメンバーは連動削除、他事業所所属メンバーは残る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("mix-owner");
+        const orphanMember = yield* seedUser("mix-orphan");
+        const survivor = yield* seedUser("mix-survivor");
+        const target = yield* seedCompany("mix-target");
+        const other = yield* seedCompany("mix-other");
+        yield* join(ownerId, target);
+        yield* join(orphanMember, target, "MEMBER");
+        yield* join(survivor, target, "MEMBER");
+        yield* join(survivor, other, "OWNER");
 
-    await runLiveResult(deleteCompany(ownerId, target));
+        yield* deleteCompany(ownerId, target);
 
-    expect(await findUserById(orphanMember)).toBeUndefined();
-    expect(await findUserById(survivor)).toBeDefined();
-    expect(await membershipCount(other)).toBe(1);
-  });
+        expect(yield* db.readUser(orphanMember)).toBeUndefined();
+        expect(yield* db.readUser(survivor)).toBeDefined();
+        expect(yield* membershipCount(other)).toBe(1);
+      }),
+    ));
 
-  test("削除 company を last_used に持つ生存メンバーは残存所属へ付け替え", async () => {
-    const ownerId = await seedUser("re-owner");
-    const target = await seedCompany("re-target");
-    const other = await seedCompany("re-other");
-    await join(ownerId, target);
-    const survivor = await seedUser("re-survivor", target);
-    await join(survivor, target, "MEMBER");
-    await join(survivor, other, "MEMBER");
+  test("削除 company を last_used に持つ生存メンバーは残存所属へ付け替え", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("re-owner");
+        const target = yield* seedCompany("re-target");
+        const other = yield* seedCompany("re-other");
+        yield* join(ownerId, target);
+        const survivor = yield* seedUser("re-survivor", target);
+        yield* join(survivor, target, "MEMBER");
+        yield* join(survivor, other, "MEMBER");
 
-    await runLiveResult(deleteCompany(ownerId, target));
+        yield* deleteCompany(ownerId, target);
 
-    expect((await findUserById(survivor))?.lastUsedCompanyId).toBe(other);
-  });
+        expect((yield* db.readUser(survivor))?.lastUsedCompanyId).toBe(other);
+      }),
+    ));
 
-  test("PENDING invitation は REVOKED 化される", async () => {
-    const ownerId = await seedUser("inv-owner");
-    const target = await seedCompany("inv-target");
-    const other = await seedCompany("inv-other");
-    await join(ownerId, target);
-    await join(ownerId, other); // 招待者 (owner) が orphan 削除されず生存し REVOKED を観測できるようにする
-    const inv = await insertInvitation({
-      id: generateInvitationId(),
-      companyId: target,
-      email: `${P}invitee@example.com`,
-      role: "MEMBER",
-      token: generateInvitationToken(),
-      expiresAt: new Date(Date.now() + 86_400_000),
-      invitedByUserId: ownerId,
-    });
+  test("PENDING invitation は REVOKED 化される", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("inv-owner");
+        const target = yield* seedCompany("inv-target");
+        const other = yield* seedCompany("inv-other");
+        yield* join(ownerId, target);
+        yield* join(ownerId, other); // 招待者 (owner) が orphan 削除されず生存し REVOKED を観測できるようにする
+        const inv = yield* db.seedInvitation({
+          companyId: target,
+          email: db.ids.email("invitee"),
+          role: "MEMBER",
+          invitedByUserId: ownerId,
+        });
 
-    await runLiveResult(deleteCompany(ownerId, target));
+        yield* deleteCompany(ownerId, target);
 
-    const row = await db
-      .select()
-      .from(invitation)
-      .where(eq(invitation.id, inv.id))
-      .then((r) => r.at(0));
-    expect(row?.status).toBe("REVOKED");
-  });
+        expect((yield* db.readInvitation(inv.id))?.status).toBe("REVOKED");
+      }),
+    ));
 
-  test("非 OWNER (MEMBER) は forbidden、無変更", async () => {
-    const ownerId = await seedUser("fb-owner");
-    const memberId = await seedUser("fb-member");
-    const companyId = await seedCompany("fb");
-    await join(ownerId, companyId);
-    await join(memberId, companyId, "MEMBER");
+  test("非 OWNER (MEMBER) は forbidden、無変更", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("fb-owner");
+        const memberId = yield* seedUser("fb-member");
+        const companyId = yield* seedCompany("fb");
+        yield* join(ownerId, companyId);
+        yield* join(memberId, companyId, "MEMBER");
 
-    const result = await runLiveResult(deleteCompany(memberId, companyId));
+        const e = yield* Effect.flip(deleteCompany(memberId, companyId));
 
-    expect(result).toEqual({ ok: false, reason: "forbidden" });
-    expect((await findCompanyById(companyId))?.activationStatus).toBe("ACTIVE");
-    expect(await membershipCount(companyId)).toBe(2);
-  });
+        expectFailure(e, Forbidden, "forbidden", 403);
+        expect((yield* db.readCompany(companyId))?.activationStatus).toBe("ACTIVE");
+        expect(yield* membershipCount(companyId)).toBe(2);
+      }),
+    ));
 
-  test("存在しない companyId は not_found_or_already_deleted", async () => {
-    const ownerId = await seedUser("nf");
-    const result = await runLiveResult(deleteCompany(ownerId, "cmp_does_not_exist"));
-    expect(result).toEqual({ ok: false, reason: "not_found_or_already_deleted" });
-  });
+  test("存在しない companyId は not_found_or_already_deleted", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("nf");
+        const e = yield* Effect.flip(deleteCompany(ownerId, "cmp_does_not_exist"));
+        expectFailure(e, NotFoundOrAlreadyDeleted, "not_found_or_already_deleted", 404);
+      }),
+    ));
 
-  test("既に削除済みの事業所への再削除は冪等 (ok / actorDeleted false)", async () => {
-    const ownerId = await seedUser("idem-owner");
-    const target = await seedCompany("idem-target");
-    const other = await seedCompany("idem-other");
-    await join(ownerId, target);
-    await join(ownerId, other);
+  test("既に削除済みの事業所への再削除は冪等 (ok / actorDeleted false)", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("idem-owner");
+        const target = yield* seedCompany("idem-target");
+        const other = yield* seedCompany("idem-other");
+        yield* join(ownerId, target);
+        yield* join(ownerId, other);
 
-    await runLiveResult(deleteCompany(ownerId, target));
-    const second = await runLiveResult(deleteCompany(ownerId, target));
+        yield* deleteCompany(ownerId, target);
+        const second = yield* deleteCompany(ownerId, target);
 
-    expect(second).toEqual({ ok: true, actorDeleted: false });
-  });
+        expect(second).toEqual({ actorDeleted: false });
+      }),
+    ));
 
-  test("並行 DeleteCompany でも company_deleted audit は 1 件のみ (二重処理しない)", async () => {
-    const ownerId = await seedUser("race-owner");
-    const target = await seedCompany("race-target");
-    const other = await seedCompany("race-other");
-    await join(ownerId, target);
-    await join(ownerId, other); // owner を生存させ audit を観測する
+  test("並行 DeleteCompany でも company_deleted audit は 1 件のみ (二重処理しない)", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("race-owner");
+        const target = yield* seedCompany("race-target");
+        const other = yield* seedCompany("race-other");
+        yield* join(ownerId, target);
+        yield* join(ownerId, other); // owner を生存させ audit を観測する
 
-    const results = await Promise.all([
-      runLiveResult(deleteCompany(ownerId, target)),
-      runLiveResult(deleteCompany(ownerId, target)),
-    ]);
+        const results = yield* Effect.all(
+          [
+            Effect.exit(deleteCompany(ownerId, target)),
+            Effect.exit(deleteCompany(ownerId, target)),
+          ],
+          { concurrency: "unbounded" },
+        );
 
-    expect(results.every((r) => r.ok)).toBe(true);
-    expect(await auditCount(ownerId, "company_deleted")).toBe(1);
-    expect(await membershipCount(target)).toBe(0);
-  });
+        expect(results.every(Exit.isSuccess)).toBe(true);
+        expect(yield* auditCount(ownerId, "company_deleted")).toBe(1);
+        expect(yield* membershipCount(target)).toBe(0);
+      }),
+    ));
 });

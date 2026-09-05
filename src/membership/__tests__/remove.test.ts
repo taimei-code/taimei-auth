@@ -1,136 +1,126 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { eq, like } from "drizzle-orm";
-import { db } from "@/db/client";
-import { generateCompanyId, insertCompany } from "@/db/repositories/company";
-import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
-import { company, membership, session, user } from "@/db/schema";
+import { Effect } from "effect";
+import { dbTest, expectFailure } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
+import { LastOwner } from "../errors";
 import { removeMember } from "../remove";
-import { runLiveResult } from "../../__tests__/live-runner";
 
 const P = "rmmem-test-";
+const { run, cleanup } = dbTest(P);
 
-async function cleanup() {
-  await db.delete(session).where(like(session.userId, `${P}%`));
-  await db.delete(membership).where(like(membership.userId, `${P}%`));
-  await db.delete(company).where(like(company.name, `${P}%`));
-  await db.delete(user).where(like(user.id, `${P}%`));
-}
-
-async function seedUser(suffix: string): Promise<string> {
-  const id = `${P}u-${suffix}`;
-  await db
-    .insert(user)
-    .values({ id, name: `U ${suffix}`, email: `${P}${suffix}@example.com`, emailVerified: false });
-  await db.insert(session).values({
-    id: `${P}s-${suffix}`,
-    token: `${P}tok-${suffix}`,
-    userId: id,
-    expiresAt: new Date(Date.now() + 86_400_000),
+const seedUser = (suffix: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const u = yield* db.seedUser(suffix, { emailVerified: false });
+    yield* db.seedSession(u.id, suffix);
+    return u.id;
   });
-  return id;
-}
 
-async function seedCompany(suffix: string): Promise<string> {
-  const id = generateCompanyId();
-  await insertCompany({ id, name: `${P}co-${suffix}`, orgCode: "PERSONAL" });
-  return id;
-}
+const seedCompany = (suffix: string) => TestDb.use((db) => db.seedCompany(suffix));
 
-async function join(userId: string, companyId: string, role: "OWNER" | "ADMIN" | "MEMBER") {
-  await insertMembership({ id: generateMembershipId(), userId, companyId, role });
-}
+const join = (userId: string, companyId: string, role: "OWNER" | "ADMIN" | "MEMBER") =>
+  TestDb.use((db) => db.seedMembership(userId, companyId, role));
 
-async function membershipExists(userId: string, companyId: string): Promise<boolean> {
-  const rows = await db.select().from(membership).where(eq(membership.userId, userId));
-  return rows.some((r) => r.companyId === companyId);
-}
+const membershipExists = (userId: string, companyId: string) =>
+  TestDb.use((db) => db.readMembership(userId, companyId)).pipe(
+    Effect.map((row) => row !== undefined),
+  );
 
-// repository の findUserById は他テストの mock.module("@/db/repositories/user") 漏れの影響を受けるため、
-// アカウント存否は実テーブルを直接見て判定する (mock に依らず actual state を検証する)。
-async function userExists(id: string): Promise<boolean> {
-  return (await db.select().from(user).where(eq(user.id, id))).length > 0;
-}
+// アカウント存否は実テーブルを直接見て判定する (被験体の repository に依らず actual state を検証する)。
+const userExists = (id: string) =>
+  TestDb.use((db) => db.readUser(id)).pipe(Effect.map((row) => row !== undefined));
 
 describe("removeMember", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("唯一の所属メンバーを除名 → membership 削除 + account 連動削除", async () => {
-    const ownerId = await seedUser("only-owner");
-    const memberId = await seedUser("only-member");
-    const companyId = await seedCompany("only");
-    await join(ownerId, companyId, "OWNER");
-    await join(memberId, companyId, "MEMBER");
+  test("唯一の所属メンバーを除名 → membership 削除 + account 連動削除", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("only-owner");
+        const memberId = yield* seedUser("only-member");
+        const companyId = yield* seedCompany("only");
+        yield* join(ownerId, companyId, "OWNER");
+        yield* join(memberId, companyId, "MEMBER");
 
-    const result = await runLiveResult(
-      removeMember({
-        actorUserId: ownerId,
-        targetUserId: memberId,
-        companyId,
-        targetRole: "MEMBER",
+        const result = yield* removeMember({
+          actorUserId: ownerId,
+          targetUserId: memberId,
+          companyId,
+          targetRole: "MEMBER",
+        });
+
+        expect(result).toEqual({ accountDeleted: true });
+        expect(yield* membershipExists(memberId, companyId)).toBe(false);
+        expect(yield* userExists(memberId)).toBe(false);
       }),
-    );
+    ));
 
-    expect(result).toEqual({ ok: true, accountDeleted: true });
-    expect(await membershipExists(memberId, companyId)).toBe(false);
-    expect(await userExists(memberId)).toBe(false);
-  });
+  test("QA-D-03 他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("multi-owner");
+        const memberId = yield* seedUser("multi-member");
+        const target = yield* seedCompany("multi-target");
+        const other = yield* seedCompany("multi-other");
+        yield* join(ownerId, target, "OWNER");
+        yield* join(memberId, target, "MEMBER");
+        yield* join(memberId, other, "MEMBER");
 
-  test("QA-D-03 他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", async () => {
-    const ownerId = await seedUser("multi-owner");
-    const memberId = await seedUser("multi-member");
-    const target = await seedCompany("multi-target");
-    const other = await seedCompany("multi-other");
-    await join(ownerId, target, "OWNER");
-    await join(memberId, target, "MEMBER");
-    await join(memberId, other, "MEMBER");
+        const result = yield* removeMember({
+          actorUserId: ownerId,
+          targetUserId: memberId,
+          companyId: target,
+          targetRole: "MEMBER",
+        });
 
-    const result = await runLiveResult(
-      removeMember({
-        actorUserId: ownerId,
-        targetUserId: memberId,
-        companyId: target,
-        targetRole: "MEMBER",
+        expect(result).toEqual({ accountDeleted: false });
+        expect(yield* membershipExists(memberId, target)).toBe(false);
+        expect(yield* membershipExists(memberId, other)).toBe(true);
+        expect(yield* userExists(memberId)).toBe(true);
       }),
-    );
+    ));
 
-    expect(result).toEqual({ ok: true, accountDeleted: false });
-    expect(await membershipExists(memberId, target)).toBe(false);
-    expect(await membershipExists(memberId, other)).toBe(true);
-    expect(await userExists(memberId)).toBe(true);
-  });
+  test("最後の OWNER の除名は last_owner で reject、membership も account も無変更", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("last-owner");
+        const companyId = yield* seedCompany("last");
+        yield* join(ownerId, companyId, "OWNER");
 
-  test("最後の OWNER の除名は last_owner で reject、membership も account も無変更", async () => {
-    const ownerId = await seedUser("last-owner");
-    const companyId = await seedCompany("last");
-    await join(ownerId, companyId, "OWNER");
+        const e = yield* Effect.flip(
+          removeMember({
+            actorUserId: ownerId,
+            targetUserId: ownerId,
+            companyId,
+            targetRole: "OWNER",
+          }),
+        );
 
-    const result = await runLiveResult(
-      removeMember({ actorUserId: ownerId, targetUserId: ownerId, companyId, targetRole: "OWNER" }),
-    );
-
-    expect(result).toEqual({ ok: false, reason: "last_owner" });
-    expect(await membershipExists(ownerId, companyId)).toBe(true);
-    expect(await userExists(ownerId)).toBe(true);
-  });
-
-  test("本人が唯一の所属を退会 (self leave) → account 連動削除", async () => {
-    const ownerId = await seedUser("self-owner");
-    const memberId = await seedUser("self-member");
-    const companyId = await seedCompany("self");
-    await join(ownerId, companyId, "OWNER");
-    await join(memberId, companyId, "MEMBER");
-
-    const result = await runLiveResult(
-      removeMember({
-        actorUserId: memberId,
-        targetUserId: memberId,
-        companyId,
-        targetRole: "MEMBER",
+        expectFailure(e, LastOwner, "last_owner", 409);
+        expect(yield* membershipExists(ownerId, companyId)).toBe(true);
+        expect(yield* userExists(ownerId)).toBe(true);
       }),
-    );
+    ));
 
-    expect(result).toEqual({ ok: true, accountDeleted: true });
-    expect(await userExists(memberId)).toBe(false);
-  });
+  test("本人が唯一の所属を退会 (self leave) → account 連動削除", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("self-owner");
+        const memberId = yield* seedUser("self-member");
+        const companyId = yield* seedCompany("self");
+        yield* join(ownerId, companyId, "OWNER");
+        yield* join(memberId, companyId, "MEMBER");
+
+        const result = yield* removeMember({
+          actorUserId: memberId,
+          targetUserId: memberId,
+          companyId,
+          targetRole: "MEMBER",
+        });
+
+        expect(result).toEqual({ accountDeleted: true });
+        expect(yield* userExists(memberId)).toBe(false);
+      }),
+    ));
 });

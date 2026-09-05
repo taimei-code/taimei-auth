@@ -63,6 +63,7 @@ productionのdomain、Guard、Transportはrepository関数とtransaction helper�
 - Transport testは `handlers/__tests__/` または `rpc/__tests__/` に置く。
 - 複数domainまたはrepository全体のinvariantは `src/__tests__/` に置く。
 - DBへ接触するtestは接触をfixture setupと事後状態の観測に限定し、production境界の例外根拠にしない。
+- DBへ接触するsrcのtestは `TestDb` service (`src/__tests__/test-db.ts`、実体は `db/testing/*`) を `yield*` し、`@/db/*` をruntime importしない (型importは可)。test本体は `runTest(prefix)` に渡す1つの `Effect.gen` で、失敗は `Effect.flip` / `Effect.exit` でfailure classとして観測する。理由の正本はADR-0017 Decisionの依存注入項。
 
 ## 実装時のgotcha
 

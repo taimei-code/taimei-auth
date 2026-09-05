@@ -54,14 +54,14 @@ export const userRepoLayer = (users: UserRow[]): Layer.Layer<UserRepo> =>
   Layer.succeed(
     UserRepo,
     partial<UserRepo["Service"]>({
-      findById: (id) => Effect.succeed(users.find((u) => u.id === id)),
+      findUserById: (id) => Effect.succeed(users.find((u) => u.id === id)),
     }),
   );
 
 export const userRepoFailing = (cause: unknown): Layer.Layer<UserRepo> =>
   Layer.succeed(
     UserRepo,
-    partial<UserRepo["Service"]>({ findById: () => Effect.fail(new DbError({ cause })) }),
+    partial<UserRepo["Service"]>({ findUserById: () => Effect.fail(new DbError({ cause })) }),
   );
 
 export const membershipRepoLayer = (rows: Membership[]): Layer.Layer<MembershipRepo> =>
@@ -89,7 +89,7 @@ export const invitationRepoLayer = (rows: InvitationRow[]): Layer.Layer<Invitati
   Layer.succeed(
     InvitationRepo,
     partial<InvitationRepo["Service"]>({
-      findByToken: (token) => Effect.succeed(rows.find((r) => r.token === token)),
+      findInvitationByToken: (token) => Effect.succeed(rows.find((r) => r.token === token)),
     }),
   );
 

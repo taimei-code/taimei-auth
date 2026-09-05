@@ -1,65 +1,47 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { eq, like } from "drizzle-orm";
-import { db } from "@/db/client";
-import { generateCompanyId, insertCompany, softDeleteCompany } from "@/db/repositories/company";
-import { generateMembershipId, insertMembership } from "@/db/repositories/membership";
-import { company, membership, session, user } from "@/db/schema";
-import { runLive } from "../../__tests__/live-runner";
+import { Effect } from "effect";
+import { dbTest } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
 import { backfillOrphanCleanup } from "../backfill-orphan-cleanup";
 
 const P = "backfill-test-";
+const { run, cleanup } = dbTest(P);
 
-async function cleanup() {
-  await db.delete(session).where(like(session.userId, `${P}%`));
-  await db.delete(membership).where(like(membership.userId, `${P}%`));
-  await db.delete(company).where(like(company.name, `${P}%`));
-  await db.delete(user).where(like(user.id, `${P}%`));
-}
-
-async function seedUser(suffix: string): Promise<string> {
-  const id = `${P}u-${suffix}`;
-  await db
-    .insert(user)
-    .values({ id, name: `U ${suffix}`, email: `${P}${suffix}@example.com`, emailVerified: false });
-  await db.insert(session).values({
-    id: `${P}s-${suffix}`,
-    token: `${P}tok-${suffix}`,
-    userId: id,
-    expiresAt: new Date(Date.now() + 86_400_000),
+const seedUser = (suffix: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const u = yield* db.seedUser(suffix, { emailVerified: false });
+    yield* db.seedSession(u.id, suffix);
+    return u.id;
   });
-  return id;
-}
 
-async function seedCompany(suffix: string, deleted: boolean): Promise<string> {
-  const id = generateCompanyId();
-  await insertCompany({ id, name: `${P}co-${suffix}`, orgCode: "PERSONAL" });
-  if (deleted) await softDeleteCompany(id);
-  return id;
-}
+const seedCompany = (suffix: string, deleted: boolean) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const id = yield* db.seedCompany(suffix);
+    if (deleted) yield* db.markCompanyDeleted(id);
+    return id;
+  });
 
-async function join(userId: string, companyId: string, role: "OWNER" | "ADMIN" | "MEMBER") {
-  await insertMembership({ id: generateMembershipId(), userId, companyId, role });
-}
+const join = (userId: string, companyId: string, role: "OWNER" | "ADMIN" | "MEMBER") =>
+  TestDb.use((db) => db.seedMembership(userId, companyId, role));
 
-async function userExists(id: string): Promise<boolean> {
-  return (await db.select().from(user).where(eq(user.id, id))).length > 0;
-}
+const userExists = (id: string) =>
+  TestDb.use((db) => db.readUser(id)).pipe(Effect.map((row) => row !== undefined));
 
-async function membershipCount(companyId: string): Promise<number> {
-  return (await db.select().from(membership).where(eq(membership.companyId, companyId))).length;
-}
+const membershipCount = (companyId: string) => TestDb.use((db) => db.countMemberships(companyId));
 
 // DELETED company に ghost membership を持つ user を 2 名作る: orphan (この事業所のみ) と survivor (別 ACTIVE 所属あり)。
-async function seedGhostScenario() {
-  const deleted = await seedCompany("ghost", true);
-  const active = await seedCompany("active", false);
-  const orphan = await seedUser("orphan");
-  const survivor = await seedUser("survivor");
-  await join(orphan, deleted, "OWNER");
-  await join(survivor, deleted, "MEMBER");
-  await join(survivor, active, "MEMBER");
+const seedGhostScenario = Effect.gen(function* () {
+  const deleted = yield* seedCompany("ghost", true);
+  const active = yield* seedCompany("active", false);
+  const orphan = yield* seedUser("orphan");
+  const survivor = yield* seedUser("survivor");
+  yield* join(orphan, deleted, "OWNER");
+  yield* join(survivor, deleted, "MEMBER");
+  yield* join(survivor, active, "MEMBER");
   return { deleted, active, orphan, survivor };
-}
+});
 
 describe("backfillOrphanCleanup", () => {
   beforeEach(cleanup);
@@ -67,42 +49,51 @@ describe("backfillOrphanCleanup", () => {
 
   // findDeletedCompanyIdsWithMemberships はグローバルクエリのため、global count ではなく
   // 自テストが作ったエンティティの振る舞いだけを検証する (他データ・残骸に左右されない)。
-  test("dry-run: 対象を集計するが一切 mutate しない", async () => {
-    const { deleted, orphan, survivor } = await seedGhostScenario();
+  test("dry-run: 対象を集計するが一切 mutate しない", () =>
+    run(
+      Effect.gen(function* () {
+        const { deleted, orphan, survivor } = yield* seedGhostScenario;
 
-    const report = await runLive(backfillOrphanCleanup({ execute: false }));
+        const report = yield* backfillOrphanCleanup({ execute: false });
 
-    expect(report.executed).toBe(false);
-    expect(report.deletedUserIds).toContain(orphan);
-    expect(report.deletedUserIds).not.toContain(survivor);
-    // mutate していないこと
-    expect(await membershipCount(deleted)).toBe(2);
-    expect(await userExists(orphan)).toBe(true);
-  });
+        expect(report.executed).toBe(false);
+        expect(report.deletedUserIds).toContain(orphan);
+        expect(report.deletedUserIds).not.toContain(survivor);
+        // mutate していないこと
+        expect(yield* membershipCount(deleted)).toBe(2);
+        expect(yield* userExists(orphan)).toBe(true);
+      }),
+    ));
 
-  test("execute: ghost membership を物理削除し orphan を連動削除、survivor と ACTIVE 事業所は維持", async () => {
-    const { deleted, active, orphan, survivor } = await seedGhostScenario();
+  test("execute: ghost membership を物理削除し orphan を連動削除、survivor と ACTIVE 事業所は維持", () =>
+    run(
+      Effect.gen(function* () {
+        const { deleted, active, orphan, survivor } = yield* seedGhostScenario;
 
-    const report = await runLive(backfillOrphanCleanup({ execute: true }));
+        const report = yield* backfillOrphanCleanup({ execute: true });
 
-    expect(report.executed).toBe(true);
-    expect(report.deletedUserIds).toContain(orphan);
-    expect(report.deletedUserIds).not.toContain(survivor);
-    expect(await membershipCount(deleted)).toBe(0);
-    expect(await userExists(orphan)).toBe(false);
-    expect(await userExists(survivor)).toBe(true);
-    expect(await membershipCount(active)).toBe(1);
-  });
+        expect(report.executed).toBe(true);
+        expect(report.deletedUserIds).toContain(orphan);
+        expect(report.deletedUserIds).not.toContain(survivor);
+        expect(yield* membershipCount(deleted)).toBe(0);
+        expect(yield* userExists(orphan)).toBe(false);
+        expect(yield* userExists(survivor)).toBe(true);
+        expect(yield* membershipCount(active)).toBe(1);
+      }),
+    ));
 
-  test("ACTIVE 事業所のメンバーは backfill 対象外で削除されない", async () => {
-    const active = await seedCompany("only-active", false);
-    const u = await seedUser("only");
-    await join(u, active, "OWNER");
+  test("ACTIVE 事業所のメンバーは backfill 対象外で削除されない", () =>
+    run(
+      Effect.gen(function* () {
+        const active = yield* seedCompany("only-active", false);
+        const u = yield* seedUser("only");
+        yield* join(u, active, "OWNER");
 
-    const report = await runLive(backfillOrphanCleanup({ execute: true }));
+        const report = yield* backfillOrphanCleanup({ execute: true });
 
-    expect(report.deletedUserIds).not.toContain(u);
-    expect(await userExists(u)).toBe(true);
-    expect(await membershipCount(active)).toBe(1);
-  });
+        expect(report.deletedUserIds).not.toContain(u);
+        expect(yield* userExists(u)).toBe(true);
+        expect(yield* membershipCount(active)).toBe(1);
+      }),
+    ));
 });
