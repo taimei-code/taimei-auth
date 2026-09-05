@@ -1,13 +1,8 @@
 # taimei-auth
 
-Web UI、IdP、User、Account、Session DBを1サービスに同居させている。
-
 将来identity DBを別processへ分離できるよう、consumer、server、DB、SDKの境界を維持する。
-
 起動、compose、migration、Proto生成の手順は [README.md](./README.md) を参照する。
-
 各scopeでは `CLAUDE.md` だけに本文を書き、同じ変更で同階層に相対symlink `AGENTS.md -> CLAUDE.md` を置く。
-
 claude code以外の場合、subdirectoryのfileを扱う時は、そのfileまでのpath上にあるnested AGENTS.md をon-demandで読み、rootから順に追加適用し、path外のinstructionは読まない。
 
 ## 共通境界
@@ -26,3 +21,9 @@ claude code以外の場合、subdirectoryのfileを扱う時は、そのfileま�
 - dependency更新で `minimumReleaseAge` の除外が必要な場合は [`ADR-0009`](./docs/adr/0009-supply-chain-hardening.md) に従う。
 - TypeScript 7では新規tsconfigに必要な `types` を明示し、削除済みの `baseUrl` を使わない。
 - Vite配下の型解決不能なside-effect importは `vite-env.d.ts` のreferenceで解決する。
+
+## Effectの学び方
+
+このリポジトリはEffect (TypeScript library) を使う。
+Effectのコードを書く前に、まず `node_modules/effect/AGENTS.md` を**最後まで**読み、必要に応じてfile内のリンク先も辿る。
+そのguideに無いEffectのAPIや概念を知りたい時は、`node_modules/effect/src` のsource codeを検索する。
