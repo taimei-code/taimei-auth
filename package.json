@@ -34,6 +34,7 @@
     "@vercel/blob": "^2.3.3",
     "better-auth": "^1.6.23",
     "drizzle-orm": "^0.45.2",
+    "effect": "4.0.0-rc.112",
     "hono": "^4.12.25",
     "nanoid": "^5.1.11",
     "otpauth": "9.5.1",

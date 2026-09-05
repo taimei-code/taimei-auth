@@ -88,6 +88,10 @@
                   {
                     "group": ["@connectrpc/connect-node"],
                     "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+                  },
+                  {
+                    "group": ["effect/unstable/*", "effect/unstable/**"],
+                    "message": "effect/unstable/* は stable 後も semver 外で minor で breaking し得る。core (effect) のみ使う (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }
@@ -136,6 +140,10 @@
                   {
                     "group": ["@connectrpc/connect-node"],
                     "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+                  },
+                  {
+                    "group": ["effect/unstable/*", "effect/unstable/**"],
+                    "message": "effect/unstable/* は stable 後も semver 外で minor で breaking し得る。core (effect) のみ使う (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }
@@ -173,7 +181,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)",
+                  "effect": "web (共通画面 SPA) と @core 共有 module は effect-free を維持する (docs/adr/0017-effect-v4-full-adoption.md / src/__tests__/web-shared-core-runtime-free.test.ts)"
                 }
               }
             }

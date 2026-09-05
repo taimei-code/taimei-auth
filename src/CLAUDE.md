@@ -14,9 +14,9 @@
 
 ## 層の責務
 
-- **Transport**：`handlers/` と `rpc/` に置き、parameter parse、認証、Guard呼出し、Use-case呼出し、response変換を所有する。
-- **Guard**：`membership/guard/` と `membership/policy.ts` に置き、Hono非依存の操作単位認可を所有する。
-- **Use-case**：`account/`、`company/`、`invitation/`、`membership/`、`mfa/` に置き、業務手続、transaction、audit、不変条件、TOCTOU再検証を所有する。
+- **Transport**：`handlers/` と `rpc/` に置き、parameter parse、認証、Guard呼出し、Use-case呼出し、response変換を所有する。Effect programを `runRoute`、`runMiddleware`、`runRpc` のadapterで走らせ、failureとdefectのwire写像はadapterだけが行う。
+- **Guard**：`membership/guard/` と `membership/policy.ts` に置き、Hono非依存の操作単位認可を所有する。公開APIは `Effect<A, GuardError, R>` で、依存はportsのserviceを `yield*` して取る。
+- **Use-case**：`account/`、`company/`、`invitation/`、`membership/`、`mfa/` に置き、業務手続、transaction、audit、不変条件、TOCTOU再検証を所有する。`Effect.fn` で書き、失敗は各domainの `errors.ts` のfailure classを `yield*` で返す。
 - **Repository**：`db/repositories/` に置き、queryを提供するが業務判断を持たない。
 
 新規または責務変更を伴うTransportは、policy述語、repositoryへの直接write、transactionを所有しない。
@@ -26,6 +26,17 @@ Use-caseとGuardは `membership/policy.ts` の純粋述語を利用できる。
 ADR-0012のScope outに記録された既存経路は、独立した抽出作業なしに機械的に移動しない。
 
 既存例外を変更する場合も、Transport側の業務判断またはtransactionを増やさない。
+
+## Effect様式
+
+理由と境界表は [`docs/adr/0017-effect-v4-full-adoption.md`](../docs/adr/0017-effect-v4-full-adoption.md) を正本とする。
+
+- 各domainは `ports.ts` にRepositoryのEffect面 (`Context.Service`) を、`wiring.ts` にproduction結線 (`liftDb`) を置く。`db/repositories/*` と `db/transaction` のruntime importは `*/wiring.ts`、`id-generator.ts`、`transaction.ts`、`auth.ts` に限り、他は `import type` だけを使う。
+- transactionは `Transaction.run` で取り、`runInTransaction` を直接呼ばない。tx内のfailureとdefectは常にrollbackされ、tx後の副作用は `tapError` や `catchTag` でtxの外に置く。
+- 時刻は `Clock.currentTimeMillis`、IDは `IdGenerator`、better-auth APIは `AuthApi`、Redisは `Redis`、Sentryは `SentryService`、メールは `EmailSender`、fire-and-forgetは `Background.run` のserviceを通す。`Date.now()`、`Sentry.capture*`、`runBackground`、`Promise.all` をuse-caseやhandlerに直接書かない。
+- サードパーティ境界の失敗は `errors.ts` の `DbError`、`AuthApiError`、`RedisError`、`EmailError` (`cause: unknown`) で運び、producerは `tryDb`、`tryAuthApi`、`tryRedis`、`tryEmail` だけを使う。
+- `auth.ts` から静的に辿れるmodule (`auth-plugins/*`、better-auth callback、それらが呼ぶ `mfa/totp/challenge-required.ts` と `mfa/totp/login-challenge.ts`) で `getRuntime` が必要な場合は関数内で `await import("./runtime")` する。静的importはruntimeとの循環でTDZになる。
+- 全ゲートは `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
 
 ## DB境界と既存例外
 

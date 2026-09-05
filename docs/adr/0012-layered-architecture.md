@@ -6,6 +6,10 @@ Accepted (2026-07-19)。本 ADR で「Guard 層の完成」= `/api/account/*` 14
 `src/membership/guard/` に集約する対象に合意する。inline `runInTransaction` を残す 6 route の
 use-case 抽出は後続案件で扱う (下の「スコープ外」)。
 
+2026-09-04 に [ADR-0017](./0017-effect-v4-full-adoption.md) の「ADR-0012 を次の点で補う」で Guard 層の構成
+(deps factory と `respond.ts`) と失敗の HTTP 写像点を改めた。4 層の責務と依存方向は据え置き。改めた内容は
+ADR-0017 を正本とし、以下の該当箇所は当時の設計として読む。
+
 ## Context
 
 直近 PR #103–#108 で membership guard 集約を進めた結果、認可の組み立ての target 側 (対象 membership の
