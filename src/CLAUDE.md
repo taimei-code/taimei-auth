@@ -42,7 +42,7 @@ ADR-0012のScope outに記録された既存経路は、独立した抽出作業
 
 productionのdomain、Guard、Transportはrepository関数とtransaction helperを利用し、`drizzle-orm` または `pg` を直接importしない。
 
-境界規則と例外pathの正本は [`db/CLAUDE.md`](../db/CLAUDE.md) とする。`src/` の既存例外はそこに記録された `src/auth.ts`、`src/worker.ts`、test fixtureで、追加する変更はDB境界の設計変更としてreviewする。
+境界規則と例外pathの正本は [`db/CLAUDE.md`](../db/CLAUDE.md) の「例外 path (正本)」とする。例外を追加する変更はDB境界の設計変更としてreviewする。
 
 ## ファイル配置
 
