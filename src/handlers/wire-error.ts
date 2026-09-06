@@ -33,7 +33,7 @@ const _guardCodesReachMfaWire: [GuardCodesOnMfaRoutes] extends [GuardError["erro
 export type RouteError = WireError | BoundaryError;
 
 // 成功 response (c.json) と同じ charset 無しの content-type。
-const JSON_HEADERS = { "content-type": "application/json" } as const;
+export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 export function wireErrorResponse(failure: WireError): Response {
   const body: { error: string; details?: unknown } = { error: failure.error };
