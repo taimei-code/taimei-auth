@@ -3,10 +3,12 @@ import { Effect } from "effect";
 import { auditRowsFor, dbTest, observing } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import {
+  actorOf,
   countRecoveryCodeRows,
   enableMfaFor,
   findMfaTotpRow,
 } from "../../src/mfa/__tests__/helpers";
+import { enroll } from "../../src/mfa/totp";
 import { forceDisableMfa, toDisableUserMfaReport } from "../disable-user-mfa";
 
 describe("toDisableUserMfaReport", () => {
@@ -67,6 +69,22 @@ describe("forceDisableMfa (統合)", () => {
         expect(second).toEqual({ ok: true, changed: false });
         expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(1);
         expect(secondLogs.some((line) => line.includes(DISABLED_EMAIL_LOG))).toBe(false);
+      }),
+    ));
+
+  test("登録済み未有効 (verifiedAt NULL) の user: 行は消すが changed: false、記帳も通知もしない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("pending");
+        yield* enroll({ actor: actorOf(user) });
+
+        const { value, logs } = yield* observing(forceDisableMfa(user.id));
+        expect(value).toEqual({ ok: true, changed: false });
+        expect(yield* findMfaTotpRow(user.id)).toBeUndefined();
+        expect(yield* countRecoveryCodeRows(user.id)).toBe(0);
+        expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(0);
+        expect(logs.some((line) => line.includes(DISABLED_EMAIL_LOG))).toBe(false);
       }),
     ));
 
