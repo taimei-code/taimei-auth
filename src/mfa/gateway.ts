@@ -1,5 +1,6 @@
 import { makeSignature } from "better-auth/crypto";
 import { Clock, Effect } from "effect";
+import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../auth";
 import { type AuthApiError, tryAuthApi } from "../errors";
 import { captureCause, type SentryService } from "../sentry";
@@ -41,6 +42,15 @@ function hasApiErrorBody(error: unknown): boolean {
   return typeof (body as { code?: unknown }).code === "string";
 }
 
+// session cookie の wire 形式の正本 (CONTEXT.md「session cookie」)。値は `<token>.<標準 base64 署名 44 文字>` を
+// percent-encode したもので、better-auth 本体 (better-call の signCookieValue) と同じ形。hono の serialize が
+// encodeURIComponent と属性の直列化を担い、属性は createAuthCookie のものをそのまま渡す (手写ししない)。
+// `__Secure-` 名に Secure が無い構成は hono が throw し、Secure 無しの cookie を黙って出さない。
+// server は better-call の parseCookies が `%` を含む値を decodeURIComponent してから署名を検証するので、
+// 過去に raw で発行した cookie も受理する。SDK (packages/auth-client/src/cookie.ts) は値を decode しない。
+// 固定する test: src/__tests__/session-cookie-contract.test.ts (形式 / 往復 / 属性同一性)、
+// src/mfa/__tests__/containment.test.ts AC-150f (手組みへの逆戻りを拾う静的 tripwire)。
+
 // チャレンジ通過確定後の session 発行窓口。本人確認はしない — 呼び出しは「第二要素の検証成功が
 // 確定した後」に限る契約 (ADR-0016 / PoC 0003)。Max-Age を明示付与しないと browser-session cookie に
 // なり通常ログインと寿命が揺れる。cookieCache (session_data) は発行時に作らない (次リクエストの
@@ -54,38 +64,7 @@ export const issueSessionFor = Effect.fn("mfa.issueSessionFor")(function* (userI
     const cookie = authContext.createAuthCookie("session_token", { maxAge });
     const signed = `${session.token}.${await makeSignature(session.token, authContext.secret)}`;
     const headers = new Headers();
-    headers.append("set-cookie", serializeRawSessionCookie(cookie.name, signed, cookie.attributes));
+    headers.append("set-cookie", serializeSetCookie(cookie.name, signed, cookie.attributes));
     return headers;
   });
 });
-
-type SessionCookieAttributes = {
-  path?: string;
-  domain?: string;
-  secure?: boolean;
-  httpOnly?: boolean;
-  sameSite?: string | boolean;
-  maxAge?: number;
-};
-
-// 値を percent-encode しない — better-auth 発行の同名 cookie は raw で、SDK
-// (packages/auth-client/src/cookie.ts) は「URL decode しない」を契約にしている。hono の serialize は
-// 常に encodeURIComponent するため使えない。base64 の +/=/ は cookie-value として有効。
-function serializeRawSessionCookie(
-  name: string,
-  value: string,
-  attributes: SessionCookieAttributes,
-): string {
-  const parts = [`${name}=${value}`];
-  if (attributes.maxAge !== undefined) parts.push(`Max-Age=${attributes.maxAge}`);
-  parts.push(`Path=${attributes.path ?? "/"}`);
-  if (attributes.domain) parts.push(`Domain=${attributes.domain}`);
-  if (attributes.httpOnly) parts.push("HttpOnly");
-  if (attributes.secure) parts.push("Secure");
-  if (typeof attributes.sameSite === "string" && attributes.sameSite !== "") {
-    parts.push(
-      `SameSite=${attributes.sameSite.charAt(0).toUpperCase()}${attributes.sameSite.slice(1).toLowerCase()}`,
-    );
-  }
-  return parts.join("; ");
-}

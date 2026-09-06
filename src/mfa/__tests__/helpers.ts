@@ -35,6 +35,8 @@ const TOTP_PERIOD_SECONDS = 30;
 export type { MfaTotpRow } from "@/db/testing/read";
 
 // better-auth の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる。
+// 署名付き値の形式は SIGNED_COOKIE_VALUE (発行者は wire でこれを percent-encode する) で、
+// src/__tests__/session-cookie-contract.test.ts が固定する。
 const signCookieValue = (value: string): Effect.Effect<string> =>
   Effect.promise(async () => {
     const { secret } = await auth.$context;
@@ -64,13 +66,20 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   return headers;
 }
 
+// 署名付き値 (percent-decode 後) の形式: 署名 44 文字 (HMAC-SHA-256 32 byte の標準 base64、末尾 `=`)。
+// better-call getSignedCookie の受理条件 (末尾 44 文字が `=` 終端) より狭い。wire 上の値は両発行者とも
+// これを percent-encode したもの (CONTEXT.md「session cookie」)。固定するのは
+// src/__tests__/session-cookie-contract.test.ts。
+export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;
+
 export type TestSession = { token: string; headers: Headers };
+
+export const sessionCookieName = (): Effect.Effect<string> =>
+  Effect.promise(async () => (await auth.$context).authCookies.sessionToken.name);
 
 const sessionHeaders = (token: string): Effect.Effect<Headers> =>
   Effect.gen(function* () {
-    const name = yield* Effect.promise(
-      async () => (await auth.$context).authCookies.sessionToken.name,
-    );
+    const name = yield* sessionCookieName();
     return requestHeaders({ [name]: yield* signCookieValue(token) });
   });
 
@@ -85,19 +94,22 @@ export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
   });
 
 export const issuedSessionCookieCount = (forwarded: Headers): Effect.Effect<number> =>
-  Effect.promise(async () => {
-    const { authCookies } = await auth.$context;
-    return issuedSessionCookieValues(forwarded, authCookies.sessionToken.name).length;
-  });
+  Effect.map(issuedSessionSetCookies(forwarded), (cookies) => cookies.length);
 
-// 失効指示 (空値 / Max-Age=0) は「発行された cookie」に数えない。
-function issuedSessionCookieValues(forwarded: Headers, cookieName: string): string[] {
-  const prefix = `${cookieName}=`;
-  return forwarded
-    .getSetCookie()
-    .filter((cookie) => cookie.startsWith(prefix) && !/max-age=0(;|$)/i.test(cookie))
-    .map((cookie) => cookie.slice(prefix.length).split(";")[0])
-    .filter((value) => value.lastIndexOf(".") > 0);
+// 応答が発行した session cookie の Set-Cookie 行。失効指示 (空値や署名なしの値 / Max-Age=0) は
+// 「発行された cookie」に数えない。
+export const issuedSessionSetCookies = (forwarded: Headers): Effect.Effect<string[]> =>
+  Effect.map(sessionCookieName(), (name) =>
+    forwarded
+      .getSetCookie()
+      .filter((cookie) => cookie.startsWith(`${name}=`) && !/max-age=0(;|$)/i.test(cookie))
+      .filter((cookie) => setCookieValue(cookie).lastIndexOf(".") > 0),
+  );
+
+// Set-Cookie 行の値部分 (先頭 pair の `=` 以降)。
+export function setCookieValue(setCookie: string): string {
+  const pair = setCookie.split(";")[0];
+  return pair.slice(pair.indexOf("=") + 1);
 }
 
 export function actorOf(user: { id: string; email: string }): MfaTotpActor {

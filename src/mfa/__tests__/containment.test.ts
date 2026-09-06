@@ -74,6 +74,17 @@ describe("MFA totp module boundary", () => {
     ).toEqual(["src/mfa/totp/wiring.ts"]);
   });
 
+  test("AC-150f gateway の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
+    // 根拠は CONTEXT.md「session cookie」、挙動の固定は src/__tests__/session-cookie-contract.test.ts。ここは
+    // 手組みへの逆戻りの意図を最速で拾う静的 tripwire。root は src/mfa に固定する (file path を渡すと file が
+    // 無い時に空集合で素通りする)。login-challenge.ts の hit が検出器の positive control を兼ねる。
+    expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa")).toEqual([
+      "src/mfa/gateway.ts",
+      "src/mfa/totp/login-challenge.ts",
+    ]);
+    expect(filesWithCodeLiteral("Max-Age=|HttpOnly|SameSite=", "src/mfa")).toEqual([]);
+  });
+
   test("AC-150b db/repositories/mfa-totp の production importer 列挙", () => {
     // repository の Effect face は ports (型) + wiring (結線) に閉じ、use-case と management CLI は
     // service を yield* する (ADR-0017 Stage 3)。id-generator は採番関数の正本。
