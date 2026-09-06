@@ -7,7 +7,7 @@ import { isLocalEnvironment } from "../../env";
 import { tryAuthApi } from "../../errors";
 import { Redis } from "../../redis-service";
 import { SentryService } from "../../sentry";
-import { spendAttemptBudget } from "../attempt-budget";
+import { spendAttemptBudget } from "../../attempt-budget";
 
 // ログインチャレンジの store (Redis 1 key) + 試行枠 + 自前署名 cookie (A-9)。
 // 旧 challenge-store の 3 write 順序・better-call 署名 scheme のハードコピー・完了マーカー形式は
@@ -115,7 +115,8 @@ export const destroyLoginChallenge = Effect.fn("mfa.destroyLoginChallenge")(func
   yield* (yield* Redis).delete(challengeKey(challengeId));
 });
 
-// fail-closed の計数 kernel は attempt-budget.ts と共有。上限到達はロック急増の唯一の検知信号
+// 計数 kernel は attempt-budget.ts と共有。kernel は倒し方を持たないので、fail-closed (unavailable → Locked)
+// は呼び手 complete-login-challenge.ts が verdict を写して決める。上限到達はロック急増の唯一の検知信号
 // なので Sentry warning に載せる (§8.2)。
 export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(function* (
   challengeId: string,
