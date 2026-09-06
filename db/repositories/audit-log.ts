@@ -174,32 +174,6 @@ export const recordAccountDeleted = (
 ): Promise<void> =>
   appendAuditLog({ eventType: "account_delete", userId: params.user_id, payload: {} }, txOrDb);
 
-export const recordMfaEnabled = (
-  params: { user_id: string; ip: string | null; userAgent: string },
-  txOrDb: DbOrTx = db,
-): Promise<void> =>
-  appendAuditLog(
-    {
-      eventType: "mfa_enabled",
-      userId: params.user_id,
-      payload: { ip: params.ip, userAgent: params.userAgent },
-    },
-    txOrDb,
-  );
-
-export const recordMfaDisabled = (
-  params: { user_id: string; ip: string | null; userAgent: string },
-  txOrDb: DbOrTx = db,
-): Promise<void> =>
-  appendAuditLog(
-    {
-      eventType: "mfa_disabled",
-      userId: params.user_id,
-      payload: { ip: params.ip, userAgent: params.userAgent },
-    },
-    txOrDb,
-  );
-
 export const recordCompanyCreated = (
   params: {
     actor_user_id: string;

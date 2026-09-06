@@ -1,8 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import { Clock, Effect } from "effect";
-import { AuditLog } from "../audit/ports";
-import { swallowAuditFailure } from "../audit/report-failure";
+import { appendAuditLogBestEffort } from "../audit/report-failure";
 import { Background } from "../background";
 import { EmailSender } from "../email/ports";
 import { getClientContext } from "../request-context";
@@ -25,7 +24,6 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
   const { user } = input;
   const background = yield* Background;
   const email = yield* EmailSender;
-  const audit = yield* AuditLog;
   const now = yield* Clock.currentTimeMillis;
 
   // welcome メールを初回サインアップに限る (チャレンジ通過も rotate も初回でないため 2 通目防止)。
@@ -42,11 +40,15 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
   const method = resolvePrimaryAuthMethod({ path: input.path, params: input.params });
   if (!method) return;
 
+  // payload は明示的に組む: 型付き property へ call 結果 / spread を渡すと excess-property check が効かず、
+  // ClientContext に増えた field が audit_log.payload に黙って載る。
   const { ip, userAgent } = getClientContext(input.headers);
   yield* background.run(
-    audit
-      .appendAuditLog({ eventType: "sign_in", userId: user.id, payload: { method, ip, userAgent } })
-      .pipe(swallowAuditFailure("sign_in")),
+    appendAuditLogBestEffort({
+      eventType: "sign_in",
+      userId: user.id,
+      payload: { method, ip, userAgent },
+    }),
   );
 });
 

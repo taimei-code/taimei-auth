@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { db } from "../client";
-import {
-  appendAuditLog,
-  recordCompanyCreated,
-  recordMfaDisabled,
-  recordMfaEnabled,
-} from "../repositories/audit-log";
+import { appendAuditLog, recordCompanyCreated } from "../repositories/audit-log";
 import { revokeAllSessionsForUser } from "../repositories/session";
 import { deleteUser as deleteUserRepo } from "../repositories/user";
 import { auditLog, session, user } from "../schema";
@@ -56,11 +51,15 @@ describe("audit log repository", () => {
   // MFA の有効化・無効化は「乗っ取り犯による勝手な操作」を本人が後から辿れる唯一の記録なので、
   // event_type 2 種と payload の形が union に載っていること自体が前提条件になる。
   test("QA-M-01 mfa_enabled / mfa_disabled が union に載り 1 行ずつ追加される", async () => {
-    await recordMfaEnabled({ user_id: testUserId, ip: "1.2.3.4", userAgent: "test/1.0" });
-    await recordMfaDisabled({
-      user_id: testUserId,
-      ip: null,
-      userAgent: "management/disable-user-mfa",
+    await appendAuditLog({
+      eventType: "mfa_enabled",
+      userId: testUserId,
+      payload: { ip: "1.2.3.4", userAgent: "test/1.0" },
+    });
+    await appendAuditLog({
+      eventType: "mfa_disabled",
+      userId: testUserId,
+      payload: { ip: null, userAgent: "management/disable-user-mfa" },
     });
 
     const rows = await db

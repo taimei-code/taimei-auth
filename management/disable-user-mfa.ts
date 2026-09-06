@@ -3,8 +3,7 @@
 // 1 tx で mfa_totp 行とリカバリーコードを全削除する。guard 参加・protocol 照合は存在しない (ADR-0016)。
 import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
-import { AuditLog } from "../src/audit/ports";
-import { swallowAuditFailure } from "../src/audit/report-failure";
+import { appendAuditLogBestEffort } from "../src/audit/report-failure";
 import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
 import { MfaTotpRepo } from "../src/mfa/totp/ports";
 import { getRuntime } from "../src/runtime";
@@ -19,7 +18,6 @@ export type ForceDisableResult =
 
 export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function* (userId: string) {
   const users = yield* UserRepo;
-  const audit = yield* AuditLog;
   const mfa = yield* MfaTotpRepo;
   const tx = yield* Transaction;
 
@@ -35,10 +33,12 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
   );
   if (deleted === 0) return { ok: true, changed: false } satisfies ForceDisableResult;
 
-  // 記帳は best-effort — 救済の成立 (行削除) を audit 失敗で取り消さない。
-  yield* audit
-    .recordMfaDisabled({ user_id: userId, ip: null, userAgent: "management/disable-user-mfa" })
-    .pipe(swallowAuditFailure("mfa_disabled"));
+  // best-effort 記帳 (CONTEXT.md)。
+  yield* appendAuditLogBestEffort({
+    eventType: "mfa_disabled",
+    userId,
+    payload: { ip: null, userAgent: "management/disable-user-mfa" },
+  });
   const notified = yield* notifyMfaDisabledForManagement(user.email);
   return { ok: true, changed: true, notified } satisfies ForceDisableResult;
 });

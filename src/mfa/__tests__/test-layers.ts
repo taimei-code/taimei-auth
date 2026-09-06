@@ -55,8 +55,6 @@ export const auditFailingLayer = (cause: unknown): Layer.Layer<AuditLog> =>
   Layer.succeed(
     AuditLog,
     partial<AuditLog["Service"]>({
-      recordMfaEnabled: () => Effect.fail(new DbError({ cause })),
-      recordMfaDisabled: () => Effect.fail(new DbError({ cause })),
       appendAuditLog: () => Effect.fail(new DbError({ cause })),
     }),
   );

@@ -1,6 +1,5 @@
 import { Clock, Effect } from "effect";
-import { AuditLog } from "../../audit/ports";
-import { swallowAuditFailure } from "../../audit/report-failure";
+import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { AlreadyEnabled, EnrollmentChanged, InvalidCode, MfaNotFound } from "../error-mapping";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
@@ -36,12 +35,13 @@ export const activate = Effect.fn("mfa.activate")(function* (input: {
     return yield* new AlreadyEnabled();
   }
 
-  // 記帳は best-effort — 有効化の成立を audit 失敗で取り消さない (長期障害の検知は Sentry 側)。
+  // best-effort 記帳 (CONTEXT.md)。
   const { ip, userAgent } = getClientContext(input.headers);
-  const audit = yield* AuditLog;
-  yield* audit
-    .recordMfaEnabled({ user_id: input.actor.id, ip, userAgent })
-    .pipe(swallowAuditFailure("mfa_enabled"));
+  yield* appendAuditLogBestEffort({
+    eventType: "mfa_enabled",
+    userId: input.actor.id,
+    payload: { ip, userAgent },
+  });
   yield* (yield* MfaNotifier).notifyEnabled(input.actor.email);
   return { sessionChanges } satisfies TotpSessionChanges;
 });

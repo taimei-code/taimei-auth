@@ -67,6 +67,16 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
 
   // wire-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
   // (use-case / handler は SentryService を yield* する: src/CLAUDE.md「Effect様式」)。
+  // best-effort 記帳 (CONTEXT.md): use-case は appendAuditLogBestEffort を通す。raw appendAuditLog を直接 yield* すると
+  // DbError が E channel に残り、成立済みの操作 (行削除 / verified 化 / session 発行) が 500 で返る。
+  test("AuditLog.appendAuditLog の直呼びと swallowAuditFailure の pipe は src/audit/report-failure.ts (+ invitation accept の record* 経由) だけ", () => {
+    expect(
+      srcFiles("\\.appendAuditLog\\(").filter((f) => f !== "src/audit/report-failure.ts"),
+    ).toEqual([]);
+    const allowed = new Set(["src/audit/report-failure.ts", "src/invitation/accept.ts"]);
+    expect(srcFiles("swallowAuditFailure\\(").filter((f) => !allowed.has(f))).toEqual([]);
+  });
+
   test("reportInternalFailures / captureThrown の呼び出しは adapter (run-route / run-rpc) と better-auth の結線 (auth.ts / app.ts) だけ", () => {
     const allowed = new Set([
       "src/handlers/wire-error.ts",

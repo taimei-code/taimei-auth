@@ -14,6 +14,8 @@ import {
   issueTestChallenge,
   requestHeaders,
   tamperCookieSignature,
+  TEST_CLIENT_IP,
+  TEST_USER_AGENT,
   totpCode,
   wrongTotpCode,
 } from "../../__tests__/helpers";
@@ -154,10 +156,14 @@ describe("ログインチャレンジ", () => {
         );
         expect(session?.user.id).toBe(user.id);
 
-        // sign_in audit 1 件 (method 付き)。
+        // sign_in audit 1 件 (method + request 由来の ip / userAgent)。
         const audits = yield* auditRowsFor(user.id, "sign_in");
         expect(audits.length).toBe(1);
-        expect(audits[0]?.payload).toMatchObject({ method: "magic_link" });
+        expect(audits[0]?.payload).toEqual({
+          method: "magic_link",
+          ip: TEST_CLIENT_IP,
+          userAgent: TEST_USER_AGENT,
+        });
 
         // 同一チャレンジの再使用 → 401、pending false。
         const replayed = yield* verifyFails(challenge.headers, {
@@ -191,7 +197,11 @@ describe("ログインチャレンジ", () => {
           recoveryCodesRemaining: 9,
         });
         const audits = yield* auditRowsFor(user.id, "sign_in");
-        expect(audits[0]?.payload).toMatchObject({ method: "github" });
+        expect(audits[0]?.payload).toEqual({
+          method: "github",
+          ip: TEST_CLIENT_IP,
+          userAgent: TEST_USER_AGENT,
+        });
       }),
     ));
 

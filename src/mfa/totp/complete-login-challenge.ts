@@ -1,6 +1,5 @@
 import { Effect } from "effect";
-import { AuditLog } from "../../audit/ports";
-import { swallowAuditFailure } from "../../audit/report-failure";
+import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { ChallengeExpired, InvalidCode, Locked } from "../error-mapping";
 import { validateChallengeRedirect } from "../redirect-guard";
@@ -53,14 +52,11 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   const sessionHeaders = yield* (yield* MfaSessions).issueSession(challenge.userId);
 
   const { ip, userAgent } = getClientContext(headers);
-  const audit = yield* AuditLog;
-  yield* audit
-    .appendAuditLog({
-      eventType: "sign_in",
-      userId: challenge.userId,
-      payload: { method: challenge.method, ip, userAgent },
-    })
-    .pipe(swallowAuditFailure("sign_in"));
+  yield* appendAuditLogBestEffort({
+    eventType: "sign_in",
+    userId: challenge.userId,
+    payload: { method: challenge.method, ip, userAgent },
+  });
 
   // append で積む — set だと後段が前段の Set-Cookie を落とす (同名 rotate も両方届ける)。
   for (const cookie of clearCookie.getSetCookie()) sessionHeaders.append("set-cookie", cookie);

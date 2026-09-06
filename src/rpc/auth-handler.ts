@@ -4,9 +4,8 @@ import { Code } from "@connectrpc/connect";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { Effect } from "effect";
 import { AccountRepo, SessionRepo, UserRepo } from "../account/ports";
-import { AuditLog } from "../audit/ports";
+import { appendAuditLogBestEffort } from "../audit/report-failure";
 import { AuthApi } from "../auth-service";
-import { swallowAuditFailure } from "../audit/report-failure";
 import { Background } from "../background";
 import {
   AuthService,
@@ -17,6 +16,7 @@ import {
   VerifySessionOkSchema,
   VerifySessionResponseSchema,
 } from "../gen/auth/v1/auth_pb";
+import { getClientContext } from "../request-context";
 import { toProtoAccount, toProtoSession, toProtoUser, userResponse } from "./mappers";
 import { RpcError, runRpc } from "./run-rpc";
 
@@ -111,21 +111,21 @@ export function registerAuthService(router: ConnectRouter) {
           const headers = new Headers();
           headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
           // sign-out path は better-auth hooks.after で ctx.context.session が populate されない (1.6.9) ため、
-          // signOut 前に session lookup して user_id を取る。IP / userAgent は RPC 経由で取れず "unknown" 固定。
+          // signOut 前に session lookup して user_id を取る。IP / userAgent は "unknown" 固定: /rpc/* は consumer
+          // backend からの service-to-service 呼び出し (requireServiceKey) で、ctx.requestHeader が持つのは
+          // consumer server の identity であって end user のものではない (request-context の信頼 hop 判定も通らない)。
           const authApi = yield* AuthApi;
           const result = yield* authApi.getSession(headers).pipe(Effect.orElseSucceed(() => null));
           const userId = result?.user?.id;
           if (userId) {
-            const audit = yield* AuditLog;
             const background = yield* Background;
+            const { ip, userAgent } = getClientContext(null);
             yield* background.run(
-              audit
-                .appendAuditLog({
-                  eventType: "sign_out",
-                  userId,
-                  payload: { ip: "unknown", userAgent: "unknown" },
-                })
-                .pipe(swallowAuditFailure("sign_out")),
+              appendAuditLogBestEffort({
+                eventType: "sign_out",
+                userId,
+                payload: { ip, userAgent },
+              }),
             );
           }
           yield* authApi.signOut(headers);

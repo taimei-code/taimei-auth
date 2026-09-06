@@ -1,6 +1,5 @@
 import { Effect } from "effect";
-import { AuditLog } from "../../audit/ports";
-import { swallowAuditFailure } from "../../audit/report-failure";
+import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { Transaction } from "../../transaction";
 import { NotEnabled } from "../error-mapping";
@@ -39,12 +38,13 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
     }),
   );
 
-  // 記帳は best-effort — 無効化の成立 (行削除) を audit 失敗で取り消さない。
+  // best-effort 記帳 (CONTEXT.md)。
   const { ip, userAgent } = getClientContext(input.headers);
-  const audit = yield* AuditLog;
-  yield* audit
-    .recordMfaDisabled({ user_id: input.actor.id, ip, userAgent })
-    .pipe(swallowAuditFailure("mfa_disabled"));
+  yield* appendAuditLogBestEffort({
+    eventType: "mfa_disabled",
+    userId: input.actor.id,
+    payload: { ip, userAgent },
+  });
   yield* (yield* MfaNotifier).notifyDisabled(input.actor.email);
   return { sessionChanges } satisfies TotpSessionChanges;
 });

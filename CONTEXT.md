@@ -180,6 +180,10 @@ _Avoid_: event log (より広義), activity log
 **audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012 / ADR-0016。
 _Avoid_: log entry, audit record
 
+**best-effort 記帳**:
+操作の成立を記帳失敗で取り消さない **audit event** の記帳。記帳を成立条件にすると audit 保存の障害がそのまま user の操作の失敗になるので、失敗は Sentry に集約し、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと rollback する「tx 内記帳」と対になる。sign-in / sign-out / MFA の有効化・無効化 / `invitation_accept_rejected` がこちら。
+_Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
+
 ## Relationships
 
 - **共通ログイン画面** ↔ **共通サインアップ画面**: 相互リンクで往復可能、`service_name` / `redirect_url` / `sign_up_url` は引き継がれる
