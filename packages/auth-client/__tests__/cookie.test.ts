@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { CookieReader } from "../src/cookie";
-import { extractSessionTokenFromCookieHeader, getSessionToken, hasAuthCookie } from "../src/cookie";
+import {
+  buildSessionCookieHeader,
+  extractSessionTokenFromCookieHeader,
+  getSessionToken,
+  hasAuthCookie,
+} from "../src/cookie";
 
 const makeReader = (entries: Record<string, string>): CookieReader => {
   return (name) => entries[name];
@@ -99,5 +104,27 @@ describe("extractSessionTokenFromCookieHeader", () => {
     expect(extractSessionTokenFromCookieHeader("better-auth.session_token=tok=abc=def")).toBe(
       "tok=abc=def",
     );
+  });
+});
+
+// server 側の発行者との往復は src/__tests__/session-cookie-contract.test.ts が固定する (CONTEXT.md「session cookie」)。
+describe("session cookie 契約の SDK 側", () => {
+  // 44 文字の標準 base64 署名 (`+` `/` `=` を含む) を模した raw 値。
+  const SIGNED = `tok-abc.${"A".repeat(20)}+/${"B".repeat(21)}=`;
+
+  test("build → extract の往復で + / = を含む raw 値がそのまま戻る", () => {
+    expect(extractSessionTokenFromCookieHeader(buildSessionCookieHeader(SIGNED))).toBe(SIGNED);
+  });
+
+  test("percent-encoded な値を decode しない", () => {
+    expect(extractSessionTokenFromCookieHeader("better-auth.session_token=abc%2Bdef%3D")).toBe(
+      "abc%2Bdef%3D",
+    );
+  });
+
+  test("SESSION_COOKIE_NAMES は export されない (ADR-0006)", async () => {
+    const keys = Object.keys(await import("../src/index"));
+    expect(keys).toContain("getSessionToken");
+    expect(keys).not.toContain("SESSION_COOKIE_NAMES");
   });
 });
