@@ -156,6 +156,10 @@ _Avoid_: fail-safe (どちらの倒し方かを示さない), graceful degradati
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別し、実体は Redis (secondaryStorage) のみに保管する。`session.storeSessionInDatabase` を有効にしていないため Postgres の `session` テーブルには行を書かない (テーブル定義は better-auth の schema 要求として残る)。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
 
+**session cookie**:
+**session** を識別する署名付き cookie (`better-auth.session_token`、HTTPS では `__Secure-` 接頭辞)。発行者は 2 つ: 通常ログイン (better-auth) と **MFA チャレンジ** 通過後の発行 (`src/mfa/gateway.ts`)。Set-Cookie に載る値は両者とも percent-encoding 済みの署名付き値で、属性 (Max-Age / Path / Domain / HttpOnly / Secure / SameSite) も 2 発行者で同一。`@taimei-code/auth-client` と consumer app は値の中身を解釈せず、decode も encode もしない。値の形式の詳細と固定する test は `src/mfa/gateway.ts` の `issueSessionFor` 直前のコメントを正本とする。
+_Avoid_: session token (署名を除いた Redis key の方), session (識別される状態の方)
+
 **sign-out**:
 ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie (session token + cookieCache) の削除と Redis 上の session 削除を伴う (Postgres `session` 行は書かれていないので削除対象も無い)。UI 文言は「ログアウト」(既存ボタンラベル・失敗トーストもこれに合わせる)。設計・コード語彙は sign-out。
 _Avoid_: logout (英語混在を避ける), session 終了 (より広義)

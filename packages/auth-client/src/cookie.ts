@@ -25,8 +25,10 @@ export function buildSessionCookieHeader(token: string): string {
   return SESSION_COOKIE_NAMES.map((name) => `${name}=${token}`).join("; ");
 }
 
-// IdP が発行する cookie 値の前提: 現行は URL-safe な opaque ID のみのため URL decode しない。
-// ただし JWT 等に変わると値自体に '=' を含みうるため、区切りは最初の '=' に限定する。
+// 値は opaque に扱い decode / encode しない。IdP の発行者 (better-auth 本体 / src/mfa/gateway.ts) はどちらも
+// percent-encoded の署名付き値を出し、server がそれを decode して検証するので素通しで往復する (正本は CONTEXT.md
+// 「session cookie」、往復は src/__tests__/session-cookie-contract.test.ts が固定)。値自体が '=' を含みうるため、
+// 区切りは最初の '=' に限定する。
 export function extractSessionTokenFromCookieHeader(cookieHeader: string): string | undefined {
   if (!cookieHeader) return undefined;
   const pairs = cookieHeader.split(";");
