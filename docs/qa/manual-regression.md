@@ -14,9 +14,9 @@
 ## QA-MR-01: cross-subdomain Cookie の実ドメイン共有 (#30 / #89 家系)
 
 - **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` 周辺を触る PR、および本番デプロイ後
-- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済み — ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有
+- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済み — ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有。session cookie の発行者は 2 つあり ([CONTEXT.md「session cookie」](../../CONTEXT.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済み。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
 - **手順**:
-  1. ブラウザで `https://auth.taimei-code.com` にログインする
+  1. ブラウザで `https://auth.taimei-code.com` に **MFA 無効の user で** ログインする
   2. DevTools → Application → Cookies で session cookie の `Domain` が `.taimei-code.com`、`Secure` / `HttpOnly` が付与されていることを確認する
   3. `https://app.taimei-code.com` (consumer app) を開き、再ログインなしで認証状態が引き継がれることを確認する
 - **期待結果**: cookie domain が `.taimei-code.com` で、subdomain 間で session が共有される。ログイン後に consumer 側で 401 / redirect loop にならない
