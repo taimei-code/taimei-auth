@@ -46,7 +46,7 @@ export const buildLoginShortcut = (isAuthenticated: IsAuthenticated) => {
           catch: (err) => err,
         }).pipe(
           Effect.catch((err) =>
-            captureCause({ level: "warning", tags: { handler: "loginShortcut" } })({
+            captureCause({ tags: { handler: "loginShortcut" } })({
               cause: err,
             }).pipe(Effect.as(false)),
           ),

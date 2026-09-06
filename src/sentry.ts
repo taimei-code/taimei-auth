@@ -43,12 +43,15 @@ export class SentryService extends Context.Service<
   }
 >()("taimei/Sentry") {}
 
-// 境界失敗 (cause 付き failure) を Sentry に記録する combinator。fail-open / fail-closed の分岐は呼び出し側が
-// 続ける (`Effect.catchTag("RedisError", (f) => captureCause({ tags })(f).pipe(Effect.as(null)))`)。
+// 境界失敗 (cause 付き failure) を Sentry に記録する combinator。level は boundary error の warning (ADR-0017 Decision の
+// Sentry 項) を既定にし、呼び手の倒し方 (fail-open / fail-closed) で変えない。倒し方の分岐は呼び出し側が続ける
+// (`Effect.catchTag("RedisError", (f) => captureCause({ tags })(f).pipe(Effect.as(null)))`)。
 export const captureCause =
   (context?: CaptureContext) =>
   (failure: { readonly cause: unknown }): Effect.Effect<void, never, SentryService> =>
-    SentryService.use((sentry) => sentry.captureException(failure.cause, context));
+    SentryService.use((sentry) =>
+      sentry.captureException(failure.cause, { level: "warning", ...context }),
+    );
 
 export const SentryLive = Layer.succeed(
   SentryService,

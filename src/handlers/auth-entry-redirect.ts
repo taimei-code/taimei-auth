@@ -26,9 +26,7 @@ export const authEntryRedirect = (c: Context, next: Next) => {
 const passThrough = (failure: {
   readonly cause: unknown;
 }): Effect.Effect<undefined, never, SentryService> =>
-  captureCause({ level: "warning", tags: { handler: "authEntryRedirect" } })(failure).pipe(
-    Effect.as(undefined),
-  );
+  captureCause({ tags: { handler: "authEntryRedirect" } })(failure).pipe(Effect.as(undefined));
 
 // Redis / better-auth / DB の transient 障害は 5xx にせず pass-through (SPA を返す) に倒す。login-shortcut と同じ
 // fail-open 方針で、session-aware redirect は利便で認可ではない。Sentry には warning で残す。
