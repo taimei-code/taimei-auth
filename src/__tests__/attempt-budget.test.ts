@@ -23,11 +23,13 @@ describe("spendAttemptBudget", () => {
       ),
     );
 
-  test("AC-017 / AC-018 計数不能 (RedisError) は unavailable に倒し、Sentry に component 付きで 1 回記録する", async () => {
+  test("AC-017 / AC-018 計数不能 (RedisError) は unavailable に倒し、Sentry に component 付き warning で 1 回記録する", async () => {
     const before = captured.length;
     expect(await spend(failingRedisLayer)).toBe("unavailable");
     expect(captured.length).toBe(before + 1);
     expect(captured.at(-1)?.[1]?.tags?.component).toBe("c");
+    // boundary error は warning (ADR-0017 Decision の Sentry 項)。level は呼び手で変えない。
+    expect(captured.at(-1)?.[1]?.level).toBe("warning");
   });
 
   test("AC-019 count 0 は契約逸脱として unavailable に倒す (fail-closed の第 2 線)", async () => {

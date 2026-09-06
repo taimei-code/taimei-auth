@@ -9,7 +9,7 @@ import { captureCause } from "./sentry";
 export type AttemptBudgetVerdict = "accepted" | "exhausted" | "unavailable";
 
 // RedisError を E channel に載せず unavailable に畳む (呼び手に障害の分岐を持たせない)。observation は残す —
-// 計数不能が続いていることは Sentry でしか気付けない。
+// 計数不能が続いていることは Sentry でしか気付けない (level は captureCause の既定 warning、ADR-0017 Decision の Sentry 項)。
 export const spendAttemptBudget = Effect.fn("attemptBudget.spend")(function* (input: {
   key: string;
   windowSeconds: number;

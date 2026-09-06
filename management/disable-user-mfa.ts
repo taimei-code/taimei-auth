@@ -1,6 +1,8 @@
 // MFA 運用救済 CLI (位置づけと手順: ADR-0016 §8.1 / README.md の運用節)。
 //   bun run management/disable-user-mfa.ts <userId>
 // 1 tx で mfa_totp 行とリカバリーコードを全削除する。guard 参加・protocol 照合は存在しない (ADR-0016)。
+// 登録済み未有効 (verifiedAt NULL、self-service の disable が NotEnabled で拒む状態) の行も消すが、MFA は有効でなかったので
+// changed: false とし、mfa_disabled の記帳と「無効にしました」メールは出さない (どちらも起きていない遷移の記録になる)。
 import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
 import { appendAuditLogBestEffort } from "../src/audit/report-failure";
@@ -23,6 +25,7 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
 
   const user = yield* users.findUserById(userId);
   if (!user) return { ok: false, error: "not_found" } satisfies ForceDisableResult;
+  const wasEnabled = (yield* mfa.readMfaVerification(userId))?.verifiedAt != null;
 
   const deleted = yield* tx.run((t) =>
     Effect.gen(function* () {
@@ -31,7 +34,8 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
       return rows;
     }),
   );
-  if (deleted === 0) return { ok: true, changed: false } satisfies ForceDisableResult;
+  if (deleted === 0 || !wasEnabled)
+    return { ok: true, changed: false } satisfies ForceDisableResult;
 
   // best-effort 記帳 (CONTEXT.md)。
   yield* appendAuditLogBestEffort({

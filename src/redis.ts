@@ -14,7 +14,7 @@ export interface RedisStorage {
   getAndDelete(key: string): Promise<string | null>;
 }
 
-// rate-limit window の状態: 現在の hit カウントと window 残り TTL (Retry-After 算出用)。
+// rate-limit window の状態: 現在の hit カウントと window 残り TTL (ttl の扱いは incrementRateWindow のコメント)。
 export type RateWindowResult = { count: number; ttl: number };
 
 // MULTI INCR/EXPIRE/TTL の exec 応答を RateWindowResult に写す唯一の場所 (両実装が通る)。
@@ -23,7 +23,7 @@ export type RateWindowResult = { count: number; ttl: number };
 // count を 0 に潰すと fail-open 側の試行枠で storage 障害が「通す」に化けるため throw する
 // (attemptOnce の tryRedis が RedisError に写す)。倒し方の正本: CONTEXT.md「試行枠」。
 // boolean を Number() の前に弾くのは、位置ずれで EXPIRE の true が count 1 に化けるのを防ぐため。
-// ttl は Retry-After にしか使わず security 判断に関与しないので、欠損・負値は windowSec に倒して throw しない。
+// ttl は呼び手が読まず (incrementRateWindow のコメント) security 判断に関与しないので、欠損・負値は windowSec に倒して throw しない。
 export function toRateWindowResult(res: unknown, windowSec: number): RateWindowResult {
   const [rawCount, , rawTtl] = Array.isArray(res) ? res : [];
   const count = typeof rawCount === "boolean" ? Number.NaN : Number(rawCount);
@@ -36,7 +36,9 @@ export function toRateWindowResult(res: unknown, windowSec: number): RateWindowR
 
 // ESM live binding: initRedis 後の値を import 側が参照する。
 export let redisStorage: RedisStorage;
-// key を windowSec の window で 1 hit INCR し、現在カウントと TTL を返す。INCR + EXPIRE + TTL の MULTI
+// key を windowSec の window で 1 hit INCR し、現在カウントと TTL を返す。EXPIRE を INCR ごとに打つので window は
+// 「最後の req から windowSec」(固定 window ではない) になり、直後の TTL は常に windowSec に等しい。呼び手はこれを根拠に
+// 待ち時間として windowSec を返し、ttl を読まない (読む場所を増やさない)。INCR + EXPIRE + TTL の MULTI
 // による atomic 化は必須 — INCR 後 EXPIRE 前に crash すると TTL なし counter が永続残留する。
 export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
 export let pingRedis: () => Promise<boolean>;

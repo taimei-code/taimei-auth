@@ -84,7 +84,7 @@ codegen (`db:generate` / `generate`) は生成物を working tree へ書き出�
 ### Proto 変更フロー
 
 1. `proto/` 配下の `.proto` を編集
-2. host で `bun run generate` を実行し `src/gen/` を再生成、同 script が `packages/auth-client/src/gen/` へ自動コピー (両方 commit する)
+2. host で `bun run generate` を実行すると `src/gen/` と `packages/auth-client/src/gen/` の両方が同じ内容で再生成される (両方 commit する。CI が `bun run generate:check` で 2 コピーの一致を検査する)
 3. CI の `Buf breaking check` step が `main` を baseline に wire 互換性違反を検出する。意図的な breaking が必要な場合は SDK の major 版を bump し、CHANGELOG に migration 例を追記すること
 4. 別 IdP 移行や proto v2 切替で並行運用が必要になった時は `docs/migration-strategy.md` の Dual Read/Write 段階移行 playbook を発動する
 

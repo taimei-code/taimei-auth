@@ -1,9 +1,9 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { Effect } from "effect";
 import type { Context, MiddlewareHandler } from "hono";
+import { spendAttemptBudget } from "./attempt-budget";
 import { runMiddleware } from "./handlers/run-route";
-import { Redis } from "./redis-service";
-import { captureCause } from "./sentry";
+import { JSON_HEADERS } from "./handlers/wire-error";
 
 export type RateLimitOptions = {
   keyFn: (c: Context) => string | Promise<string>;
@@ -30,34 +30,37 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-// 倒し方は fail-open (根拠: CONTEXT.md「fail-closed / fail-open」)。RedisError は Sentry (warning) に残す。
-// EXPIRE を毎回呼ぶため「最後の req から windowSec」semantic になる (固定 window ではない — 差は許容)。
-// 本体は Effect program (Redis service 経由)、runMiddleware が Response → 短絡 / undefined → next() に写像する。
+// HTTP 経路の試行枠 (CONTEXT.md「試行枠」)。倒し方は fail-open (根拠: CONTEXT.md「fail-closed / fail-open」) で、
+// kernel の unavailable は通す。Retry-After は windowSec: 計数は INCR ごとに EXPIRE を打つので残り TTL は常に
+// windowSec に等しい (正本: redis.ts の MULTI 計数のコメント)。kernel は ttl を返さない。
+// key の解決 (Hono Context) は middleware 側に置き、program は Hono 非依存にして test が Redis / Sentry の
+// test Layer だけで fail-open と境界を観測できるようにする。
+// middleware の options から keyFn を Hono Context で解決済みの key に置き換えた形。
+type RateLimitInput = Omit<RateLimitOptions, "keyFn"> & { key: string };
+
+export const rateLimitProgram = Effect.fn("rateLimit.check")(function* (input: RateLimitInput) {
+  const verdict = yield* spendAttemptBudget({
+    key: input.key,
+    windowSeconds: input.windowSec,
+    maxAttempts: input.limit,
+    component: "rate-limit",
+  });
+  if (verdict !== "exhausted") return undefined;
+  return new Response(JSON.stringify({ error: "Too Many Requests" }), {
+    status: 429,
+    headers: { ...JSON_HEADERS, "Retry-After": String(input.windowSec) },
+  });
+});
+
 export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {
   return (c, next) =>
     runMiddleware(
       c,
       next,
-      Effect.gen(function* () {
-        const redis = yield* Redis;
-        const key = yield* Effect.promise(async () => options.keyFn(c));
-        const result = yield* redis
-          .incrementRateWindow(key, options.windowSec)
-          .pipe(
-            Effect.catchTag("RedisError", (failure) =>
-              captureCause({ level: "warning", tags: { component: "rate-limit" } })(failure).pipe(
-                Effect.as(null),
-              ),
-            ),
-          );
-        if (!result) return undefined;
-        const { count, ttl } = result;
-        if (count > options.limit) {
-          return c.json({ error: "Too Many Requests" }, 429, {
-            "Retry-After": String(Math.max(ttl, 1)),
-          });
-        }
-        return undefined;
-      }),
+      Effect.promise(async () => options.keyFn(c)).pipe(
+        Effect.flatMap((key) =>
+          rateLimitProgram({ key, limit: options.limit, windowSec: options.windowSec }),
+        ),
+      ),
     );
 }

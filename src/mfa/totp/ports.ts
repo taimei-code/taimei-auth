@@ -44,6 +44,8 @@ export class MfaSessions extends Context.Service<
 >()("taimei/MfaSessions") {}
 
 // 通知は失敗しない契約 (notification-adapter が catch を内蔵する)。
+// seam にする理由: 「失敗しない」を E channel = never として interface に固定し、use-case が adapter の catch を
+// 読まずに済むようにするため (test は記録型 Layer で通知先を観測する)。
 export class MfaNotifier extends Context.Service<
   MfaNotifier,
   {
@@ -53,6 +55,8 @@ export class MfaNotifier extends Context.Service<
 >()("taimei/MfaNotifier") {}
 
 // 無効化の総当たり防御 (Redis 計数)。fail-closed = 数えられない時も Locked。
+// seam にする理由: fail-closed を E channel = Locked として interface に固定し、test が Locked を注入して
+// 枯渇経路を Redis 無しで観測するため。
 export class MfaDisableBudget extends Context.Service<
   MfaDisableBudget,
   {

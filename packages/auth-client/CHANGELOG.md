@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Deprecations
+
+- `buildAuthLogoutUrl` / `BuildAuthLogoutUrlOptions` を `@deprecated` にした。組み立てた `/auth/sign-out` に応答する route は auth ホストに無く (SPA の fallback が 200 を返すだけで session は残る)、sign-out は共通画面 SPA の `authClient.signOut()` で行う。公開 export の削除は breaking なので次の major (v2.0.0) で行う
+
 ## 1.1.0 — 2026-05-26
 
 事業所 (company) 機能 (PR #55 → #63) を SDK 公開 API に反映。proto field 追加のみで wire 互換は維持 (`buf breaking` 通過)。
