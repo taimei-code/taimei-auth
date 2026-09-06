@@ -17,6 +17,23 @@ export interface RedisStorage {
 // rate-limit window の状態: 現在の hit カウントと window 残り TTL (Retry-After 算出用)。
 export type RateWindowResult = { count: number; ttl: number };
 
+// MULTI INCR/EXPIRE/TTL の exec 応答を RateWindowResult に写す唯一の場所 (両実装が通る)。
+// 成功した INCR は必ず 1 以上を返す。両 library はコマンド error を throw する (Upstash は UpstashError、
+// node-redis は MultiErrorReply) ので、ここで弾くのは応答の形が変わった時の契約逸脱だけ。
+// count を 0 に潰すと fail-open 側の試行枠で storage 障害が「通す」に化けるため throw する
+// (attemptOnce の tryRedis が RedisError に写す)。倒し方の正本: CONTEXT.md「試行枠」。
+// boolean を Number() の前に弾くのは、位置ずれで EXPIRE の true が count 1 に化けるのを防ぐため。
+// ttl は Retry-After にしか使わず security 判断に関与しないので、欠損・負値は windowSec に倒して throw しない。
+export function toRateWindowResult(res: unknown, windowSec: number): RateWindowResult {
+  const [rawCount, , rawTtl] = Array.isArray(res) ? res : [];
+  const count = typeof rawCount === "boolean" ? Number.NaN : Number(rawCount);
+  if (!Number.isFinite(count) || count < 1) {
+    throw new Error(`incrementRateWindow: exec の応答が契約に外れる (count=${String(rawCount)})`);
+  }
+  const ttl = Number(rawTtl);
+  return { count, ttl: Number.isFinite(ttl) && ttl >= 1 ? ttl : windowSec };
+}
+
 // ESM live binding: initRedis 後の値を import 側が参照する。
 export let redisStorage: RedisStorage;
 // key を windowSec の window で 1 hit INCR し、現在カウントと TTL を返す。INCR + EXPIRE + TTL の MULTI
@@ -41,14 +58,8 @@ function initUpstash(url: string, token: string): void {
     },
     getAndDelete: async (key) => (await r.getdel<string>(key)) ?? null,
   };
-  incrementRateWindow = async (key, windowSec) => {
-    const res = (await r.multi().incr(key).expire(key, windowSec).ttl(key).exec()) as [
-      number,
-      unknown,
-      number,
-    ];
-    return { count: Number(res[0] ?? 0), ttl: Number(res[2] ?? windowSec) };
-  };
+  incrementRateWindow = async (key, windowSec) =>
+    toRateWindowResult(await r.multi().incr(key).expire(key, windowSec).ttl(key).exec(), windowSec);
   pingRedis = () =>
     r
       .ping()
@@ -96,7 +107,7 @@ function initNodeRedis(redisUrl: string): void {
   incrementRateWindow = async (key, windowSec) => {
     const redis = await connectedClient();
     const res = await redis.multi().incr(key).expire(key, windowSec).ttl(key).exec();
-    return { count: Number(res?.[0] ?? 0), ttl: Number(res?.[2] ?? windowSec) };
+    return toRateWindowResult(res, windowSec);
   };
   // 決して reject しない boolean 契約 (/health が try/catch なしで待ち redis 断を 503 degraded にするため)。
   // 注意: 接続が確立も失敗もしない間は resolve しない — 打ち切りは呼び出し側 (src/index.ts の boot race)。

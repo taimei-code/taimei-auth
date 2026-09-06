@@ -4,6 +4,7 @@ import { Background, BackgroundLive, withWaitUntil } from "../background";
 import { RedisError, timeoutAsBoundary, tryRedis } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
+import { getRedis } from "../redis";
 import { Redis, RedisLive } from "../redis-service";
 
 // ADR-0017 Stage 4 の runtime primitive / boundary service。compose Redis + Postgres を使う。
@@ -34,6 +35,11 @@ describe("Redis service (live)", () => {
     const r = await run(Redis.use((redis) => redis.incrementRateWindow(`${key}:w`, 5)));
     expect(r.count).toBe(1);
     expect(r.ttl).toBeGreaterThan(0);
+    expect(r.ttl).toBeLessThanOrEqual(5);
+    // toRateWindowResult は TTL 欠損 / -1 を windowSec に倒すため、EXPIRE が実際に付いたことは生 TTL で見る。
+    const rawTtl = await (await getRedis()).ttl(`${key}:w`);
+    expect(rawTtl).toBeGreaterThanOrEqual(1);
+    expect(rawTtl).toBeLessThanOrEqual(5);
     await run(Redis.use((redis) => redis.delete(`${key}:w`)));
   });
 });
