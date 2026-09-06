@@ -30,7 +30,7 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-// Redis 障害時は fail-open (auth は事業 critical path、availability を優先)。RedisError は Sentry (warning) に残す。
+// 倒し方は fail-open (根拠: CONTEXT.md「fail-closed / fail-open」)。RedisError は Sentry (warning) に残す。
 // EXPIRE を毎回呼ぶため「最後の req から windowSec」semantic になる (固定 window ではない — 差は許容)。
 // 本体は Effect program (Redis service 経由)、runMiddleware が Response → 短絡 / undefined → next() に写像する。
 export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {

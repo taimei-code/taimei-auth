@@ -144,6 +144,14 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続
 認証アプリと **リカバリーコード** を両方失った user を、運用者が本人のコード検証なしに復帰可能な **MFA 登録状態**へ戻す **MFA 登録遷移**。user の session / Actor を使う self-service の無効化とは区別する。詳細: ADR-0016。
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コード識別子としてのみ使う), 救済スクリプト (実装形態名)
 
+**試行枠**:
+window 内の試行回数の上限。**auth ホスト** が Redis の計数で守る防御で、経路ごとに「数えられない時の倒し方」(**fail-closed / fail-open**) を明示して決め、暗黙の既定を持たない。fail-closed: **多要素認証 (MFA)** のコード検証 (ログインチャレンジと無効化)。fail-open: HTTP 経路別の IP / session 軸 (**Magic Link**、canary token、**MFA チャレンジ** の API、MFA 状態変更) と **事業所** 単位の招待。code 上の「rate limit」(HTTP 429 を返す middleware) と「quota」(招待) は同じ概念の別名で、設計語彙では **試行枠** に統一する。MFA だけを fail-closed に倒す理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
+_Avoid_: rate limit / quota / attempt budget (code の識別子に残る別名。設計語彙では使わない), throttling (より広義)
+
+**fail-closed / fail-open**:
+判断材料が得られない時 (Redis で数えられない、**session** から actor を解決できない、**role** が未知) にどちらへ倒すか。fail-closed は拒否に倒し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open に倒し、通すと第二要素の総当たり防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor 解決、unknown role) は fail-closed に倒す。fail-open で通した事実は Sentry に残し、silent には通さない。
+_Avoid_: fail-safe (どちらの倒し方かを示さない), graceful degradation (倒し方でなく体験の話)
+
 **session**:
 better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別し、実体は Redis (secondaryStorage) のみに保管する。`session.storeSessionInDatabase` を有効にしていないため Postgres の `session` テーブルには行を書かない (テーブル定義は better-auth の schema 要求として残る)。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
@@ -157,7 +165,7 @@ better-auth lifecycle hook や admin 操作によって、user 自身の意思�
 _Avoid_: invalidate (より広義), terminate, kill
 
 **membership guard**:
-**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (fail-closed: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は Effect program として合成した結果を adapter (`runRoute`) が HTTP に写像する。詳細: ADR-0012 / ADR-0017。
+**アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (**fail-closed**: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は Effect program として合成した結果を adapter (`runRoute`) が HTTP に写像する。詳細: ADR-0012 / ADR-0017。
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)
 
 **audit log**:
@@ -199,3 +207,4 @@ _Avoid_: log entry, audit record
 - 「twoFactor」「backupCodes」「`2fa-*`」は twoFactor プラグイン撤去によりテーブル名・列名・API 名・cookie 内識別子としてはもはや存在しない。設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 残る借用はテスト内の語彙検査のみ
 - 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた — resolved: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないため本 glossary に置かず、正本は ADR-0017
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化
+- 「rate limit」「quota」「attempt budget」が code 上で並存し、同じ「window 内の試行上限」を指していた — resolved: 設計語彙は **試行枠** に統一、code の識別子は別名として据え置き

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { Redis } from "../redis-service";
 import { captureCause } from "../sentry";
-import { spendAttemptBudget } from "./attempt-budget";
+import { spendAttemptBudget } from "../attempt-budget";
 import { Locked } from "./error-mapping";
 
 // ADR-0012 (Use-case 層): 無効化のコード検証に掛けるアカウント単位の試行上限。セッションあり経路で

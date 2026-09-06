@@ -63,7 +63,7 @@
 
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 
-- **契機**: `src/mfa/` / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` / `otpauth://` URI の生成を触る PR
+- **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` を触る PR
 - **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済み — ここで見るのは実アプリが QR コードと URI を解釈できるか
 - **手順**:
   1. `/account/security` の「多要素認証 (MFA)」を有効化し、表示された QR コードを認証アプリのカメラで読み取る
