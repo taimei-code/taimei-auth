@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
-import { dbTest, expectFailure } from "../../../__tests__/live-runner";
+import { auditRowsFor, dbTest, expectFailure } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
   countMfaTotpRows,
@@ -65,6 +65,11 @@ function buildOps(overrides?: { locked?: boolean; auditFails?: boolean }) {
 }
 
 const headers = new Headers({ "user-agent": "totp-reg-test", "x-forwarded-for": "203.0.113.9" });
+
+const sentryAuditFailureEvents = () =>
+  sentry.exceptions
+    .filter((e) => e.context?.tags?.component === "audit-log")
+    .map((e) => e.context?.tags?.event);
 
 describe("MFA 登録遷移 (自前 totp)", () => {
   beforeEach(() => cleanup().then(() => sentry.reset()));
@@ -157,6 +162,10 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           recoveryCodesRemaining: 10,
         });
 
+        // best-effort 記帳の成功側: 行が 1 件書かれ、Sentry には何も行かない。
+        expect((yield* auditRowsFor(user.id, "mfa_enabled")).length).toBe(1);
+        expect(sentryAuditFailureEvents()).toEqual([]);
+
         // 有効: enroll / activate → 409
         expectFailure(
           yield* Effect.flip(ops.run(enroll({ actor }))),
@@ -201,6 +210,8 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect(disabled.sessionChanges).toBeInstanceOf(Headers);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
         expect(yield* countRecoveryCodeRows(user.id)).toBe(0);
+        expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(1);
+        expect(sentryAuditFailureEvents()).toEqual([]);
         expect(ops.notified).toEqual([`enabled:${user.email}`, `disabled:${user.email}`]);
         expect(ops.resets).toEqual([user.id]);
       }),
@@ -334,10 +345,15 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         );
 
         expect(activated.sessionChanges).toBeInstanceOf(Headers);
-        expect(
-          sentry.exceptions.filter((e) => e.context?.tags?.component === "audit-log").length,
-        ).toBe(1);
+        expect(sentryAuditFailureEvents()).toEqual(["mfa_enabled"]);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).not.toBeNull();
+
+        const disabled = yield* ops.run(
+          disable({ actor, headers, code: yield* totpCode(secret, 1), kind: "totp" }),
+        );
+        expect(disabled.sessionChanges).toBeInstanceOf(Headers);
+        expect(sentryAuditFailureEvents()).toEqual(["mfa_enabled", "mfa_disabled"]);
+        expect(yield* countMfaTotpRows(user.id)).toBe(0);
       }),
     ));
 

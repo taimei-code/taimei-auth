@@ -139,7 +139,6 @@ describe("MFA totp module boundary", () => {
       `management/backfill-orphan-cleanup.ts:from "../src/account/backfill-orphan-cleanup"`,
       `management/backfill-orphan-cleanup.ts:from "../src/runtime"`,
       `management/disable-user-mfa.ts:from "../src/account/ports"`,
-      `management/disable-user-mfa.ts:from "../src/audit/ports"`,
       `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
       `management/disable-user-mfa.ts:from "../src/mfa/notification-adapter"`,
       `management/disable-user-mfa.ts:from "../src/mfa/totp/ports"`,
