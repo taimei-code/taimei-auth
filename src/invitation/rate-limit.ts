@@ -1,6 +1,5 @@
 import { Clock, Effect } from "effect";
-import { Redis } from "../redis-service";
-import { captureCause } from "../sentry";
+import { spendAttemptBudget } from "../attempt-budget";
 
 // company 単位の invitation rate limit。Magic Link rate limit と独立した二重防御 (一括入社の burst を見越した既定値)。
 const DEFAULT_HOURLY_LIMIT_PER_COMPANY = 50;
@@ -14,20 +13,19 @@ function hourlyLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOURLY_LIMIT_PER_COMPANY;
 }
 
-// Redis 障害時は fail-open (availability 優先)。MULTI で atomic 化する根拠は src/rate-limit.ts に集約。
-// RedisError だけを握って true に倒すため E は never で、呼び出し側は障害の分岐を持たない。
+// 倒し方は fail-open (根拠: CONTEXT.md「fail-closed / fail-open」)。計数は試行枠 kernel に乗せ、数えられなかった
+// verdict (unavailable) も通す。kernel が RedisError を畳むため E は never で、呼び出し側は障害の分岐を持たない。
 export const tryConsumeInvitationQuota = Effect.fn("invitation.tryConsumeQuota")(function* (
   companyId: string,
 ) {
-  const redis = yield* Redis;
   const nowMillis = yield* Clock.currentTimeMillis;
-  const key = `invitation_rate:${companyId}:${hourBucket(nowMillis)}`;
-  return yield* redis.incrementRateWindow(key, HOUR_BUCKET_TTL_SEC).pipe(
-    Effect.map((result) => result.count <= hourlyLimit()),
-    Effect.catchTag("RedisError", (failure) =>
-      captureCause({ tags: { component: "invitation-rate-limit" } })(failure).pipe(Effect.as(true)),
-    ),
-  );
+  const verdict = yield* spendAttemptBudget({
+    key: `invitation_rate:${companyId}:${hourBucket(nowMillis)}`,
+    windowSeconds: HOUR_BUCKET_TTL_SEC,
+    maxAttempts: hourlyLimit(),
+    component: "invitation-rate-limit",
+  });
+  return verdict === "accepted" || verdict === "unavailable";
 });
 
 function hourBucket(nowMillis: number): string {
