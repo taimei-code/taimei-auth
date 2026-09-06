@@ -84,6 +84,11 @@ jobs:
       - name: Lint (shellcheck)
         run: shellcheck scripts/*.sh e2e/*.sh
 
+      # src/gen と SDK 側 copy は buf.gen.yaml が両方へ生成するが、#2 で src/gen だけ commit されて
+      # #34 まで割れた前例がある。dir 単位の diff なので proto が増えても期待値の編集は要らない。
+      - name: Assert generated proto copies are identical
+        run: bun run generate:check
+
       - name: Typecheck
         run: bun run typecheck
 
