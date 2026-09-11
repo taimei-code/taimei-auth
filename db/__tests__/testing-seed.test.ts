@@ -7,7 +7,6 @@ import {
   markInvitationAccepted,
   markInvitationRevoked,
 } from "../repositories/invitation";
-import type { Role } from "../schema";
 import { createSeed, ids } from "../testing/seed";
 import {
   readAuditRows,
@@ -108,18 +107,6 @@ describe("db/testing seed", () => {
 
   test("createSeed の公開面は 11 関数 (AC-208)", () => {
     expect(Object.keys(seed).sort()).toEqual(Object.keys(SEED_KEYS).sort());
-  });
-
-  test("seedInvitation は unknown role をそのまま書く (fail-closed 検査用、cast で通す)", async () => {
-    const owner = await seed.seedUser("owner");
-    const co = await seed.seedCompany("role");
-    const inv = await seed.seedInvitation({
-      companyId: co,
-      email: ids(P).email("sup"),
-      role: "SUPERVISOR" as Role,
-      invitedByUserId: owner.id,
-    });
-    expect(String((await readInvitation(inv.id))?.role)).toBe("SUPERVISOR");
   });
 
   test("markCompanyDeleted は既定で deleted_at も書き、deletedAt: false なら status だけ変える", async () => {
