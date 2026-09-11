@@ -95,9 +95,8 @@ export type AuditLogEntry =
         invitation_id: string;
         company_id: string;
         invited_by_user_id: string;
-        // DB `role` 列 (text) の生値なので union に絞らず string。未知文字列も監査解析に必要なため事実を持つ。
-        attempted_role: string;
-        inviter_current_role: string | null;
+        attempted_role: Role;
+        inviter_current_role: Role | null;
         reason: string;
       };
     }
@@ -262,8 +261,8 @@ export const recordInvitationAcceptRejected = (
     invitation_id: string;
     company_id: string;
     invited_by_user_id: string;
-    attempted_role: string;
-    inviter_current_role: string | null;
+    attempted_role: Role;
+    inviter_current_role: Role | null;
     reason: string;
   },
   txOrDb: DbOrTx = db,

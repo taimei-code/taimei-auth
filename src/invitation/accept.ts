@@ -1,10 +1,10 @@
 import { Data, Effect } from "effect";
-import type { InvitationRow } from "@/db/repositories/invitation";
+import type { InvitationRow, Role } from "@/db/repositories/invitation";
 import type { DbTx } from "@/db/transaction";
 import { AuditLog } from "../audit/ports";
 import { swallowAuditFailure } from "../audit/report-failure";
 import { IdGenerator } from "../id-generator";
-import { canAcceptInvitedRole, isKnownRole } from "../membership/policy";
+import { canAcceptInvitedRole } from "../membership/policy";
 import { ExpiredOrUsed } from "../membership/guard/errors";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
@@ -17,7 +17,7 @@ const ACCEPT_REJECTED_LOG = "invitation_accept_rejected" as const;
 
 class RejectAccept extends Data.TaggedError("RejectAccept")<{
   readonly reason: RejectReason;
-  readonly inviterRole: string | null;
+  readonly inviterRole: Role | null;
 }> {}
 
 export const acceptInvitation = Effect.fn("invitation.accept")(function* (params: {
@@ -35,7 +35,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
     const accepted = yield* invitations.markInvitationAccepted(invitation.id, t);
     if (!accepted) return yield* new RejectAccept({ reason: "double_accept", inviterRole: null });
 
-    const inviterCurrentRole: string | null =
+    const inviterCurrentRole =
       invitation.role === "OWNER"
         ? ((yield* memberships.lockMembershipForShare(
             t,
@@ -45,10 +45,10 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
         : null;
 
     if (!canAcceptInvitedRole(invitation.role, inviterCurrentRole)) {
-      const reason: RejectReason = isKnownRole(invitation.role)
-        ? "inviter_not_owner_or_missing"
-        : "unknown_invited_role";
-      return yield* new RejectAccept({ reason, inviterRole: inviterCurrentRole });
+      return yield* new RejectAccept({
+        reason: "inviter_not_owner_or_missing",
+        inviterRole: inviterCurrentRole,
+      });
     }
 
     yield* memberships.insertMembership(

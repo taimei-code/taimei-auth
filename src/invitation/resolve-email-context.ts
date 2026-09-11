@@ -37,7 +37,7 @@ export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailC
     companyName: company.name,
     inviterName: inviter?.name ?? "",
     inviterEmail: inviter?.email ?? "",
-    roleLabel: roleLabelJa(invitation.role, "メンバー"),
+    roleLabel: roleLabelJa(invitation.role),
   } satisfies InvitationEmailContext;
 });
 

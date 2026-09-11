@@ -12,7 +12,7 @@ const members = [
     user_id: "user-1",
     user_name: "User",
     user_email: "user@example.com",
-    role: "OWNER",
+    role: "OWNER" as const,
     joined_at: "2026-01-01T00:00:00.000Z",
   },
 ];
