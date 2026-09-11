@@ -8,11 +8,13 @@ import {
   integer,
   bigint,
   jsonb,
+  check,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { inArray, relations } from "drizzle-orm";
 
 // 用語の正本: CONTEXT.md (role / org_code / activation_status / 事業所 / audit log)
-export type Role = "OWNER" | "ADMIN" | "MEMBER";
+export const ROLES = ["OWNER", "ADMIN", "MEMBER"] as const;
+export type Role = (typeof ROLES)[number];
 
 export type OrgCode = "PERSONAL" | "CORPORATE";
 
@@ -196,6 +198,8 @@ export const membership = pgTable(
     uniqueIndex("membership_user_company_key").on(table.userId, table.companyId),
     index("membership_company_id_idx").on(table.companyId),
     index("membership_user_id_idx").on(table.userId),
+    // inlineParams が無いと drizzle-kit は値を $1.. の placeholder で SQL に出し、CHECK が壊れる。
+    check("membership_role_check", inArray(table.role, ROLES).inlineParams()),
   ],
 );
 
@@ -224,6 +228,7 @@ export const invitation = pgTable(
   (table) => [
     index("invitation_company_id_idx").on(table.companyId),
     index("invitation_email_idx").on(table.email),
+    check("invitation_role_check", inArray(table.role, ROLES).inlineParams()),
   ],
 );
 

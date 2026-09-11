@@ -1,7 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import { isAtLeast, requiresOwnerProtection, type Role } from "@core/membership/policy";
+import { isAtLeast, type Role } from "@core/membership/policy";
 import { roleLabelJa } from "@core/membership/role-label";
 
 import { useCurrentCompany } from "../../account/current-company";
@@ -27,11 +27,12 @@ export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCurrentCompany();
   const selfUserId = authClient.useSession().data?.user.id ?? null;
   const companyId = currentMembership?.company_id ?? null;
-  const canManage = isAtLeast(currentMembership?.role ?? "", "ADMIN");
+  const canManage = currentMembership !== null && isAtLeast(currentMembership.role, "ADMIN");
   const isOwner = currentMembership?.role === "OWNER";
   const assignableRoles: readonly Role[] = isOwner
     ? ["MEMBER", "ADMIN", "OWNER"]
     : ["MEMBER", "ADMIN"];
+  const roleFromSelect = (value: string) => assignableRoles.find((role) => role === value);
 
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
@@ -39,6 +40,7 @@ export const Members = () => {
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
+  const effectiveInviteRole = assignableRoles.includes(inviteRole) ? inviteRole : "MEMBER";
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
@@ -69,7 +71,7 @@ export const Members = () => {
     e.preventDefault();
     if (!companyId) return;
     setSubmitting(true);
-    createInvitation(companyId, { email: inviteEmail.trim(), role: inviteRole })
+    createInvitation(companyId, { email: inviteEmail.trim(), role: effectiveInviteRole })
       .then((res) => {
         setInviteEmail("");
         return notifyAfterRefresh(refresh, {
@@ -161,8 +163,7 @@ export const Members = () => {
         <ul className="space-y-2">
           {members.map((m) => {
             const isSelf = m.user_id === selfUserId;
-            const canOperateThisMember =
-              canManage && !isSelf && (isOwner || !requiresOwnerProtection(m.role));
+            const canOperateThisMember = canManage && !isSelf && assignableRoles.includes(m.role);
             return (
               <li
                 key={m.membership_id}
@@ -184,7 +185,10 @@ export const Members = () => {
                       aria-label={`${m.user_email} の役割`}
                       value={m.role}
                       disabled={busyUserId !== null}
-                      onChange={(e) => handleRoleChange(m, e.target.value as Role)}
+                      onChange={(e) => {
+                        const next = roleFromSelect(e.target.value);
+                        if (next) handleRoleChange(m, next);
+                      }}
                       className="h-9 w-28 text-sm"
                     >
                       {assignableRoles.map((role) => (
@@ -240,8 +244,11 @@ export const Members = () => {
                 <Label htmlFor="invite-role">役割</Label>
                 <NativeSelect
                   id="invite-role"
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value as Role)}
+                  value={effectiveInviteRole}
+                  onChange={(e) => {
+                    const next = roleFromSelect(e.target.value);
+                    if (next) setInviteRole(next);
+                  }}
                   disabled={submitting}
                   className="sm:w-36"
                 >

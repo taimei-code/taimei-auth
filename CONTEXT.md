@@ -33,7 +33,7 @@ _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 _Avoid_: ユーザー (より広義、global user を指す時に使う), メンバーシップ (関係の方を指す時は **membership**)
 
 **role**:
-**membership** が表現する権限階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階。OWNER のみが事業所削除 / 課金変更 / OWNER 権限委譲を行える。ADMIN は OWNER を作れず、自身の昇格もできない (= OWNER 昇格は OWNER のみ承認可)。1 事業所に複数 OWNER を許容するが、常に OWNER を 1 人以上持つ。最後の OWNER を減らす操作 (降格 / 除名 / 退会) は `last_owner` として拒否される。詳細: PR #55 → #63 / ADR-0010。
+**membership** が表現する権限階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階。OWNER のみが事業所削除 / 課金変更 / OWNER 権限委譲を行える。ADMIN は OWNER を作れず、自身の昇格もできない (= OWNER 昇格は OWNER のみ承認可)。1 事業所に複数 OWNER を許容するが、常に OWNER を 1 人以上持つ。最後の OWNER を減らす操作 (降格 / 除名 / 退会) は `last_owner` として拒否される。**membership** と **invitation** の role は常にこの 3 値のいずれかで、それ以外の値は保存されない (未知 role という状態は存在しない)。詳細: PR #55 → #63 / ADR-0010 / ADR-0018。
 _Avoid_: 役職 (人事ドメインの語と紛らわしい), permission (個別アクション認可と混同), member_type (freee の `Membership.Type` は業種分類で role とは別概念)
 
 **invitation**:
@@ -153,7 +153,7 @@ window 内の試行回数の上限。**auth ホスト** が Redis の計数で�
 _Avoid_: rate limit / quota / attempt budget (code の識別子に残る別名。設計語彙では使わない), throttling (より広義)
 
 **fail-closed / fail-open**:
-判断材料が得られない時 (Redis で数えられない、**session** から actor を解決できない、**role** が未知) にどちらへ倒すか。fail-closed は拒否に倒し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open に倒し、通すと第二要素の総当たり防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor 解決、unknown role) は fail-closed に倒す。fail-open で通した事実は Sentry に残し、silent には通さない。
+判断材料が得られない時 (Redis で数えられない、**session** から actor を解決できない) にどちらへ倒すか。fail-closed は拒否に倒し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open に倒し、通すと第二要素の総当たり防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor 解決) は fail-closed に倒す。未知 role は状態として存在しない (**role** の項)。fail-open で通した事実は Sentry に残し、silent には通さない。
 _Avoid_: fail-safe (どちらの倒し方かを示さない), graceful degradation (倒し方でなく体験の話)
 
 **session**:
@@ -181,7 +181,7 @@ user の意図ある action (**sign-in** / **sign-out** / account delete 等) �
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / unknown role fail-closed / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012 / ADR-0016。
+**audit log** に記録される 1 行。`event_type` は user action の categorization に限定 (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user 意図でなくシステム側の防御発火 (ADR-0012 の OWNER 招待再検証 / double_accept) の記録で、他の user action event と対称に扱う (発火/非発火の観測性を対称化)。詳細: ADR-0012 / ADR-0016。
 _Avoid_: log entry, audit record
 
 **best-effort 記帳**:

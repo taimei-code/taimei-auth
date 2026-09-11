@@ -7,30 +7,10 @@ import {
   canInviteRole,
   canRemoveTarget,
   isAtLeast,
-  requiresOwnerProtection,
 } from "../policy";
 
-const ROLES: Role[] = ["OWNER", "ADMIN", "MEMBER"];
-
-describe("requiresOwnerProtection", () => {
-  // OWNER 保護判定の共有式 (server 述語と web の出し分けが同居)。既知 role は OWNER のみ true。
-  test("OWNER → true", () => {
-    expect(requiresOwnerProtection("OWNER")).toBe(true);
-  });
-  for (const role of ["ADMIN", "MEMBER"]) {
-    test(`${role} → false`, () => {
-      expect(requiresOwnerProtection(role)).toBe(false);
-    });
-  }
-
-  // 未知 role は保護対象に含める (fail-closed)。prototype 上のキー名も素通しさせない。
-  test("想定外 role 文字列 → true (fail-closed)", () => {
-    expect(requiresOwnerProtection("SUPERVISOR")).toBe(true);
-  });
-  test("prototype チェーン上のキー名 → true (fail-closed)", () => {
-    expect(requiresOwnerProtection("constructor")).toBe(true);
-  });
-});
+// src の test は @/db を runtime import しない (test-db-boundary gate)。
+const ROLES = ["OWNER", "ADMIN", "MEMBER"] as const satisfies readonly Role[];
 
 describe("isAtLeast", () => {
   // OWNER > ADMIN > MEMBER の全順序で「以上」判定が成り立つ。
@@ -44,14 +24,10 @@ describe("isAtLeast", () => {
     }
   }
 
-  // ROLE_LEVEL に無い role は fail-closed で false (未知 role の素通しを防ぐ)。
-  test("想定外 role 文字列 → false (fail-closed)", () => {
-    expect(isAtLeast("SUPERVISOR", "MEMBER")).toBe(false);
-  });
-
-  // Object.prototype 上のキー名が own-property 判定をすり抜けて role を素通しさせないこと。
-  test("prototype チェーン上のキー名 → false", () => {
-    expect(isAtLeast("toString", "MEMBER")).toBe(false);
+  // 未知 role は DB の CHECK 制約で存在しない (ADR-0018)。typecheck が gate で、runtime の assert は持たない。
+  test("想定外 role 文字列は型で拒否される", () => {
+    // @ts-expect-error Role 以外の文字列は引数に取れない
+    isAtLeast("SUPERVISOR", "MEMBER");
   });
 });
 
@@ -128,16 +104,5 @@ describe("canAcceptInvitedRole", () => {
   test("inviter null で invited=ADMIN/MEMBER → true (招待者退会の正規ケース)", () => {
     expect(canAcceptInvitedRole("ADMIN", null)).toBe(true);
     expect(canAcceptInvitedRole("MEMBER", null)).toBe(true);
-  });
-
-  // QA-D-03 未知の invitedRole (直接 INSERT された unknown 文字列) は Object.hasOwn で fail-closed。
-  test("invited=想定外 role 文字列 → false", () => {
-    expect(canAcceptInvitedRole("SUPERVISOR", "OWNER")).toBe(false);
-    expect(canAcceptInvitedRole("", "OWNER")).toBe(false);
-  });
-
-  // prototype チェーン上のキー名が role 判定を素通しさせないこと。
-  test("invited=toString → false (prototype pollution 予防)", () => {
-    expect(canAcceptInvitedRole("toString", "OWNER")).toBe(false);
   });
 });

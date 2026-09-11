@@ -82,7 +82,7 @@ export type MemberRow = {
   userId: string;
   userName: string;
   userEmail: string;
-  role: string;
+  role: Role;
   joinedAt: Date;
 };
 
@@ -122,7 +122,7 @@ export async function lockMembershipForShare(
   tx: DbTx,
   userId: string,
   companyId: string,
-): Promise<{ role: string } | undefined> {
+): Promise<{ role: Role } | undefined> {
   return tx
     .select({ role: membership.role })
     .from(membership)

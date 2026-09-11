@@ -10,9 +10,6 @@ export class RateLimited extends Data.TaggedError("RateLimited") {
   readonly status = 429 as const;
 }
 
-export type RejectReason =
-  | "double_accept"
-  | "unknown_invited_role"
-  | "inviter_not_owner_or_missing";
+export type RejectReason = "double_accept" | "inviter_not_owner_or_missing";
 
 export type InvitationError = NotFoundOrNotPending | RateLimited;

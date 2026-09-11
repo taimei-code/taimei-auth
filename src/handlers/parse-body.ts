@@ -11,6 +11,11 @@ export const roleBodySchema = z.enum([
   "ADMIN",
   "MEMBER",
 ] as const satisfies readonly Role[]);
+const _roleBodySchemaIsExhaustive: [
+  Exclude<Role, (typeof roleBodySchema.options)[number]>,
+] extends [never]
+  ? true
+  : never = true;
 
 // 桁数を縛らないのは、書式判定を Transport が持つと誤入力が invalid_argument になり SPA の分岐から外れるため。
 export const mfaCodeSchema = z.string().min(1).max(64);

@@ -39,7 +39,7 @@ OWNER になれる TOCTOU 窓が残っていた。
 | Repository | `db/repositories/` | 薄いまま (db/CLAUDE.md ルール維持)。判定を持たない |
 
 **`src/membership/policy.ts` は Guard 層と Use-case 層が共有する純粋述語 kernel** (isAtLeast /
-isKnownRole / canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget /
+canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget /
 canAcceptInvitedRole 等)。Use-case から policy 述語を呼ぶのは正しい (accept use-case の tx 内
 再検証 = canAcceptInvitedRole がその代表例)。**禁止対象は Transport (handler / rpc) からの
 policy 述語直呼びだけ** — 認可の組み立てを handler に散らさず、operation 単位 entry (Guard 層) か
@@ -116,9 +116,8 @@ lock しつつ再検証する (`canAcceptInvitedRole` 述語)。ADMIN/MEMBER 招
   role 変更 / 除名で撤回可能。招待者退会の正規ケース (「〇〇さんが招待して、当日退職 → 翌日に
   被招待者が受諾」等) を壊すため、OWNER 招待だけを再検証対象にする。
 
-述語 `canAcceptInvitedRole(invitedRole, inviterCurrentRole)` は `src/membership/policy.ts` に置き、
-未知 invitedRole (role 列に直 INSERT された unknown 文字列) は `Object.hasOwn` で fail-closed に
-拒否する (`isAtLeast` と同じ prototype pollution 対策)。inviter membership 不在 (null) は OWNER
+述語 `canAcceptInvitedRole(invitedRole, inviterCurrentRole)` は `src/membership/policy.ts` に置く。
+未知 invitedRole は DB の CHECK 制約により存在しない (ADR-0018)。inviter membership 不在 (null) は OWNER
 招待に限り false、ADMIN/MEMBER 招待は true (前段の理由と対称)。
 
 ### tx isolation の前提 (READ COMMITTED)
@@ -136,7 +135,7 @@ scope が守れているかは repository の `lockMembershipForShare(tx, userId
 ### `invitation_accept_rejected` audit event の運用契約
 
 **event 型**: `invitation_accept_rejected` (`AuditLogEntry` union に追加)。**発火経路**: acceptInvitation
-use-case の reject 分岐 (double_accept / inviter_not_owner_or_missing / unknown_invited_role)。
+use-case の reject 分岐 (double_accept / inviter_not_owner_or_missing)。
 
 **payload keys** (固定): `invitation_id` / `company_id` / `invited_by_user_id` / `attempted_role` /
 `inviter_current_role` / `reason`。**PII (email 等) は含めない** — invitation_id から辿れるため

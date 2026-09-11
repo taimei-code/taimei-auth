@@ -8,6 +8,8 @@ import {
   type ReactNode,
 } from "react";
 
+import type { Role } from "@core/membership/policy";
+
 import { RequestJsonError, getJson, postJson } from "../shared/request-json";
 
 export type Membership = {
@@ -15,7 +17,7 @@ export type Membership = {
   company_id: string;
   company_name: string;
   company_org_code: string;
-  role: string;
+  role: Role;
   joined_at: string;
 };
 

@@ -5,7 +5,7 @@ import { getJson, postJson } from "../shared/request-json";
 export type PendingInvitation = {
   id: string;
   email: string;
-  role: string;
+  role: Role;
   expires_at: string;
   created_at: string;
 };

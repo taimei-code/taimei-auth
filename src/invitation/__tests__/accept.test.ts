@@ -1,6 +1,5 @@
 import { afterAll, beforeEach, describe, expect, type Mock, spyOn, test } from "bun:test";
 import { Effect, Exit } from "effect";
-import type { Role } from "@/db/schema";
 import { ExpiredOrUsed } from "../../membership/guard/errors";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -249,40 +248,6 @@ describe("acceptInvitation", () => {
         expect(second).toBeInstanceOf(ExpiredOrUsed);
         const audit = yield* firstAudit(invitee.id, "invitation_accept_rejected");
         expect((audit?.payload as Record<string, unknown>).reason).toBe("double_accept");
-      }),
-    ));
-
-  test("QA-D-03 / QA-M-06 unknown invitation.role (直 INSERT 由来) → 410 + reject audit (attempted_role が unknown 文字列)", () =>
-    run(
-      Effect.gen(function* () {
-        const db = yield* TestDb;
-        const owner = yield* db.seedUser("m06-owner");
-        const co = yield* db.seedCompany("m06");
-        yield* db.seedMembership(owner.id, co, "OWNER");
-        const invitee = yield* db.seedUser("m06-invitee");
-
-        // Role 型を fail-closed 検証するため意図的に unknown 文字列を cast で通す。
-        const { token: tok } = yield* db.seedInvitation({
-          companyId: co,
-          email: invitee.email,
-          role: "SUPERVISOR" as Role,
-          invitedByUserId: owner.id,
-        });
-        const invitationRow = yield* reloadInvitation(tok);
-
-        const failure = yield* withWarnSpy(() =>
-          Effect.flip(
-            acceptInvitation({
-              actor: { id: invitee.id, email: invitee.email },
-              invitation: invitationRow,
-            }),
-          ),
-        );
-        expect(failure).toBeInstanceOf(ExpiredOrUsed);
-        const audit = yield* firstAudit(invitee.id, "invitation_accept_rejected");
-        const payload = audit?.payload as Record<string, unknown>;
-        expect(payload.attempted_role).toBe("SUPERVISOR");
-        expect(payload.reason).toBe("unknown_invited_role");
       }),
     ));
 

@@ -7,7 +7,7 @@ export type Member = {
   user_id: string;
   user_name: string;
   user_email: string;
-  role: string;
+  role: Role;
   joined_at: string;
 };
 
