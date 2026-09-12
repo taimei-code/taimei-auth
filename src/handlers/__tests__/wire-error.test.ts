@@ -16,17 +16,23 @@ import { InvalidCode, Locked, MfaNotFound } from "../../mfa/error-mapping";
 import { AlreadyExists, NotFoundOrAlreadyDeleted } from "../../company/errors";
 import { NotFoundOrNotPending, RateLimited } from "../../invitation/errors";
 import { LastOwner } from "../../membership/errors";
-import { ExpiredOrUsed, Forbidden, InvalidArgument, NotFound } from "../../membership/guard/errors";
+import {
+  ExpiredOrUsed,
+  Forbidden,
+  InvalidArgument,
+  NotFound,
+  Unauthorized,
+} from "../../membership/guard/errors";
 import {
   captureThrown,
   internalErrorResponse,
-  isWireShaped,
+  parseWireShaped,
   settleCause,
   type WireError,
   wireErrorResponse,
 } from "../wire-error";
 
-// design §3.2 / AC-011 / AC-012 / AC-015 / AC-041。旧 respond.ts の byte-invariant を引き継ぐ。
+// 旧 respond.ts の byte-invariant を引き継ぐ。
 describe("wireErrorResponse", () => {
   test("failure を { error } JSON にし、content-type は charset 無しの application/json", async () => {
     const res = wireErrorResponse(new Forbidden());
@@ -47,6 +53,33 @@ describe("wireErrorResponse", () => {
   });
 });
 
+describe("parseWireShaped", () => {
+  test("wire 形の failure は同じ参照をそのまま返す", () => {
+    const failure = new Forbidden();
+    expect(parseWireShaped(failure)).toBe(failure);
+  });
+
+  test("catalog 外でも wire 形なら通し、details は検査しない", () => {
+    const details = { fieldErrors: { email: ["x"] } };
+    expect(parseWireShaped({ error: "invalid_argument", status: 400, details })?.details).toBe(
+      details,
+    );
+  });
+
+  test("error と status が揃わない値は undefined", () => {
+    const notWire: unknown[] = [
+      { error: "x" },
+      { status: 400 },
+      { error: 1, status: 400 },
+      { error: "x", status: "400" },
+      null,
+      undefined,
+      "x",
+    ];
+    expect(notWire.filter((e) => parseWireShaped(e) !== undefined)).toEqual([]);
+  });
+});
+
 describe("internalErrorResponse", () => {
   test("Hono 既定と同じ text の 500", async () => {
     const res = internalErrorResponse();
@@ -57,6 +90,7 @@ describe("internalErrorResponse", () => {
 describe("failure class の wire 直列化 (旧 REASON_TO_ERROR / 旧 respond.ts と同一の組)", () => {
   // guard / domain / MFA の failure はすべて wireErrorResponse の 1 経路を通る。
   const table: Array<[WireError, number, string]> = [
+    [new Unauthorized(), 401, '{"error":"unauthorized"}'],
     [new Forbidden(), 403, '{"error":"forbidden"}'],
     [new NotFound(), 404, '{"error":"not_found"}'],
     [new LastOwner(), 409, '{"error":"last_owner"}'],
@@ -92,7 +126,7 @@ describe("settleCause", () => {
     const forbidden = new Forbidden();
     const settled = settleCause(
       Cause.combine(Cause.fail(new DbError({ cause })), Cause.fail(forbidden)),
-      isWireShaped,
+      parseWireShaped,
       report,
     );
     expect(settled.failure).toBe(forbidden);
@@ -102,14 +136,25 @@ describe("settleCause", () => {
 
   test("wire 形でない failure は failure 無しで error として送る", () => {
     const rogue = { _tag: "Rogue" };
-    const settled = settleCause(Cause.fail(rogue), isWireShaped, report);
+    const settled = settleCause(Cause.fail(rogue), parseWireShaped, report);
     expect(settled.failure).toBeUndefined();
     expect(settled.reported).toEqual([rogue]);
     expect(captured[0]?.[1]?.level).toBe("error");
   });
 
+  test("wire failure は Sentry に送らない (2 つあっても最初の 1 つを返すだけ)", () => {
+    const first = new Forbidden();
+    const settled = settleCause(
+      Cause.combine(Cause.fail(first), Cause.fail(new NotFound())),
+      parseWireShaped,
+      report,
+    );
+    expect(settled.failure).toBe(first);
+    expect(settled.reported).toEqual([]);
+  });
+
   test("interrupt だけの Cause は Cause.pretty の Error を 1 件送る", () => {
-    const settled = settleCause(Cause.interrupt(), isWireShaped, report);
+    const settled = settleCause(Cause.interrupt(), parseWireShaped, report);
     expect(settled.failure).toBeUndefined();
     expect(settled.reported.length).toBe(1);
     expect(settled.reported[0]).toBeInstanceOf(Error);
