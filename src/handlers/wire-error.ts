@@ -12,6 +12,12 @@ export type DomainError = MembershipError | CompanyError | InvitationError;
 
 export type WireError = GuardError | DomainError | MfaError;
 
+export type WireShaped = {
+  readonly error: string;
+  readonly status: number;
+  readonly details?: unknown;
+};
+
 type GuardCodesOnMfaRoutes = "unauthorized" | "invalid_argument";
 const _guardCodesReachMfaWire: [GuardCodesOnMfaRoutes] extends [GuardError["error"]]
   ? [GuardCodesOnMfaRoutes] extends [MfaWireErrorCode]
@@ -21,13 +27,16 @@ const _guardCodesReachMfaWire: [GuardCodesOnMfaRoutes] extends [GuardError["erro
 
 export type RouteError = WireError | BoundaryError;
 
-// 成功 response (c.json) と byte-invariant にするため charset 無しの application/json を明示する。
+const _routeFailuresAreWireShaped: [Exclude<RouteError, BoundaryError>] extends [WireShaped]
+  ? true
+  : never = true;
+
+// charset 無しの application/json を明示する (byte-invariant の理由: ADR-0012「error Response builder は Hono 非依存」)
 export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
-export function wireErrorResponse(failure: WireError): Response {
-  const body: { error: string; details?: unknown } = { error: failure.error };
-  if ("details" in failure && failure.details !== undefined) body.details = failure.details;
-  return new Response(JSON.stringify(body), { status: failure.status, headers: JSON_HEADERS });
+export function wireErrorResponse(failure: WireShaped): Response {
+  const body = JSON.stringify({ error: failure.error, details: failure.details });
+  return new Response(body, { status: failure.status, headers: JSON_HEADERS });
 }
 
 const TEXT_HEADERS = { "content-type": "text/plain; charset=UTF-8" } as const;
@@ -36,9 +45,11 @@ export function internalErrorResponse(): Response {
   return new Response("Internal Server Error", { status: 500, headers: TEXT_HEADERS });
 }
 
-// catalog 外の failure が status: undefined → 200 で fail-open しないよう実行時にも形を見る。
-export const isWireShaped = (e: unknown): e is { error: string; status: number } =>
-  Predicate.isObject(e) && Predicate.isString(e.error) && Predicate.isNumber(e.status);
+// catalog 外の failure を実行時にも形で見る (fail-open を防ぐ理由: ADR-0017「実装の機構」)
+export const parseWireShaped = (e: unknown): WireShaped | undefined =>
+  Predicate.isObject(e) && Predicate.isString(e.error) && Predicate.isNumber(e.status)
+    ? (e as WireShaped)
+    : undefined;
 
 type Report = Pick<CaptureContext, "tags" | "extra"> & { label: string };
 
@@ -52,18 +63,18 @@ const send = ({ error, level }: ReturnType<typeof toInternal>, { label, ...conte
   Sentry.captureException(error, { ...context, level });
 };
 
-export function settleCause<E>(
-  cause: Cause.Cause<E>,
-  isWire: (e: unknown) => boolean,
+export function settleCause<W>(
+  cause: Cause.Cause<unknown>,
+  parseWire: (e: unknown) => W | undefined,
   report: Report,
-): { failure: Exclude<E, BoundaryError> | undefined; reported: readonly unknown[] } {
-  let failure: Exclude<E, BoundaryError> | undefined;
+): { failure: W | undefined; reported: readonly unknown[] } {
+  let failure: W | undefined;
   const internal: ReturnType<typeof toInternal>[] = [];
   for (const reason of cause.reasons) {
     if (Cause.isFailReason(reason)) {
-      if (!isBoundaryError(reason.error) && isWire(reason.error))
-        failure ??= reason.error as Exclude<E, BoundaryError>;
-      else internal.push(toInternal(reason.error));
+      const wire = isBoundaryError(reason.error) ? undefined : parseWire(reason.error);
+      if (wire === undefined) internal.push(toInternal(reason.error));
+      else failure ??= wire;
     } else if (Cause.isDieReason(reason)) internal.push(toInternal(reason.defect));
   }
   if (failure === undefined && internal.length === 0) {

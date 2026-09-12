@@ -4,7 +4,7 @@ import type { Context, Next } from "hono";
 import { type AppServices, getRuntime } from "../runtime";
 import {
   internalErrorResponse,
-  isWireShaped,
+  parseWireShaped,
   type RouteError,
   settleCause,
   wireErrorResponse,
@@ -33,7 +33,7 @@ export async function runMiddleware(
 type Adapter = "runRoute" | "runMiddleware";
 
 function causeToResponse(c: Context, cause: Cause.Cause<RouteError>, adapter: Adapter): Response {
-  const { failure } = settleCause(cause, isWireShaped, {
+  const { failure } = settleCause(cause, parseWireShaped, {
     label: `[${adapter}] ${c.req.method} ${c.req.path}`,
     tags: { handler: adapter },
     extra: { method: c.req.method, path: c.req.path },
