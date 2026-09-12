@@ -3,6 +3,7 @@ import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { Transaction } from "../../transaction";
 import { NotEnabled } from "../error-mapping";
+import { isMfaEnabled } from "../policy";
 import type { MfaCodeKind } from "../wire-contracts";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { MfaDisableBudget, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
@@ -16,9 +17,9 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
   kind: MfaCodeKind;
 }) {
   const mfa = yield* MfaTotpRepo;
-  // 未登録に budget を消費させないための前段判定。
+  // 有効でない user に budget を消費させないための前段判定。
   const enrollment = yield* mfa.readMfaVerification(input.actor.id);
-  if (!enrollment || enrollment.verifiedAt === null) return yield* new NotEnabled();
+  if (!isMfaEnabled(enrollment)) return yield* new NotEnabled();
 
   const budget = yield* MfaDisableBudget;
   yield* budget.spend(input.actor.id);

@@ -99,6 +99,23 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
+  test("AC-023 登録済み未有効: disable は not_enabled で、試行枠を消費しない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("pending-disable");
+        const actor = { id: user.id, email: user.email };
+        const ops = buildOps();
+        yield* ops.run(enroll({ actor }));
+
+        const notEnabled = yield* Effect.flip(
+          ops.run(disable({ actor, headers, code: "123456", kind: "totp" })),
+        );
+        expectFailure(notEnabled, NotEnabled, "not_enabled", 409);
+        expect(ops.spends).toEqual([]);
+      }),
+    ));
+
   test("一巡: enroll → 再表示 → 評決 → activate → disable (ADR-0016 §3.2)", () =>
     run(
       Effect.gen(function* () {

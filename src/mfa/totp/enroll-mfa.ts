@@ -3,6 +3,7 @@ import type { MfaTotpRow } from "@/db/repositories/mfa-totp";
 import { IdGenerator } from "../../id-generator";
 import { Transaction } from "../../transaction";
 import { AlreadyEnabled, ChallengeExpired } from "../error-mapping";
+import { isMfaEnabled } from "../policy";
 import type { MfaTotpActor, TotpEnrollmentMaterial } from "./contracts";
 import { codeCipher, decryptText, decryptValue, encryptValue, secretCipher } from "./cipher";
 import { MfaIssuer, MfaKeyring, MfaTotpRepo } from "./ports";
@@ -13,7 +14,7 @@ const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
   actor: MfaTotpActor,
   row: MfaTotpRow,
 ) {
-  if (row.verifiedAt !== null) return yield* new AlreadyEnabled();
+  if (isMfaEnabled(row)) return yield* new AlreadyEnabled();
 
   const ring = yield* MfaKeyring.use((k) => k.ring);
   const issuer = yield* MfaIssuer.use((i) => i.appName);

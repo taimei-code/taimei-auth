@@ -1,5 +1,6 @@
 import { Clock, Effect } from "effect";
 import { InvalidCode, NotEnabled } from "../error-mapping";
+import { isMfaEnabled } from "../policy";
 import type { MfaCodeKind } from "../wire-contracts";
 import { codeCipher, decryptText, decryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaTotpRepo } from "./ports";
@@ -18,7 +19,7 @@ export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (
   const ring = yield* MfaKeyring.use((k) => k.ring);
 
   const row = yield* mfa.findMfaTotp(userId);
-  if (!row || row.verifiedAt === null) return yield* new NotEnabled();
+  if (!isMfaEnabled(row)) return yield* new NotEnabled();
 
   if (input.kind === "totp") {
     const secret = yield* Effect.promise(() => decryptValue(ring, secretCipher(row), userId));

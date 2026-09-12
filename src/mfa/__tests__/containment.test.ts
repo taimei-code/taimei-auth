@@ -113,6 +113,12 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
+  test("AC-038 verifiedAt を読む production code は policy.ts だけ (db/ は列の所有層で対象外)", () => {
+    expect(filesWithCodeLiteral("verifiedAt", "src web/src management")).toEqual([
+      "src/mfa/policy.ts",
+    ]);
+  });
+
   test("QA-E-02 façade の runtime export 面 (handler が使ってよい面) を固定", async () => {
     const facade = await import("../totp");
     expect(Object.keys(facade).sort()).toEqual([
@@ -141,6 +147,7 @@ describe("MFA totp module boundary", () => {
       `management/disable-user-mfa.ts:from "../src/account/ports"`,
       `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
       `management/disable-user-mfa.ts:from "../src/mfa/notification-adapter"`,
+      `management/disable-user-mfa.ts:from "../src/mfa/policy"`,
       `management/disable-user-mfa.ts:from "../src/mfa/totp/ports"`,
       `management/disable-user-mfa.ts:from "../src/runtime"`,
       `management/disable-user-mfa.ts:from "../src/transaction"`,

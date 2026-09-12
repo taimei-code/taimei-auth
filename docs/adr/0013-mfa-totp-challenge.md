@@ -222,10 +222,9 @@ stateDiagram-v2
 運用上の境界:
 
 - `MfaStatus` (画面表示用、`src/mfa/registration/status.ts`) は本状態の射影であり別概念。表示の enabled は kind から
-  導出せず `requiresMfaChallenge` (policy.ts) を通す — 表示とチャレンジ要否の判定二重化を防ぐ規律
-- force-disable (`management/disable-user-mfa.ts`) は本状態判定の対象外 — Actor を持たず行削除数で
-  冪等判定し、行削除 → フラグ降ろしの順序を正しさの前提にする (`user.twoFactorEnabled` の直接比較は
-  policy 規律の既知の例外)
+  導出せず `isMfaEnabled` (policy.ts、旧 `requiresMfaChallenge`) を通す — 表示とチャレンジ要否の判定二重化を防ぐ規律
+- force-disable (`management/disable-user-mfa.ts`) も同じ述語を通す (旧構成では `user.twoFactorEnabled` の
+  直接比較を policy 規律の既知の例外としていた)
 - 本表と `registration/state.ts` は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** — kill-switch は
   ログイン境界 (src/auth-plugins/) のみに効く。登録状態の判定に混ぜると kill-switch off の
   incident 中に全ユーザーの disable が `not_enabled` になり self-service の出口が閉じる
