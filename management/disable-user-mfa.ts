@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
 import { appendAuditLogBestEffort } from "../src/audit/report-failure";
 import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
+import { isMfaEnabled } from "../src/mfa/policy";
 import { MfaTotpRepo } from "../src/mfa/totp/ports";
 import { getRuntime } from "../src/runtime";
 import { Transaction } from "../src/transaction";
@@ -19,7 +20,7 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
 
   const user = yield* users.findUserById(userId);
   if (!user) return { ok: false, error: "not_found" } satisfies ForceDisableResult;
-  const wasEnabled = (yield* mfa.readMfaVerification(userId))?.verifiedAt != null;
+  const wasEnabled = isMfaEnabled(yield* mfa.readMfaVerification(userId));
 
   const deleted = yield* tx.run(
     Effect.fn("management.forceDisableMfa.apply")(function* (t) {
