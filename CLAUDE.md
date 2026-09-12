@@ -21,6 +21,8 @@ claude code以外の場合、subdirectoryのfileを扱う時は、そのfileま�
 - dependency更新で `minimumReleaseAge` の除外が必要な場合は [`ADR-0009`](./docs/adr/0009-supply-chain-hardening.md) に従う。
 - TypeScript 7では新規tsconfigに必要な `types` を明示し、削除済みの `baseUrl` を使わない。
 - Vite配下の型解決不能なside-effect importは `vite-env.d.ts` のreferenceで解決する。
+- 検査結果を呼び出し側が再判定している述語は、booleanではなく型述語で絞った型を返す (例: `src/mfa/policy.ts`、`src/errors.ts`)。再判定またはcastが1行も消えないなら導入しない。
+- 判定を述語1本に集めた時は、規範コメントではなく所有domainの `__tests__/containment.test.ts` の静的tripwireで直接比較の再発を止める。
 
 ## Effectの学び方
 
