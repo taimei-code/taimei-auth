@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { type PrimaryAuthRoute, parsePrimaryAuthRoute } from "../primary-auth-routes";
+import {
+  parsePrimaryAuthRoute,
+  PRIMARY_AUTH_ROUTES,
+  type PrimaryAuthRoute,
+} from "../primary-auth-routes";
 
 describe("parsePrimaryAuthRoute", () => {
   const table: [string, Record<string, unknown> | undefined, PrimaryAuthRoute][] = [
@@ -29,4 +33,9 @@ describe("parsePrimaryAuthRoute", () => {
     });
   }
 
+  test("matcher が通す PRIMARY_AUTH_ROUTES は全て github で Mapped になる (allowlist と parser のずれを止める)", () => {
+    for (const route of PRIMARY_AUTH_ROUTES) {
+      expect(parsePrimaryAuthRoute(route, { id: "github" })._tag).toBe("Mapped");
+    }
+  });
 });
