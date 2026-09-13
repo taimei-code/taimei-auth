@@ -5,7 +5,7 @@ import { buildApp } from "./app";
 import { pingRedis } from "./redis";
 import { getRuntime } from "./runtime";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
-import { parseTrustedProxyHops } from "./request-context";
+import { proxyTrustFromEnv } from "./request-context";
 
 initBunSentry();
 
@@ -15,10 +15,7 @@ if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
   process.exit(1);
 }
 
-// 既定値で埋めると client IP が "unknown" に潰れ、audit も IP 軸 rate-limit も無価値化する。
-const trustedProxyHopsConfigured =
-  parseTrustedProxyHops(process.env.AUTH_TRUSTED_PROXY_HOPS) !== null;
-if (process.env.APP_ENV === "production" && !trustedProxyHopsConfigured) {
+if (proxyTrustFromEnv()._tag === "Unconfigured") {
   console.error("FATAL: AUTH_TRUSTED_PROXY_HOPS (non-negative integer) is required in production.");
   process.exit(1);
 }

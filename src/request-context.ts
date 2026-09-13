@@ -6,10 +6,18 @@ export type ClientContext = { ip: string; userAgent: string };
 
 const UNKNOWN = "unknown";
 
-// 非 production Bun の既定。proxy 無しの直公開だが、テスト / e2e が X-Forwarded-For で client IP を
-// 注入して検証するため 1 hop 相当にする。production Bun は index.ts が未設定を boot で拒否する。
-const DEFAULT_TRUSTED_PROXY_HOPS = 1;
+export type ProxyTrust =
+  | { readonly _tag: "Unconfigured" }
+  | { readonly _tag: "Direct" }
+  | { readonly _tag: "BehindProxy"; readonly hops: number };
 
+const UNCONFIGURED: ProxyTrust = { _tag: "Unconfigured" };
+const DIRECT: ProxyTrust = { _tag: "Direct" };
+
+// 非 production は proxy 無しの直公開だが、テスト / e2e が X-Forwarded-For で client IP を注入するため 1 hop 相当。
+const LOCAL_DEFAULT_PROXY_TRUST: ProxyTrust = { _tag: "BehindProxy", hops: 1 };
+
+const NON_NEGATIVE_INTEGER = /^\d+$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 const HEXTET = /^[0-9a-fA-F]{1,4}$/;
 const BRACKETED_IPV6_WITH_OPTIONAL_PORT = /^\[([^\]]+)\](?::\d+)?$/;
@@ -45,7 +53,7 @@ function isIpv6Literal(value: string): boolean {
 // port 付きで書く proxy 実装があるため IPv4 のみ port を落とす (bracket 無し IPv6 は判別不能なので触らない)。
 function stripIpv4Port(value: string): string {
   const parts = value.split(":");
-  return parts.length === 2 && /^\d+$/.test(parts[1]) ? parts[0] : value;
+  return parts.length === 2 && NON_NEGATIVE_INTEGER.test(parts[1]) ? parts[0] : value;
 }
 
 function parseIpLiteral(value: string | null | undefined): string | null {
@@ -57,30 +65,29 @@ function parseIpLiteral(value: string | null | undefined): string | null {
   return isIpv4Literal(candidate) || isIpv6Literal(candidate) ? candidate : null;
 }
 
-// 設定ミス (空文字 / 負数 / 小数) が攻撃者の値を信用する側へ倒れないよう、非負整数以外は null にする。
-export function parseTrustedProxyHops(raw: string | undefined): number | null {
-  if (raw === undefined) return null;
+export function parseProxyTrust(raw: string | undefined): ProxyTrust {
+  if (raw === undefined) return UNCONFIGURED;
   const trimmed = raw.trim();
-  if (!/^\d+$/.test(trimmed)) return null;
+  if (!NON_NEGATIVE_INTEGER.test(trimmed)) return UNCONFIGURED;
   const hops = Number(trimmed);
-  return Number.isSafeInteger(hops) ? hops : null;
+  if (!Number.isSafeInteger(hops)) return UNCONFIGURED;
+  return hops === 0 ? DIRECT : { _tag: "BehindProxy", hops };
 }
 
-// X-Forwarded-For は client が先頭へ任意の値を積めるため、末尾から trustedProxyHops 番目 (自前 proxy が
+// X-Forwarded-For は client が先頭へ任意の値を積めるため、末尾から trust.hops 番目 (自前 proxy が
 // 付け足した位置) だけを client とみなす。export は Bun global を差し替えられず pure 関数で検証するため。
-export function resolveForwardedClientIp(headers: Headers, trustedProxyHops: number): string {
-  // hop 0 = proxy 無しの直公開。client IP を名乗るヘッダがすべて client 由来になるため何も信用しない。
-  if (trustedProxyHops < 1) return UNKNOWN;
+export function resolveForwardedClientIp(headers: Headers, trust: ProxyTrust): string {
+  if (trust._tag !== "BehindProxy") return UNKNOWN;
 
   // x-real-ip は「最も近い proxy が見た peer」で client と一致するのは 1 hop のときだけ。多段では使わない。
-  const realIp = trustedProxyHops === 1 ? parseIpLiteral(headers.get("x-real-ip")) : null;
+  const realIp = trust.hops === 1 ? parseIpLiteral(headers.get("x-real-ip")) : null;
 
   const forwardedHeader = headers.get("x-forwarded-for");
   // X-Forwarded-For を出さず X-Real-IP だけを立てる proxy 設定があるため、不在時のみそちらへ落とす。
   if (forwardedHeader === null) return realIp ?? UNKNOWN;
 
   const chain = forwardedHeader.split(",");
-  const hopIndex = chain.length - trustedProxyHops;
+  const hopIndex = chain.length - trust.hops;
   const forwardedIp = hopIndex >= 0 ? parseIpLiteral(chain[hopIndex]) : null;
   if (!forwardedIp) return UNKNOWN;
 
@@ -94,16 +101,16 @@ export function resolveCloudflareClientIp(headers: Headers): string {
   return parseIpLiteral(headers.get("cf-connecting-ip")) ?? UNKNOWN;
 }
 
-function trustedProxyHopsFromEnv(): number | null {
-  const configured = parseTrustedProxyHops(process.env.AUTH_TRUSTED_PROXY_HOPS);
-  if (configured !== null) return configured;
+export function proxyTrustFromEnv(): ProxyTrust {
+  const trust = parseProxyTrust(process.env.AUTH_TRUSTED_PROXY_HOPS);
+  if (trust._tag !== "Unconfigured") return trust;
   // production の設定漏れは index.ts の boot guard が止める。二重防御として production ではヘッダを信用しない。
-  return isLocalEnvironment() ? DEFAULT_TRUSTED_PROXY_HOPS : null;
+  return isLocalEnvironment() ? LOCAL_DEFAULT_PROXY_TRUST : UNCONFIGURED;
 }
 
 // Bun 判定が先なのは load-bearing: Bun 上では cf-connecting-ip も client が送れるため forwarded 経路へ振る。
 function resolveClientIp(headers: Headers): string {
-  if (isBunRuntime()) return resolveForwardedClientIp(headers, trustedProxyHopsFromEnv() ?? 0);
+  if (isBunRuntime()) return resolveForwardedClientIp(headers, proxyTrustFromEnv());
   return resolveCloudflareClientIp(headers);
 }
 
