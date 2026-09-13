@@ -27,6 +27,7 @@ import { SentryService } from "../../sentry";
 import { partial, runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
+import type { PrimaryAuthRoute } from "../primary-auth-routes";
 
 // チャレンジ強制プラグイン (src/auth-plugins/mfa-challenge.ts) の統合テスト。
 // magic link は実 HTTP 経路で駆動する。OAuth (/callback/:id) は GitHub の資格情報が無いと
@@ -359,8 +360,13 @@ describe("チャレンジ強制プラグイン", () => {
 describe("enforceChallenge (program 単体)", () => {
   beforeEach(() => sentry.reset());
 
-  const GITHUB = { path: "/callback/:id", params: { id: "github" } };
-  const inputWith = (calls: string[], route = GITHUB) => ({
+  const GITHUB: PrimaryAuthRoute = { _tag: "Mapped", method: "github" };
+  const UNMAPPED_GITLAB: PrimaryAuthRoute = {
+    _tag: "Unmapped",
+    path: "/callback/:id",
+    providerId: "gitlab",
+  };
+  const inputWith = (calls: string[], route: PrimaryAuthRoute = GITHUB) => ({
     userId: "user-unit",
     sessionToken: "token-unit",
     route,
@@ -436,7 +442,7 @@ describe("enforceChallenge (program 単体)", () => {
       Effect.gen(function* () {
         const calls: string[] = [];
         const exit = yield* decide(
-          inputWith(calls, { path: "/callback/:id", params: { id: "gitlab" } }),
+          inputWith(calls, UNMAPPED_GITLAB),
           Layer.mergeAll(mfaEnabled, untouched),
         );
         expect(exit).toEqual(Exit.succeed("challenge"));
@@ -444,6 +450,23 @@ describe("enforceChallenge (program 単体)", () => {
         expect(sentry.exceptions.length).toBe(1);
         expect(sentry.exceptions[0]?.context?.tags).toEqual({ component: "mfa-challenge" });
         expect(sentry.exceptions[0]?.context?.level).toBe("warning");
+        expect(sentry.exceptions[0]?.message).toContain(
+          "unmapped primary auth route /callback/:id (id=gitlab)",
+        );
+      }),
+    ));
+
+  test("Unmapped でも MFA 未有効なら pass、介入の副作用は 0 回", () =>
+    run(
+      Effect.gen(function* () {
+        const calls: string[] = [];
+        const exit = yield* decide(
+          inputWith(calls, UNMAPPED_GITLAB),
+          Layer.mergeAll(enrollment({ verifiedAt: null }), untouched),
+        );
+        expect(exit).toEqual(Exit.succeed("pass"));
+        expect(calls).toEqual([]);
+        expect(sentry.exceptions.length).toBe(0);
       }),
     ));
 
@@ -474,7 +497,7 @@ describe("enforceChallenge (program 単体)", () => {
       Effect.gen(function* () {
         const calls: string[] = [];
         const exit = yield* decide(
-          inputWith(calls, { path: "/callback/:id", params: { id: "gitlab" } }),
+          inputWith(calls, UNMAPPED_GITLAB),
           Layer.mergeAll(mfaEnabled, untouched, dyingSentry("captureException")),
         );
         expect(exit).toEqual(Exit.succeed("challenge"));

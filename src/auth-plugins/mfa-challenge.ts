@@ -9,9 +9,10 @@ import { mfaChallengeRequired } from "../mfa/totp/challenge-required";
 import { type LoginChallengeCookie, openLoginChallenge } from "../mfa/totp/login-challenge";
 import { captureCause, SentryService } from "../sentry";
 import {
-  type AuthRouteMatch,
   isPrimaryAuthRoute,
-  resolvePrimaryAuthMethod,
+  parsePrimaryAuthRoute,
+  type PrimaryAuthRoute,
+  type UnmappedRoute,
 } from "./primary-auth-routes";
 
 const MFA_CHALLENGE_PAGE = "/auth/mfa";
@@ -25,7 +26,7 @@ const killSwitchReportedAt = Ref.makeUnsafe(0);
 type IssuedSession = {
   userId: string;
   sessionToken: string;
-  route: AuthRouteMatch;
+  route: PrimaryAuthRoute;
   // better-auth は redirect の location を responseHeaders へ載せてから after-hook を呼ぶ。
   location: string | null | undefined;
   setCookie(cookie: LoginChallengeCookie): void;
@@ -34,11 +35,11 @@ type IssuedSession = {
 };
 
 class UnmappedPrimaryAuthRoute extends Data.TaggedError("UnmappedPrimaryAuthRoute")<{
-  readonly route: AuthRouteMatch;
+  readonly route: UnmappedRoute;
 }> {
   // Sentry は Error の name / message しか載せない (ExtraErrorData 未設定) ので route を message に畳む。
   override get message() {
-    return `mfa-challenge: unmapped primary auth route ${this.route.path} (id=${this.route.params?.id})`;
+    return `mfa-challenge: unmapped primary auth route ${this.route.path} (id=${this.route.providerId})`;
   }
 }
 
@@ -67,12 +68,12 @@ const reportKillSwitchPeriodically = Effect.gen(function* () {
 const handOffToChallenge = Effect.fn("auth.handOffToMfaChallenge")(function* (
   input: IssuedSession,
 ) {
-  const method = resolvePrimaryAuthMethod(input.route);
-  if (!method) return yield* new UnmappedPrimaryAuthRoute({ route: input.route });
+  if (input.route._tag === "Unmapped")
+    return yield* new UnmappedPrimaryAuthRoute({ route: input.route });
   const cookie = yield* openLoginChallenge({
     userId: input.userId,
     redirectUrl: input.location ?? FALLBACK_REDIRECT,
-    method,
+    method: input.route.method,
   });
   input.setCookie(cookie);
   input.dropIssuedSession();
@@ -107,7 +108,7 @@ const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
   const input: IssuedSession = {
     userId: issued.user.id,
     sessionToken: issued.session.token,
-    route: { path: ctx.path, params: ctx.params },
+    route: parsePrimaryAuthRoute(ctx.path, ctx.params),
     location: ctx.context.responseHeaders?.get("location"),
     setCookie: (cookie) => ctx.setCookie(cookie.name, cookie.value, cookie.attributes),
     dropIssuedSession: () => {
