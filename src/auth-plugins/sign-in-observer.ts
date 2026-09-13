@@ -5,7 +5,11 @@ import { appendAuditLogBestEffort } from "../audit/report-failure";
 import { Background } from "../background";
 import { EmailSender } from "../email/ports";
 import { getClientContext } from "../request-context";
-import { isPrimaryAuthRoute, resolvePrimaryAuthMethod } from "./primary-auth-routes";
+import {
+  isPrimaryAuthRoute,
+  parsePrimaryAuthRoute,
+  type PrimaryAuthRoute,
+} from "./primary-auth-routes";
 
 // mfa-challenge の後に登録し、null 化された newSession でスキップする。登録順が前提 (ADR-0013)。
 
@@ -13,8 +17,7 @@ const NEW_USER_THRESHOLD_MS = 10000;
 
 type SignedIn = {
   user: { id: string; email: string; name: string; createdAt: Date | string };
-  path: string;
-  params: Record<string, string> | undefined;
+  route: PrimaryAuthRoute;
   headers: Headers | null | undefined;
 };
 
@@ -33,8 +36,7 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
     );
   }
 
-  const method = resolvePrimaryAuthMethod({ path: input.path, params: input.params });
-  if (!method) return;
+  if (input.route._tag === "Unmapped") return;
 
   // 型付き property へ call 結果や spread を渡すと excess-property check が効かず増分が黙って載る。
   const { ip, userAgent } = getClientContext(input.headers);
@@ -42,7 +44,7 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
     appendAuditLogBestEffort({
       eventType: "sign_in",
       userId: user.id,
-      payload: { method, ip, userAgent },
+      payload: { method: input.route.method, ip, userAgent },
     }),
   );
 });
@@ -54,8 +56,7 @@ const observeSignIn = createAuthMiddleware(async (ctx) => {
   await getRuntime().runPromise(
     observe({
       user: establishedSession.user,
-      path: ctx.path,
-      params: ctx.params,
+      route: parsePrimaryAuthRoute(ctx.path, ctx.params),
       headers: ctx.headers,
     }),
   );
