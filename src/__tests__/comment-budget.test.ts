@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { REPO_ROOT } from "./grep-files";
 
 // 2026-09-10 実測。増減した PR は必ずこの値を実測に合わせる。
-const BUDGET = 256;
+const BUDGET = 255;
 const DIRS = ["src", "db", "management", "web/src"];
 const EXEMPT = [
   "src/request-context.ts",

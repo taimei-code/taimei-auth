@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 import { isLocalEnvironment } from "../env";
 import { getAppName, getAppUrl, getWelcomeFromEmail, renderAndSendEmail } from "./client";
+import type { DisplayText } from "./sanitize";
 import WelcomeEmail from "./welcome";
 
 export const sendWelcomeEmail = Effect.fn("email.sendWelcome")(function* (
   email: string,
-  userName?: string | null,
+  userName: DisplayText,
 ) {
   if (isLocalEnvironment()) {
     yield* Effect.sync(() => console.log(`[TEST] Welcome email for ${email}`));

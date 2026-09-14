@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import { toDisplayText } from "../../email/sanitize";
 import { acceptInvitationPath } from "../accept-path";
 import { resolveInvitationEmailContext } from "../resolve-email-context";
 
@@ -17,10 +18,10 @@ const magicLinkUrl = (callbackURL: string) =>
 
 const inviteCallback = acceptInvitationPath;
 
-const seedInvite = (role: "OWNER" | "ADMIN" | "MEMBER") =>
+const seedInvite = (role: "OWNER" | "ADMIN" | "MEMBER", inviterName = "招待 花子") =>
   Effect.gen(function* () {
     const db = yield* TestDb;
-    const inviter = yield* db.seedUser("inviter", { name: "招待 花子" });
+    const inviter = yield* db.seedUser("inviter", { name: inviterName });
     const companyId = yield* db.seedCompany("main");
     yield* db.seedMembership(inviter.id, companyId, "OWNER");
     const invitation = yield* db.seedInvitation({
@@ -46,9 +47,9 @@ describe("resolveInvitationEmailContext", () => {
         );
 
         expect(context).toEqual({
-          companyName: `${P}co-main`,
-          inviterName: "招待 花子",
-          inviterEmail: inviter.email,
+          companyName: toDisplayText(`${P}co-main`),
+          inviterName: toDisplayText("招待 花子"),
+          inviterEmail: toDisplayText(inviter.email),
           roleLabel: "管理者",
         });
       }),
@@ -66,6 +67,18 @@ describe("resolveInvitationEmailContext", () => {
           magicLinkUrl(inviteCallback(invitation.token)),
         );
         expect(context?.roleLabel).toBe(label);
+      }),
+    ));
+
+  test("招待者名の制御文字は resolveInvitationEmailContext で除去され DisplayText として返る", () =>
+    run(
+      Effect.gen(function* () {
+        const { invitation } = yield* seedInvite("MEMBER", "招待\r\n花子");
+
+        const context = yield* resolveInvitationEmailContext(
+          magicLinkUrl(inviteCallback(invitation.token)),
+        );
+        expect(context?.inviterName).toBe(toDisplayText("招待花子"));
       }),
     ));
 
@@ -94,24 +107,6 @@ describe("resolveInvitationEmailContext", () => {
           magicLinkUrl(`javascript:alert(1)?invitation_token=${invitation.token}`),
         );
         expect(context).toBeNull();
-      }),
-    ));
-
-  test("ADMIN 招待は roleLabel が管理者になる", () =>
-    run(
-      Effect.gen(function* () {
-        const { inviter, invitation } = yield* seedInvite("ADMIN");
-
-        const context = yield* resolveInvitationEmailContext(
-          magicLinkUrl(inviteCallback(invitation.token)),
-        );
-
-        expect(context).toEqual({
-          companyName: `${P}co-main`,
-          inviterName: "招待 花子",
-          inviterEmail: inviter.email,
-          roleLabel: "管理者",
-        });
       }),
     ));
 
