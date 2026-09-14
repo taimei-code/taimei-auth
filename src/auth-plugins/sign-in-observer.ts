@@ -4,6 +4,7 @@ import { Clock, Effect } from "effect";
 import { appendAuditLogBestEffort } from "../audit/report-failure";
 import { Background } from "../background";
 import { EmailSender } from "../email/ports";
+import { toDisplayText } from "../email/sanitize";
 import { getClientContext } from "../request-context";
 import {
   isPrimaryAuthRoute,
@@ -31,7 +32,7 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
     // Workers では fire-and-forget を waitUntil 経由にしないと "hung" になる。
     yield* background.run(
       email
-        .sendWelcome(user.email, user.name)
+        .sendWelcome(user.email, toDisplayText(user.name))
         .pipe(Effect.catch((e) => Effect.logError("Welcome email failed:", e.cause))),
     );
   }

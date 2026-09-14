@@ -1,15 +1,12 @@
 import { Effect } from "effect";
 import { UserRepo } from "../account/ports";
 import { CompanyRepo } from "../company/ports";
+import { toDisplayText } from "../email/sanitize";
+import type { InvitationEmailParams } from "../email/send-invitation";
 import { roleLabelJa } from "../membership/role-label";
 import { InvitationRepo } from "./ports";
 
-export type InvitationEmailContext = {
-  companyName: string;
-  inviterName: string;
-  inviterEmail: string;
-  roleLabel: string;
-};
+export type InvitationEmailContext = Omit<InvitationEmailParams, "inviteeEmail" | "url">;
 
 // sendMagicLink callback は {email, url} しか受け取らないため url から context を再構成する。
 export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailContext")(function* (
@@ -34,9 +31,9 @@ export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailC
   if (!company) return null;
 
   return {
-    companyName: company.name,
-    inviterName: inviter?.name ?? "",
-    inviterEmail: inviter?.email ?? "",
+    companyName: toDisplayText(company.name),
+    inviterName: toDisplayText(inviter?.name ?? ""),
+    inviterEmail: toDisplayText(inviter?.email ?? ""),
     roleLabel: roleLabelJa(invitation.role),
   } satisfies InvitationEmailContext;
 });

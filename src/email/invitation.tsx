@@ -12,14 +12,14 @@ import {
   Text,
   Tailwind,
 } from "@react-email/components";
-import { sanitizeDisplayText } from "./sanitize";
+import type { DisplayText } from "./sanitize";
 
 type InvitationEmailProps = {
   url: string;
   appName: string;
-  companyName: string;
-  inviterName: string;
-  inviterEmail: string;
+  companyName: DisplayText;
+  inviterName: DisplayText;
+  inviterEmail: DisplayText;
   inviteeEmail: string;
   roleLabel: string;
   supportEmail: string;
@@ -29,18 +29,14 @@ type InvitationEmailProps = {
 export default function InvitationEmail({
   url = "https://auth.taimei-code.com/api/auth/magic-link/verify?token=xxx",
   appName = "taimei",
-  companyName = "サンプル事業所",
-  inviterName = "山田太郎",
-  inviterEmail = "owner@example.com",
+  companyName,
+  inviterName,
+  inviterEmail,
   inviteeEmail = "invitee@example.com",
   roleLabel = "メンバー",
   supportEmail = "support@taimei-code.com",
   abuseUrl = "https://taimei-code.com/security",
 }: InvitationEmailProps) {
-  const displaySafeCompanyName = sanitizeDisplayText(companyName);
-  const displaySafeInviterName = sanitizeDisplayText(inviterName);
-  const displaySafeInviterEmail = sanitizeDisplayText(inviterEmail);
-
   return (
     <Html lang="ja">
       <Head>
@@ -51,7 +47,7 @@ export default function InvitationEmail({
         </style>
       </Head>
       <Preview>
-        {displaySafeInviterName} さんから「{displaySafeCompanyName}」への招待
+        {inviterName} さんから「{companyName}」への招待
       </Preview>
       <Tailwind>
         <Body className="mx-auto bg-white font-sans">
@@ -67,8 +63,8 @@ export default function InvitationEmail({
                 className="mt-4 text-center text-base leading-relaxed"
                 style={{ color: "#737373" }}
               >
-                {displaySafeInviterName} さん ({displaySafeInviterEmail}) から
-                <br />「{displaySafeCompanyName}」への参加 ({roleLabel}) に招待されています。
+                {inviterName} さん ({inviterEmail}) から
+                <br />「{companyName}」への参加 ({roleLabel}) に招待されています。
               </Text>
             </Section>
 

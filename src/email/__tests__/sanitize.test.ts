@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { sanitizeDisplayText } from "../sanitize";
+import { toDisplayText } from "../sanitize";
 
-// user 入力由来の表示名 / company 名は招待メールの件名・本文に流れ込む
-// (send-invitation.ts が唯一の利用箇所)。CR/LF が残ると SMTP ヘッダインジェクション、
-// 方向制御・zero-width が残ると表示名偽装 (phishing) になるため、除去境界を固定する。
+const clean: (s: string) => string = toDisplayText;
 
-describe("sanitizeDisplayText", () => {
+describe("toDisplayText", () => {
   describe("正常系: 通常の表示名は不変", () => {
     test.each([
       ["日本語 + 空白", "山田 太郎"],
@@ -13,23 +11,21 @@ describe("sanitizeDisplayText", () => {
       ["ASCII", "John Smith Jr."],
       ["絵文字は除去対象外", "開発チーム🚀"],
     ])("%s", (_name, input) => {
-      expect(sanitizeDisplayText(input)).toBe(input);
+      expect(clean(input)).toBe(input);
     });
   });
 
   describe("異常系: インジェクション検体の除去", () => {
     test("CR/LF (SMTP ヘッダインジェクション) を除去する", () => {
-      expect(sanitizeDisplayText("山田\r\nBcc: attacker@evil.com 太郎")).toBe(
-        "山田Bcc: attacker@evil.com 太郎",
-      );
+      expect(clean("山田\r\nBcc: attacker@evil.com 太郎")).toBe("山田Bcc: attacker@evil.com 太郎");
     });
 
     test("RTL override (表示名偽装) を除去する", () => {
-      expect(sanitizeDisplayText("abc‮def")).toBe("abcdef");
+      expect(clean("abc‮def")).toBe("abcdef");
     });
 
     test("zero-width 文字を除去する", () => {
-      expect(sanitizeDisplayText("株式​会社")).toBe("株式会社");
+      expect(clean("株式​会社")).toBe("株式会社");
     });
   });
 
@@ -43,20 +39,20 @@ describe("sanitizeDisplayText", () => {
       ["RTL/LTR override 端 0x202A", "a‪b"],
       ["isolate 端 0x2069", "a⁩b"],
     ])("%s は除去される", (_name, input) => {
-      expect(sanitizeDisplayText(input)).toBe("ab");
+      expect(clean(input)).toBe("ab");
     });
 
     test("除去対象レンジの外側 (0x20 空白 / 0x2070) は残る", () => {
-      expect(sanitizeDisplayText("a b")).toBe("a b");
-      expect(sanitizeDisplayText("a⁰b")).toBe("a⁰b");
+      expect(clean("a b")).toBe("a b");
+      expect(clean("a⁰b")).toBe("a⁰b");
     });
 
     test("前後空白は trim される", () => {
-      expect(sanitizeDisplayText("  山田 太郎  ")).toBe("山田 太郎");
+      expect(clean("  山田 太郎  ")).toBe("山田 太郎");
     });
 
     test("制御文字のみの入力は空文字になる", () => {
-      expect(sanitizeDisplayText("\r\n‮​")).toBe("");
+      expect(clean("\r\n‮​")).toBe("");
     });
   });
 });

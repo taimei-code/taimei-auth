@@ -1,3 +1,6 @@
+declare const displayTextBrand: unique symbol;
+export type DisplayText = string & { readonly [displayTextBrand]: true };
+
 // 不可視 unicode / 方向制御文字を除去し、表示名偽装の phishing と SMTP ヘッダインジェクションを防ぐ。
 const isInvisibleOrDirectional = (cp: number): boolean =>
   cp <= 0x1f || // C0 制御文字 (CR=0x0d / LF=0x0a を含む)
@@ -7,8 +10,8 @@ const isInvisibleOrDirectional = (cp: number): boolean =>
   (cp >= 0x202a && cp <= 0x202e) || // RTL/LTR override
   (cp >= 0x2066 && cp <= 0x2069); // isolate (LRI/RLI/FSI/PDI)
 
-export const sanitizeDisplayText = (s: string): string =>
+export const toDisplayText = (s: string): DisplayText =>
   Array.from(s)
     .filter((ch) => !isInvisibleOrDirectional(ch.codePointAt(0) ?? 0))
     .join("")
-    .trim();
+    .trim() as DisplayText;

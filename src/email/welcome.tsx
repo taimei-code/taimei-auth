@@ -12,16 +12,17 @@ import {
   Text,
   Tailwind,
 } from "@react-email/components";
+import type { DisplayText } from "./sanitize";
 
 type WelcomeEmailProps = {
   appName: string;
-  userName?: string | null;
+  userName: DisplayText;
   dashboardUrl: string;
 };
 
 export default function WelcomeEmail({
   appName = "Taimei",
-  userName = "ユーザー",
+  userName,
   dashboardUrl = "https://example.com/dashboard",
 }: WelcomeEmailProps) {
   const greeting = userName ? `${userName} さん` : "";
