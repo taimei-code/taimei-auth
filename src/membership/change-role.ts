@@ -4,7 +4,6 @@ import type { DbTx } from "@/db/transaction";
 import { AuditLog } from "../audit/ports";
 import { Transaction } from "../transaction";
 import { applyRoleChange } from "./apply-change";
-import { NotFound } from "./guard/errors";
 
 export const changeRole = Effect.fn("membership.changeRole")(function* (params: {
   actorUserId: string;
@@ -22,8 +21,7 @@ export const changeRole = Effect.fn("membership.changeRole")(function* (params: 
 
   yield* tx.run(
     Effect.fn("membership.changeRole.apply")(function* (t: DbTx) {
-      const updated = yield* applyRoleChange(t, { targetUserId, companyId, nextRole });
-      if (!updated) return yield* new NotFound();
+      yield* applyRoleChange(t, { targetUserId, companyId, nextRole });
       yield* audit.recordRoleChanged(
         {
           actor_user_id: actorUserId,
