@@ -1,8 +1,9 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { dbTest, expectFailure } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { LastOwner } from "../errors";
+import { NotFound } from "../guard/errors";
 import { removeMember } from "../remove";
 
 const P = "rmmem-test-";
@@ -121,6 +122,30 @@ describe("removeMember", () => {
 
         expect(result).toEqual({ accountDeleted: true });
         expect(yield* userExists(memberId)).toBe(false);
+      }),
+    ));
+
+  test("同じ member を 2 回除名 → 2 回目は not_found で、membership_removed audit は 1 回目の 1 行だけ", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("twice-owner");
+        const memberId = yield* seedUser("twice-member");
+        const companyId = yield* seedCompany("twice");
+        yield* join(ownerId, companyId, "OWNER");
+        yield* join(memberId, companyId, "MEMBER");
+        const remove = () =>
+          removeMember({
+            actorUserId: ownerId,
+            targetUserId: memberId,
+            companyId,
+            targetRole: "MEMBER",
+          });
+
+        expect(yield* remove()).toEqual({ accountDeleted: true });
+        const e = yield* Effect.flip(remove());
+
+        expectFailure(e, NotFound, "not_found", 404);
+        expect((yield* auditRowsFor(ownerId, "membership_removed")).length).toBe(1);
       }),
     ));
 });

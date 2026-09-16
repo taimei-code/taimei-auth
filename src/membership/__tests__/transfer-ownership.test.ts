@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { dbTest, auditRowsFor } from "../../__tests__/live-runner";
+import { dbTest, auditRowsFor, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import { NotFound } from "../guard/errors";
 import { transferOwnership } from "../transfer-ownership";
 
 // transfer-ownership use-case (src/membership/transfer-ownership.ts) の DB 統合テスト。
@@ -10,6 +11,9 @@ import { transferOwnership } from "../transfer-ownership";
 
 const P = "trans-test-";
 const { run, cleanup } = dbTest(P);
+
+const transferToNobody = (actorUserId: string, companyId: string) =>
+  Effect.flip(transferOwnership({ actorUserId, toUserId: `${P}nonexistent-user`, companyId }));
 
 describe("transferOwnership", () => {
   beforeEach(cleanup);
@@ -113,6 +117,40 @@ describe("transferOwnership", () => {
         const finalOwnerId = (yield* db.readMembership(to.id, co))?.role === "OWNER" ? to.id : null;
         const payload = audits[0]?.payload as Record<string, unknown>;
         expect(payload.to_user_id).toBe(finalOwnerId);
+      }),
+    ));
+
+  test("to が非 member (OWNER 2 名) → not_found / actor も他 OWNER も OWNER のまま / ownership_transferred audit なし", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const actor = yield* db.seedUser("gone-actor");
+        const other = yield* db.seedUser("gone-other");
+        const co = yield* db.seedCompany("gone");
+        yield* db.seedMembership(actor.id, co, "OWNER");
+        yield* db.seedMembership(other.id, co, "OWNER");
+
+        const e = yield* transferToNobody(actor.id, co);
+
+        expectFailure(e, NotFound, "not_found", 404);
+        expect((yield* db.readMembership(actor.id, co))?.role).toBe("OWNER");
+        expect((yield* db.readMembership(other.id, co))?.role).toBe("OWNER");
+        expect((yield* auditRowsFor(actor.id, "ownership_transferred")).length).toBe(0);
+      }),
+    ));
+
+  test("to が非 member (OWNER 1 名) → last_owner ではなく not_found / actor は OWNER のまま", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const actor = yield* db.seedUser("sole-actor");
+        const co = yield* db.seedCompany("sole");
+        yield* db.seedMembership(actor.id, co, "OWNER");
+
+        const e = yield* transferToNobody(actor.id, co);
+
+        expectFailure(e, NotFound, "not_found", 404);
+        expect((yield* db.readMembership(actor.id, co))?.role).toBe("OWNER");
       }),
     ));
 });
