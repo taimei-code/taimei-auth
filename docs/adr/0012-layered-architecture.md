@@ -38,10 +38,10 @@ OWNER になれる TOCTOU 窓が残っていた。
 | Use-case | `src/company/`, `src/membership/`, `src/invitation/`, `src/account/` | 業務手続 = 関数 1 つ。tx / audit / 不変条件 (OWNER≥1, orphan 連動削除) / TOCTOU 再検証を所有 |
 | Repository | `db/repositories/` | 薄いまま (db/CLAUDE.md ルール維持)。判定を持たない |
 
-**`src/membership/policy.ts` は Guard 層と Use-case 層が共有する純粋述語 kernel** (isAtLeast /
+**`src/membership/policy.ts` は Guard 層と Use-case 層が共有する純粋述語 / parser kernel** (isAtLeast /
 canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget /
-canAcceptInvitedRole 等)。Use-case から policy 述語を呼ぶのは正しい (accept use-case の tx 内
-再検証 = canAcceptInvitedRole がその代表例)。**禁止対象は Transport (handler / rpc) からの
+verifyInviter 等)。Use-case から policy を呼ぶのは正しい (accept use-case の tx 内
+再検証 = verifyInviter の verdict がその代表例)。**禁止対象は Transport (handler / rpc) からの
 policy 述語直呼びだけ** — 認可の組み立てを handler に散らさず、operation 単位 entry (Guard 層) か
 use-case (Use-case 層) に集約する規律 (PR #103–#108 + 本 ADR)。将来「cross-layer import 掃除」の
 誤リファクタで policy import を use-case から剥がさないよう本節で pin する。
@@ -106,7 +106,7 @@ error 文字列を散らばらせて同じ文字列を別 status で返す silen
 
 `invitation.role === "OWNER"` の accept は accept tx 内で「招待者 (`invitedByUserId`) が現在も
 OWNER である」ことを (`invitedByUserId`, `invitation.companyId`) 1 行の `SELECT ... FOR SHARE` で
-lock しつつ再検証する (`canAcceptInvitedRole` 述語)。ADMIN/MEMBER 招待は対象外にする。
+lock しつつ再検証する (lookup 結果を `verifyInviter` が Accept / Reject に判定)。ADMIN/MEMBER 招待は対象外にする。
 
 理由:
 - **OWNER**: 一度 mint されると同事業所の他 OWNER でも「勝手に降格させる」ためには canChangeRole
@@ -116,9 +116,10 @@ lock しつつ再検証する (`canAcceptInvitedRole` 述語)。ADMIN/MEMBER 招
   role 変更 / 除名で撤回可能。招待者退会の正規ケース (「〇〇さんが招待して、当日退職 → 翌日に
   被招待者が受諾」等) を壊すため、OWNER 招待だけを再検証対象にする。
 
-述語 `canAcceptInvitedRole(invitedRole, inviterCurrentRole)` は `src/membership/policy.ts` に置く。
-未知 invitedRole は DB の CHECK 制約により存在しない (ADR-0018)。inviter membership 不在 (null) は OWNER
-招待に限り false、ADMIN/MEMBER 招待は true (前段の理由と対称)。
+`verifyInviter(found)` は `src/membership/policy.ts` に置き、lookup 結果を `Accept | Reject(seen)` の直和型 (`_tag` で
+判別する union) に判定する。`seen` は拒否時に見た招待者の状態 (`Demoted(role)` / `Missing`) で、拒否の規則が広がる時は
+`verifyInviter` の分岐と `seen` の枝だけを足す。use-case は `Reject` を拒否に写すだけで規則を持たない。未知 invitedRole は
+DB の CHECK 制約により存在しない (ADR-0018)。
 
 ### tx isolation の前提 (READ COMMITTED)
 
@@ -138,8 +139,10 @@ scope が守れているかは repository の `lockMembershipForShare(tx, userId
 use-case の reject 分岐 (double_accept / inviter_not_owner_or_missing)。
 
 **payload keys** (固定): `invitation_id` / `company_id` / `invited_by_user_id` / `attempted_role` /
-`inviter_current_role` / `reason`。**PII (email 等) は含めない** — invitation_id から辿れるため
-ログ集約系への露出面を作らない。
+`inviter` / `reason`。`inviter` は再検証で見た招待者の状態 `{ _tag: "Demoted", role }` / `{ _tag: "Missing" }`
+で、double_accept (lookup に到達しない) は `null` (2026-09-17 に `inviter_current_role: Role | null` から置換。
+それ以前の行は旧 key を持つ)。**PII (email 等) は含めない** — invitation_id から辿れるためログ集約系への
+露出面を作らない。
 
 **at-least-once 近似**: reject 経路は accept tx を rollback したあと、rollback 後に console.warn
 (structured payload の JSON) を先行 emit → その後別 tx で `recordInvitationAcceptRejected` を実行。

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { Role } from "../policy";
+import type { InviterVerdict, Role } from "../policy";
 import {
-  canAcceptInvitedRole,
   canAttemptRemoval,
   canChangeRole,
   canInviteRole,
   canRemoveTarget,
   isAtLeast,
+  verifyInviter,
 } from "../policy";
 
 // src の test は @/db を runtime import しない (test-db-boundary gate)。
@@ -84,25 +84,15 @@ describe("canRemoveTarget", () => {
   }
 });
 
-describe("canAcceptInvitedRole", () => {
-  // QA-M-06 3×3 の全 (invitedRole, inviterCurrentRole) — OWNER 招待は inviter OWNER のみ true、
-  // それ以外の invitedRole は inviter role を問わず true。
-  for (const invited of ROLES) {
-    for (const inviter of ROLES) {
-      const expected = invited === "OWNER" ? inviter === "OWNER" : true;
-      test(`invited=${invited} inviter=${inviter} → ${expected}`, () => {
-        expect(canAcceptInvitedRole(invited, inviter)).toBe(expected);
-      });
-    }
+describe("verifyInviter", () => {
+  test("行なし → Reject (Missing)", () => {
+    expect(verifyInviter(undefined)).toEqual({ _tag: "Reject", seen: { _tag: "Missing" } });
+  });
+  for (const role of ROLES) {
+    const expected: InviterVerdict =
+      role === "OWNER" ? { _tag: "Accept" } : { _tag: "Reject", seen: { _tag: "Demoted", role } };
+    test(`${role} → ${expected._tag}`, () => {
+      expect(verifyInviter({ role })).toEqual(expected);
+    });
   }
-
-  // QA-M-06 招待者 membership 行が存在しない (除名済 / 退会) — OWNER 招待だけ false に倒し、
-  // ADMIN/MEMBER 招待は招待者退会の正規ケースを壊さないよう true のまま。
-  test("inviter null で invited=OWNER → false (fail-closed)", () => {
-    expect(canAcceptInvitedRole("OWNER", null)).toBe(false);
-  });
-  test("inviter null で invited=ADMIN/MEMBER → true (招待者退会の正規ケース)", () => {
-    expect(canAcceptInvitedRole("ADMIN", null)).toBe(true);
-    expect(canAcceptInvitedRole("MEMBER", null)).toBe(true);
-  });
 });
