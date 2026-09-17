@@ -6,7 +6,7 @@ import { TestDb } from "../../__tests__/test-db";
 import { acceptInvitation } from "../accept";
 
 // invitation accept use-case (src/invitation/accept.ts) の DB 統合テスト。
-// FOR SHARE lock + canAcceptInvitedRole の再検証 / audit event / reused 冪等 /
+// FOR SHARE lock + verifyInviter の再検証 / audit event / reused 冪等 /
 // 並行 double-accept / 降格レース の invariant を検証する。
 
 const P = "acc-test-";
@@ -159,7 +159,7 @@ describe("acceptInvitation", () => {
         expect(payload.company_id).toBe(co);
         expect(payload.invited_by_user_id).toBe(inviter.id);
         expect(payload.attempted_role).toBe("OWNER");
-        expect(payload.inviter_current_role).toBe("ADMIN");
+        expect(payload.inviter).toEqual({ _tag: "Demoted", role: "ADMIN" });
         expect(payload.reason).toBe("inviter_not_owner_or_missing");
         // PII (email) は payload に含めない契約。
         expect(payload).not.toHaveProperty("email");
@@ -174,7 +174,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-04 招待者 membership 行が不在 (退会) の OWNER 招待 → 410 + reject audit (inviter_current_role=null)", () =>
+  test("QA-M-04 招待者 membership 行が不在 (退会) の OWNER 招待 → 410 + reject audit (inviter=Missing)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -206,8 +206,35 @@ describe("acceptInvitation", () => {
         expect(failure).toBeInstanceOf(ExpiredOrUsed);
         const audit = yield* firstAudit(invitee.id, "invitation_accept_rejected");
         const payload = audit?.payload as Record<string, unknown>;
-        expect(payload.inviter_current_role).toBe(null);
+        expect(payload.inviter).toEqual({ _tag: "Missing" });
         expect(payload.reason).toBe("inviter_not_owner_or_missing");
+      }),
+    ));
+
+  test("QA-M-06 招待者が退会済みの MEMBER 招待 → accept 成功 (再検証は OWNER 招待だけ)", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const inviter = yield* db.seedUser("m06-inviter");
+        const co = yield* db.seedCompany("m06");
+        yield* db.seedMembership(inviter.id, co, "OWNER");
+        const invitee = yield* db.seedUser("m06-invitee");
+        const inv = yield* db.seedInvitation({
+          companyId: co,
+          email: invitee.email,
+          role: "MEMBER",
+          invitedByUserId: inviter.id,
+        });
+        yield* db.removeMembership(inviter.id, co);
+        const invitationRow = yield* reloadInvitation(inv.token);
+
+        const result = yield* acceptInvitation({
+          actor: { id: invitee.id, email: invitee.email },
+          invitation: invitationRow,
+        });
+        expect(result).toEqual({ companyId: co });
+        expect((yield* db.readMembership(invitee.id, co))?.role).toBe("MEMBER");
+        expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(0);
       }),
     ));
 
@@ -247,7 +274,9 @@ describe("acceptInvitation", () => {
         );
         expect(second).toBeInstanceOf(ExpiredOrUsed);
         const audit = yield* firstAudit(invitee.id, "invitation_accept_rejected");
-        expect((audit?.payload as Record<string, unknown>).reason).toBe("double_accept");
+        const payload = audit?.payload as Record<string, unknown>;
+        expect(payload.reason).toBe("double_accept");
+        expect(payload.inviter).toBe(null);
       }),
     ));
 

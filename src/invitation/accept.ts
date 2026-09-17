@@ -1,24 +1,30 @@
 import { Data, Effect } from "effect";
-import type { InvitationRow, Role } from "@/db/repositories/invitation";
+import type { InvitationRow } from "@/db/repositories/invitation";
+import type { InviterSeen } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
 import { AuditLog } from "../audit/ports";
 import { swallowAuditFailure } from "../audit/report-failure";
 import { IdGenerator } from "../id-generator";
-import { canAcceptInvitedRole } from "../membership/policy";
+import { verifyInviter } from "../membership/policy";
 import { ExpiredOrUsed } from "../membership/guard/errors";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
-import type { RejectReason } from "./errors";
 import { InvitationRepo } from "./ports";
 
 // 招待者の再検証を tx 内に置くのは、降格 UPDATE が割り込む TOCTOU 窓を閉じるため。
 
 const ACCEPT_REJECTED_LOG = "invitation_accept_rejected" as const;
 
-class RejectAccept extends Data.TaggedError("RejectAccept")<{
-  readonly reason: RejectReason;
-  readonly inviterRole: Role | null;
-}> {}
+class DoubleAccept extends Data.TaggedError("DoubleAccept") {
+  readonly reason = "double_accept" as const;
+  readonly inviter = null;
+}
+
+class InviterNotOwner extends Data.TaggedError("InviterNotOwner")<{
+  readonly inviter: InviterSeen;
+}> {
+  readonly reason = "inviter_not_owner_or_missing" as const;
+}
 
 export const acceptInvitation = Effect.fn("invitation.accept")(function* (params: {
   actor: { id: string; email: string };
@@ -33,22 +39,13 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
 
   const apply = Effect.fn("invitation.accept.apply")(function* (t: DbTx) {
     const accepted = yield* invitations.markInvitationAccepted(invitation.id, t);
-    if (!accepted) return yield* new RejectAccept({ reason: "double_accept", inviterRole: null });
+    if (!accepted) return yield* new DoubleAccept();
 
-    const inviterCurrentRole =
-      invitation.role === "OWNER"
-        ? ((yield* memberships.lockMembershipForShare(
-            t,
-            invitation.invitedByUserId,
-            invitation.companyId,
-          ))?.role ?? null)
-        : null;
-
-    if (!canAcceptInvitedRole(invitation.role, inviterCurrentRole)) {
-      return yield* new RejectAccept({
-        reason: "inviter_not_owner_or_missing",
-        inviterRole: inviterCurrentRole,
-      });
+    if (invitation.role === "OWNER") {
+      const verdict = yield* memberships
+        .lockMembershipForShare(t, invitation.invitedByUserId, invitation.companyId)
+        .pipe(Effect.map(verifyInviter));
+      if (verdict._tag === "Reject") return yield* new InviterNotOwner({ inviter: verdict.seen });
     }
 
     yield* memberships.insertMembership(
@@ -74,7 +71,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
   yield* tx
     .run(apply)
     .pipe(
-      Effect.catchTag("RejectAccept", (rejected) =>
+      Effect.catchTag(["DoubleAccept", "InviterNotOwner"], (rejected) =>
         recordRejectionAndFail(actor.id, invitation, rejected),
       ),
     );
@@ -85,7 +82,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
 const recordRejectionAndFail = Effect.fn("invitation.accept.recordRejection")(function* (
   actorUserId: string,
   invitation: InvitationRow,
-  rejected: RejectAccept,
+  rejected: DoubleAccept | InviterNotOwner,
 ) {
   const audit = yield* AuditLog;
   const payload = {
@@ -94,7 +91,7 @@ const recordRejectionAndFail = Effect.fn("invitation.accept.recordRejection")(fu
     company_id: invitation.companyId,
     invited_by_user_id: invitation.invitedByUserId,
     attempted_role: invitation.role,
-    inviter_current_role: rejected.inviterRole,
+    inviter: rejected.inviter,
     reason: rejected.reason,
   };
   // console.warn を DB 書込みの前に置くのは DB 断でも痕跡を残すため。行の形は運用の log filter が拾う。

@@ -1,5 +1,5 @@
 // 相対 import なのは web の "@/" alias との誤解決を避けるため。
-import type { Role } from "../../db/repositories/membership";
+import type { InviterSeen, Role } from "../../db/repositories/membership";
 
 export type { Role } from "../../db/repositories/membership";
 
@@ -27,8 +27,13 @@ export function canRemoveTarget(actorRole: Role, isSelf: boolean, targetRole: Ro
   return !(targetRole === "OWNER" && !isSelf && actorRole !== "OWNER");
 }
 
-// OWNER 招待だけ招待者の現役 OWNER を要求するのは、降格 / 除名後の mint を塞ぐため。
-export function canAcceptInvitedRole(invitedRole: Role, inviterCurrentRole: Role | null): boolean {
-  if (invitedRole !== "OWNER") return true;
-  return inviterCurrentRole === "OWNER";
+export type InviterVerdict =
+  | { readonly _tag: "Accept" }
+  | { readonly _tag: "Reject"; readonly seen: InviterSeen };
+
+export function verifyInviter(found: { readonly role: Role } | undefined): InviterVerdict {
+  if (found === undefined) return { _tag: "Reject", seen: { _tag: "Missing" } };
+  return found.role === "OWNER"
+    ? { _tag: "Accept" }
+    : { _tag: "Reject", seen: { _tag: "Demoted", role: found.role } };
 }
