@@ -21,6 +21,10 @@ export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string)
 export type MembershipRow = typeof membership.$inferSelect;
 export type { Role };
 
+export type InviterSeen =
+  | { readonly _tag: "Demoted"; readonly role: Exclude<Role, "OWNER"> }
+  | { readonly _tag: "Missing" };
+
 export type MembershipWithCompany = MembershipRow & {
   companyName: string;
   companyOrgCode: string;
