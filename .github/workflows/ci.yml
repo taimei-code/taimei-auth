@@ -218,7 +218,7 @@ jobs:
       #   cache-from すると最も高価な既定 build が毎回 cold になる)。cache-to は dev build 1 本のみ。
       - name: Build (既定 target)
         id: build-default
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           load: true
@@ -231,7 +231,7 @@ jobs:
       # local image store への load を省く。1GB 級の export/import が丸ごと消えて job が ~20-35s 短縮する。
       - name: Build (--target dev)
         id: build-dev
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: dev
@@ -246,7 +246,7 @@ jobs:
       # install layer が export されず毎回再 install になる。よって別 scope + mode=max。
       - name: Build (--target runner)
         id: build-runner
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: runner
@@ -261,7 +261,7 @@ jobs:
       # consumer repo の e2e だけ壊れる」cross-context 型になる。web-build 層以外は cache hot でほぼ無料。
       - name: Build (--target dev / APP_ENV=development)
         id: build-dev-devenv
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           target: dev
