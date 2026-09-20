@@ -3,7 +3,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { HealthRepo } from "./health/ports";
-import { Redis } from "./redis-service";
+import { TtlStore } from "./ttl-store-service";
 import { handleRpc } from "./rpc/fetch-handler";
 import { loginShortcut } from "./handlers/login-shortcut";
 import { accountAvatar } from "./handlers/avatar-upload";
@@ -110,7 +110,7 @@ export function buildApp(options: AppOptions): Hono {
     "/api/mfa/challenge",
     createRateLimitMiddleware({
       keyFn: (c) => `rate-limit:mfa-challenge-status:ip:${getClientContext(c.req.raw.headers).ip}`,
-      // 未認証で到達し challenge cookie ありで Redis 3 往復。30 = 表示 1 + verify 上限 10 の数人分 (NAT 同居)。
+      // 未認証で到達し challenge cookie ありで TTL store 3 往復。30 = 表示 1 + verify 上限 10 の数人分 (NAT 同居)。
       limit: isLocal ? LOCAL_RELAXED_LIMIT : 30,
       windowSec: 60,
     }),
@@ -175,16 +175,16 @@ export function buildApp(options: AppOptions): Hono {
       c,
       Effect.gen(function* () {
         const health = yield* HealthRepo;
-        const redis = yield* Redis;
-        const [dbOk, redisOk] = yield* Effect.all(
+        const ttlStore = yield* TtlStore;
+        const [dbOk, ttlStoreOk] = yield* Effect.all(
           [
             health.pingDatabase().pipe(Effect.orElseSucceed(() => false)),
-            redis.ping().pipe(Effect.orElseSucceed(() => false)),
+            ttlStore.ping().pipe(Effect.orElseSucceed(() => false)),
           ],
           { concurrency: "unbounded" },
         );
-        const checks = { db: dbOk ? "ok" : "error", redis: redisOk ? "ok" : "error" };
-        const healthy = dbOk && redisOk;
+        const checks = { db: dbOk ? "ok" : "error", ttlStore: ttlStoreOk ? "ok" : "error" };
+        const healthy = dbOk && ttlStoreOk;
         const version = process.env.CF_VERSION_ID ?? null;
         return c.json(
           { status: healthy ? "ok" : "degraded", checks, version },

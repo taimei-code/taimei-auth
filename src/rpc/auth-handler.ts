@@ -31,7 +31,7 @@ const verifySessionError = (reason: Result) =>
 export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (req: {
   sessionToken: string;
 }) {
-  // 参照するのは cookieCache でなく Redis 側 payload (handler は cookie を送らないため)。
+  // 参照するのは cookieCache でなく TTL store 側 payload (handler は cookie を送らないため)。
   const headers = new Headers();
   headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
 

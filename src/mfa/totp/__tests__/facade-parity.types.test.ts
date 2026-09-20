@@ -42,7 +42,7 @@ const _disableForward = (r: DisableOk): Headers => r.sessionChanges;
 const _okBody: MfaOkResponse = { ok: true };
 
 // 失敗枝のうち MFA 語彙を持つ failure class は adapter が 1 行で HTTP に落とせる形 ({ error, status })。
-// boundary error (DbError / AuthApiError / RedisError) はここに現れず 500 へ落ちる。
+// boundary error (DbError / AuthApiError / TtlStoreError) はここに現れず 500 へ落ちる。
 type ActivateFailure = Extract<
   Effect.Error<ReturnType<Facade["activate"]>>,
   { error: MfaWireErrorCode }

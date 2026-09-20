@@ -224,4 +224,4 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた — resolved: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないため本 glossary に置かず、正本は ADR-0017
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化
 - 「rate limit」「quota」「attempt budget」が code 上で並存し、同じ「window 内の試行上限」を指していた — resolved: 設計語彙は **試行枠** に統一、code の識別子は別名として据え置き
-- 「Redis」は 2026-09 まで **TTL store** の実装名 (Upstash / node-redis) で、glossary でも保存先を指す語として使っていた — resolved: 実装を Durable Objects / in-memory に替えた (ADR-0019) 際に **TTL store** を canonical 化。code の `redis.ts` / `Redis` service / `RedisError` は識別子として据え置き
+- 「Redis」は 2026-09 まで **TTL store** の実装名 (Upstash / node-redis) で、glossary でも保存先を指す語として使っていた — resolved: 実装を Durable Objects / in-memory に替えた (ADR-0019) 際に **TTL store** を canonical 化。code の識別子も `ttl-store.ts` / `TtlStore` service / `TtlStoreError` へ改名済み (`/health` の check key は `ttlStore`)

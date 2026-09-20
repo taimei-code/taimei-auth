@@ -23,7 +23,7 @@ export const redirectToSignIn = () => redirectToAuthFlow("/auth/");
 
 export const redirectToCompanySignup = () => redirectToAuthFlow("/auth/signup/company");
 
-// getSession は通るのに account API が 401 = Redis の session と DB の user 行が食い違う stale session。
+// getSession は通るのに account API が 401 = TTL store の session と DB の user 行が食い違う stale session。
 export const isStaleSessionError = (error: unknown): boolean =>
   error instanceof RequestJsonError && error.status === 401;
 

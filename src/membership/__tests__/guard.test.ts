@@ -42,14 +42,14 @@ describe("requireActor", () => {
   });
 
   test("Auth が AuthApiError → Unauthorized (fail-closed: 誤って通さず拒否)", async () => {
-    const layer = Layer.mergeAll(authFailing(new Error("redis down")), userRepoLayer([]));
+    const layer = Layer.mergeAll(authFailing(new Error("ttl store down")), userRepoLayer([]));
     const e = await run(requireActor(headers).pipe(Effect.provide(layer)));
     expect(e._tag).toBe("Unauthorized");
   });
 
   test("Auth が AuthApiError → Sentry に cause を component=membership-guard で記録する", async () => {
     captured.length = 0;
-    const cause = new Error("redis down");
+    const cause = new Error("ttl store down");
     const layer = Layer.mergeAll(authFailing(cause), userRepoLayer([]));
     await run(requireActor(headers).pipe(Effect.provide(layer)));
     expect(captured.length).toBe(1);

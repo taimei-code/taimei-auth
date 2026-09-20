@@ -1,25 +1,25 @@
 import { describe, expect, test } from "bun:test";
 import { Cause, Effect } from "effect";
 import { Background, BackgroundLive, withWaitUntil } from "../background";
-import { RedisError, timeoutAsBoundary, tryRedis } from "../errors";
+import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
-import { getMemoryKvStore } from "../redis";
-import { Redis, RedisLive } from "../redis-service";
+import { getMemoryKvStore } from "../ttl-store";
+import { TtlStore, TtlStoreLive } from "../ttl-store-service";
 
 // ADR-0017 Stage 4 の runtime primitive / boundary service。in-memory store + compose Postgres を使う。
-describe("Redis service (live)", () => {
-  const run = <A, E>(p: Effect.Effect<A, E, Redis>) =>
-    Effect.runPromise(Effect.provide(p, RedisLive));
+describe("TtlStore service (live)", () => {
+  const run = <A, E>(p: Effect.Effect<A, E, TtlStore>) =>
+    Effect.runPromise(Effect.provide(p, TtlStoreLive));
   const key = `stage4-test:${Date.now()}`;
 
   test("set → get → delete が Effect で往復する", async () => {
     const value = await run(
-      Redis.use((redis) =>
+      TtlStore.use((ttlStore) =>
         Effect.gen(function* () {
-          yield* redis.set(key, "v", 30);
-          const got = yield* redis.get(key);
-          yield* redis.delete(key);
+          yield* ttlStore.set(key, "v", 30);
+          const got = yield* ttlStore.get(key);
+          yield* ttlStore.delete(key);
           return got;
         }),
       ),
@@ -28,26 +28,26 @@ describe("Redis service (live)", () => {
   });
 
   test("ping は boolean を返す", async () => {
-    expect(await run(Redis.use((redis) => redis.ping()))).toBe(true);
+    expect(await run(TtlStore.use((ttlStore) => ttlStore.ping()))).toBe(true);
   });
 
   test("incrementRateWindow は count を返し EXPIRE を付ける (再試行しない書き込み系)", async () => {
-    const r = await run(Redis.use((redis) => redis.incrementRateWindow(`${key}:w`, 5)));
+    const r = await run(TtlStore.use((ttlStore) => ttlStore.incrementRateWindow(`${key}:w`, 5)));
     expect(r.count).toBe(1);
     const rawTtl = getMemoryKvStore().ttl(`${key}:w`);
     expect(rawTtl).toBeGreaterThanOrEqual(1);
     expect(rawTtl).toBeLessThanOrEqual(5);
-    await run(Redis.use((redis) => redis.delete(`${key}:w`)));
+    await run(TtlStore.use((ttlStore) => ttlStore.delete(`${key}:w`)));
   });
 });
 
 describe("timeoutAsBoundary", () => {
   test("期限内に終わらない境界呼び出しは boundary error (cause = TimeoutError) になる", async () => {
-    const wrap = timeoutAsBoundary((cause) => new RedisError({ cause }), "10 millis");
+    const wrap = timeoutAsBoundary((cause) => new TtlStoreError({ cause }), "10 millis");
     const e = await Effect.runPromise(
-      Effect.flip(wrap(tryRedis(() => new Promise<never>(() => {})))),
+      Effect.flip(wrap(tryTtlStore(() => new Promise<never>(() => {})))),
     );
-    expect(e).toBeInstanceOf(RedisError);
+    expect(e).toBeInstanceOf(TtlStoreError);
     expect(Cause.isTimeoutError(e.cause)).toBe(true);
   });
 });

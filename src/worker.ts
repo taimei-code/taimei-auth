@@ -3,7 +3,7 @@ import type { Hono } from "hono";
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
 import { KvStore as KvStoreBase } from "./kv-store.do";
-import { initRedis, type KvStoreNamespace } from "./redis";
+import { initTtlStore, type KvStoreNamespace } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
@@ -30,12 +30,12 @@ function copyEnvToProcess(env: Env): void {
   process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
-// 順序は load-bearing: env コピー → initRedis → initAuth → buildApp (後者が前者の結果を読む)。
+// 順序は load-bearing: env コピー → initTtlStore → initAuth → buildApp (後者が前者の結果を読む)。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  initRedis(env.KV_STORE);
+  initTtlStore(env.KV_STORE);
   initAuth();
   bootstrappedApp = buildApp({
     mountStatic: (app) => {

@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
 import { AuthApiError } from "../../../errors";
-import { getMemoryKvStore } from "../../../redis";
+import { getMemoryKvStore } from "../../../ttl-store";
 import { runTest, expectFailure, auditRowsFor, partial } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
@@ -32,7 +32,7 @@ import { MfaSessions } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 
-// ログインチャレンジの発行 → 通過 (§10-4)。実 Redis + 実 gateway (issueSessionFor)。
+// ログインチャレンジの発行 → 通過 (§10-4)。実 TTL store + 実 gateway (issueSessionFor)。
 // sign_in audit は live Layer の実書き込みを実 DB で観測する。
 
 const P = "mfa-lc-";
@@ -243,7 +243,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-140 試行計数の Redis 不能 → 429 locked (fail-closed)", () =>
+  test("AC-140 試行計数の TTL store 不能 → 429 locked (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

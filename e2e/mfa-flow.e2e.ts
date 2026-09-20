@@ -19,7 +19,7 @@ test.beforeEach(() => {
 });
 
 // 認証アプリの代わりにコードを作る一式。src/mfa/__tests__/helpers.ts の同名関数は再利用せず
-// 書き下ろす — あちらは db / redis client を道連れに import するため、spec プロセスに pg Pool を
+// 書き下ろす — あちらは db / TTL store client を道連れに import するため、spec プロセスに pg Pool を
 // 開くことになる (biome の e2e override が禁じている理由そのもの)。生成そのものは本番と同じ
 // @better-auth/utils に委ねる。
 // 刻みは src/auth.ts の totpOptions と同値。プラグインに検証窓の option は無く、窓の広さ

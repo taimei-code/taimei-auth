@@ -20,7 +20,7 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 
 - **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`getByName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを null として隠し、削除は alarm だけが行う (read path に write を置かない)。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
 - **Bun の TTL store は in-memory** (`src/kv-store.memory.ts`)。`bun test` と `bun run src/index.ts` (単一 process) が使う。test の観測面 `keys(prefix)` / `ttl(key)` は `getMemoryKvStore` 経由に限り、biome の `importNamePattern` で production からの import を禁じる
-- **`RedisStorage` / `Redis` service / `RedisError` の名前と契約は据え置く**。better-auth `secondaryStorage`、use-case 4 経路、`/health` の `redis` check は無変更で適合する
+- **`RedisStorage` / `Redis` service / `RedisError` の名前と契約は据え置く**。better-auth `secondaryStorage`、use-case 4 経路、`/health` の `redis` check は無変更で適合する (追記 2026-09-20: 契約はそのまま、名前は `TtlStorage` / `TtlStore` / `TtlStoreError`、`/health` の check key は `ttlStore` へ改名した)
 - **local 実行は `wrangler dev`** (`scripts/wrangler-dev.sh`)。compose と e2e は dev stage の image に本物の Node.js binary を重ねて起動する (oven/bun の `node` は bun への shim で wrangler が拒否する)
 - **Upstash / node-redis / keepalive cron を撤去**。`redis` / `@upstash/redis` の依存、`UPSTASH_*` secret 2 個、compose `auth-redis`、CI の redis service、`triggers.crons` を消す
 - **runner stage を撤去**。本番 artifact は wrangler bundle (devDependencies も同梱) で、pruned runner image の消費者は compose と smoke script だけだった。compose が wrangler dev (dev stage) になる以上、runner を維持する理由が無い。位置契約 (既定 target = dev) は維持する (ADR-0014 Status)

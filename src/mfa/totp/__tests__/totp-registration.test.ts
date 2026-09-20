@@ -33,7 +33,7 @@ import { readOwnedMfaStatus } from "../read-status";
 import { verifyAndConsumeOwnedCode } from "../verify-code";
 
 // 登録遷移 use-case の統合テスト (実 DB + 記録型 test Layer)。評決表 (ADR-0016 §3.2) をそのまま固定する。
-// revoke の実効性と Redis fail-closed は既存資産 (login-challenge / handler テスト) の担当。
+// revoke の実効性と TTL store fail-closed は既存資産 (login-challenge / handler テスト) の担当。
 
 const P = "mfa-totp-reg-";
 const { run, cleanup } = dbTest(P);

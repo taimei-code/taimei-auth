@@ -21,8 +21,8 @@ import {
   readLoginChallengeState,
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
-import { getMemoryKvStore, redisStorage } from "../../redis";
-import { Redis } from "../../redis-service";
+import { getMemoryKvStore, ttlStorage } from "../../ttl-store";
+import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
 import { partial, runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -59,7 +59,7 @@ const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 // baseURL 未設定時は request origin が採用されるため、テストが叩く origin と揃える。
 const AUTH_ORIGIN = "http://localhost:3100";
 
-// テストが発行させたチャレンジの Redis state を明示的に消す (TTL 待ちにしない)。
+// テストが発行させたチャレンジの TTL store state を明示的に消す (TTL 待ちにしない)。
 const issuedIds: string[] = [];
 const trackChallengeFrom = (headers: Headers) =>
   peekLoginChallenge(headers).pipe(
@@ -93,7 +93,7 @@ type OAuthCallbackOutcome = {
 };
 
 // after-hook が使う機能だけを載せた transport ctx。context は実物 (internalAdapter / baseURL) を
-// そのまま持たせるので、セッション破棄もチャレンジ発行も実 Redis / 実 DB に効く。
+// そのまま持たせるので、セッション破棄もチャレンジ発行も実 TTL store / 実 DB に効く。
 const runOAuthCallbackHook = (
   newSession: { session: { token: string }; user: Record<string, unknown> } | null,
 ) =>
@@ -201,13 +201,13 @@ describe("チャレンジ強制プラグイン", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e12");
         yield* enableMfaFor(user);
-        // リンク発行・session 書き込みも redisStorage.set を通るため、注入はチャレンジ key に限る。
+        // リンク発行・session 書き込みも ttlStorage.set を通るため、注入はチャレンジ key に限る。
         const link = yield* requestMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
-        const originalSet = redisStorage.set.bind(redisStorage);
+        const originalSet = ttlStorage.set.bind(ttlStorage);
 
         const login = yield* Effect.acquireUseRelease(
           Effect.sync(() =>
-            spyOn(redisStorage, "set").mockImplementation((key, value, ttl) => {
+            spyOn(ttlStorage, "set").mockImplementation((key, value, ttl) => {
               if (key.startsWith("mfa:login-challenge:")) {
                 return Promise.reject(new Error("challenge store unavailable"));
               }
@@ -383,12 +383,12 @@ describe("enforceChallenge (program 単体)", () => {
   const mfaEnabled = enrollment({ verifiedAt: new Date() });
   // method を渡さない partial は呼ばれた時点で die する = 「0 回」の決定的信号。
   const untouched = Layer.mergeAll(
-    Layer.succeed(Redis, partial<Redis["Service"]>({})),
+    Layer.succeed(TtlStore, partial<TtlStore["Service"]>({})),
     Layer.succeed(AuthApi, partial<AuthApi["Service"]>({})),
   );
   const interventionSucceeds = (calls: string[]) =>
     Layer.mergeAll(
-      Layer.succeed(Redis, partial<Redis["Service"]>({ set: () => Effect.void })),
+      Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ set: () => Effect.void })),
       Layer.succeed(
         AuthApi,
         partial<AuthApi["Service"]>({
@@ -434,7 +434,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-158 未知 provider は fail-closed: challenge、drop 1 回、cookie / Redis 0 回、Sentry warning 1 件", () =>
+  test("AC-158 未知 provider は fail-closed: challenge、drop 1 回、cookie / TTL store 0 回、Sentry warning 1 件", () =>
     run(
       Effect.gen(function* () {
         const calls: string[] = [];

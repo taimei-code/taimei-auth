@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { getMemoryKvStore } from "../../redis";
+import { getMemoryKvStore } from "../../ttl-store";
 import { runTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteAccountIfOrphaned } from "../orphan";
@@ -115,10 +115,10 @@ describe("deleteAccountIfOrphaned", () => {
       }),
     ));
 
-  // secondaryStorage 構成では session の実体は Redis のみ (Postgres session テーブルは常に空)。
+  // secondaryStorage 構成では session の実体は TTL store のみ (Postgres session テーブルは常に空)。
   // DB 側の revoke だけでは削除済み user の session が生き残り、その cookie で事業所作成を叩くと
-  // membership insert が FK 違反 500 になる実障害があった。orphan 削除は Redis 側も purge すること。
-  test("orphan 削除は secondaryStorage (Redis) の session 実体と索引も purge する", () =>
+  // membership insert が FK 違反 500 になる実障害があった。orphan 削除は TTL store 側も purge すること。
+  test("orphan 削除は secondaryStorage (TTL store) の session 実体と索引も purge する", () =>
     run(
       Effect.gen(function* () {
         const userId = yield* seedUser("store");
@@ -134,7 +134,7 @@ describe("deleteAccountIfOrphaned", () => {
       }),
     ));
 
-  test("membership が残り削除しない場合は Redis session に触れない", () =>
+  test("membership が残り削除しない場合は TTL store の session に触れない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

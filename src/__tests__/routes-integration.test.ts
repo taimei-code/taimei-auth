@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { requestApp } from "../handlers/__tests__/helpers";
 import { Effect } from "effect";
 import { app } from "../index";
-import { getMemoryKvStore } from "../redis";
+import { getMemoryKvStore } from "../ttl-store";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 

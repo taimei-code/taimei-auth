@@ -11,7 +11,7 @@ const RUNTIME_SRC = readFileSync(
 );
 
 // design §3.1 / AC-006 / AC-008: runtime は lazy accessor で isolate/process に 1 つ。Layer は I/O resource を
-// 持たない (pool は ALS、Redis client は initRedis が持つ) ので、runtime.ts は db/client と redis を import しない。
+// 持たない (pool は ALS、TTL store client は initTtlStore が持つ) ので、runtime.ts は db/client と ttl-store を import しない。
 describe("getRuntime", () => {
   test("2 回呼ぶと同一 object を返す (memo)", () => {
     expect(getRuntime()).toBe(getRuntime());
@@ -21,7 +21,7 @@ describe("getRuntime", () => {
     expect(await getRuntime().runPromise(Effect.succeed(1))).toBe(1);
   });
 
-  test("runtime.ts は db/client と redis を import しない (Layer に I/O resource を持たせない)", () => {
-    expect(RUNTIME_SRC).not.toMatch(/from "@\/db\/client"|from "\.\/redis"|from "pg"/);
+  test("runtime.ts は db/client と ttl-store を import しない (Layer に I/O resource を持たせない)", () => {
+    expect(RUNTIME_SRC).not.toMatch(/from "@\/db\/client"|from "\.\/ttl-store"|from "pg"/);
   });
 });

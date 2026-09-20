@@ -2,39 +2,39 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { createRateLimitMiddleware, rateLimitProgram } from "../rate-limit";
-import { getMemoryKvStore } from "../redis";
-import type { Redis } from "../redis-service";
+import { getMemoryKvStore } from "../ttl-store";
+import type { TtlStore } from "../ttl-store-service";
 import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
-import { failingRedisLayer, redisReturning } from "./test-layers";
+import { failingTtlStoreLayer, ttlStoreReturning } from "./test-layers";
 
-// AC-043: E channel は never のまま (kernel が RedisError を畳む)、Hono 非依存。
+// AC-043: E channel は never のまま (kernel が TtlStoreError を畳む)、Hono 非依存。
 rateLimitProgram satisfies (input: {
   key: string;
   limit: number;
   windowSec: number;
-}) => Effect.Effect<Response | undefined, never, Redis | SentryService>;
+}) => Effect.Effect<Response | undefined, never, TtlStore | SentryService>;
 
-describe("rateLimitProgram (Redis 無し)", () => {
+describe("rateLimitProgram (TTL store 無し)", () => {
   const captured = recordSentryExceptions();
-  const check = (redis: Layer.Layer<Redis>) =>
+  const check = (ttlStore: Layer.Layer<TtlStore>) =>
     Effect.runPromise(
       Effect.provide(
         rateLimitProgram({ key: "rate-limit:test:stub", limit: 5, windowSec: 60 }),
-        Layer.mergeAll(redis, SentryLive),
+        Layer.mergeAll(ttlStore, SentryLive),
       ),
     );
 
-  test("計数不能 (RedisError) は fail-open で通し、Sentry に rate-limit / warning を 1 回記録する", async () => {
+  test("計数不能 (TtlStoreError) は fail-open で通し、Sentry に rate-limit / warning を 1 回記録する", async () => {
     const before = captured.length;
-    expect(await check(failingRedisLayer)).toBeUndefined();
+    expect(await check(failingTtlStoreLayer)).toBeUndefined();
     expect(captured.length).toBe(before + 1);
     expect(captured.at(-1)?.[1]?.tags?.component).toBe("rate-limit");
     expect(captured.at(-1)?.[1]?.level).toBe("warning");
   });
 
   test("上限 + 1 は 429 で Retry-After は windowSec", async () => {
-    const res = await check(redisReturning({ count: 6 }));
+    const res = await check(ttlStoreReturning({ count: 6 }));
     expect(res?.status).toBe(429);
     expect(res?.headers.get("Retry-After")).toBe("60");
     expect(res?.headers.get("content-type")).toBe("application/json");
@@ -42,7 +42,7 @@ describe("rateLimitProgram (Redis 無し)", () => {
   });
 
   test("上限ちょうどは通す", async () => {
-    expect(await check(redisReturning({ count: 5 }))).toBeUndefined();
+    expect(await check(ttlStoreReturning({ count: 5 }))).toBeUndefined();
   });
 });
 

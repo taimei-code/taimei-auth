@@ -11,7 +11,7 @@ import {
   totpCode,
 } from "../../mfa/__tests__/helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { getMemoryKvStore } from "../../redis";
+import { getMemoryKvStore } from "../../ttl-store";
 import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mfaChallenge } from "../mfa-challenge";
@@ -121,7 +121,7 @@ describe("MFA チャレンジ API", () => {
       }),
     ));
 
-  test("QA-M-08 期限切れ (Redis 消滅) → 401 情報漏洩なし", () =>
+  test("QA-M-08 期限切れ (TTL store 消滅) → 401 情報漏洩なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Redis } from "../redis-service";
+import { TtlStore } from "../ttl-store-service";
 import { captureCause } from "../sentry";
 import { spendAttemptBudget } from "../attempt-budget";
 import { Locked } from "./error-mapping";
@@ -26,8 +26,8 @@ export const spendDisableAttempt = Effect.fn("mfa.spendDisableAttempt")(function
 export const resetDisableAttempts = Effect.fn("mfa.resetDisableAttempts")(function* (
   userId: string,
 ) {
-  const redis = yield* Redis;
-  yield* redis
+  const ttlStore = yield* TtlStore;
+  yield* ttlStore
     .delete(disableAttemptsKey(userId))
-    .pipe(Effect.catchTag("RedisError", captureCause({ tags: { component: COMPONENT } })));
+    .pipe(Effect.catchTag("TtlStoreError", captureCause({ tags: { component: COMPONENT } })));
 });

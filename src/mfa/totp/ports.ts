@@ -4,7 +4,7 @@ import type * as repo from "@/db/repositories/mfa-totp";
 import type { Background } from "../../background";
 import type { EmailSender } from "../../email/ports";
 import type { AuthApiError, LiftedModule } from "../../errors";
-import type { Redis } from "../../redis-service";
+import type { TtlStore } from "../../ttl-store-service";
 import type { SentryService } from "../../sentry";
 import type { ChallengeExpired, Locked } from "../error-mapping";
 import type { MfaKeyRing } from "./cipher";
@@ -47,7 +47,7 @@ export class MfaNotifier extends Context.Service<
 export class MfaDisableBudget extends Context.Service<
   MfaDisableBudget,
   {
-    spend(userId: string): Effect.Effect<void, Locked, Redis | SentryService>;
-    reset(userId: string): Effect.Effect<void, never, Redis | SentryService>;
+    spend(userId: string): Effect.Effect<void, Locked, TtlStore | SentryService>;
+    reset(userId: string): Effect.Effect<void, never, TtlStore | SentryService>;
   }
 >()("taimei/MfaDisableBudget") {}
