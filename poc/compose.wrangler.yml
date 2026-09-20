@@ -1,0 +1,28 @@
+# PoC (候補 A、M5): compose の auth-service を Bun でなく wrangler dev (miniflare + DO) で動かす override。
+# 使い方: docker build --target dev --build-arg APP_ENV=development -t taimei-auth-dev . の後に
+#         docker compose -f docker-compose.yml -f poc/compose.wrangler.yml up --build auth-service-wrangler
+# 観測: http://auth.taimei-code.local:3101/health (host 側 port 3101、container 内 3100)
+services:
+  auth-service-wrangler:
+    build:
+      context: .
+      dockerfile: poc/Dockerfile.wrangler
+    ports:
+      - "3101:3100"
+    environment:
+      # wrangler.jsonc の hyperdrive.localConnectionString (127.0.0.1:5435) を compose 内アドレスへ差し替える公式 env。
+      WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:password@auth-postgres:5432/auth
+      WRANGLER_SEND_METRICS: "false"
+      CI: "true"
+    # --local-upstream が無いと routes の host (auth.taimei-code.com) が Origin に書き換わり cookie 付き POST が 403 になる。
+    command: >
+      sh -c "bunx wrangler dev --ip 0.0.0.0 --port 3100
+      --env-file poc/compose.dev.env
+      --local-upstream auth.taimei-code.local:3100"
+    depends_on:
+      auth-postgres:
+        condition: service_healthy
+      auth-migrate:
+        condition: service_completed_successfully
+    networks:
+      - taimei-network
