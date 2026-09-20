@@ -6,7 +6,7 @@
   "name": "taimei-auth",
   "main": "src/worker.ts",
   "compatibility_date": "2025-04-01",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": ["nodejs_compat", "delete_all_deletes_alarm"],
   "assets": {
     "directory": "./web/dist",
     "binding": "ASSETS",
@@ -19,6 +19,9 @@
   // magic link 送信が 500 になった原因)。毎日 03:00 JST に worker.ts の scheduled handler で TTL 付き SET を
   // 1 回打つ (src/redis-keepalive.ts)。週 1 回以上であることを src/__tests__/wrangler-cron-keepalive.test.ts が固定する。
   "triggers": { "crons": ["0 18 * * *"] },
+  // session / verification / 試行枠 / MFA チャレンジの TTL store。1 key = 1 object (src/kv-store.do.ts、ADR-0019)。
+  "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

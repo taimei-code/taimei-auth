@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: Workers は per-request に実 Pool を供給する経路だけ許可
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
+import { KvStore as KvStoreBase } from "./kv-store.do";
 import { initRedis } from "./redis";
 import { touchRedisKeepAliveProgram } from "./redis-keepalive";
 import { buildApp } from "./app";
@@ -12,6 +13,7 @@ import { initCloudflareSentry } from "./sentry-cloudflare";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
+  KV_STORE: DurableObjectNamespace<KvStoreBase>;
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SENTRY_DSN?: string;
   APP_ENV?: string;
@@ -78,12 +80,14 @@ const handler = {
   },
 };
 
+const sentryOptions = (env: Env) => ({
+  dsn: env.SENTRY_DSN,
+  environment: env.APP_ENV ?? "production",
+  tracesSampleRate: 0.1,
+});
+
 // ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。
-export default Sentry.withSentry(
-  (env: Env) => ({
-    dsn: env.SENTRY_DSN,
-    environment: env.APP_ENV ?? "production",
-    tracesSampleRate: 0.1,
-  }),
-  handler,
-);
+export default Sentry.withSentry(sentryOptions, handler);
+
+// alarm の例外は request の外で起きるため、DO 側も同じ option で Sentry に繋ぐ。
+export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);
