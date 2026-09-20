@@ -38,7 +38,7 @@ describe("rateLimitProgram (Redis 無し)", () => {
     expect(res?.status).toBe(429);
     expect(res?.headers.get("Retry-After")).toBe("60");
     expect(res?.headers.get("content-type")).toBe("application/json");
-    expect(await res?.json()).toEqual({ error: "Too Many Requests" });
+    expect(await res?.json<unknown>()).toEqual({ error: "Too Many Requests" });
   });
 
   test("上限ちょうどは通す", async () => {

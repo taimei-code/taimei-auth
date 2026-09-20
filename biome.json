@@ -13,6 +13,7 @@
       "!web/dist",
       "!drizzle",
       "!src/gen",
+      "!worker-configuration.d.ts",
       "!packages/auth-client/dist",
       "!packages/auth-client/src/gen",
       "!bun.lock",
