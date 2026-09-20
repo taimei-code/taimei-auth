@@ -45,6 +45,7 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 - devDependencies 誤分類の behavioral 検知 (runner image での `bun build` probe) は持たない。本番 artifact に影響しないため、残るのは package.json section の衛生で、biome `noRestrictedImports` の静的検査が担う
 - `bun test` は in-memory を観測し、DO は wrangler dev 上の e2e と本番 QA でしか観測しない。DO 固有の性質 (input gate の原子性、alarm) は platform 側の保証に依る
 - DO は初回 request 地点の近くに作られる。日本単一運用のため影響は無いと見る
+- Workers Free のまま動く (SQLite backend の DO は Free で使える。ADR-0011 の $0 制約は維持)。Free の上限は日次 (00:00 UTC reset) で、超えるとその操作が失敗する: requests 100,000 / 日、SQLite rows written 100,000 / 日、rows read 5,000,000 / 日。認証済み request は毎回 session read で DO request を 1 つ以上使い、`set` / `incrementWindow` / `delete` / alarm は全て write に数える。Paid ($5 / 月〜) に切り替える判断軸は 2 つ: (1) Cloudflare dashboard の DO metrics で requests か rows written の日次実測が Free 上限の 50% を超えた時 (残り半分は burst と、攻撃者が任意に増やせる試行枠 incr の余地)、(2) 上限到達の帰結を「認証が落ちる」から「課金される」に変えたい時 (個人運用を越えて他者の業務が乗った時点)。どちらにも当たらない間は Free に留める
 - Workers runtime 型が global `Response` を上書きするため、`res.json()` の推論が崩れた test 2 箇所を `json<unknown>()` に固定した。同種の推論崩れは今後も起きうる
 - local の compose / e2e が wrangler dev (workerd) になったため、`verification.storeInDatabase` の Bun 限定 true は `bun test` / `bun run dev` だけで効き、e2e は本番と同じ secondaryStorage 経路の verification を通る
 - consumer repo (taimei) の e2e compose は `bun run src/index.ts` + Redis container を前提にしているが、`src/index.ts` が in-memory で起動するため即座には壊れない。Redis container と `REDIS_URL` の削除は consumer 側の follow-up
