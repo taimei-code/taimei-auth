@@ -393,6 +393,7 @@ describe("enforceChallenge (program 単体)", () => {
       Layer.succeed(
         AuthApi,
         partial<AuthApi["Service"]>({
+          secret: Effect.succeed("test-secret"),
           deleteSession: (token) =>
             Effect.sync(() => {
               calls.push(`deleteSession:${token}`);
