@@ -28,11 +28,9 @@ import {
 } from "./config-invariant-helpers";
 
 // devDependencies のうち web 専用 ban の対象外にするもの。
-// 判定基準は「server コードから import され得る runtime module か (誤って import したら runner で
-// 落ちる種類か)」。CLI / build 設定 / 型定義 / test 専用 runtime は許可、それ以外は ban 側。
-// 「ship される server コードが import しない」という基準にすると全 devDependencies が該当して
-// 分類にならないため採らない。許可側へ誤って逃がした package は runner image の bun build probe
-// (scripts/docker-smoke.sh) が behavioral に捕まえる。
+// 判定基準は「server コードから import され得る runtime module か」。CLI / build 設定 / 型定義 /
+// test 専用 runtime は許可、それ以外は ban 側。「ship される server コードが import しない」という
+// 基準にすると全 devDependencies が該当して分類にならないため採らない。
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",

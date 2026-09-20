@@ -171,7 +171,7 @@ jobs:
       - name: E2E test
         run: bun run test:e2e
 
-  # ADR-0014 の 2 契約 (既定 build target = full toolchain の dev / runner = 本番相当) の機械検証。
+  # ADR-0014 の契約 (既定 build target = full toolchain の dev) の機械検証。
   # CI に docker build が無いと契約違反が merge 後に consumer repo の CI で初めて顕在化するため、
   # 本 repo の PR 時点で落とす。本 job の失敗は本番 deploy も止める (deploy 従属の詳細と緊急時の
   # escape hatch も下記 ADR)。
@@ -187,12 +187,10 @@ jobs:
       contents: read
 
     # docker-smoke.sh が末尾に echo する実行 assert 件数の期待値。mode typo 等で assert 0 件のまま
-    # 緑になる vacuous green を遮断する。更新が要るのは script の assert を増減したときと、
-    # runner 側の probe 対象が image の中身から導出されるもの (packages/auth-client/package.json の
-    # exports キー / `management/*.ts` の本数) を増減したとき — 後者は script 無変更でも件数が動く。
+    # 緑になる vacuous green を遮断する。script の assert_in_image / forbidden_entries、または image の中身から
+    # 導出される probe 対象 (packages/auth-client/package.json の exports キー) を増減したときに更新する。
     env:
-      EXPECTED_DEV_ASSERTS: "16"
-      EXPECTED_RUNNER_ASSERTS: "25"
+      EXPECTED_DEV_ASSERTS: "20"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -242,21 +240,6 @@ jobs:
           cache-from: type=gha,scope=dev
           cache-to: type=gha,scope=dev,mode=min
 
-      # runner は prod-deps を COPY --from でしか参照しないため、既定の mode=min では prod-deps の
-      # install layer が export されず毎回再 install になる。よって別 scope + mode=max。
-      - name: Build (--target runner)
-        id: build-runner
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          target: runner
-          load: true
-          tags: smoke-runner
-          provenance: false
-          sbom: false
-          cache-from: type=gha,scope=runner
-          cache-to: type=gha,scope=runner,mode=max
-
       # ARG APP_ENV は stage スコープのため stage 再構成で silent に落ち、失敗が「ローカルログインと
       # consumer repo の e2e だけ壊れる」cross-context 型になる。web-build 層以外は cache hot でほぼ無料。
       - name: Build (--target dev / APP_ENV=development)
@@ -298,32 +281,20 @@ jobs:
           docker run --rm --network none -w /app smoke-dev cat web/dist/build-info.json \
             | grep -F '"appEnv":"production"'
 
-      # dev / runner は mode と期待件数が違うだけなので 1 step + 関数にまとめる
-      # (2 step に分けると片方だけ件数突合を直す drift が起きる)。
-      - name: Smoke (dev / runner image)
+      - name: Smoke (dev image)
         run: |
-          status=0
-          smoke() {
-            smoke_mode="$1"
-            smoke_image="$2"
-            smoke_expected="$3"
-            smoke_status=0
-            output=$(bash scripts/docker-smoke.sh "$smoke_mode" "$smoke_image") || smoke_status=$?
-            echo "$output"
-            # 契約違反があるときは件数突合より先に FAIL 行を出す。逆順だと、assert を増やした PR で
-            # 件数不一致 error が先に出て「本当に壊れている契約」が annotation から消える。
-            if [ "$smoke_status" -ne 0 ]; then
-              printf '%s\n' "$output" | sed -n 's/^FAIL: /::error::docker-smoke.sh '"$smoke_mode"': /p'
-              echo "::error::docker-smoke.sh $smoke_mode が失敗した (exit=$smoke_status)。上の FAIL 行が契約違反の内訳 (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
-              return "$smoke_status"
-            fi
-            count=$(printf '%s\n' "$output" | sed -n 's/^asserts executed: //p')
-            if [ "$count" != "$smoke_expected" ]; then
-              echo "::error::docker-smoke.sh $smoke_mode の実行 assert 件数が期待値と不一致 (実行=${count:-none} / 期待=$smoke_expected)。script の assert 増減、または runner 側の probe 対象増減 (packages/auth-client/package.json の exports キー / management/*.ts) に合わせて本 job の EXPECTED_DEV_ASSERTS / EXPECTED_RUNNER_ASSERTS を更新する。"
-              return 1
-            fi
-            return 0
-          }
-          smoke dev smoke-dev "$EXPECTED_DEV_ASSERTS" || status=1
-          smoke runner smoke-runner "$EXPECTED_RUNNER_ASSERTS" || status=1
-          exit "$status"
+          smoke_status=0
+          output=$(bash scripts/docker-smoke.sh dev smoke-dev) || smoke_status=$?
+          echo "$output"
+          # 契約違反があるときは件数突合より先に FAIL 行を出す。逆順だと、assert を増やした PR で
+          # 件数不一致 error が先に出て「本当に壊れている契約」が annotation から消える。
+          if [ "$smoke_status" -ne 0 ]; then
+            printf '%s\n' "$output" | sed -n 's/^FAIL: /::error::docker-smoke.sh dev: /p'
+            echo "::error::docker-smoke.sh dev が失敗した (exit=$smoke_status)。上の FAIL 行が契約違反の内訳 (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
+            exit "$smoke_status"
+          fi
+          count=$(printf '%s\n' "$output" | sed -n 's/^asserts executed: //p')
+          if [ "$count" != "$EXPECTED_DEV_ASSERTS" ]; then
+            echo "::error::docker-smoke.sh dev の実行 assert 件数が期待値と不一致 (実行=${count:-none} / 期待=$EXPECTED_DEV_ASSERTS)。script の assert 増減に合わせて本 job の EXPECTED_DEV_ASSERTS を更新する。"
+            exit 1
+          fi

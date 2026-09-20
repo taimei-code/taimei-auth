@@ -1,4 +1,4 @@
-# **/ 前置は必須: runner / dev の COPY . . が stage 内 build 済みの dist / node_modules を host の古い成果物で上書きするのを防ぐ (root-anchor だと packages/ 配下に効かない)。
+# **/ 前置は必須: dev stage の COPY . . が stage 内 build 済みの dist / node_modules を host の古い成果物で上書きするのを防ぐ (root-anchor だと packages/ 配下に効かない)。
 # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
 **/node_modules
 **/dist
