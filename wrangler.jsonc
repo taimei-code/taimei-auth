@@ -46,5 +46,8 @@
   // 本番ドメイン。custom_domain:true で Cloudflare が auth.taimei-code.com の DNS レコードと
   // TLS 証明書を管理し Worker に紐付ける。cross-subdomain cookie (.taimei-code.com) のため
   // workers.dev でなくこのホストで配信する必要がある (ADR-0004 / ADR-0011)。
+  // deploy.yml の preview smoke が version の Preview URL を叩く。config に無いと `wrangler deploy` が
+  // previews_enabled を false に戻す (2026-09-20 に手動 deploy で実測)。
+  "preview_urls": true,
   "routes": [{ "pattern": "auth.taimei-code.com", "custom_domain": true }]
 }
