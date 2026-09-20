@@ -1,0 +1,7 @@
+{
+  "name": "poc-kv-do",
+  "main": "worker.ts",
+  "compatibility_date": "2025-04-01",
+  "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }]
+}

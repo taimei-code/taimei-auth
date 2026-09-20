@@ -1,0 +1,6 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "types": ["bun"] },
+  "include": ["../src/**/*.ts", "../db/**/*.ts", "./worker-configuration.d.ts", "./kv-do/*.ts"],
+  "exclude": ["../node_modules", "../dist", "../packages", "../src/**/__tests__/**"]
+}

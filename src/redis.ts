@@ -100,8 +100,78 @@ function initNodeRedis(redisUrl: string): void {
       .catch(() => false);
 }
 
-export function initRedis(): void {
+export type KvStoreNamespace = {
+  idFromName(name: string): unknown;
+  get(id: unknown): import("./kv-store.do").KvStore;
+};
+
+function initDurableObject(ns: KvStoreNamespace): void {
+  const stub = (key: string) => ns.get(ns.idFromName(key));
+  redisStorage = {
+    get: (key) => stub(key).get(),
+    set: (key, value, ttl) => stub(key).set(value, ttl),
+    delete: (key) => stub(key).delete(),
+    getAndDelete: (key) => stub(key).getAndDelete(),
+  };
+  incrementRateWindow = async (key, windowSec) =>
+    toRateWindowResult([await stub(key).incrementWindow(windowSec)]);
+  pingRedis = () =>
+    stub("health:ping")
+      .get()
+      .then(() => true)
+      .catch(() => false);
+  getRedis = async () => {
+    throw new Error("getRedis は node-redis 専用 accessor。Workers (Durable Objects) では利用できない");
+  };
+}
+
+// PoC (候補 A): bun test を Redis なしで走らせるための in-memory 実装。KvStore と同じ 1 key = 1 entry モデル。
+function initMemory(): void {
+  const entries = new Map<string, { value: string; expiresAt: number | null }>();
+  const live = (key: string) => {
+    const e = entries.get(key);
+    if (!e) return null;
+    if (e.expiresAt !== null && e.expiresAt <= Date.now()) {
+      entries.delete(key);
+      return null;
+    }
+    return e;
+  };
+  redisStorage = {
+    get: async (key) => live(key)?.value ?? null,
+    set: async (key, value, ttl) => {
+      entries.set(key, { value, expiresAt: ttl ? Date.now() + ttl * 1000 : null });
+    },
+    delete: async (key) => {
+      entries.delete(key);
+    },
+    getAndDelete: async (key) => {
+      const e = live(key);
+      entries.delete(key);
+      return e?.value ?? null;
+    },
+  };
+  incrementRateWindow = async (key, windowSec) => {
+    const count = Number(live(key)?.value ?? 0) + 1;
+    entries.set(key, { value: String(count), expiresAt: Date.now() + windowSec * 1000 });
+    return { count };
+  };
+  pingRedis = async () => true;
+  getRedis = async () => {
+    throw new Error("getRedis は node-redis 専用 accessor。memory backend では利用できない");
+  };
+}
+
+export function initRedis(kvStore?: KvStoreNamespace): void {
   if (redisStorage) return;
+  if (kvStore) {
+    initDurableObject(kvStore);
+    return;
+  }
+  if (process.env.REDIS_URL === "memory") {
+    initMemory();
+    return;
+  }
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (url && token) {
