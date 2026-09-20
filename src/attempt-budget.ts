@@ -4,8 +4,6 @@ import { captureCause } from "./sentry";
 
 // 数えられなければ unavailable。倒し方 (fail-closed / fail-open) は呼び手が決める: CONTEXT.md「試行枠」
 
-export type AttemptBudgetVerdict = "accepted" | "exhausted" | "unavailable";
-
 export const spendAttemptBudget = Effect.fn("attemptBudget.spend")(function* (input: {
   key: string;
   windowSeconds: number;

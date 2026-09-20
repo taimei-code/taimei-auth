@@ -38,7 +38,7 @@ export const renderAndSendEmail = Effect.fn("email.renderAndSend")(function* (pa
   }
 });
 
-export function getResendClient(): Resend {
+function getResendClient(): Resend {
   if (!resendInstance) {
     const apiKey = process.env.AUTH_RESEND_KEY;
 

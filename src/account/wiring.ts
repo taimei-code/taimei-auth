@@ -7,8 +7,8 @@ import { AccountRepo, SessionRepo, UserRepo } from "./ports";
 
 export const UserRepoLive = Layer.succeed(UserRepo, liftAll(userRepo));
 
-export const SessionRepoLive = Layer.succeed(SessionRepo, liftAll(sessionRepo));
+const SessionRepoLive = Layer.succeed(SessionRepo, liftAll(sessionRepo));
 
-export const AccountRepoLive = Layer.succeed(AccountRepo, liftAll(accountRepo));
+const AccountRepoLive = Layer.succeed(AccountRepo, liftAll(accountRepo));
 
 export const AccountLayers = Layer.mergeAll(UserRepoLive, SessionRepoLive, AccountRepoLive);

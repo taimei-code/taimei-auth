@@ -6,9 +6,7 @@ import { codeCipher, decryptText, decryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { matchTotpCode } from "./totp-engine";
 
-export type MatchedOwnedCode =
-  | { kind: "totp"; timestep: number }
-  | { kind: "recovery_code"; id: string };
+type MatchedOwnedCode = { kind: "totp"; timestep: number } | { kind: "recovery_code"; id: string };
 
 // リカバリーコードは一様乱数で attacker 制御の秘密相関が無く、等値比較の timing 側路は許容する。
 export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (

@@ -6,7 +6,7 @@ import { MembershipRepo } from "../ports";
 import { type Actor, type ParseBody, requireActor } from "./core";
 import { EmailMismatch, ExpiredOrUsed, NotFound } from "./errors";
 
-export type InvitationAcceptGrant =
+type InvitationAcceptGrant =
   | { mode: "proceed"; actor: Actor; invitation: InvitationRow }
   // reused branch は handler が company_id しか使わないため companyId だけ narrow する (PR #107 規律)。
   | { mode: "reused"; companyId: string };

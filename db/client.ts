@@ -29,7 +29,7 @@ class RoutingPool extends Pool {
 
 export const db: Db = drizzle(new RoutingPool(), { schema });
 
-export function initDb(connectionString: string): void {
+function initDb(connectionString: string): void {
   if (singletonPool) return;
   singletonPool = new Pool({ connectionString });
 }

@@ -10,7 +10,7 @@ import { SentryService } from "../../sentry";
 import { spendAttemptBudget } from "../../attempt-budget";
 import { ChallengeExpired } from "../error-mapping";
 
-export const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
+const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
 
 const CHALLENGE_TTL_SECONDS = 600;
 const MAX_ATTEMPTS = 5;
@@ -22,8 +22,8 @@ export const attemptsKey = (challengeId: string): string =>
 const CHALLENGE_METHODS = ["magic_link", "github"] as const;
 export type ChallengeMethod = (typeof CHALLENGE_METHODS)[number];
 
-export type LoginChallenge = { userId: string; redirectUrl: string; method: ChallengeMethod };
-export type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
+type LoginChallenge = { userId: string; redirectUrl: string; method: ChallengeMethod };
+type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
 // 鍵は better-auth の解決を通す — env 直読みだと dev/CI の default fallback で session 側とずれる。
 const signChallengeId = Effect.fn("mfa.signChallengeId")(function* (challengeId: string) {

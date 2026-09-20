@@ -10,7 +10,7 @@ import { Transaction } from "../transaction";
 import { AlreadyExists } from "./errors";
 import { CompanyRepo } from "./ports";
 
-export type CreateCompanyInput = { name: string; orgCode: OrgCode };
+type CreateCompanyInput = { name: string; orgCode: OrgCode };
 
 export type CreatedCompany = { company: CompanyRow; membership: MembershipRow };
 

@@ -21,10 +21,10 @@ export const ids = (prefix: string) => ({
   companyName: (suffix: string): string => `${prefix}co-${suffix}`,
 });
 
-export type SeededUser = { id: string; email: string };
-export type SeededInvitation = { id: string; token: string };
+type SeededUser = { id: string; email: string };
+type SeededInvitation = { id: string; token: string };
 
-export type SeedUserOptions = {
+type SeedUserOptions = {
   emailVerified?: boolean;
   lastUsedCompanyId?: string | null;
   name?: string;

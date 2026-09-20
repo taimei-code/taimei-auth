@@ -8,7 +8,7 @@ import { CompanyRepo } from "./ports";
 
 // before/after diff を tx 内で集めるのは、tx 外だと別 tx の update と混線し audit の before がずれるため。
 
-export type UpdateCompanyInput = { name: string; orgCode: OrgCode };
+type UpdateCompanyInput = { name: string; orgCode: OrgCode };
 
 export const updateCompanyInfo = Effect.fn("company.updateCompanyInfo")(function* (params: {
   actorUserId: string;

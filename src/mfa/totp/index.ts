@@ -1,4 +1,3 @@
-export type { MfaTotpActor } from "./contracts";
 export { activate } from "./activate-mfa";
 export { completeLoginChallenge } from "./complete-login-challenge";
 export { disable } from "./disable-mfa";
