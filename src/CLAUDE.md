@@ -1,84 +1,36 @@
 # src/ サーバーサイド実装規則
 
-`src/` 配下へファイルを追加、移動、変更する時に適用する。
+層境界の正本は [`ADR-0012`](../docs/adr/0012-layered-architecture.md)、Effect 様式の正本は [`ADR-0017`](../docs/adr/0017-effect-v4-full-adoption.md)。
 
-詳細な層境界は [`docs/adr/0012-layered-architecture.md`](../docs/adr/0012-layered-architecture.md) を正本とする。
+## 配置
 
-## 配置を決める順序
+変更理由を所有する業務ドメインを決め、次に層を決め、両方に合う既存の場所へ置く。所有domain、層、依存方向、test配置を説明できた時点で配置完了とする。
 
-1. 変更理由を所有する業務ドメインを決める。
-2. Transport、Guard、Use-case、Repositoryのどの層かを決める。
-3. domainと層の両方に合う既存の場所へ置く。
-
-新規または移動するファイルは、所有domain、層、依存方向、test配置を説明できた時点で配置完了とする。
-
-## 層の責務
-
-- **Transport**：`handlers/` と `rpc/` に置き、parameter parse、認証、Guard呼出し、Use-case呼出し、response変換を所有する (例: `handlers/account-company.ts`、`rpc/user-handler.ts`)。Effect programを `runRoute`、`runMiddleware`、`runRpc` のadapterで走らせ、failureとdefectのwire写像はadapterだけが行う。
-- **Guard**：`membership/guard/` と `membership/policy.ts` に置き、Hono非依存の操作単位認可を所有する (例: `membership/guard/core.ts`)。公開APIは `Effect<A, GuardError, R>` で、`Effect.fn` で書き、依存はportsのserviceを `yield*` して取る。
-- **Use-case**：`account/`、`company/`、`invitation/`、`membership/`、`mfa/` に置き、業務手続、transaction、audit、不変条件、TOCTOU再検証を所有する (例: `invitation/create.ts`)。`Effect.fn` で書き、失敗は各domainの `errors.ts` のfailure classを `yield*` で返す。
-- **Repository**：`db/repositories/` に置き、queryを提供するが業務判断を持たない (例: `db/repositories/membership.ts`)。
-
-新規または責務変更を伴うTransportは、policy述語、repositoryへの直接write、transactionを所有しない。
-
-Use-caseとGuardは `membership/policy.ts` の純粋述語を利用できる。
-
-ADR-0012のScope outに記録された既存経路は、独立した抽出作業なしに機械的に移動しない。
-
-既存例外を変更する場合も、Transport側の業務判断またはtransactionを増やさない。
+- **Transport** (`handlers/`、`rpc/`): parameter parse、認証、Guard と Use-case の呼出し、response 変換。Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect の wire 写像は adapter だけが行う。policy 述語、repository への直接 write、transaction を持たない。
+- **Guard** (`membership/guard/`、`membership/policy.ts`): Hono 非依存の操作単位認可。公開 API は `Effect<A, GuardError, R>`。
+- **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU 再検証。失敗は各 domain の `errors.ts` の failure class。
+- **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が正本。
+- domain が肥大化したら技術分類ではなく操作名で下位 directory を作る。`services/` や `utils/` のような無関係な実装の寄せ集めを作らない。
+- web から `@core` として参照される module は browser-safe な依存だけを持つ。
+- コメントは 1 行に収める。2 行要るなら名前・型・正本のどれかが足りていない。file 冒頭に層・ADR・domain の道案内を書かない。
 
 ## Effect様式
 
-理由と境界表は [`docs/adr/0017-effect-v4-full-adoption.md`](../docs/adr/0017-effect-v4-full-adoption.md) を正本とする。
+- Guard と Use-case は `Effect.fn` で書き、依存は ports の service を `yield*` して取る。combinator は `Effect.fn` の第 2 引数以降に渡し、戻り値に `.pipe` を付けない。method を 1 つだけ呼ぶ時は `Service.use((s) => s.method())`。failure class の instance はそのまま Effect なので `Effect.fail(new X())` と書かない。
+- 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`)、`wiring.ts` に production 結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同一。同期 helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので必要な側が直接 import する。
+- transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置く。
+- 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` (渡す effect の失敗は渡す前に catch する)。
+- サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で運び、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。
+- `auth.ts` から静的に辿れる module で `getRuntime` が要る時は関数内で `await import("./runtime")` する (TDZ 回避、ADR-0017 の Did not adopt)。
+- 以上の境界は `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
 
-- 各domainは `ports.ts` にRepositoryのEffect面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` にproduction結線 (`liftAll(repo)`) を置く。portのmethod名はrepositoryの関数名と同一にし、port側で名前を付け替えない。同期helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側 (`id-generator.ts`、`db/testing/*`) が直接importする。`db/repositories/*` と `db/transaction` のruntime importは `*/wiring.ts`、`id-generator.ts`、`transaction.ts`、`auth.ts` に限り、他は `import type` だけを使う。
-- transactionは `Transaction.run` で取り、`runInTransaction` を直接呼ばない。tx内のfailureとdefectは常にrollbackされ、tx後の副作用は `tapError` や `catchTag` でtxの外に置く。
-- 時刻は `Clock.currentTimeMillis`、IDは `IdGenerator`、better-auth APIは `AuthApi`、TTL storeは `TtlStore`、Sentryは `SentryService`、メールは `EmailSender`、fire-and-forgetは `Background.run` のserviceを通し、渡すeffectの失敗は渡す前にcatchする (`Fiber.await` のExitは誰も見ない)。`Date.now()`、`Sentry.capture*`、`handlers/wire-error.ts` の `captureThrown` / `settleCause`、`runBackground`、`Promise.all` をuse-caseやhandlerに直接書かない。
-- combinatorは `Effect.fn` の第2引数以降に渡し、戻り値に `.pipe` を付けない。serviceのmethodを1つだけ呼ぶ時は `Service.use((s) => s.method())` で取る。failure classのinstanceはそのままEffectなので `Effect.fail(new X())` と書かない。
-- サードパーティ境界の失敗は `errors.ts` の `DbError`、`AuthApiError`、`TtlStoreError`、`EmailError` (`cause: unknown`) で運び、producerは `tryDb`、`tryAuthApi`、`tryTtlStore`、`tryEmail` だけを使う。
-- `auth.ts` から静的に辿れるmodule (集合と理由は [`ADR-0017`](../docs/adr/0017-effect-v4-full-adoption.md) のDid not adoptにあるTDZ項) で `getRuntime` が必要な場合は関数内で `await import("./runtime")` する。`runtime.ts` を直接静的importするfileの集合は `src/__tests__/effect-boundary.test.ts` が固定する。
-- 全ゲートは `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
+## test
 
-## DB境界と既存例外
+- domain test は `<domain>/__tests__/`、Transport test は `handlers/__tests__/` / `rpc/__tests__/`、複数 domain にまたがる invariant は `src/__tests__/` に置く。
+- DB に接触する test は `TestDb` service を `yield*` し、`@/db/*` を runtime import しない (型 import は可)。test 本体は `runTest(prefix)` に渡す 1 つの `Effect.gen` で、失敗は `Effect.flip` / `Effect.exit` で failure class として観測する。DB 接触は fixture setup と事後状態の観測に限り、production 境界の例外根拠にしない。
+- `@core` の公開面を変えたら `src/__tests__/web-shared-core-runtime-free.test.ts` を実行する。workerd 固有挙動は local test で完了扱いにせず、manual regression か `wrangler dev --remote` へ渡す。
 
-productionのdomain、Guard、Transportはrepository関数とtransaction helperを利用し、`drizzle-orm` または `pg` を直接importしない。
+## gotcha
 
-境界規則と例外pathの正本は [`db/CLAUDE.md`](../db/CLAUDE.md) の「例外 path (正本)」とする。例外を追加する変更はDB境界の設計変更としてreviewする。
-
-## ファイル配置
-
-- domain固有の実装は所有domainの直下に置く。
-- domainが肥大化した場合は、技術分類ではなく操作または機能名で下位directoryを作る。
-- `services/` や `utils/` のような名前で、無関係なdomain実装を集めるdirectoryを作らない。
-- `app.ts` はcomposition rootとして結線を所有する。
-- `auth-plugins/` はBetter Authとのintegration seamを所有する。
-- `email/` は送信client、template、delivery adapterを所有し、domainの業務手続を所有しない。
-- `index.ts`、`worker.ts`、`background.ts`、`auth.ts` は用途を特定できるruntime entryとしてrootに置く。
-- domainを持たないruntime primitiveは用途を特定できるroot fileに置き、domain判断を持ち始めた時点で所有domainへ移す。
-- `gen/` はcodegen出力として扱い、手動編集しない。
-- webから `@core` として参照されるmoduleはbrowser-safeな依存だけを持つ。
-- fileの冒頭に層・ADR・所属domainの道案内を書かない。層はdirectoryが、判断の正本はADRが言う。残すのはcodeが表現できない外部前提 (runtime / libraryの挙動、security判断) だけにする。
-- コメントは1行に収める。2行要るなら名前・型・正本のどれかが足りていない。
-
-## test配置
-
-- domain testは `<domain>/__tests__/` に置く。
-- Transport testは `handlers/__tests__/` または `rpc/__tests__/` に置く。
-- 複数domainまたはrepository全体のinvariantは `src/__tests__/` に置く。
-- DBへ接触するtestは接触をfixture setupと事後状態の観測に限定し、production境界の例外根拠にしない。
-- DBへ接触するsrcのtestは `TestDb` service (`src/__tests__/test-db.ts`、実体は `db/testing/*`) を `yield*` し、`@/db/*` をruntime importしない (型importは可)。test本体は `runTest(prefix)` に渡す1つの `Effect.gen` で、失敗は `Effect.flip` / `Effect.exit` でfailure classとして観測する。理由の正本はADR-0017 Decisionの依存注入項。
-
-## 実装時のgotcha
-
-- 同じsegment数のHono routeでは、static routeをparameter routeより先に登録する。
-- workerdではrequestをまたいでI/O resourceを再利用せず、requestごとに生成してcloseする。
-- workerd固有挙動の実機確認には、必要に応じて `wrangler dev --remote` を使う。
-
-workerdとDB poolの理由は [`docs/adr/0011-cloudflare-workers-migration.md`](../docs/adr/0011-cloudflare-workers-migration.md) と [`db/CLAUDE.md`](../db/CLAUDE.md) を参照する。
-
-## 検証
-
-- 変更したdomainまたはTransportのfocused testを実行する。
-- 層またはimport境界を変更した場合は `bun run typecheck` と関連するinvariant testを実行する。
-- `@core` の公開面を変更した場合は `src/__tests__/web-shared-core-runtime-free.test.ts` を実行する。
-- workerd固有挙動はlocal testだけで完了扱いにせず、該当するmanual regressionまたはremote実機確認へ渡す。
+- 同じ segment 数の Hono route では static route を parameter route より先に登録する。
+- workerd では request をまたいで I/O resource を再利用しない (ADR-0011)。
