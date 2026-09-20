@@ -4,7 +4,7 @@ import { runInTransaction } from "@/db/transaction";
 import { DbError } from "./errors";
 
 // drizzle は callback の throw でしか rollback しない。機構は ADR-0017「実装の機構」
-export class RollbackSignal<E> extends Error {
+class RollbackSignal<E> extends Error {
   constructor(readonly exit: Exit.Exit<never, E>) {
     super("transaction rolled back (Effect failure inside callback)");
     this.name = "RollbackSignal";

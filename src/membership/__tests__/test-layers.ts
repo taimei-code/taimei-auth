@@ -12,7 +12,6 @@ import { partial } from "../../__tests__/live-runner";
 import { SentryLive, type SentryService } from "../../sentry";
 
 // guard test 用の test Layer (design §3.14)。deps factory の後継で、Effect.provide で差し替える。
-export { partial };
 
 // guard program を SentryLive の下で走らせる。run は失敗を GuardError 相当 (_tag / error / status を持つ
 // class) として取り出す (DbError 等は個別 test が instanceof で見る)。
@@ -29,7 +28,7 @@ export type Membership = { userId: string; companyId: string; role: string };
 export const sessionOf = (userId: string): Session =>
   ({ session: { userId }, user: { id: userId } }) as unknown as Session;
 
-export const userOf = (id: string, email: string): UserRow =>
+const userOf = (id: string, email: string): UserRow =>
   ({ id, email, lastUsedCompanyId: null }) as unknown as UserRow;
 
 export const authLayer = (

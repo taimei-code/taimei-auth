@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": [
+    "src/index.ts",
+    "web/index.html",
+    "db/migrate-manual.ts",
+    "management/*.ts",
+    "e2e/*.ts",
+    "drizzle.config.ts",
+    "playwright.config.ts",
+    "web/vite.config.ts",
+    "web/tailwind.config.ts"
+  ],
+  "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
+  "ignoreDependencies": ["@bufbuild/protoc-gen-es"],
+  "usedClassMembers": [
+    "error",
+    "status",
+    {
+      "extends": "DurableObject",
+      "members": ["*"]
+    }
+  ],
+  "rules": {
+    "dev-dependencies-in-production": "off",
+    "circular-dependencies": "warn"
+  },
+  "ignoreExports": [
+    {
+      "file": "src/company/org-code.ts",
+      "exports": ["OrgCode"]
+    },
+    {
+      "file": "web/src/company/company-api.ts",
+      "exports": ["OrgCode"]
+    },
+    {
+      "file": "db/repositories/invitation.ts",
+      "exports": ["Role"]
+    },
+    {
+      "file": "src/membership/policy.ts",
+      "exports": ["Role"]
+    },
+    {
+      "file": "src/gen/auth/v1/auth_pb.ts",
+      "exports": ["Session"]
+    }
+  ]
+}

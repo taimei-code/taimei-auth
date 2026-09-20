@@ -6,7 +6,7 @@ import type { InvitationEmailParams } from "../email/send-invitation";
 import { roleLabelJa } from "../membership/role-label";
 import { InvitationRepo } from "./ports";
 
-export type InvitationEmailContext = Omit<InvitationEmailParams, "inviteeEmail" | "url">;
+type InvitationEmailContext = Omit<InvitationEmailParams, "inviteeEmail" | "url">;
 
 // sendMagicLink callback は {email, url} しか受け取らないため url から context を再構成する。
 export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailContext")(function* (

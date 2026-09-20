@@ -19,7 +19,7 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..
 // 空振りして invariant が silent に消える)。
 export const WEB_ONLY_DEP_MESSAGE =
   "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
-export const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
+const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
 
 // biome の override は merge されず置換されるため、classification の ban は src 系にマッチする
 // 2 つの override に意図的に重複コピーされている (統合しない)。
@@ -37,7 +37,7 @@ export const EXPECTED_CONNECT_NODE_COPY_COUNT = 2;
 export const REPRESENTATIVE_SERVER_FILE = "src/handlers/account-company.ts";
 export const REPRESENTATIVE_DB_FILE = "db/schema.ts";
 export const REPRESENTATIVE_MANAGEMENT_FILE = "management/disable-user-mfa.ts";
-export const REPRESENTATIVE_BANNED_SCOPE_FILES = [
+const REPRESENTATIVE_BANNED_SCOPE_FILES = [
   REPRESENTATIVE_SERVER_FILE,
   REPRESENTATIVE_DB_FILE,
   REPRESENTATIVE_MANAGEMENT_FILE,

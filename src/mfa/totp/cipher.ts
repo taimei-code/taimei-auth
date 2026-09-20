@@ -100,11 +100,11 @@ export async function decryptValue(
 }
 
 // Buffer は Bun / workerd (nodejs_compat) の両 runtime にある。
-export function encodeBase64(bytes: Uint8Array): string {
+function encodeBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
 
-export function decodeBase64(text: string): Uint8Array<ArrayBuffer> {
+function decodeBase64(text: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(Buffer.from(text, "base64"));
 }
 

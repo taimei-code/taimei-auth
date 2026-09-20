@@ -6,7 +6,7 @@ import { AppLayer, type AppServices } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer } from "./test-db";
 
-export type TestServices = AppServices | TestDb;
+type TestServices = AppServices | TestDb;
 
 // DB 統合 test の唯一の runner: test 本体 (Effect.gen) を production の AppLayer + TestDb で走らせる。
 // service を差し替える test は program 側で `Effect.provide(layer)` する (内側の provide が勝つ)。

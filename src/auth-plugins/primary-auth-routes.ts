@@ -1,8 +1,8 @@
 import type { ChallengeMethod } from "../mfa/totp/login-challenge";
 
 // better-auth の hook が受け取る `ctx.path` は route パターンで実 path ではない ("/callback/:id")。
-export const MAGIC_LINK_VERIFY_ROUTE = "/magic-link/verify";
-export const OAUTH_CALLBACK_ROUTE = "/callback/:id";
+const MAGIC_LINK_VERIFY_ROUTE = "/magic-link/verify";
+const OAUTH_CALLBACK_ROUTE = "/callback/:id";
 
 export const PRIMARY_AUTH_ROUTES = [MAGIC_LINK_VERIFY_ROUTE, OAUTH_CALLBACK_ROUTE] as const;
 

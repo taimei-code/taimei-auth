@@ -32,8 +32,6 @@ export const TEST_USER_AGENT = "mfa-integration-test";
 // src/mfa/totp/totp-engine.ts の PERIOD と同値。検証は独立実装 (@better-auth/utils) で行う (§10)。
 const TOTP_PERIOD_SECONDS = 30;
 
-export type { MfaTotpRow } from "@/db/testing/read";
-
 // better-auth の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる。
 // 署名付き値の形式は SIGNED_COOKIE_VALUE (発行者は wire でこれを percent-encode する) で、
 // src/__tests__/session-cookie-contract.test.ts が固定する。
@@ -74,7 +72,7 @@ export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;
 
 export type TestSession = { token: string; headers: Headers };
 
-export const sessionCookieName = (): Effect.Effect<string> =>
+const sessionCookieName = (): Effect.Effect<string> =>
   Effect.promise(async () => (await auth.$context).authCookies.sessionToken.name);
 
 const sessionHeaders = (token: string): Effect.Effect<Headers> =>
@@ -155,7 +153,7 @@ export const countMfaTotpRows = (userId: string) =>
 export const countRecoveryCodeRows = (userId: string) =>
   TestDb.use((db) => db.readRecoveryCodes(userId)).pipe(Effect.map((rows) => rows.length));
 
-export type EnabledMfaUser = {
+type EnabledMfaUser = {
   actor: MfaTotpActor;
   /** 認証アプリが持つ値に相当する平文 TOTP secret。 */
   secret: string;
@@ -190,7 +188,7 @@ export const enableMfaFor = (user: { id: string; email: string }) =>
     } satisfies EnabledMfaUser;
   });
 
-export type IssuedChallenge = {
+type IssuedChallenge = {
   challengeId: string;
   cookieName: string;
   /** チャレンジ cookie だけを載せた (セッション cookie を持たない) リクエスト headers。 */
@@ -221,7 +219,7 @@ export const issueTestChallenge = (challenge: {
   );
 
 // チャレンジの TTL store state (本体 + 試行枠) を消す。TTL 待ちにせず、test が発行した分を明示的に片付ける。
-export const deleteChallengeState = (challengeIds: readonly string[]) =>
+const deleteChallengeState = (challengeIds: readonly string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
     yield* Effect.forEach(
@@ -266,7 +264,7 @@ const AUTH_ORIGIN = "http://localhost:3100";
 const MAGIC_LINK_LOG = "[TEST] Magic Link for";
 export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
 
-export type PrimaryAuthLogin = { response: Response; location: URL | null; logs: string[] };
+type PrimaryAuthLogin = { response: Response; location: URL | null; logs: string[] };
 
 // 通知メールは Background service の fire-and-forget。worker entry と同じ withWaitUntil で拾って
 // 完走を待つことで、送信ログの観測が時間依存にならない。
@@ -325,7 +323,7 @@ export function browserCookieHeaders(response: Response): Headers {
 }
 
 // 公開 API が Effect であることの型 assert (AC-218)。
-export const mfaTestApi = {
+const _mfaTestApi = {
   enableMfaFor,
   createSessionFor,
   issueTestChallenge,
@@ -339,4 +337,4 @@ export const mfaTestApi = {
 } satisfies Record<string, (...args: never[]) => Effect.Effect<unknown, unknown, unknown>>;
 
 // Sentry recorder は MFA 以外 (adapter / guard) の test も使うため src/__tests__ へ移した。
-export { installSentryRecorder, type SentryCapture } from "../../__tests__/sentry-recorder";
+export { installSentryRecorder } from "../../__tests__/sentry-recorder";
