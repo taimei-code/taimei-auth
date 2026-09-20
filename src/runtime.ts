@@ -6,7 +6,7 @@ import { HealthRepoLive } from "./health/wiring";
 import { TtlStoreLive } from "./ttl-store-service";
 import { SentryLive } from "./sentry";
 import { AuditLogLive } from "./audit/wiring";
-import { AuthApiLive } from "./auth-service";
+import { AuthApiLive } from "./auth-wiring";
 import { CompanyRepoLive } from "./company/wiring";
 import { IdGeneratorLive } from "./id-generator";
 import { InvitationRepoLive } from "./invitation/wiring";
@@ -33,9 +33,11 @@ export const AppLayer = Layer.mergeAll(
 
 export type AppServices = Layer.Success<typeof AppLayer>;
 
-let runtime: ManagedRuntime.ManagedRuntime<AppServices, never> | undefined;
+export type AppRuntime = ManagedRuntime.ManagedRuntime<AppServices, never>;
 
-export function getRuntime(): ManagedRuntime.ManagedRuntime<AppServices, never> {
+let runtime: AppRuntime | undefined;
+
+export function getRuntime(): AppRuntime {
   runtime ??= ManagedRuntime.make(AppLayer);
   return runtime;
 }

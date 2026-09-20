@@ -7,6 +7,7 @@ import { isMfaChallengeEnabled } from "../mfa/kill-switch";
 import { FALLBACK_REDIRECT } from "../mfa/redirect-guard";
 import { mfaChallengeRequired } from "../mfa/totp/challenge-required";
 import { type LoginChallengeCookie, openLoginChallenge } from "../mfa/totp/login-challenge";
+import type { AppRuntime } from "../runtime";
 import { captureCause, SentryService } from "../sentry";
 import {
   isPrimaryAuthRoute,
@@ -101,44 +102,44 @@ export const enforceChallenge = Effect.fn("auth.enforceMfaChallenge")(function* 
   return "challenge" as const;
 });
 
-const enforceChallengeAfterPrimaryAuth = createAuthMiddleware(async (ctx) => {
-  const issued = ctx.context.newSession;
-  if (!issued) return;
+const enforceChallengeAfterPrimaryAuth = (runtime: AppRuntime) =>
+  createAuthMiddleware(async (ctx) => {
+    const issued = ctx.context.newSession;
+    if (!issued) return;
 
-  const input: IssuedSession = {
-    userId: issued.user.id,
-    sessionToken: issued.session.token,
-    route: parsePrimaryAuthRoute(ctx.path, ctx.params),
-    location: ctx.context.responseHeaders?.get("location"),
-    setCookie: (cookie) => ctx.setCookie(cookie.name, cookie.value, cookie.attributes),
-    dropIssuedSession: () => {
-      deleteSessionCookie(ctx, true);
-      ctx.context.setNewSession(null);
-    },
-  };
+    const input: IssuedSession = {
+      userId: issued.user.id,
+      sessionToken: issued.session.token,
+      route: parsePrimaryAuthRoute(ctx.path, ctx.params),
+      location: ctx.context.responseHeaders?.get("location"),
+      setCookie: (cookie) => ctx.setCookie(cookie.name, cookie.value, cookie.attributes),
+      dropIssuedSession: () => {
+        deleteSessionCookie(ctx, true);
+        ctx.context.setNewSession(null);
+      },
+    };
 
-  let decision: "pass" | "challenge";
-  try {
-    const { getRuntime } = await import("../runtime");
-    decision = await getRuntime().runPromise(enforceChallenge(input));
-  } catch (error) {
-    console.error("[mfa-challenge] runtime unavailable", error);
-    if (!isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED)) return;
-    input.dropIssuedSession();
-    decision = "challenge";
-  }
-  if (decision === "challenge") {
-    throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
-  }
-});
+    let decision: "pass" | "challenge";
+    try {
+      decision = await runtime.runPromise(enforceChallenge(input));
+    } catch (error) {
+      console.error("[mfa-challenge] runtime unavailable", error);
+      if (!isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED)) return;
+      input.dropIssuedSession();
+      decision = "challenge";
+    }
+    if (decision === "challenge") {
+      throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
+    }
+  });
 
-export const mfaChallenge = (): BetterAuthPlugin => ({
+export const mfaChallenge = (runtime: AppRuntime): BetterAuthPlugin => ({
   id: "mfa-challenge",
   hooks: {
     after: [
       {
         matcher: (ctx) => isPrimaryAuthRoute(ctx.path),
-        handler: enforceChallengeAfterPrimaryAuth,
+        handler: enforceChallengeAfterPrimaryAuth(runtime),
       },
     ],
   },

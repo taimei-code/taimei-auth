@@ -1,7 +1,9 @@
 // 既定は dry-run、`--execute` で実削除 (削除した user_id を全件ログ)。
 import { sweepAbandonedSignups } from "../src/account/sweep-abandoned-signups";
+import { initAuth } from "../src/auth";
 import { getRuntime } from "../src/runtime";
 
+initAuth(getRuntime());
 const execute = process.argv.includes("--execute");
 const ttlHours = Number(process.env.SWEEP_TTL_HOURS ?? "24");
 const report = await getRuntime().runPromise(

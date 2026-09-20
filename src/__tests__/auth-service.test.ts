@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { AuthApi, AuthApiLive } from "../auth-service";
+import { AuthApi } from "../auth-service";
+import { AuthApiLive } from "../auth-wiring";
 
 // design §3.8: better-auth API 面の Effect face。失敗は AuthApiError (cause: unknown)。
 describe("AuthApiLive", () => {

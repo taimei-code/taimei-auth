@@ -6,6 +6,7 @@ import { Background } from "../background";
 import { EmailSender } from "../email/ports";
 import { toDisplayText } from "../email/sanitize";
 import { getClientContext } from "../request-context";
+import type { AppRuntime } from "../runtime";
 import {
   isPrimaryAuthRoute,
   parsePrimaryAuthRoute,
@@ -50,26 +51,26 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
   );
 });
 
-const observeSignIn = createAuthMiddleware(async (ctx) => {
-  const establishedSession = ctx.context.newSession;
-  if (!establishedSession) return;
-  const { getRuntime } = await import("../runtime");
-  await getRuntime().runPromise(
-    observe({
-      user: establishedSession.user,
-      route: parsePrimaryAuthRoute(ctx.path, ctx.params),
-      headers: ctx.headers,
-    }),
-  );
-});
+const observeSignIn = (runtime: AppRuntime) =>
+  createAuthMiddleware(async (ctx) => {
+    const establishedSession = ctx.context.newSession;
+    if (!establishedSession) return;
+    await runtime.runPromise(
+      observe({
+        user: establishedSession.user,
+        route: parsePrimaryAuthRoute(ctx.path, ctx.params),
+        headers: ctx.headers,
+      }),
+    );
+  });
 
-export const signInObserver = (): BetterAuthPlugin => ({
+export const signInObserver = (runtime: AppRuntime): BetterAuthPlugin => ({
   id: "sign-in-observer",
   hooks: {
     after: [
       {
         matcher: (ctx) => isPrimaryAuthRoute(ctx.path),
-        handler: observeSignIn,
+        handler: observeSignIn(runtime),
       },
     ],
   },

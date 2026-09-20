@@ -2,9 +2,8 @@ import { constantTimeEqual, makeSignature } from "better-auth/crypto";
 import { Effect } from "effect";
 import { parse as parseCookieHeader, serialize as serializeSetCookie } from "hono/utils/cookie";
 import { z } from "zod";
-import { auth } from "../../auth";
+import { AuthApi } from "../../auth-service";
 import { isLocalEnvironment } from "../../env";
-import { tryAuthApi } from "../../errors";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
 import { spendAttemptBudget } from "../../attempt-budget";
@@ -27,7 +26,7 @@ type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
 // 鍵は better-auth の解決を通す — env 直読みだと dev/CI の default fallback で session 側とずれる。
 const signChallengeId = Effect.fn("mfa.signChallengeId")(function* (challengeId: string) {
-  const secret = yield* tryAuthApi(async () => (await auth.$context).secret);
+  const secret = yield* AuthApi.use((authApi) => authApi.secret);
   return yield* Effect.promise(() => makeSignature(challengeId, secret));
 });
 
