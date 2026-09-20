@@ -41,7 +41,7 @@ docker compose up --build --watch
 
 ```bash
 curl http://localhost:3100/health
-# => {"status":"ok","checks":{"db":"ok","redis":"ok"}}
+# => {"status":"ok","checks":{"db":"ok","redis":"ok"},"version":null}
 ```
 
 ブラウザで以下にアクセスする

@@ -89,6 +89,11 @@ jobs:
       - name: Assert generated proto copies are identical
         run: bun run generate:check
 
+      # worker-configuration.d.ts は commit する生成物 (--include-env=false なので binding は含まない)。
+      # compatibility_date / compatibility_flags / wrangler 更新後の再生成漏れを止める。
+      - name: Assert worker-configuration.d.ts is up to date
+        run: bun run types:check
+
       - name: Typecheck
         run: bun run typecheck
 

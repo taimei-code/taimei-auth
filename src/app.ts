@@ -185,7 +185,11 @@ export function buildApp(options: AppOptions): Hono {
         );
         const checks = { db: dbOk ? "ok" : "error", redis: redisOk ? "ok" : "error" };
         const healthy = dbOk && redisOk;
-        return c.json({ status: healthy ? "ok" : "degraded", checks }, healthy ? 200 : 503);
+        const version = process.env.CF_VERSION_ID ?? null;
+        return c.json(
+          { status: healthy ? "ok" : "degraded", checks, version },
+          healthy ? 200 : 503,
+        );
       }),
     ),
   );

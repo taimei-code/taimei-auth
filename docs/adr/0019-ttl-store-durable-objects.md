@@ -18,7 +18,7 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 
 ## Decision
 
-- **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`idFromName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを lazy に消す。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
+- **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`idFromName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを null として隠し、削除は alarm だけが行う (read path に write を置かない)。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
 - **Bun の TTL store は in-memory** (`src/kv-store.memory.ts`)。`bun test` と `bun run src/index.ts` (単一 process) が使う。test の観測面 `keys(prefix)` / `ttl(key)` は `getMemoryKvStore` 経由に限り、biome の `importNamePattern` で production からの import を禁じる
 - **`RedisStorage` / `Redis` service / `RedisError` の名前と契約は据え置く**。better-auth `secondaryStorage`、use-case 4 経路、`/health` の `redis` check は無変更で適合する
 - **local 実行は `wrangler dev`** (`scripts/wrangler-dev.sh`)。compose と e2e は dev stage の image に本物の Node.js binary を重ねて起動する (oven/bun の `node` は bun への shim で wrangler が拒否する)
@@ -39,7 +39,8 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 ## Consequences
 
 - 切替時に既存 Upstash の session / verification は引き継がれず、全ユーザーが再ログイン (magic link 1 回) になる。発行済み magic link / 招待 link は無効。個人運用規模のため告知はしない
-- DO の lifecycle change (migrations) を含む bundle は `wrangler versions upload` で受け付けられない。deploy.yml は upload → preview smoke → deploy の経路しか持たないため、DO class と migration を足す PR は merge 前に手元で `bunx wrangler deploy` (lifecycle change だけを本番へ) してから merge する。lifecycle change 適用後は、それより前の version へ rollback できない。Redis 撤去の PR の rollback 先はその version で、Upstash secret を消すまで有効
+- DO の lifecycle change (migrations) を含む bundle は `wrangler versions upload` で受け付けられない。deploy.yml は upload → smoke → deploy の経路しか持たないため、DO class と migration を足す PR は merge 前に手元で `bunx wrangler deploy` (lifecycle change だけを本番へ) してから merge する。lifecycle change 適用後は、それより前の version へ rollback できない。Redis 撤去の PR の rollback 先はその version で、Upstash secret を消すまで有効
+- Preview URL は DO を持つ Worker では生成されない (Cloudflare の制約。DO class を足した version から実測)。deploy.yml の gate は「新 version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL を smoke し、通れば 100%、落ちれば旧 version 100% に戻す」に置き換えた。override が効かないと旧 version の 200 で smoke が vacuous に通るため、`version_metadata` binding の id を `/health` の `version` で返し、smoke が最初に一致を確かめる。手動 `wrangler deploy` は config に無い `preview_urls` を false に戻すが、Preview URL を使わなくなったので影響しない
 - Upstash 廃止 (secret 2 個の削除と DB 削除) は Redis 撤去の PR の deploy と QA-MR-03 / 05 / 10 の当日に行う
 - devDependencies 誤分類の behavioral 検知 (runner image での `bun build` probe) は持たない。本番 artifact に影響しないため、残るのは package.json section の衛生で、biome `noRestrictedImports` の静的検査が担う
 - `bun test` は in-memory を観測し、DO は wrangler dev 上の e2e と本番 QA でしか観測しない。DO 固有の性質 (input gate の原子性、alarm) は platform 側の保証に依る
