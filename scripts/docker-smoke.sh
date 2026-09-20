@@ -185,6 +185,8 @@ assert_in_image "dev image に drizzle の migration SQL がある" \
 assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
   'test -d /app/drizzle/manual'
 # oven/bun の node は bun への shim で wrangler dev が起動を拒否する (Dockerfile dev stage の COPY の前提)。
+# 単一引用符は意図通り: $(...) はコンテナ内 sh で展開させる。
+# shellcheck disable=SC2016
 assert_in_image "dev image の node が本物の Node.js (bun の shim でない)" \
   'test "$(node -p "process.versions.bun ?? \"node\"")" = node'
 

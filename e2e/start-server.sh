@@ -7,7 +7,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # 旧 `bun run src/index.ts` は .env を自動で読んでいた。wrangler dev は --env-file だけを読むため、
 # 明示 export の前に .env を読む (下の export が優先)。
-set -a; [[ -f .env ]] && . ./.env; set +a
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . ./.env
+  set +a
+fi
 
 # vite define が build 時の APP_ENV を client bundle に焼き込む (未設定は production 扱いで
 # SPA 側 allowlist が localhost を拒否する) ため、e2e build は明示的に development にする
