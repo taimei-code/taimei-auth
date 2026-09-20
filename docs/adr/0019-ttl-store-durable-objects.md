@@ -1,0 +1,48 @@
+# ADR-0019: Redis を撤去し、TTL store を Workers では Durable Objects、Bun では in-memory にする
+
+## Status
+
+Accepted (2026-09-20)。判断主体は maintainer。実装は 3 PR に分ける: 本 ADR + runner stage の撤去、Durable Object class と migration の追加、Redis 撤去本体。本 ADR は ADR-0011 の Decision 3「Redis は Bun=node-redis / Workers=Upstash REST」と Consequences の Upstash 項、ADR-0014 の runner / prod-deps stage に関する部分 (Status に列挙) を supersede する。
+
+関連: ADR-0011 (Workers 移行)、ADR-0014 (Docker stage)、CONTEXT.md の **session** / **試行枠** / **MFA チャレンジ** (TTL store の項は Redis 撤去の PR で登録する)。PoC / Prototype の観測値は PR #197 / #198。
+
+## Context
+
+TTL 付きの短命状態 — session / verification / cookieCache (better-auth `secondaryStorage`)、試行枠 4 経路の計数、MFA チャレンジ — を置く store を、本 ADR では TTL store と呼ぶ。その実体は今、Redis だけに置いている。本番は Upstash REST、local (compose / e2e / `bun test`) は node-redis で、`src/redis.ts` が init 時に選ぶ (ADR-0011 Decision 3)。
+
+Upstash free tier は 30 日データ操作が無いと DB をアーカイブし REST endpoint が消える。2026-09-03 に本番の magic link 送信が 500 になり、毎日の keepalive cron で凌いでいる (ADR-0011 Consequences)。vendor が 1 つ増え、secret が 2 つ増え、cron と test 3 本が「アーカイブされないため」だけに存在する。
+
+Cloudflare KV は結果整合 (最大 60 秒) のため、verification token の単回消費 (`getAndDelete`) と session 失効が壊れる。Durable Objects (DO) は object 内で request が直列化される (input gate) ため、`get → delete` と `incr → expire` が追加の lock なしで atomic になる。PoC で `RedisStorage` の 6 操作 (TTL 失効、並行 `getAndDelete` 10 本で取得 1、並行 incr 20 本の欠落なし) を確認した。
+
+DO は workerd 専用で Bun プロセスから触れない。local を Redis のまま残す案と Redis を全廃する案を比較し、後者を採った。
+
+## Decision
+
+- **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`idFromName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを lazy に消す。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
+- **Bun の TTL store は in-memory** (`src/kv-store.memory.ts`)。`bun test` と `bun run src/index.ts` (単一 process) が使う。test の観測面 `keys(prefix)` / `ttl(key)` は `getMemoryKvStore` 経由に限り、biome の `importNamePattern` で production からの import を禁じる
+- **`RedisStorage` / `Redis` service / `RedisError` の名前と契約は据え置く**。better-auth `secondaryStorage`、use-case 4 経路、`/health` の `redis` check は無変更で適合する
+- **local 実行は `wrangler dev`** (`scripts/wrangler-dev.sh`)。compose と e2e は dev stage の image に本物の Node.js binary を重ねて起動する (oven/bun の `node` は bun への shim で wrangler が拒否する)
+- **Upstash / node-redis / keepalive cron を撤去**。`redis` / `@upstash/redis` の依存、`UPSTASH_*` secret 2 個、compose `auth-redis`、CI の redis service、`triggers.crons` を消す
+- **runner stage を撤去**。本番 artifact は wrangler bundle (devDependencies も同梱) で、pruned runner image の消費者は compose と smoke script だけだった。compose が wrangler dev (dev stage) になる以上、runner を維持する理由が無い。位置契約 (既定 target = dev) は維持する (ADR-0014 Status)
+- **Bun runtime は本番 fallback ではなくなる**。in-memory の session は process 再起動で消えるため、ADR-0011 が保持していた Cloud Run 退避路は成立しない。`src/index.ts` は `bun run dev` と consumer repo の e2e (`bun run src/index.ts`) のための開発 entry として残す
+- 型は `wrangler types --include-env=false` の生成物 `worker-configuration.d.ts` を commit し、CI の `--check` で drift を止める。`Env` は `src/worker.ts` の手書きのまま
+
+## Alternatives
+
+- Cloudflare KV: 結果整合で単回消費と失効が壊れる。設計上の除外
+- local は Redis のまま、本番だけ DO にする案: test 変更 0 の最小 diff だが local に Redis が残り、`bun test` と本番の backend 乖離も今と同じ
+- shard 型 DO (N object に hash 分散): 1 key = 1 object より code が長く TTL sweep が要る
+- `@cloudflare/vitest-pool-workers` で DO 契約 test を repo に持つ: 新規 dependency が要る。DO の原子性は platform の保証で、`bun test` は in-memory、DO は e2e (wrangler dev) と本番 QA で観測する
+- `wrangler types --include-env`: `process.env` を `Cloudflare.Env` で augment し `delete process.env.X` を書く test が TS2790 で落ちる
+- alchemy / Bun から miniflare を直接起動: 別 PoC で棄却 (wrangler dev が担う bundle / assets / Hyperdrive emulation を自前で組む規模)
+
+## Consequences
+
+- 切替時に既存 Upstash の session / verification は引き継がれず、全ユーザーが再ログイン (magic link 1 回) になる。発行済み magic link / 招待 link は無効。個人運用規模のため告知はしない
+- DO の lifecycle change (migrations) を含む bundle は `wrangler versions upload` で受け付けられない。deploy.yml は upload → preview smoke → deploy の経路しか持たないため、DO class と migration を足す PR は merge 前に手元で `bunx wrangler deploy` (lifecycle change だけを本番へ) してから merge する。lifecycle change 適用後は、それより前の version へ rollback できない。Redis 撤去の PR の rollback 先はその version で、Upstash secret を消すまで有効
+- Upstash 廃止 (secret 2 個の削除と DB 削除) は Redis 撤去の PR の deploy と QA-MR-03 / 05 / 10 の当日に行う
+- devDependencies 誤分類の behavioral 検知 (runner image での `bun build` probe) は持たない。本番 artifact に影響しないため、残るのは package.json section の衛生で、biome `noRestrictedImports` の静的検査が担う
+- `bun test` は in-memory を観測し、DO は wrangler dev 上の e2e と本番 QA でしか観測しない。DO 固有の性質 (input gate の原子性、alarm) は platform 側の保証に依る
+- DO は初回 request 地点の近くに作られる。日本単一運用のため影響は無いと見る
+- Workers runtime 型が global `Response` を上書きするため、`res.json()` の推論が崩れた test 2 箇所を `json<unknown>()` に固定した。同種の推論崩れは今後も起きうる
+- consumer repo (taimei) の e2e compose は `bun run src/index.ts` + Redis container を前提にしているが、`src/index.ts` が in-memory で起動するため即座には壊れない。Redis container と `REDIS_URL` の削除は consumer 側の follow-up
