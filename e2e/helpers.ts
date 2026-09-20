@@ -6,7 +6,7 @@ import { expect, type Page } from "@playwright/test";
 // playwright は playwright.config.ts の位置 (repo root) を cwd に実行するため、そこ基準で解決する
 // (import.meta.url は playwright の CJS transpile と衝突する)
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
-export const BASE_URL = "http://localhost:3110";
+const BASE_URL = "http://localhost:3110";
 
 // 消費型 fixture (spec 実行がアカウントごと消費する) を spec ごとに作り直し、CI retry と
 // ローカル再実行 (reuseExistingServer で seed が走らない) に耐性を持たせる。
