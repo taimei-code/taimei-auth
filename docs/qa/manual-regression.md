@@ -36,11 +36,11 @@
 ## QA-MR-03: workerd 固有挙動 — Worker hung 非再発 (#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
-- **前提**: 実 workerd + 実バインディングでしか再現しない (local の miniflare では出ない — ルート CLAUDE.md の gotcha 参照)。このため確認は手動でなく `deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う: `wrangler versions upload` した未 deploy の version の preview URL に `/health` を 20 連打し、全部 200 でなければ `wrangler versions deploy` に進まない
+- **前提**: 実 workerd + 実バインディングでしか再現しない (local の miniflare では出ない — ルート CLAUDE.md の gotcha 参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う: `wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 連打し、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式、ADR-0019)
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する
-  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID の先頭 8 桁で `bash scripts/preview-smoke.sh https://<先頭8桁>-taimei-auth.<subdomain>.workers.dev` を実行する (`wrangler dev --remote` でも同じ観測になる。preview URL の呼び出しは `wrangler tail` に流れないため、例外の不在は応答が 1101 の 500 でないことで判定する)
+  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com <id>` を実行し、終わったら `<現在の id>@100%` に戻す (例外の不在は応答が 1101 の 500 でないことで判定する)
 - **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 
 ## QA-MR-04: Resend 実メールのレンダリング

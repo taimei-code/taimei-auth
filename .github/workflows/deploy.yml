@@ -6,14 +6,16 @@ name: Deploy
 # 緊急時の escape hatch は下の workflow_dispatch。
 # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md の Consequences
 # 手順: build (auth-client SDK + web assets) -> migration (drizzle/*.sql があれば) -> versions upload
-# -> preview smoke -> versions deploy。
+# -> 新 version を 0% で deployment に加える -> version override header で smoke -> 100% に切替。
 # migration を deploy より先に行い、新コードが未 migrate の DB に当たらないようにする
 # (compose の auth-migrate -> auth-service と同じ順序: docker-compose.yml)。
-# `wrangler deploy` を versions upload / deploy の 2 段に割るのは、本番 traffic に乗せる前に実 workerd +
-# 実 binding で新 version を叩く gate (scripts/preview-smoke.sh) を挟むため。smoke が落ちたら deploy step に
-# 進まず、本番は前の version のまま残る (旧 QA-MR-03 / QA-MR-11 の手動 remote 確認をここで自動化した)。
-# preview URL は Worker 設定の Preview URLs (previews_enabled) が on であることが前提 (workers.dev の route は
-# off のまま)。off にすると smoke が到達不能で常に fail する。
+# `wrangler deploy` を versions upload / deploy の段に割るのは、本番 traffic に乗せる前に実 workerd +
+# 実 binding で新 version を叩く gate (scripts/preview-smoke.sh) を挟むため。smoke が落ちたら旧 version
+# 100% に戻して失敗させる (旧 QA-MR-03 / QA-MR-11 の手動 remote 確認をここで自動化した)。
+# Preview URL は DO を持つ Worker では生成されない (Cloudflare の制約、ADR-0019) ため、0% の version を
+# Cloudflare-Workers-Version-Overrides header で指名して本番 URL から叩く。
+# DO の lifecycle change (migrations) を含む version は versions upload で上げられない。その時だけ手元で
+# `wrangler deploy` する (ADR-0019 Consequences)。
 #
 # 必要な repo secret:
 #   - CLOUDFLARE_API_TOKEN  : Workers Scripts:Edit 権限の API token (versions upload / deploy と subdomain 取得用)
@@ -98,20 +100,35 @@ jobs:
           [ -n "$version_id" ] || { echo "version id not found in wrangler output" >&2; exit 1; }
           echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
 
-      # preview URL は <version-id 先頭 8 桁>-<worker 名>.<account の workers.dev subdomain>.workers.dev。
-      # worker 名は wrangler.jsonc の name と揃える。subdomain は API から取る (account 固有値を repo に書かない)。
-      - name: Preview smoke (gate)
+      # 現在 100% の version を控え、新 version を 0% で deployment に加える (override header は deployment 内の
+      # version にしか効かない)。通常 traffic はまだ旧 version にだけ乗る。
+      - name: Stage version at 0% traffic
+        id: stage
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          WORKER_NAME: taimei-auth
           VERSION_ID: ${{ steps.upload.outputs.version_id }}
         run: |
           set -euo pipefail
-          subdomain=$(curl -sSf -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain" | jq -r '.result.subdomain')
-          [ -n "$subdomain" ] && [ "$subdomain" != "null" ] || { echo "workers.dev subdomain not found" >&2; exit 1; }
-          bash scripts/preview-smoke.sh "https://${VERSION_ID::8}-${WORKER_NAME}.${subdomain}.workers.dev"
+          current=$(bunx wrangler deployments status | sed -n 's/.*(100%) *//p' | tr -d '[:space:]')
+          [ -n "$current" ] || { echo "current 100% version not found in deployments status" >&2; exit 1; }
+          echo "current_id=$current" >> "$GITHUB_OUTPUT"
+          bunx wrangler versions deploy "${VERSION_ID}@0%" "${current}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} stage (${GITHUB_SHA::7})"
+
+      # smoke は /health の version が新 version と一致することを最初に確かめる (override 不発の vacuous green を止める)。
+      - name: Smoke new version via override header (gate)
+        env:
+          VERSION_ID: ${{ steps.upload.outputs.version_id }}
+        run: bash scripts/preview-smoke.sh https://auth.taimei-code.com "$VERSION_ID"
+
+      # smoke が落ちたら旧 version 100% に戻す (新 version を deployment から外す)。
+      - name: Restore previous version on smoke failure
+        if: failure() && steps.stage.outcome == 'success'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CURRENT_ID: ${{ steps.stage.outputs.current_id }}
+        run: bunx wrangler versions deploy "${CURRENT_ID}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} restore after smoke failure"
 
       # smoke を通った version だけを 100% に割り当てる。ここで初めて本番 traffic が新コードを通る。
       - name: Deploy version to production traffic

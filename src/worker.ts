@@ -14,6 +14,7 @@ import { initCloudflareSentry } from "./sentry-cloudflare";
 type Env = {
   HYPERDRIVE: { connectionString: string };
   KV_STORE: DurableObjectNamespace<KvStoreBase>;
+  CF_VERSION_METADATA: WorkerVersionMetadata;
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SENTRY_DSN?: string;
   APP_ENV?: string;
@@ -28,6 +29,7 @@ function copyEnvToProcess(env: Env): void {
   for (const [k, v] of Object.entries(env)) {
     if (typeof v === "string") process.env[k] = v;
   }
+  process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
 // 順序は load-bearing: env コピー → initRedis → initAuth → buildApp (後者が前者の結果を読む)。

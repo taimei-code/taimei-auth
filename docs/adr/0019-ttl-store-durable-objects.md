@@ -39,7 +39,8 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 ## Consequences
 
 - 切替時に既存 Upstash の session / verification は引き継がれず、全ユーザーが再ログイン (magic link 1 回) になる。発行済み magic link / 招待 link は無効。個人運用規模のため告知はしない
-- DO の lifecycle change (migrations) を含む bundle は `wrangler versions upload` で受け付けられない。deploy.yml は upload → preview smoke → deploy の経路しか持たないため、DO class と migration を足す PR は merge 前に手元で `bunx wrangler deploy` (lifecycle change だけを本番へ) してから merge する。lifecycle change 適用後は、それより前の version へ rollback できない。Redis 撤去の PR の rollback 先はその version で、Upstash secret を消すまで有効
+- DO の lifecycle change (migrations) を含む bundle は `wrangler versions upload` で受け付けられない。deploy.yml は upload → smoke → deploy の経路しか持たないため、DO class と migration を足す PR は merge 前に手元で `bunx wrangler deploy` (lifecycle change だけを本番へ) してから merge する。lifecycle change 適用後は、それより前の version へ rollback できない。Redis 撤去の PR の rollback 先はその version で、Upstash secret を消すまで有効
+- Preview URL は DO を持つ Worker では生成されない (Cloudflare の制約。DO class を足した version から実測)。deploy.yml の gate は「新 version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL を smoke し、通れば 100%、落ちれば旧 version 100% に戻す」に置き換えた。override が効かないと旧 version の 200 で smoke が vacuous に通るため、`version_metadata` binding の id を `/health` の `version` で返し、smoke が最初に一致を確かめる。手動 `wrangler deploy` は config に無い `preview_urls` を false に戻すが、Preview URL を使わなくなったので影響しない
 - Upstash 廃止 (secret 2 個の削除と DB 削除) は Redis 撤去の PR の deploy と QA-MR-03 / 05 / 10 の当日に行う
 - devDependencies 誤分類の behavioral 検知 (runner image での `bun build` probe) は持たない。本番 artifact に影響しないため、残るのは package.json section の衛生で、biome `noRestrictedImports` の静的検査が担う
 - `bun test` は in-memory を観測し、DO は wrangler dev 上の e2e と本番 QA でしか観測しない。DO 固有の性質 (input gate の原子性、alarm) は platform 側の保証に依る
