@@ -69,12 +69,9 @@ jobs:
         working-directory: packages/auth-client
         run: bun run build
 
-      - name: Lint (Biome)
+      # fallow audit は PR で新たに増えた dead code / 循環 / 重複だけを落とす (既存分は inherited)。
+      - name: Lint (Biome + fallow audit)
         run: bun run lint
-
-      # PR で新たに増えた dead code / 循環 / 重複だけを落とす (既存分は inherited として素通し)。
-      - name: Dead code (fallow audit)
-        run: bunx fallow audit
 
       # ubuntu runner に preinstalled の shellcheck を使う (install step は足さない)。
       - name: Lint (shellcheck)

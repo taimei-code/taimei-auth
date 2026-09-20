@@ -19,7 +19,7 @@
     "sweep:abandoned-signups": "bun run management/sweep-abandoned-signups.ts",
     "test": "bun test",
     "test:e2e": "playwright test",
-    "lint": "biome check",
+    "lint": "biome check && fallow audit",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",

@@ -1,9 +1,7 @@
 # taimei-auth
 
 将来identity DBを別processへ分離できるよう、consumer、server、DB、SDKの境界を維持する。
-起動、compose、migration、Proto生成の手順は [README.md](./README.md) を参照する。
-各scopeでは `CLAUDE.md` だけに本文を書き、同じ変更で同階層に相対symlink `AGENTS.md -> CLAUDE.md` を置く。
-claude code以外の場合、subdirectoryのfileを扱う時は、そのfileまでのpath上にあるnested AGENTS.md をon-demandで読み、rootから順に追加適用し、path外のinstructionは読まない。
+各scopeの本文は `CLAUDE.md` に書き、同階層に相対symlink `AGENTS.md -> CLAUDE.md` を同じ変更で置く。
 
 ## 共通境界
 
@@ -12,21 +10,13 @@ claude code以外の場合、subdirectoryのfileを扱う時は、そのfileま�
 
 ## リポジトリ共通規則
 
-- `web/` のbuild設定にあるcontent、include、files系pathは、CWDではなく `import.meta.url` 起点で解決する。
-- `workspace:*` 依存を追加または変更した時はDockerfileと [`ADR-0014`](./docs/adr/0014-docker-runner-dev-stage-separation.md) を確認する。
-- canonical用語の確定または曖昧さ解消では [`CONTEXT.md`](./CONTEXT.md) を更新する。
-- 巻き戻し困難、文脈なしでは不可解、実トレードオフの結果という3条件を満たす判断では [`docs/adr/`](./docs/adr/) にADRを追加する。
-- 同じ設計判断の理由が3箇所以上へ散る場合は `CONTEXT.md` またはADRへ集約し、各所は参照だけを置く。
+- `web/` のbuild設定にあるcontent、include、files系pathは `import.meta.url` 起点で解決する (CWDはrootと `web/` の両方があり得る)。
+- `workspace:*` 依存を変更した時はDockerfileと [`ADR-0014`](./docs/adr/0014-docker-runner-dev-stage-separation.md) を確認する。
+- canonical用語の確定と曖昧さ解消は [`CONTEXT.md`](./CONTEXT.md) に書く。巻き戻し困難、文脈なしでは不可解、実トレードオフの結果という3条件を満たす判断は [`docs/adr/`](./docs/adr/) に書く。同じ理由が3箇所以上へ散ったらどちらかへ集約し、各所は参照だけを置く。
 - 変更領域が [`docs/qa/manual-regression.md`](./docs/qa/manual-regression.md) の契機に一致する場合は、該当するQA-MRをマージ前に実施する。
-- dependency更新で `minimumReleaseAge` の除外が必要な場合は [`ADR-0009`](./docs/adr/0009-supply-chain-hardening.md) に従う。
-- TypeScript 7では新規tsconfigに必要な `types` を明示し、削除済みの `baseUrl` を使わない。
-- Vite配下の型解決不能なside-effect importは `vite-env.d.ts` のreferenceで解決する。
-- 検査結果を呼び出し側が再判定している述語は、booleanをやめる。同じ式でnarrowingするなら型述語 (例: `src/mfa/policy.ts`、`src/errors.ts`)、結果を関数境界の外へ渡すならparseした値 (例: `src/handlers/wire-error.ts` の `parseWireShaped`)。再判定またはcastが1行も消えないなら導入しない。
-- 判定を述語1本に集めた時は、規範コメントではなく所有domainの `__tests__/containment.test.ts` の静的tripwireで直接比較の再発を止める。
-- 変更を仕上げる前に `bunx fallow audit` を実行し、新たに増えたdead code、循環依存、重複を消す (CIの同名stepと同じgate)。使い方は `.claude/skills/fallow` を参照する。
+- 検査結果を呼び出し側が再判定している述語はbooleanをやめる。同じ式でnarrowingするなら型述語 (例: `src/mfa/policy.ts`)、結果を関数境界の外へ渡すならparseした値 (例: `src/handlers/wire-error.ts` の `parseWireShaped`)。再判定またはcastが1行も消えないなら導入しない。
+- 判定を述語1本に集めた時は、所有domainの `__tests__/containment.test.ts` の静的tripwireで直接比較の再発を止める。
 
-## Effectの学び方
+## Effect
 
-このリポジトリはEffect (TypeScript library) を使う。
-Effectのコードを書く前に、まず `node_modules/effect/AGENTS.md` を**最後まで**読み、必要に応じてfile内のリンク先も辿る。
-そのguideに無いEffectのAPIや概念を知りたい時は、`node_modules/effect/src` のsource codeを検索する。
+Effectのコードを書く前に `node_modules/effect/AGENTS.md` を**最後まで**読み、リンク先も辿る。そこに無いAPIは `node_modules/effect/src` を検索する。
