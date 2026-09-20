@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
 import { AuthApiError } from "../../../errors";
-import { getRedis } from "../../../redis";
+import { getMemoryKvStore } from "../../../redis";
 import { runTest, expectFailure, auditRowsFor, partial } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
@@ -53,7 +53,7 @@ const verify = completeLoginChallenge;
 const verifyFails = (headers: Headers, input: { code: string; kind: "totp" | "recovery_code" }) =>
   Effect.flip(completeLoginChallenge(headers, input));
 const challengeState = readLoginChallengeState;
-const redis = () => Effect.promise(() => getRedis());
+const store = () => Effect.sync(() => getMemoryKvStore());
 
 describe("ログインチャレンジ", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
@@ -94,8 +94,7 @@ describe("ログインチャレンジ", () => {
           browserCookieHeaders(new Response(null, { headers: reissued })),
         );
         if (opened) {
-          const r = yield* redis();
-          yield* Effect.promise(() => r.del(challengeKey(opened.challengeId)));
+          (yield* store()).delete(challengeKey(opened.challengeId));
         }
 
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
@@ -256,11 +255,8 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        // INCR できない値を置く — mock でなく実際に失敗する Redis 操作で fail-closed を確かめる。
-        const r = yield* redis();
-        yield* Effect.promise(() =>
-          r.set(attemptsKeyOf(challenge.challengeId), "not-a-number", { EX: 60 }),
-        );
+        // INCR できない値を置く — mock でなく実際に失敗する storage 操作で fail-closed を確かめる。
+        (yield* store()).set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60);
 
         const rejected = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret),

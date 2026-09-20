@@ -4,10 +4,10 @@ import { Background, BackgroundLive, withWaitUntil } from "../background";
 import { RedisError, timeoutAsBoundary, tryRedis } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
-import { getRedis } from "../redis";
+import { getMemoryKvStore } from "../redis";
 import { Redis, RedisLive } from "../redis-service";
 
-// ADR-0017 Stage 4 の runtime primitive / boundary service。compose Redis + Postgres を使う。
+// ADR-0017 Stage 4 の runtime primitive / boundary service。in-memory store + compose Postgres を使う。
 describe("Redis service (live)", () => {
   const run = <A, E>(p: Effect.Effect<A, E, Redis>) =>
     Effect.runPromise(Effect.provide(p, RedisLive));
@@ -34,7 +34,7 @@ describe("Redis service (live)", () => {
   test("incrementRateWindow は count を返し EXPIRE を付ける (再試行しない書き込み系)", async () => {
     const r = await run(Redis.use((redis) => redis.incrementRateWindow(`${key}:w`, 5)));
     expect(r.count).toBe(1);
-    const rawTtl = await (await getRedis()).ttl(`${key}:w`);
+    const rawTtl = getMemoryKvStore().ttl(`${key}:w`);
     expect(rawTtl).toBeGreaterThanOrEqual(1);
     expect(rawTtl).toBeLessThanOrEqual(5);
     await run(Redis.use((redis) => redis.delete(`${key}:w`)));

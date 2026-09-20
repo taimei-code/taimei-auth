@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # デプロイ前の preview smoke。`wrangler versions upload` で上げた (まだ本番 traffic に乗っていない) version の
-# preview URL に対し、実 workerd + 実 binding (Hyperdrive / Upstash) で runtime が動くことを確認する。
+# preview URL に対し、実 workerd + 実 binding (Hyperdrive / Durable Objects) で runtime が動くことを確認する。
 # deploy.yml がこの script の exit code を gate にし、落ちたら `wrangler versions deploy` を実行しない。
 # 見ているもの (旧 QA-MR-03 / QA-MR-11 の手動手順を置き換える):
 #   - /health x20 が全部 200: request ごとの ALS pool と Effect runtime の上で DB ping + Redis ping が通る
