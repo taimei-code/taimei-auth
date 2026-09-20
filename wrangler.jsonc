@@ -19,6 +19,8 @@
   // magic link 送信が 500 になった原因)。毎日 03:00 JST に worker.ts の scheduled handler で TTL 付き SET を
   // 1 回打つ (src/redis-keepalive.ts)。週 1 回以上であることを src/__tests__/wrangler-cron-keepalive.test.ts が固定する。
   "triggers": { "crons": ["0 18 * * *"] },
+  "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",

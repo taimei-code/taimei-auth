@@ -2,7 +2,8 @@ import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: Workers は per-request に実 Pool を供給する経路だけ許可
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
-import { initRedis } from "./redis";
+import { initRedis, type KvStoreNamespace } from "./redis";
+export { KvStore } from "./kv-store.do";
 import { touchRedisKeepAliveProgram } from "./redis-keepalive";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
@@ -12,6 +13,7 @@ import { initCloudflareSentry } from "./sentry-cloudflare";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
+  KV_STORE?: KvStoreNamespace;
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SENTRY_DSN?: string;
   APP_ENV?: string;
@@ -33,7 +35,7 @@ function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  initRedis();
+  initRedis(env.KV_STORE);
   initAuth();
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
@@ -73,7 +75,7 @@ const handler = {
 
   async scheduled(_controller: unknown, env: Env, _ctx: ExecutionCtx): Promise<void> {
     copyEnvToProcess(env);
-    initRedis();
+    initRedis(env.KV_STORE);
     await getRuntime().runPromise(touchRedisKeepAliveProgram);
   },
 };
