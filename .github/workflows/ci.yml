@@ -43,6 +43,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # fallow audit が origin/main との merge-base を要る
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
@@ -68,6 +71,10 @@ jobs:
 
       - name: Lint (Biome)
         run: bun run lint
+
+      # PR で新たに増えた dead code / 循環 / 重複だけを落とす (既存分は inherited として素通し)。
+      - name: Dead code (fallow audit)
+        run: bunx fallow audit
 
       # ubuntu runner に preinstalled の shellcheck を使う (install step は足さない)。
       - name: Lint (shellcheck)

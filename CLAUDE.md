@@ -23,6 +23,7 @@ claude code以外の場合、subdirectoryのfileを扱う時は、そのfileま�
 - Vite配下の型解決不能なside-effect importは `vite-env.d.ts` のreferenceで解決する。
 - 検査結果を呼び出し側が再判定している述語は、booleanをやめる。同じ式でnarrowingするなら型述語 (例: `src/mfa/policy.ts`、`src/errors.ts`)、結果を関数境界の外へ渡すならparseした値 (例: `src/handlers/wire-error.ts` の `parseWireShaped`)。再判定またはcastが1行も消えないなら導入しない。
 - 判定を述語1本に集めた時は、規範コメントではなく所有domainの `__tests__/containment.test.ts` の静的tripwireで直接比較の再発を止める。
+- 変更を仕上げる前に `bunx fallow audit` を実行し、新たに増えたdead code、循環依存、重複を消す (CIの同名stepと同じgate)。使い方は `.claude/skills/fallow` を参照する。
 
 ## Effectの学び方
 

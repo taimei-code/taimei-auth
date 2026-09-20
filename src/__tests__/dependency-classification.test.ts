@@ -39,6 +39,7 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
   "drizzle-kit": "build-tool: migration 生成 / 適用 CLI (dev image と auth-migrate が実行)",
+  fallow: "build-tool: dead code / 循環依存の静的解析 CLI (CI の fallow audit と MCP server)",
   postcss: "build-tool: web の CSS build pipeline",
   tailwindcss: "build-tool: web の CSS build pipeline",
   typescript: "build-tool: tsc (typecheck と auth-client の dist build)",

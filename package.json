@@ -69,6 +69,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.4",
+    "fallow": "^3.25.0",
     "lucide-react": "^0.482.0",
     "postcss": "^8.5.23",
     "qrcode": "^1.5.4",
