@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# ADR-0014 の 2 契約 — 「既定 build target = full toolchain の dev」「runner = 本番相当
-# (devDependencies 抜き)」— を build 済み image に対して実測する smoke。
-# 本 script が SSOT なのは「単一 image に対する assert」と、それを非 vacuous にする sentinel /
-# leak canary の一覧 (seed mode) まで。image 同士の突合 (既定 build と --target dev の image ID 一致)
-# と APP_ENV の bundle marker 検査は build 引数違いの 2 image を要するため
-# .github/workflows/ci.yml 側にある。ネガティブ確認をローカルで反転実行できるよう script 化している。
+# 単一 image への assert と、それを非 vacuous にする sentinel / leak canary の一覧 (seed mode) の SSOT。
+# 位置契約 (既定 build と --target dev の image ID 一致) と APP_ENV の bundle marker 検査は
+# build 引数違いの 2 image を要するため .github/workflows/ci.yml 側にある。
 # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
 #
 # set -e を使わない理由: negative assert を `! cmd` で書くと bash は `!` 付き command の失敗では
@@ -12,9 +9,9 @@
 # 末尾で 1 度だけ exit し、否定はコンテナ内の `test ! -e ...` 側で行う。
 
 usage() {
-  echo "usage: docker-smoke.sh <seed|dev|runner> [image]" >&2
-  echo "  seed         : build context (cwd) に sentinel / leak canary を作る (image 引数なし)" >&2
-  echo "  dev | runner : build 済み image に契約 assert をかける" >&2
+  echo "usage: docker-smoke.sh <seed|dev> [image]" >&2
+  echo "  seed : build context (cwd) に sentinel / leak canary を作る (image 引数なし)" >&2
+  echo "  dev  : build 済み dev image に契約 assert をかける" >&2
 }
 
 # --- 不在 assert の対象と seed 内容 (assert / seed 両方の SSOT) --------------------------------
@@ -78,7 +75,7 @@ case "$mode" in
     seed_forbidden_paths
     exit 0
     ;;
-  dev | runner)
+  dev)
     if [ "$#" -ne 2 ]; then
       echo "error: $mode mode は引数が 2 つ必要 (mode と image)。指定された引数: $#" >&2
       usage
@@ -86,7 +83,7 @@ case "$mode" in
     fi
     ;;
   "")
-    echo "error: mode が指定されていない (seed / dev / runner)" >&2
+    echo "error: mode が指定されていない (seed / dev)" >&2
     usage
     exit 2
     ;;
@@ -151,7 +148,6 @@ check_batch_item() {
   fail "$description :: ${detail:-$output}"
 }
 
-# --- 両 image 共通: image に載ってはいけないもの (.dockerignore の実効性) ---------------
 # assert 対象 path は seed と同じ forbidden_entries から導出する (上の定義参照)。
 forbidden_paths=""
 for entry in $forbidden_entries; do
@@ -173,98 +169,46 @@ for path in $forbidden_paths; do
   check_batch_item "/app/$path が image に載っていない (.dockerignore)" "$forbidden_probe" "$path"
 done
 
-if [ "$mode" = "dev" ]; then
-  # bare の `drizzle-kit` は使わない: oven/bun の PATH に /app/node_modules/.bin が無く、
-  # 契約を満たしていても exit 127 の false FAIL になる。bunx はローカル .bin を先に見るため
-  # behavioral 判定 (JS shim だけ残って platform 別 binary が落ちる失敗モードの検出) を保てる。
-  assert_in_image "dev image で bunx drizzle-kit が実行できる (auth-migrate / taimei e2e の前提)" \
-    'bunx drizzle-kit --version'
-  assert_in_image "dev image に 共通画面 SPA の build 成果物がある" \
-    'test -f /app/web/dist/index.html'
-  # runner 側の lucide-react 不在 assert の positive control。repo から lucide-react が消えたら
-  # ここが落ちて対で気づける (不在 assert が vacuous に成立するのを防ぐ)。
-  assert_in_image "dev image に web 専用 devDependency (lucide-react) が入っている" \
-    'test -e /app/node_modules/lucide-react'
-  # SQL が image から落ちても drizzle-kit は正常終了し migration が silent no-op になるため、
-  # binary の behavioral assert では代替できない。
-  # 単一引用符は意図通り: $1 はコンテナ内 sh の位置引数で、host 側で展開させてはならない。
-  # shellcheck disable=SC2016
-  assert_in_image "dev image に drizzle の migration SQL がある" \
-    'set -- /app/drizzle/*.sql; test -f "$1"'
-  assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
-    'test -d /app/drizzle/manual'
-else
-  # 不在は existence で判定する (import 系 probe は bun の auto-install fallback で偽陰性になる)。
-  assert_in_image "runner image に drizzle-kit の bin が無い (devDependencies が prune されている)" \
-    'test ! -e /app/node_modules/.bin/drizzle-kit'
-  # prod-deps を `FROM deps` 派生に戻す regression もここで落ちる。
-  assert_in_image "runner image に web 専用 devDependency (lucide-react) が無い" \
-    'test ! -e /app/node_modules/lucide-react'
-  # SPA を実際に配信するのは runner なので、dev 側の存在 assert では web/dist の COPY 漏れを
-  # 検出できない (Dockerfile の COPY --from=web-build を消しても dev は緑のまま)。
-  assert_in_image "runner image に 共通画面 SPA の build 成果物がある" \
-    'test -f /app/web/dist/index.html'
-  # `| wc -l` も `$(find ...)` 単体も禁止: 前者はパイプで、後者は command substitution で find の
-  # exit status を捨て、find 不在・dir 不在でも「0 行 = 合格」になる。status を明示的に拾って
-  # 区別する。scope を 2 dir に限るのは COPY . . 由来の repo symlink を除くため。
-  # 単一引用符は意図通り: $out / $st はコンテナ内 sh の変数で、host 側で展開させてはならない。
-  # shellcheck disable=SC2016
-  assert_in_image "runner image の node_modules / packages に broken symlink が無い" \
-    'out=$(find /app/node_modules /app/packages -xtype l 2>&1); st=$?; [ "$st" -eq 0 ] || { echo "find failed: $out"; exit 2; }; [ -z "$out" ] || { echo "$out"; exit 1; }'
+# bare の `drizzle-kit` は使わない: oven/bun の PATH に /app/node_modules/.bin が無く、
+# 契約を満たしていても exit 127 の false FAIL になる。bunx はローカル .bin を先に見るため
+# behavioral 判定 (JS shim だけ残って platform 別 binary が落ちる失敗モードの検出) を保てる。
+assert_in_image "dev image で bunx drizzle-kit が実行できる (auth-migrate / taimei e2e の前提)" \
+  'bunx drizzle-kit --version'
+assert_in_image "dev image に 共通画面 SPA の build 成果物がある" \
+  'test -f /app/web/dist/index.html'
+# SQL が image から落ちても drizzle-kit は正常終了し migration が silent no-op になるため、
+# binary の behavioral assert では代替できない。
+# 単一引用符は意図通り: $1 はコンテナ内 sh の位置引数で、host 側で展開させてはならない。
+# shellcheck disable=SC2016
+assert_in_image "dev image に drizzle の migration SQL がある" \
+  'set -- /app/drizzle/*.sql; test -f "$1"'
+assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
+  'test -d /app/drizzle/manual'
 
-  # SDK entrypoint の probe 対象は image 内 package.json の exports キーから導出する
-  # (subpath をハードコードすると exports 追加時に silent に漏れる)。導出と import を 1 container に
-  # まとめ、probe 対象一覧を `ITEM` 行として script 側へ返させる。
-  sdk_probe=$(docker run --rm --network none -w /app "$image" bun -e '
-    const fs = require("node:fs");
-    const pkg = JSON.parse(fs.readFileSync("/app/packages/auth-client/package.json", "utf8"));
-    for (const key of Object.keys(pkg.exports || {})) {
-      const specifier = `@taimei-code/auth-client${key.replace(/^\./, "")}`;
-      console.log(`ITEM ${specifier}`);
-      try {
-        await import(specifier);
-        console.log(`OK ${specifier}`);
-      } catch (error) {
-        console.log(`FAIL ${specifier} :: ${String(error).replace(/\s+/g, " ")}`);
-      }
+# SDK entrypoint の probe 対象は image 内 package.json の exports キーから導出する
+# (subpath をハードコードすると exports 追加時に silent に漏れる)。consumer repo だけが subpath を
+# import するため、本 repo の typecheck / test はこの解決失敗を捕らえない。
+sdk_probe=$(docker run --rm --network none -w /app "$image" bun -e '
+  const fs = require("node:fs");
+  const pkg = JSON.parse(fs.readFileSync("/app/packages/auth-client/package.json", "utf8"));
+  for (const key of Object.keys(pkg.exports || {})) {
+    const specifier = `@taimei-code/auth-client${key.replace(/^\./, "")}`;
+    console.log(`ITEM ${specifier}`);
+    try {
+      await import(specifier);
+      console.log(`OK ${specifier}`);
+    } catch (error) {
+      console.log(`FAIL ${specifier} :: ${String(error).replace(/\s+/g, " ")}`);
     }
-  ' 2>&1)
-  sdk_specifiers=$(printf '%s\n' "$sdk_probe" | sed -n 's/^ITEM //p')
-  if [ -z "$sdk_specifiers" ]; then
-    fail "packages/auth-client/package.json の exports キーを導出できなかった :: $sdk_probe"
-  fi
-  for specifier in $sdk_specifiers; do
-    check_batch_item "runner image で SDK entrypoint $specifier が import できる" \
-      "$sdk_probe" "$specifier"
-  done
-
-  # shipped graph 全体が prod-only tree で解決すること = 依存誤分類の本命の検出。
-  # management/ は README が runner 内実行を定めており MFA ロックアウト救済の唯一の出口を含むが、
-  # src/index.ts の graph からは到達不能なため個別に probe する。列挙せず image 内で
-  # `management/*.ts` を展開するのは、新しい management スクリプトを足した時に probe 対象へ
-  # 自動で入れるため (列挙だと足し忘れが未検査のまま緑になる)。probe 対象一覧は SDK 側と同じく
-  # `ITEM` 行で返させ、assert 件数も実際の展開結果から数える。
-  # 動的 import は静的 probe の対象外 (既知の穴)。
-  bundle_probe=$(docker run --rm --network none -w /app "$image" sh -c '
-    set -- src/index.ts src/worker.ts management/*.ts
-    for entry in "$@"; do
-      echo "ITEM $entry"
-      if err=$(bun build --target bun --outdir /tmp/probe "$entry" 2>&1); then
-        echo "OK $entry"
-      else
-        echo "FAIL $entry :: $(printf %s "$err" | tr "\n" " ")"
-      fi
-    done
-  ' 2>&1)
-  bundle_entrypoints=$(printf '%s\n' "$bundle_probe" | sed -n 's/^ITEM //p')
-  if [ -z "$bundle_entrypoints" ]; then
-    fail "bundle probe の entrypoint 一覧を導出できなかった :: $bundle_probe"
-  fi
-  for entry in $bundle_entrypoints; do
-    check_batch_item "runner image の prod-only tree で $entry が bundle できる" \
-      "$bundle_probe" "$entry"
-  done
+  }
+' 2>&1)
+sdk_specifiers=$(printf '%s\n' "$sdk_probe" | sed -n 's/^ITEM //p')
+if [ -z "$sdk_specifiers" ]; then
+  fail "packages/auth-client/package.json の exports キーを導出できなかった :: $sdk_probe"
 fi
+for specifier in $sdk_specifiers; do
+  check_batch_item "dev image で SDK entrypoint $specifier が import できる" "$sdk_probe" "$specifier"
+done
 
 # 実行件数を必ず出す (CI 側の期待件数突合とセットで「assert 0 件の緑」を構造的に不可能にする)。
 echo "asserts executed: $asserts"

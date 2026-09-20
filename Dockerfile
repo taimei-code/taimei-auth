@@ -27,14 +27,7 @@ RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=shared bun instal
 COPY packages ./packages
 RUN cd packages/auth-client && bun run build
 
-# runner に載せる node_modules を server runtime の依存だけに絞るための install
-# (deps を full install のまま残す理由と分類規約: docs/adr/0014-docker-runner-dev-stage-separation.md)。
-# flag の意図は deps stage と同じ。
-FROM manifests AS prod-deps
-RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=shared bun install --frozen-lockfile --ignore-scripts --production
-
 # 共通画面 SPA (web/) の Vite build をコンテナ内で実行。
-# runner ステージで COPY . . するため build:web の前に web/dist を生成しておく。
 # src/ を COPY する理由: web/vite.config.ts の "@core" alias が ../src を指しており
 # SignIn/SignUp で TAIMEI_SERVICES, signInParamsSchema を import するため。
 FROM deps AS web-build
@@ -47,19 +40,7 @@ COPY src ./src
 COPY tsconfig.json ./
 RUN bun run build:web
 
-FROM base AS runner
-# node_modules と packages/ は同一 install (prod-deps) に揃え、bun store への symlink 混成を避ける。
-# packages/ が要るのは node_modules/@taimei-code/auth-client が packages/auth-client への symlink で
-# 解決されるため (target が無いと runtime で resolve 失敗する)。build 産物の dist だけ deps stage から
-# 重ねる。詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
-COPY --from=prod-deps /app/node_modules ./node_modules
-COPY --from=prod-deps /app/packages ./packages
-COPY --from=deps /app/packages/auth-client/dist ./packages/auth-client/dist
-COPY --from=web-build /app/web/dist ./web/dist
-COPY . .
-
-# 最終 stage = 既定 build target は full toolchain の dev を維持する (target 指定なしで build する
-# consumer への位置契約)。runner を最終に置いた時の壊れ方・consumer 側の pin 状況・機械検証の内訳:
-# docs/adr/0014-docker-runner-dev-stage-separation.md
+# 最終 stage = 既定 build target は full toolchain の dev (target 指定なしで build する consumer への
+# 位置契約。consumer 側の pin 状況・機械検証の内訳: docs/adr/0014-docker-runner-dev-stage-separation.md)。
 FROM web-build AS dev
 COPY . .

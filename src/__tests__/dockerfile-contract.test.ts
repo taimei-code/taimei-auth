@@ -52,11 +52,11 @@ describe("Dockerfile stage 契約の config invariant", () => {
     // 最終 stage が dev でない書き方は、名前付き / 名前なし / flag 付き / 小文字 as / 行末コメントの
     // どれでも検出する (`^FROM \S+ AS \S+$` 決め打ちだと後ろ 4 つが「FROM 行でない」扱いで素通りする)。
     for (const appended of [
-      "FROM runner AS release",
-      "FROM runner",
-      "FROM --platform=linux/amd64 runner AS release",
-      "FROM runner as release",
-      "FROM runner AS release # 本番 image",
+      "FROM base AS release",
+      "FROM base",
+      "FROM --platform=linux/amd64 base AS release",
+      "FROM base as release",
+      "FROM base AS release # 本番 image",
     ]) {
       expect(dockerfileViolations(`${dockerfile}\n${appended}\n`, packages).join("\n")).toContain(
         "Dockerfile の最後の stage が dev でない",

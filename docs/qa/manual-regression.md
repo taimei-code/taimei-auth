@@ -95,9 +95,9 @@
 ## QA-MR-09: consumer repo (taimei) からの cross-repo build と起動
 
 - **契機**: Dockerfile の stage 構成 / `packages` COPY 方式を変える PR
-- **前提**: consumer repo `~/mydev/taimei` を clone 済み。port 3100 が競合するため本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **unpinned な main** を clone するため、マージした時点で全 taimei branch に即波及する (= 実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発 probe までで、dev image を server として長時間 boot する経路はこのケースだけがカバーする
+- **前提**: consumer repo `~/github/taimei` を clone 済み。port 3100 が競合するため本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **unpinned な main** を clone するため、マージした時点で全 taimei branch に即波及する (= 実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発 probe までで、consumer 側の compose から build して boot する経路はこのケースだけがカバーする
 - **手順**:
-  1. `cd ~/mydev/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
+  1. `cd ~/github/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
   2. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
   3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
 - **期待結果**: build が `Workspace dependency not found` 等で落ちず、`bunx drizzle-kit migrate` が完走して `/health` が 200 を返す

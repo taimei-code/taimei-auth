@@ -1,4 +1,4 @@
-// 依存分類 (どの package が runner image に載るか) / docker build 契約 / action pin は、設定ファイル
+// 依存分類 (どの package が server runtime の依存か) / docker build 契約 / action pin は、設定ファイル
 // 同士の整合でしか成立していない — biome の ban list / package.json の section / Dockerfile の stage
 // 構成 / workflow の action pin。どれかが片側だけ動いても lint も typecheck も build も緑のままなので、
 // 設定を text として読んで drift を検出する (web-shared-core-runtime-free.test.ts と同型)。
@@ -18,7 +18,7 @@ export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..
 // 本定数を同時に直すこと (message は override 横断の selector なので、片方だけ直すと selector が
 // 空振りして invariant が silent に消える)。
 export const WEB_ONLY_DEP_MESSAGE =
-  "web 専用 devDependency のため server runtime (runner image) に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
+  "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
 export const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
 
 // biome の override は merge されず置換されるため、classification の ban は src 系にマッチする

@@ -5,6 +5,15 @@
 # cross-subdomain Cookie (.taimei-code.local) を成立させるため、auth-service には
 # network alias `auth.taimei-code.local` を付与する。
 
+# APP_ENV を build args に渡す理由: web/vite.config.ts が define で APP_ENV を bundle に
+# 埋め込むため、build 時に値が決まっていないと Vite は "production" でビルドしてしまい
+# services.ts の isLocalEnv が false になり localhost / .local が allowlist で弾かれる。
+x-dev-build: &dev-build
+  context: .
+  target: dev
+  args:
+    APP_ENV: development
+
 networks:
   taimei-network:
     name: taimei-network
@@ -45,13 +54,7 @@ services:
   # auth-service の起動を depends_on (service_completed_successfully) で待たせて、
   # schema 不整合時のサーバ起動 → 500 を防ぐ。idempotent なので毎回走らせて問題ない。
   auth-migrate:
-    # runner には devDependencies (drizzle-kit) が無いため full toolchain の dev stage を使う
-    # (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。
-    build:
-      context: .
-      target: dev
-      args:
-        APP_ENV: development
+    build: *dev-build
     # drizzle migrate (auto-managed) → manual trigger SQL (drizzle/manual/) の順に適用。
     # trigger は drizzle-kit が管理しないため別 dir に置く (db/CLAUDE.md ルール 8 / PR #43)。
     # psql client を image に入れず、drizzle-orm の sql.raw で実行する (db/migrate-manual.ts)。
@@ -65,15 +68,7 @@ services:
       - taimei-network
 
   auth-service:
-    # APP_ENV を build args に渡す理由: web/vite.config.ts が define で APP_ENV を bundle に
-    # 埋め込むため、build 時に値が決まっていないと Vite は "production" でビルドしてしまい
-    # services.ts の isLocalEnv が false になり localhost / .local が allowlist で弾かれる。
-    # runner (本番相当の pruned node_modules) を常時使い、server コードが devDependencies を import する誤分類をローカルで検知する (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。
-    build:
-      context: .
-      target: runner
-      args:
-        APP_ENV: development
+    build: *dev-build
     ports:
       - "3100:3100"
     env_file:

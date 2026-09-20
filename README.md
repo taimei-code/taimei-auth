@@ -73,7 +73,7 @@ URL を別タブで開くと `/account` に遷移する。**初回登録 (所属
 
 ## compose での環境操作
 
-codegen (`db:generate` / `generate`) は生成物を working tree へ書き出して commit する作業のため、**host の bun で実行する**。DB には接続しないので postgres / redis は不要 — `bun install` さえ済んでいれば動く。auth-service は本番相当の runner stage (devDependencies 抜き) で動くため、drizzle-kit / buf / biome / tsc などの dev ツールはコンテナ内に無い (実行すると exit 127)。host に bun を入れずに dev ツールを使いたい場合は full toolchain の auth-migrate (dev stage) を使う (`docker compose run --rm auth-migrate bun run lint` 等。生成物を伴わないコマンドに限る)。設計判断は [ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md) を参照。
+codegen (`db:generate` / `generate`) は生成物を working tree へ書き出して commit する作業のため、**host の bun で実行する**。DB には接続しないので postgres / redis は不要 — `bun install` さえ済んでいれば動く。host に bun を入れずに dev ツールを使いたい場合は auth-migrate (dev stage、依存が postgres だけで軽い) を使う (`docker compose run --rm auth-migrate bun run lint` 等。生成物を伴わないコマンドに限る)。設計判断は [ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md) を参照。
 
 ### スキーマ変更フロー
 
