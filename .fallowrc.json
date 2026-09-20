@@ -22,8 +22,7 @@
     }
   ],
   "rules": {
-    "dev-dependencies-in-production": "off",
-    "circular-dependencies": "warn"
+    "dev-dependencies-in-production": "off"
   },
   "ignoreExports": [
     {

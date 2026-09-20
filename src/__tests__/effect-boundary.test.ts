@@ -103,11 +103,10 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
 
 // ---- test の DB 接触 (08-liftall-and-test-seeds §3.3): src の test と e2e は db/testing/* だけを runtime import する ----
 
-// 静的 import (named / namespace / default / side-effect / re-export) と、gate が禁じる場合は動的 import (import 関数
-// 呼び出し) も拾い、`import type` / `export type` は除く。1 行の形は grep で拾う (default import の識別子は `type` にも
-// 当たるので、hit 行を読んで型 import を落とす)。biome (lineWidth 100) が折り返した複数行の形は `} from "…"` の行を
-// grep で拾い、その statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が
-// 素通りする)。DB 境界は動的 import も禁じ、runtime の TDZ gate は動的 import を正規の形として許可する。
+// 静的 import (named / namespace / default / side-effect / re-export) と動的 import (import 関数呼び出し) を拾い、
+// `import type` / `export type` は除く。1 行の形は grep で拾う (default import の識別子は `type` にも当たるので、hit 行を
+// 読んで型 import を落とす)。biome (lineWidth 100) が折り返した複数行の形は `} from "…"` の行を grep で拾い、その
+// statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が素通りする)。
 type ImportGate = {
   readonly specifier: RegExp;
   readonly oneLine: string;
@@ -117,18 +116,12 @@ type ImportGate = {
 // `export * from` と side-effect の `import "…"`。
 const STATIC_FORMS = String.raw`^(import|export) (\{|\*|[A-Za-z_$][A-Za-z0-9_$]*).* from|^import`;
 const TYPE_ONLY = /^(import|export) type\b/;
-const gateFor = (specifier: string, opts: { includeDynamic: boolean }): ImportGate => ({
+const gateFor = (specifier: string): ImportGate => ({
   specifier: new RegExp(specifier),
-  oneLine: opts.includeDynamic
-    ? String.raw`(${STATIC_FORMS}|import\()\s*${specifier}`
-    : String.raw`(${STATIC_FORMS})\s*${specifier}`,
+  oneLine: String.raw`(${STATIC_FORMS}|import\()\s*${specifier}`,
   closing: String.raw`^\} from\s*${specifier}`,
 });
-const DB_IMPORTS = gateFor(`["']@/db/[^"']*["']`, { includeDynamic: true });
-// 相対 path (`./runtime` / `../runtime`)、tsconfig paths の `@core/runtime`、拡張子付きの `.js` を同じ module として拾う。
-const RUNTIME_IMPORTS = gateFor(String.raw`["'](@core/|(\./|\.\./)+)runtime(\.js)?["']`, {
-  includeDynamic: false,
-});
+const DB_IMPORTS = gateFor(`["']@/db/[^"']*["']`);
 const TS_FILES = ["*.ts", "*.tsx"];
 type ScanOptions = Pick<GrepOptions, "onlyTests" | "excludeTests">;
 
@@ -211,31 +204,6 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         join(dir, "re-export-type.ts"),
         'export type { DbTx } from "@/db/transaction";\n',
       );
-      writeFileSync(join(dir, "rt-static.ts"), 'import { getRuntime } from "./runtime";\n');
-      writeFileSync(
-        join(dir, "rt-multi.ts"),
-        'import {\n  type AppServices,\n  getRuntime,\n} from "../runtime";\n',
-      );
-      writeFileSync(join(dir, "rt-type.ts"), 'import type { AppServices } from "../runtime";\n');
-      writeFileSync(
-        join(dir, "rt-multi-type.ts"),
-        'import type {\n  AppServices,\n} from "../runtime";\n',
-      );
-      writeFileSync(
-        join(dir, "rt-dynamic.ts"),
-        `const { getRuntime } = await ${dynamicImport}"./runtime");\n`,
-      );
-      writeFileSync(join(dir, "rt-side-effect.ts"), 'import "./runtime";\n');
-      writeFileSync(join(dir, "rt-default.ts"), 'import rt from "../runtime";\n');
-      writeFileSync(join(dir, "rt-mixed.ts"), 'import rt, { getRuntime } from "./runtime";\n');
-      writeFileSync(join(dir, "rt-re-export.ts"), 'export { getRuntime } from "../runtime";\n');
-      writeFileSync(join(dir, "rt-re-export-star.ts"), 'export * from "./runtime";\n');
-      writeFileSync(join(dir, "rt-alias.ts"), 'import { getRuntime } from "@core/runtime";\n');
-      writeFileSync(join(dir, "rt-js.ts"), 'import { getRuntime } from "./runtime.js";\n');
-      writeFileSync(
-        join(dir, "rt-re-export-type.ts"),
-        'export type { AppServices } from "./runtime";\n',
-      );
       expect(valueImportFiles(DB_IMPORTS, dir)).toEqual([
         join(dir, "default.ts"),
         join(dir, "dynamic.ts"),
@@ -256,18 +224,6 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         join(dir, "re-export.ts"),
         join(dir, "side-effect.ts"),
         join(dir, "static.ts"),
-      ]);
-      // runtime gate は動的 import を許可する (TDZ を避ける正規の形) ので静的 import の file だけ。
-      expect(valueImportFiles(RUNTIME_IMPORTS, dir)).toEqual([
-        join(dir, "rt-alias.ts"),
-        join(dir, "rt-default.ts"),
-        join(dir, "rt-js.ts"),
-        join(dir, "rt-mixed.ts"),
-        join(dir, "rt-multi.ts"),
-        join(dir, "rt-re-export-star.ts"),
-        join(dir, "rt-re-export.ts"),
-        join(dir, "rt-side-effect.ts"),
-        join(dir, "rt-static.ts"),
       ]);
     } finally {
       rmSync(dir, { recursive: true });
@@ -298,16 +254,5 @@ describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
       lines: true,
     });
     expect(hits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
-  });
-});
-
-// ---- runtime.ts の静的 import (src/CLAUDE.md「Effect様式」の TDZ 規則): auth.ts から静的に辿れる module に生えると環で TDZ になる ----
-
-describe("runtime.ts の静的 import", () => {
-  test("adapter (run-route / run-rpc) に限る", () => {
-    expect(valueImportFiles(RUNTIME_IMPORTS, "src", { excludeTests: true })).toEqual([
-      "src/handlers/run-route.ts",
-      "src/rpc/run-rpc.ts",
-    ]);
   });
 });

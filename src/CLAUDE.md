@@ -21,7 +21,7 @@
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置く。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` (渡す effect の失敗は渡す前に catch する)。
 - サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で運び、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。
-- `auth.ts` から静的に辿れる module で `getRuntime` が要る時は関数内で `await import("./runtime")` する (TDZ 回避、ADR-0017 の Did not adopt)。
+- `auth.ts` から辿れる module は `runtime.ts` を import せず `initAuth(runtime)` で受け取った runtime を使う (import 環は fallow の `circular-dependency` が止める)。
 - 以上の境界は `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
 
 ## test
