@@ -43,4 +43,7 @@ RUN bun run build:web
 # 最終 stage = 既定 build target は full toolchain の dev (target 指定なしで build する consumer への
 # 位置契約。consumer 側の pin 状況・機械検証の内訳: docs/adr/0014-docker-runner-dev-stage-separation.md)。
 FROM web-build AS dev
+# oven/bun の node は bun への shim で wrangler が Bun runtime を拒否するため、本物の Node.js を重ねる。
+COPY --from=node:22.23-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY . .
+CMD ["bash", "scripts/wrangler-dev.sh"]

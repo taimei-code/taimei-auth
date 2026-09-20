@@ -184,6 +184,9 @@ assert_in_image "dev image に drizzle の migration SQL がある" \
   'set -- /app/drizzle/*.sql; test -f "$1"'
 assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
   'test -d /app/drizzle/manual'
+# oven/bun の node は bun への shim で wrangler dev が起動を拒否する (Dockerfile dev stage の COPY の前提)。
+assert_in_image "dev image の node が本物の Node.js (bun の shim でない)" \
+  'test "$(node -p "process.versions.bun ?? \"node\"")" = node'
 
 # SDK entrypoint の probe 対象は image 内 package.json の exports キーから導出する
 # (subpath をハードコードすると exports 追加時に silent に漏れる)。consumer repo だけが subpath を

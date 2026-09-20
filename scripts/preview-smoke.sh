@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # デプロイ前の smoke。`wrangler versions upload` で上げ 0% で deployment に含めた version を、
 # Cloudflare-Workers-Version-Overrides header で指名して本番 URL から叩き、実 workerd + 実 binding
-# (Hyperdrive / Upstash / DO) で runtime が動くことを確認する。Preview URL は DO を持つ Worker では
+# (Hyperdrive / DO) で runtime が動くことを確認する。Preview URL は DO を持つ Worker では
 # 生成されない (Cloudflare の制約) ため header 方式にしている。override が効かないと旧 version の 200 で
 # vacuous に通るので、/health の version が指名した id と一致することを最初に確かめる。
 # deploy.yml がこの script の exit code を gate にし、落ちたら新 version を 100% にしない。
 # 見ているもの (旧 QA-MR-03 / QA-MR-11 の手動手順を置き換える):
-#   - /health x20 が全部 200: request ごとの ALS pool と Effect runtime の上で DB ping + Redis ping が通る
+#   - /health x20 が全部 200: request ごとの ALS pool と Effect runtime の上で DB ping + TTL store の ping が通る
 #     (warm isolate が前 request の接続を掴む "Worker hung" (#91) の非再発)
 #   - 未認証 GET /api/account/memberships が 401 {"error":"unauthorized"}: adapter と guard の failure が
 #     workerd 上で wire に写像される

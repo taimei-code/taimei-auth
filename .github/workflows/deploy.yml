@@ -86,7 +86,7 @@ jobs:
             echo "no migration files under drizzle/ -> skip"
           fi
 
-      # vars は wrangler.jsonc、secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN) は
+      # vars は wrangler.jsonc、secret (AUTH_SECRET / AUTH_SERVICE_KEY / SENTRY_DSN) は
       # 事前に wrangler secret put 済みで、新 version にも継承される。version はまだ本番 traffic に乗らない。
       - name: Upload Worker version (not yet deployed)
         id: upload
