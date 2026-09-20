@@ -13,11 +13,12 @@ import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
 import { captureThrown } from "./handlers/wire-error";
 import { MembershipRepo } from "./membership/ports";
 import { ttlStorage } from "./ttl-store";
+import type { AppRuntime } from "./runtime";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
 // Workers は per-request env のため module ロード時でなく initAuth() で構築する。
-function buildAuth() {
+function buildAuth(runtime: AppRuntime) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
@@ -63,9 +64,7 @@ function buildAuth() {
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
-          // runtime は AuthApiLive 経由で本 module を import するため、循環を避けて呼び出し時に読み込む。
-          const { getRuntime } = await import("./runtime");
-          const blocking = await getRuntime().runPromise(
+          const blocking = await runtime.runPromise(
             MembershipRepo.use((m) => m.findCompaniesBlockingUserDeletion(user.id)),
           );
           if (blocking.length > 0) {
@@ -96,16 +95,14 @@ function buildAuth() {
     plugins: [
       magicLink({
         sendMagicLink: async ({ email, url }) => {
-          // runtime → auth-service → auth の import 環を避けるため関数内で lazy import する。
-          const { getRuntime } = await import("./runtime");
-          await getRuntime().runPromise(dispatchMagicLink(email, url));
+          await runtime.runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: 300,
         // local は test 高速化で緩め、production は Hono middleware (src/rate-limit.ts) と独立した二重防御。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
-      mfaChallenge(),
-      signInObserver(),
+      mfaChallenge(runtime),
+      signInObserver(runtime),
     ],
 
     session: {
@@ -128,14 +125,9 @@ function buildAuth() {
 
 export let auth: ReturnType<typeof buildAuth>;
 
-export function initAuth(): void {
+export function initAuth(runtime: AppRuntime): void {
   if (auth) return;
-  auth = buildAuth();
+  auth = buildAuth(runtime);
 }
 
 export type Session = ReturnType<typeof buildAuth>["$Infer"]["Session"];
-
-// Bun / Node は import 時に db / ttlStorage が init 済みのため auth も自動 init (Workers は worker entry)。
-if (isBunRuntime()) {
-  initAuth();
-}

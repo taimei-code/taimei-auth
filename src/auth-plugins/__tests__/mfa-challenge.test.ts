@@ -21,6 +21,7 @@ import {
   readLoginChallengeState,
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
+import { getRuntime } from "../../runtime";
 import { getMemoryKvStore, ttlStorage } from "../../ttl-store";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
@@ -119,7 +120,7 @@ const runOAuthCallbackHook = (
         },
       };
 
-      const afterHook = mfaChallenge().hooks?.after?.[0];
+      const afterHook = mfaChallenge(getRuntime()).hooks?.after?.[0];
       if (!afterHook) throw new Error("mfa-challenge plugin has no after hook");
       expect(afterHook.matcher(ctx as never)).toBe(true);
 

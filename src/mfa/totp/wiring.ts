@@ -28,7 +28,7 @@ const MfaKeyringLive = Layer.succeed(
 
 const MfaIssuerLive = Layer.succeed(MfaIssuer, MfaIssuer.of({ appName: Effect.sync(getAppName) }));
 
-const MfaSessionsLive = Layer.succeed(
+const MfaSessionsLive: Layer.Layer<MfaSessions> = Layer.succeed(
   MfaSessions,
   MfaSessions.of({ revokeOthers: revokeOtherSessions, issueSession: issueSessionFor }),
 );

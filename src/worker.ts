@@ -2,6 +2,7 @@ import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: Workers は per-request に実 Pool を供給する経路だけ許可
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
+import { getRuntime } from "./runtime";
 import { KvStore as KvStoreBase } from "./kv-store.do";
 import { initTtlStore, type KvStoreNamespace } from "./ttl-store";
 import { buildApp } from "./app";
@@ -36,7 +37,7 @@ function bootstrap(env: Env): Hono {
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
   initTtlStore(env.KV_STORE);
-  initAuth();
+  initAuth(getRuntime());
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
       app.all("*", (c) => {

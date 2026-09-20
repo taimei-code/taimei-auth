@@ -33,9 +33,11 @@ export const AppLayer = Layer.mergeAll(
 
 export type AppServices = Layer.Success<typeof AppLayer>;
 
-let runtime: ManagedRuntime.ManagedRuntime<AppServices, never> | undefined;
+export type AppRuntime = ManagedRuntime.ManagedRuntime<AppServices, never>;
 
-export function getRuntime(): ManagedRuntime.ManagedRuntime<AppServices, never> {
+let runtime: AppRuntime | undefined;
+
+export function getRuntime(): AppRuntime {
   runtime ??= ManagedRuntime.make(AppLayer);
   return runtime;
 }

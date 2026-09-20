@@ -1,3 +1,6 @@
+[test]
+preload = ["./src/__tests__/preload.ts"]
+
 [install]
 minimumReleaseAge = 604800
 # esbuild: GHSA-gv7w-rqvm-qjhr (HIGH) の修正版 0.28.1 が release 2 日で 7 日齢に満たないため除外。
