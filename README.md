@@ -1,6 +1,6 @@
 # taimei-auth
 
-taimei の認証サービス。better-auth + Hono (Bun) + drizzle (Postgres) + Redis。Web UI / IdP / User・Account・Session DB を 1 サービスに同居させている。
+taimei の認証サービス。better-auth + Hono + drizzle (Postgres) + Cloudflare Workers / Durable Objects。Web UI / IdP / User・Account・Session DB を 1 サービスに同居させている。
 
 ---
 
@@ -23,7 +23,7 @@ compose 版は consumer (taimei) との cross-subdomain Cookie を成立させ�
 localhost だけで完結させたい場合は compose を使わず host で直接起動する。`.env` を既定値 (`AUTH_COOKIE_DOMAIN=localhost`) のままにすれば `crossSubDomainCookies` が無効化され `localhost:3100` で動く:
 
 ```bash
-docker compose up auth-postgres auth-redis -d   # DB / Redis のみ compose で起動
+docker compose up auth-postgres -d   # DB のみ compose で起動
 bun install && bun run db:migrate
 bun run dev:web   # 別ターミナル: Vite dev server
 bun run dev       # Hono server (localhost:3100)
@@ -73,7 +73,7 @@ URL を別タブで開くと `/account` に遷移する。**初回登録 (所属
 
 ## compose での環境操作
 
-codegen (`db:generate` / `generate`) は生成物を working tree へ書き出して commit する作業のため、**host の bun で実行する**。DB には接続しないので postgres / redis は不要 — `bun install` さえ済んでいれば動く。host に bun を入れずに dev ツールを使いたい場合は auth-migrate (dev stage、依存が postgres だけで軽い) を使う (`docker compose run --rm auth-migrate bun run lint` 等。生成物を伴わないコマンドに限る)。設計判断は [ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md) を参照。
+codegen (`db:generate` / `generate`) は生成物を working tree へ書き出して commit する作業のため、**host の bun で実行する**。DB には接続しないので postgres は不要 — `bun install` さえ済んでいれば動く。host に bun を入れずに dev ツールを使いたい場合は auth-migrate (dev stage、依存が postgres だけで軽い) を使う (`docker compose run --rm auth-migrate bun run lint` 等。生成物を伴わないコマンドに限る)。設計判断は [ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md) を参照。
 
 ### スキーマ変更フロー
 

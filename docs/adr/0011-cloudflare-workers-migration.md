@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted — **本番稼働中** (`auth.taimei-code.com` / Cloudflare Workers + Hyperdrive·Neon + Upstash + Resend)。
+Accepted — **本番稼働中** (`auth.taimei-code.com` / Cloudflare Workers + Durable Objects + Hyperdrive·Neon + Resend)。
+Decision 3 (Redis の 2 実装) と Consequences の Upstash 項は [ADR-0019](./0019-ttl-store-durable-objects.md) (2026-09-20) が supersede した (Redis は撤去済み)。
 実機検証の観測値は
 [`0011-cloudflare-workers-migration.analysis.md`](./0011-cloudflare-workers-migration.analysis.md)
 (spike 台帳) に記録。本 ADR は決定と理由を担う。デプロイで初めて踏んだバグは「本番デプロイで発見した
@@ -52,12 +53,11 @@ Bun は `DATABASE_URL`、Workers は Hyperdrive binding (`env.HYPERDRIVE.connect
 `runInTransaction` の interactive tx・`pg_advisory_xact_lock`・`SELECT ... FOR UPDATE` が Workers でも
 保たれる (race 直列化が正しさに関わるため必須)。
 
-### 3. Redis は Bun=node-redis / Workers=Upstash REST
+### 3. TTL store は Workers=Durable Objects / Bun=in-memory (ADR-0019 が supersede)
 
-`src/redis.ts` が `RedisStorage` (better-auth secondaryStorage) と `incrementRateWindow` (rate-limit
-プリミティブ) の interface 越しに 2 実装を init 時に選択する。Upstash REST はコネクションレスで Workers
-互換。`@upstash/redis` は `automaticDeserialization: false` で raw string 契約 (better-auth が JSON
-文字列を保存) に合わせる。選択は runtime 判定でなく **Upstash 認証情報の有無** で行う。
+当初は `src/redis.ts` が `RedisStorage` (better-auth secondaryStorage) と `incrementRateWindow` の
+interface 越しに node-redis (Bun) と Upstash REST (Workers) を init 時に選択していた。2026-09-20 に
+[ADR-0019](./0019-ttl-store-durable-objects.md) で Redis を撤去した。現在の backend と選択方法は ADR-0019 の Decision を正本とする。
 
 ### 4. RPC は fetch ハンドラ直配信 (connect-node proxy 廃止)
 
@@ -117,7 +117,7 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
 
 - **live binding で呼出側を無改修に保つ**: 移植の ripple を repository / handler に広げず、init の
   3 singleton と entry に閉じる。Workers の per-request env 制約を満たしつつ Bun も従来動作を保つ。
-- **capability で選ぶ (runtime sniff を避ける)**: redis backend は Upstash 認証情報の有無で、
+- **capability で選ぶ (runtime sniff を避ける)**: TTL store の backend は DO binding の有無で、
   DB verification は「その runtime で DB token 消費が完走するか」の capability で選ぶ。`storeInDatabase`
   だけは workerd の不具合回避のため `isBunRuntime()` を使うが、これは capability の近似。
 - **Postgres 据え置きが正しさを守る**: 削除/除名/orphan cascade は tx の原子性に依存する。D1/Turso/
@@ -156,15 +156,11 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
 - **`storeInDatabase` の根因は未追跡**: workerd で DB verification 消費が hang する根因 (better-auth
   の DB token 消費の tx/query パターン) は本番非経路のため深追いせず。再評価トリガー = better-auth が
   Workers 対応の DB verification 版を出した時。
-- **$0 は無料枠内で成立**: Workers / Neon / Upstash / Hyperdrive。日本単一・個人運用の低トラフィック
+- **$0 は無料枠内で成立**: Workers / Durable Objects / Neon / Hyperdrive。日本単一・個人運用の低トラフィック
   前提で、launch 時に各枠の実数値を再確認する。
-- **Upstash free tier の無活動アーカイブ**: 30 日間データ操作 (PING 不算入) が無いと DB がアーカイブされ
-  REST endpoint が消える。session / verification は Redis のみに置くため、その時点で magic link 送信が
-  500 になる (2026-09-03 に本番で発生。`/health` の `redis: error` と `wrangler tail` の
-  `UpstashJSONParseError ... error code: 1016` が目印)。対策は Cron Trigger (`wrangler.jsonc`
-  `triggers.crons`) から `src/worker.ts` の `scheduled` が毎日 TTL 付き SET を打つ keep-alive
-  (`src/redis-keepalive.ts`)。復旧は Upstash Console で DB を復元/再作成し `wrangler secret put` で
-  `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` を更新する。
+- **Upstash free tier の無活動アーカイブ (撤去済み)**: 30 日間データ操作が無いと DB がアーカイブされ REST
+  endpoint が消え、2026-09-03 に本番で magic link 送信が 500 になった。毎日の keep-alive cron で凌いでいたが、
+  ADR-0019 で Upstash ごと撤去した。
 - **Hyperdrive の query caching は無効にする**: Hyperdrive は既定で parameterized な SELECT の結果を
   max_age 60s / stale-while-revalidate 15s で cache する (tx 内の読み取りと mutation は対象外)。本 service
   の membership 読み取り (`findMembershipsByUserId`) は cacheable なので、signup → 事業所作成 → `/account`
@@ -174,7 +170,7 @@ spike で予測しきれず本番 (auth.taimei-code.com) で初めて踏んだ 2
   `wrangler hyperdrive get <id>` の `caching.disabled: true` を確認する (analysis.md の spike-1 で
   「本番 query caching の再確認」として持ち越していた項目の結論)。config を作り直す時は
   `--caching-disabled` を付ける。回帰確認は QA-MR-10。
-- **本番 secret/設定**: `wrangler secret put` で `AUTH_SECRET` / `AUTH_SERVICE_KEY` / `UPSTASH_*` /
+- **本番 secret/設定**: `wrangler secret put` で `AUTH_SECRET` / `AUTH_SERVICE_KEY` /
   `SENTRY_DSN` を注入。`hyperdrive.id` を実 config に、`vars` を本番値にする。DNS で `auth` subdomain
   を Workers に向ける。migration は CI から drizzle-kit で流す (Worker 内では実行しない)。
 

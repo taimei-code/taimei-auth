@@ -23,7 +23,6 @@ jobs:
 
     # db/__tests__/user-revision.test.ts が DB trigger を runtime で検証するため、
     # CI で postgres service を起動して migrate 適用後にテストを回す。
-    # src/__tests__/rate-limit.test.ts が Redis MULTI を runtime で検証するため redis service も必須。
     services:
       postgres:
         image: postgres:16.8-alpine3.21
@@ -38,19 +37,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
 
     env:
       DATABASE_URL: postgres://postgres:password@localhost:5432/auth
-      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -109,11 +98,6 @@ jobs:
       - name: Apply migrations
         run: bun run db:migrate && bun run db:migrate-manual
 
-      # redis 接続 lifecycle の cold 経路 (未接続のまま adapter 呼び出し) はフル実行では
-      # 辞書順で先行するファイルの接続に隠れて通ってしまうため、単独実行で退行を検出する
-      - name: Test (redis lifecycle subset)
-        run: bun test src/__tests__/redis-lifecycle.test.ts
-
       - name: Test
         run: bun test
 
@@ -138,19 +122,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
 
     env:
       DATABASE_URL: postgres://postgres:password@localhost:5432/auth
-      REDIS_URL: redis://localhost:6379
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -195,7 +169,7 @@ jobs:
     # 緑になる vacuous green を遮断する。script の assert_in_image / forbidden_entries、または image の中身から
     # 導出される probe 対象 (packages/auth-client/package.json の exports キー) を増減したときに更新する。
     env:
-      EXPECTED_DEV_ASSERTS: "20"
+      EXPECTED_DEV_ASSERTS: "21"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

@@ -11,7 +11,7 @@ import {
   totpCode,
 } from "../../mfa/__tests__/helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { getRedis } from "../../redis";
+import { getMemoryKvStore } from "../../redis";
 import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mfaChallenge } from "../mfa-challenge";
@@ -133,9 +133,7 @@ describe("MFA チャレンジ API", () => {
           method: "magic_link",
         });
         // TTL 経過の決定的な再現: 実 store の key を消す (固定 sleep は使わない)。
-        yield* Effect.promise(async () =>
-          (await getRedis()).del(challengeKey(challenge.challengeId)),
-        );
+        yield* Effect.sync(() => getMemoryKvStore().delete(challengeKey(challenge.challengeId)));
 
         const res = yield* verifyWith(buildApp(), challenge.headers, {
           code: yield* totpCode(enabled.secret),

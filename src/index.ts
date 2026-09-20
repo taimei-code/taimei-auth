@@ -1,9 +1,6 @@
-import { Effect } from "effect";
 import { serveStatic } from "hono/bun";
 import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "./app";
-import { pingRedis } from "./redis";
-import { getRuntime } from "./runtime";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { proxyTrustFromEnv } from "./request-context";
 
@@ -36,20 +33,6 @@ export const app = buildApp({
     honoApp.get("/account/*", spaFallback);
   },
 });
-
-const REDIS_BOOT_TIMEOUT_MS = 10_000;
-
-// timeout による打ち切りは必須 — redis 断のとき ping は resolve しない。
-const redisReachable = await getRuntime().runPromise(
-  Effect.promise(() => pingRedis()).pipe(
-    Effect.timeout(REDIS_BOOT_TIMEOUT_MS),
-    Effect.orElseSucceed(() => false),
-  ),
-);
-if (!redisReachable) {
-  console.error("FATAL: Redis is unreachable at boot.");
-  process.exit(1);
-}
 
 const port = Number(process.env.PORT) || 3100;
 console.log(`auth-service listening on port ${port}`);

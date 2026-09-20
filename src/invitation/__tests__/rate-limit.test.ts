@@ -3,7 +3,7 @@ import { Effect, Layer } from "effect";
 import { expectFailure } from "../../__tests__/live-runner";
 import { failingRedisLayer } from "../../__tests__/test-layers";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import { getRedis } from "../../redis";
+import { getMemoryKvStore } from "../../redis";
 import { type Redis, RedisLive } from "../../redis-service";
 import { SentryLive, type SentryService } from "../../sentry";
 import { RateLimited } from "../errors";
@@ -17,9 +17,8 @@ const bucketKey = () =>
   `invitation_rate:${COMPANY}:${new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length)}`;
 
 const clearBucket = async () => {
-  const r = await getRedis();
-  const keys = await r.keys(`invitation_rate:${COMPANY}:*`);
-  if (keys.length) await r.del(keys);
+  const store = getMemoryKvStore();
+  for (const key of store.keys(`invitation_rate:${COMPANY}:`)) store.delete(key);
 };
 
 const run = <A, E>(
@@ -43,25 +42,25 @@ describe("consumeInvitationQuota", () => {
   });
 });
 
-describe("consumeInvitationQuota (live Redis)", () => {
+describe("consumeInvitationQuota (in-memory TTL store)", () => {
   beforeEach(clearBucket);
   afterAll(clearBucket);
 
   test("AC-026 / AC-028 49 hit 済みの bucket への 50 hit 目は通し、key は固定 window の書式で 1 つ", async () => {
-    const r = await getRedis();
-    await r.set(bucketKey(), "49", { EX: 3600 });
+    const store = getMemoryKvStore();
+    store.set(bucketKey(), "49", 3600);
     expect(await run(consumeInvitationQuota(COMPANY))).toBeUndefined();
 
-    const keys = await r.keys(`invitation_rate:${COMPANY}:*`);
+    const keys = store.keys(`invitation_rate:${COMPANY}:`);
     expect(keys).toHaveLength(1);
     expect(keys[0]).toMatch(/^invitation_rate:invitation-rate-limit-test:\d{4}-\d{2}-\d{2}T\d{2}$/);
-    const ttl = await r.ttl(keys[0] as string);
+    const ttl = store.ttl(keys[0] as string);
     expect(ttl).toBeGreaterThanOrEqual(1);
     expect(ttl).toBeLessThanOrEqual(3600);
   });
 
   test("AC-027 50 hit 済みの bucket への 51 hit 目は拒否する", async () => {
-    await (await getRedis()).set(bucketKey(), "50", { EX: 3600 });
+    getMemoryKvStore().set(bucketKey(), "50", 3600);
     const e = await run(Effect.flip(consumeInvitationQuota(COMPANY)));
     expectFailure(e, RateLimited, "rate_limited", 429);
   });

@@ -21,7 +21,7 @@ const REDIS_TIMEOUT = "2 seconds";
 const retrySchedule = Schedule.exponential("100 millis").pipe(Schedule.jittered);
 const withRedisTimeout = timeoutAsBoundary((cause) => new RedisError({ cause }), REDIS_TIMEOUT);
 
-export const withRedisRetry = <A, R>(
+const withRedisRetry = <A, R>(
   effect: Effect.Effect<A, RedisError, R>,
 ): Effect.Effect<A, RedisError, R> =>
   effect.pipe(Effect.retry({ schedule: retrySchedule, times: 3 }));

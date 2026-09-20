@@ -121,8 +121,8 @@
                 "patterns": [
                   {
                     "group": ["**/redis"],
-                    "importNamePattern": "getRedis",
-                    "message": "getRedis はテストの key 直接操作専用の生 client accessor。production は redisStorage / incrementRateWindow の interface 越しに使うこと"
+                    "importNamePattern": "getMemoryKvStore",
+                    "message": "getMemoryKvStore はテストの key 直接操作専用の accessor。production は redisStorage / incrementRateWindow の interface 越しに使うこと"
                   },
                   {
                     "group": [

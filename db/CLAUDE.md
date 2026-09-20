@@ -53,7 +53,7 @@ const rows = await db.select().from(user).where(...);  // NG
 
 自前 MFA テーブル (`mfa_totp` / `mfa_recovery_code`) は better-auth が複製しないため、repository (`db/repositories/mfa-totp.ts`) 経由の直接 write が正 (Session/User 例外の対象外。設計: ADR-0016)。
 
-例外: `Session` / `User` の **削除・更新** は `db/repositories/<entity>.ts` を作らず、`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、複製の更新を lifecycle hook に委ねる。理由は複製が 2 層あるため: (1) session の実体は Redis (secondaryStorage) のみで DB の `session` テーブルに行は無く (CONTEXT.md の session)、SQL 直操作は消したはずの session を Redis に残す。(2) user は DB が正本だが、各 active session の Redis payload と cookieCache (署名付き cookie、`session.cookieCache` maxAge 5 分) に複製され、SQL 直更新はこれらに届かない (better-auth の updateUser は Redis payload を書き直し、cookieCache は最大 5 分で失効して追いつく)。`Session` repository を作らないのはこの理由。詳細: PR #34 → #35
+例外: `Session` / `User` の **削除・更新** は `db/repositories/<entity>.ts` を作らず、`auth.api.signOut({ headers })` / `auth.api.updateUser` 等の better-auth API 経由で行い、複製の更新を lifecycle hook に委ねる。理由は複製が 2 層あるため: (1) session の実体は TTL store (CONTEXT.md) のみで DB の `session` テーブルに行は無く (CONTEXT.md の session)、SQL 直操作は消したはずの session を TTL store に残す。(2) user は DB が正本だが、各 active session の TTL store の payload と cookieCache (署名付き cookie、`session.cookieCache` maxAge 5 分) に複製され、SQL 直更新はこれらに届かない (better-auth の updateUser は TTL store の payload を書き直し、cookieCache は最大 5 分で失効して追いつく)。`Session` repository を作らないのはこの理由。詳細: PR #34 → #35
 
 ## ルール 8: drizzle-kit が管理できない SQL は `drizzle/manual/` に分離する
 

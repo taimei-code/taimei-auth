@@ -33,7 +33,6 @@
     "@sentry/bun": "^10.51.0",
     "@sentry/cloudflare": "^10.57.0",
     "@taimei-code/auth-client": "workspace:*",
-    "@upstash/redis": "^1.38.0",
     "@vercel/blob": "^2.3.3",
     "better-auth": "^1.6.23",
     "drizzle-orm": "^0.45.2",
@@ -44,7 +43,6 @@
     "pg": "^8.16.3",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "redis": "^5.11.0",
     "resend": "^6.6.0",
     "zod": "^4.4.3"
   },

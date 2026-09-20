@@ -5,6 +5,14 @@
 # - AUTH_SERVICE_URL を 3110 に向けないと magic link の verify URL が compose (3100) を指す
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# 旧 `bun run src/index.ts` は .env を自動で読んでいた。wrangler dev は --env-file だけを読むため、
+# 明示 export の前に .env を読む (下の export が優先)。
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  . ./.env
+  set +a
+fi
 
 # vite define が build 時の APP_ENV を client bundle に焼き込む (未設定は production 扱いで
 # SPA 側 allowlist が localhost を拒否する) ため、e2e build は明示的に development にする
@@ -16,4 +24,6 @@ bun run e2e/seed.ts
 # src/mfa/__tests__/helpers.ts の既定値と同一)
 export MFA_TOTP_ENCRYPTION_KEYS="${MFA_TOTP_ENCRYPTION_KEYS:-v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
 
-PORT=3110 AUTH_SERVICE_URL=http://localhost:3110 bun run src/index.ts 2>&1 | tee -a e2e/.server.log
+export APP_ENV=development APP_NAME="${APP_NAME:-taimei}" PORT=3110
+export AUTH_SERVICE_URL=http://localhost:3110 AUTH_TRUSTED_ORIGINS=http://localhost:3110 AUTH_COOKIE_DOMAIN=
+bash scripts/wrangler-dev.sh 2>&1 | tee -a e2e/.server.log

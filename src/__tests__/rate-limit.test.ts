@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { createRateLimitMiddleware, rateLimitProgram } from "../rate-limit";
-import { getRedis } from "../redis";
+import { getMemoryKvStore } from "../redis";
 import type { Redis } from "../redis-service";
 import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
@@ -54,10 +54,9 @@ const buildApp = (key: string, limit: number, windowSec = 60) => {
 };
 
 describe("rate-limit middleware", () => {
-  beforeEach(async () => {
-    const redis = await getRedis();
-    const keys = await redis.keys("rate-limit:test:*");
-    if (keys.length > 0) await redis.del(keys);
+  beforeEach(() => {
+    const store = getMemoryKvStore();
+    for (const key of store.keys("rate-limit:test:")) store.delete(key);
   });
 
   test("limit 5 で 6 req 目に 429 + Retry-After", async () => {

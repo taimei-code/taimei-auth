@@ -26,7 +26,7 @@ function buildAuth() {
 
     secondaryStorage: redisStorage,
 
-    // Workers は DB の verification token 消費が hang するため local Bun e2e のときだけ true にする。
+    // Workers は DB の verification token 消費が hang するため Bun の local 実行 (bun test / bun run dev) だけ true にする。
     verification: {
       storeInDatabase: isBunRuntime() && isLocalEnvironment(),
     },

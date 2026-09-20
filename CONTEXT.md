@@ -16,7 +16,7 @@ _Avoid_: メンバーシップ (カタカナ語、UI に冗長), affiliation (�
 
 **current_company_id** / **last_used_company_id**:
 2 つの近接概念を分離して使い分ける (詳細: PR #55 → #63):
-- `session.current_company_id` (`Session.company_id` proto field): **現在 active な事業所**。1 session 内で操作対象となる事業所。`/account` の CompanySwitcher で切替可能、`SetCurrentCompany` RPC で UPDATE + Redis cookieCache invalidate。`NULL` = 「事業所未選択」状態 (= membership 0 件 / 唯一 company DELETED 直後)
+- `session.current_company_id` (`Session.company_id` proto field): **現在 active な事業所**。1 session 内で操作対象となる事業所。`/account` の CompanySwitcher で切替可能、`SetCurrentCompany` RPC で UPDATE + **TTL store** の cookieCache invalidate。`NULL` = 「事業所未選択」状態 (= membership 0 件 / 唯一 company DELETED 直後)
 - `user.last_used_company_id` (`User.default_company_id` proto field): **新規 session 確立時の default 候補**。better-auth lifecycle hook が session 確立時にこの値を `current_company_id` に copy する
 _Avoid_: default_company_id (user 列だが proto field のみ。DB 列名は last_used_company_id), active_company_id (current_company_id の同義語、混在禁止)
 
@@ -121,7 +121,7 @@ _Avoid_: 2FA / 二要素認証 (要素数を 2 に固定する語。第二要素
 _Avoid_: OTP / ワンタイムパスワード (メール OTP・SMS OTP を含む広義語。いずれも提供しない), 認証コード (**Magic Link** の token と紛らわしい)
 
 **MFA チャレンジ**:
-一次認証は成功したが第二要素が未検証、という中間状態そのもの。署名付き cookie `mfa_login_challenge` + Redis 1 key (TTL 600 秒) で 1 チャレンジを構成し、cookie が持つ challengeId で識別する。発行時点で一次認証が作った **session** は破棄されるため、チャレンジ保留中の user は consumer app からは未認証に見える。通過手段は **TOTP** コードまたは **リカバリーコード**。詳細: ADR-0016。
+一次認証は成功したが第二要素が未検証、という中間状態そのもの。署名付き cookie `mfa_login_challenge` + **TTL store** 1 key (TTL 600 秒) で 1 チャレンジを構成し、cookie が持つ challengeId で識別する。発行時点で一次認証が作った **session** は破棄されるため、チャレンジ保留中の user は consumer app からは未認証に見える。通過手段は **TOTP** コードまたは **リカバリーコード**。詳細: ADR-0016。
 _Avoid_: 2FA チャレンジ, 二段階認証画面 (画面は状態の表現の一つに過ぎない), pending session (session は存在しないため誤り)
 
 **kill switch**:
@@ -149,23 +149,27 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コード識別子としてのみ使う), 救済スクリプト (実装形態名)
 
 **試行枠**:
-window 内の試行回数の上限。**auth ホスト** が Redis の計数で守る防御で、経路ごとに「数えられない時の倒し方」(**fail-closed / fail-open**) を明示して決め、暗黙の既定を持たない。fail-closed: **多要素認証 (MFA)** のコード検証 (ログインチャレンジと無効化)。fail-open: HTTP 経路別の IP / session 軸 (**Magic Link**、canary token、**MFA チャレンジ** の API、MFA 状態変更) と **事業所** 単位の招待。code 上の「rate limit」(HTTP 429 を返す middleware) と「quota」(招待) は同じ概念の別名で、設計語彙では **試行枠** に統一する。MFA だけを fail-closed に倒す理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
+window 内の試行回数の上限。**auth ホスト** が **TTL store** の計数で守る防御で、経路ごとに「数えられない時の倒し方」(**fail-closed / fail-open**) を明示して決め、暗黙の既定を持たない。fail-closed: **多要素認証 (MFA)** のコード検証 (ログインチャレンジと無効化)。fail-open: HTTP 経路別の IP / session 軸 (**Magic Link**、canary token、**MFA チャレンジ** の API、MFA 状態変更) と **事業所** 単位の招待。code 上の「rate limit」(HTTP 429 を返す middleware) と「quota」(招待) は同じ概念の別名で、設計語彙では **試行枠** に統一する。MFA だけを fail-closed に倒す理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
 _Avoid_: rate limit / quota / attempt budget (code の識別子に残る別名。設計語彙では使わない), throttling (より広義)
 
 **fail-closed / fail-open**:
-判断材料が得られない時 (Redis で数えられない、**session** から actor を解決できない) にどちらへ倒すか。fail-closed は拒否に倒し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open に倒し、通すと第二要素の総当たり防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor 解決) は fail-closed に倒す。未知 role は状態として存在しない (**role** の項)。fail-open で通した事実は Sentry に残し、silent には通さない。
+判断材料が得られない時 (**TTL store** で数えられない、**session** から actor を解決できない) にどちらへ倒すか。fail-closed は拒否に倒し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open に倒し、通すと第二要素の総当たり防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor 解決) は fail-closed に倒す。未知 role は状態として存在しない (**role** の項)。fail-open で通した事実は Sentry に残し、silent には通さない。
 _Avoid_: fail-safe (どちらの倒し方かを示さない), graceful degradation (倒し方でなく体験の話)
 
 **session**:
-better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別し、実体は Redis (secondaryStorage) のみに保管する。`session.storeSessionInDatabase` を有効にしていないため Postgres の `session` テーブルには行を書かない (テーブル定義は better-auth の schema 要求として残る)。`auth.api.getSession({ headers })` で server-side 取得。
+better-auth が管理する認証状態。Cookie (`.taimei-code.com` ドメイン) で識別し、実体は **TTL store** のみに保管する。`session.storeSessionInDatabase` を有効にしていないため Postgres の `session` テーブルには行を書かない (テーブル定義は better-auth の schema 要求として残る)。`auth.api.getSession({ headers })` で server-side 取得。
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
+
+**TTL store**:
+TTL 付きの短命状態 (**session** / verification / **試行枠** の計数 / **MFA チャレンジ**) を置く store。Workers では Durable Objects、Bun では in-memory。Postgres には書かない。entry は全て TTL を持ち、失効は store 側が行う。詳細: ADR-0019。
+_Avoid_: Redis (2026-09 に撤去した実装名), secondaryStorage (better-auth の API 語), KV (Cloudflare KV と紛らわしく、結果整合の含意がある), cache (失うと session が消えるので cache ではない), 揮発 store (Durable Objects は永続)
 
 **session cookie**:
 **session** を識別する署名付き cookie (`better-auth.session_token`、HTTPS では `__Secure-` 接頭辞)。発行者は 2 つ: 通常ログイン (better-auth) と **MFA チャレンジ** 通過後の発行 (`src/mfa/gateway.ts`)。Set-Cookie に載る値は両者とも percent-encoding 済みの署名付き値で、属性 (Max-Age / Path / Domain / HttpOnly / Secure / SameSite) も 2 発行者で同一。`@taimei-code/auth-client` と consumer app は値の中身を解釈せず、decode も encode もしない。値の形式と属性同一性は `src/__tests__/session-cookie-contract.test.ts` が固定する。
-_Avoid_: session token (署名を除いた Redis key の方), session (識別される状態の方)
+_Avoid_: session token (署名を除いた **TTL store** の key の方), session (識別される状態の方)
 
 **sign-out**:
-ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie (session token + cookieCache) の削除と Redis 上の session 削除を伴う (Postgres `session` 行は書かれていないので削除対象も無い)。UI 文言は「ログアウト」(既存ボタンラベル・失敗トーストもこれに合わせる)。設計・コード語彙は sign-out。
+ユーザー自身が `auth.api.signOut()` を呼び、current **session** を意図的に terminate する操作。Cookie (session token + cookieCache) の削除と **TTL store** 上の session 削除を伴う (Postgres `session` 行は書かれていないので削除対象も無い)。UI 文言は「ログアウト」(既存ボタンラベル・失敗トーストもこれに合わせる)。設計・コード語彙は sign-out。
 _Avoid_: logout (英語混在を避ける), session 終了 (より広義)
 
 **session revoke**:
@@ -220,3 +224,4 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた — resolved: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないため本 glossary に置かず、正本は ADR-0017
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化
 - 「rate limit」「quota」「attempt budget」が code 上で並存し、同じ「window 内の試行上限」を指していた — resolved: 設計語彙は **試行枠** に統一、code の識別子は別名として据え置き
+- 「Redis」は 2026-09 まで **TTL store** の実装名 (Upstash / node-redis) で、glossary でも保存先を指す語として使っていた — resolved: 実装を Durable Objects / in-memory に替えた (ADR-0019) 際に **TTL store** を canonical 化。code の `redis.ts` / `Redis` service / `RedisError` は識別子として据え置き
