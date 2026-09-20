@@ -44,7 +44,8 @@ export class KvStore<Env = unknown> extends DurableObject<Env> {
   }
 
   async alarm(): Promise<void> {
-    if (await this.live()) return;
-    await this.delete();
+    const entry = await this.live();
+    if (!entry) return this.delete();
+    if (entry.expiresAt !== null) await this.ctx.storage.setAlarm(entry.expiresAt);
   }
 }

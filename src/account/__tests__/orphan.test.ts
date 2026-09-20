@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { getRedis } from "../../redis";
+import { getMemoryKvStore } from "../../redis";
 import { runTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteAccountIfOrphaned } from "../orphan";
@@ -8,22 +8,20 @@ import { deleteAccountIfOrphaned } from "../orphan";
 const P = "orphan-test-";
 const run = runTest(P);
 
-const redis = () => Effect.promise(() => getRedis());
-
 const cleanup = () =>
   run(
     Effect.gen(function* () {
       yield* (yield* TestDb).cleanup();
-      const r = yield* redis();
-      yield* Effect.promise(() =>
-        r.del([
-          `${P}rtok-1`,
-          `${P}rtok-2`,
-          `active-sessions-${P}u-redis`,
-          `${P}rtok-kept`,
-          `active-sessions-${P}u-rkept`,
-        ]),
-      );
+      const s = getMemoryKvStore();
+      for (const key of [
+        `${P}rtok-1`,
+        `${P}rtok-2`,
+        `active-sessions-${P}u-store`,
+        `${P}rtok-kept`,
+        `active-sessions-${P}u-rkept`,
+      ]) {
+        s.delete(key);
+      }
     }),
   );
 
@@ -37,21 +35,20 @@ const seedUser = (suffix: string) =>
 
 // better-auth secondaryStorage の実保存形状を再現する: session 実体は token 文字列キー、
 // user の生存 session 一覧は active-sessions-{userId} (deleteUserSessions が読む索引)。
-const seedRedisSessions = (userId: string, tokens: string[]) =>
-  Effect.promise(async () => {
-    const r = await getRedis();
+const seedSessions = (userId: string, tokens: string[]) =>
+  Effect.sync(() => {
+    const s = getMemoryKvStore();
     const expiresAt = Date.now() + 86_400_000;
     for (const token of tokens) {
-      await r.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
+      s.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
     }
-    await r.set(
+    s.set(
       `active-sessions-${userId}`,
       JSON.stringify(tokens.map((token) => ({ token, expiresAt }))),
     );
   });
 
-const redisGet = (key: string) =>
-  redis().pipe(Effect.flatMap((r) => Effect.promise(() => r.get(key))));
+const storeGet = (key: string) => Effect.sync(() => getMemoryKvStore().get(key));
 
 const countAccountDeleteAudit = (userId: string) =>
   TestDb.use((db) => db.readAuditRows(userId, "account_delete")).pipe(
@@ -124,16 +121,16 @@ describe("deleteAccountIfOrphaned", () => {
   test("orphan 削除は secondaryStorage (Redis) の session 実体と索引も purge する", () =>
     run(
       Effect.gen(function* () {
-        const userId = yield* seedUser("redis");
+        const userId = yield* seedUser("store");
         const tokens = [`${P}rtok-1`, `${P}rtok-2`];
-        yield* seedRedisSessions(userId, tokens);
+        yield* seedSessions(userId, tokens);
 
         const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
         expect(deleted).toBe(true);
-        expect(yield* redisGet(`${P}rtok-1`)).toBeNull();
-        expect(yield* redisGet(`${P}rtok-2`)).toBeNull();
-        expect(yield* redisGet(`active-sessions-${userId}`)).toBeNull();
+        expect(yield* storeGet(`${P}rtok-1`)).toBeNull();
+        expect(yield* storeGet(`${P}rtok-2`)).toBeNull();
+        expect(yield* storeGet(`active-sessions-${userId}`)).toBeNull();
       }),
     ));
 
@@ -144,13 +141,13 @@ describe("deleteAccountIfOrphaned", () => {
         const userId = yield* seedUser("rkept");
         const companyId = yield* db.seedCompany("rkept");
         yield* db.seedMembership(userId, companyId, "OWNER");
-        yield* seedRedisSessions(userId, [`${P}rtok-kept`]);
+        yield* seedSessions(userId, [`${P}rtok-kept`]);
 
         const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
         expect(deleted).toBe(false);
-        expect(yield* redisGet(`${P}rtok-kept`)).not.toBeNull();
-        expect(yield* redisGet(`active-sessions-${userId}`)).not.toBeNull();
+        expect(yield* storeGet(`${P}rtok-kept`)).not.toBeNull();
+        expect(yield* storeGet(`active-sessions-${userId}`)).not.toBeNull();
       }),
     ));
 });

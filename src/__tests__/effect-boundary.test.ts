@@ -304,12 +304,10 @@ describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
 // ---- runtime.ts の静的 import (src/CLAUDE.md「Effect様式」の TDZ 規則): auth.ts から静的に辿れる module に生えると環で TDZ になる ----
 
 describe("runtime.ts の静的 import", () => {
-  test("adapter (run-route / run-rpc) と entry (index / worker) に限る", () => {
+  test("adapter (run-route / run-rpc) に限る", () => {
     expect(valueImportFiles(RUNTIME_IMPORTS, "src", { excludeTests: true })).toEqual([
       "src/handlers/run-route.ts",
-      "src/index.ts",
       "src/rpc/run-rpc.ts",
-      "src/worker.ts",
     ]);
   });
 });

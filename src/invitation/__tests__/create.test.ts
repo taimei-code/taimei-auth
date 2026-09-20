@@ -11,7 +11,7 @@ import {
 } from "../../handlers/__tests__/helpers";
 import { dbTest, drained, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { getRedis } from "../../redis";
+import { getMemoryKvStore } from "../../redis";
 import { createInvitation } from "../create";
 import { RateLimited } from "../errors";
 
@@ -28,36 +28,29 @@ const { run, cleanup } = dbTest(TEST_PREFIX);
 const invitationRowsByEmail = (companyId: string, email: string) =>
   TestDb.use((db) => db.readInvitationsByEmail(companyId, email));
 
-const redis = () => Effect.promise(() => getRedis());
-
 // invitation_rate:<companyId>:<hourBucket> の hit 数を返す。key 未生成なら 0。
 // hour bucket をまたぐ現象は test 内では発生しないため decode の複雑さは避ける。
 const rateCount = (companyId: string) =>
-  Effect.gen(function* () {
-    const r = yield* redis();
-    const keys = yield* Effect.promise(() => r.keys(`invitation_rate:${companyId}:*`));
-    const vals = yield* Effect.forEach(keys, (k) => Effect.promise(() => r.get(k)), {
-      concurrency: "unbounded",
-    });
-    return vals.reduce((acc, v) => acc + (v ? Number(v) : 0), 0);
+  Effect.sync(() => {
+    const s = getMemoryKvStore();
+    return s
+      .keys(`invitation_rate:${companyId}:`)
+      .reduce((acc, k) => acc + Number(s.get(k) ?? 0), 0);
   });
 
 // key を消して bucket を先入れ状態にする helper (rate 上限テストで手動 pre-set する場合に使う)。
 const clearRateKey = (companyId: string) =>
-  Effect.promise(async () => {
-    const r = await getRedis();
-    const keys = await r.keys(`invitation_rate:${companyId}:*`);
-    if (keys.length) await r.del(keys);
+  Effect.sync(() => {
+    const s = getMemoryKvStore();
+    for (const k of s.keys(`invitation_rate:${companyId}:`)) s.delete(k);
   });
 
 const presetRate = (companyId: string, value: string) =>
-  redis().pipe(
-    Effect.flatMap((r) =>
-      Effect.promise(() =>
-        r.set(`invitation_rate:${companyId}:${new Date().toISOString().slice(0, 13)}`, value, {
-          EX: 3600,
-        }),
-      ),
+  Effect.sync(() =>
+    getMemoryKvStore().set(
+      `invitation_rate:${companyId}:${new Date().toISOString().slice(0, 13)}`,
+      value,
+      3600,
     ),
   );
 

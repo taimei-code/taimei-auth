@@ -3,17 +3,15 @@ import type { Hono } from "hono";
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
 import { KvStore as KvStoreBase } from "./kv-store.do";
-import { initRedis } from "./redis";
-import { touchRedisKeepAliveProgram } from "./redis-keepalive";
+import { initRedis, type KvStoreNamespace } from "./redis";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
-import { getRuntime } from "./runtime";
 import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
-  KV_STORE: DurableObjectNamespace<KvStoreBase>;
+  KV_STORE: KvStoreNamespace;
   CF_VERSION_METADATA: WorkerVersionMetadata;
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SENTRY_DSN?: string;
@@ -37,7 +35,7 @@ function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  initRedis();
+  initRedis(env.KV_STORE);
   initAuth();
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
@@ -73,12 +71,6 @@ const handler = {
         ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));
       }
     });
-  },
-
-  async scheduled(_controller: unknown, env: Env, _ctx: ExecutionCtx): Promise<void> {
-    copyEnvToProcess(env);
-    initRedis();
-    await getRuntime().runPromise(touchRedisKeepAliveProgram);
   },
 };
 
