@@ -62,4 +62,6 @@ COPY . .
 # consumer への位置契約)。runner を最終に置いた時の壊れ方・consumer 側の pin 状況・機械検証の内訳:
 # docs/adr/0014-docker-runner-dev-stage-separation.md
 FROM web-build AS dev
+# oven/bun の node は bun への fallback shim で、wrangler が Bun runtime を拒否するため本物の Node.js を重ねる。
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY . .

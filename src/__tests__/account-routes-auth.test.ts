@@ -43,7 +43,7 @@ describe("account routes は cookie 無しで全て 401", () => {
     test(`${method} ${path} → 401 unauthorized`, async () => {
       const res = await app.request(`http://localhost${path}`, { method });
       expect(res.status).toBe(401);
-      expect(await res.json()).toEqual({ error: "unauthorized" });
+      expect(await res.json<unknown>()).toEqual({ error: "unauthorized" });
     });
   }
 });

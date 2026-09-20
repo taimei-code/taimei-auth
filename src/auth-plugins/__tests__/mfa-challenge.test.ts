@@ -21,7 +21,7 @@ import {
   readLoginChallengeState,
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
-import { getRedis, redisStorage } from "../../redis";
+import { getMemoryKvStore, redisStorage } from "../../redis";
 import { Redis } from "../../redis-service";
 import { SentryService } from "../../sentry";
 import { partial, runTest } from "../../__tests__/live-runner";
@@ -69,13 +69,10 @@ const trackChallengeFrom = (headers: Headers) =>
       }),
     ),
   );
-const cleanupTrackedChallenges = Effect.gen(function* () {
-  const redis = yield* Effect.promise(() => getRedis());
-  yield* Effect.forEach(
-    issuedIds.flatMap((id) => [challengeKey(id), attemptsKey(id)]),
-    (key) => Effect.promise(() => redis.del(key)),
-    { concurrency: "unbounded" },
-  );
+const cleanupTrackedChallenges = Effect.sync(() => {
+  const store = getMemoryKvStore();
+  for (const key of issuedIds.flatMap((id) => [challengeKey(id), attemptsKey(id)]))
+    store.delete(key);
   issuedIds.length = 0;
 });
 

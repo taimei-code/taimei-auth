@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { getRedis } from "../../redis";
+import { getMemoryKvStore } from "../../redis";
 import { runTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteAccountIfOrphaned } from "../orphan";
@@ -8,22 +8,22 @@ import { deleteAccountIfOrphaned } from "../orphan";
 const P = "orphan-test-";
 const run = runTest(P);
 
-const redis = () => Effect.promise(() => getRedis());
+const store = () => Effect.sync(() => getMemoryKvStore());
 
 const cleanup = () =>
   run(
     Effect.gen(function* () {
       yield* (yield* TestDb).cleanup();
-      const r = yield* redis();
-      yield* Effect.promise(() =>
-        r.del([
-          `${P}rtok-1`,
-          `${P}rtok-2`,
-          `active-sessions-${P}u-redis`,
-          `${P}rtok-kept`,
-          `active-sessions-${P}u-rkept`,
-        ]),
-      );
+      const s = yield* store();
+      for (const key of [
+        `${P}rtok-1`,
+        `${P}rtok-2`,
+        `active-sessions-${P}u-redis`,
+        `${P}rtok-kept`,
+        `active-sessions-${P}u-rkept`,
+      ]) {
+        s.delete(key);
+      }
     }),
   );
 
@@ -38,20 +38,19 @@ const seedUser = (suffix: string) =>
 // better-auth secondaryStorage の実保存形状を再現する: session 実体は token 文字列キー、
 // user の生存 session 一覧は active-sessions-{userId} (deleteUserSessions が読む索引)。
 const seedRedisSessions = (userId: string, tokens: string[]) =>
-  Effect.promise(async () => {
-    const r = await getRedis();
+  Effect.sync(() => {
+    const s = getMemoryKvStore();
     const expiresAt = Date.now() + 86_400_000;
     for (const token of tokens) {
-      await r.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
+      s.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
     }
-    await r.set(
+    s.set(
       `active-sessions-${userId}`,
       JSON.stringify(tokens.map((token) => ({ token, expiresAt }))),
     );
   });
 
-const redisGet = (key: string) =>
-  redis().pipe(Effect.flatMap((r) => Effect.promise(() => r.get(key))));
+const redisGet = (key: string) => store().pipe(Effect.map((s) => s.get(key)));
 
 const countAccountDeleteAudit = (userId: string) =>
   TestDb.use((db) => db.readAuditRows(userId, "account_delete")).pipe(

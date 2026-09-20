@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { requestApp } from "../handlers/__tests__/helpers";
 import { Effect } from "effect";
 import { app } from "../index";
-import { getRedis } from "../redis";
+import { getMemoryKvStore } from "../redis";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
@@ -83,8 +83,7 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
   // GET /api/mfa/challenge は requireActor を通らない未認証経路で、有効なチャレンジ cookie が
   // 付けば 1 リクエストで Redis 3 往復を引く。枠の登録漏れは 404 と違って画面が正常に見えるため、
   // handler でなく組み立て済み app の枠消費を直に見る (429 で見ないのは local 緩和で到達しないため)。
-  const windowCount = (key: string) =>
-    Effect.promise(async () => Number((await (await getRedis()).get(key)) ?? 0));
+  const windowCount = (key: string) => Effect.sync(() => Number(getMemoryKvStore().get(key) ?? 0));
 
   // 窓は TTL (60 秒) で自然に消えるため後始末は置かない。IP literal 以外は unknown へ落ちて窓を
   // 共有するため (request-context.ts)、下位 2 octet を振って test 間の衝突だけを避ける。

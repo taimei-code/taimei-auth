@@ -1,7 +1,7 @@
 {
   // Cloudflare Workers 設定。設計詳細: docs/adr/0011-cloudflare-workers-migration.md
   // 本番では hyperdrive.id を実 Hyperdrive config id に、vars を本番値に、
-  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / UPSTASH_* / SENTRY_DSN / MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
+  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / SENTRY_DSN / MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
   // ローカルは localConnectionString + .dev.vars (gitignore 済) を使う。
   "name": "taimei-auth",
   "main": "src/worker.ts",
@@ -15,10 +15,9 @@
     "run_worker_first": true,
     "not_found_handling": "single-page-application"
   },
-  // Upstash free tier は 30 日間データ操作が無いと DB をアーカイブし endpoint が消える (2026-09-03 に本番で
-  // magic link 送信が 500 になった原因)。毎日 03:00 JST に worker.ts の scheduled handler で TTL 付き SET を
-  // 1 回打つ (src/redis-keepalive.ts)。週 1 回以上であることを src/__tests__/wrangler-cron-keepalive.test.ts が固定する。
-  "triggers": { "crons": ["0 18 * * *"] },
+  // session / verification / 試行枠 / MFA challenge の実体。1 key = 1 object (src/kv-store.do.ts)。
+  "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
