@@ -90,7 +90,7 @@ describe("loginShortcut (fail-open)", () => {
   });
 
   test("AuthApi が AuthApiError → fail-open で /auth/ に 302、Sentry warning 1 件", async () => {
-    const cause = new Error("redis down");
+    const cause = new Error("ttl store down");
     const res = await runProgram("/login", authFailing(cause));
 
     expect(res.status).toBe(302);

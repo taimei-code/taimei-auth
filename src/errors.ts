@@ -4,16 +4,16 @@ export class DbError extends Data.TaggedError("DbError")<{ readonly cause: unkno
 
 export class AuthApiError extends Data.TaggedError("AuthApiError")<{ readonly cause: unknown }> {}
 
-export class RedisError extends Data.TaggedError("RedisError")<{ readonly cause: unknown }> {}
+export class TtlStoreError extends Data.TaggedError("TtlStoreError")<{ readonly cause: unknown }> {}
 
 export class EmailError extends Data.TaggedError("EmailError")<{ readonly cause: unknown }> {}
 
-export type BoundaryError = DbError | AuthApiError | RedisError | EmailError;
+export type BoundaryError = DbError | AuthApiError | TtlStoreError | EmailError;
 
 export const isBoundaryError = (e: unknown): e is BoundaryError =>
   e instanceof DbError ||
   e instanceof AuthApiError ||
-  e instanceof RedisError ||
+  e instanceof TtlStoreError ||
   e instanceof EmailError;
 
 const tryBoundary =
@@ -23,7 +23,7 @@ const tryBoundary =
 
 export const tryDb = tryBoundary((cause) => new DbError({ cause }));
 export const tryAuthApi = tryBoundary((cause) => new AuthApiError({ cause }));
-export const tryRedis = tryBoundary((cause) => new RedisError({ cause }));
+export const tryTtlStore = tryBoundary((cause) => new TtlStoreError({ cause }));
 export const tryEmail = tryBoundary((cause) => new EmailError({ cause }));
 
 type Lifted<F extends (...args: never[]) => Promise<unknown>> = (

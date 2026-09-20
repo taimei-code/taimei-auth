@@ -3,7 +3,7 @@ import { AccountLayers } from "./account/wiring";
 import { BackgroundLive } from "./background";
 import { EmailSenderLive } from "./email/wiring";
 import { HealthRepoLive } from "./health/wiring";
-import { RedisLive } from "./redis-service";
+import { TtlStoreLive } from "./ttl-store-service";
 import { SentryLive } from "./sentry";
 import { AuditLogLive } from "./audit/wiring";
 import { AuthApiLive } from "./auth-service";
@@ -24,7 +24,7 @@ export const AppLayer = Layer.mergeAll(
   MfaLayers,
   TransactionLive,
   IdGeneratorLive,
-  RedisLive,
+  TtlStoreLive,
   SentryLive,
   BackgroundLive,
   EmailSenderLive,

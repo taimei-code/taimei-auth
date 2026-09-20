@@ -12,7 +12,7 @@ import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
 import { captureThrown } from "./handlers/wire-error";
 import { MembershipRepo } from "./membership/ports";
-import { redisStorage } from "./redis";
+import { ttlStorage } from "./ttl-store";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
@@ -24,7 +24,7 @@ function buildAuth() {
     // appName は MFA の TOTP issuer。enroll と再表示で同じ値でないと認証アプリのエントリが割れる。
     appName: getAppName(),
 
-    secondaryStorage: redisStorage,
+    secondaryStorage: ttlStorage,
 
     // Workers は DB の verification token 消費が hang するため Bun の local 実行 (bun test / bun run dev) だけ true にする。
     verification: {
@@ -135,7 +135,7 @@ export function initAuth(): void {
 
 export type Session = ReturnType<typeof buildAuth>["$Infer"]["Session"];
 
-// Bun / Node は import 時に db / redisStorage が init 済みのため auth も自動 init (Workers は worker entry)。
+// Bun / Node は import 時に db / ttlStorage が init 済みのため auth も自動 init (Workers は worker entry)。
 if (isBunRuntime()) {
   initAuth();
 }

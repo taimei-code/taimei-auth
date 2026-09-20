@@ -48,7 +48,7 @@ const sessionCookieAttributes = () =>
 
 // ブラウザが送り返す request の Cookie header は Set-Cookie の先頭 pair と同じ形。
 const asRequestCookieHeader = (setCookie: string) => setCookie.split(";")[0];
-// Redis の session key は署名を除いた token。
+// TTL store の session key は署名を除いた token。
 const tokenWithoutSignature = (value: string) => {
   const decoded = decodeURIComponent(value);
   return decoded.slice(0, decoded.lastIndexOf("."));
@@ -69,7 +69,7 @@ const attributeSet = (setCookie: string) =>
       .map((part) => (part.startsWith("Max-Age=") ? "Max-Age" : part)),
   );
 
-// 発行した session は Redis にしか無いので、test が消す (TTL 7 日を待たない)。
+// 発行した session は TTL store にしか無いので、test が消す (TTL 7 日を待たない)。
 const issuedTokens: string[] = [];
 const rememberForCleanup = (setCookies: string[]) => {
   issuedTokens.push(...setCookies.map((cookie) => tokenWithoutSignature(setCookieValue(cookie))));

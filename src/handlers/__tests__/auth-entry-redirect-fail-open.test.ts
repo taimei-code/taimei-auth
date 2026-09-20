@@ -10,7 +10,7 @@ import { SentryLive } from "../../sentry";
 import { authEntryRedirectProgram } from "../auth-entry-redirect";
 import { runProgramInRoute } from "./run-program-in-route";
 
-// session-aware redirect は利便であって認可ではないため、better-auth / Redis の transient 障害では 500 を
+// session-aware redirect は利便であって認可ではないため、better-auth / TTL store の transient 障害では 500 を
 // 返さず pass-through (SPA) に倒す (login-shortcut と同じ fail-open)。Sentry には warning で残る。
 const captured = recordSentryExceptions();
 

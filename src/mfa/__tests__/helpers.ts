@@ -3,7 +3,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import { makeSignature } from "better-auth/crypto";
 import { Effect } from "effect";
 import { auth } from "../../auth";
-import { Redis } from "../../redis-service";
+import { TtlStore } from "../../ttl-store-service";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
 import type { MfaTotpActor } from "../totp/contracts";
@@ -16,10 +16,10 @@ import {
 import { observing } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
-// MFA の DB/Redis 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
+// MFA の DB/TTL store 統合テストが共用する「本物のセッション・本物のチャレンジ・本物の TOTP」の組み立て。
 // 状態を DB へ直接捏造すると、暗号化 secret とコードの対応が伴わず以降の検証がすべて偽陽性になる
 // ため、生成はいずれも production と同じ経路 (internalAdapter / totp façade) を通す。
-// 公開 API は Effect。better-auth と raw Redis は非 DB の Promise 境界で、呼び出し点で Effect.promise に包む
+// 公開 API は Effect。better-auth と raw TTL store は非 DB の Promise 境界で、呼び出し点で Effect.promise に包む
 // (DB は TestDb のみ)。
 
 // テスト実行時の鍵 ring 既定値 (.env に無くても bun test が自走できるようにする)。
@@ -83,7 +83,7 @@ const sessionHeaders = (token: string): Effect.Effect<Headers> =>
     return requestHeaders({ [name]: yield* signCookieValue(token) });
   });
 
-// secondaryStorage 構成ではセッション実体が Redis にしか無く、DB へ session 行を挿しても
+// secondaryStorage 構成ではセッション実体が TTL store にしか無く、DB へ session 行を挿しても
 // getSession は解決できない。
 export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
   Effect.gen(function* () {
@@ -178,7 +178,7 @@ export const enableMfaFor = (user: { id: string; email: string }) =>
       code: yield* totpCode(secret, -1),
       enrollmentId: enrolled.enrollmentId,
     });
-    // 無効化の試行枠は user 単位で Redis に 15 分残るが、seed の user id は実行のたびに同じ。
+    // 無効化の試行枠は user 単位で TTL store に 15 分残るが、seed の user id は実行のたびに同じ。
     // 「有効化直後は枠が空」を fixture 側で保証する。
     yield* resetDisableAttempts(user.id);
     return {
@@ -220,13 +220,13 @@ export const issueTestChallenge = (challenge: {
     }),
   );
 
-// チャレンジの Redis state (本体 + 試行枠) を消す。TTL 待ちにせず、test が発行した分を明示的に片付ける。
+// チャレンジの TTL store state (本体 + 試行枠) を消す。TTL 待ちにせず、test が発行した分を明示的に片付ける。
 export const deleteChallengeState = (challengeIds: readonly string[]) =>
   Effect.gen(function* () {
-    const redis = yield* Redis;
+    const ttlStore = yield* TtlStore;
     yield* Effect.forEach(
       challengeIds.flatMap((id) => [challengeKey(id), attemptsKey(id)]),
-      (key) => redis.delete(key),
+      (key) => ttlStore.delete(key),
       { concurrency: "unbounded" },
     );
   });
@@ -242,11 +242,11 @@ export const cleanupIssuedChallenges = () =>
   );
 
 // revoke の実効性は DB では観測できない (secondaryStorage 構成では session 行が存在しない)。
-// Redis 上の実体そのものを数える。
+// TTL store 上の実体そのものを数える。
 export const countLiveSessions = (tokens: string[]) =>
   Effect.gen(function* () {
-    const redis = yield* Redis;
-    const entities = yield* Effect.forEach(tokens, (token) => redis.get(token), {
+    const ttlStore = yield* TtlStore;
+    const entities = yield* Effect.forEach(tokens, (token) => ttlStore.get(token), {
       concurrency: "unbounded",
     });
     return entities.filter((entity) => entity !== null).length;
@@ -254,8 +254,8 @@ export const countLiveSessions = (tokens: string[]) =>
 
 export const deleteSessionEntities = (tokens: string[]) =>
   Effect.gen(function* () {
-    const redis = yield* Redis;
-    yield* Effect.forEach(tokens, (token) => redis.delete(token), { concurrency: "unbounded" });
+    const ttlStore = yield* TtlStore;
+    yield* Effect.forEach(tokens, (token) => ttlStore.delete(token), { concurrency: "unbounded" });
   });
 
 // baseURL 未設定時 better-auth は request の origin を baseURL として使うため、テストは

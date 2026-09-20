@@ -2,7 +2,7 @@ import { isBunRuntime } from "./env";
 import type { KvStore } from "./kv-store.do";
 import { MemoryKvStore } from "./kv-store.memory";
 
-export interface RedisStorage {
+export interface TtlStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl?: number): Promise<void>;
   delete(key: string): Promise<void>;
@@ -20,16 +20,16 @@ export function toRateWindowResult(count: number): RateWindowResult {
   return { count };
 }
 
-export let redisStorage: RedisStorage;
+export let ttlStorage: TtlStorage;
 export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
-export let pingRedis: () => Promise<boolean>;
+export let pingTtlStore: () => Promise<boolean>;
 export let getMemoryKvStore: () => MemoryKvStore;
 
 export type KvStoreNamespace = DurableObjectNamespace<KvStore>;
 
 function initDurableObject(ns: KvStoreNamespace): void {
   const stub = (key: string) => ns.getByName(key);
-  redisStorage = {
+  ttlStorage = {
     get: (key) => stub(key).get(),
     set: (key, value, ttl) => stub(key).set(value, ttl),
     delete: (key) => stub(key).delete(),
@@ -37,7 +37,7 @@ function initDurableObject(ns: KvStoreNamespace): void {
   };
   incrementRateWindow = async (key, windowSec) =>
     toRateWindowResult(await stub(key).incrementWindow(windowSec));
-  pingRedis = () =>
+  pingTtlStore = () =>
     stub("health:ping")
       .get()
       .then(() => true)
@@ -51,7 +51,7 @@ function initDurableObject(ns: KvStoreNamespace): void {
 
 function initMemory(): void {
   const store = new MemoryKvStore();
-  redisStorage = {
+  ttlStorage = {
     get: async (key) => store.get(key),
     set: async (key, value, ttl) => store.set(key, value, ttl),
     delete: async (key) => store.delete(key),
@@ -59,18 +59,20 @@ function initMemory(): void {
   };
   incrementRateWindow = async (key, windowSec) =>
     toRateWindowResult(store.incrementWindow(key, windowSec));
-  pingRedis = async () => true;
+  pingTtlStore = async () => true;
   getMemoryKvStore = () => store;
 }
 
-export function initRedis(kvStore?: KvStoreNamespace): void {
-  if (redisStorage) return;
+export function initTtlStore(kvStore?: KvStoreNamespace): void {
+  if (ttlStorage) return;
   if (kvStore) initDurableObject(kvStore);
   else if (isBunRuntime()) initMemory();
   else
-    throw new Error("initRedis: Workers では KV_STORE binding が必須 (in-memory へは落とさない)");
+    throw new Error(
+      "initTtlStore: Workers では KV_STORE binding が必須 (in-memory へは落とさない)",
+    );
 }
 
 if (isBunRuntime()) {
-  initRedis();
+  initTtlStore();
 }

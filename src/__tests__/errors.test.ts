@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { AuthApiError, DbError, RedisError, tryAuthApi, tryDb, tryRedis } from "../errors";
+import { AuthApiError, DbError, TtlStoreError, tryAuthApi, tryDb, tryTtlStore } from "../errors";
 
 // 境界 error (design §3.6): サードパーティ由来の失敗を cause: unknown 付きで E channel に載せる。
 describe("boundary errors", () => {
@@ -37,10 +37,10 @@ describe("tryDb / tryAuthApi (Promise → boundary error)", () => {
     expect(e.cause).toBe(boom);
   });
 
-  test("tryRedis は RedisError に包む", async () => {
+  test("tryTtlStore は TtlStoreError に包む", async () => {
     const boom = new Error("upstash 1016");
-    const e = await Effect.runPromise(Effect.flip(tryRedis(() => Promise.reject(boom))));
-    expect(e).toBeInstanceOf(RedisError);
+    const e = await Effect.runPromise(Effect.flip(tryTtlStore(() => Promise.reject(boom))));
+    expect(e).toBeInstanceOf(TtlStoreError);
     expect(e.cause).toBe(boom);
   });
 

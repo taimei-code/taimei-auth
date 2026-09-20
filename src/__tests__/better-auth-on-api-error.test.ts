@@ -79,7 +79,7 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
   });
 
   // better-call の router handler は onRequest を processRequest の try/catch の外で await する。rate limiter
-  // (secondaryStorage = Redis) の throw はこの経路で、onError に来ず auth.handler の reject になる (src/app.ts が拾う)。
+  // (secondaryStorage = TTL store) の throw はこの経路で、onError に来ず auth.handler の reject になる (src/app.ts が拾う)。
   test("onRequest 段の throw は onError に来ず auth.handler が reject する", async () => {
     const { instance, calls } = buildThrowingAuth("onRequest");
     await expect(

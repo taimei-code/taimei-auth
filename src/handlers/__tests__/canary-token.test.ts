@@ -87,7 +87,7 @@ describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
 
   test("上限超過は 429 になり Sentry 送信自体が止まる (quota 保護)", async () => {
     const app = new Hono();
-    // 実行ごとに固有キーで実 Redis の窓を汚さない (windowSec 内の再実行でも衝突しない)
+    // 実行ごとに固有キーで実 TTL store の窓を汚さない (windowSec 内の再実行でも衝突しない)
     const key = `rate-limit:canary-test:${crypto.randomUUID()}`;
     app.use(
       "/auth/canary-token/*",

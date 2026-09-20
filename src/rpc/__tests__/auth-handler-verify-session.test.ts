@@ -142,7 +142,7 @@ describe("verifySession outcome", () => {
   });
 
   test("signOut throws → still returns REVISION_OUTDATED", async () => {
-    mockSignOut.mockRejectedValue(new Error("redis down"));
+    mockSignOut.mockRejectedValue(new Error("ttl store down"));
     const warnSpy = mock();
     const originalWarn = console.warn;
     console.warn = warnSpy;

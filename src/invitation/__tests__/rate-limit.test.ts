@@ -1,10 +1,10 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { expectFailure } from "../../__tests__/live-runner";
-import { failingRedisLayer } from "../../__tests__/test-layers";
+import { failingTtlStoreLayer } from "../../__tests__/test-layers";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import { getMemoryKvStore } from "../../redis";
-import { type Redis, RedisLive } from "../../redis-service";
+import { getMemoryKvStore } from "../../ttl-store";
+import { type TtlStore, TtlStoreLive } from "../../ttl-store-service";
 import { SentryLive, type SentryService } from "../../sentry";
 import { RateLimited } from "../errors";
 import { consumeInvitationQuota } from "../rate-limit";
@@ -22,21 +22,21 @@ const clearBucket = async () => {
 };
 
 const run = <A, E>(
-  p: Effect.Effect<A, E, Redis | SentryService>,
-  redis: Layer.Layer<Redis> = RedisLive,
-) => Effect.runPromise(Effect.provide(p, Layer.mergeAll(redis, SentryLive)));
+  p: Effect.Effect<A, E, TtlStore | SentryService>,
+  ttlStore: Layer.Layer<TtlStore> = TtlStoreLive,
+) => Effect.runPromise(Effect.provide(p, Layer.mergeAll(ttlStore, SentryLive)));
 
-// AC-029: E channel に RedisError が無い (kernel が畳む)。上限到達だけが RateLimited。
+// AC-029: E channel に TtlStoreError が無い (kernel が畳む)。上限到達だけが RateLimited。
 consumeInvitationQuota satisfies (
   companyId: string,
-) => Effect.Effect<void, RateLimited, Redis | SentryService>;
+) => Effect.Effect<void, RateLimited, TtlStore | SentryService>;
 
 describe("consumeInvitationQuota", () => {
   const captured = recordSentryExceptions();
 
-  test("AC-024 / AC-025 計数不能 (RedisError) は通し (fail-open)、Sentry に component 付きで 1 回記録する", async () => {
+  test("AC-024 / AC-025 計数不能 (TtlStoreError) は通し (fail-open)、Sentry に component 付きで 1 回記録する", async () => {
     const before = captured.length;
-    expect(await run(consumeInvitationQuota(COMPANY), failingRedisLayer)).toBeUndefined();
+    expect(await run(consumeInvitationQuota(COMPANY), failingTtlStoreLayer)).toBeUndefined();
     expect(captured.length).toBe(before + 1);
     expect(captured.at(-1)?.[1]?.tags?.component).toBe("invitation-rate-limit");
   });

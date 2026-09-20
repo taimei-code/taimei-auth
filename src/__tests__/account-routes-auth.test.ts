@@ -4,7 +4,7 @@ import { mountAccountRoutes } from "../app";
 
 // cookie 無し (未認証) で全 account route が 401 を返すことを確認し、guard 呼び忘れ (認可の
 // 抜け) を検知する。getSession は cookie 不在で null を返す (throw しても guard が fail-closed で
-// null に倒す) ため、この smoke は DB / Redis に依存しない。
+// null に倒す) ため、この smoke は DB / TTL store に依存しない。
 // 登録は app.ts と同じ mountAccountRoutes を通し、router の追加漏れ (guard 未通過 route) も検知する。
 const buildApp = () => {
   const app = new Hono();

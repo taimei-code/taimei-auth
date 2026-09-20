@@ -7,7 +7,7 @@ import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
 import { consumeInvitationQuota } from "./rate-limit";
 
-// rate-limit を tx 内へ統合しないのは、並行重複招待時の Redis カウンタ消費が変わり監視系が drift するため。
+// rate-limit を tx 内へ統合しないのは、並行重複招待時の TTL store カウンタ消費が変わり監視系が drift するため。
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // invitation は 24h 有効 (CONTEXT.md 'invitation')
 

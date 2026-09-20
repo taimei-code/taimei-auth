@@ -11,12 +11,12 @@ import {
 } from "../../handlers/__tests__/helpers";
 import { dbTest, drained, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { getMemoryKvStore } from "../../redis";
+import { getMemoryKvStore } from "../../ttl-store";
 import { createInvitation } from "../create";
 import { RateLimited } from "../errors";
 
 // invitation/create use-case (src/invitation/create.ts) の DB 統合 + handler HTTP テスト。
-// - reused 両方向 (rate consume 0 / 1 回) を Redis の invitation_rate:* キーで直接観測
+// - reused 両方向 (rate consume 0 / 1 回) を TTL store の invitation_rate:* キーで直接観測
 // - rate 上限 429 (INVITATION_HOURLY_LIMIT_PER_COMPANY を跨いだ超過)
 // - rate 上限中でも既存 PENDING への再送は reused=true (idempotency > rate 順序 pin)
 // - handler HTTP 経路で magic-link (auth.api.signInMagicLink) が reused=false/true 両経路各 1 回

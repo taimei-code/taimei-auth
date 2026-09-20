@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { toRateWindowResult } from "../redis";
+import { toRateWindowResult } from "../ttl-store";
 
 // incrementWindow の応答 (number) → RateWindowResult の純関数。
 describe("toRateWindowResult", () => {

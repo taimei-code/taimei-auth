@@ -5,7 +5,7 @@ import { z } from "zod";
 import { auth } from "../../auth";
 import { isLocalEnvironment } from "../../env";
 import { tryAuthApi } from "../../errors";
-import { Redis } from "../../redis-service";
+import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
 import { spendAttemptBudget } from "../../attempt-budget";
 import { ChallengeExpired } from "../error-mapping";
@@ -51,7 +51,7 @@ export const openLoginChallenge = Effect.fn("mfa.openLoginChallenge")(function* 
   challenge: LoginChallenge,
 ) {
   const challengeId = `mfa-lc-${crypto.randomUUID()}`;
-  yield* Redis.use((r) =>
+  yield* TtlStore.use((r) =>
     r.set(challengeKey(challengeId), JSON.stringify(challenge), CHALLENGE_TTL_SECONDS),
   );
   const signature = yield* signChallengeId(challengeId);
@@ -72,7 +72,7 @@ export const readLoginChallengeState = Effect.fn("mfa.readLoginChallengeState")(
 export const peekLoginChallenge = Effect.fn("mfa.peekLoginChallenge")(function* (headers: Headers) {
   const challengeId = yield* resolveChallengeId(headers);
   if (!challengeId) return null;
-  const raw = yield* Redis.use((r) => r.get(challengeKey(challengeId)));
+  const raw = yield* TtlStore.use((r) => r.get(challengeKey(challengeId)));
   const challenge = parseChallenge(raw);
   return challenge ? ({ ...challenge, challengeId } satisfies OpenedLoginChallenge) : null;
 });
@@ -80,7 +80,7 @@ export const peekLoginChallenge = Effect.fn("mfa.peekLoginChallenge")(function* 
 export const consumeLoginChallenge = Effect.fn("mfa.consumeLoginChallenge")(function* (
   challengeId: string,
 ) {
-  const raw = yield* Redis.use((r) => r.getAndDelete(challengeKey(challengeId)));
+  const raw = yield* TtlStore.use((r) => r.getAndDelete(challengeKey(challengeId)));
   if (raw === null) return yield* new ChallengeExpired();
   return clearCookieHeaders();
 });
@@ -89,7 +89,7 @@ export const consumeLoginChallenge = Effect.fn("mfa.consumeLoginChallenge")(func
 export const destroyLoginChallenge = Effect.fn("mfa.destroyLoginChallenge")(function* (
   challengeId: string,
 ) {
-  yield* Redis.use((r) => r.delete(challengeKey(challengeId)));
+  yield* TtlStore.use((r) => r.delete(challengeKey(challengeId)));
 });
 
 // 上限到達を Sentry へ出すのがロック急増の唯一の検知信号。
