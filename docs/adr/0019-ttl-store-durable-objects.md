@@ -18,7 +18,7 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 
 ## Decision
 
-- **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`idFromName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを null として隠し、削除は alarm だけが行う (read path に write を置かない)。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
+- **Workers の TTL store は DO `KvStore`** (`src/kv-store.do.ts`)。1 key = 1 object (`getByName(key)`)、storage に `{ value, expiresAt }` 1 entry、TTL は `setAlarm(expiresAt)` → `alarm()` で `deleteAll`。`get` は期限切れを null として隠し、削除は alarm だけが行う (read path に write を置かない)。`incrementWindow` は Redis の `MULTI INCR + EXPIRE` と同じく毎回 TTL を延長する。TTL 0 以下は「既に期限切れ」で、無期限になるのは TTL 未指定だけ (better-auth は全 key に TTL を渡すので実際には無期限の key は無い)
 - **Bun の TTL store は in-memory** (`src/kv-store.memory.ts`)。`bun test` と `bun run src/index.ts` (単一 process) が使う。test の観測面 `keys(prefix)` / `ttl(key)` は `getMemoryKvStore` 経由に限り、biome の `importNamePattern` で production からの import を禁じる
 - **`RedisStorage` / `Redis` service / `RedisError` の名前と契約は据え置く**。better-auth `secondaryStorage`、use-case 4 経路、`/health` の `redis` check は無変更で適合する
 - **local 実行は `wrangler dev`** (`scripts/wrangler-dev.sh`)。compose と e2e は dev stage の image に本物の Node.js binary を重ねて起動する (oven/bun の `node` は bun への shim で wrangler が拒否する)
@@ -46,4 +46,5 @@ DO は workerd 専用で Bun プロセスから触れない。local を Redis �
 - `bun test` は in-memory を観測し、DO は wrangler dev 上の e2e と本番 QA でしか観測しない。DO 固有の性質 (input gate の原子性、alarm) は platform 側の保証に依る
 - DO は初回 request 地点の近くに作られる。日本単一運用のため影響は無いと見る
 - Workers runtime 型が global `Response` を上書きするため、`res.json()` の推論が崩れた test 2 箇所を `json<unknown>()` に固定した。同種の推論崩れは今後も起きうる
+- local の compose / e2e が wrangler dev (workerd) になったため、`verification.storeInDatabase` の Bun 限定 true は `bun test` / `bun run dev` だけで効き、e2e は本番と同じ secondaryStorage 経路の verification を通る
 - consumer repo (taimei) の e2e compose は `bun run src/index.ts` + Redis container を前提にしているが、`src/index.ts` が in-memory で起動するため即座には壊れない。Redis container と `REDIS_URL` の削除は consumer 側の follow-up
