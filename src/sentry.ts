@@ -45,6 +45,11 @@ export const captureCause =
       sentry.captureException(failure.cause, { level: "warning", ...context }),
     );
 
+export const captureCauseAs =
+  <A>(value: A, context?: CaptureContext) =>
+  (failure: { readonly cause: unknown }): Effect.Effect<A, never, SentryService> =>
+    captureCause(context)(failure).pipe(Effect.as(value));
+
 const bestEffort = (send: () => void): Effect.Effect<void> =>
   Effect.sync(send).pipe(
     Effect.catchDefect((defect) =>

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { DbError, TtlStoreError } from "../errors";
-import { captureCause } from "../sentry";
+import { captureCauseAs } from "../sentry";
 import { TtlStore } from "../ttl-store-service";
 import { HealthRepo } from "./ports";
 
@@ -9,11 +9,7 @@ type CheckResult = "ok" | "error";
 const settle = (check: "db" | "ttlStore", probe: Effect.Effect<void, DbError | TtlStoreError>) =>
   probe.pipe(
     Effect.as<CheckResult>("ok"),
-    Effect.catch((failure) =>
-      captureCause({ tags: { handler: "health", check } })(failure).pipe(
-        Effect.as<CheckResult>("error"),
-      ),
-    ),
+    Effect.catch(captureCauseAs<CheckResult>("error", { tags: { handler: "health", check } })),
   );
 
 export const probeHealth = Effect.fn("health.probeHealth")(function* () {
