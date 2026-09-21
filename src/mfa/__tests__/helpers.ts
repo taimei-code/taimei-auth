@@ -33,7 +33,7 @@ export const TEST_USER_AGENT = "mfa-integration-test";
 const TOTP_PERIOD_SECONDS = 30;
 
 // better-auth の署名付き cookie は `値.HMAC-SHA-256(値)` をパディング付き標準 base64 で載せる。
-// 署名付き値の形式は SIGNED_COOKIE_VALUE (発行者は wire でこれを percent-encode する) で、
+// 署名付き値の形式は SIGNED_COOKIE_VALUE (発行者は Set-Cookie でこれを percent-encode する) で、
 // src/__tests__/session-cookie-contract.test.ts が固定する。
 const signCookieValue = (value: string): Effect.Effect<string> =>
   Effect.promise(async () => {
@@ -65,7 +65,7 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
 }
 
 // 署名付き値 (percent-decode 後) の形式: 署名 44 文字 (HMAC-SHA-256 32 byte の標準 base64、末尾 `=`)。
-// better-call getSignedCookie の受理条件 (末尾 44 文字が `=` 終端) より狭い。wire 上の値は両発行者とも
+// better-call getSignedCookie の受理条件 (末尾 44 文字が `=` 終端) より狭い。Set-Cookie 上の値は両発行者とも
 // これを percent-encode したもの (CONTEXT.md「session cookie」)。固定するのは
 // src/__tests__/session-cookie-contract.test.ts。
 export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;

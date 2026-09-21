@@ -7,7 +7,7 @@ import { DbError } from "../../errors";
 import { Forbidden } from "../../membership/guard/errors";
 import { runMiddleware, runRoute } from "../run-route";
 
-// design §3.2 (2 次・3 次改訂): runRoute は唯一の写像点。failure → wire、boundary error / defect / interrupt →
+// design §3.2 (2 次・3 次改訂): runRoute は唯一の写像点。failure → client-facing 応答、boundary error / defect / interrupt →
 // Sentry + 500。Hono が Error を飲み込むため adapter が自分で Sentry に送る (AC-010〜015, 060, 061)。
 const captured = recordSentryExceptions();
 
@@ -39,7 +39,7 @@ describe("runRoute", () => {
     expect(res).toBe(okResponse);
   });
 
-  test("failure は wire (status / content-type / body)", async () => {
+  test("failure は応答 (status / content-type / body)", async () => {
     const res = await buildApp().request("/forbidden");
     expect(res.status).toBe(403);
     expect(res.headers.get("content-type")).toBe("application/json");
@@ -83,7 +83,7 @@ describe("runRoute", () => {
     expect((captured[0]?.[0] as Error).message).toMatch(/[Ii]nterrupt/);
   });
 
-  test("Fail(wire) と Die が同居する Cause は defect を Sentry に送りつつ wire の 4xx を返す", async () => {
+  test("Fail(client-facing) と Die が同居する Cause は defect を Sentry に送りつつ client-facing の 4xx を返す", async () => {
     captured.length = 0;
     const app = new Hono();
     app.get("/both", (c) =>
@@ -179,7 +179,7 @@ describe("runMiddleware", () => {
     expect([res.status, await res.text()]).toEqual([401, "blocked"]);
   });
 
-  test("failure は runRoute と同じ wire", async () => {
+  test("failure は runRoute と同じ応答", async () => {
     const app = new Hono();
     app.use("*", (c, next) => runMiddleware(c, next, Effect.fail(new Forbidden())));
     app.get("/x", (c) => c.text("handled"));

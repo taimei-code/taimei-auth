@@ -11,7 +11,7 @@ import {
 } from "../error-mapping";
 
 // プラグイン写像は消滅 (完全自前化: ADR-0016)。残るのは failure class 7 種のみ。
-// wire 語彙との双方向一致は error-mapping.ts 内の MatchesWireShape 検出器 (typecheck) が固定する。
+// client-facing 語彙との双方向一致は error-mapping.ts 内の MatchesClientFacingShape 検出器 (typecheck) が固定する。
 
 describe("MFA failure class", () => {
   const table: Array<[MfaError, MfaError["error"], MfaError["status"]]> = [

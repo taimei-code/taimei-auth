@@ -45,8 +45,8 @@ describe("company API", () => {
   test.each([
     [true, true],
     [false, false],
-  ])("delete は account_deleted=%s を camelCase=%s に写す", async (wire, expected) => {
-    const fetchSpy = stubFetch(Response.json({ ok: true, account_deleted: wire }));
+  ])("delete は account_deleted=%s を camelCase=%s に写す", async (raw, expected) => {
+    const fetchSpy = stubFetch(Response.json({ ok: true, account_deleted: raw }));
 
     expect(await deleteCompany("company-1")).toEqual({ accountDeleted: expected });
     expect(fetchSpy).toHaveBeenCalledWith("/api/account/companies/company-1/delete", postInit());

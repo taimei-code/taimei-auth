@@ -10,7 +10,7 @@ import { getAppName } from "./email/client";
 import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
-import { captureThrown } from "./handlers/wire-error";
+import { captureThrown } from "./handlers/client-facing-error";
 import { MembershipRepo } from "./membership/ports";
 import { ttlStorage } from "./ttl-store";
 import type { AppRuntime } from "./runtime";

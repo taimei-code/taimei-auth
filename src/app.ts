@@ -1,5 +1,4 @@
-import { Effect } from "effect";
-import { Hono, type MiddlewareHandler } from "hono";
+import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
@@ -14,10 +13,14 @@ import { health } from "./handlers/health";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { runMiddleware } from "./handlers/run-route";
-import { captureThrown, internalErrorResponse } from "./handlers/wire-error";
+import {
+  captureThrown,
+  internalErrorResponse,
+  clientFacingErrorResponse,
+} from "./handlers/client-facing-error";
 import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
-import { getValidServiceKeys } from "./service-key";
+import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins, isLocalEnvironment } from "./env";
 
 export type AppOptions = {
@@ -35,30 +38,6 @@ export function mountAccountRoutes(app: Hono): void {
 
 const LOCAL_RELAXED_LIMIT = 1000;
 
-const requireServiceKey: MiddlewareHandler = (c, next) =>
-  runMiddleware(
-    c,
-    next,
-    Effect.sync(() => {
-      const serviceKey = c.req.header("X-Service-Key");
-      const acceptedServiceKeys = getValidServiceKeys();
-      if (acceptedServiceKeys.length === 0) {
-        // production の fail-fast は entry 側 (index.ts) の起動時 process.exit。ここは二重防御。
-        if (process.env.APP_ENV === "production") {
-          return c.json({ error: "Service Key not configured (production)" }, 503);
-        }
-        console.warn(
-          "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
-        );
-        return undefined;
-      }
-      if (!serviceKey || !acceptedServiceKeys.includes(serviceKey)) {
-        return c.json({ error: "Unauthorized: invalid service key" }, 401);
-      }
-      return undefined;
-    }),
-  );
-
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
 
@@ -73,11 +52,15 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  app.use("/rpc/*", requireServiceKey);
+  app.use("/rpc/*", (c, next) =>
+    runMiddleware(c, next, verifyServiceKey(c.req.header("X-Service-Key"))),
+  );
 
   app.all(
     "/rpc/*",
-    async (c) => (await handleRpc(c.req.raw)) ?? c.json({ error: "Not Found" }, 404),
+    async (c) =>
+      (await handleRpc(c.req.raw)) ??
+      clientFacingErrorResponse({ error: "Not Found", status: 404 }),
   );
 
   app.route("/", loginShortcut);

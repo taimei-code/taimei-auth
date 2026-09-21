@@ -1,5 +1,5 @@
 import { Data } from "effect";
-import type { MatchesWireShape, MfaWireErrorCode } from "./wire-contracts";
+import type { MatchesClientFacingShape, MfaClientFacingErrorCode } from "./client-facing-contracts";
 
 export class InvalidCode extends Data.TaggedError("InvalidCode") {
   readonly error = "invalid_code" as const;
@@ -32,7 +32,7 @@ export class NotEnabled extends Data.TaggedError("NotEnabled") {
   readonly status = 409 as const;
 }
 
-// MfaNotFound という名は、同じ wire code を持つ guard の NotFound と読み分けるため。
+// MfaNotFound という名は、同じ error code を持つ guard の NotFound と読み分けるため。
 export class MfaNotFound extends Data.TaggedError("MfaNotFound") {
   readonly error = "not_found" as const;
   readonly status = 404 as const;
@@ -49,7 +49,7 @@ export type MfaError =
 
 type MfaErrorCode = MfaError["error"];
 
-const _codesMatchWire: MatchesWireShape<
+const _codesMatchWire: MatchesClientFacingShape<
   Record<MfaErrorCode, true>,
-  Record<Exclude<MfaWireErrorCode, "invalid_argument" | "unauthorized">, true>
+  Record<Exclude<MfaClientFacingErrorCode, "invalid_argument" | "unauthorized">, true>
 > = true;

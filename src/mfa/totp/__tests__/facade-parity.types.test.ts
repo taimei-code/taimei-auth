@@ -8,12 +8,12 @@ import type {
   MfaErrorResponse,
   MfaOkResponse,
   MfaStatusResponse,
-  MfaWireErrorCode,
-} from "../../wire-contracts";
+  MfaClientFacingErrorCode,
+} from "../../client-facing-contracts";
 import type { MfaTotpActor } from "../contracts";
 
 // 契約検出器 (§10-5)。runtime import なし (typeof import) — façade の入出力が handler の呼び出しと
-// wire response 構築を無変更で通ることを typecheck で固定する。壊れたらこのファイルが赤くなる。
+// 応答構築を無変更で通ることを typecheck で固定する。壊れたらこのファイルが赤くなる。
 
 type Facade = typeof import("../index");
 
@@ -45,7 +45,7 @@ const _okBody: MfaOkResponse = { ok: true };
 // boundary error (DbError / AuthApiError / TtlStoreError) はここに現れず 500 へ落ちる。
 type ActivateFailure = Extract<
   Effect.Error<ReturnType<Facade["activate"]>>,
-  { error: MfaWireErrorCode }
+  { error: MfaClientFacingErrorCode }
 >;
 const _failureWire = (r: ActivateFailure): MfaErrorResponse => ({ error: r.error });
 const _failureStatus = (r: ActivateFailure): number => r.status;

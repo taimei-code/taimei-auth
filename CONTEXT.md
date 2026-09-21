@@ -176,6 +176,10 @@ _Avoid_: logout (英語混在を避ける), session 終了 (より広義)
 better-auth lifecycle hook や admin 操作によって、user 自身の意思とは独立に **session** を強制無効化する操作。`session.revoked_at` 列に時刻を記録し、VerifySession が `RESULT_REVOKED` を返す状態にする。**sign-out** (ユーザー自発) と対比される。trigger は password change / account delete 等の security-sensitive operation。
 _Avoid_: invalidate (より広義), terminate, kill
 
+**Service Key**:
+consumer app が **auth ホスト** の `/rpc/*` を呼ぶ時に提示する service 間認証の shared secret (`X-Service-Key` header、env `AUTH_SERVICE_KEY`)。end user の **session** とは独立で、consumer app の server 側だけが持つ。rotation のため active と previous (`AUTH_SERVICE_KEY_PREVIOUS`) の 2 本を同時に受理する。未設定時は production では **fail-closed** (503)、非 production では service 認証を止めて通す (**kill switch** と同種の運用上の無効化で、判断材料が得られない **fail-open** ではない)。手順: `docs/runbook/service-key-rotation.md`。
+_Avoid_: API key (end user 向け credential と紛らわしい), shared secret (`AUTH_SECRET` と衝突), サービスキー (カタカナ表記の混在)
+
 **membership guard**:
 **アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (**fail-closed**: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は Effect program として合成した結果を adapter (`runRoute`) が HTTP に写像する。詳細: ADR-0012 / ADR-0017。
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)
@@ -222,6 +226,7 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - 「after-signin」「after-signup」は **proxy 側 path** (e.g. taimei の `/auth/after-signin` Controller) を指す別概念 — taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うため混同注意
 - 「twoFactor」「backupCodes」「`2fa-*`」は twoFactor プラグイン撤去によりテーブル名・列名・API 名・cookie 内識別子としてはもはや存在しない。設計語彙と自前識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う — 残る借用はテスト内の語彙検査のみ
 - 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた — resolved: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないため本 glossary に置かず、正本は ADR-0017
+- 「wire」(client が受け取る応答の byte 列) は日本語話者に意味が取りづらく、定義もどこにも無かった — resolved: 2026-09 に code の識別子を `ClientFacingError` / `ClientFacingErrorShape` / `clientFacingErrorResponse` / `parseClientFacingError` / `MfaClientFacingErrorCode` (`src/handlers/client-facing-error.ts` / `src/mfa/client-facing-contracts.ts`) へ改名。client-facing = 中身を client に開示する失敗 (`error` code + `status` をそのまま応答にする)、対比は internal (BoundaryError / defect → Sentry + 500 の固定文)。線は 4xx / 5xx ではなく開示の有無 (`ServiceKeyMisconfigured` は 503 だが client-facing)。ADR-0017 の「wire」は旧名として読む
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールド射影 (実装型) で、別のドメイン概念ではない — resolved: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化
 - 「rate limit」「quota」「attempt budget」が code 上で並存し、同じ「window 内の試行上限」を指していた — resolved: 設計語彙は **試行枠** に統一、code の識別子は別名として据え置き
 - 「Redis」は 2026-09 まで **TTL store** の実装名 (Upstash / node-redis) で、glossary でも保存先を指す語として使っていた — resolved: 実装を Durable Objects / in-memory に替えた (ADR-0019) 際に **TTL store** を canonical 化。code の識別子も `ttl-store.ts` / `TtlStore` service / `TtlStoreError` へ改名済み (`/health` の check key は `ttlStore`)

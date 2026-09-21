@@ -53,7 +53,7 @@ const tokenWithoutSignature = (value: string) => {
   const decoded = decodeURIComponent(value);
   return decoded.slice(0, decoded.lastIndexOf("."));
 };
-// wire 上の値は percent-encoded で、decode すると署名付き値の形になる。
+// Set-Cookie 上の値は percent-encoded で、decode すると署名付き値の形になる。
 const expectEncodedSignedValue = (value: string) => {
   expect(value).toBe(encodeURIComponent(decodeURIComponent(value)));
   expect(decodeURIComponent(value)).toMatch(SIGNED_COOKIE_VALUE);

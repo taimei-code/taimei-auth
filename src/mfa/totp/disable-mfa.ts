@@ -4,7 +4,7 @@ import { getClientContext } from "../../request-context";
 import { Transaction } from "../../transaction";
 import { NotEnabled } from "../error-mapping";
 import { isMfaEnabled } from "../policy";
-import type { MfaCodeKind } from "../wire-contracts";
+import type { MfaCodeKind } from "../client-facing-contracts";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { MfaDisableBudget, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
 import { verifyAndConsumeOwnedCode } from "./verify-code";

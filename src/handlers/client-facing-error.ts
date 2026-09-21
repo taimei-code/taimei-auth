@@ -6,13 +6,14 @@ import type { InvitationError } from "../invitation/errors";
 import type { MembershipError } from "../membership/errors";
 import type { GuardError } from "../membership/guard/errors";
 import type { MfaError } from "../mfa/error-mapping";
-import type { MfaWireErrorCode } from "../mfa/wire-contracts";
+import type { MfaClientFacingErrorCode } from "../mfa/client-facing-contracts";
+import type { ServiceKeyError } from "../service-key";
 
 export type DomainError = MembershipError | CompanyError | InvitationError;
 
-export type WireError = GuardError | DomainError | MfaError;
+export type ClientFacingError = GuardError | DomainError | MfaError | ServiceKeyError;
 
-export type WireShaped = {
+export type ClientFacingErrorShape = {
   readonly error: string;
   readonly status: number;
   readonly details?: unknown;
@@ -20,21 +21,23 @@ export type WireShaped = {
 
 type GuardCodesOnMfaRoutes = "unauthorized" | "invalid_argument";
 const _guardCodesReachMfaWire: [GuardCodesOnMfaRoutes] extends [GuardError["error"]]
-  ? [GuardCodesOnMfaRoutes] extends [MfaWireErrorCode]
+  ? [GuardCodesOnMfaRoutes] extends [MfaClientFacingErrorCode]
     ? true
     : never
   : never = true;
 
-export type RouteError = WireError | BoundaryError;
+export type RouteError = ClientFacingError | BoundaryError;
 
-const _routeFailuresAreWireShaped: [Exclude<RouteError, BoundaryError>] extends [WireShaped]
+const _routeFailuresAreClientFacing: [Exclude<RouteError, BoundaryError>] extends [
+  ClientFacingErrorShape,
+]
   ? true
   : never = true;
 
 // charset 無しの application/json を明示する (byte-invariant の理由: ADR-0012「error Response builder は Hono 非依存」)
 export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
-export function wireErrorResponse(failure: WireShaped): Response {
+export function clientFacingErrorResponse(failure: ClientFacingErrorShape): Response {
   const body = JSON.stringify({ error: failure.error, details: failure.details });
   return new Response(body, { status: failure.status, headers: JSON_HEADERS });
 }
@@ -46,9 +49,9 @@ export function internalErrorResponse(): Response {
 }
 
 // catalog 外の failure を実行時にも形で見る (fail-open を防ぐ理由: ADR-0017「実装の機構」)
-export const parseWireShaped = (e: unknown): WireShaped | undefined =>
+export const parseClientFacingError = (e: unknown): ClientFacingErrorShape | undefined =>
   Predicate.isObject(e) && Predicate.isString(e.error) && Predicate.isNumber(e.status)
-    ? (e as WireShaped)
+    ? (e as ClientFacingErrorShape)
     : undefined;
 
 type Report = Pick<CaptureContext, "tags" | "extra"> & { label: string };
@@ -65,16 +68,18 @@ const send = ({ error, level }: ReturnType<typeof toInternal>, { label, ...conte
 
 export function settleCause<W>(
   cause: Cause.Cause<unknown>,
-  parseWire: (e: unknown) => W | undefined,
+  parseClientFacing: (e: unknown) => W | undefined,
   report: Report,
 ): { failure: W | undefined; reported: readonly unknown[] } {
   let failure: W | undefined;
   const internal: ReturnType<typeof toInternal>[] = [];
   for (const reason of cause.reasons) {
     if (Cause.isFailReason(reason)) {
-      const wire = isBoundaryError(reason.error) ? undefined : parseWire(reason.error);
-      if (wire === undefined) internal.push(toInternal(reason.error));
-      else failure ??= wire;
+      const clientFacing = isBoundaryError(reason.error)
+        ? undefined
+        : parseClientFacing(reason.error);
+      if (clientFacing === undefined) internal.push(toInternal(reason.error));
+      else failure ??= clientFacing;
     } else if (Cause.isDieReason(reason)) internal.push(toInternal(reason.defect));
   }
   if (failure === undefined && internal.length === 0) {

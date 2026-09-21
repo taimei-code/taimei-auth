@@ -3,7 +3,7 @@ import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { ChallengeExpired, InvalidCode, Locked } from "../error-mapping";
 import { validateChallengeRedirect } from "../redirect-guard";
-import type { MfaCodeKind } from "../wire-contracts";
+import type { MfaCodeKind } from "../client-facing-contracts";
 import {
   consumeLoginChallenge,
   destroyLoginChallenge,

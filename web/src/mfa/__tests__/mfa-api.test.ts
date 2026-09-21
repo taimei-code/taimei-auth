@@ -10,9 +10,9 @@ import {
   verifyMfaChallenge,
 } from "../mfa-api";
 
-// wire fixture の形の正本は server 統合テスト (src/handlers/__tests__/account-mfa.test.ts /
+// 応答 fixture の形の正本は server 統合テスト (src/handlers/__tests__/account-mfa.test.ts /
 // mfa-challenge.test.ts) が実 HTTP で固定している応答。ここでは公開関数越しに
-// wire → view 変換・positive check・error code 解決を検証する (AC は solution_plan の ID)。
+// 応答 → view 変換・positive check・error code 解決を検証する (AC は solution_plan の ID)。
 
 afterEach(restoreFetch);
 
@@ -23,8 +23,8 @@ const codeOfRejection = (promise: Promise<unknown>): Promise<string> =>
     throw new Error("expected rejection");
   }, mfaErrorCodeOf);
 
-describe("wire → view 変換", () => {
-  test("AC-006 getMfaStatus は snake wire を camel view へ変換する", async () => {
+describe("応答 → view 変換", () => {
+  test("AC-006 getMfaStatus は snake 応答 を camel view へ変換する", async () => {
     stubFetch(Response.json({ enabled: true, in_effect: true, recovery_codes_remaining: 7 }));
 
     expect(await getMfaStatus()).toEqual({
@@ -154,7 +154,7 @@ describe("positive check — 形の崩れた 2xx を unknown へ縮退", () => {
   });
 });
 
-describe("request 方向 — camel view → snake wire", () => {
+describe("request 方向 — camel view → snake 応答", () => {
   test("AC-012 activateMfa は enrollment_id で送信する", async () => {
     const fetchSpy = stubFetch(Response.json({ ok: true }));
 
@@ -195,7 +195,7 @@ describe("AC-022 void endpoint は 2xx body によらず resolve する", () => 
 
 describe("AC-011 error code 解決 (公開関数越し)", () => {
   test.each([
-    ["既知 wire code はそのまま", 400, { error: "invalid_code" }, "invalid_code"],
+    ["既知 error code はそのまま", 400, { error: "invalid_code" }, "invalid_code"],
     ["429 + locked は locked", 429, { error: "locked" }, "locked"],
     ["既知 code の無い 429 は rate_limited", 429, {}, "rate_limited"],
     ["未知 code は unknown", 500, { error: "boom" }, "unknown"],

@@ -26,48 +26,48 @@ import {
 import {
   captureThrown,
   internalErrorResponse,
-  parseWireShaped,
+  parseClientFacingError,
   settleCause,
-  type WireError,
-  wireErrorResponse,
-} from "../wire-error";
+  type ClientFacingError,
+  clientFacingErrorResponse,
+} from "../client-facing-error";
 
 // 旧 respond.ts の byte-invariant を引き継ぐ。
-describe("wireErrorResponse", () => {
+describe("clientFacingErrorResponse", () => {
   test("failure を { error } JSON にし、content-type は charset 無しの application/json", async () => {
-    const res = wireErrorResponse(new Forbidden());
+    const res = clientFacingErrorResponse(new Forbidden());
     expect(res.status).toBe(403);
     expect(res.headers.get("content-type")).toBe("application/json");
     expect(await res.text()).toBe('{"error":"forbidden"}');
   });
 
   test("details 無しの InvalidArgument は details key を持たない", async () => {
-    const body = await wireErrorResponse(new InvalidArgument({})).json();
+    const body = await clientFacingErrorResponse(new InvalidArgument({})).json();
     expect("details" in (body as object)).toBe(false);
   });
 
   test("details 有りの InvalidArgument は同じ object を details に持つ", async () => {
     const details = { formErrors: [], fieldErrors: { email: ["x"] } };
-    const body = await wireErrorResponse(new InvalidArgument({ details })).json();
+    const body = await clientFacingErrorResponse(new InvalidArgument({ details })).json();
     expect(body).toEqual({ error: "invalid_argument", details });
   });
 });
 
-describe("parseWireShaped", () => {
-  test("wire 形の failure は同じ参照をそのまま返す", () => {
+describe("parseClientFacingError", () => {
+  test("client-facing 形の failure は同じ参照をそのまま返す", () => {
     const failure = new Forbidden();
-    expect(parseWireShaped(failure)).toBe(failure);
+    expect(parseClientFacingError(failure)).toBe(failure);
   });
 
-  test("catalog 外でも wire 形なら通し、details は検査しない", () => {
+  test("catalog 外でも client-facing 形なら通し、details は検査しない", () => {
     const details = { fieldErrors: { email: ["x"] } };
-    expect(parseWireShaped({ error: "invalid_argument", status: 400, details })?.details).toBe(
-      details,
-    );
+    expect(
+      parseClientFacingError({ error: "invalid_argument", status: 400, details })?.details,
+    ).toBe(details);
   });
 
   test("error と status が揃わない値は undefined", () => {
-    const notWire: unknown[] = [
+    const notClientFacing: unknown[] = [
       { error: "x" },
       { status: 400 },
       { error: 1, status: 400 },
@@ -76,7 +76,7 @@ describe("parseWireShaped", () => {
       undefined,
       "x",
     ];
-    expect(notWire.filter((e) => parseWireShaped(e) !== undefined)).toEqual([]);
+    expect(notClientFacing.filter((e) => parseClientFacingError(e) !== undefined)).toEqual([]);
   });
 });
 
@@ -87,9 +87,9 @@ describe("internalErrorResponse", () => {
   });
 });
 
-describe("failure class の wire 直列化 (旧 REASON_TO_ERROR / 旧 respond.ts と同一の組)", () => {
-  // guard / domain / MFA の failure はすべて wireErrorResponse の 1 経路を通る。
-  const table: Array<[WireError, number, string]> = [
+describe("failure class の 応答への直列化 (旧 REASON_TO_ERROR / 旧 respond.ts と同一の組)", () => {
+  // guard / domain / MFA の failure はすべて clientFacingErrorResponse の 1 経路を通る。
+  const table: Array<[ClientFacingError, number, string]> = [
     [new Unauthorized(), 401, '{"error":"unauthorized"}'],
     [new Forbidden(), 403, '{"error":"forbidden"}'],
     [new NotFound(), 404, '{"error":"not_found"}'],
@@ -104,7 +104,7 @@ describe("failure class の wire 直列化 (旧 REASON_TO_ERROR / 旧 respond.ts
   ];
   for (const [failure, status, body] of table) {
     test(`${failure._tag} → ${status} ${body}`, async () => {
-      const res = wireErrorResponse(failure);
+      const res = clientFacingErrorResponse(failure);
       expect([res.status, await res.text()]).toEqual([status, body]);
     });
   }
@@ -120,12 +120,12 @@ describe("settleCause", () => {
   });
   afterEach(() => spy.mockRestore());
 
-  test("boundary failure と wire failure が同居すると wire を返し boundary の cause を warning で送る", () => {
+  test("boundary failure と client-facing failure が同居すると client-facing を返し boundary の cause を warning で送る", () => {
     const cause = new Error("pg down");
     const forbidden = new Forbidden();
     const settled = settleCause(
       Cause.combine(Cause.fail(new DbError({ cause })), Cause.fail(forbidden)),
-      parseWireShaped,
+      parseClientFacingError,
       report,
     );
     expect(settled.failure).toBe(forbidden);
@@ -133,19 +133,19 @@ describe("settleCause", () => {
     expect(captured).toEqual([[cause, { tags: report.tags, level: "warning" }]]);
   });
 
-  test("wire 形でない failure は failure 無しで error として送る", () => {
+  test("client-facing 形でない failure は failure 無しで error として送る", () => {
     const rogue = { _tag: "Rogue" };
-    const settled = settleCause(Cause.fail(rogue), parseWireShaped, report);
+    const settled = settleCause(Cause.fail(rogue), parseClientFacingError, report);
     expect(settled.failure).toBeUndefined();
     expect(settled.reported).toEqual([rogue]);
     expect(captured[0]?.[1]?.level).toBe("error");
   });
 
-  test("wire failure は Sentry に送らない (2 つあっても最初の 1 つを返すだけ)", () => {
+  test("client-facing failure は Sentry に送らない (2 つあっても最初の 1 つを返すだけ)", () => {
     const first = new Forbidden();
     const settled = settleCause(
       Cause.combine(Cause.fail(first), Cause.fail(new NotFound())),
-      parseWireShaped,
+      parseClientFacingError,
       report,
     );
     expect(settled.failure).toBe(first);
@@ -153,7 +153,7 @@ describe("settleCause", () => {
   });
 
   test("interrupt だけの Cause は Cause.pretty の Error を 1 件送る", () => {
-    const settled = settleCause(Cause.interrupt(), parseWireShaped, report);
+    const settled = settleCause(Cause.interrupt(), parseClientFacingError, report);
     expect(settled.failure).toBeUndefined();
     expect(settled.reported.length).toBe(1);
     expect(settled.reported[0]).toBeInstanceOf(Error);
@@ -185,8 +185,8 @@ describe("captureThrown", () => {
     expect(captured[n]?.[1]?.level).toBe("error");
   });
 
-  // wire が無いので wire-shaped な failure も内部失敗として送る。
-  test("wire-shaped な値も痕跡ゼロにせず error で送る", () => {
+  // client-facing failure が無いので client-facing 形 な failure も内部失敗として送る。
+  test("client-facing 形 な値も痕跡ゼロにせず error で送る", () => {
     const failure = new Forbidden();
     const n = captured.length;
     captureThrown(failure, "better-auth");

@@ -4,11 +4,11 @@ import { z } from "zod";
 
 import { completeLoginChallenge, readLoginChallengeState } from "../mfa/totp";
 import type {
-  MatchesWireShape,
+  MatchesClientFacingShape,
   MfaChallengeStateResponse,
   MfaChallengeVerifyRequest,
   MfaChallengeVerifyResponse,
-} from "../mfa/wire-contracts";
+} from "../mfa/client-facing-contracts";
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 import { runRoute } from "./run-route";
@@ -16,7 +16,7 @@ import { runRoute } from "./run-route";
 export const mfaChallenge = new Hono();
 
 const verifyBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
-const _verifyBodyMatchesWire: MatchesWireShape<
+const _verifyBodyMatchesWire: MatchesClientFacingShape<
   z.infer<typeof verifyBody>,
   MfaChallengeVerifyRequest
 > = true;

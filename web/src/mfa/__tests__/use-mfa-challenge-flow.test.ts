@@ -91,7 +91,7 @@ describe("mfaChallengePort.verify", () => {
     });
   });
 
-  test("AC-006/007/010/011/026-032 wire の error code を rejected へ保つ", async () => {
+  test("AC-006/007/010/011/026-032 応答の error code を rejected へ保つ", async () => {
     fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
       jsonResponse({ error: "challenge_expired" }, 401),
     );

@@ -5,13 +5,13 @@ import { z } from "zod";
 import { requireActor } from "../membership/guard";
 import { activate, disable, enroll, readOwnedMfaStatus } from "../mfa/totp";
 import type {
-  MatchesWireShape,
+  MatchesClientFacingShape,
   MfaActivateRequest,
   MfaDisableRequest,
   MfaEnrollResponse,
   MfaOkResponse,
   MfaStatusResponse,
-} from "../mfa/wire-contracts";
+} from "../mfa/client-facing-contracts";
 import { forwardSetCookie } from "./forward-cookies";
 import { mfaCodeKindSchema, mfaCodeSchema, parseZodBody } from "./parse-body";
 import { runRoute } from "./run-route";
@@ -20,11 +20,11 @@ export const accountMfa = new Hono();
 
 const activateBody = z.object({ code: mfaCodeSchema, enrollment_id: z.string().min(1) });
 const disableBody = z.object({ code: mfaCodeSchema, kind: mfaCodeKindSchema });
-const _activateBodyMatchesWire: MatchesWireShape<
+const _activateBodyMatchesWire: MatchesClientFacingShape<
   z.infer<typeof activateBody>,
   MfaActivateRequest
 > = true;
-const _disableBodyMatchesWire: MatchesWireShape<
+const _disableBodyMatchesWire: MatchesClientFacingShape<
   z.infer<typeof disableBody>,
   MfaDisableRequest
 > = true;

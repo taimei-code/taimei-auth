@@ -11,7 +11,7 @@ import {
 } from "../guard/errors";
 
 // design §3.6 / AC-037: guard の failure class は _tag / error / status を own property に持ち、
-// wire code と status を自身で運ぶ (catalog 分散、adapter は直列化のみ)。
+// error code と status を自身で運ぶ (catalog 分散、adapter は直列化のみ)。
 describe("guard errors", () => {
   test("Unauthorized は error=unauthorized / status=401 を own property に持つ", () => {
     const e = new Unauthorized();
