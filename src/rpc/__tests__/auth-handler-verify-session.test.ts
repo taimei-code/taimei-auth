@@ -10,6 +10,8 @@ import {
   userRepoLayer,
 } from "../../membership/__tests__/test-layers";
 import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
+import { SentryLive } from "../../sentry";
+import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
 // better-auth (getSession / signOut) と DB (UserRepo / SessionRepo) はすべて test Layer で差し替える
@@ -56,9 +58,12 @@ const sessionRepoLayer = (revokedAt: Date | null): Layer.Layer<SessionRepo> =>
 const run = (
   layers: Layer.Layer<AuthApi | UserRepo | SessionRepo>,
 ): Promise<VerifySessionResponse> =>
-  Effect.runPromise(Effect.provide(verifySessionProgram({ sessionToken: "x" }), layers));
+  Effect.runPromise(
+    Effect.provide(verifySessionProgram({ sessionToken: "x" }), Layer.mergeAll(layers, SentryLive)),
+  );
 
 describe("verifySession outcome", () => {
+  const captured = recordSentryExceptions();
   test("returns SESSION_NOT_FOUND when getSession returns null", async () => {
     const res = await run(
       Layer.mergeAll(
@@ -141,25 +146,25 @@ describe("verifySession outcome", () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  test("signOut throws → still returns REVISION_OUTDATED", async () => {
-    mockSignOut.mockRejectedValue(new Error("ttl store down"));
-    const warnSpy = mock();
-    const originalWarn = console.warn;
-    console.warn = warnSpy;
-    try {
-      const res = await run(
-        Layer.mergeAll(
-          authLayer(() => sessionOf({ id: "u1", revision: 3 })),
-          userRepoLayer([userRow(5)]),
-          sessionRepoLayer(null),
-        ),
-      );
-      expect(res.outcome.case).toBe("error");
-      if (res.outcome.case !== "error") throw new Error();
-      expect(res.outcome.value.reason).toBe(Result.REVISION_OUTDATED);
-      expect(warnSpy).toHaveBeenCalled();
-    } finally {
-      console.warn = originalWarn;
-    }
+  test("AC-017/018 signOut throws → still returns REVISION_OUTDATED and records the cause to Sentry", async () => {
+    const cause = new Error("ttl store down");
+    mockSignOut.mockRejectedValue(cause);
+    const before = captured.length;
+    const res = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 3 })),
+        userRepoLayer([userRow(5)]),
+        sessionRepoLayer(null),
+      ),
+    );
+    expect(res.outcome.case).toBe("error");
+    if (res.outcome.case !== "error") throw new Error();
+    expect(res.outcome.value.reason).toBe(Result.REVISION_OUTDATED);
+    expect(captured.length).toBe(before + 1);
+    expect(captured.at(-1)?.[0]).toBe(cause);
+    expect(captured.at(-1)?.[1]).toMatchObject({
+      level: "warning",
+      tags: { handler: "verifySession" },
+    });
   });
 });
