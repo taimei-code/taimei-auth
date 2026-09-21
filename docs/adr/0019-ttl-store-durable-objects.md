@@ -10,6 +10,8 @@ Accepted (2026-09-20)。判断主体は maintainer。実装は 3 PR に分ける
 
 TTL 付きの短命状態 — session / verification / cookieCache (better-auth `secondaryStorage`)、試行枠 4 経路の計数、MFA チャレンジ — を置く store を、本 ADR では TTL store と呼ぶ。その実体は今、Redis だけに置いている。本番は Upstash REST、local (compose / e2e / `bun test`) は node-redis で、`src/redis.ts` が init 時に選ぶ (ADR-0011 Decision 3)。
 
+session が Postgres でなくここにある経緯: 2026-03-21 (commit `8e04363`) に「セッション L2 キャッシュ」の意図で `secondaryStorage` に Redis を渡したが、better-auth はこの設定で `storeSessionInDatabase` を既定 false にするため、cache のつもりで入れたものが session の唯一の置き場になった。以後 ADR-0011 (Workers で DB verification 消費が hang) と ADR-0016 (MFA チャレンジを session と同じ置き場に) がこの構成を前提に積み上がり、本 ADR の時点で「Postgres の負荷対策」ではなく「TTL 付き短命状態の置き場を 1 系統にする」ことが正当化になっている。
+
 Upstash free tier は 30 日データ操作が無いと DB をアーカイブし REST endpoint が消える。2026-09-03 に本番の magic link 送信が 500 になり、毎日の keepalive cron で凌いでいる (ADR-0011 Consequences)。vendor が 1 つ増え、secret が 2 つ増え、cron と test 3 本が「アーカイブされないため」だけに存在する。
 
 Cloudflare KV は結果整合 (最大 60 秒) のため、verification token の単回消費 (`getAndDelete`) と session 失効が壊れる。Durable Objects (DO) は object 内で request が直列化される (input gate) ため、`get → delete` と `incr → expire` が追加の lock なしで atomic になる。PoC で `RedisStorage` の 6 操作 (TTL 失効、並行 `getAndDelete` 10 本で取得 1、並行 incr 20 本の欠落なし) を確認した。
