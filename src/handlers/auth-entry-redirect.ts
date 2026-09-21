@@ -4,7 +4,7 @@ import type { Context, Next } from "hono";
 
 import { AuthApi } from "../auth-service";
 import { MembershipRepo } from "../membership/ports";
-import { captureCause } from "../sentry";
+import { captureCauseAs } from "../sentry";
 import { signInParamsSchema } from "../sign-in-params";
 import { runMiddleware } from "./run-route";
 
@@ -16,9 +16,6 @@ export const authEntryRedirect = (c: Context, next: Next) => {
   if (!AUTH_ENTRY_PATHS.has(c.req.path) || !getSessionCookie(headers)) return next();
   return runMiddleware(c, next, authEntryRedirectProgram(c));
 };
-
-const passThrough = (failure: { readonly cause: unknown }) =>
-  captureCause({ tags: { handler: "authEntryRedirect" } })(failure).pipe(Effect.as(undefined));
 
 // transient 障害は 5xx でなく pass-through に倒す (session-aware redirect は利便で認可ではない)。
 export const authEntryRedirectProgram = Effect.fn("handlers.authEntryRedirect")(
@@ -51,5 +48,8 @@ export const authEntryRedirectProgram = Effect.fn("handlers.authEntryRedirect")(
 
     return c.redirect(params.data.redirect_url);
   },
-  Effect.catchTag(["AuthApiError", "DbError"], passThrough),
+  Effect.catchTag(
+    ["AuthApiError", "DbError"],
+    captureCauseAs(undefined, { tags: { handler: "authEntryRedirect" } }),
+  ),
 );

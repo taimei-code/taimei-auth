@@ -77,6 +77,24 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("swallowAuditFailure\\(").filter((f) => !allowed.has(f))).toEqual([]);
   });
 
+  // CONTEXT.md「fail-open で通した事実は Sentry に残し、silent には通さない」の code 側。
+  test("silent な fold (orElseSucceed / Effect.ignore / logError だけの catch) は production src に無く、captureCause の直呼びは fail-closed / void 経路だけ (値に倒す経路は captureCauseAs)", () => {
+    expect(srcFiles("orElseSucceed\\(|Effect\\.ignore\\(")).toEqual([]);
+    expect(srcFiles("Effect\\.logError\\(")).toEqual(["src/email/client.ts"]);
+    expect(srcFiles("captureCause\\(").sort()).toEqual([
+      "src/audit/report-failure.ts",
+      "src/auth-plugins/mfa-challenge.ts",
+      "src/auth-plugins/sign-in-observer.ts",
+      "src/handlers/account-invitation.ts",
+      "src/membership/guard/core.ts",
+      "src/mfa/disable-attempt-budget.ts",
+      "src/mfa/gateway.ts",
+      "src/mfa/notification-adapter.ts",
+      "src/rpc/auth-handler.ts",
+      "src/sentry.ts",
+    ]);
+  });
+
   // OWNER が減りうる write の呼び手を固定する。per-member の write は OWNER≥1 の判定を持つ apply-change.ts だけ、
   // 全削除 (removeMembershipsOfCompany) は事後 count が無い company/delete と backfill だけ。
   test("OWNER を減らしうる membership write の呼び手は apply-change / company delete / backfill だけ", () => {

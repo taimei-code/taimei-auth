@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 
 import { AuthApi } from "../auth-service";
-import { captureCause } from "../sentry";
+import { captureCauseAs } from "../sentry";
 import { runRoute } from "./run-route";
 
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
@@ -29,15 +29,15 @@ const buildLoginRedirect = (url: URL): URL => {
   return target;
 };
 
-const failOpenAsSignedOut = (failure: { readonly cause: unknown }) =>
-  captureCause({ tags: { handler: "loginShortcut" } })(failure).pipe(Effect.as(false));
-
 export const loginShortcutProgram = Effect.fn("handlers.loginShortcut")(function* (c: Context) {
   const headers = c.req.raw.headers;
   const authenticated = getSessionCookie(headers)
     ? yield* AuthApi.use((authApi) => authApi.getSession(headers)).pipe(
         Effect.map((session) => session !== null),
-        Effect.catchTag("AuthApiError", failOpenAsSignedOut),
+        Effect.catchTag(
+          "AuthApiError",
+          captureCauseAs(false, { tags: { handler: "loginShortcut" } }),
+        ),
       )
     : false;
 

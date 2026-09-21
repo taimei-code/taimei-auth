@@ -17,6 +17,7 @@ import {
   VerifySessionResponseSchema,
 } from "../gen/auth/v1/auth_pb";
 import { getClientContext } from "../request-context";
+import { captureCause, captureCauseAs } from "../sentry";
 import { toProtoAccount, toProtoSession, toProtoUser, userResponse } from "./mappers";
 import { RpcError, runRpc } from "./run-rpc";
 
@@ -28,13 +29,14 @@ const verifySessionError = (reason: Result) =>
     },
   });
 
+const sessionCookieHeaders = (sessionToken: string) =>
+  new Headers({ cookie: buildSessionCookieHeader(sessionToken) });
+
 export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (req: {
   sessionToken: string;
 }) {
   // 参照するのは cookieCache でなく TTL store 側 payload (handler は cookie を送らないため)。
-  const headers = new Headers();
-  headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
-
+  const headers = sessionCookieHeaders(req.sessionToken);
   const authApi = yield* AuthApi;
   const result = yield* authApi.getSession(headers);
 
@@ -60,11 +62,7 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
   if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
     yield* authApi
       .signOut(headers)
-      .pipe(
-        Effect.catch((failure) =>
-          Effect.sync(() => console.warn("signOut failed during revision mismatch", failure.cause)),
-        ),
-      );
+      .pipe(Effect.catch(captureCause({ tags: { handler: "verifySession" } })));
     return verifySessionError(Result.REVISION_OUTDATED);
   }
 
@@ -77,6 +75,29 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
       }),
     },
   });
+});
+
+export const signOutProgram = Effect.fn("rpc.signOut")(function* (req: { sessionToken: string }) {
+  const headers = sessionCookieHeaders(req.sessionToken);
+  // better-auth 1.6.9 の sign-out は hooks.after で session が populate されないため先に lookup する。
+  const authApi = yield* AuthApi;
+  const result = yield* authApi
+    .getSession(headers)
+    .pipe(Effect.catchTag("AuthApiError", captureCauseAs(null, { tags: { handler: "signOut" } })));
+  const userId = result?.user?.id;
+  if (userId) {
+    const background = yield* Background;
+    const { ip, userAgent } = getClientContext(null);
+    yield* background.run(
+      appendAuditLogBestEffort({
+        eventType: "sign_out",
+        userId,
+        payload: { ip, userAgent },
+      }),
+    );
+  }
+  yield* authApi.signOut(headers);
+  return { success: true };
 });
 
 export function registerAuthService(router: ConnectRouter) {
@@ -95,30 +116,7 @@ export function registerAuthService(router: ConnectRouter) {
         ),
       ),
 
-    signOut: (req) =>
-      runRpc(
-        Effect.gen(function* () {
-          const headers = new Headers();
-          headers.set("cookie", buildSessionCookieHeader(req.sessionToken));
-          // better-auth 1.6.9 の sign-out は hooks.after で session が populate されないため先に lookup する。
-          const authApi = yield* AuthApi;
-          const result = yield* authApi.getSession(headers).pipe(Effect.orElseSucceed(() => null));
-          const userId = result?.user?.id;
-          if (userId) {
-            const background = yield* Background;
-            const { ip, userAgent } = getClientContext(null);
-            yield* background.run(
-              appendAuditLogBestEffort({
-                eventType: "sign_out",
-                userId,
-                payload: { ip, userAgent },
-              }),
-            );
-          }
-          yield* authApi.signOut(headers);
-          return { success: true };
-        }),
-      ),
+    signOut: (req) => runRpc(signOutProgram(req)),
 
     sendMagicLink: (req) =>
       runRpc(

@@ -38,8 +38,12 @@ export class MfaSessions extends Context.Service<
 export class MfaNotifier extends Context.Service<
   MfaNotifier,
   {
-    notifyEnabled(email: string): Effect.Effect<void, never, EmailSender | Background>;
-    notifyDisabled(email: string): Effect.Effect<void, never, EmailSender | Background>;
+    notifyEnabled(
+      email: string,
+    ): Effect.Effect<void, never, EmailSender | Background | SentryService>;
+    notifyDisabled(
+      email: string,
+    ): Effect.Effect<void, never, EmailSender | Background | SentryService>;
   }
 >()("taimei/MfaNotifier") {}
 

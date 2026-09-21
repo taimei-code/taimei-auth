@@ -10,11 +10,6 @@ describe("/health probe の封じ込め (静的 tripwire)", () => {
     ]);
   });
 
-  test("失敗を false に潰す orElseSucceed は health 経路に無い", () => {
-    expect(grepFiles("orElseSucceed", "src/health", { excludeTests: true })).toEqual([]);
-    expect(grepFiles("orElseSucceed", "src/handlers/health.ts")).toEqual([]);
-  });
-
   test("repository と driver は失敗を握らず void で返す", () => {
     expect(grepFiles("Promise<void>", "db/repositories/health.ts")).toHaveLength(1);
     expect(grepFiles("catch", "db/repositories/health.ts")).toEqual([]);

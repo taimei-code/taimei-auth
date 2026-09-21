@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { TtlStore } from "./ttl-store-service";
-import { captureCause } from "./sentry";
+import { captureCauseAs } from "./sentry";
 
 // 数えられなければ unavailable。倒し方 (fail-closed / fail-open) は呼び手が決める: CONTEXT.md「試行枠」
 
@@ -14,8 +14,9 @@ export const spendAttemptBudget = Effect.fn("attemptBudget.spend")(function* (in
   const counted = yield* ttlStore
     .incrementRateWindow(input.key, input.windowSeconds)
     .pipe(
-      Effect.catchTag("TtlStoreError", (failure) =>
-        captureCause({ tags: { component: input.component } })(failure).pipe(Effect.as(null)),
+      Effect.catchTag(
+        "TtlStoreError",
+        captureCauseAs(null, { tags: { component: input.component } }),
       ),
     );
   // 第 2 線: 契約逸脱の 0 / NaN を accepted に写さず unavailable に倒す (throw の正本は ttl-store.ts)
