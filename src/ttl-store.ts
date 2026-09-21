@@ -22,7 +22,7 @@ export function toRateWindowResult(count: number): RateWindowResult {
 
 export let ttlStorage: TtlStorage;
 export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
-export let pingTtlStore: () => Promise<boolean>;
+export let pingTtlStore: () => Promise<void>;
 export let getMemoryKvStore: () => MemoryKvStore;
 
 export type KvStoreNamespace = DurableObjectNamespace<KvStore>;
@@ -37,11 +37,9 @@ function initDurableObject(ns: KvStoreNamespace): void {
   };
   incrementRateWindow = async (key, windowSec) =>
     toRateWindowResult(await stub(key).incrementWindow(windowSec));
-  pingTtlStore = () =>
-    stub("health:ping")
-      .get()
-      .then(() => true)
-      .catch(() => false);
+  pingTtlStore = async () => {
+    await stub("health:ping").get();
+  };
   getMemoryKvStore = () => {
     throw new Error(
       "getMemoryKvStore は Bun (in-memory) 専用の test accessor。Workers では利用できない",
@@ -59,7 +57,7 @@ function initMemory(): void {
   };
   incrementRateWindow = async (key, windowSec) =>
     toRateWindowResult(store.incrementWindow(key, windowSec));
-  pingTtlStore = async () => true;
+  pingTtlStore = async () => {};
   getMemoryKvStore = () => store;
 }
 

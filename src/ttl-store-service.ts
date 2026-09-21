@@ -13,7 +13,7 @@ export class TtlStore extends Context.Service<
       key: string,
       windowSec: number,
     ): Effect.Effect<RateWindowResult, TtlStoreError>;
-    ping(): Effect.Effect<boolean, TtlStoreError>;
+    ping(): Effect.Effect<void, TtlStoreError>;
   }
 >()("taimei/TtlStore") {}
 

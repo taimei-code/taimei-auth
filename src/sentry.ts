@@ -45,12 +45,17 @@ export const captureCause =
       sentry.captureException(failure.cause, { level: "warning", ...context }),
     );
 
+const bestEffort = (send: () => void): Effect.Effect<void> =>
+  Effect.sync(send).pipe(
+    Effect.catchDefect((defect) =>
+      Effect.sync(() => console.error("[sentry] capture failed", defect)),
+    ),
+  );
+
 export const SentryLive = Layer.succeed(
   SentryService,
   SentryService.of({
-    captureException: (error, context) =>
-      Effect.sync(() => Sentry.captureException(error, context)),
-    captureMessage: (message, context) =>
-      Effect.sync(() => Sentry.captureMessage(message, context)),
+    captureException: (error, context) => bestEffort(() => Sentry.captureException(error, context)),
+    captureMessage: (message, context) => bestEffort(() => Sentry.captureMessage(message, context)),
   }),
 );
