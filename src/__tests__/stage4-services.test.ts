@@ -4,7 +4,7 @@ import { Background, BackgroundLive, withWaitUntil } from "../background";
 import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
-import { getMemoryKvStore } from "../ttl-store";
+import { getMemoryKvStore, pingTtlStore } from "../ttl-store";
 import { TtlStore, TtlStoreLive } from "../ttl-store-service";
 
 // ADR-0017 Stage 4 の runtime primitive / boundary service。in-memory store + compose Postgres を使う。
@@ -27,8 +27,9 @@ describe("TtlStore service (live)", () => {
     expect(value).toBe("v");
   });
 
-  test("ping は boolean を返す", async () => {
-    expect(await run(TtlStore.use((ttlStore) => ttlStore.ping()))).toBe(true);
+  test("ping は成功で resolve する (in-memory は常に到達可能)", async () => {
+    expect(await run(TtlStore.use((ttlStore) => ttlStore.ping()))).toBeUndefined();
+    expect(await pingTtlStore()).toBeUndefined();
   });
 
   test("incrementRateWindow は count を返し EXPIRE を付ける (再試行しない書き込み系)", async () => {
@@ -80,13 +81,13 @@ describe("Background service", () => {
   });
 });
 describe("HealthRepo (live)", () => {
-  test("pingDatabase が true", async () => {
-    const ok = await Effect.runPromise(
+  test("pingDatabase が成功で resolve する", async () => {
+    const result = await Effect.runPromise(
       Effect.provide(
         HealthRepo.use((repo) => repo.pingDatabase()),
         HealthRepoLive,
       ),
     );
-    expect(ok).toBe(true);
+    expect(result).toBeUndefined();
   });
 });
