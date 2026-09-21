@@ -5,9 +5,4 @@ export class AlreadyExists extends Data.TaggedError("AlreadyExists") {
   readonly status = 409 as const;
 }
 
-export class NotFoundOrAlreadyDeleted extends Data.TaggedError("NotFoundOrAlreadyDeleted") {
-  readonly error = "not_found_or_already_deleted" as const;
-  readonly status = 404 as const;
-}
-
-export type CompanyError = AlreadyExists | NotFoundOrAlreadyDeleted;
+export type CompanyError = AlreadyExists;

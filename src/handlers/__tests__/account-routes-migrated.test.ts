@@ -822,36 +822,70 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    // 現状維持 2 route (削除・切替) — 移行対象外だが error catalog に含める。
-    test("POST /api/account/companies/:companyId/delete non-owner → 403 forbidden", () =>
+    test.each([
+      "MEMBER",
+      "ADMIN",
+    ] as const)("POST /api/account/companies/:companyId/delete %s → 403 forbidden、無変更", (role) =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
           const owner = yield* db.seedUser("del-fb-owner");
-          const member = yield* db.seedUser("del-fb-member");
+          const actor = yield* db.seedUser("del-fb-actor");
           const co = yield* db.seedCompany("del-fb");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          yield* db.seedMembership(member.id, co, "MEMBER");
-          stubActor(member);
-          const app = buildTestApp();
-          const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/delete`);
+          yield* db.seedMembership(actor.id, co, role);
+          stubActor(actor);
+          const actual = yield* invoke(
+            buildTestApp(),
+            "POST",
+            `/api/account/companies/${co}/delete`,
+          );
           assertMatchesFixture(actual, "error-delete-forbidden");
+          expect((yield* db.readCompany(co))?.activationStatus).toBe("ACTIVE");
+          expect(yield* db.countMemberships(co)).toBe(2);
         }),
       ));
 
-    test("POST /api/account/companies/:companyId/delete unknown → 404 not_found_or_already_deleted", () =>
+    test("POST /api/account/companies/:companyId/delete 非メンバー × {unknown, DELETED, ACTIVE} → 同一の 403 forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
-          const actor = yield* db.seedUser("del-nf");
+          const actor = yield* db.seedUser("del-nm");
+          const deleted = yield* db.seedCompany("del-nm-deleted");
+          yield* db.markCompanyDeleted(deleted, { deletedAt: false });
+          const active = yield* db.seedCompany("del-nm-active");
           stubActor(actor);
           const app = buildTestApp();
-          const actual = yield* invoke(
+          const unknown = yield* invoke(
             app,
             "POST",
             "/api/account/companies/cmp_does_not_exist/delete",
           );
-          assertMatchesFixture(actual, "error-delete-not-found");
+          const onDeleted = yield* invoke(app, "POST", `/api/account/companies/${deleted}/delete`);
+          const onActive = yield* invoke(app, "POST", `/api/account/companies/${active}/delete`);
+          assertMatchesFixture(unknown, "error-delete-forbidden");
+          expect(onDeleted).toEqual(unknown);
+          expect(onActive).toEqual(unknown);
+          expect((yield* db.readCompany(active))?.activationStatus).toBe("ACTIVE");
+        }),
+      ));
+
+    test("POST /api/account/companies/:companyId/delete OWNER → 200、同じ actor の再送は 403 forbidden", () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const owner = yield* db.seedUser("del-ok-owner");
+          const target = yield* db.seedCompany("del-ok-target");
+          const other = yield* db.seedCompany("del-ok-other");
+          yield* db.seedMembership(owner.id, target, "OWNER");
+          yield* db.seedMembership(owner.id, other, "OWNER");
+          stubActor(owner);
+          const app = buildTestApp();
+          const first = yield* invoke(app, "POST", `/api/account/companies/${target}/delete`);
+          assertMatchesFixture(first, "success-delete-company");
+          expect((yield* db.readCompany(target))?.activationStatus).toBe("DELETED");
+          const again = yield* invoke(app, "POST", `/api/account/companies/${target}/delete`);
+          assertMatchesFixture(again, "error-delete-forbidden");
         }),
       ));
 
@@ -910,6 +944,21 @@ describe("account routes migration snapshot", () => {
           );
           expect(actual.status).toBe(401);
           expect(actual.body).toEqual({ error: "unauthorized" });
+        }),
+      ));
+
+    test("cookie 無しで delete → unknown / ACTIVE の両方が同一の 401 unauthorized", () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const active = yield* db.seedCompany("del-401-active");
+          stubActor(null);
+          const app = buildTestApp();
+          const unknown = yield* invoke(app, "POST", "/api/account/companies/cmp_missing/delete");
+          const onActive = yield* invoke(app, "POST", `/api/account/companies/${active}/delete`);
+          expect(unknown.status).toBe(401);
+          expect(unknown.body).toEqual({ error: "unauthorized" });
+          expect(onActive).toEqual(unknown);
         }),
       ));
   });

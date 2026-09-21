@@ -87,7 +87,7 @@ export const CompanySettings = () => {
       .catch((err) => {
         notifyError(
           describeRequestJsonError(err, {
-            403: "削除する権限がありません。",
+            403: "この事業所を削除する権限がないか、既に削除されています。",
             fallback: "事業所の削除に失敗しました。",
           }),
         );

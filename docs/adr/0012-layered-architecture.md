@@ -10,6 +10,10 @@ use-case 抽出は後続案件で扱う (下の「スコープ外」)。
 (deps factory と `respond.ts`) と失敗の HTTP 写像点を改めた。4 層の責務と依存方向は据え置き。改めた内容は
 ADR-0017 を正本とし、以下の該当箇所は当時の設計として読む。
 
+2026-09-21 に事業所削除 (`POST /api/account/companies/:companyId/delete`) を (C) 現状維持から (B) generic entry
+(`requireMembership(..., "OWNER")`) へ移した。認可が use-case の存在判定より後にあり、非メンバーが 404 / 200 で
+company の存在と状態を観測できていたためである。use-case 側の OWNER 再確認は lock 後の TOCTOU 再検証として残す。
+
 ## Context
 
 直近 PR #103–#108 で membership guard 集約を進めた結果、認可の組み立ての target 側 (対象 membership の
@@ -95,12 +99,10 @@ error 文字列を散らばらせて同じ文字列を別 status で返す silen
 
 - **(A) 操作単位 entry 新設 5 route**: 上表のとおり `requireRoleChange` / `requireRemoval` /
   `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept` を各 1 route に導入。
-- **(B) 既存 generic entry + envelope 1 行化 7 route**: GET memberships / GET members /
-  GET invitations / 招待取消 / 事業所作成 (signup) / 事業所 add / 事業所編集。認可が
-  `requireActor` / `requireMembership` の generic entry で十分な route。
-- **(C) 現状維持 2 route**: 事業所切替 (`POST /api/account/current-company`) / 事業所削除
-  (`POST /api/account/companies/:companyId/delete`) — 認可が use-case・tx 内に融合しており
-  (TOCTOU 対策 / OWNER≥1 + orphan 連動削除のロジック内 chain)、レイヤ地図上の正位置のため触らない。
+- **(B) 既存 generic entry + envelope 1 行化 8 route**: GET memberships / GET members /
+  GET invitations / 招待取消 / 事業所作成 (signup) / 事業所 add / 事業所編集 / 事業所削除 (上の Status 節)。認可が `requireActor` / `requireMembership` の generic entry で十分な route。
+- **(C) 現状維持 1 route**: 事業所切替 (`POST /api/account/current-company`) — 認可が use-case・tx 内に
+  融合しており、レイヤ地図上の正位置のため触らない。事業所削除は (B) へ移した (上の Status 節)。
 
 ### 招待受諾の再検証を OWNER 招待に限定する脅威モデル
 

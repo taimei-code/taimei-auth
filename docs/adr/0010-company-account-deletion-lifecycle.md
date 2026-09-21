@@ -74,7 +74,7 @@ signup の一時的な 0 件アカウントは許容するが恒久化させな�
 - **データ移行 (backfill) が必要**: 既に `DELETED` な company にぶら下がる残存 membership を一度物理削除し、その結果 orphan になったアカウントを回収する one-shot 処理を `drizzle/manual/` ではなく管理スクリプト (`management/`) として用意する。
 - **新規バッチ基盤**: D5 の TTL sweep ジョブの定期実行 (cron / scheduler) を追加する。
 - **マイグレーション不要部分**: D1 自体は tx 内 DELETE のみでスキーマ変更なし。`membership.company_id` の `ON DELETE RESTRICT` は「company を物理削除しない」現状方針と矛盾しないため維持。
-- **race / 冪等性**: 事業所削除の 2 度押しは `softDeleteCompany` の `WHERE activation_status='ACTIVE'` で冪等。membership 物理削除も対象 0 行なら no-op。
+- **race / 冪等性**: 事業所削除の 2 度押しは、逐次なら membership 消滅後の 2 回目が membership guard で 403 になり (2026-09-21、ADR-0012 (B))、並行なら `softDeleteCompany` の `WHERE activation_status='ACTIVE'` で冪等。membership 物理削除も対象 0 行なら no-op。
 
 ## Did not adopt
 
