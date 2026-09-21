@@ -2,8 +2,6 @@ import { Effect } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
-import { HealthRepo } from "./health/ports";
-import { TtlStore } from "./ttl-store-service";
 import { handleRpc } from "./rpc/fetch-handler";
 import { loginShortcut } from "./handlers/login-shortcut";
 import { accountAvatar } from "./handlers/avatar-upload";
@@ -12,9 +10,10 @@ import { accountInvitation } from "./handlers/account-invitation";
 import { accountMembership } from "./handlers/account-membership";
 import { accountMfa } from "./handlers/account-mfa";
 import { canaryToken } from "./handlers/canary-token";
+import { health } from "./handlers/health";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
-import { runMiddleware, runRoute } from "./handlers/run-route";
+import { runMiddleware } from "./handlers/run-route";
 import { captureThrown, internalErrorResponse } from "./handlers/wire-error";
 import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
@@ -170,29 +169,7 @@ export function buildApp(options: AppOptions): Hono {
   // session-aware redirect は静的配信より前に登録する。
   app.use("/auth/*", authEntryRedirect);
 
-  app.get("/health", (c) =>
-    runRoute(
-      c,
-      Effect.gen(function* () {
-        const health = yield* HealthRepo;
-        const ttlStore = yield* TtlStore;
-        const [dbOk, ttlStoreOk] = yield* Effect.all(
-          [
-            health.pingDatabase().pipe(Effect.orElseSucceed(() => false)),
-            ttlStore.ping().pipe(Effect.orElseSucceed(() => false)),
-          ],
-          { concurrency: "unbounded" },
-        );
-        const checks = { db: dbOk ? "ok" : "error", ttlStore: ttlStoreOk ? "ok" : "error" };
-        const healthy = dbOk && ttlStoreOk;
-        const version = process.env.CF_VERSION_ID ?? null;
-        return c.json(
-          { status: healthy ? "ok" : "degraded", checks, version },
-          healthy ? 200 : 503,
-        );
-      }),
-    ),
-  );
+  app.route("/", health);
 
   options.mountStatic(app);
 
