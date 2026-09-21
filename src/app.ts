@@ -14,7 +14,7 @@ import { health } from "./handlers/health";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { runMiddleware } from "./handlers/run-route";
-import { captureThrown, internalErrorResponse } from "./handlers/wire-error";
+import { captureThrown, internalErrorResponse } from "./handlers/client-facing-error";
 import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { getValidServiceKeys } from "./service-key";

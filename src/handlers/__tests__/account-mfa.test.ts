@@ -20,7 +20,7 @@ import { accountMfa } from "../account-mfa";
 // account MFA API (src/handlers/account-mfa.ts) の統合テスト。
 // 対象ユーザーは requireActor が解決した 1 人だけで、body の内容では動かない — セッションを
 // 持つ誰もが他人の第二要素を外せる状態にしないための境界がここ。
-// wire の期待 JSON は旧実装のテストから不変 (「wire 不変」の最終観測 — ADR-0016)。
+// 応答の期待 JSON は旧実装のテストから不変 (「応答不変」の最終観測 — ADR-0016)。
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);

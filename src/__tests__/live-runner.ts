@@ -26,7 +26,7 @@ export const dbTest = (prefix: string) => {
 export const auditRowsFor = (userId: string, eventType: string) =>
   TestDb.use((db) => db.readAuditRows(userId, eventType));
 
-// failure class の instanceof と wire code (error / status) をまとめて assert する。
+// failure class の instanceof と error code (error / status) をまとめて assert する。
 export const expectFailure = (
   e: unknown,
   cls: new () => { error: string; status: number },

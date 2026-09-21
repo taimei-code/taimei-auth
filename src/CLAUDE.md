@@ -6,7 +6,7 @@
 
 変更理由を所有する業務ドメインを決め、次に層を決め、両方に合う既存の場所へ置く。所有domain、層、依存方向、test配置を説明できた時点で配置完了とする。
 
-- **Transport** (`handlers/`、`rpc/`): parameter parse、認証、Guard と Use-case の呼出し、response 変換。Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect の wire 写像は adapter だけが行う。policy 述語、repository への直接 write、transaction を持たない。
+- **Transport** (`handlers/`、`rpc/`): parameter parse、認証、Guard と Use-case の呼出し、response 変換。Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect の client-facing 応答 (`ClientFacingError` → HTTP / Connect) への写像は adapter だけが行う。policy 述語、repository への直接 write、transaction を持たない。
 - **Guard** (`membership/guard/`、`membership/policy.ts`): Hono 非依存の操作単位認可。公開 API は `Effect<A, GuardError, R>`。
 - **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU 再検証。失敗は各 domain の `errors.ts` の failure class。
 - **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が正本。

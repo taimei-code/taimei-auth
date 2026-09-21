@@ -7,7 +7,7 @@ import { handleRpc } from "../fetch-handler";
 
 // Connect transport を test から立てる唯一の点。program を分離せず、
 // production の handleRpc に Connect の JSON request を渡し、path 解決 → proto decode → runRpc の写像 →
-// error JSON までを wire (status / content-type / body の 3 点) で固定する。requireServiceKey は src/app.ts の
+// error JSON までを応答 (status / content-type / body の 3 点) で固定する。requireServiceKey は src/app.ts の
 // 前段 middleware なので対象外。
 
 const { run, cleanup } = dbTest("rpc-del-");

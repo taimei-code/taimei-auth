@@ -58,14 +58,14 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("runBackground\\(").filter((f) => f !== "src/background.ts")).toEqual([]);
   });
 
-  test("Sentry facade の直呼びは src/sentry.ts と settleCause (wire-error) だけ", () => {
-    const allowed = new Set(["src/sentry.ts", "src/handlers/wire-error.ts"]);
+  test("Sentry facade の直呼びは src/sentry.ts と settleCause (client-facing-error) だけ", () => {
+    const allowed = new Set(["src/sentry.ts", "src/handlers/client-facing-error.ts"]);
     expect(
       srcFiles("Sentry\\.capture(Exception|Message)\\(").filter((f) => !allowed.has(f)),
     ).toEqual([]);
   });
 
-  // wire-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
+  // client-facing-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
   // (use-case / handler は SentryService を yield* する: src/CLAUDE.md「Effect様式」)。
   // best-effort 記帳 (CONTEXT.md): use-case は appendAuditLogBestEffort を通す。raw appendAuditLog を直接 yield* すると
   // DbError が E channel に残り、成立済みの操作 (行削除 / verified 化 / session 発行) が 500 で返る。
@@ -109,7 +109,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
 
   test("settleCause / captureThrown の呼び出しは adapter (run-route / run-rpc) と better-auth の結線 (auth.ts / app.ts) だけ", () => {
     const allowed = new Set([
-      "src/handlers/wire-error.ts",
+      "src/handlers/client-facing-error.ts",
       "src/handlers/run-route.ts",
       "src/rpc/run-rpc.ts",
       "src/auth.ts",

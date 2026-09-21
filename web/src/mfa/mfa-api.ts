@@ -8,14 +8,14 @@ import {
   type MfaDisableRequest,
   type MfaEnrollResponse,
   type MfaStatusResponse,
-  type MfaWireErrorCode,
-} from "@core/mfa/wire-contracts";
+  type MfaClientFacingErrorCode,
+} from "@core/mfa/client-facing-contracts";
 
-export type { MfaCodeKind } from "@core/mfa/wire-contracts";
+export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
 
 export type MfaStatus = {
   enabled: boolean;
-  // 旧 wire 互換 field。server は常に enabled と同値を返す (ADR-0016)。
+  // 旧応答互換 field。server は常に enabled と同値を返す (ADR-0016)。
   inEffect: boolean;
   recoveryCodesRemaining: number;
 };
@@ -31,13 +31,17 @@ export type MfaChallengeState = MfaChallengeStateResponse;
 
 export type MfaChallengePassed = { redirectUrl: string };
 
-export type MfaErrorCode = MfaWireErrorCode | "rate_limited" | "unknown";
+export type MfaErrorCode = MfaClientFacingErrorCode | "rate_limited" | "unknown";
 
-const WIRE_ERROR_CODES: ReadonlySet<string> = new Set(MFA_WIRE_ERROR_CODES);
+const CLIENT_FACING_ERROR_CODES: ReadonlySet<string> = new Set(MFA_WIRE_ERROR_CODES);
 
 // ロックアウトと rate limit は同じ 429 で返るため、判別は status でなく body の error コードで行う。
-const resolveMfaErrorCode = (status: number, wireError: string | undefined): MfaErrorCode => {
-  if (wireError !== undefined && WIRE_ERROR_CODES.has(wireError)) return wireError as MfaErrorCode;
+const resolveMfaErrorCode = (
+  status: number,
+  clientFacingError: string | undefined,
+): MfaErrorCode => {
+  if (clientFacingError !== undefined && CLIENT_FACING_ERROR_CODES.has(clientFacingError))
+    return clientFacingError as MfaErrorCode;
   if (status === 429) return "rate_limited";
   return "unknown";
 };
@@ -56,7 +60,7 @@ export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
 const asRecord = (body: unknown): Record<string, unknown> | null =>
   typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
 
-function readWireError(body: unknown): string | undefined {
+function readClientFacingError(body: unknown): string | undefined {
   const error = asRecord(body)?.error;
   return typeof error === "string" ? error : undefined;
 }
@@ -65,7 +69,7 @@ async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
   // credentials: cookie 送信に加えローテート後セッションの Set-Cookie 受領にも要る (外すと操作直後にログアウト)。
   const res = await fetch(url, { credentials: "include", ...init });
   const body: unknown = await res.json().catch(() => undefined);
-  if (!res.ok) throw new MfaApiError(resolveMfaErrorCode(res.status, readWireError(body)));
+  if (!res.ok) throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(body)));
   return body;
 }
 
@@ -85,20 +89,20 @@ const requireRecord = (body: unknown): Record<string, unknown> => {
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
-// satisfies は wire 正本に必須 field が増えた時にここを型エラーにする (追加 field は無視して additive 変更を通す)。
+// satisfies は応答契約の正本に必須 field が増えた時にここを型エラーにする (追加 field は無視して additive 変更を通す)。
 const readMfaStatus = (body: unknown): MfaStatus => {
-  const wire = requireRecord(body);
+  const record = requireRecord(body);
   if (
-    typeof wire.enabled !== "boolean" ||
-    typeof wire.in_effect !== "boolean" ||
-    typeof wire.recovery_codes_remaining !== "number"
+    typeof record.enabled !== "boolean" ||
+    typeof record.in_effect !== "boolean" ||
+    typeof record.recovery_codes_remaining !== "number"
   ) {
     throw new MfaApiError("unknown");
   }
   const checked = {
-    enabled: wire.enabled,
-    in_effect: wire.in_effect,
-    recovery_codes_remaining: wire.recovery_codes_remaining,
+    enabled: record.enabled,
+    in_effect: record.in_effect,
+    recovery_codes_remaining: record.recovery_codes_remaining,
   } satisfies MfaStatusResponse;
   return {
     enabled: checked.enabled,
@@ -109,21 +113,21 @@ const readMfaStatus = (body: unknown): MfaStatus => {
 
 // 空値も不正に倒す: 空 totp_uri は QR も secret も無い scan 画面、空 recovery_codes は手段ゼロの有効化になる。
 const readMfaEnrollment = (body: unknown): MfaEnrollment => {
-  const wire = requireRecord(body);
+  const record = requireRecord(body);
   if (
-    typeof wire.enrollment_id !== "string" ||
-    wire.enrollment_id === "" ||
-    typeof wire.totp_uri !== "string" ||
-    wire.totp_uri === "" ||
-    !isStringArray(wire.recovery_codes) ||
-    wire.recovery_codes.length === 0
+    typeof record.enrollment_id !== "string" ||
+    record.enrollment_id === "" ||
+    typeof record.totp_uri !== "string" ||
+    record.totp_uri === "" ||
+    !isStringArray(record.recovery_codes) ||
+    record.recovery_codes.length === 0
   ) {
     throw new MfaApiError("unknown");
   }
   const checked = {
-    enrollment_id: wire.enrollment_id,
-    totp_uri: wire.totp_uri,
-    recovery_codes: wire.recovery_codes,
+    enrollment_id: record.enrollment_id,
+    totp_uri: record.totp_uri,
+    recovery_codes: record.recovery_codes,
   } satisfies MfaEnrollResponse;
   return {
     enrollmentId: checked.enrollment_id,
@@ -133,18 +137,18 @@ const readMfaEnrollment = (body: unknown): MfaEnrollment => {
 };
 
 const readMfaChallengeState = (body: unknown): MfaChallengeState => {
-  const wire = requireRecord(body);
-  if (typeof wire.pending !== "boolean") throw new MfaApiError("unknown");
-  return { pending: wire.pending } satisfies MfaChallengeStateResponse;
+  const record = requireRecord(body);
+  if (typeof record.pending !== "boolean") throw new MfaApiError("unknown");
+  return { pending: record.pending } satisfies MfaChallengeStateResponse;
 };
 
 // 空文字も不正に倒す: passed のまま流すと flow の assign("") が現在 URL へ再遷移する。
 const readMfaChallengePassed = (body: unknown): MfaChallengePassed => {
-  const wire = requireRecord(body);
-  if (typeof wire.redirect_url !== "string" || wire.redirect_url === "") {
+  const record = requireRecord(body);
+  if (typeof record.redirect_url !== "string" || record.redirect_url === "") {
     throw new MfaApiError("unknown");
   }
-  const checked = { redirect_url: wire.redirect_url } satisfies MfaChallengeVerifyResponse;
+  const checked = { redirect_url: record.redirect_url } satisfies MfaChallengeVerifyResponse;
   return { redirectUrl: checked.redirect_url };
 };
 

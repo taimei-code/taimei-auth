@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Role } from "@/db/repositories/membership";
 import type { ParseBody } from "../membership/guard";
 import { InvalidArgument } from "../membership/guard/errors";
-import type { MfaCodeKind } from "../mfa/wire-contracts";
+import type { MfaCodeKind } from "../mfa/client-facing-contracts";
 
 export const roleBodySchema = z.enum([
   "OWNER",

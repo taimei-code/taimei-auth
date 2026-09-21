@@ -14,7 +14,7 @@ export const MFA_WIRE_ERROR_CODES = [
   "not_found",
 ] as const;
 
-export type MfaWireErrorCode = (typeof MFA_WIRE_ERROR_CODES)[number];
+export type MfaClientFacingErrorCode = (typeof MFA_WIRE_ERROR_CODES)[number];
 
 export type MfaStatusResponse = {
   enabled: boolean;
@@ -35,10 +35,10 @@ export type MfaChallengeStateResponse = { pending: boolean };
 export type MfaChallengeVerifyResponse = { redirect_url: string };
 
 // guard 層の envelope は membership/guard/errors.ts が正本 — MFA route に届く 2 コードだけ含める。
-export type MfaErrorResponse = { error: MfaWireErrorCode };
+export type MfaErrorResponse = { error: MfaClientFacingErrorCode };
 
 // `satisfies z.ZodType<T>` は片方向で optional の欠落を検出しないため、こちらで双方向に縛る。
-export type MatchesWireShape<A, B> = [A, keyof A] extends [B, keyof B]
+export type MatchesClientFacingShape<A, B> = [A, keyof A] extends [B, keyof B]
   ? [B, keyof B] extends [A, keyof A]
     ? true
     : never

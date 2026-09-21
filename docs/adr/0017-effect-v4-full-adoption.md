@@ -73,6 +73,8 @@ Stage は層単位で進める。Stage の途中では main に 2 様式が共�
 
 Decision の各項が「何を選んだか」を言い、この節は「その形でないと壊れる理由」を module ごとに置く。書き方の規則そのものは `src/CLAUDE.md`「Effect様式」が正本で、ここには再掲しない。
 
+本 ADR の「wire」(client が受け取る応答の byte 列、それに載る failure) は 2026-09 に code 上 `ClientFacingError` 系へ改名した (`src/handlers/wire-error.ts` → `client-facing-error.ts`、`src/mfa/wire-contracts.ts` → `client-facing-contracts.ts`)。対比語と線引きは `CONTEXT.md` の Flagged ambiguities を正本とし、本文の「wire」は旧名として読む。
+
 - 境界 producer (`src/errors.ts`): `Effect.tryPromise` は thunk の同期 throw も E に載せるため、旧 guard の「`Promise.resolve().then()` で包む」fail-open 回避は要らない。`liftAll` は型では Promise を返す関数だけを写し、実行時は全関数を包む (戻り値は実行前に判定できず、型に無い key には到達できない)。`Effect.timeout` の `TimeoutError` は各境界の error (`RedisError` / `EmailError`) に畳み、呼び手は境界 1 種だけを catch する
 - Transaction (`src/transaction.ts`): drizzle は callback が throw した時だけ rollback するため、program の Exit が失敗なら `RollbackSignal` を throw して rollback を引き、callback の外で元の Exit に復元する。それ以外の throw (drizzle / pg) は `DbError` (別 root fiber の帰結は Consequences)
 - Background (`src/background.ts`): `Effect.forkDetach` は scope に付かない fiber を作り (親の interrupt で止まらない) が context は継承するため、program の requirement (R) はそのまま呼び手に載る。detach した fiber の完了 Promise を ALS carrier (`runBackground`) に登録し、`Fiber.await` は失敗しない (Exit を返す)。effect 自身の失敗は渡す前に呼び手が catch する (規則は `src/CLAUDE.md`「Effect様式」)

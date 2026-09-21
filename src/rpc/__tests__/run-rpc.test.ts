@@ -20,7 +20,7 @@ const rejectsWith = async (p: Promise<unknown>) => {
 };
 
 describe("statusToCode", () => {
-  test("wire status → Connect Code の対応表", () => {
+  test("HTTP status → Connect Code の対応表", () => {
     expect([400, 401, 403, 404, 409, 410, 429, 500].map(statusToCode)).toEqual([
       Code.InvalidArgument,
       Code.Unauthenticated,

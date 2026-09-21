@@ -3,11 +3,11 @@ import type { Cause, Effect } from "effect";
 import { Data, Exit } from "effect";
 import type { BoundaryError } from "../errors";
 import {
-  parseWireShaped,
+  parseClientFacingError,
   type RouteError,
   settleCause,
-  type WireShaped,
-} from "../handlers/wire-error";
+  type ClientFacingErrorShape,
+} from "../handlers/client-facing-error";
 import { type AppServices, getRuntime } from "../runtime";
 
 export class RpcError extends Data.TaggedError("RpcError")<{
@@ -36,16 +36,16 @@ export async function runRpc<A>(program: RpcEffect<A>): Promise<A> {
 }
 
 const _rpcFailuresAreParsed: [Exclude<RouteError | RpcError, BoundaryError>] extends [
-  RpcError | WireShaped,
+  RpcError | ClientFacingErrorShape,
 ]
   ? true
   : never = true;
 
-const parseConnectWire = (e: unknown): RpcError | WireShaped | undefined =>
-  e instanceof RpcError ? e : parseWireShaped(e);
+const parseConnectClientFacing = (e: unknown): RpcError | ClientFacingErrorShape | undefined =>
+  e instanceof RpcError ? e : parseClientFacingError(e);
 
 function causeToConnectError(cause: Cause.Cause<RouteError | RpcError>): ConnectError {
-  const { failure, reported } = settleCause(cause, parseConnectWire, {
+  const { failure, reported } = settleCause(cause, parseConnectClientFacing, {
     label: "[runRpc]",
     tags: { handler: "runRpc" },
   });

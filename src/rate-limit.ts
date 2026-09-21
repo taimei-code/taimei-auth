@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import type { Context, MiddlewareHandler } from "hono";
 import { spendAttemptBudget } from "./attempt-budget";
 import { runMiddleware } from "./handlers/run-route";
-import { JSON_HEADERS } from "./handlers/wire-error";
+import { JSON_HEADERS } from "./handlers/client-facing-error";
 
 export type RateLimitOptions = {
   keyFn: (c: Context) => string | Promise<string>;

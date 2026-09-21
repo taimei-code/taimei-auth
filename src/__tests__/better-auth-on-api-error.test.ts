@@ -125,7 +125,7 @@ describe("src/auth.ts の onAPIError.onError", () => {
     expect(captured[n]?.[1]?.tags?.component).toBe("better-auth");
   });
 
-  test("4xx の APIError は意図した wire failure なので送らない", () => {
+  test("4xx の APIError は意図した client-facing failure なので送らない", () => {
     const n = captured.length;
     onError(new APIError("BAD_REQUEST"));
     expect(captured.length - n).toBe(0);
