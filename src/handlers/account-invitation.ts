@@ -13,6 +13,7 @@ import { revokeInvitation } from "../invitation/revoke";
 import { requireInvitationAccept, requireInvite, requireMembership } from "../membership/guard";
 import { MembershipRepo } from "../membership/ports";
 import { parseZodBody, parseZodBodyWithDetails, roleBodySchema } from "./parse-body";
+import { captureCause } from "../sentry";
 import { runRoute } from "./run-route";
 
 export const accountInvitation = new Hono();
@@ -91,11 +92,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", (c) =>
       yield* background.run(
         authApi
           .signInMagicLink({ email, callbackURL })
-          .pipe(
-            Effect.catch((failure) =>
-              Effect.logError("failed to send invitation magic link", failure.cause),
-            ),
-          ),
+          .pipe(Effect.catch(captureCause({ tags: { handler: "accountInvitation" } }))),
       );
 
       return c.json({

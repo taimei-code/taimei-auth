@@ -6,6 +6,7 @@ import { Background } from "../background";
 import { EmailSender } from "../email/ports";
 import { toDisplayText } from "../email/sanitize";
 import { getClientContext } from "../request-context";
+import { captureCause } from "../sentry";
 import type { AppRuntime } from "../runtime";
 import {
   isPrimaryAuthRoute,
@@ -23,7 +24,7 @@ type SignedIn = {
   headers: Headers | null | undefined;
 };
 
-const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
+export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
   const { user } = input;
   const background = yield* Background;
   const email = yield* EmailSender;
@@ -34,7 +35,7 @@ const observe = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
     yield* background.run(
       email
         .sendWelcome(user.email, toDisplayText(user.name))
-        .pipe(Effect.catch((e) => Effect.logError("Welcome email failed:", e.cause))),
+        .pipe(Effect.catch(captureCause({ tags: { component: "welcome-email" } }))),
     );
   }
 
@@ -56,7 +57,7 @@ const observeSignIn = (runtime: AppRuntime) =>
     const establishedSession = ctx.context.newSession;
     if (!establishedSession) return;
     await runtime.runPromise(
-      observe({
+      observeSignInProgram({
         user: establishedSession.user,
         route: parsePrimaryAuthRoute(ctx.path, ctx.params),
         headers: ctx.headers,
