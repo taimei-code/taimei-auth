@@ -4,7 +4,6 @@ import { Forbidden } from "../../membership/guard/errors";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteCompany } from "../delete";
-import { NotFoundOrAlreadyDeleted } from "../errors";
 
 const P = "delco-test-";
 const { run, cleanup } = dbTest(P);
@@ -48,7 +47,14 @@ describe("deleteCompany", () => {
         expect((yield* db.readCompany(companyId))?.activationStatus).toBe("DELETED");
         expect(yield* membershipCount(companyId)).toBe(0);
         expect(yield* db.readUser(ownerId)).toBeUndefined();
-        expect(yield* auditCount(ownerId, "company_deleted")).toBe(1);
+        const deletedAudits = yield* auditRowsFor(ownerId, "company_deleted");
+        expect(deletedAudits.map((r) => r.payload)).toEqual([
+          {
+            deleted_by_user_id: ownerId,
+            company_id: companyId,
+            name_at_deletion: db.ids.companyName("sole"),
+          },
+        ]);
         expect(yield* auditCount(ownerId, "membership_removed")).toBe(1);
         expect(yield* auditCount(ownerId, "account_delete")).toBe(1);
         expect((yield* db.readSessions(ownerId)).length).toBe(0);
@@ -136,7 +142,7 @@ describe("deleteCompany", () => {
       }),
     ));
 
-  test("非 OWNER (MEMBER) は forbidden、無変更", () =>
+  test("guard 通過後に降格された actor (MEMBER) は lock 後の再確認で forbidden、無変更", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -154,12 +160,12 @@ describe("deleteCompany", () => {
       }),
     ));
 
-  test("存在しない companyId は not_found_or_already_deleted", () =>
+  test("存在しない companyId は非メンバーと同じ forbidden (存在を観測させない)", () =>
     run(
       Effect.gen(function* () {
         const ownerId = yield* seedUser("nf");
         const e = yield* Effect.flip(deleteCompany(ownerId, "cmp_does_not_exist"));
-        expectFailure(e, NotFoundOrAlreadyDeleted, "not_found_or_already_deleted", 404);
+        expectFailure(e, Forbidden, "forbidden", 403);
       }),
     ));
 

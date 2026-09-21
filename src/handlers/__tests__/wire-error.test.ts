@@ -13,7 +13,7 @@ import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { consoleSentryBackend, setSentryBackend } from "../../sentry";
 import { InvalidCode, Locked, MfaNotFound } from "../../mfa/error-mapping";
-import { AlreadyExists, NotFoundOrAlreadyDeleted } from "../../company/errors";
+import { AlreadyExists } from "../../company/errors";
 import { NotFoundOrNotPending, RateLimited } from "../../invitation/errors";
 import { LastOwner } from "../../membership/errors";
 import {
@@ -96,7 +96,6 @@ describe("failure class の wire 直列化 (旧 REASON_TO_ERROR / 旧 respond.ts
     [new LastOwner(), 409, '{"error":"last_owner"}'],
     [new AlreadyExists(), 409, '{"error":"already_exists"}'],
     [new NotFoundOrNotPending(), 404, '{"error":"not_found_or_not_pending"}'],
-    [new NotFoundOrAlreadyDeleted(), 404, '{"error":"not_found_or_already_deleted"}'],
     [new RateLimited(), 429, '{"error":"rate_limited"}'],
     [new ExpiredOrUsed(), 410, '{"error":"expired_or_used"}'],
     [new InvalidCode(), 400, '{"error":"invalid_code"}'],

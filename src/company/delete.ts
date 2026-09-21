@@ -5,9 +5,9 @@ import { deleteAccountIfOrphaned } from "../account/orphan";
 import { AuditLog } from "../audit/ports";
 import { InvitationRepo } from "../invitation/ports";
 import { Forbidden } from "../membership/guard/errors";
+import { isAtLeast } from "../membership/policy";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
-import { NotFoundOrAlreadyDeleted } from "./errors";
 import { CompanyRepo } from "./ports";
 
 export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
@@ -23,17 +23,14 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
 
   return yield* tx.run(
     Effect.fn("company.deleteCompany.apply")(function* (t: DbTx) {
+      yield* memberships.lockOwnerMembershipsOfCompany(t, companyId);
       const target = yield* companies.findCompanyById(companyId, t);
-      if (!target) return yield* new NotFoundOrAlreadyDeleted();
+      if (!target) return yield* new Forbidden();
       if (target.activationStatus !== "ACTIVE") return { actorDeleted: false };
 
-      yield* memberships.lockOwnerMembershipsOfCompany(t, companyId);
-      // authz の membership 読みを lock 後に置くのは、並行削除との間で誤 forbidden を出さないため。
-      const locked = yield* companies.findCompanyById(companyId, t);
-      if (!locked || locked.activationStatus !== "ACTIVE") return { actorDeleted: false };
-
       const actorMembership = yield* memberships.findMembership(actorUserId, companyId, t);
-      if (!actorMembership || actorMembership.role !== "OWNER") return yield* new Forbidden();
+      if (!actorMembership || !isAtLeast(actorMembership.role, "OWNER"))
+        return yield* new Forbidden();
 
       const revokedInvitations = yield* invitations.revokePendingInvitationsOfCompany(companyId, t);
       yield* audit.recordInvitationsRevoked(

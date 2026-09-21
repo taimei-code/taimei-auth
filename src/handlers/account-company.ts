@@ -114,8 +114,8 @@ accountCompany.post("/api/account/companies/:companyId/delete", (c) =>
   runRoute(
     c,
     Effect.gen(function* () {
-      const actor = yield* requireActor(c.req.raw.headers);
       const companyId = c.req.param("companyId");
+      const { actor } = yield* requireMembership(c.req.raw.headers, companyId, "OWNER");
       const result = yield* deleteCompany(actor.id, companyId);
       return c.json({ ok: true, account_deleted: result.actorDeleted });
     }),
