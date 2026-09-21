@@ -1,12 +1,12 @@
 # Service Key 緊急 rotation 手順
 
-`AUTH_SERVICE_KEY` (taimei → taimei-auth の `/rpc/*` 認証 shared secret) が漏洩した場合の緊急 rotation 手順。所要時間 推定 30 分。
+`AUTH_SERVICE_KEY` (**Service Key**、定義は [`CONTEXT.md`](../../CONTEXT.md)) が漏洩した場合の緊急 rotation 手順。所要時間 推定 30 分。
 
 **定期 rotation 運用 (rotation 周期 / grace period 値 / reminder 設計) は本ドキュメント scope 外**。A-2 (AWS Secrets Manager 統合) 着手時に再検討する。
 
 ## 前提
 
-- `src/index.ts` の `/rpc/*` middleware は `getValidServiceKeys()` 経由で `AUTH_SERVICE_KEY` (active) + `AUTH_SERVICE_KEY_PREVIOUS` (optional) の両方を受け入れる
+- `CONTEXT.md` の **Service Key** のとおり `AUTH_SERVICE_KEY` (active) + `AUTH_SERVICE_KEY_PREVIOUS` (optional) の 2 本を同時に受理する。判定は `verifyServiceKey` (`src/service-key.ts`)、鍵集合は `getValidServiceKeys()`
 - 適切な手順で実施すれば **end user 影響 0**
 - 手順ミス (例: PREVIOUS 削除 を consumer 更新前に実行) で taimei → taimei-auth RPC 全 401 → end user 全員 session 検証失敗
 

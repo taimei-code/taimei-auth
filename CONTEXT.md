@@ -176,6 +176,10 @@ _Avoid_: logout (英語混在を避ける), session 終了 (より広義)
 better-auth lifecycle hook や admin 操作によって、user 自身の意思とは独立に **session** を強制無効化する操作。`session.revoked_at` 列に時刻を記録し、VerifySession が `RESULT_REVOKED` を返す状態にする。**sign-out** (ユーザー自発) と対比される。trigger は password change / account delete 等の security-sensitive operation。
 _Avoid_: invalidate (より広義), terminate, kill
 
+**Service Key**:
+consumer app が **auth ホスト** の `/rpc/*` を呼ぶ時に提示する service 間認証の shared secret (`X-Service-Key` header、env `AUTH_SERVICE_KEY`)。end user の **session** とは独立で、consumer app の server 側だけが持つ。rotation のため active と previous (`AUTH_SERVICE_KEY_PREVIOUS`) の 2 本を同時に受理する。未設定時は production では **fail-closed** (503)、非 production では service 認証を止めて通す (**kill switch** と同種の運用上の無効化で、判断材料が得られない **fail-open** ではない)。手順: `docs/runbook/service-key-rotation.md`。
+_Avoid_: API key (end user 向け credential と紛らわしい), shared secret (`AUTH_SECRET` と衝突), サービスキー (カタカナ表記の混在)
+
 **membership guard**:
 **アカウント管理画面** 系の操作 API (**auth ホスト** の `/api/account/*`) の認可入口 (`src/membership/guard/` directory module)。**session** からの actor 解決 (**fail-closed**: 解決失敗は拒否に倒す) と、**membership** の存在 / **role** 階層 (OWNER > ADMIN > MEMBER) に基づく操作可否判定を一手に担う。target 側 role 規則 (OWNER への操作は OWNER のみ等) の policy 判定も同じ語で指す。認可の入口は 2 系統: generic entry (`requireActor` / `requireMembership` / `requireMembershipOf`) と、operation 単位 entry (`requireRoleChange` / `requireRemoval` / `requireTransferOwnership` / `requireInvite` / `requireInvitationAccept`)。後者は 401→400→403→404 の順で target 側の canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget を含めた 1 発回答を返し、handler は Effect program として合成した結果を adapter (`runRoute`) が HTTP に写像する。詳細: ADR-0012 / ADR-0017。
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態名)

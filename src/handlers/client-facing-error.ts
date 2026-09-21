@@ -7,10 +7,11 @@ import type { MembershipError } from "../membership/errors";
 import type { GuardError } from "../membership/guard/errors";
 import type { MfaError } from "../mfa/error-mapping";
 import type { MfaClientFacingErrorCode } from "../mfa/client-facing-contracts";
+import type { ServiceKeyError } from "../service-key";
 
 export type DomainError = MembershipError | CompanyError | InvitationError;
 
-export type ClientFacingError = GuardError | DomainError | MfaError;
+export type ClientFacingError = GuardError | DomainError | MfaError | ServiceKeyError;
 
 export type ClientFacingErrorShape = {
   readonly error: string;
