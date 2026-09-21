@@ -1,24 +1,15 @@
 import { Effect } from "effect";
 import type { AuditLogEntry } from "@/db/repositories/audit-log";
 import type { DbError } from "../errors";
-import { SentryService } from "../sentry";
+import { captureCause, type SentryService } from "../sentry";
 import { AuditLog } from "./ports";
 
 export const swallowAuditFailure =
   (event: AuditLogEntry["eventType"]) =>
-  <A, R>(
-    program: Effect.Effect<A, DbError, R>,
-  ): Effect.Effect<A | undefined, never, R | SentryService> =>
+  <R>(program: Effect.Effect<unknown, DbError, R>): Effect.Effect<void, never, R | SentryService> =>
     program.pipe(
-      Effect.catch((failure) =>
-        Effect.gen(function* () {
-          const sentry = yield* SentryService;
-          yield* sentry.captureException(failure.cause, {
-            tags: { component: "audit-log", event },
-          });
-          return undefined;
-        }),
-      ),
+      Effect.asVoid,
+      Effect.catch(captureCause({ level: "error", tags: { component: "audit-log", event } })),
     );
 
 export const appendAuditLogBestEffort = (entry: AuditLogEntry) =>
