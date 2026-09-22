@@ -9,7 +9,7 @@ import {
   stubActor,
   TEST_PREFIX,
 } from "../../handlers/__tests__/helpers";
-import { dbTest, drained, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest, drained, expectFailure, withSpy } from "../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
 import { getMemoryKvStore } from "../../ttl-store";
@@ -245,15 +245,9 @@ describe("createInvitation (use-case)", () => {
     ));
 });
 
-// magic-link 送信の spy。restore は Effect の release で必ず行う。
 const withMagicLinkSpy = <A, E, R>(
   use: (spy: Mock<typeof auth.api.signInMagicLink>) => Effect.Effect<A, E, R>,
-) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => spyOn(auth.api, "signInMagicLink")),
-    use,
-    (spy) => Effect.sync(() => spy.mockRestore()),
-  );
+) => withSpy(() => spyOn(auth.api, "signInMagicLink"), use);
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
   const captured = recordSentryExceptions();

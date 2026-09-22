@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, type Mock, spyOn, test } from "bun:test";
 import { Effect, Exit } from "effect";
 import { ExpiredOrUsed } from "../../membership/guard/errors";
-import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest, expectFailure, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { acceptInvitation } from "../accept";
 
@@ -33,11 +33,7 @@ const membershipRowsOf = (userId: string, companyId: string) =>
 
 // reject 経路の console.warn を捕捉する。restore は Effect の release で必ず行う。
 const withWarnSpy = <A, E, R>(use: (warn: Mock<typeof console.warn>) => Effect.Effect<A, E, R>) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => spyOn(console, "warn").mockImplementation(() => {})),
-    use,
-    (warn) => Effect.sync(() => warn.mockRestore()),
-  );
+  withSpy(() => spyOn(console, "warn").mockImplementation(() => {}), use);
 
 describe("acceptInvitation", () => {
   beforeEach(cleanup);
@@ -132,8 +128,7 @@ describe("acceptInvitation", () => {
         yield* db.setMembershipRole(inviter.id, co, "ADMIN");
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        // Bun 1.3 の spy.mockRestore() は call history もクリアするため、warn call の検証は
-        // release 前に済ませる (実測: PR #109)。
+        // warn call の検証は withSpy の release 前に済ませる (restore が call 履歴も消す。実測: PR #109)。
         const { e, warnCalls } = yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
             const e = yield* Effect.flip(
