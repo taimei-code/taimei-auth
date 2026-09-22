@@ -1,8 +1,7 @@
 import { Effect, type Exit, type Layer } from "effect";
 import { type Context, Hono } from "hono";
 
-// Hono の Context を得るためだけの使い捨て route で program を走らせ、service を test Layer で差し替える。
-// Hono は handler の throw を 500 にして握りつぶすので、Exit を取り出して失敗をテスト側で throw する。
+// Hono は handler の throw を 500 にして握りつぶすため、Exit を取り出してテスト側で throw する。
 export const runProgramInRoute = async <A, E, R>(
   route: string,
   url: string,

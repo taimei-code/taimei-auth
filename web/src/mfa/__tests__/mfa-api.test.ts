@@ -10,14 +10,9 @@ import {
   verifyMfaChallenge,
 } from "../mfa-api";
 
-// 応答 fixture の形は、server の統合テスト (src/handlers/__tests__/account-mfa.test.ts と
-// mfa-challenge.test.ts) が実際の HTTP で固定している応答を定義元とする。ここでは公開関数を通して、
-// 応答から view への変換、positive check、error code の解決を検証する (AC は solution_plan の ID)。
-
 afterEach(restoreFetch);
 
-// sentinel を try に入れて自分の catch で拾う形にすると、resolve した場合も "unknown" が返り、
-// 縮退テスト全体が何も検証しなくなる。2 引数の then で reject した経路だけを code に変換する。
+// try/catch で sentinel を拾う形だと resolve した場合も "unknown" になり検証にならない
 const codeOfRejection = (promise: Promise<unknown>): Promise<string> =>
   promise.then(() => {
     throw new Error("expected rejection");
@@ -62,7 +57,6 @@ describe("応答 → view 変換", () => {
     expect(await verifyMfaChallenge({ code: "123456", kind: "totp" })).toEqual({
       redirectUrl: "/account/security",
     });
-    // POST はチャレンジを消費するため、2 回目の呼び出しは challenge_expired になる (ADR-0013 §9)。
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 

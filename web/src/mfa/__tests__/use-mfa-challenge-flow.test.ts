@@ -1,10 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { mfaChallengePort } from "../use-mfa-challenge-flow";
 
-// production の port の実体を fetch spy で検証する。stub 化した api object を挟まないのは、
-// HTTP の変換 (mfa-api の resolveMfaErrorCode まで) を実際の呼び出しの連なりで通し、テストの注入点を
-// useMfaChallengeFlow(port) の 1 つに保つためである。
-
 let fetchSpy: ReturnType<typeof spyOn> | undefined;
 
 afterEach(() => {

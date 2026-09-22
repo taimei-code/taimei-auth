@@ -5,12 +5,9 @@ import { partial } from "../../__tests__/live-runner";
 import { Locked } from "../error-mapping";
 import { MfaDisableBudget, MfaIssuer, MfaNotifier, MfaSessions } from "../totp/ports";
 
-// MFA の use-case テスト用 test Layer (design §3.14)。runner は live-runner.ts の runTest を使う。
-
 export const issuerLayer = (appName: string): Layer.Layer<MfaIssuer> =>
   Layer.succeed(MfaIssuer, MfaIssuer.of({ appName: Effect.succeed(appName) }));
 
-// revoke は他デバイス失効の観測点である。呼び出しの有無と回数が検証対象なので、記録して stub の cookie を返す。
 export const sessionsLayer = (recorded: { revokes: Headers[] }): Layer.Layer<MfaSessions> =>
   Layer.succeed(
     MfaSessions,
@@ -50,7 +47,6 @@ export const disableBudgetLayer = (
     }),
   );
 
-// audit の書き込み失敗 (DbError) を注入する。記帳が best-effort であること (操作は成立する) の検証用。
 export const auditFailingLayer = (cause: unknown): Layer.Layer<AuditLog> =>
   Layer.succeed(
     AuditLog,

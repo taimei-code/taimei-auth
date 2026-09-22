@@ -11,10 +11,6 @@ import { MembershipRepo } from "../ports";
 import { partial } from "../../__tests__/live-runner";
 import { SentryLive, type SentryService } from "../../sentry";
 
-// guard テスト用の test Layer (design §3.14)。deps factory の後継で、Effect.provide で差し替える。
-
-// guard program を SentryLive の下で走らせる。run は失敗を GuardError 相当 (_tag / error / status を持つ
-// class) として取り出す (DbError 等は個別のテストが instanceof で判定する)。
 export const run = <A, E>(p: Effect.Effect<A, E, SentryService>) =>
   Effect.runPromise(Effect.flip(Effect.provide(p, SentryLive))) as Promise<
     E & { _tag: string; error?: string; status?: number }
@@ -92,7 +88,6 @@ export const invitationRepoLayer = (rows: InvitationRow[]): Layer.Layer<Invitati
     }),
   );
 
-// 認証済み actor (user "u1", email) を解決する標準 Layer。
 export const signedIn = (userId = "u1", email = "u1@example.com") =>
   Layer.mergeAll(
     authLayer(() => sessionOf(userId)),

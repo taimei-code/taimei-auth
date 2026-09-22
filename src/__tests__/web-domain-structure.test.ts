@@ -7,9 +7,6 @@ import {
   readActualWebSources,
 } from "./web-domain-structure-helpers";
 
-// web/src のドメイン構造 (ADR-0015、web/src/CLAUDE.md) を固定する恒久的な architecture テスト。
-// #151 の一度きりの移行完了の証跡は、baseline が merge 済みのため退役した (helper のコメントを参照)。
-
 describe("extractModuleSpecifiers", () => {
   test("全 static import 形式と literal dynamic import を抽出する", async () => {
     const source = `

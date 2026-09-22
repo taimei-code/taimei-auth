@@ -18,13 +18,9 @@ import {
   readUser,
 } from "../testing/read";
 
-// db/testing/* はテストの seed と観測 (事後状態の読み取り) の定義元である。ここでは、それが明示した状態をそのまま作ることと、
-// production の状態遷移と同じ列を書くことを固定する。
-
 const P = "dbseed-test-";
 const seed = createSeed(P);
 
-// createSeed が公開する 11 関数を型で固定する (AC-208)。
 const SEED_KEYS = {
   seedUser: true,
   seedSession: true,

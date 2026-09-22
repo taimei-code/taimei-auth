@@ -2,9 +2,6 @@ import { describe, expect, test } from "bun:test";
 import type { InvitationRow } from "@/db/repositories/invitation";
 import { isAcceptableAt } from "../policy";
 
-// 受諾可否の述語 (PENDING かつ期限内) の定義元。expired は status 列でなく expires_at から導出する
-// (status は PENDING / ACCEPTED / REVOKED の 3 値だけ)。時刻は引数で受け取り、Date.now() に依存しない。
-
 const NOW = Date.UTC(2026, 8, 5, 12, 0, 0);
 
 const rowOf = (over: Partial<InvitationRow>): InvitationRow =>

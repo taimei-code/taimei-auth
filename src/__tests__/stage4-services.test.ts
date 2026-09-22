@@ -7,7 +7,6 @@ import { HealthRepoLive } from "../health/wiring";
 import { getMemoryKvStore, pingTtlStore } from "../ttl-store";
 import { TtlStore, TtlStoreLive } from "../ttl-store-service";
 
-// ADR-0017 Stage 4 の runtime primitive と境界 service のテスト。in-memory store と compose の Postgres を使う。
 describe("TtlStore service (live)", () => {
   const run = <A, E>(p: Effect.Effect<A, E, TtlStore>) =>
     Effect.runPromise(Effect.provide(p, TtlStoreLive));

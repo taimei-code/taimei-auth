@@ -3,9 +3,6 @@ import { buildApp } from "../app";
 import { auth } from "../auth";
 import { recordSentryExceptions } from "./sentry-recorder";
 
-// src/app.ts の /api/auth/* mount を検査する。better-auth の router は onRequest 段 (rate limiter による TTL store 読み取り) の
-// throw を onError に渡さず、auth.handler の reject にする (この機構は better-auth-on-api-error.test.ts で固定している)。Hono 既定の
-// errorHandler は Sentry に届かないので、mount が拾って captureThrown に送り 500 を返す。
 describe("/api/auth/* の mount は auth.handler の reject を Sentry に送る", () => {
   const captured = recordSentryExceptions();
   const app = buildApp({ mountStatic: () => {} });

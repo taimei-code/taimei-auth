@@ -14,15 +14,13 @@ import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
-// better-auth (getSession / signOut) と DB (UserRepo / SessionRepo) はすべて test Layer で差し替える
-// (mock.module はプロセス全体に作用して後続のファイルに漏れるため使わない)。
+// mock.module はプロセス全体に作用して後続のファイルに漏れるため使わない。
 const mockSignOut = mock();
 
 beforeEach(() => {
   mockSignOut.mockReset();
 });
 
-// 共有 authLayer の signOut を mock に差し替える (既定は Effect.void)。
 const signOut = () =>
   Effect.tryPromise({
     try: () => Promise.resolve(mockSignOut()),
@@ -134,7 +132,6 @@ describe("verifySession outcome", () => {
   });
 
   test("cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
-    // 旧形式の session payload (deploy 前に発行されたため revision フィールドがない)
     const res = await run(
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1" })),

@@ -5,10 +5,6 @@ import { join } from "node:path";
 import { Hono } from "hono";
 import { buildSpaFallbackHandler } from "../spa-fallback";
 
-// CI には web/dist が存在しない (build:web は deploy 時にだけ走る) ため、実 dist に依存せず
-// 一時ファイルの fixture を handler に注入する。status だけの assert では index.html が無くても
-// 200 が返って誤って成功するため、body の内容まで必ず読み切って検証する。
-
 const FIXTURE_HTML = "<!DOCTYPE html><html><body>spa-fixture</body></html>";
 
 const buildApp = () => {

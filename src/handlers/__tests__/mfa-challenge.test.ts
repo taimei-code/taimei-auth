@@ -16,10 +16,6 @@ import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mfaChallenge } from "../mfa-challenge";
 
-// pre-session チャレンジ API (src/handlers/mfa-challenge.ts) の統合テスト。
-// requireActor を通らずチャレンジ cookie を認証材料にする二本目の認証経路なので、
-// cookie 無し / 改ざん / 期限切れの 3 ケースは認可スモークと同格の扱いで固定する。
-
 const P = "mfa-h-challenge-";
 const run = runTest(P);
 
@@ -67,7 +63,6 @@ describe("MFA チャレンジ API", () => {
 
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({ redirect_url: "/account/security" });
-        // 転送漏れがあると「ログインできたのにセッションが無い」状態になり、画面からは原因不明の再ログインに見える。
         const setCookies = res.headers.getSetCookie();
         expect(setCookies.length).toBeGreaterThan(0);
       }),
@@ -114,7 +109,6 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(verifyRes.status).toBe(401);
-        // 署名検証に落ちたのか期限切れなのかを区別させず、遷移先・userId・第二要素の種別も返さない。
         expect(yield* responseJson(verifyRes)).toEqual({ error: "challenge_expired" });
         expect(verifyRes.headers.getSetCookie()).toEqual([]);
         expect(yield* responseJson(statusRes)).toEqual({ pending: false });
@@ -132,7 +126,6 @@ describe("MFA チャレンジ API", () => {
           redirectUrl: "/account/security",
           method: "magic_link",
         });
-        // TTL の経過を決定的に再現するため、実 store の key を消す (固定の sleep は使わない)。
         yield* Effect.sync(() => getMemoryKvStore().delete(challengeKey(challenge.challengeId)));
 
         const res = yield* verifyWith(buildApp(), challenge.headers, {
@@ -141,7 +134,6 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(res.status).toBe(401);
-        // cookie 無し / 改ざんの場合と同じ body にして、どの段階で失敗したかを未認証のブラウザに教えない。
         expect(yield* responseJson(res)).toEqual({ error: "challenge_expired" });
         expect(res.headers.getSetCookie()).toEqual([]);
       }),

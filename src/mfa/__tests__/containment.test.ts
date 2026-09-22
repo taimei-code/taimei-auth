@@ -6,8 +6,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const SEARCH_ROOTS = "src web/src";
 
-// __tests__ を除外するのは自分自身に一致するのを避けるため (このファイル自身がパターン文字列を持つ)。コメント内の出現は
-// 封じ込め違反でないため `//` 以降を落としてから判定する (`[^:]` は URL の `://` を残すため)。
+// __tests__ 除外は自分自身への一致を避けるため。コメント内の一致は違反でないので `//` 以降を落とす (`[^:]` は URL の `://` を残す)。
 function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): string[] {
   const command = [
     `cd ${JSON.stringify(REPO_ROOT)} &&`,
@@ -23,8 +22,7 @@ function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): st
     .sort();
 }
 
-// import はファイル単位でなく出現単位で全列挙する。ファイル単位の grep では許可済みファイルに増えた
-// 2 本目の import を見逃し、ファイル一覧のハードコードでは新規ファイルが検査をすり抜ける。
+// ファイル単位の grep は許可済みファイルに増えた 2 本目の import を見逃す。
 function importOccurrences(root: string, targetPattern: string): string[] {
   const pattern = `(from|import)[ (]['"]${targetPattern}[^'"]*['"]`;
   const command = [
@@ -40,10 +38,8 @@ function importOccurrences(root: string, targetPattern: string): string[] {
 
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
   test("QA-R-01 auth-plugins が import してよい mfa モジュールは 4 つに限る", () => {
-    // 検出器が生きていることの positive control。
+    // positive control。
     expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
-    // hot path へ行 SELECT 以外の DB 依存を混入させない。challenge-required (最小射影の SELECT 1 回追加)
-    // と login-challenge (cookie の材料) 以外の mfa モジュールをログイン境界に増やさない (ADR-0016 §4.4)。
     expect(importOccurrences("src/auth-plugins", "[^'\"]*mfa/")).toEqual([
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/kill-switch"`,
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/redirect-guard"`,
@@ -51,8 +47,6 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/totp/login-challenge"`,
       `src/auth-plugins/primary-auth-routes.ts:from "../mfa/totp/login-challenge"`,
     ]);
-    // mfa_totp repository の直接 import は 0 件である (読み取りは challenge-required に一本化する。
-    // sign-in-observer の audit-log repository は観測用で対象外)。
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src/auth-plugins")).toEqual([]);
   });
 
@@ -81,9 +75,7 @@ describe("MFA totp module boundary", () => {
   });
 
   test("AC-150f gateway の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
-    // 根拠は CONTEXT.md「session cookie」で、挙動の固定は src/__tests__/session-cookie-contract.test.ts が行う。ここは
-    // 手組みへ戻そうとする変更を最速で検出する静的 tripwire である。root は src/mfa に固定する (ファイルパスを渡すとファイルが
-    // 無い時に空集合になって検査をすり抜ける)。login-challenge.ts の一致が検出器の positive control を兼ねる。
+    // root にファイルパスを渡すとファイルが無い時に空集合ですり抜ける。login-challenge.ts の一致が positive control。
     expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa")).toEqual([
       "src/mfa/gateway.ts",
       "src/mfa/totp/login-challenge.ts",
@@ -92,8 +84,6 @@ describe("MFA totp module boundary", () => {
   });
 
   test("AC-150b db/repositories/mfa-totp の production importer 列挙", () => {
-    // repository の Effect face は ports (型) と wiring (結線) に閉じ、use-case と management CLI は
-    // service を yield* する (ADR-0017 Stage 3)。id-generator は採番関数の定義元である。
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src management")).toEqual([
       "src/id-generator.ts",
       "src/mfa/totp/enroll-mfa.ts",
@@ -109,8 +99,6 @@ describe("MFA totp module boundary", () => {
   });
 
   test("AC-150e secret 材料を返す findMfaTotp の importer 列挙", () => {
-    // findMfaTotp は secret 列を含む全列の射影なので、復号の材料を扱ってよいのは use-case の 3 ファイルに限る
-    // (ports / wiring は LiftedModule / liftAll で repository module から導出するため、関数名を持たない)。
     expect(filesWithCodeLiteral("findMfaTotp", "src db management")).toEqual([
       "db/repositories/mfa-totp.ts",
       "src/mfa/totp/activate-mfa.ts",

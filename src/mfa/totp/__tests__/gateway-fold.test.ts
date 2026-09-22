@@ -9,9 +9,6 @@ import { ChallengeExpired } from "../../error-mapping";
 import { MfaSessions } from "../ports";
 import { MfaLayers } from "../wiring";
 
-// better-auth の revokeOtherSessions の失敗を「body.code 付きなら ChallengeExpired (観測あり)、それ以外なら
-// AuthApiError (そのまま通す)」にまとめる境界。gateway は import せず、wiring の live 結線を通して観測する (containment AC-150a)。
-
 const captured = recordSentryExceptions();
 const headers = new Headers();
 
