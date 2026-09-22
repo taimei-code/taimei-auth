@@ -55,6 +55,12 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
     // sign-in-observer の audit-log repository は観測用で対象外)。
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src/auth-plugins")).toEqual([]);
   });
+
+  test("AC-022 kill switch の env を読むのは mfa-challenge の after-hook だけ (program は引数で受ける)", () => {
+    expect(filesWithCodeLiteral("MFA_CHALLENGE_ENABLED")).toEqual([
+      "src/auth-plugins/mfa-challenge.ts",
+    ]);
+  });
 });
 
 describe("MFA totp module boundary", () => {

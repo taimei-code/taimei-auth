@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
 import { auth } from "../../auth";
 import { AuthApi } from "../../auth-service";
-import { DbError } from "../../errors";
+import { AuthApiError, DbError, TtlStoreError } from "../../errors";
 import {
   browserCookieHeaders,
   cleanupIssuedChallenges,
@@ -21,11 +21,11 @@ import {
   readLoginChallengeState,
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
-import { getRuntime } from "../../runtime";
+import { type AppRuntime, getRuntime } from "../../runtime";
 import { getMemoryKvStore, ttlStorage } from "../../ttl-store";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
-import { partial, runTest } from "../../__tests__/live-runner";
+import { partial, runTest, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
@@ -40,6 +40,11 @@ const run = runTest(P);
 const sentry = installSentryRecorder();
 const killSwitchWarnings = () =>
   sentry.messages.filter((capture) => capture.context?.tags?.component === "mfa-challenge");
+const expectMfaChallengeException = (count: number) => {
+  expect(sentry.exceptions.length).toBe(count);
+  for (const capture of sentry.exceptions)
+    expect(capture.context?.tags).toEqual({ component: "mfa-challenge" });
+};
 const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
     Effect.sync(() => {
@@ -53,6 +58,11 @@ const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
         if (original === undefined) delete process.env.MFA_CHALLENGE_ENABLED;
         else process.env.MFA_CHALLENGE_ENABLED = original;
       }),
+  );
+const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
+  withSpy(
+    () => spyOn(Date, "now").mockReturnValue(at),
+    () => body,
   );
 
 const CHALLENGE_PAGE_PATH = "/auth/mfa";
@@ -90,13 +100,14 @@ type OAuthCallbackOutcome = {
   redirectStatus: number | undefined;
   redirectedTo: string | null;
   newSessionUpdates: unknown[];
-  responseHeaders: Headers;
+  browserHeaders: Headers;
 };
 
 // after-hook が使う機能だけを載せた transport ctx。context は実物 (internalAdapter / baseURL) を
 // そのまま持たせるので、セッション破棄もチャレンジ発行も実 TTL store / 実 DB に効く。
 const runOAuthCallbackHook = (
   newSession: { session: { token: string }; user: Record<string, unknown> } | null,
+  runtime = getRuntime(),
 ) =>
   Effect.gen(function* () {
     const outcome = yield* Effect.promise(async (): Promise<OAuthCallbackOutcome> => {
@@ -120,7 +131,7 @@ const runOAuthCallbackHook = (
         },
       };
 
-      const afterHook = mfaChallenge(getRuntime()).hooks?.after?.[0];
+      const afterHook = mfaChallenge(runtime).hooks?.after?.[0];
       if (!afterHook) throw new Error("mfa-challenge plugin has no after hook");
       expect(afterHook.matcher(ctx as never)).toBe(true);
 
@@ -132,12 +143,10 @@ const runOAuthCallbackHook = (
         redirectStatus: thrown?.statusCode,
         redirectedTo: thrown?.headers?.get("location") ?? null,
         newSessionUpdates,
-        responseHeaders,
+        browserHeaders: browserCookieHeaders(new Response(null, { headers: responseHeaders })),
       };
     });
-    yield* trackChallengeFrom(
-      browserCookieHeaders(new Response(null, { headers: outcome.responseHeaders })),
-    );
+    yield* trackChallengeFrom(outcome.browserHeaders);
     return outcome;
   });
 
@@ -206,25 +215,25 @@ describe("チャレンジ強制プラグイン", () => {
         const link = yield* requestMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
         const originalSet = ttlStorage.set.bind(ttlStorage);
 
-        const login = yield* Effect.acquireUseRelease(
-          Effect.sync(() =>
+        const login = yield* withSpy(
+          () =>
             spyOn(ttlStorage, "set").mockImplementation((key, value, ttl) => {
               if (key.startsWith("mfa:login-challenge:")) {
                 return Promise.reject(new Error("challenge store unavailable"));
               }
               return originalSet(key, value, ttl);
             }),
-          ),
           () => followMagicLink(link),
-          (failing) => Effect.sync(() => failing.mockRestore()),
         );
 
         // 元の 302 を通す fail-open だと、MFA を有効にした user が第二要素なしでセッションを得る。
         expect(login.location?.pathname).toBe(CHALLENGE_PAGE_PATH);
         expect(login.location?.toString()).not.toBe(CONSUMER_CALLBACK);
         expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(0);
-        expect(sentry.exceptions.length).toBe(1);
-        expect(sentry.exceptions[0]?.context?.tags).toEqual({ component: "mfa-challenge" });
+        expect(yield* readLoginChallengeState(browserCookieHeaders(login.response))).toEqual({
+          pending: false,
+        });
+        expectMfaChallengeException(1);
       }),
     ));
 
@@ -236,12 +245,11 @@ describe("チャレンジ強制プラグイン", () => {
         yield* enableMfaFor(user);
         const authContext = yield* Effect.promise(() => auth.$context);
 
-        const login = yield* Effect.acquireUseRelease(
-          Effect.sync(() =>
+        const login = yield* withSpy(
+          () =>
             spyOn(authContext.internalAdapter, "deleteSession").mockRejectedValue(
               new Error("session store unavailable"),
             ),
-          ),
           () =>
             Effect.gen(function* () {
               const login = yield* loginWithMagicLink({
@@ -251,14 +259,15 @@ describe("チャレンジ強制プラグイン", () => {
               yield* trackChallengeFrom(browserCookieHeaders(login.response));
               return login;
             }),
-          (failing) => Effect.sync(() => failing.mockRestore()),
         );
 
         expect(login.location?.pathname).toBe(CHALLENGE_PAGE_PATH);
         // 破棄が失敗しても cookie が出ていなければブラウザは使えるセッションを持たない。
         expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(0);
-        expect(sentry.exceptions.length).toBe(1);
-        expect(sentry.exceptions[0]?.context?.tags).toEqual({ component: "mfa-challenge" });
+        expect(yield* readLoginChallengeState(browserCookieHeaders(login.response))).toEqual({
+          pending: true,
+        });
+        expectMfaChallengeException(1);
       }),
     ));
 
@@ -268,59 +277,79 @@ describe("チャレンジ強制プラグイン", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("d11");
         const enabled = yield* enableMfaFor(user);
-        const killSwitchWarnings = () =>
-          sentry.messages.filter((capture) => capture.context?.tags?.component === "mfa-challenge");
 
-        yield* Effect.acquireUseRelease(
-          Effect.sync(() => {
-            const original = process.env.MFA_CHALLENGE_ENABLED;
-            process.env.MFA_CHALLENGE_ENABLED = "false";
-            return original;
+        yield* withKillSwitchOff(
+          Effect.gen(function* () {
+            const first = yield* loginWithMagicLink({
+              email: user.email,
+              callbackURL: CONSUMER_CALLBACK,
+            });
+            const second = yield* loginWithMagicLink({
+              email: user.email,
+              callbackURL: CONSUMER_CALLBACK,
+            });
+
+            for (const login of [first, second]) {
+              expect(login.location?.toString()).toBe(CONSUMER_CALLBACK);
+              expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(1);
+            }
+            // 停止中である事実は届けたいが、全ログインで警告を出すとノイズで埋もれる。
+            expect(killSwitchWarnings().length).toBe(1);
+            expect(killSwitchWarnings()[0]?.message).toBe(
+              "mfa: challenge enforcement disabled by kill switch",
+            );
+            expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
+
+            // 間隔を跨いだら鳴り直す。1 回きりだと常駐 isolate が初回以降ずっと黙る。時計を進めて
+            // 安全なのは kill switch 判定が介入より前で return するため。
+            const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
+            yield* withClockAt(
+              afterInterval,
+              runOAuthCallbackHook({
+                session: { token: enabled.session.token },
+                user: { id: user.id },
+              }),
+            );
+
+            expect(killSwitchWarnings().length).toBe(2);
           }),
-          () =>
-            Effect.gen(function* () {
-              const first = yield* loginWithMagicLink({
-                email: user.email,
-                callbackURL: CONSUMER_CALLBACK,
-              });
-              const second = yield* loginWithMagicLink({
-                email: user.email,
-                callbackURL: CONSUMER_CALLBACK,
-              });
-
-              for (const login of [first, second]) {
-                expect(login.location?.toString()).toBe(CONSUMER_CALLBACK);
-                expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(1);
-              }
-              // 停止中である事実は届けたいが、全ログインで警告を出すとノイズで埋もれる。
-              expect(killSwitchWarnings().length).toBe(1);
-              expect(killSwitchWarnings()[0]?.message).toBe(
-                "mfa: challenge enforcement disabled by kill switch",
-              );
-              expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
-
-              // 間隔を跨いだら鳴り直す。1 回きりだと常駐 isolate が初回以降ずっと黙る。時計を進めて
-              // 安全なのは kill switch 判定が介入より前で return するため。
-              const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
-              yield* Effect.acquireUseRelease(
-                Effect.sync(() => spyOn(Date, "now").mockReturnValue(afterInterval)),
-                () =>
-                  runOAuthCallbackHook({
-                    session: { token: enabled.session.token },
-                    user: { id: user.id },
-                  }),
-                (clock) => Effect.sync(() => clock.mockRestore()),
-              );
-
-              expect(killSwitchWarnings().length).toBe(2);
-            }),
-          (original) =>
-            Effect.sync(() => {
-              if (original === undefined) delete process.env.MFA_CHALLENGE_ENABLED;
-              else process.env.MFA_CHALLENGE_ENABLED = original;
-            }),
         );
       }),
+    ));
+
+  const ISSUED = { session: { token: "token-down" }, user: { id: "user-down" } };
+  const runHookWithRuntimeDown = () =>
+    withSpy(
+      () => spyOn(console, "error").mockImplementation(() => {}),
+      () =>
+        runOAuthCallbackHook(
+          ISSUED,
+          partial<AppRuntime>({ runPromise: () => Promise.reject(new Error("runtime down")) }),
+        ),
+    );
+
+  test("AC-019 runtime 不在 + kill switch on → session を落として 302 /auth/mfa、チャレンジ cookie は出ない", () =>
+    run(
+      Effect.gen(function* () {
+        const outcome = yield* runHookWithRuntimeDown();
+        expect(outcome.redirectStatus).toBe(302);
+        expect(new URL(outcome.redirectedTo as string).pathname).toBe(CHALLENGE_PAGE_PATH);
+        expect(outcome.newSessionUpdates).toEqual([null]);
+        expect(yield* readLoginChallengeState(outcome.browserHeaders)).toEqual({
+          pending: false,
+        });
+      }),
+    ));
+
+  test("AC-020 runtime 不在 + kill switch off → 素通し", () =>
+    run(
+      withKillSwitchOff(
+        Effect.gen(function* () {
+          const outcome = yield* runHookWithRuntimeDown();
+          expect(outcome.redirectStatus).toBeUndefined();
+          expect(outcome.newSessionUpdates).toEqual([]);
+        }),
+      ),
     ));
 
   test("QA-R-02 連携がチャレンジ誘発しない (実 OAuth は QA-MR-02)", () =>
@@ -352,7 +381,7 @@ describe("チャレンジ強制プラグイン", () => {
     ));
 });
 
-// program 単体 (設計 D9 / D12): fake Layer を内側で provide し、判定・介入・kill switch の各分岐を DB 非依存で固定する。
+// program 単体: fake Layer を内側で provide し、判定・介入・kill switch の各分岐を DB 非依存で固定する。
 // kill switch の最終通知時刻は module-level の Ref で QA-D-11 と共有するため、この describe は QA-D-11 の後に置き、
 // 時計は「QA-D-11 が残した値より INTERVAL 以上先」から始める (初回通知を確実に起こす)。
 describe("enforceChallenge (program 単体)", () => {
@@ -364,42 +393,51 @@ describe("enforceChallenge (program 単体)", () => {
     path: "/callback/:id",
     providerId: "gitlab",
   };
-  const inputWith = (calls: string[], route: PrimaryAuthRoute = GITHUB) => ({
+  const inputWith = (route: PrimaryAuthRoute = GITHUB) => ({
     userId: "user-unit",
     sessionToken: "token-unit",
     route,
     location: CONSUMER_CALLBACK,
-    setCookie: () => {
-      calls.push("setCookie");
-    },
-    dropIssuedSession: () => {
-      calls.push("drop");
-    },
+    challengeEnabled: true,
   });
+  const killSwitchOff = () => ({ ...inputWith(), challengeEnabled: false });
   const enrollment = (row: { verifiedAt: Date | null } | undefined) =>
     Layer.succeed(
       MfaTotpRepo,
       partial<MfaTotpRepo["Service"]>({ readMfaVerification: () => Effect.succeed(row) }),
     );
   const mfaEnabled = enrollment({ verifiedAt: new Date() });
+  const failingRepo = Layer.succeed(
+    MfaTotpRepo,
+    partial<MfaTotpRepo["Service"]>({
+      readMfaVerification: () =>
+        Effect.fail(new DbError({ cause: new Error("mfa_totp unavailable") })),
+    }),
+  );
   // method を渡さない partial は呼ばれた時点で die する = 「0 回」の決定的信号。
+  const repoUntouched = Layer.succeed(MfaTotpRepo, partial<MfaTotpRepo["Service"]>({}));
+  const ttlStoreUntouched = Layer.succeed(TtlStore, partial<TtlStore["Service"]>({}));
   const untouched = Layer.mergeAll(
-    Layer.succeed(TtlStore, partial<TtlStore["Service"]>({})),
+    ttlStoreUntouched,
     Layer.succeed(AuthApi, partial<AuthApi["Service"]>({})),
   );
-  const interventionSucceeds = (calls: string[]) =>
+  const ttlStoreWith = (set: () => Effect.Effect<void, TtlStoreError>) =>
+    Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ set }));
+  const authApiWith = (deleteSession: (token: string) => Effect.Effect<void, AuthApiError>) =>
+    Layer.succeed(
+      AuthApi,
+      partial<AuthApi["Service"]>({ secret: Effect.succeed("test-secret"), deleteSession }),
+    );
+  const authApiRecording = (deleted: string[]) =>
+    authApiWith((token) =>
+      Effect.sync(() => {
+        deleted.push(token);
+      }),
+    );
+  const interventionSucceeds = (deleted: string[]) =>
     Layer.mergeAll(
-      Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ set: () => Effect.void })),
-      Layer.succeed(
-        AuthApi,
-        partial<AuthApi["Service"]>({
-          secret: Effect.succeed("test-secret"),
-          deleteSession: (token) =>
-            Effect.sync(() => {
-              calls.push(`deleteSession:${token}`);
-            }),
-        }),
-      ),
+      ttlStoreWith(() => Effect.void),
+      authApiRecording(deleted),
     );
   const decide = <R>(input: ReturnType<typeof inputWith>, layer: Layer.Layer<R>) =>
     Effect.exit(enforceChallenge(input).pipe(Effect.provide(layer)));
@@ -408,46 +446,68 @@ describe("enforceChallenge (program 単体)", () => {
       SentryService,
       partial<SentryService["Service"]>({ [method]: () => Effect.die(new Error("sentry down")) }),
     );
+  const PASS = Exit.succeed({ _tag: "Pass" } as const);
+  const challengeWithCookie = Exit.succeed({
+    _tag: "Challenge" as const,
+    cookie: expect.objectContaining({
+      name: "mfa_login_challenge",
+      value: expect.stringMatching(/.+/),
+    }),
+  });
+  const challengeWithoutCookie = Exit.succeed({ _tag: "Challenge" as const, cookie: null });
+  const _programNeverFails: [Effect.Error<ReturnType<typeof enforceChallenge>>] extends [never]
+    ? true
+    : never = true;
 
-  test("AC-154 成功順序: setCookie → drop → deleteSession(token) が各 1 回で challenge", () =>
+  test("AC-007 介入成功: Challenge { cookie } と deleteSession(token) 1 回", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
+        const deleted: string[] = [];
         const exit = yield* decide(
-          inputWith(calls),
-          Layer.mergeAll(mfaEnabled, interventionSucceeds(calls)),
+          inputWith(),
+          Layer.mergeAll(mfaEnabled, interventionSucceeds(deleted)),
         );
-        expect(exit).toEqual(Exit.succeed("challenge"));
-        expect(calls).toEqual(["setCookie", "drop", "deleteSession:token-unit"]);
+        expect(exit).toEqual(challengeWithCookie);
+        expect(deleted).toEqual(["token-unit"]);
+        expectMfaChallengeException(0);
       }),
     ));
 
-  test("AC-155 MFA 未有効は pass、介入の副作用は 0 回", () =>
+  test("AC-005 MFA 未有効は Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
         const exit = yield* decide(
-          inputWith(calls),
+          inputWith(),
           Layer.mergeAll(enrollment({ verifiedAt: null }), untouched),
         );
-        expect(exit).toEqual(Exit.succeed("pass"));
-        expect(calls).toEqual([]);
-        expect(sentry.exceptions.length).toBe(0);
+        expect(exit).toEqual(PASS);
+        expectMfaChallengeException(0);
       }),
     ));
 
-  test("AC-158 未知 provider は fail-closed: challenge、drop 1 回、cookie / TTL store 0 回、Sentry warning 1 件", () =>
+  test("AC-006 Unmapped でも MFA 未有効なら Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
         const exit = yield* decide(
-          inputWith(calls, UNMAPPED_GITLAB),
-          Layer.mergeAll(mfaEnabled, untouched),
+          inputWith(UNMAPPED_GITLAB),
+          Layer.mergeAll(enrollment({ verifiedAt: null }), untouched),
         );
-        expect(exit).toEqual(Exit.succeed("challenge"));
-        expect(calls).toEqual(["drop"]);
-        expect(sentry.exceptions.length).toBe(1);
-        expect(sentry.exceptions[0]?.context?.tags).toEqual({ component: "mfa-challenge" });
+        expect(exit).toEqual(PASS);
+        expectMfaChallengeException(0);
+      }),
+    ));
+
+  test("AC-008 未知 provider は fail-closed: Challenge { null }、deleteSession 1 回、TTL store 0 回、Sentry warning 1 件", () =>
+    run(
+      Effect.gen(function* () {
+        const deleted: string[] = [];
+        const exit = yield* decide(
+          inputWith(UNMAPPED_GITLAB),
+          Layer.mergeAll(mfaEnabled, ttlStoreUntouched, authApiRecording(deleted)),
+        );
+        expect(exit).toEqual(challengeWithoutCookie);
+        expect(deleted).toEqual(["token-unit"]);
+        expectMfaChallengeException(1);
         expect(sentry.exceptions[0]?.context?.level).toBe("warning");
         expect(sentry.exceptions[0]?.message).toContain(
           "unmapped primary auth route /callback/:id (id=gitlab)",
@@ -455,98 +515,121 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("Unmapped でも MFA 未有効なら pass、介入の副作用は 0 回", () =>
+  test("AC-009 判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
+        const deleted: string[] = [];
         const exit = yield* decide(
-          inputWith(calls, UNMAPPED_GITLAB),
-          Layer.mergeAll(enrollment({ verifiedAt: null }), untouched),
+          inputWith(),
+          Layer.mergeAll(failingRepo, interventionSucceeds(deleted)),
         );
-        expect(exit).toEqual(Exit.succeed("pass"));
-        expect(calls).toEqual([]);
-        expect(sentry.exceptions.length).toBe(0);
+        expect(exit).toEqual(challengeWithCookie);
+        expect(deleted).toEqual(["token-unit"]);
+        expectMfaChallengeException(1);
       }),
     ));
 
-  test("AC-178 判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
+  test("AC-010 チャレンジ発行失敗: Challenge { null } でも deleteSession は 1 回", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
-        const failingRepo = Layer.succeed(
-          MfaTotpRepo,
-          partial<MfaTotpRepo["Service"]>({
-            readMfaVerification: () =>
-              Effect.fail(new DbError({ cause: new Error("mfa_totp unavailable") })),
-          }),
-        );
+        const deleted: string[] = [];
         const exit = yield* decide(
-          inputWith(calls),
-          Layer.mergeAll(failingRepo, interventionSucceeds(calls)),
+          inputWith(),
+          Layer.mergeAll(
+            mfaEnabled,
+            ttlStoreWith(() => new TtlStoreError({ cause: new Error("challenge store down") })),
+            authApiRecording(deleted),
+          ),
         );
-        expect(exit).toEqual(Exit.succeed("challenge"));
-        expect(calls).toEqual(["setCookie", "drop", "deleteSession:token-unit"]);
-        expect(sentry.exceptions.length).toBe(1);
-        expect(sentry.exceptions[0]?.context?.tags).toEqual({ component: "mfa-challenge" });
+        expect(exit).toEqual(challengeWithoutCookie);
+        expect(deleted).toEqual(["token-unit"]);
+        expectMfaChallengeException(1);
       }),
     ));
 
-  test("AC-161 Sentry backend の defect でも介入経路は challenge で完走する", () =>
+  test("AC-011 deleteSession 失敗: 発行済みの cookie は失わない", () =>
     run(
       Effect.gen(function* () {
-        const calls: string[] = [];
         const exit = yield* decide(
-          inputWith(calls, UNMAPPED_GITLAB),
-          Layer.mergeAll(mfaEnabled, untouched, dyingSentry("captureException")),
+          inputWith(),
+          Layer.mergeAll(
+            mfaEnabled,
+            ttlStoreWith(() => Effect.void),
+            authApiWith(() => new AuthApiError({ cause: new Error("session store down") })),
+          ),
         );
-        expect(exit).toEqual(Exit.succeed("challenge"));
-        expect(calls).toEqual(["drop"]);
+        expect(exit).toEqual(challengeWithCookie);
+        expectMfaChallengeException(1);
       }),
     ));
 
-  // kill switch off の 2 case。時計の起点は QA-D-11 が残した「実時刻 + INTERVAL + 1」より INTERVAL 以上先。
-  const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
-    Effect.acquireUseRelease(
-      Effect.sync(() => spyOn(Date, "now").mockReturnValue(at)),
-      () => body,
-      (clock) => Effect.sync(() => clock.mockRestore()),
-    );
-
-  test("AC-162 Sentry backend の defect でも kill switch off は pass (kill switch が無効化されない)", () =>
+  test("AC-012 Sentry backend の defect でも介入経路は Challenge で完走する", () =>
     run(
-      withKillSwitchOff(
-        Effect.gen(function* () {
-          const calls: string[] = [];
-          const t0 = Date.now() + 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
-          const exit = yield* withClockAt(
-            t0,
-            decide(
-              inputWith(calls),
-              Layer.mergeAll(mfaEnabled, untouched, dyingSentry("captureMessage")),
-            ),
+      Effect.gen(function* () {
+        const deleted: string[] = [];
+        const exit = yield* decide(
+          inputWith(UNMAPPED_GITLAB),
+          Layer.mergeAll(
+            mfaEnabled,
+            ttlStoreUntouched,
+            authApiRecording(deleted),
+            dyingSentry("captureException"),
+          ),
+        );
+        expect(exit).toEqual(challengeWithoutCookie);
+        expect(deleted).toEqual(["token-unit"]);
+      }),
+    ));
+
+  // kill switch off の 4 case。時計の起点は QA-D-11 が残した「実時刻 + INTERVAL + 1」より INTERVAL 以上先。
+
+  test("AC-001 kill switch off は Pass、判定も介入も 0 回", () =>
+    run(
+      Effect.gen(function* () {
+        const deleted: string[] = [];
+        const exit = yield* decide(
+          killSwitchOff(),
+          Layer.mergeAll(repoUntouched, ttlStoreUntouched, authApiRecording(deleted)),
+        );
+        expect(exit).toEqual(PASS);
+        expect(deleted).toEqual([]);
+        expectMfaChallengeException(0);
+      }),
+    ));
+
+  test("AC-002 Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
+    run(
+      Effect.gen(function* () {
+        const t0 = Date.now() + 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const exit = yield* withClockAt(
+          t0,
+          decide(
+            killSwitchOff(),
+            Layer.mergeAll(mfaEnabled, untouched, dyingSentry("captureMessage")),
+          ),
+        );
+        expect(exit).toEqual(PASS);
+      }),
+    ));
+
+  test("AC-003 / AC-004 再通知の境界: 初回で鳴り、INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
+    run(
+      Effect.gen(function* () {
+        const layer = Layer.mergeAll(mfaEnabled, untouched);
+        // AC-002 が残した値より INTERVAL 以上先に置き、ここで最終通知時刻を t0 に確定させる。
+        const t0 = Date.now() + 6 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const at = (offset: number) =>
+          withClockAt(t0 + offset, decide(killSwitchOff(), layer)).pipe(
+            Effect.map(() => killSwitchWarnings().length),
           );
-          expect(exit).toEqual(Exit.succeed("pass"));
-          expect(calls).toEqual([]);
-        }),
-      ),
-    ));
 
-  test("AC-166 再通知の境界: INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
-    run(
-      withKillSwitchOff(
-        Effect.gen(function* () {
-          const layer = Layer.mergeAll(mfaEnabled, untouched);
-          // AC-162 が残した値より INTERVAL 以上先に置き、ここで最終通知時刻を t0 に確定させる。
-          const t0 = Date.now() + 6 * KILL_SWITCH_REPORT_INTERVAL_MS;
-          const at = (offset: number) =>
-            withClockAt(t0 + offset, decide(inputWith([]), layer)).pipe(
-              Effect.map(() => killSwitchWarnings().length),
-            );
-
-          expect(yield* at(0)).toBe(1);
-          expect(yield* at(KILL_SWITCH_REPORT_INTERVAL_MS - 1)).toBe(1);
-          expect(yield* at(KILL_SWITCH_REPORT_INTERVAL_MS)).toBe(2);
-        }),
-      ),
+        expect(yield* at(0)).toBe(1);
+        expect(killSwitchWarnings()[0]?.message).toBe(
+          "mfa: challenge enforcement disabled by kill switch",
+        );
+        expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
+        expect(yield* at(KILL_SWITCH_REPORT_INTERVAL_MS - 1)).toBe(1);
+        expect(yield* at(KILL_SWITCH_REPORT_INTERVAL_MS)).toBe(2);
+      }),
     ));
 });

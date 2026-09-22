@@ -1,6 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Effect, Layer } from "effect";
-import { expectFailure } from "../../../__tests__/live-runner";
+import { expectFailure, withSpy } from "../../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../../__tests__/sentry-recorder";
 import { auth } from "../../../auth";
 import { AuthApiError } from "../../../errors";
@@ -16,14 +16,13 @@ const captured = recordSentryExceptions();
 const headers = new Headers();
 
 const revokeWith = <T>(impl: () => Promise<T>) =>
-  Effect.acquireUseRelease(
-    Effect.sync(() => spyOn(auth.api, "revokeOtherSessions").mockImplementation(impl as never)),
+  withSpy(
+    () => spyOn(auth.api, "revokeOtherSessions").mockImplementation(impl as never),
     () =>
       Effect.provide(
         Effect.exit(MfaSessions.use((s) => s.revokeOthers(headers))),
         Layer.mergeAll(MfaLayers, SentryLive),
       ),
-    (spy) => Effect.sync(() => spy.mockRestore()),
   ).pipe(Effect.runPromise);
 
 const failureOf = (exit: Awaited<ReturnType<typeof revokeWith>>) =>

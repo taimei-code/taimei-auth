@@ -22,6 +22,7 @@
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` (渡す effect の失敗は渡す前に catch する)。
 - サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で運び、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。
 - `auth.ts` から辿れる module は `runtime.ts` を import せず `initAuth(runtime)` で受け取った runtime を使う (import 環は fallow の `circular-dependency` が止める)。
+- 副作用の置き場は「Layer で差し替えられるか」で決める。差し替えられる副作用 (`AuthApi` / `TtlStore` 等の service) は program に置く。runtime が所有しない object (`ctx`、`Response`、`process.env`、`throw`) への副作用は `runPromise` を呼ぶ adapter (`runRoute` / `runMiddleware` / `runRpc`、better-auth の hook) が行い、program はそれを closure で受け取らず「何をすべきか」を直和型の値で返す (例: `src/auth-plugins/mfa-challenge.ts` の `ChallengeDecision`)。program の入力に `() => void` が混ざり、test が呼び出し順を recorder で assert し始めたら、この境界が崩れている。
 - 以上の境界は `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
 
 ## test

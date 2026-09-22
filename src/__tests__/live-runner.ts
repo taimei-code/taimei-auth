@@ -83,6 +83,15 @@ export const observing = <A, E, R>(
     return { value, logs };
   });
 
+// spy の restore は Effect の release で必ず行う (Bun の mockRestore は call 履歴も消す)。
+export const withSpy = <S extends { mockRestore(): void }, A, E, R>(
+  install: () => S,
+  use: (spy: S) => Effect.Effect<A, E, R>,
+) =>
+  Effect.acquireUseRelease(Effect.sync(install), use, (spy) =>
+    Effect.sync(() => spy.mockRestore()),
+  );
+
 // test Layer 用: service の shape は ports の全 method を要求するため、test は必要な method だけを渡し、
 // 未実装の method は呼ばれた時点で defect にする (silent に undefined を返さない)。
 export const partial = <T extends object>(impl: Partial<T>): T =>
