@@ -24,16 +24,24 @@ export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const killSwitchReportedAt = Ref.makeUnsafe(0);
 
-type IssuedSession = {
+type ChallengeInput = {
   userId: string;
   sessionToken: string;
   route: PrimaryAuthRoute;
   // better-auth は redirect の location を responseHeaders へ載せてから after-hook を呼ぶ。
   location: string | null | undefined;
-  setCookie(cookie: LoginChallengeCookie): void;
-  // 後段より前に落とす — 後段が落ちても未通過セッションを残さず、observer にも記帳させない。
-  dropIssuedSession(): void;
+  challengeEnabled: boolean;
 };
+
+type ChallengeDecision =
+  | { readonly _tag: "Pass" }
+  | { readonly _tag: "Challenge"; readonly cookie: LoginChallengeCookie | null };
+
+const PASS: ChallengeDecision = { _tag: "Pass" };
+const challengeWith = (cookie: LoginChallengeCookie | null): ChallengeDecision => ({
+  _tag: "Challenge",
+  cookie,
+});
 
 class UnmappedPrimaryAuthRoute extends Data.TaggedError("UnmappedPrimaryAuthRoute")<{
   readonly route: UnmappedRoute;
@@ -66,71 +74,67 @@ const reportKillSwitchPeriodically = Effect.gen(function* () {
   );
 });
 
-const handOffToChallenge = Effect.fn("auth.handOffToMfaChallenge")(function* (
-  input: IssuedSession,
+const openChallengeCookie = Effect.fn("auth.openMfaChallengeCookie")(function* (
+  input: ChallengeInput,
 ) {
   if (input.route._tag === "Unmapped")
     return yield* new UnmappedPrimaryAuthRoute({ route: input.route });
-  const cookie = yield* openLoginChallenge({
+  return yield* openLoginChallenge({
     userId: input.userId,
     redirectUrl: input.location ?? FALLBACK_REDIRECT,
     method: input.route.method,
   });
-  input.setCookie(cookie);
-  input.dropIssuedSession();
-  yield* AuthApi.use((authApi) => authApi.deleteSession(input.sessionToken));
 });
 
 export const enforceChallenge = Effect.fn("auth.enforceMfaChallenge")(function* (
-  input: IssuedSession,
+  input: ChallengeInput,
 ) {
-  if (!isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED)) {
+  if (!input.challengeEnabled) {
     yield* reportKillSwitchPeriodically;
-    return "pass" as const;
+    return PASS;
   }
   // 読めない時も fail-closed — 素通しにすると after-hook が一次認証ごと 500 にする。
   const required = yield* mfaChallengeRequired(input.userId).pipe(
     Effect.catchCause((cause) => reportFailure(cause).pipe(Effect.as(true))),
   );
-  if (!required) return "pass" as const;
-  // 介入を決めた後の失敗も fail-closed — cookie を落としたまま同じチャレンジ画面へ倒す。
-  yield* handOffToChallenge(input).pipe(
-    Effect.catchCause((cause) =>
-      Effect.andThen(Effect.sync(input.dropIssuedSession), reportFailure(cause)),
-    ),
+  if (!required) return PASS;
+  const cookie = yield* openChallengeCookie(input).pipe(
+    Effect.catchCause((cause) => reportFailure(cause).pipe(Effect.as(null))),
   );
-  return "challenge" as const;
+  yield* AuthApi.use((authApi) => authApi.deleteSession(input.sessionToken)).pipe(
+    Effect.catchCause(reportFailure),
+  );
+  return challengeWith(cookie);
 });
 
 const enforceChallengeAfterPrimaryAuth = (runtime: AppRuntime) =>
   createAuthMiddleware(async (ctx) => {
     const issued = ctx.context.newSession;
     if (!issued) return;
+    const challengeEnabled = isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED);
 
-    const input: IssuedSession = {
-      userId: issued.user.id,
-      sessionToken: issued.session.token,
-      route: parsePrimaryAuthRoute(ctx.path, ctx.params),
-      location: ctx.context.responseHeaders?.get("location"),
-      setCookie: (cookie) => ctx.setCookie(cookie.name, cookie.value, cookie.attributes),
-      dropIssuedSession: () => {
-        deleteSessionCookie(ctx, true);
-        ctx.context.setNewSession(null);
-      },
-    };
-
-    let decision: "pass" | "challenge";
+    let decision: ChallengeDecision;
     try {
-      decision = await runtime.runPromise(enforceChallenge(input));
+      decision = await runtime.runPromise(
+        enforceChallenge({
+          userId: issued.user.id,
+          sessionToken: issued.session.token,
+          route: parsePrimaryAuthRoute(ctx.path, ctx.params),
+          location: ctx.context.responseHeaders?.get("location"),
+          challengeEnabled,
+        }),
+      );
     } catch (error) {
       console.error("[mfa-challenge] runtime unavailable", error);
-      if (!isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED)) return;
-      input.dropIssuedSession();
-      decision = "challenge";
+      if (!challengeEnabled) return;
+      decision = challengeWith(null);
     }
-    if (decision === "challenge") {
-      throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
-    }
+    if (decision._tag === "Pass") return;
+    deleteSessionCookie(ctx, true);
+    ctx.context.setNewSession(null);
+    if (decision.cookie)
+      ctx.setCookie(decision.cookie.name, decision.cookie.value, decision.cookie.attributes);
+    throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
   });
 
 export const mfaChallenge = (runtime: AppRuntime): BetterAuthPlugin => ({
