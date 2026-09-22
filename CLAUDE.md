@@ -19,4 +19,4 @@
 
 ## Effect
 
-Effectのコードを書く前に `node_modules/effect/AGENTS.md` を**最後まで**読み、リンク先も辿る。そこに無いAPIは `node_modules/effect/src` を検索する。
+Effectのコードを書く前に `node_modules/effect/AGENTS.md` を最後まで読み、書くAPIに関わるリンク先を辿る (v4 rcのAPIは学習データのv3と違う)。そこに無いAPIは `node_modules/effect/src` を検索する。
