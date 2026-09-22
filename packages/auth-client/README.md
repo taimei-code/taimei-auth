@@ -2,7 +2,7 @@
 
 taimei-auth 認証サービス (IdP) のクライアント SDK。
 
-**設計方針 (taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41)**: SDK は consumer の framework に依存しない。`@connectrpc/connect` で抽象化された Transport / Interceptor のみを受け取り、`next/*` / `react` / `@connectrpc/connect-node` 等の framework / runtime 固有モジュールを import しない。Node runtime / Edge runtime / Cloudflare Workers / Bun fetch / Deno のいずれからも利用できる。
+**設計方針 (taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41)**: SDK は consumer の framework に依存しない。`@connectrpc/connect` で抽象化された Transport / Interceptor だけを受け取り、`next/*`、`react`、`@connectrpc/connect-node` などの framework や runtime に固有の module を import しない。Node runtime、Edge runtime、Cloudflare Workers、Bun fetch、Deno のどれからでも利用できる。
 
 ---
 
@@ -42,7 +42,7 @@ import { authClient } from "@/lib/auth/client";
 
 const guard = createAuthGuard({
   client: authClient,
-  cache, // 1 request 内 dedup
+  cache, // 1 request 内の重複呼び出しをまとめる
   getSessionToken: async () => {
     const cookieStore = await cookies();
     return getSessionToken((name) => cookieStore.get(name)?.value);
@@ -51,7 +51,7 @@ const guard = createAuthGuard({
 
 export const getSession = guard.getSession;
 
-// consumer-owned redirect: SDK には redirect を持たせない (framework 中立)
+// redirect は consumer が所有する。SDK には持たせない (framework 中立のため)
 export const requireSession = async ({ returnTo }: { returnTo: string }) => {
   const session = await getSession();
   if (!session) redirect(`/auth?callbackUrl=${encodeURIComponent(returnTo)}`);
@@ -63,7 +63,7 @@ export const requireSession = async ({ returnTo }: { returnTo: string }) => {
 
 ## 2. Cookie reader 例
 
-`getSessionToken` / `hasAuthCookie` は `(name: string) => string | undefined` の lambda を受け取る。framework ごとに以下のように吸収する。
+`getSessionToken` / `hasAuthCookie` は `(name: string) => string | undefined` の lambda を受け取る。framework ごとの差は次のように吸収する。
 
 ```ts
 // Next.js (`next/headers`)
@@ -76,12 +76,12 @@ getSessionToken((name) => getCookie(c, name));
 // Express
 getSessionToken((name) => req.cookies[name]);
 
-// 生 Request (fetch API)
+// 生の Request (fetch API)
 const cookieHeader = request.headers.get("cookie") ?? "";
 // この場合は extractSessionTokenFromCookieHeader(cookieHeader) を直接使う方が簡潔
 ```
 
-`SESSION_COOKIE_NAMES` (`better-auth.session_token` / `__Secure-better-auth.session_token`) は SDK 内に閉じる。consumer が cookie 名を知る必要はない。
+`SESSION_COOKIE_NAMES` (`better-auth.session_token` / `__Secure-better-auth.session_token`) は SDK の内部に閉じる。consumer が cookie 名を知る必要はない。
 
 ---
 
@@ -89,19 +89,19 @@ const cookieHeader = request.headers.get("cookie") ?? "";
 
 | Runtime | 推奨 transport | 備考 |
 |---------|----------------|------|
-| Node.js / Vercel Node | `@connectrpc/connect-node` | `httpVersion: "1.1"` 等を指定 |
-| Edge / Cloudflare Workers / Bun fetch / browser | `@connectrpc/connect-web` | `httpVersion` 不要 (fetch ベース) |
+| Node.js / Vercel Node | `@connectrpc/connect-node` | `httpVersion: "1.1"` などを指定する |
+| Edge / Cloudflare Workers / Bun fetch / browser | `@connectrpc/connect-web` | `httpVersion` は不要 (fetch ベース) |
 | Deno | `@connectrpc/connect-web` | 同上 |
 
-どちらの transport も `Transport` 型を返すため、SDK 側のコード (`createAuthClient({ transport })`) は無変更で動く。
+どちらの transport も `Transport` 型を返すため、SDK 側のコード (`createAuthClient({ transport })`) は変更なしで動く。
 
-**Note**: `createServiceKeyInterceptor(serviceKey)` は **app 初期化時に 1 度だけ呼び出して transport に渡す** こと。リクエスト毎に呼ぶと closure 生成のオーバーヘッドが乗る。
+**Note**: `createServiceKeyInterceptor(serviceKey)` は **app の初期化時に 1 度だけ呼び出して transport に渡す** こと。リクエストごとに呼ぶと closure 生成のオーバーヘッドが加わる。
 
 ---
 
 ## 4. `requireSession` 自前実装 (Next.js 以外の framework)
 
-SDK は `getSession` のみを提供する (`packages/auth-client/CLAUDE.md` ルール 7)。redirect 制御フロー (副作用) は consumer 側 wrapper で書く。Next.js 版は §1 Quickstart 参照。他 framework での例:
+SDK は `getSession` だけを提供する (`packages/auth-client/CLAUDE.md` ルール 7)。redirect の制御フロー (副作用) は consumer 側の wrapper で書く。Next.js 版は §1 Quickstart を参照。他の framework での例:
 
 ```ts
 // Hono
@@ -128,16 +128,16 @@ function requireSession(req, res, next) {
 
 | 依存 | 0.4.0 | 0.5.0 |
 |------|-------|-------|
-| L1: `React.cache` 暗黙利用 | SDK 側で `cache` を必須注入 | `cache?` optional に、Next.js consumer は `cache` (`React.cache`) を明示注入 |
-| L2: `redirect` 注入 | `createAuthGuard({ redirect })` | consumer 側 wrapper に移動 (SDK の戻り値は `{ getSession }` のみ) |
-| L3: `CookieReader` shape | `{ get(name): { value } }` interface | `(name: string) => string \| undefined` 関数型 |
-| L4: `@connectrpc/connect-node` | SDK が `createConnectTransport` を内蔵、peerDeps に存在 | consumer が transport を構築し `createAuthClient({ transport })` に渡す。SDK peerDeps から削除 |
-| L5: `/auth?callbackUrl=` ハードコード | SDK の `buildLoginRedirectPath` が組み立て | consumer 側 wrapper で組み立て (URL 規約を consumer が所有) |
+| L1: `React.cache` の暗黙利用 | SDK が `cache` の注入を必須にする | `cache?` を optional にし、Next.js の consumer は `cache` (`React.cache`) を明示的に注入する |
+| L2: `redirect` の注入 | `createAuthGuard({ redirect })` | consumer 側の wrapper に移す (SDK の戻り値は `{ getSession }` だけ) |
+| L3: `CookieReader` の shape | `{ get(name): { value } }` interface | `(name: string) => string \| undefined` の関数型 |
+| L4: `@connectrpc/connect-node` | SDK が `createConnectTransport` を内蔵し、peerDeps にも存在する | consumer が transport を構築して `createAuthClient({ transport })` に渡す。SDK の peerDeps から削除 |
+| L5: `/auth?callbackUrl=` のハードコード | SDK の `buildLoginRedirectPath` が組み立てる | consumer 側の wrapper で組み立てる (URL の規約は consumer が所有する) |
 
-主な API rename:
+主な API の rename:
 
 - `getSessionTokenFromCookieStore(store)` → `getSessionToken(reader)`
-- `createAuthClient({ baseUrl, serviceKey })` → `createAuthClient({ transport })` (transport は consumer が組み立て、Service Key は `createServiceKeyInterceptor(key)` を interceptor として transport に注入)
-- `createAuthGuard(...).requireSession` 廃止 → consumer 側 4 行 wrapper に移動
+- `createAuthClient({ baseUrl, serviceKey })` → `createAuthClient({ transport })` (transport は consumer が組み立て、Service Key は `createServiceKeyInterceptor(key)` を interceptor として transport に注入する)
+- `createAuthGuard(...).requireSession` は廃止し、consumer 側の 4 行の wrapper に移す
 
 詳細: taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41 を参照。
