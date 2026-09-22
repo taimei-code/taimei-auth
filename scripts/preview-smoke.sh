@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# デプロイ前の smoke。`wrangler versions upload` で上げ 0% で deployment に含めた version を、
-# Cloudflare-Workers-Version-Overrides header で指名して本番 URL から叩き、実 workerd + 実 binding
-# (Hyperdrive / DO) で runtime が動くことを確認する。Preview URL は DO を持つ Worker では
-# 生成されない (Cloudflare の制約) ため header 方式にしている。override が効かないと旧 version の 200 で
-# vacuous に通るので、/health の version が指名した id と一致することを最初に確かめる。
+# デプロイ前の smoke。`wrangler versions upload` で上げて 0% で deployment に含めた version を、
+# Cloudflare-Workers-Version-Overrides header で指名して本番 URL から呼び、実際の workerd と実際の binding
+# (Hyperdrive と DO) で runtime が動くことを確認する。Preview URL は DO を持つ Worker では
+# 生成されない (Cloudflare の制約) ため header 方式にしている。override が適用されないと旧 version の 200 で
+# 中身の無いまま通ってしまうので、/health の version が指名した id と一致することを最初に確かめる。
 # deploy.yml がこの script の exit code を gate にし、落ちたら新 version を 100% にしない。
-# 見ているもの (旧 QA-MR-03 / QA-MR-11 の手動手順を置き換える):
-#   - /health x20 が全部 200: request ごとの ALS pool と Effect runtime の上で DB ping + TTL store の ping が通る
-#     (warm isolate が前 request の接続を掴む "Worker hung" (#91) の非再発)
-#   - 未認証 GET /api/account/memberships が 401 {"error":"unauthorized"}: adapter と guard の failure が
-#     workerd 上で wire に写像される
-#   - GET /auth/ が 200 text/html: ASSETS binding の SPA 配信
-# 認証付き経路は session cookie が要るため対象外 (runtime 機構は /health と同じ。残るリスクは Sentry と rollback で受ける)。
+# 見ているもの (以前の QA-MR-03 と QA-MR-11 の手動手順を置き換える):
+#   - /health を 20 回呼んで全部 200 になること。request ごとの ALS pool と Effect runtime の上で DB の ping と TTL store の ping が通る
+#     (warm な isolate が前の request の接続を使い回す "Worker hung" (#91) が再発していないこと)
+#   - 未認証の GET /api/account/memberships が 401 {"error":"unauthorized"} になること。adapter と guard の failure が
+#     workerd 上で応答に変換される
+#   - GET /auth/ が 200 text/html になること。ASSETS binding が SPA を配信する
+# 認証付きの経路は session cookie が要るため対象外にする (runtime の仕組みは /health と同じ。残るリスクは Sentry と rollback で受ける)。
 # usage: scripts/preview-smoke.sh <base-url> <version-id>   例: https://auth.taimei-code.com 711abba4-…
 set -u
 
@@ -31,7 +31,7 @@ fail() {
   fails=$((fails + 1))
 }
 
-# 1 request 分の status / content-type / body を取る (body は 1 行に潰して先頭だけ残す)。
+# 1 request 分の status、content-type、body を取る (body は 1 行にまとめて先頭だけ残す)。
 probe() {
   local method="$1" path="$2" out status ctype body
   out=$(curl -sS --max-time 30 -X "$method" -H "$override_header" -o /tmp/preview-smoke-body.$$ -w '%{http_code} %{content_type}' "$base$path" 2>&1) || {
@@ -48,7 +48,7 @@ probe() {
 
 echo "preview smoke: $base (version $version)"
 
-# --- override が効いていること (/health の version が指名した id) ------------------------------
+# --- override が適用されていること (/health の version が指名した id と一致する) ------------------------------
 result=$(probe GET /health)
 body="${result##*|}"
 case "$body" in

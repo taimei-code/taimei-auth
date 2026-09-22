@@ -3,24 +3,24 @@ preload = ["./src/__tests__/preload.ts"]
 
 [install]
 minimumReleaseAge = 604800
-# esbuild: GHSA-gv7w-rqvm-qjhr (HIGH) の修正版 0.28.1 が release 2 日で 7 日齢に満たないため除外。
-# esbuild は実体 binary を platform 別 @esbuild/<os>-<arch> の optionalDependencies で持ち、これらも
-# 同時 publish (2 日) で個別に block され lockfile から落ちる (CI frozen install で「@esbuild/linux-x64
-# could not be found」)。glob (@esbuild/*) は本キーで効かないため全 platform を明示列挙する
-# (lockfile を linux/mac/win いずれの frozen install でも解決可能に保つため全 platform 必要)。
-# build 専用 devDep / advisory は build 時 RCE。詳細: docs/adr/0009-supply-chain-hardening.md
+# esbuild は、GHSA-gv7w-rqvm-qjhr (HIGH) の修正版 0.28.1 が release から 2 日で 7 日齢に満たないため除外する。
+# esbuild は実体の binary を platform 別の @esbuild/<os>-<arch> という optionalDependencies で持ち、これらも
+# 同時に publish された (2 日) ため個別に止められ、lockfile から落ちる (CI の frozen install で「@esbuild/linux-x64
+# could not be found」になる)。glob (@esbuild/*) はこのキーでは使えないため、全 platform を明示的に列挙する
+# (lockfile を linux、mac、win のどの frozen install でも解決できるように保つには全 platform が要る)。
+# esbuild は build 専用の devDep で、advisory は build 時の RCE である。詳細は docs/adr/0009-supply-chain-hardening.md を参照。
 #
-# undici: GHSA-vxpw-j846-p89q (HIGH, WebSocket DoS) の修正版 6.27.0 が release 5 日で 7 日齢に
-# 満たないため除外。@vercel/blob の transitive で overrides により 6.27.0 に固定する。advisory は
-# WebSocket client のもので @vercel/blob は HTTP fetch 用途のため本アプリでは非該当だが、CI の
-# bun audit gate を通すため patched 版へ。esbuild と同じ「security patch < 7 日」の bypass。
-# 詳細: docs/adr/0009-supply-chain-hardening.md §H
+# undici は、GHSA-vxpw-j846-p89q (HIGH、WebSocket の DoS) の修正版 6.27.0 が release から 5 日で 7 日齢に
+# 満たないため除外する。@vercel/blob の推移的依存で、overrides により 6.27.0 に固定する。advisory は
+# WebSocket client のもので、@vercel/blob は HTTP fetch にしか使わないためこのアプリには該当しないが、CI の
+# bun audit gate を通すため修正版へ上げる。esbuild と同じ「security patch が 7 日未満」の場合の bypass である。
+# 詳細は docs/adr/0009-supply-chain-hardening.md §H を参照。
 #
-# nanoid: GHSA-28wg-ghj8-5hjv / GHSA-2v37-7h3g-55p8 (HIGH, 非 secure / custom generator が不正な
-# size で無限ループ) の 3.x 系修正版 3.3.18 が release 7 日目で 7 日齢に満たないため除外。postcss の
-# transitive (5.x 系の direct dep 側は 5.1.16 で 7 日齢を満たすため bypass 不要)。nanoid は pure JS
-# で platform 別 optionalDependencies を持たないため esbuild と違い 1 entry で足りる。
-# 詳細: docs/adr/0009-supply-chain-hardening.md §H
+# nanoid は、GHSA-28wg-ghj8-5hjv と GHSA-2v37-7h3g-55p8 (HIGH、非 secure および custom generator が不正な
+# size で無限ループする) の 3.x 系修正版 3.3.18 が release から 7 日目で 7 日齢に満たないため除外する。postcss の
+# 推移的依存である (5.x 系の直接依存側は 5.1.16 で 7 日齢を満たすため bypass は不要)。nanoid は pure JS
+# で platform 別の optionalDependencies を持たないため、esbuild と違い 1 entry で足りる。
+# 詳細は docs/adr/0009-supply-chain-hardening.md §H を参照。
 minimumReleaseAgeExcludes = [
   "nanoid",
   "undici",

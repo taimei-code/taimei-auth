@@ -1,6 +1,6 @@
--- user.revision を name/email/email_verified/image の変更で自動 ++。
--- updated_at のみの no-op update では ++ しない (DISTINCT FROM ガード)。
--- drizzle-kit は trigger を管理しないため drizzle/manual/ に分離する。
+-- name、email、email_verified、image のいずれかが変わった時に user.revision を自動で 1 増やす。
+-- updated_at だけが変わる実質的に変更の無い update では増やさない (DISTINCT FROM で防ぐ)。
+-- drizzle-kit は trigger を管理しないため drizzle/manual/ に分けて置く。
 CREATE OR REPLACE FUNCTION bump_user_revision() RETURNS trigger AS $$
 BEGIN
   IF (OLD.name, OLD.email, OLD.email_verified, OLD.image)
@@ -16,8 +16,8 @@ CREATE TRIGGER user_bump_revision_on_update
   BEFORE UPDATE ON "user"
   FOR EACH ROW EXECUTE FUNCTION bump_user_revision();
 
--- password change は account.password の UPDATE。user テーブル trigger では検知できないため連動。
--- OAuth signIn の access_token / refresh_token UPDATE は password IS DISTINCT FROM false で skip。
+-- password の変更は account.password の UPDATE として起きる。user テーブルの trigger では検知できないため、account 側から連動させる。
+-- OAuth の signIn で access_token や refresh_token が UPDATE される時は、password IS DISTINCT FROM が false になるため何もしない。
 CREATE OR REPLACE FUNCTION bump_user_revision_from_account() RETURNS trigger AS $$
 BEGIN
   IF OLD.password IS DISTINCT FROM NEW.password THEN
