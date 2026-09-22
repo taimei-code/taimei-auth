@@ -7,9 +7,9 @@ import { failingTtlStoreLayer, ttlStoreReturning } from "../../__tests__/test-la
 import { spendDisableAttempt } from "../disable-attempt-budget";
 import { Locked } from "../error-mapping";
 
-// 無効化の試行枠の倒し方 (fail-closed) を TTL store 無しで固定する。exhausted の 429 は
-// handlers/__tests__/account-mfa.test.ts (QA-M-09) が live で見るので、ここは kernel の verdict → Locked の写像だけ。
-// 正本: CONTEXT.md「fail-closed / fail-open」→ ADR-0013 Consequences → ADR-0016。
+// 無効化の試行枠が障害時に fail-closed になることを TTL store 無しで固定する。exhausted の 429 は
+// handlers/__tests__/account-mfa.test.ts (QA-M-09) が live で確認するので、ここは kernel の verdict から Locked への変換だけを見る。
+// 定義元は CONTEXT.md「fail-closed / fail-open」、ADR-0013 Consequences、ADR-0016 の順に参照する。
 describe("spendDisableAttempt", () => {
   const captured = recordSentryExceptions();
   const spend = (ttlStore: Layer.Layer<TtlStore>) =>

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./grep-files";
 
-// 2026-09-10 実測。増減した PR は必ずこの値を実測に合わせる。
+// 2026-09-10 に実測した値。ブロック数を増減させた PR は、必ずこの値を実測に合わせて更新する。
 const BUDGET = 242;
 const DIRS = ["src", "db", "management", "web/src"];
 const EXEMPT = [

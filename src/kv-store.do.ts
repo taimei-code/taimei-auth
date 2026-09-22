@@ -29,7 +29,7 @@ export class KvStore<Env = unknown> extends DurableObject<Env> {
     await this.ctx.storage.deleteAll();
   }
 
-  // object 内は input gate で直列化されるため、get→delete と incr→expire は lock なしで atomic。
+  // object 内の処理は input gate で直列化されるため、get してから delete、incr してから expire の組は lock なしで atomic になる。
   async getAndDelete(): Promise<string | null> {
     const value = await this.get();
     if (value !== null) await this.delete();

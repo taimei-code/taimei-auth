@@ -1,9 +1,9 @@
 {
-  // Cloudflare Workers 設定。設計詳細: docs/adr/0011-cloudflare-workers-migration.md
-  // 本番では hyperdrive.id を実 Hyperdrive config id に、vars を本番値に、
-  // secret (AUTH_SECRET / AUTH_SERVICE_KEY / SENTRY_DSN / MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
-  // ローカルは localConnectionString と scripts/wrangler-dev.sh が渡す --env-file を使う
-  // (--env-file 指定時は wrangler が .dev.vars / .env を読まない)。
+  // Cloudflare Workers の設定。設計の詳細は docs/adr/0011-cloudflare-workers-migration.md を参照。
+  // 本番では hyperdrive.id を実際の Hyperdrive config の id に、vars を本番の値にし、
+  // secret (AUTH_SECRET、AUTH_SERVICE_KEY、SENTRY_DSN、MFA_TOTP_ENCRYPTION_KEYS) は `wrangler secret put` で注入する。
+  // ローカルでは localConnectionString と、scripts/wrangler-dev.sh が渡す --env-file を使う
+  // (--env-file を指定した時は wrangler が .dev.vars と .env を読まない)。
   "name": "taimei-auth",
   "main": "src/worker.ts",
   "compatibility_date": "2025-04-01",
@@ -11,12 +11,12 @@
   "assets": {
     "directory": "./web/dist",
     "binding": "ASSETS",
-    // worker を常に先に走らせ (/ の loginShortcut 等が静的 index.html に吸われないように)、
-    // worker が該当しない path を env.ASSETS.fetch へ委譲する。deep link は SPA fallback。
+    // worker を常に先に走らせ (/ の loginShortcut などが静的な index.html に取られないように)、
+    // worker が扱わないパスを env.ASSETS.fetch へ委譲する。deep link は SPA の fallback で処理する。
     "run_worker_first": true,
     "not_found_handling": "single-page-application"
   },
-  // session / verification / 試行枠 / MFA チャレンジの TTL store。1 key = 1 object (src/kv-store.do.ts、ADR-0019)。
+  // session、verification、試行枠、MFA チャレンジの TTL store。1 つの key が 1 つの object に対応する (src/kv-store.do.ts、ADR-0019)。
   "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
   "hyperdrive": [
@@ -32,18 +32,18 @@
     "AUTH_SERVICE_URL": "https://auth.taimei-code.com",
     "AUTH_COOKIE_DOMAIN": "taimei-code.com",
     "AUTH_TRUSTED_ORIGINS": "https://app.taimei-code.com,https://auth.taimei-code.com",
-    // from は Resend 検証済みドメイン (transactional.taimei-code.com) のアドレスにする。
-    // 未設定だと client.ts の default onboarding@resend.dev になり、Resend テストモードで
-    // アカウント所有者宛にしか送れず任意ユーザーへの magic-link が 403 になる。
+    // from は Resend で検証済みのドメイン (transactional.taimei-code.com) のアドレスにする。
+    // 未設定だと client.ts の既定値 onboarding@resend.dev になり、Resend のテストモードでは
+    // アカウント所有者宛にしか送れないため、任意のユーザーへの magic-link が 403 になる。
     "AUTH_FROM_EMAIL_MAGIC_LINK": "noreply@transactional.taimei-code.com",
     "AUTH_FROM_EMAIL_WELCOME": "noreply@transactional.taimei-code.com",
     "AUTH_FROM_EMAIL_INVITATION": "noreply@transactional.taimei-code.com",
     "AUTH_FROM_EMAIL_SECURITY": "noreply@transactional.taimei-code.com"
   },
-  // 本番ドメイン。custom_domain:true で Cloudflare が auth.taimei-code.com の DNS レコードと
-  // TLS 証明書を管理し Worker に紐付ける。cross-subdomain cookie (.taimei-code.com) のため
-  // workers.dev でなくこのホストで配信する必要がある (ADR-0004 / ADR-0011)。
-  // deploy.yml の smoke が version override header で叩いた応答の version を /health で照合する。
+  // 本番ドメイン。custom_domain:true にすると Cloudflare が auth.taimei-code.com の DNS レコードと
+  // TLS 証明書を管理し、Worker に紐付ける。サブドメインをまたぐ cookie (.taimei-code.com) のため、
+  // workers.dev ではなくこのホストで配信する必要がある (ADR-0004 と ADR-0011)。
+  // deploy.yml の smoke が version override header で呼んだ応答の version を /health で照合する。
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   "routes": [{ "pattern": "auth.taimei-code.com", "custom_domain": true }]
 }

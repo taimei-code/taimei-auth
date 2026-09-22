@@ -128,7 +128,7 @@ describe("deleteCompany", () => {
         const target = yield* seedCompany("inv-target");
         const other = yield* seedCompany("inv-other");
         yield* join(ownerId, target);
-        yield* join(ownerId, other); // 招待者 (owner) が orphan 削除されず生存し REVOKED を観測できるようにする
+        yield* join(ownerId, other); // 招待者 (owner) が orphan として削除されずに残り、REVOKED を観測できるようにする
         const inv = yield* db.seedInvitation({
           companyId: target,
           email: db.ids.email("invitee"),
@@ -192,7 +192,7 @@ describe("deleteCompany", () => {
         const target = yield* seedCompany("race-target");
         const other = yield* seedCompany("race-other");
         yield* join(ownerId, target);
-        yield* join(ownerId, other); // owner を生存させ audit を観測する
+        yield* join(ownerId, other); // owner を残して audit を観測する
 
         const results = yield* Effect.all(
           [

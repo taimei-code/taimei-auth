@@ -13,7 +13,7 @@ export class MfaTotpRepo extends Context.Service<MfaTotpRepo, LiftedModule<typeo
   "taimei/MfaTotpRepo",
 ) {}
 
-// 鍵 ring は env から遅延解決する — import 時に throw させない。
+// 鍵 ring は env から遅延して解決し、import 時に throw させない。
 export class MfaKeyring extends Context.Service<
   MfaKeyring,
   { readonly ring: Effect.Effect<MfaKeyRing> }
@@ -24,7 +24,7 @@ export class MfaIssuer extends Context.Service<
   { readonly appName: Effect.Effect<string> }
 >()("taimei/MfaIssuer") {}
 
-// port 名を gateway 名と変えるのは、gateway 名の出現を wiring に閉じるため。
+// port の名前を gateway の名前と変えるのは、gateway 名が現れる場所を wiring だけに限るため。
 export class MfaSessions extends Context.Service<
   MfaSessions,
   {
@@ -47,7 +47,7 @@ export class MfaNotifier extends Context.Service<
   }
 >()("taimei/MfaNotifier") {}
 
-// 数えられない時も Locked (fail-closed): CONTEXT.md「試行枠」
+// 数えられないときも Locked にする (fail-closed)。根拠は CONTEXT.md「試行枠」
 export class MfaDisableBudget extends Context.Service<
   MfaDisableBudget,
   {

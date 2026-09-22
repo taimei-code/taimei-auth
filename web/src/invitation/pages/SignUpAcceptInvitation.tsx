@@ -34,7 +34,7 @@ export const SignUpAcceptInvitation = () => {
         return acceptInvitation(invitationToken);
       })
       .then((result) => {
-        if (!result) return; // 未認証で redirect 済
+        if (!result) return; // 未認証のため既に redirect している
         window.location.replace("/account");
       })
       .catch((err) => {

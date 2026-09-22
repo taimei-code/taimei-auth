@@ -17,7 +17,7 @@ const _roleBodySchemaIsExhaustive: [
   ? true
   : never = true;
 
-// 桁数を縛らないのは、書式判定を Transport が持つと誤入力が invalid_argument になり SPA の分岐から外れるため。
+// 桁数を制限しないのは、書式の判定を Transport が持つと誤入力が invalid_argument になり、SPA の分岐から外れるため。
 export const mfaCodeSchema = z.string().min(1).max(64);
 
 export const mfaCodeKindSchema = z.enum([

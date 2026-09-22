@@ -14,7 +14,7 @@ import {
   type PrimaryAuthRoute,
 } from "./primary-auth-routes";
 
-// mfa-challenge の後に登録し、null 化された newSession でスキップする。登録順が前提 (ADR-0013)。
+// mfa-challenge の後に登録し、newSession が null にされていればスキップする。この登録順が前提になる (ADR-0013)。
 
 const NEW_USER_THRESHOLD_MS = 10000;
 
@@ -41,7 +41,7 @@ export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (i
 
   if (input.route._tag === "Unmapped") return;
 
-  // 型付き property へ call 結果や spread を渡すと excess-property check が効かず増分が黙って載る。
+  // 型付きの property に関数呼び出しの結果や spread を渡すと excess-property check が働かず、余分な項目が気付かれないまま入る。
   const { ip, userAgent } = getClientContext(input.headers);
   yield* background.run(
     appendAuditLogBestEffort({

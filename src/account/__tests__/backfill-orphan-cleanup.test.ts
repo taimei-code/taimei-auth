@@ -31,7 +31,7 @@ const userExists = (id: string) =>
 
 const membershipCount = (companyId: string) => TestDb.use((db) => db.countMemberships(companyId));
 
-// DELETED company に ghost membership を持つ user を 2 名作る: orphan (この事業所のみ) と survivor (別 ACTIVE 所属あり)。
+// DELETED の company に残った membership を持つ user を 2 名作る。orphan (この事業所にしか所属していない) と survivor (別の ACTIVE な所属がある)。
 const seedGhostScenario = Effect.gen(function* () {
   const deleted = yield* seedCompany("ghost", true);
   const active = yield* seedCompany("active", false);
@@ -47,8 +47,8 @@ describe("backfillOrphanCleanup", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  // findDeletedCompanyIdsWithMemberships はグローバルクエリのため、global count ではなく
-  // 自テストが作ったエンティティの振る舞いだけを検証する (他データ・残骸に左右されない)。
+  // findDeletedCompanyIdsWithMemberships は全体を対象にするクエリのため、全体の件数ではなく
+  // このテストが作ったエンティティの振る舞いだけを検証する (他のデータや残骸に左右されない)。
   test("dry-run: 対象を集計するが一切 mutate しない", () =>
     run(
       Effect.gen(function* () {
@@ -59,7 +59,7 @@ describe("backfillOrphanCleanup", () => {
         expect(report.executed).toBe(false);
         expect(report.deletedUserIds).toContain(orphan);
         expect(report.deletedUserIds).not.toContain(survivor);
-        // mutate していないこと
+        // 何も変更していないこと
         expect(yield* membershipCount(deleted)).toBe(2);
         expect(yield* userExists(orphan)).toBe(true);
       }),

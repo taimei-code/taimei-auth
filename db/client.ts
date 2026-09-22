@@ -5,7 +5,7 @@ import * as schema from "./schema";
 
 type Db = NodePgDatabase<typeof schema>;
 
-// workerd は別 request の I/O コンテキストで開いた socket を再利用できず、使い回すと "Worker hung" になる。
+// workerd では別の request の I/O コンテキストで開いた socket を再利用できず、使い回すと "Worker hung" になる。
 const requestPoolStore = new AsyncLocalStorage<Pool>();
 let singletonPool: Pool | undefined;
 
@@ -19,7 +19,7 @@ function requireCurrentPool(): Pool {
   return pool;
 }
 
-// extends Pool は drizzle の instanceof Pool 判定を満たすために必須。
+// drizzle が instanceof Pool で判定するため、Pool を継承する必要がある。
 class RoutingPool extends Pool {
   override query = ((...args: Parameters<Pool["query"]>) =>
     requireCurrentPool().query(...args)) as Pool["query"];
@@ -34,7 +34,7 @@ function initDb(connectionString: string): void {
   singletonPool = new Pool({ connectionString });
 }
 
-// max:5 は Workers の同時外部接続上限。pool を閉じるのは呼び出し側 (src/worker.ts)。
+// max:5 は Workers の同時外部接続の上限。pool を閉じるのは呼び出し側 (src/worker.ts) が行う。
 export function runWithRequestPool<T>(connectionString: string, fn: (pool: Pool) => T): T {
   const pool = new Pool({ connectionString, max: 5 });
   return requestPoolStore.run(pool, () => fn(pool));

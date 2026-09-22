@@ -1,8 +1,8 @@
 name: CI
 
-# PR / main push で lint + typecheck + test を回す。
-# 1 job に集約する理由: bun install が支配的なコストで、3 job に分けると並列化メリットより
-# install 3 回の方が遅くなる。setup-bun が node_modules cache を持つようになったら分割を再検討。
+# PR と main への push で lint、typecheck、test を回す。
+# 1 job にまとめている理由は、bun install がコストの大半を占めるため、3 job に分けると並列化の利点より
+# install 3 回の方が遅くなるからである。setup-bun が node_modules の cache を持つようになったら分割を再検討する。
 
 on:
   pull_request:
@@ -10,8 +10,8 @@ on:
     branches:
       - main
 
-# PR への連続 push は古い run を打ち切る。main push は打ち切らない (deploy が CI の run-level
-# conclusion を gate にしているため: .github/workflows/deploy.yml)。
+# PR へ連続して push した時は古い run を打ち切る。main への push は打ち切らない (deploy が CI の run 全体の
+# conclusion を gate にしているため。.github/workflows/deploy.yml を参照)。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
-    # db/__tests__/user-revision.test.ts が DB trigger を runtime で検証するため、
-    # CI で postgres service を起動して migrate 適用後にテストを回す。
+    # db/__tests__/user-revision.test.ts が DB の trigger を実際に動かして検証するため、
+    # CI で postgres service を起動し、migrate を適用してからテストを回す。
     services:
       postgres:
         image: postgres:16.8-alpine3.21
@@ -44,70 +44,70 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # fallow audit が origin/main との merge-base を要る
+          # fallow audit が origin/main との merge-base を必要とする
           fetch-depth: 0
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.3"
 
-      # --ignore-scripts: install lifecycle 経由の任意コード実行を封じる (ADR-0009 C)。
-      # bun の default は trustedDependencies のみ実行だが多重防御として明示。
+      # --ignore-scripts は、install の lifecycle script を経由した任意コード実行を防ぐ (ADR-0009 C)。
+      # bun の既定でも trustedDependencies しか実行しないが、多重防御として明示する。
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      # GHSA-qwww-vcr4-c8h2 (react-router RSC Mode CSRF) は patched が 8.3.0 (major) のみで
-      # 7.x backport が無く、本リポは declarative SPA router のみ (RSC Mode 不使用) のため非該当として
-      # advisory 単位で明示 accept する。v8 昇格または 7.x backport 登場で外す。
-      # 詳細: docs/adr/0009-supply-chain-hardening.md「audit gate 対応 3 回目」
+      # GHSA-qwww-vcr4-c8h2 (react-router の RSC Mode の CSRF) は修正版が 8.3.0 (major) だけで
+      # 7.x への backport が無い。このリポジトリは declarative な SPA router しか使わず RSC Mode を使わないため、
+      # 該当しないものとして advisory 単位で明示的に受け入れる。v8 へ上げるか 7.x の backport が出たら外す。
+      # 詳細は docs/adr/0009-supply-chain-hardening.md「audit gate 対応 3 回目」を参照。
       - name: Audit dependencies
         run: bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2
 
-      # taimei-auth (root) が `@taimei-code/auth-client` を workspace dep として import するため、
-      # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (PR #34 → #35 の dogfooding)。
+      # taimei-auth (root) が `@taimei-code/auth-client` を workspace 依存として import するため、
+      # SDK の dist/*.d.ts を typecheck より先に build しておく必要がある (PR #34 から #35 にかけての dogfooding)。
       - name: Build auth-client SDK
         working-directory: packages/auth-client
         run: bun run build
 
-      # fallow audit は PR で新たに増えた dead code / 循環 / 重複だけを落とす (既存分は inherited)。
+      # fallow audit は、PR で新たに増えた dead code、循環、重複だけを失敗にする (既存分は引き継ぐ)。
       - name: Lint (Biome + fallow audit)
         run: bun run lint
 
-      # ubuntu runner に preinstalled の shellcheck を使う (install step は足さない)。
+      # ubuntu runner にあらかじめ入っている shellcheck を使う (install の step は足さない)。
       - name: Lint (shellcheck)
         run: shellcheck scripts/*.sh e2e/*.sh
 
-      # src/gen と SDK 側 copy は buf.gen.yaml が両方へ生成するが、#2 で src/gen だけ commit されて
-      # #34 まで割れた前例がある。dir 単位の diff なので proto が増えても期待値の編集は要らない。
+      # src/gen と SDK 側のコピーは buf.gen.yaml が両方へ生成するが、#2 で src/gen だけが commit されて
+      # #34 まで食い違っていた前例がある。ディレクトリ単位の diff なので、proto が増えても期待値の編集は要らない。
       - name: Assert generated proto copies are identical
         run: bun run generate:check
 
-      # worker-configuration.d.ts は commit する生成物 (--include-env=false なので binding は含まない)。
-      # compatibility_date / compatibility_flags / wrangler 更新後の再生成漏れを止める。
+      # worker-configuration.d.ts は commit する生成物である (--include-env=false なので binding は含まない)。
+      # compatibility_date、compatibility_flags、wrangler を更新した後の再生成漏れを止める。
       - name: Assert worker-configuration.d.ts is up to date
         run: bun run types:check
 
       - name: Typecheck
         run: bun run typecheck
 
-      # proto wire 互換性を機械的に強制。
-      # main ブランチを baseline として、本 PR の proto 変更が breaking でないことを CI で検証する。
-      # 意図的な breaking が必要な場合は CHANGELOG 明記 + SDK major bump + 一時的に --against スキップで対応。
-      # GitHub Actions の shallow clone で main ref が無いため、remote URL 経由で参照する。
+      # proto の wire 互換性を機械的に強制する。
+      # main ブランチを基準として、この PR の proto 変更が breaking でないことを CI で検証する。
+      # 意図的に breaking にする必要がある場合は、CHANGELOG に明記し、SDK の major を上げ、一時的に --against を外して対応する。
+      # GitHub Actions の shallow clone には main の ref が無いため、remote URL 経由で参照する。
       - name: Buf breaking check
         run: bunx @bufbuild/buf breaking --against "https://github.com/${{ github.repository }}.git#branch=main"
 
-      # drizzle/0000 + 0001 + drizzle/manual/0001 trigger を順次適用。
-      # db/__tests__/user-revision.test.ts が trigger 挙動を検証するため必須。
+      # drizzle/0000、0001、drizzle/manual/0001 の trigger を順に適用する。
+      # db/__tests__/user-revision.test.ts が trigger の挙動を検証するため必要である。
       - name: Apply migrations
         run: bun run db:migrate && bun run db:migrate-manual
 
       - name: Test
         run: bun test
 
-  # ブラウザ実機の認証動線スモーク (magic link 着地 / SessionGuard / 役割別 UI)。
-  # check job と分離する理由: playwright の browser install (~100MB) と build:web を
-  # 伴い、失敗時に unit/integration の結果と切り分けたいため。
+  # 実際のブラウザで認証の動線をスモークテストする (magic link の着地、SessionGuard、役割別の UI)。
+  # check job と分けている理由は、playwright の browser install (約 100MB) と build:web を
+  # 伴い、失敗した時に unit テストと integration テストの結果から切り分けたいためである。
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -154,49 +154,49 @@ jobs:
       - name: E2E test
         run: bun run test:e2e
 
-  # ADR-0014 の契約 (既定 build target = full toolchain の dev) の機械検証。
-  # CI に docker build が無いと契約違反が merge 後に consumer repo の CI で初めて顕在化するため、
-  # 本 repo の PR 時点で落とす。本 job の失敗は本番 deploy も止める (deploy 従属の詳細と緊急時の
-  # escape hatch も下記 ADR)。
-  # 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
+  # ADR-0014 の契約 (既定の build target は full toolchain を持つ dev である) を機械的に検証する。
+  # CI に docker build が無いと、契約違反が merge 後に consumer repo の CI で初めて表面化するため、
+  # このリポジトリの PR の時点で落とす。この job の失敗は本番 deploy も止める (deploy の従属関係の詳細と緊急時の
+  # 回避手段も下記の ADR に書いてある)。
+  # 詳細は docs/adr/0014-docker-runner-dev-stage-separation.md を参照。
   docker:
     runs-on: ubuntu-latest
-    # bun.lock 変更時 = install が必ず cold を最悪ケースに置く (RUN --mount=type=cache の中身は
-    # gha cache に保存されないため、layer miss 時ほど cache が効かない)。
+    # bun.lock を変更した時は install が必ず cold になるので、それを最悪ケースとして見積もる (RUN --mount=type=cache の中身は
+    # gha cache に保存されないため、layer が miss した時ほど cache が役に立たない)。
     timeout-minutes: 15
 
-    # 本 job は checkout と image build しかしないため read で足りる (ADR-0009 の threat model)。
+    # この job は checkout と image の build しかしないため read で足りる (ADR-0009 の threat model)。
     permissions:
       contents: read
 
-    # docker-smoke.sh が末尾に echo する実行 assert 件数の期待値。mode typo 等で assert 0 件のまま
-    # 緑になる vacuous green を遮断する。script の assert_in_image / forbidden_entries、または image の中身から
-    # 導出される probe 対象 (packages/auth-client/package.json の exports キー) を増減したときに更新する。
+    # docker-smoke.sh が末尾に echo する、実行した assert 件数の期待値。mode の typo などで assert が 0 件のまま
+    # 緑になる、中身の無い成功を防ぐ。script の assert_in_image と forbidden_entries、または image の中身から
+    # 導き出される probe 対象 (packages/auth-client/package.json の exports キー) を増減した時に更新する。
     env:
       EXPECTED_DEV_ASSERTS: "21"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # 一覧と「なぜ seed が要るか」の SSOT は scripts/docker-smoke.sh (同 script が不在を assert する
-      # ので、seed 側をここに書くと assert 対象と seed 対象が silent にズレる)。
+      # 一覧と「なぜ seed が要るか」は scripts/docker-smoke.sh だけに書く (その script が不在を assert する
+      # ので、seed 側をここに書くと assert 対象と seed 対象が気付かれないままずれる)。
       - name: Create sentinels and leak canaries
         run: bash scripts/docker-smoke.sh seed
 
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
-      # 全 build 共通の理由:
-      # - build-push-action + load: true — buildx の docker-container driver は build 結果を local
-      #   image store に載せないため、明示しないと後続の docker run / image inspect が全て空振りする
-      #   (ローカルの docker driver では自動 load されるため再現しない差)。gha cache の runtime token
-      #   注入も本 action が担うので素の docker build は使わない (image を消費しない --target dev
-      #   build だけは例外 — 理由は当該 step のコメント)。
-      # - context: . — 省略すると Git context が使われ、gitignored な sentinel が build に入らず
-      #   不在 assert が vacuous に戻る。
-      # - provenance / sbom: false — attestation が付くと image ID が分岐し、下の位置契約
-      #   (dev = 最終 stage) assert が壊れる。
-      # - cache: 既定 build と --target dev build は同一 scope を共有する (供給元の無い scope を
-      #   cache-from すると最も高価な既定 build が毎回 cold になる)。cache-to は dev build 1 本のみ。
+      # 全 build に共通する設定の理由:
+      # - build-push-action と load: true を使うのは、buildx の docker-container driver が build 結果を local の
+      #   image store に入れないため、明示しないと後続の docker run と image inspect がすべて対象を見つけられないからである
+      #   (ローカルの docker driver では自動で load されるため再現しない差)。gha cache の runtime token の
+      #   注入もこの action が担うので、素の docker build は使わない (image を使わない --target dev の
+      #   build だけは例外で、理由はその step のコメントに書いてある)。
+      # - context: . を書くのは、省略すると Git context が使われ、gitignore された sentinel が build に入らず、
+      #   不在 assert が中身の無い成功に戻るからである。
+      # - provenance と sbom を false にするのは、attestation が付くと image ID が分かれ、下の位置契約
+      #   (dev が最終 stage である) の assert が壊れるからである。
+      # - cache は、既定の build と --target dev の build で同じ scope を共有する (供給元の無い scope を
+      #   cache-from すると、最も高価な既定の build が毎回 cold になる)。cache-to は dev の build 1 本だけに付ける。
       - name: Build (既定 target)
         id: build-default
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -208,8 +208,8 @@ jobs:
           sbom: false
           cache-from: type=gha,scope=dev
 
-      # 本 build の image は誰も消費しない (使うのは下の位置契約 assert が読む imageid 出力だけ) ため
-      # local image store への load を省く。1GB 級の export/import が丸ごと消えて job が ~20-35s 短縮する。
+      # この build の image は誰も使わない (使うのは下の位置契約の assert が読む imageid の出力だけ) ため、
+      # local の image store への load を省く。1GB 級の export と import が丸ごと無くなり、job が 20〜35 秒ほど短くなる。
       - name: Build (--target dev)
         id: build-dev
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -223,8 +223,8 @@ jobs:
           cache-from: type=gha,scope=dev
           cache-to: type=gha,scope=dev,mode=min
 
-      # ARG APP_ENV は stage スコープのため stage 再構成で silent に落ち、失敗が「ローカルログインと
-      # consumer repo の e2e だけ壊れる」cross-context 型になる。web-build 層以外は cache hot でほぼ無料。
+      # ARG APP_ENV は stage スコープなので、stage を組み替えた時に気付かれないまま消え、失敗が「ローカルのログインと
+      # consumer repo の e2e だけ壊れる」という別の文脈で現れる形になる。web-build 層以外は cache が当たるためほぼ無料である。
       - name: Build (--target dev / APP_ENV=development)
         id: build-dev-devenv
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -245,7 +245,7 @@ jobs:
           echo "既定 build: $default_id"
           echo "--target dev: $dev_id"
           # 空文字同士は「一致」になるため、比較の前に両方が取れていることを確かめる
-          # (action の出力名変更や build 失敗の握り潰しで assert が vacuous に成立するのを防ぐ)。
+          # (action の出力名の変更や build 失敗の握り潰しで、assert が中身の無いまま成立するのを防ぐ)。
           if [ -z "$default_id" ] || [ -z "$dev_id" ]; then
             echo "::error::image ID を取得できなかった (既定=${default_id:-none} / --target dev=${dev_id:-none})。build step の outputs.imageid を確認する。"
             exit 1
@@ -255,12 +255,12 @@ jobs:
             exit 1
           fi
 
-      # build-info.json は web/vite.config.ts の plugin が build 時の APP_ENV から出す成果物。
+      # build-info.json は、web/vite.config.ts の plugin が build 時の APP_ENV から出力する成果物である。
       - name: Assert APP_ENV=development が SPA build 成果物に反映されている
         run: |
           docker run --rm --network none -w /app smoke-dev-devenv cat web/dist/build-info.json \
             | grep -F '"appEnv":"development"'
-          # 対照: 既定 build は production (marker の非 vacuous 性)
+          # 対照として、既定の build は production であることを確かめる (marker が中身を持って動いている証拠)
           docker run --rm --network none -w /app smoke-dev cat web/dist/build-info.json \
             | grep -F '"appEnv":"production"'
 
@@ -269,8 +269,8 @@ jobs:
           smoke_status=0
           output=$(bash scripts/docker-smoke.sh dev smoke-dev) || smoke_status=$?
           echo "$output"
-          # 契約違反があるときは件数突合より先に FAIL 行を出す。逆順だと、assert を増やした PR で
-          # 件数不一致 error が先に出て「本当に壊れている契約」が annotation から消える。
+          # 契約違反がある時は、件数の突き合わせより先に FAIL 行を出す。逆順だと、assert を増やした PR で
+          # 件数不一致の error が先に出て「本当に壊れている契約」が annotation から消える。
           if [ "$smoke_status" -ne 0 ]; then
             printf '%s\n' "$output" | sed -n 's/^FAIL: /::error::docker-smoke.sh dev: /p'
             echo "::error::docker-smoke.sh dev が失敗した (exit=$smoke_status)。上の FAIL 行が契約違反の内訳 (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"

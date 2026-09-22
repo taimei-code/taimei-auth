@@ -3,7 +3,7 @@ import { db } from "../client";
 import { mfaRecoveryCode, mfaTotp } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// 全関数は条件付き単文で、並行決着は WHERE 句が担う (行の解釈は use-case 側)。
+// 全関数を条件付きの単一 statement にし、並行時の決着は WHERE 句に任せる (行の解釈は use-case 側で行う)。
 
 export type MfaTotpRow = typeof mfaTotp.$inferSelect;
 
@@ -11,7 +11,7 @@ export const generateEnrollmentId = (): string => crypto.randomUUID();
 export const generateRecoveryCodeId = (index: number): string =>
   `${String(index).padStart(2, "0")}-${crypto.randomUUID()}`;
 
-// 復号は use-case の cipher が行い、平文はプロセス境界を越えない。
+// 復号は use-case 側の cipher が行い、平文はプロセスの境界を越えない。
 export async function findMfaTotp(
   userId: string,
   txOrDb: DbOrTx = db,
@@ -89,7 +89,7 @@ export async function activateMfaTotp(
     .then((rows) => rows.length === 1);
 }
 
-// last_used_timestep の単調比較で同一 timestep の 2 回目と過去コードを拒む。
+// last_used_timestep との単調比較で、同じ timestep の 2 回目と過去のコードを拒否する。
 export async function consumeTotpTimestep(userId: string, timestep: number): Promise<boolean> {
   return db
     .update(mfaTotp)

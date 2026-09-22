@@ -8,7 +8,7 @@ import { InvitationRepo } from "./ports";
 
 type InvitationEmailContext = Omit<InvitationEmailParams, "inviteeEmail" | "url">;
 
-// sendMagicLink callback は {email, url} しか受け取らないため url から context を再構成する。
+// sendMagicLink の callback は {email, url} しか受け取らないため、url から context を再構成する。
 export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailContext")(function* (
   magicLinkUrl: string,
 ) {
@@ -43,7 +43,7 @@ function extractInvitationToken(magicLinkUrl: string): string | null {
   if (!callback) return null;
   const parsed = safeParseUrl(callback);
   if (!parsed) return null;
-  // javascript: 等の非 http(s) スキーム callbackURL は invitation 文脈として扱わない (不正値を無視)。
+  // javascript: などの http(s) 以外のスキームを持つ callbackURL は invitation の文脈として扱わない (不正な値は無視する)。
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   return parsed.searchParams.get("invitation_token");
 }

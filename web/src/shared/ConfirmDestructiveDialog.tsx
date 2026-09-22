@@ -44,7 +44,7 @@ export const ConfirmDestructiveDialog = ({
   };
 
   const handleOpenChange = (next: boolean) => {
-    if (busy) return; // 実行中は閉じない (二重実行 / state 不整合を防ぐ)
+    if (busy) return; // 実行中は閉じない (二重実行と state の不整合を防ぐ)
     setOpen(next);
   };
 

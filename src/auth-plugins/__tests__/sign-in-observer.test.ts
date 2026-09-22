@@ -18,8 +18,8 @@ import { runTest, observing, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
 // sign-in 観測プラグイン (src/auth-plugins/sign-in-observer.ts) の統合テスト。
-// 観測対象は一次認証のみ — チャレンジ通過の sign_in は通過手続 (totp/complete-login-challenge) が
-// 記帳する (ADR-0016 §4.6)。1 ログイン = 1 記帳の不変条件をここで固定する。
+// 観測対象は一次認証だけである。チャレンジ通過の sign_in は通過手続 (totp/complete-login-challenge) が
+// 記帳する (ADR-0016 §4.6)。1 回のログインにつき記帳は 1 件という不変条件をここで固定する。
 
 const P = "mfa-observer-";
 const run = runTest(P);
@@ -78,8 +78,8 @@ describe("sign-in 観測プラグイン", () => {
         yield* ageUser(seeded.id);
         const enabled = yield* enableMfaFor(seeded);
 
-        // MFA 有効ユーザーの 1 回のログインは「一次認証 (介入で記帳しない) → チャレンジ通過 (記帳)」の
-        // 2 段になる。両段で記帳すると 1 ログインが 2 件になり、逆に写像が外れると 0 件になる。
+        // MFA 有効ユーザーの 1 回のログインは、一次認証 (介入するので記帳しない) とチャレンジ通過 (記帳する) の
+        // 2 段になる。両段で記帳すると 1 回のログインが 2 件になり、逆にどちらの段も記帳しないと 0 件になる。
         const login = yield* loginWithMagicLink({
           email: seeded.email,
           callbackURL: CONSUMER_CALLBACK,
@@ -130,8 +130,8 @@ describe("sign-in 観測プラグイン", () => {
   test("QA-M-28 welcome もサインイン記帳も一次認証経路限定 (登録操作は auth route を通らない)", () =>
     run(
       Effect.gen(function* () {
-        // 作成直後 (welcome の対象年齢) のまま有効化まで進める。revoke も auth.api を通るため、
-        // 観測が path で絞れていないと 2 通目の welcome や偽の sign_in が積まれる。
+        // 作成直後 (welcome の対象になる経過時間) のまま有効化まで進める。revoke も auth.api を通るため、
+        // 観測をパスで絞れていないと 2 通目の welcome や偽の sign_in が記録される。
         const db = yield* TestDb;
         const seeded = yield* db.seedUser("m28");
         const session = yield* createSessionFor(seeded.id);

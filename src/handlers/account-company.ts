@@ -77,7 +77,7 @@ accountCompany.post("/api/account/companies", (c) =>
   ),
 );
 
-// この route は下の `/:companyId` より前に置くこと。同 segment 数の static vs param は登録順依存。
+// この route は下の `/:companyId` より前に置く。segment 数が同じ static と param のどちらに一致するかは登録順で決まる。
 accountCompany.post("/api/account/companies/add", (c) =>
   runRoute(
     c,

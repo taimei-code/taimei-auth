@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 単一 image への assert と、それを非 vacuous にする sentinel / leak canary の一覧 (seed mode) の SSOT。
-# 位置契約 (既定 build と --target dev の image ID 一致) と APP_ENV の bundle marker 検査は
-# build 引数違いの 2 image を要するため .github/workflows/ci.yml 側にある。
-# 詳細: docs/adr/0014-docker-runner-dev-stage-separation.md
+# 単一の image への assert と、その assert に中身を持たせる sentinel と leak canary の一覧 (seed mode) をここだけで定義する。
+# 位置契約 (既定の build と --target dev の image ID が一致すること) と APP_ENV の bundle marker の検査は、
+# build 引数の違う 2 つの image が要るため .github/workflows/ci.yml 側にある。
+# 詳細は docs/adr/0014-docker-runner-dev-stage-separation.md を参照。
 #
-# set -e を使わない理由: negative assert を `! cmd` で書くと bash は `!` 付き command の失敗では
-# exit しないため、不在 assert が構造的に fail 不能になる。全違反を fail accumulator に貯めて
+# set -e を使わない理由は、否定の assert を `! cmd` で書くと bash は `!` 付きの command の失敗では
+# exit しないため、不在の assert が構造的に失敗できなくなるからである。すべての違反を failed に貯めて
 # 末尾で 1 度だけ exit し、否定はコンテナ内の `test ! -e ...` 側で行う。
 
 usage() {
@@ -14,18 +14,18 @@ usage() {
   echo "  dev  : build 済み dev image に契約 assert をかける" >&2
 }
 
-# --- 不在 assert の対象と seed 内容 (assert / seed 両方の SSOT) --------------------------------
-# 1 entry = "<image 内で不在を assert する path>|<seed で作るファイル>|<中身>"。seed 欄が空の entry は
-# seed しない。assert 側と seed 側を別々に列挙すると「seed していない path を assert する」状態
-# (= 常に真の vacuous assert) へ silent に戻るため、1 定義から両方を導出する。
+# --- 不在 assert の対象と seed の内容 (assert と seed の両方をここだけで定義する) --------------------------------
+# 1 entry は "<image 内で不在を assert するパス>|<seed で作るファイル>|<中身>" の形である。seed 欄が空の entry は
+# seed しない。assert 側と seed 側を別々に列挙すると、「seed していないパスを assert する」状態
+# (常に真になる中身の無い assert) へ気付かれないまま戻るため、1 つの定義から両方を導く。
 #
-# seed が要る理由: .dev.vars / .env / .llm / .claude / .wrangler / test-results は untracked または
-# 開発端末固有で fresh checkout に存在せず、置かないと「image に混入していない」assert が vacuous に
-# なる (.git は checkout / clone が必ず作るので seed 不要)。
-# leak canary は .dockerignore の `**/node_modules` `**/dist` が root-anchor (`node_modules` /
-# `dist`) に狭められる regression の唯一の観測手段 (fresh checkout には leak 元の host 成果物が無い)。
-# root 直下だけでは足りない — 狭めても root は除外され続けるため、退行が現れるのは
-# packages/auth-client 配下の nested path だけ。
+# seed が要る理由は、.dev.vars、.env、.llm、.claude、.wrangler、test-results が untracked または
+# 開発端末に固有で、新しい checkout には存在せず、置かないと「image に混入していない」という assert が
+# 中身の無いものになるからである (.git は checkout や clone が必ず作るので seed は不要)。
+# leak canary は、.dockerignore の `**/node_modules` と `**/dist` が root からのパス (`node_modules` と
+# `dist`) に狭められる退行を観測できる唯一の手段である (新しい checkout には leak 元になるホストの成果物が無い)。
+# root 直下だけでは足りない。狭めても root は除外され続けるため、退行が現れるのは
+# packages/auth-client 配下の入れ子のパスだけである。
 forbidden_entries="
   .dev.vars|.dev.vars|sentinel
   .env|.env|sentinel
@@ -40,8 +40,8 @@ forbidden_entries="
   packages/auth-client/dist/.leak-canary|packages/auth-client/dist/.leak-canary|canary
 "
 
-# 既存ファイルは上書きしない: ローカル実行で実物の .env / .dev.vars を潰さないため
-# (assert には「存在すること」しか要らないので中身の再生成は不要)。
+# 既存のファイルは上書きしない。ローカルで実行した時に本物の .env や .dev.vars を消さないためである
+# (assert には「存在すること」しか要らないので、中身を作り直す必要は無い)。
 seed_forbidden_paths() {
   local entry seed_spec seed_path content
   for entry in $forbidden_entries; do
@@ -62,7 +62,7 @@ seed_forbidden_paths() {
   done
 }
 
-# 引数 validation は docker に触る前に行う (mode typo で assert 0 件のまま緑になるのを防ぐ)。
+# 引数の検証は docker に触る前に行う (mode の typo で assert が 0 件のまま緑になるのを防ぐ)。
 mode="$1"
 
 case "$mode" in
@@ -96,7 +96,7 @@ esac
 
 image="$2"
 
-# stale tag に対する実行を可視化する (過去 iteration の残骸 image を検証して緑になるのを防ぐ)。
+# 古い tag に対する実行を見えるようにする (過去の反復で残った image を検証して緑になるのを防ぐ)。
 if ! inspected=$(docker image inspect -f '{{.Id}}|{{.Created}}' "$image" 2>&1); then
   echo "error: image を inspect できない: $image" >&2
   echo "$inspected" >&2
@@ -113,13 +113,13 @@ fail() {
   failed=1
 }
 
-# probe は全て `--network none` で回す: bun / bunx の auto-install が network 経由で
-# 依存を取ってきて positive probe を false PASS させるため。cwd は必ず /app
-# (/tmp から実行すると bare specifier が auto-install fallback に流れて偽陰性になる)。
+# probe はすべて `--network none` で回す。bun や bunx の auto-install がネットワーク経由で
+# 依存を取ってきて、存在確認の probe を誤って PASS させるためである。cwd は必ず /app にする
+# (/tmp から実行すると bare specifier が auto-install の fallback へ進み、誤った失敗になる)。
 assert_in_image() {
   local description="$1"
   local script="$2"
-  # 代入と exit status 取得を分ける (`local x=$(...)` は local の status で上書きされる)。
+  # 代入と exit status の取得を分ける (`local x=$(...)` では status が local のもので上書きされる)。
   local output status
   asserts=$((asserts + 1))
   output=$(docker run --rm --network none -w /app "$image" sh -c "$script" 2>&1)
@@ -129,9 +129,9 @@ assert_in_image() {
   fi
 }
 
-# 同種の probe を 1 container にまとめても「どの item が落ちたか」と assert 件数を失わないための
-# 判定 helper。batch 側は item ごとに `OK <item>` / `FAIL <item> :: <理由>` を 1 行ずつ echo し、
-# 本 helper が item 単位で 1 assert として突き合わせる (container 起動だけを削り、粒度は据え置く)。
+# 同種の probe を 1 つの container にまとめても「どの item が落ちたか」と assert の件数を失わないための
+# 判定 helper。batch 側は item ごとに `OK <item>` または `FAIL <item> :: <理由>` を 1 行ずつ echo し、
+# この helper が item 単位で 1 assert として突き合わせる (container の起動だけを減らし、粒度は変えない)。
 check_batch_item() {
   local description="$1"
   local output="$2"
@@ -141,20 +141,20 @@ check_batch_item() {
   if printf '%s\n' "$output" | grep -qxF "OK $item"; then
     return 0
   fi
-  # OK 行が無い = 違反、または batch probe 自体が起動に失敗している。後者では全 item が
-  # 出力全体を添えて落ちる (沈黙して緑にならない)。
-  # ` ::` まで込みで拾う (item 名が別 item の prefix のとき、他 item の FAIL 行を巻き込まない)。
+  # OK 行が無いのは、違反があるか、batch probe 自体が起動に失敗しているかのどちらかである。後者では全 item が
+  # 出力全体を添えて落ちる (何も出さずに緑になることはない)。
+  # ` ::` まで含めて拾う (item 名が別の item の prefix になっている時、他の item の FAIL 行を巻き込まない)。
   detail=$(printf '%s\n' "$output" | grep -F "FAIL $item ::")
   fail "$description :: ${detail:-$output}"
 }
 
-# assert 対象 path は seed と同じ forbidden_entries から導出する (上の定義参照)。
+# assert 対象のパスは seed と同じ forbidden_entries から導く (上の定義を参照)。
 forbidden_paths=""
 for entry in $forbidden_entries; do
   forbidden_paths="$forbidden_paths ${entry%%|*}"
 done
-# 単なる存在確認なので 1 container で全 path を舐める (path 数だけ container を起動しない)。
-# path list は意図的に unquoted で展開する (空白区切りを inner sh の argv に分解させるため)。
+# 単なる存在確認なので、1 つの container で全パスを順に調べる (パスの数だけ container を起動しない)。
+# パスの一覧は意図的に quote せずに展開する (空白区切りを内側の sh の argv に分解させるため)。
 # shellcheck disable=SC2086
 forbidden_probe=$(docker run --rm --network none -w /app "$image" sh -c '
   for path in "$@"; do
@@ -169,30 +169,30 @@ for path in $forbidden_paths; do
   check_batch_item "/app/$path が image に載っていない (.dockerignore)" "$forbidden_probe" "$path"
 done
 
-# bare の `drizzle-kit` は使わない: oven/bun の PATH に /app/node_modules/.bin が無く、
-# 契約を満たしていても exit 127 の false FAIL になる。bunx はローカル .bin を先に見るため
-# behavioral 判定 (JS shim だけ残って platform 別 binary が落ちる失敗モードの検出) を保てる。
+# 素の `drizzle-kit` は使わない。oven/bun の PATH に /app/node_modules/.bin が無く、
+# 契約を満たしていても exit 127 で誤って FAIL になるためである。bunx はローカルの .bin を先に見るため、
+# 実際に動くかの判定 (JS の shim だけが残って platform 別の binary が落ちている失敗の検出) を保てる。
 assert_in_image "dev image で bunx drizzle-kit が実行できる (auth-migrate / taimei e2e の前提)" \
   'bunx drizzle-kit --version'
 assert_in_image "dev image に 共通画面 SPA の build 成果物がある" \
   'test -f /app/web/dist/index.html'
-# SQL が image から落ちても drizzle-kit は正常終了し migration が silent no-op になるため、
-# binary の behavioral assert では代替できない。
-# 単一引用符は意図通り: $1 はコンテナ内 sh の位置引数で、host 側で展開させてはならない。
+# SQL が image から抜けていても drizzle-kit は正常終了し、migration が何もしないまま気付かれないため、
+# binary が動くかの assert では代わりにならない。
+# 単一引用符は意図どおりである。$1 はコンテナ内の sh の位置引数で、ホスト側で展開させてはならない。
 # shellcheck disable=SC2016
 assert_in_image "dev image に drizzle の migration SQL がある" \
   'set -- /app/drizzle/*.sql; test -f "$1"'
 assert_in_image "dev image に手書き SQL の drizzle/manual/ がある" \
   'test -d /app/drizzle/manual'
-# oven/bun の node は bun への shim で wrangler dev が起動を拒否する (Dockerfile dev stage の COPY の前提)。
-# 単一引用符は意図通り: $(...) はコンテナ内 sh で展開させる。
+# oven/bun の node は bun への shim で、wrangler dev が起動を拒否する (Dockerfile の dev stage の COPY の前提)。
+# 単一引用符は意図どおりである。$(...) はコンテナ内の sh で展開させる。
 # shellcheck disable=SC2016
 assert_in_image "dev image の node が本物の Node.js (bun の shim でない)" \
   'test "$(node -p "process.versions.bun ?? \"node\"")" = node'
 
-# SDK entrypoint の probe 対象は image 内 package.json の exports キーから導出する
-# (subpath をハードコードすると exports 追加時に silent に漏れる)。consumer repo だけが subpath を
-# import するため、本 repo の typecheck / test はこの解決失敗を捕らえない。
+# SDK entrypoint の probe 対象は image 内の package.json の exports キーから導く
+# (subpath を直接書くと、exports を追加した時に気付かれないまま抜ける)。consumer repo だけが subpath を
+# import するため、このリポジトリの typecheck と test ではこの解決の失敗を捕まえられない。
 sdk_probe=$(docker run --rm --network none -w /app "$image" bun -e '
   const fs = require("node:fs");
   const pkg = JSON.parse(fs.readFileSync("/app/packages/auth-client/package.json", "utf8"));
@@ -215,6 +215,6 @@ for specifier in $sdk_specifiers; do
   check_batch_item "dev image で SDK entrypoint $specifier が import できる" "$sdk_probe" "$specifier"
 done
 
-# 実行件数を必ず出す (CI 側の期待件数突合とセットで「assert 0 件の緑」を構造的に不可能にする)。
+# 実行件数を必ず出す (CI 側の期待件数との突き合わせと組み合わせて、「assert 0 件の緑」を構造的に不可能にする)。
 echo "asserts executed: $asserts"
 exit "${failed:-0}"

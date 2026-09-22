@@ -30,7 +30,7 @@ import { createCompany, type OrgCode } from "../company-api";
 
 type GuardStatus = "loading" | "needs-input" | "already-has-company";
 
-// server guard は本 path を除外し SessionGuard も /auth/* を包まないため client guard をここに置く
+// server の guard はこのパスを除外し、SessionGuard も /auth/* を覆わないため、client の guard をここに置く
 export const SignUpCompany = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ export const SignUpCompany = () => {
 
   const redirectUrl = parseResult.success ? parseResult.data.redirect_url : "/account";
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: redirectUrl は searchParams 由来で再 mount しない限り変動しない
+  // biome-ignore lint/correctness/useExhaustiveDependencies: redirectUrl は searchParams から得るため、再 mount しない限り変わらない
   useEffect(() => {
     authClient
       .getSession()
@@ -59,7 +59,7 @@ export const SignUpCompany = () => {
         return listMyMemberships();
       })
       .then((memberships) => {
-        if (memberships === null) return; // 未認証で既に redirect 済
+        if (memberships === null) return; // 未認証のため既に redirect している
         if (memberships.length > 0) {
           setStatus("already-has-company");
           window.location.replace(redirectUrl);
@@ -84,7 +84,7 @@ export const SignUpCompany = () => {
     createCompany({ name: name.trim(), org_code: orgCode })
       .then(() => window.location.replace(redirectUrl))
       .catch((err) => {
-        // 別 tab で同 user の CreateCompany が成功 (409) → 素直に redirect。
+        // 別 tab で同じ user の CreateCompany が成功している (409) ので、そのまま redirect する。
         if (err instanceof RequestJsonError && err.status === 409) {
           window.location.replace(redirectUrl);
           return;

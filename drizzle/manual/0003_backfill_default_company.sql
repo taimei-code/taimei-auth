@@ -1,12 +1,12 @@
--- ADR-009: 既存 user 全員に「<name> の事業所」 (= PERSONAL / OWNER membership) を 1 件 backfill。
--- 本番デプロイ前の staging のみで意味があり、本番ロンチ後は signup フローで必ず company が作られるため不要。
--- 同 user に対する 2 重実行を防ぐため `WHERE NOT EXISTS (SELECT 1 FROM membership WHERE user_id = u.id)` で gate。
--- migrate-manual.ts が起動毎に呼ぶため idempotent。
+-- ADR-009 に基づき、既存の user 全員に「<name> の事業所」(PERSONAL な company と OWNER の membership) を 1 件ずつ backfill する。
+-- 本番デプロイ前の staging でだけ意味があり、本番ロンチ後は signup フローで必ず company が作られるため不要になる。
+-- 同じ user に対して 2 回実行しないよう、`WHERE NOT EXISTS (SELECT 1 FROM membership WHERE user_id = u.id)` で対象を絞る。
+-- migrate-manual.ts が起動のたびに呼ぶため冪等にしてある。
 --
--- N:M 破壊防止: 単一 CTE 内で user → company → membership を「同じ user 1 行から派生する 3 つの ID」として
--- 同時に決定し、user.id を carrier として運ぶ。
--- 旧案は company INSERT 後に name で JOIN し直していたため、name 衝突した別 user 行の company に
--- 誤った OWNER membership が紐付くリスクがあった (CR1 / WB-C1)。
+-- N:M の対応を壊さないために、1 つの CTE の中で user、company、membership の 3 つの ID を「同じ user 1 行から導く」形で
+-- 同時に決め、user.id を使って各 INSERT を結び付ける。
+-- 以前の案は company の INSERT 後に name で JOIN し直していたため、name が衝突した別の user 行の company に
+-- 誤った OWNER membership が紐付くおそれがあった (CR1、WB-C1)。
 
 WITH targets AS (
   SELECT
@@ -24,9 +24,9 @@ ins_company AS (
   RETURNING id
 ),
 ins_membership AS (
-  -- ins_company の RETURNING に JOIN することで「company INSERT が成功した行のみ」
-  -- に membership INSERT が連動する。targets を直参照すると ins_company が conflict 等で
-  -- 0 行に縮退したとき FK 違反になりうる。
+  -- ins_company の RETURNING に JOIN することで、company の INSERT が成功した行に対してだけ
+  -- membership を INSERT する。targets を直接参照すると、ins_company が conflict などで
+  -- 0 行になった時に FK 違反になりうる。
   INSERT INTO membership (id, user_id, company_id, role, joined_at, created_at, updated_at)
   SELECT t.new_membership_id, t.user_id, ic.id, 'OWNER', now(), now(), now()
   FROM ins_company ic

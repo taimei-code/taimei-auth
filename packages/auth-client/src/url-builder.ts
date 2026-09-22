@@ -1,4 +1,4 @@
-// 共通ログイン URL の組み立てを SDK に集約する (consumer 側でのキー名 typo / 順序の揺らぎを防ぐ)
+// 共通ログイン URL の組み立てを SDK に集約する (consumer 側でのキー名の typo と順序のばらつきを防ぐ)
 export interface BuildAuthLoginUrlOptions {
   authBaseUrl: string;
   service: string;

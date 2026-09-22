@@ -6,7 +6,7 @@ import { NotFound } from "../membership/guard/errors";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
 
-// before/after diff を tx 内で集めるのは、tx 外だと別 tx の update と混線し audit の before がずれるため。
+// 変更前後の diff を tx 内で集めるのは、tx 外だと別の tx の update と混ざり audit の before が正しくなくなるため。
 
 type UpdateCompanyInput = { name: string; orgCode: OrgCode };
 

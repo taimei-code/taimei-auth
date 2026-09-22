@@ -14,7 +14,7 @@ import {
   user,
 } from "../schema";
 
-// seed / cleanup / e2e fixture が共有する識別子の導出。片方だけ変えると cleanup が 0 件になる。
+// seed、cleanup、e2e fixture が共有する識別子を導出する。どれか 1 つだけ変えると cleanup の対象が 0 件になる。
 export const ids = (prefix: string) => ({
   userId: (suffix: string): string => `${prefix}u-${suffix}`,
   email: (suffix: string): string => `${prefix}${suffix}@example.com`,
@@ -45,7 +45,7 @@ export type SeedInvitationOptions = {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function createSeed(prefix: string) {
-  // cleanup は prefix を LIKE に埋めるため、wildcard を含む prefix は他 suite の行を消す。
+  // cleanup は prefix を LIKE のパターンに埋め込むため、wildcard を含む prefix だと他の suite の行まで消してしまう。
   if (/[%_\\]/.test(prefix)) throw new Error(`seed prefix に LIKE wildcard を含めない: ${prefix}`);
   const id = ids(prefix);
 

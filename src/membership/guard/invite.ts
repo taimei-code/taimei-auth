@@ -4,7 +4,7 @@ import { canInviteRole } from "../policy";
 import { type ParseBody, requireMembership } from "./core";
 import { Forbidden } from "./errors";
 
-// parse を 403 の後に置くのは、SPA が forbidden より先に zod error を出す誤挙動を作らないため。
+// parse を 403 の判定より後に置くのは、SPA が forbidden より先に zod のエラーを表示する誤った挙動を作らないため。
 
 export const requireInvite = Effect.fn("membership.requireInvite")(function* (opts: {
   headers: Headers;

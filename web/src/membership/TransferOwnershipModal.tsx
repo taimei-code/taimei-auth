@@ -37,7 +37,7 @@ export const TransferOwnershipModal = ({
   const selfUserId = authClient.useSession().data?.user.id ?? null;
 
   useEffect(() => {
-    // selfUserId 未確定 (session fetch 中) で開くと自分自身が委譲対象に混ざるため、確定まで待つ。
+    // selfUserId が未確定 (session の fetch 中) のまま開くと自分自身が委譲対象に混ざるため、確定まで待つ。
     if (!open || !selfUserId) return;
     setLoading(true);
     setErrorMessage(null);

@@ -32,7 +32,7 @@ import {
   clientFacingErrorResponse,
 } from "../client-facing-error";
 
-// 旧 respond.ts の byte-invariant を引き継ぐ。
+// 旧 respond.ts の byte 単位の不変を引き継ぐ。
 describe("clientFacingErrorResponse", () => {
   test("failure を { error } JSON にし、content-type は charset 無しの application/json", async () => {
     const res = clientFacingErrorResponse(new Forbidden());
@@ -161,7 +161,7 @@ describe("settleCause", () => {
   });
 });
 
-// captureThrown: Effect の外 (better-auth の onAPIError.onError) で受けた thrown value を adapter と同じ
+// captureThrown は、Effect の外 (better-auth の onAPIError.onError) で受け取った throw された値を adapter と同じ
 // settleCause の規則で Sentry に送る。
 describe("captureThrown", () => {
   const captured = recordSentryExceptions();
@@ -185,7 +185,7 @@ describe("captureThrown", () => {
     expect(captured[n]?.[1]?.level).toBe("error");
   });
 
-  // client-facing failure が無いので client-facing 形 な failure も内部失敗として送る。
+  // client-facing な failure の判定を持たないので、client-facing の形をした failure も内部失敗として送る。
   test("client-facing 形 な値も痕跡ゼロにせず error で送る", () => {
     const failure = new Forbidden();
     const n = captured.length;
@@ -211,8 +211,8 @@ describe("captureThrown", () => {
   });
 });
 
-// Sentry backend の throw を握る (better-call は onError の throw を auth.handler の reject にし、better-auth の
-// 500 応答と Set-Cookie 合流を失わせる)。
+// Sentry backend の throw をここで受け止める (better-call は onError の throw を auth.handler の reject にするため、better-auth の
+// 500 応答と Set-Cookie の合流が失われる)。
 describe("captureThrown は観測自体の失敗を握る", () => {
   const sentryFailure = new Error("sentry down");
   beforeAll(() =>

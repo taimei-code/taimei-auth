@@ -1,5 +1,5 @@
-// Dockerfile の stage 構成 (install layer の入力 / COPY 順 / 既定 build target) を text として読む
-// config invariant。stage 分離の正本: docs/adr/0014-docker-runner-dev-stage-separation.md
+// Dockerfile の stage 構成 (install layer の入力、COPY の順序、既定の build target) をテキストとして読む
+// config invariant。stage 分離の方針は docs/adr/0014-docker-runner-dev-stage-separation.md で定義する。
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -13,7 +13,7 @@ describe("Dockerfile stage 契約の config invariant", () => {
     expect(packages).toContain("auth-client");
     expect(dockerfileViolations(dockerfile, packages)).toEqual([]);
 
-    // manifest 以外の COPY は source 名も flag も問わず違反 (allowlist 判定であることの確認)。
+    // manifest 以外の COPY は、source 名や flag に関係なく違反になる (allowlist で判定していることの確認)。
     for (const injected of [
       "COPY packages ./packages",
       "COPY --chown=bun:bun packages ./packages",
@@ -30,7 +30,7 @@ describe("Dockerfile stage 契約の config invariant", () => {
       );
     }
 
-    // workspace package を足したのに manifests stage の COPY を足し忘れた場合 (足す 1 行を message に含める)。
+    // workspace package を足したのに manifests stage の COPY を足し忘れた場合 (足すべき 1 行を message に含める)。
     const missingManifestCopy = dockerfile.replace(
       "COPY packages/auth-client/package.json ./packages/auth-client/package.json\n",
       "",
@@ -49,8 +49,8 @@ describe("Dockerfile stage 契約の config invariant", () => {
       "COPY packages ./packages が bun install より前",
     );
 
-    // 最終 stage が dev でない書き方は、名前付き / 名前なし / flag 付き / 小文字 as / 行末コメントの
-    // どれでも検出する (`^FROM \S+ AS \S+$` 決め打ちだと後ろ 4 つが「FROM 行でない」扱いで素通りする)。
+    // 最終 stage が dev でない書き方は、名前付き、名前なし、flag 付き、小文字の as、行末コメントの
+    // どれであっても検出する (`^FROM \S+ AS \S+$` に決め打ちすると、後ろの 4 つが「FROM 行でない」扱いで検出されずに通る)。
     for (const appended of [
       "FROM base AS release",
       "FROM base",
@@ -62,7 +62,7 @@ describe("Dockerfile stage 契約の config invariant", () => {
         "Dockerfile の最後の stage が dev でない",
       );
     }
-    // 同じ表記ゆれを最終 dev stage 側に入れても違反にならない (偽陽性の positive control)。
+    // 同じ表記の違いを最終の dev stage 側に入れても違反にならない (偽陽性が出ないことの positive control)。
     const tolerantDev = dockerfile.replace(
       /^FROM web-build AS dev$/m,
       "FROM web-build as dev # 既定 target",

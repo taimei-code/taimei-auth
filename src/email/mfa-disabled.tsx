@@ -19,7 +19,7 @@ type MfaDisabledEmailProps = {
   supportEmail: string;
 };
 
-// 無効化には第二要素 (TOTP / リカバリーコード) が要るため、本人操作でないなら保護が外れたままを意味する。
+// 無効化には第二要素 (TOTP またはリカバリーコード) が要るため、本人の操作でなければ保護が外れたままになっていることを意味する。
 export default function MfaDisabledEmail({
   appName = "taimei",
   securityUrl = "https://auth.taimei-code.com/account/security",

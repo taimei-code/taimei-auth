@@ -20,11 +20,11 @@ import {
 
 import { REPO_ROOT } from "./config-invariant-helpers";
 
-// web/src のドメイン構造 (ADR-0015 / web/src/CLAUDE.md) を固定する恒久 architecture test の helper:
-// analyzeWebStructure (cross-domain allowlist / pages 規則 / shared 逆依存 / cycle)。新しい
-// cross-domain interface を設ける時は ALLOWED_CROSS_DOMAIN に file path を足し、設計変更として
-// review する。#151 の一度きり移行完了 witness (move manifest 照合 / 変更 path 承認 / stale
-// reference 検査) は baseline merge 済みのため退役した。
+// web/src のドメイン構造 (ADR-0015、web/src/CLAUDE.md) を固定する恒久的な architecture テストの helper。
+// analyzeWebStructure が cross-domain の allowlist、pages の規則、shared からの逆依存、循環を検査する。新しい
+// cross-domain interface を設ける時は ALLOWED_CROSS_DOMAIN にファイルパスを足し、設計変更として
+// review する。#151 の一度きりの移行完了の証跡 (move manifest との照合、変更パスの承認、古い
+// 参照の検査) は baseline が merge 済みのため退役した。
 
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
@@ -101,7 +101,7 @@ export type StructureResult = {
   fileCount: number;
 };
 
-// import 宣言 / re-export / literal dynamic import の module specifier。
+// import 宣言、re-export、literal の dynamic import から module specifier を取り出す。
 const moduleSpecifierOf = (node: Node) => {
   if (
     (isImportDeclaration(node) || isExportDeclaration(node)) &&
@@ -192,7 +192,7 @@ export async function extractModuleSpecifiers(source: string, fileName: string):
 }
 
 const withExtension = (base: string, sources: ReadonlyMap<string, string>): string | null => {
-  // `${base}/index.ts(x)` は候補にしない (domain barrel は本 checker 自身が違反にするため)
+  // `${base}/index.ts(x)` は候補にしない (domain の barrel はこの checker 自身が違反にするため)
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`]) {
     if (sources.has(candidate)) return candidate;
   }
@@ -292,9 +292,9 @@ export async function analyzeWebStructure(
 
     for (const specifier of parsed.get(path) ?? []) {
       if (specifier.startsWith("@core/")) {
-        // web/tsconfig の "@core/*" は ["./src/*", "../src/*"] の 2 candidate で、tsc は tsconfig 基準の
-        // 1 つ目が web/src/ を指す (2 entry の理由は web/tsconfig.json のコメント参照)。@core specifier と
-        // 同 path の file を web/src に置くと tsc と vite (../src 固定) が別 module を見る silent 乖離になる。
+        // web/tsconfig の "@core/*" は ["./src/*", "../src/*"] の 2 候補を持ち、tsc では tsconfig を基準にした
+        // 1 つ目が web/src/ を指す (2 つある理由は web/tsconfig.json のコメントを参照)。@core specifier と
+        // 同じパスのファイルを web/src に置くと、tsc と vite (../src に固定) が別の module を見る、気付かれないずれになる。
         const shadow = withExtension(`web/src/${specifier.slice("@core/".length)}`, sources);
         if (shadow) {
           violations.push(

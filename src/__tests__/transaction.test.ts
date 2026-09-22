@@ -6,9 +6,9 @@ import { Transaction } from "../transaction";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
-// design §3.7 / ADR-0017: tx 内の failure は常に rollback。callback の Effect が Fail / Die した時に drizzle の tx が
+// design §3.7 と ADR-0017 の確認。tx 内の failure は常に rollback される。callback の Effect が Fail または Die した時に drizzle の tx が
 // commit されないことを DB で観測する。
-// 被験体の書き込みは production と同じ Effect face (MembershipRepo) で行う。
+// 検証対象の書き込みは、production と同じ Effect face (MembershipRepo) で行う。
 class Rejected extends Data.TaggedError("Rejected")<{ readonly why: string }> {}
 
 const P = "tx-test-";
@@ -87,7 +87,7 @@ describe("Transaction.run", () => {
           Transaction.use((tx) =>
             tx.run(() =>
               Effect.gen(function* () {
-                // Transaction service 自身を tx 内から yield* できる = 外側の Context が渡っている
+                // Transaction service 自身を tx 内から yield* できるのは、外側の Context が渡っている証拠
                 yield* Transaction;
                 return yield* new Greeting({ text: "hi" });
               }),

@@ -12,8 +12,8 @@ import type {
 } from "../../client-facing-contracts";
 import type { MfaTotpActor } from "../contracts";
 
-// 契約検出器 (§10-5)。runtime import なし (typeof import) — façade の入出力が handler の呼び出しと
-// 応答構築を無変更で通ることを typecheck で固定する。壊れたらこのファイルが赤くなる。
+// 契約検出器 (§10-5)。runtime の import は無い (typeof import を使う)。façade の入出力が handler の呼び出しと
+// 応答構築を無変更で通ることを typecheck で固定する。壊れたらこのファイルが typecheck で失敗する。
 
 type Facade = typeof import("../index");
 
@@ -30,7 +30,7 @@ const _enrollWire = (r: EnrollOk): MfaEnrollResponse => ({
 type StatusResult = Effect.Success<ReturnType<Facade["readOwnedMfaStatus"]>>;
 const _statusWire = (r: StatusResult): MfaStatusResponse => ({
   enabled: r.enabled,
-  // in_effect ≡ enabled の恒等写像 (handler と同じ 1 行)。
+  // in_effect は enabled をそのまま渡す (handler と同じ 1 行)。
   in_effect: r.enabled,
   recovery_codes_remaining: r.recoveryCodesRemaining,
 });
@@ -41,8 +41,8 @@ const _activateForward = (r: ActivateOk): Headers => r.sessionChanges;
 const _disableForward = (r: DisableOk): Headers => r.sessionChanges;
 const _okBody: MfaOkResponse = { ok: true };
 
-// 失敗枝のうち MFA 語彙を持つ failure class は adapter が 1 行で HTTP に落とせる形 ({ error, status })。
-// boundary error (DbError / AuthApiError / TtlStoreError) はここに現れず 500 へ落ちる。
+// 失敗の分岐のうち MFA 語彙を持つ failure class は、adapter が 1 行で HTTP 応答にできる形 ({ error, status }) を持つ。
+// boundary error (DbError / AuthApiError / TtlStoreError) はここに現れず 500 になる。
 type ActivateFailure = Extract<
   Effect.Error<ReturnType<Facade["activate"]>>,
   { error: MfaClientFacingErrorCode }
@@ -50,7 +50,7 @@ type ActivateFailure = Extract<
 const _failureWire = (r: ActivateFailure): MfaErrorResponse => ({ error: r.error });
 const _failureStatus = (r: ActivateFailure): number => r.status;
 
-// チャレンジ 2 依存の入出力互換。
+// チャレンジ関連の 2 つの façade 関数の入出力互換。
 type ChallengeState = Effect.Success<ReturnType<Facade["readLoginChallengeState"]>>;
 const _challengeStateWire = (r: ChallengeState): MfaChallengeStateResponse => r;
 

@@ -1,5 +1,5 @@
 import { Context, Effect, Layer } from "effect";
-// SDK 依存をここに持たせないのは Workers バンドルへの @sentry/bun 混入を防ぐため。
+// SDK への依存をここに持たせないのは、Workers のバンドルに @sentry/bun が混入するのを防ぐため。
 export type CaptureContext = {
   level?: "fatal" | "error" | "warning" | "info" | "debug";
   tags?: Record<string, string | undefined>;

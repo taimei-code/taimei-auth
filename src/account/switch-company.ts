@@ -5,7 +5,7 @@ import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { UserRepo } from "./ports";
 
-// membership の存在を tx 内で再確認するのは、tx 外 check と更新の間に除名が入る TOCTOU のため。
+// membership の存在を tx 内で再確認するのは、tx 外のチェックと更新の間に除名が入る TOCTOU を防ぐため。
 export const switchCompany = Effect.fn("account.switchCompany")(function* (params: {
   actorUserId: string;
   fromCompanyId: string | null;

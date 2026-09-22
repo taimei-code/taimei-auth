@@ -26,7 +26,7 @@ type EnrollState =
   | { step: "recoveryCodes"; recoveryCodes: string[] }
   | { step: "failed"; message: string };
 
-// QR を読めない端末の唯一の登録手段。URI が想定外でも QR 側は出せるよう null に倒す。
+// QR を読めない端末にとって唯一の登録手段である。URI が想定外の形でも QR 側は出せるよう、null を返す。
 const readTotpSecret = (totpUri: string): string | null =>
   URL.canParse(totpUri) ? new URL(totpUri).searchParams.get("secret") : null;
 
@@ -69,7 +69,7 @@ const CopyButton = ({ value, label }: { value: string; label: string }) => {
   );
 };
 
-// 取得に失敗しても secret の手入力で登録は完了できるため、描画を諦めて案内に倒す。
+// 取得に失敗しても secret の手入力で登録は完了できるため、描画をやめて案内文に切り替える。
 const TotpQrCode = ({ totpUri }: { totpUri: string }) => {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -122,7 +122,7 @@ type Props = {
 export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
-  // 登録途中の再 enroll に server が同じ内容を返すこと (ADR-0013) を使った表示 cache。
+  // 登録途中の再 enroll に server が同じ内容を返すこと (ADR-0013) を利用した表示用の cache。
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
 
   const entry = useMfaCodeEntry({
@@ -136,7 +136,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
           setState({ step: "recoveryCodes", recoveryCodes });
         })
         .catch((error: unknown) => {
-          // cache を保持したままだと開き直しても古い登録を再表示して 409 を繰り返す。
+          // cache を保持したままだと、開き直しても古い登録を再表示して 409 を繰り返す。
           if (mfaErrorCodeOf(error) === "enrollment_changed") {
             setResumableEnrollment(null);
           }
@@ -148,7 +148,7 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
   const totpSecret = state.step === "scan" ? readTotpSecret(state.enrollment.totpUri) : null;
 
   const handleOpenChange = (next: boolean) => {
-    if (state.step === "starting" && open) return; // enroll 応答待ちに閉じられると宙ぶらりんの登録が残る
+    if (state.step === "starting" && open) return; // enroll の応答待ちに閉じられると、途中のままの登録が残る
     if (entry.submitting) return;
 
     if (next) {

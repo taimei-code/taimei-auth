@@ -16,7 +16,7 @@ export const SignOutButton = () => {
     authClient
       .signOut()
       .then(({ error }) => {
-        // 失敗時に redirect すると server session が残ったまま再ログイン判定になりループする。留まらせる
+        // 失敗時に redirect すると server の session が残ったまま再ログイン判定になりループするため、この画面に留める
         if (error) {
           notifyError(SIGN_OUT_FAILED);
           return;

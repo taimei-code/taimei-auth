@@ -8,7 +8,7 @@ import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "./test-layers";
 
-// AC-043: E channel は never のまま (kernel が TtlStoreError を畳む)、Hono 非依存。
+// AC-043 の確認。E channel は never のまま (kernel が TtlStoreError を吸収する) で、Hono に依存しない。
 rateLimitProgram satisfies (input: {
   key: string;
   limit: number;

@@ -5,7 +5,7 @@ export function useAsyncLoad<T>(load: () => Promise<T>, errorFallback: string) {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: mount 時 1 回のみ実行する契約 (load は呼び出し側の inline 関数で毎 render 変わるため依存に入れない)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mount 時に 1 回だけ実行する契約 (load は呼び出し側の inline 関数で render ごとに変わるため依存に入れない)
   useEffect(() => {
     load()
       .then(setData)

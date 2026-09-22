@@ -32,8 +32,8 @@ import { enroll } from "../enroll-mfa";
 import { readOwnedMfaStatus } from "../read-status";
 import { verifyAndConsumeOwnedCode } from "../verify-code";
 
-// 登録遷移 use-case の統合テスト (実 DB + 記録型 test Layer)。評決表 (ADR-0016 §3.2) をそのまま固定する。
-// revoke の実効性と TTL store fail-closed は既存資産 (login-challenge / handler テスト) の担当。
+// 登録遷移 use-case の統合テスト (実 DB と記録型の test Layer)。評決表 (ADR-0016 §3.2) をそのまま固定する。
+// revoke の実効性と TTL store の fail-closed は既存のテスト (login-challenge / handler テスト) の担当である。
 
 const P = "mfa-totp-reg-";
 const { run, cleanup } = dbTest(P);
@@ -48,7 +48,7 @@ type Recorded = {
   resets: string[];
 };
 
-// 記録型 test Layer を束ね、program に provide する (AppLayer より先に効く)。
+// 記録型の test Layer をまとめて program に provide する (AppLayer より優先される)。
 function buildOps(overrides?: { locked?: boolean; auditFails?: boolean }) {
   const recorded: Recorded = { revokes: [], notified: [], spends: [], resets: [] };
   const layers = Layer.mergeAll(
@@ -135,10 +135,10 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
         expect(yield* ops.run(readOwnedMfaStatus(actor))).toMatchObject({ enabled: false });
 
-        // enroll 再実行 = 同一内容の再表示
+        // enroll の再実行は同一内容の再表示になる
         expect(yield* ops.run(enroll({ actor }))).toEqual(enrolled);
 
-        // 識別子不一致 → 409 enrollment_changed
+        // 識別子が不一致なら 409 enrollment_changed
         const secret = secretFromTotpUri(enrolled.totpUri);
         const mismatch = yield* Effect.flip(
           ops.run(
@@ -147,7 +147,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         );
         expectFailure(mismatch, EnrollmentChanged, "enrollment_changed", 409);
 
-        // 誤コード → 400 かつ revoke 未呼出 (検証順序 — ADR-0016 §4.3)
+        // 誤コードなら 400 で、revoke は呼ばれない (検証順序は ADR-0016 §4.3)
         const wrong = yield* Effect.flip(
           ops.run(
             activate({
@@ -161,7 +161,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expectFailure(wrong, InvalidCode, "invalid_code", 400);
         expect(ops.revokes.length).toBe(0);
 
-        // 正コード (前 step) → 200
+        // 正しいコード (前の step) なら 200
         const activated = yield* ops.run(
           activate({
             actor,
@@ -179,11 +179,11 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           recoveryCodesRemaining: 10,
         });
 
-        // best-effort 記帳の成功側: 行が 1 件書かれ、Sentry には何も行かない。
+        // best-effort 記帳の成功側では、行が 1 件書かれ、Sentry には何も送られない。
         expect((yield* auditRowsFor(user.id, "mfa_enabled")).length).toBe(1);
         expect(sentryAuditFailureEvents()).toEqual([]);
 
-        // 有効: enroll / activate → 409
+        // 有効化済みなら enroll / activate は 409
         expectFailure(
           yield* Effect.flip(ops.run(enroll({ actor }))),
           AlreadyEnabled,
@@ -206,7 +206,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           409,
         );
 
-        // kernel: 同一コード 2 回目はリプレイ拒否
+        // kernel は同一コードの 2 回目をリプレイとして拒否する
         const code = yield* totpCode(secret);
         expect(
           Exit.isSuccess(
@@ -220,7 +220,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           400,
         );
 
-        // disable (次 step のコード) → 200、両テーブル 0 行
+        // disable (次の step のコード) は 200 で、両テーブルとも 0 行になる
         const disabled = yield* ops.run(
           disable({ actor, headers, code: yield* totpCode(secret, 1), kind: "totp" }),
         );
@@ -272,7 +272,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           recoveryCodesRemaining: 9,
         });
 
-        // 並行消費 ×2 → 成功ちょうど 1
+        // 2 つを並行に消費すると成功はちょうど 1 つになる
         const second = enrolled.recoveryCodes[1];
         const consume = ops.run(
           verifyAndConsumeOwnedCode(user.id, { code: second, kind: "recovery_code" }),
@@ -321,7 +321,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect(ops.spends).toEqual([user.id]);
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
 
-        // budget 枯渇 → locked (verify まで到達しない)
+        // budget が枯渇すると locked になる (verify まで到達しない)
         const locked = buildOps({ locked: true });
         expectFailure(
           yield* Effect.flip(

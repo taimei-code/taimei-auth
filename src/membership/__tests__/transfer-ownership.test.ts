@@ -6,8 +6,8 @@ import { NotFound } from "../guard/errors";
 import { transferOwnership } from "../transfer-ownership";
 
 // transfer-ownership use-case (src/membership/transfer-ownership.ts) の DB 統合テスト。
-// 委譲 + audit の from/to / 二段委譲 / apply-change.ts の FOR UPDATE 並行直列化 semantic を検証。
-// 認可 (OWNER のみ / self-transfer 拒否 / not_found / already_owner) は Guard 層の責務。
+// 委譲と audit の from/to、二段委譲、apply-change.ts の FOR UPDATE による並行の直列化を検証する。
+// 認可 (OWNER のみ、self-transfer の拒否、not_found、already_owner) は Guard 層の責務である。
 
 const P = "trans-test-";
 const { run, cleanup } = dbTest(P);
@@ -46,7 +46,7 @@ describe("transferOwnership", () => {
   test("QA-D-04 二段委譲 A→B, 続いて B→C 両者 200 / 全 role 状態が期待通り", () =>
     run(
       Effect.gen(function* () {
-        // FOR UPDATE 直列化により逐次 2 段は成立する。二段目 (B→C) 実行時 B は OWNER に昇格済み。
+        // FOR UPDATE の直列化により逐次の 2 段は成立する。二段目 (B→C) の実行時に B は OWNER に昇格済みである。
         const db = yield* TestDb;
         const A = yield* db.seedUser("A");
         const B = yield* db.seedUser("B");
@@ -68,11 +68,11 @@ describe("transferOwnership", () => {
   test("QA-D-04 並行 transfer (同 companyId, 別 to) → FOR UPDATE 直列化 / OWNER≥1 不変条件維持", () =>
     run(
       Effect.gen(function* () {
-        // apply-change.ts の FOR UPDATE により同 companyId の 2 リクエストは直列化 (deadlock なく順次 commit)。
-        // Guard 層を skip して use-case を直接叩くと、同 actor から 2 回並行 transfer した場合は
-        // 両 to が OWNER に昇格しうる (現行仕様: use-case は OWNER≥1 のみ守り OWNER≤1 は保証しない)。
-        // Guard 経由の実運用では 2 回目の A は既に ADMIN で 403 に落ちるため運用問題にならない。
-        // ここでは (a) failure なし (b) OWNER≥1 が最後に成立、を検証する。
+        // apply-change.ts の FOR UPDATE により、同じ companyId の 2 リクエストは直列化される (deadlock なく順に commit する)。
+        // Guard 層を通さず use-case を直接呼ぶと、同じ actor から 2 回並行に transfer した場合は
+        // 両方の to が OWNER に昇格しうる (現行仕様では use-case は OWNER≥1 だけを守り、OWNER≤1 は保証しない)。
+        // Guard 経由の実運用では 2 回目の A は既に ADMIN で 403 になるため運用上の問題にはならない。
+        // ここでは (a) failure が無いこと (b) OWNER≥1 が最後に成立することを検証する。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("owner-race");
         const a = yield* db.seedUser("target-a");
@@ -93,7 +93,7 @@ describe("transferOwnership", () => {
           ],
           { concurrency: "unbounded" },
         );
-        // Exit は Effect として再投入でき、失敗時は cause ごと test を落とす。
+        // Exit は Effect として再度実行でき、失敗時は cause ごとテストを失敗させる。
         for (const ex of settled) yield* ex;
 
         const rows = yield* db.readMembershipsOfCompany(co);

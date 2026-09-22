@@ -24,13 +24,13 @@ export type ChallengeMethod = (typeof CHALLENGE_METHODS)[number];
 type LoginChallenge = { userId: string; redirectUrl: string; method: ChallengeMethod };
 type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
-// 鍵は better-auth の解決を通す — env 直読みだと dev/CI の default fallback で session 側とずれる。
+// 鍵は better-auth の解決を通して得る。env を直接読むと dev や CI の default fallback で session 側とずれる。
 const signChallengeId = Effect.fn("mfa.signChallengeId")(function* (challengeId: string) {
   const secret = yield* AuthApi.use((authApi) => authApi.secret);
   return yield* Effect.promise(() => makeSignature(challengeId, secret));
 });
 
-// Domain を付けない (host-only) — 第二要素の材料を全 subdomain へ配らない。
+// Domain 属性を付けず host-only にする。第二要素の材料をすべての subdomain に配らないため。
 const challengeCookieAttributes = (maxAge: number) =>
   ({
     maxAge,
@@ -61,7 +61,7 @@ export const openLoginChallenge = Effect.fn("mfa.openLoginChallenge")(function* 
   } satisfies LoginChallengeCookie;
 });
 
-// 未認証応答へ出すのは boolean 1 つに限る (userId 等を出さない)。
+// 未認証の応答に出すのは boolean 1 つだけにする (userId などは出さない)。
 export const readLoginChallengeState = Effect.fn("mfa.readLoginChallengeState")(function* (
   headers: Headers,
 ) {
@@ -84,14 +84,14 @@ export const consumeLoginChallenge = Effect.fn("mfa.consumeLoginChallenge")(func
   return clearCookieHeaders();
 });
 
-// 失効指示 cookie は返さない — 呼び出し側は応答を invalid_code のままにする契約。
+// 失効を指示する cookie は返さない。呼び出し側は応答を invalid_code のままにする契約になっている。
 export const destroyLoginChallenge = Effect.fn("mfa.destroyLoginChallenge")(function* (
   challengeId: string,
 ) {
   yield* TtlStore.use((r) => r.delete(challengeKey(challengeId)));
 });
 
-// 上限到達を Sentry へ出すのがロック急増の唯一の検知信号。
+// 上限到達を Sentry に送ることが、ロック急増を検知する唯一の信号になる。
 export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(function* (
   challengeId: string,
 ) {

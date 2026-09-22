@@ -2,12 +2,12 @@
 
 ## Status
 
-Superseded by [ADR-0016](./0016-mfa-self-owned-totp.md) (2026-08-30)。kill-switch・redirect-guard・IP rate limit・sign-in 観測の判断は 0016 が引き継ぐ。
+Superseded by [ADR-0016](./0016-mfa-self-owned-totp.md) (2026-08-30)。kill-switch、redirect-guard、IP rate limit、sign-in 観測の判断は 0016 が引き継ぐ。
 
-本文中の `user.twoFactorEnabled` 列・`two_factor` テーブルをはじめとする旧 twoFactor 構成の DB オブジェクト
-(guard テーブル含む) への言及は当時の実装を記録したもので、デプロイ ② (2026-08-31) の DROP により実体は消滅した。
+本文中の `user.twoFactorEnabled` 列や `two_factor` テーブルをはじめとする旧 twoFactor 構成の DB オブジェクト
+(guard テーブルを含む) への言及は当時の実装を記録したもので、デプロイ ② (2026-08-31) の DROP により実体は消滅した。
 
-(原文: Accepted (2026-08-09)。`feat/mfa-totp` で実装。)
+(原文: Accepted (2026-08-09)。`feat/mfa-totp` で実装した。)
 
 ## Context
 
@@ -15,52 +15,52 @@ Superseded by [ADR-0016](./0016-mfa-self-owned-totp.md) (2026-08-30)。kill-swit
 一次認証が成功した後に 6 桁コードの **MFA チャレンジ** を要求する。
 
 taimei-auth のログイン手段は **Magic Link** (`/api/auth/magic-link/verify`) と GitHub OAuth
-(`/api/auth/callback/:id`) の 2 つで、`emailAndPassword` は無効 — パスワードログインは存在しない。
-チャレンジを片方の経路にだけ掛けると、もう片方が MFA バイパス経路になるため、両方に掛けることが要件になる。
+(`/api/auth/callback/:id`) の 2 つで、`emailAndPassword` は無効にしている。つまりパスワードログインは存在しない。
+チャレンジを片方の経路にだけ掛けると、もう片方が MFA を迂回する経路になるため、両方に掛けることが要件になる。
 
-better-auth の twoFactor プラグインは、TOTP secret の生成・暗号化保管・コード検証・リカバリーコードの
-単回消費・試行回数によるロックまでを持っている。しかし**チャレンジを差し込む after-hook は
+better-auth の twoFactor プラグインは、TOTP secret の生成、暗号化保管、コード検証、リカバリーコードの
+単回消費、試行回数によるロックまでを持っている。しかし**チャレンジを差し込む after-hook は
 `/sign-in/email` `/sign-in/username` `/sign-in/phone-number` の 3 path にしか match しない**。
-upstream は 1.6.4 でこの範囲を意図的に縮小しており (範囲を広げた PR #9122 を revert)、将来の minor で
-per-method opt-out 付きで再拡大する意向が示されている。現状のプラグインを素で載せると、本サービスの
+upstream は 1.6.4 でこの範囲を意図的に縮小しており (範囲を広げた PR #9122 を revert した)、将来の minor で
+per-method opt-out 付きで再拡大する意向が示されている。現状のプラグインをそのまま使うと、本サービスの
 ログイン経路ではチャレンジが 1 度も発火せず、MFA を有効にしたユーザーがそのまま素通りする。
 
 一方で、認証の中核である「TOTP secret をどう暗号化して保管するか」「リカバリーコードをどう単回消費に
 するか」「何回失敗でアカウントをロックするか」を自前で書くと、その正しさを全て自分で所有することになる。
 
-加えて better-auth の hook 実行順は `options.hooks.after` → プラグインの after-hook (プラグイン登録順)
-で、既存 `src/auth.ts` の `hooks.after` (welcome メール送信 + `sign_in` **audit event**) はチャレンジ
+加えて better-auth の hook の実行順は `options.hooks.after` の後にプラグインの after-hook (プラグイン登録順)
+で、既存 `src/auth.ts` の `hooks.after` (welcome メール送信と `sign_in` **audit event**) はチャレンジ
 介入より**先に**走る。「既存 hook に条件分岐を足してチャレンジ時だけスキップする」という素直な案は、
 実行順の時点で成立しない。
 
 ## Decision
 
-### 1. ハイブリッド — 素材はプラグイン、チャレンジ強制だけ自前プラグイン
+### 1. ハイブリッド: 素材はプラグイン、チャレンジ強制だけ自前プラグイン
 
 server 側にのみ twoFactor プラグイン (`allowPasswordless: true` / `skipVerificationOnEnable: false` /
-`storeBackupCodes: "encrypted"`) を載せ、**チャレンジの発火だけを自前プラグイン
-`src/auth-plugins/mfa-challenge.ts` が行う**。自前 after-hook は `/magic-link/verify` と
+`storeBackupCodes: "encrypted"`) を組み込み、**チャレンジの発火だけを自前プラグイン
+`src/auth-plugins/mfa-challenge.ts` が行う**。自前の after-hook は `/magic-link/verify` と
 `/callback/:id` を matcher にし、MFA を有効にしたユーザーであれば
 
 1. MFA チャレンジを発行し、
-2. 一次認証で確立された **session** を破棄し (cookie クリア → `setNewSession(null)` → `deleteSession` の順)、
+2. 一次認証で確立された **session** を破棄し (cookie クリア、`setNewSession(null)`、`deleteSession` の順)、
 3. 元の 302 を `/auth/mfa` への 302 に差し替える。
 
-介入を決めた後のあらゆる失敗は fail-closed に倒す (チャレンジ発行失敗・session 破棄途中の失敗の
-いずれでも、session cookie がクリアされた状態で再ログインへ誘導し `Sentry.captureException`)。
+介入を決めた後のあらゆる失敗は fail-closed にする (チャレンジ発行の失敗でも session 破棄途中の失敗でも、
+session cookie がクリアされた状態で再ログインへ誘導し `Sentry.captureException` する)。
 元の 302 をそのまま通す fail-open は取らない。
 
 3 案のトレードオフ:
 
 | 案 | 得るもの | 払うもの |
 |---|---|---|
-| プラグイン素のまま | 実装コストゼロ | **チャレンジが発火しない** (要件を満たさない) |
-| 全自前実装 | upstream 非依存 | secret の暗号化・コードの単回消費・試行ロック・リカバリーコードの正しさを全て自分で所有する |
-| **ハイブリッド (採用)** | ロック / 暗号化 / リカバリーコードは upstream の実装のまま使う | プラグイン内部形式 (cookie 名・verification value のキー形式・署名 scheme) への結合を抱える |
+| プラグインをそのまま使う | 実装コストゼロ | **チャレンジが発火しない** (要件を満たさない) |
+| 全自前実装 | upstream 非依存 | secret の暗号化、コードの単回消費、試行ロック、リカバリーコードの正しさを全て自分で所有する |
+| **ハイブリッド (採用)** | ロック / 暗号化 / リカバリーコードは upstream の実装のまま使う | プラグイン内部形式 (cookie 名、verification value のキー形式、署名 scheme) への結合を抱える |
 
 ブラウザに向けた表面は自前 REST のみにする。プラグインの `/two-factor/*` 生 path は before-hook で
-すべて 403 に落とし、`twoFactorClient()` も **共通画面 SPA** に入れない (自前 POST を迂回されると
-`sign_in` audit event の記録とチャレンジ状態の掃除がバイパスされるため、verify 系も含めて全遮断する)。
+すべて 403 にし、`twoFactorClient()` も **共通画面 SPA** に入れない (自前 POST を迂回されると
+`sign_in` audit event の記録とチャレンジ状態の掃除が迂回されるため、verify 系も含めて全遮断する)。
 プラグインの機能は server-side の `auth.api.*` 呼び出しからのみ使う。
 
 ### 2. 内部形式への結合を 2 ファイルに封じ込め、静的テストで固定する
@@ -68,62 +68,62 @@ server 側にのみ twoFactor プラグイン (`allowPasswordless: true` / `skip
 意図的に結合する対象は、upstream が公開 API として保証していない次の形式である:
 
 - 署名付き cookie `two_factor` (maxAge 600 秒)、その中の識別子 `2fa-<random20>`
-- verification value のキー形式 (`2fa-<id>` → userId / `2fa-attempts-2fa-<id>` → 試行回数)
-- cookie 署名 scheme — better-call 1.3.7 (`dist/crypto.mjs` の `makeSignature`) の HMAC-SHA-256 を
-  **パディング付き標準 base64** で載せる形式 (`btoa` 出力。32 byte = 44 文字、末尾 `=`)。better-call の
+- verification value のキー形式 (`2fa-<id>` が userId、`2fa-attempts-2fa-<id>` が試行回数)
+- cookie の署名 scheme。better-call 1.3.7 (`dist/crypto.mjs` の `makeSignature`) の HMAC-SHA-256 を
+  **パディング付き標準 base64** で表す形式 (`btoa` 出力。32 byte は 44 文字、末尾 `=`)。better-call の
   `getSignedCookie` は検証前に「44 文字かつ末尾 `=`」で足切りする
 
   再実装で取り違えやすいのが **`createHMAC("SHA-256", "base64urlnopad")`** で、これで検証すると上の
   足切りに掛かって**常に false になる**。にもかかわらず同じ better-auth の中に実在する scheme で、
   **信頼済みデバイスのトークン** (`plugins/two-factor/`) と **cookie cache** (`cookies/index.mjs`) は
-  そちらを使っている — 「better-auth の署名」で一括りにできない。一方 `hono/cookie` の
+  そちらを使っている。つまり「better-auth の署名」と一括りにはできない。一方 `hono/cookie` の
   `getSignedCookie` は better-call と同一 scheme (実装も同内容) で**署名としては互換**であり、
-  使っていないのは Hono の `Context` を要求して生の `Headers` を扱う本経路に載らないため
+  使っていないのは Hono の `Context` を要求するため、生の `Headers` を扱う本経路では使えないからである
 
-封じ込め構造:
+封じ込めの構造:
 
-- **`src/mfa/challenge-store.ts`** — 上記の形式を知る唯一のファイル。チャレンジの発行 / 読み出し /
-  消費をここだけが行う。`two_factor` / `2fa-` のリテラルが `src/` 内の他ファイルに現れないことを
+- **`src/mfa/challenge-store.ts`**: 上記の形式を知る唯一のファイル。チャレンジの発行、読み出し、
+  消費をここだけが行う。`two_factor` / `2fa-` のリテラルが `src/` 内の他のファイルに現れないことを
   静的テストで固定する (`no-hono-import.test.ts` と同形)。「壊れた」しか検知できない e2e ではなく、
-  「漏れた」を検知するのはこの静的テストの役割。
-- **`src/mfa/gateway.ts`** — `auth.api.*` / `auth.$context` への唯一の窓口
-  (`src/account/revoke-sessions.ts` の「唯一の正規窓口」規律と同形)。戻り値は plain data と転送用
+  「漏れた」を検知するのがこの静的テストの役割である。
+- **`src/mfa/gateway.ts`**: `auth.api.*` / `auth.$context` への唯一の窓口
+  (`src/account/revoke-sessions.ts` の「唯一の正規窓口」規律と同形)。戻り値は plain data と転送用の
   `Headers` に限り、プラグインの型や内部知識を外に出さない。
-- **統合テスト** — challenge-store が作ったチャレンジ状態を gateway 経由の verify が消費できること。
+- **統合テスト**: challenge-store が作ったチャレンジ状態を gateway 経由の verify が消費できることを確かめる。
   upstream が形式を変えた場合に PR の時点で落ちる。依存更新時は
-  `bun test src/mfa && bun update better-auth && bun test src/mfa` で drift を確認する。
+  `bun test src/mfa && bun update better-auth && bun test src/mfa` でずれを確認する。
 
 **撤退線**: upstream がチャレンジ範囲の再拡大 (per-method opt-out) を出したら、自前プラグインを捨てて
-標準機構へ移行する。その時に触るのは challenge-store とプラグイン登録の 2 箇所だけで済む — これが
-「1 ファイル封じ込め」に払うコストの見返りである。
+標準機構へ移行する。その時に触るのは challenge-store とプラグイン登録の 2 箇所だけで済む。これが
+「1 ファイルへの封じ込め」に払うコストの見返りである。
 
 ### 3. sign-in の観測を自前プラグインへ移し、登録順を正しさの前提として固定する
 
 better-auth は `options.hooks.after` を全プラグインの after-hook より先に実行する
-(`node_modules/better-auth/dist/api/dispatch.mjs` の `getHooks` で実測確認)。そのため
+(`node_modules/better-auth/dist/api/dispatch.mjs` の `getHooks` で実測して確認した)。そのため
 `src/auth.ts` の `hooks.after` に置いていた welcome メール送信と `sign_in` audit event の発火を、
-自前プラグイン `src/auth-plugins/sign-in-observer.ts` へ移設し、**mfa-challenge の後に登録する**。
+自前プラグイン `src/auth-plugins/sign-in-observer.ts` へ移し、**mfa-challenge の後に登録する**。
 
-登録順が後であることにより、チャレンジ介入で `newSession` が null 化された状態を observer が自然に
-観測してスキップする (チャレンジ未通過の時点で `sign_in` を記録しない)。順序そのものが正しさの前提に
-なるため、プラグイン登録順はテストで固定する。あわせて一次認証手段 (`magic_link` / `github`) の
-写像表を observer の 1 箇所に集約する。
+登録順が後であることにより、チャレンジ介入で `newSession` が null になった状態を observer がそのまま
+観測してスキップする (チャレンジ未通過の時点では `sign_in` を記録しない)。順序そのものが正しさの前提に
+なるため、プラグインの登録順はテストで固定する。あわせて一次認証手段 (`magic_link` / `github`) の
+対応表を observer の 1 箇所に集約する。
 
 この移設のさい、既存の `hooks.after` が `sign_in` audit を **一度も記録できていなかった**ことが判明した
-(移設前の DB は `sign_in` 行が 0 件)。原因は method 写像が具体パス (`/sign-in/magic-link` /
-`/callback/github`) で分岐していた点にある — hook の `ctx.path` はルートパターン (`/callback/:id`) を返し、
-かつセッション生成は `/magic-link/verify` で起きるため、Magic Link・GitHub OAuth の**両分岐とも到達不能
-だった**。写像をセッション生成パス (`/magic-link/verify` / `/callback/:id`) に合わせて修正し、本 ADR の
+(移設前の DB は `sign_in` 行が 0 件だった)。原因は method の対応表が具体パス (`/sign-in/magic-link` /
+`/callback/github`) で分岐していた点にある。hook の `ctx.path` はルートパターン (`/callback/:id`) を返し、
+かつセッション生成は `/magic-link/verify` で起きるため、Magic Link と GitHub OAuth の**両分岐とも到達不能
+だった**。対応表をセッション生成パス (`/magic-link/verify` / `/callback/:id`) に合わせて修正し、この ADR の
 チャレンジ経路 (`/two-factor/verify-*`) を加えた。
 
-### 4. `AUTH_SECRET` は MFA 登録済みユーザーの復号鍵を兼ねる — ローテーションは制約とする
+### 4. `AUTH_SECRET` は MFA 登録済みユーザーの復号鍵を兼ねるため、ローテーションは制約とする
 
 **`AUTH_SECRET` は cookie 署名鍵であると同時に、twoFactor プラグインが TOTP secret を
 `symmetricEncrypt` で暗号化する鍵、および `storeBackupCodes: "encrypted"` でリカバリーコードを
 暗号化する鍵でもある。** この値を差し替えると、登録済み全ユーザーの TOTP secret とリカバリーコードが
 復号不能になる。
 
-復号不能は自力で回復しない: ログイン手段は Magic Link / GitHub OAuth のみでチャレンジは必ず通る必要が
+復号不能は自力で回復できない。ログイン手段は Magic Link / GitHub OAuth のみでチャレンジは必ず通る必要が
 あり、登録の再実行 (enroll) は MFA 有効中は 409 で拒否され、無効化 (disable) は有効なコードの入力を要求する。
 つまり **MFA 登録済みユーザー全員が同時に、自力復帰不能なロックアウトに陥る**。session が失効するだけの
 通常の鍵差し替え (再ログインで回復する) とは影響の質が違う。
@@ -136,17 +136,17 @@ better-auth は `options.hooks.after` を全プラグインの after-hook より
 
 再暗号化スクリプトは本件では用意しない (旧鍵と新鍵を同時に持つ再暗号化経路を作ること自体が、鍵漏洩時に
 旧鍵を保持する運用を招く)。やむを得ずローテーションが必要になった場合の手順は次のとおりで、これが
-唯一の逃げ道である:
+唯一の手段である:
 
 1. `management/disable-user-mfa.ts` を MFA 登録済みユーザー全員に対して実行する
-   (`two_factor` 行の削除 + `twoFactorEnabled=false` + `mfa_disabled` audit event + 本人通知メール)
+   (`two_factor` 行の削除、`twoFactorEnabled=false`、`mfa_disabled` audit event、本人通知メール)
 2. `AUTH_SECRET` を差し替えて deploy する
 3. 各ユーザーに認証アプリの新規登録を依頼する
 
-再評価トリガー: MFA 登録ユーザー数がこの手順で捌けない規模になったとき。その時点で再暗号化手順を設計し、
-本 ADR を更新する。
+再評価のトリガー: MFA 登録ユーザー数がこの手順で捌けない規模になったとき。その時点で再暗号化手順を設計し、
+この ADR を更新する。
 
-### 5. 登録・有効化の直前に再認証 (step-up) を置かない — 受容したリスク
+### 5. 登録・有効化の直前に再認証 (step-up) を置かない (受容したリスク)
 
 パスワードレス構成のため twoFactor プラグインには `allowPasswordless: true` が必須で、**この設定が
 プラグイン内蔵の「有効化前にパスワードを要求する」step-up を無効化する**。代替の step-up (操作直前の
@@ -155,12 +155,12 @@ Magic Link 再送など) も本件では実装しない。
 したがって次のリスクを受容する: **session を奪取した攻撃者が enroll → activate を実行すると、
 有効化に伴う他 session の revoke で正規ユーザーが自分のアカウントから締め出される。**
 
-- **検知経路**: 有効化・無効化の両方で本人にbest-effortの通知メールを送る (勝手な有効化 = 締め出し、
-  勝手な無効化 = 保護解除)。運用調査にはaudit logを使う。process crashを跨ぐdurable deliveryは保証しない。
+- **検知経路**: 有効化と無効化の両方で本人に best-effort の通知メールを送る (勝手な有効化は締め出し、
+  勝手な無効化は保護解除を意味する)。運用調査には audit log を使う。process crash をまたぐ durable delivery は保証しない。
 - **復旧経路**: `management/disable-user-mfa.ts` による運用救済
 
 不採用の理由は、防げる範囲が「session 奪取済みの攻撃者による有効化」に限られる一方で、ログイン動線が
-二重になるコストが常時かかること。再評価トリガー: step-up を要する操作が他にも増えたとき
+二重になるコストが常時かかることである。再評価のトリガー: step-up を要する操作が他にも増えたとき
 (その時は本件専用ではなく共通機構として設計する)。
 
 ### 6. SDK / consumer 表面は本件で変更しない
@@ -169,18 +169,18 @@ Magic Link 再送など) も本件では実装しない。
 
 チャレンジ保留中は session の実体が破棄されているため、`createAuthGuard` を使う consumer app からは
 単に「未認証」に見え、既存の未認証ハンドリングがそのまま働く。consumer 側は SDK のバージョンを上げずに
-動く。`SessionData` に MFA 状態を載せないため、consumer app が MFA の有無で分岐する手段は現時点で
-提供しない (必要になった時点で proto 追加 + SDK の minor で対応する)。
+動く。`SessionData` に MFA 状態を入れないため、consumer app が MFA の有無で分岐する手段は現時点で
+提供しない (必要になった時点で proto 追加と SDK の minor で対応する)。
 
-### 7. MFA 登録状態 — 5 状態マトリクス (2026-08-11 追記)
+### 7. MFA 登録状態の 5 状態マトリクス (2026-08-11 追記)
 
 **MFA 登録状態** (用語定義: CONTEXT.md) は `user.twoFactorEnabled` フラグと `two_factor` 行の組から
 一意に決まる。解釈と操作単位の前提条件判定は `src/mfa/registration/state.ts` の関数群へ
 集約し、旧 `src/mfa/enrollment-state.ts` は削除した。union は
-module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が黙って別の評決を
-持てるため)。**評決を変える変更は本表の更新とセットで行う。**
+module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が気付かれないまま別の評決を
+持てるため)。**評決を変える変更はこの表の更新とセットで行う。**
 
-状態と成功遷移の見取り図。評決 (受理・拒否コードの全組合せ) の正本は下表で、図には成功遷移と中断の
+状態と成功遷移の見取り図を次に示す。評決 (受理と拒否コードの全組合せ) は下の表で定義し、図には成功遷移と中断の
 落ち方だけを描く:
 
 ```mermaid
@@ -198,48 +198,48 @@ stateDiagram-v2
 | 状態 (フラグ × 行) | enroll | activate | disable | 状態取得 (表示) |
 |---|---|---|---|---|
 | 未登録 (F × 行なし) | 受理 | 404 `not_found` | 409 `not_enabled` | 無効 |
-| 登録済み未有効 (F × 未 verified) | 受理 — 同じ secret、リカバリーコード、登録識別子を再表示する。交換は明示的な登録やり直しだけが行う | 登録識別子が一致する場合に受理 | 409 `not_enabled` | 無効 |
+| 登録済み未有効 (F × 未 verified) | 受理。同じ secret、リカバリーコード、登録識別子を再表示する。交換は明示的な登録やり直しだけが行う | 登録識別子が一致する場合に受理 | 409 `not_enabled` | 無効 |
 | 有効 (T × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 | 有効 |
-| 中断した無効化 (F × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 (この状態の唯一の出口) | 無効 (バッジ) だが `in_effect=true` を返し SPA は disable を出す |
-| 中断した有効化 (T × 未 verified) | 409 `already_enabled` | 409 `already_enabled` | 前提条件は受理 — 正しいコードで 200 成功 (プラグインが行を verified へ修復してから削除する唯一の自己復旧口)。誤コードは 400 `invalid_code` | 有効 + Sentry error |
-| 中断した有効化 (T × 行なし) | 409 `already_enabled` | 409 `already_enabled` | **前提条件で 401 `challenge_expired`** — 検証すべき secret が無く永久に成功しないため、試行枠を消費せず即拒否する (正しいコードでも枠を空費して 429 に達する事故を防ぐ)。救済は `management/disable-user-mfa.ts` | 有効 + Sentry error (窓 6h の per-user throttle) |
+| 中断した無効化 (F × verified) | 409 `already_enabled` | 409 `already_enabled` | 受理 (この状態の唯一の出口) | 無効 (バッジ) だが `in_effect=true` を返し、SPA は disable を出す |
+| 中断した有効化 (T × 未 verified) | 409 `already_enabled` | 409 `already_enabled` | 前提条件は受理。正しいコードで 200 成功 (プラグインが行を verified へ修復してから削除する唯一の自己復旧口)。誤コードは 400 `invalid_code` | 有効 + Sentry error |
+| 中断した有効化 (T × 行なし) | 409 `already_enabled` | 409 `already_enabled` | **前提条件で 401 `challenge_expired`**。検証すべき secret が無く永久に成功しないため、試行枠を消費せず即拒否する (正しいコードでも枠を空費して 429 に達する事故を防ぐ)。救済は `management/disable-user-mfa.ts` | 有効 + Sentry error (窓 6h の per-user throttle) |
 
 評決の根拠:
 
-- enroll を「効いている」全状態で拒むのは、プラグインの enable が既存行を無条件に
-  deleteMany + create し、本人の知らない secret へ黙って差し替わるため (差し替わると手元の
-  認証アプリが通らなくなる = 恒久ロックアウト)
+- enroll を「第二要素が働いている」全状態で拒むのは、プラグインの enable が既存行を無条件に
+  deleteMany + create し、本人の知らない secret へ気付かれないまま差し替わるためである (差し替わると手元の
+  認証アプリが通らなくなり、恒久ロックアウトになる)
 - activate の受理を「登録済み未有効」に限るのは、「中断した無効化」(verified 行あり) では
-  verifyTOTP が純粋検証に縮退し、フラグ false のまま通知メールと audit だけが増える偽成功に
-  なるため。「中断した有効化」で `not_found` でなく `already_enabled` を返すのはフラグ先勝ちの
-  現挙動保存
-- 中断 2 状態が生じるのは better-auth の 2 書き込み (フラグ / 行) が同一トランザクションに
-  入らないため。順序は disable がフラグ降ろし → 行削除、activate が**フラグ立て → セッション
-  rotate → 行 verified 化** (1.6.23 totp/index.mjs 実測)。activate の中断窓は書き込み 1 対では
+  verifyTOTP が純粋な検証に縮退し、フラグ false のまま通知メールと audit だけが増える偽の成功に
+  なるためである。「中断した有効化」で `not_found` でなく `already_enabled` を返すのは、フラグを先に見る
+  現在の挙動を保つためである
+- 中断 2 状態が生じるのは better-auth の 2 回の書き込み (フラグと行) が同一トランザクションに
+  入らないためである。順序は disable がフラグを降ろしてから行を削除、activate が**フラグを立て、セッションを
+  rotate し、行を verified 化する** (1.6.23 totp/index.mjs で実測)。activate の中断窓は書き込み 1 対では
   なく rotate の複数 I/O を挟むぶん広い。この順序を前提に「flag true ⇒ verified 行」を DB
   trigger で強制すると activate 自身のフラグ書き込みが弾かれるので不可
 
 運用上の境界:
 
-- `MfaStatus` (画面表示用、`src/mfa/registration/status.ts`) は本状態の射影であり別概念。表示の enabled は kind から
-  導出せず `isMfaEnabled` (policy.ts、旧 `requiresMfaChallenge`) を通す — 表示とチャレンジ要否の判定二重化を防ぐ規律
+- `MfaStatus` (画面表示用、`src/mfa/registration/status.ts`) はこの状態の射影であり別概念である。表示の enabled は kind から
+  導出せず `isMfaEnabled` (policy.ts、旧 `requiresMfaChallenge`) を通す。表示とチャレンジ要否の判定が二重化することを防ぐ規律である
 - force-disable (`management/disable-user-mfa.ts`) も同じ述語を通す (旧構成では `user.twoFactorEnabled` の
   直接比較を policy 規律の既知の例外としていた)
-- 本表と `registration/state.ts` は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** — kill-switch は
-  ログイン境界 (src/auth-plugins/) のみに効く。登録状態の判定に混ぜると kill-switch off の
+- この表と `registration/state.ts` は kill-switch (`MFA_CHALLENGE_ENABLED`) と **直交** する。kill-switch は
+  ログイン境界 (src/auth-plugins/) のみに作用する。登録状態の判定に混ぜると kill-switch off の
   incident 中に全ユーザーの disable が `not_enabled` になり self-service の出口が閉じる
-- 表示 (enabled) とは別に `in_effect` (第二要素がまだ効いているか = isMfaInEffect) を SPA へ返す。
+- 表示 (enabled) とは別に `in_effect` (第二要素がまだ働いているか。isMfaInEffect) を SPA へ返す。
   「中断した無効化」は enabled=false だが in_effect=true で、SPA はこれで disable を出す (enroll は
   409 なので唯一の出口を UI から塞がない)。in_effect のため read-status は flag=false でも行を読む
-  (security page は human-rate なので +1 SELECT を受容)
+  (security page は人間の操作頻度なので +1 SELECT を受容する)
 - フラグと行の 2 読みは単一スナップショットでないため、並行 activate / disable の最中は
   「中断した〜」が一瞬観測されうる (Sentry の false-positive として既知)。通報は user 単位・窓 6h の
-  throttle (`incrementRateWindow` の count===1) で 1 エピソード 1 回に丸め、滞留再訪の event 無制限
-  積み上がりを止める。行なしでは残数取得 (viewBackupCodes) を呼ばず、gateway の captureException を
-  自作失敗で汚さない
+  throttle (`incrementRateWindow` の count===1) で 1 エピソード 1 回に丸め、滞留中の再訪で event が無制限に
+  積み上がることを止める。行なしでは残数取得 (viewBackupCodes) を呼ばず、gateway の captureException を
+  自作の失敗で汚さない
 - 行の一意性を DB UNIQUE で強制する (`two_factor_user_id_idx` を unique 化)。プラグインの enable は
-  deleteMany + create で収束するが並行 enroll で 2 行になる窓があり、2 行状態では本表の前提
-  「組から一意に決まる」が崩れるため。2 本目の create は fail-closed に落ちる。読み側
+  deleteMany + create で収束するが並行 enroll で 2 行になる窓があり、2 行状態ではこの表の前提
+  「組から一意に決まる」が崩れるためである。2 本目の create は fail-closed に失敗する。読み側
   (`findTwoFactorVerificationState`) も verified 優先の ORDER BY で決定化する
 - Passkey (Scope out) を追加する時は `registration/state.ts` 内部の union を再設計する (非 export のため
   消費者は無傷)
@@ -247,31 +247,31 @@ stateDiagram-v2
 ### 8. MFA 登録遷移を user 単位で直列化する (2026-08-13 追記)
 
 登録、有効化、無効化、運用救済は、同じ user に対する **MFA 登録遷移**として application-owned の
-`mfa_registration_transition_guard` を取得する。`user_id` を主キーにし、guard 挿入と user 行と
-`two_factor` 行の最新状態の再読込を同じ短い DB transaction で確定する。取得 transaction は
+`mfa_registration_transition_guard` を取得する。`user_id` を主キーにし、guard の挿入と、user 行と
+`two_factor` 行の最新状態の再読込を、同じ短い DB transaction で確定する。取得 transaction は
 `lock_timeout` と `statement_timeout` を 250ms 以下に局所設定する。挿入できた request だけが
 外部副作用を開始し、未 commit の insert を含む競合 request は上限内に、状態を変更せず
-`503 temporarily_unavailable` に倒す。
+`503 temporarily_unavailable` を返す。
 
 外部 I/O を待つ間に DB transaction や session lock は保持しない。guard はランダムな operation token、
 操作種別、取得時刻を持つ。成功または既知の業務失敗で、呼び出した外部 I/O の終端結果が明確な場合だけ、
 user ID と token が一致する guard を CAS delete する。予期しない例外、DB 応答喪失、外部副作用の結果不明、
-process crash では guard を残す。自動 TTL では解放せず、後続 writer を止めて先行 writer との交差を防ぐ。
-残置の検知は解放と分離する: 取得競合時に先行 guard の `acquired_at` を観測し、正常な遷移で説明できない
+process crash では guard を残す。自動 TTL では解放せず、後続の writer を止めて先行 writer との交差を防ぐ。
+残置の検知は解放と分離する。取得競合時に先行 guard の `acquired_at` を観測し、正常な遷移で説明できない
 滞留 (15 分超) を Sentry へ通報する。通報は検知のみで、解除は従来どおり停止確認を経た management 操作に限る。
 
-MFA 登録遷移自体が明確な終端結果へ到達した後に guard 解放だけが失敗または結果不明になった場合は、解放失敗を
+MFA 登録遷移自体が明確な終端結果へ到達した後に guard の解放だけが失敗または結果不明になった場合は、解放失敗を
 観測して guard を隔離状態として扱う一方、確定済みの遷移結果、session 変更、本人通知は失わない。解放障害を
-HTTP 500 へ変換すると、rotate 済み session の cookie と不正変更を検知する通知だけが失われるためである。
+HTTP 500 へ変換すると、rotate 済み session の cookie と、不正変更を検知する通知だけが失われるためである。
 
-運用者は先行 process の停止を確認した後、management 専用操作で guard を解除できる。解除は guard 削除と
+運用者は先行 process の停止を確認した後、management 専用操作で guard を解除できる。解除は guard の削除と
 `mfa_registration_guard_released` audit を同じ transaction で確定する。`DELETE ... RETURNING` で
-1 行削除できた場合だけ audit を挿入し、同時解除または正常 CAS 解放との競合敗者は `released:false` で
-audit を残さない。audit payload は実行元、理由、停止確認済みの事実だけを許可し、operation token、
+1 行削除できた場合だけ audit を挿入し、同時解除または正常な CAS 解放との競合に負けた側は `released:false` で
+audit を残さない。audit payload には実行元、理由、停止確認済みの事実だけを許可し、operation token、
 登録識別子、secret、code、recovery code、session token を記録しない。
 
 状態取得とログイン時のチャレンジ判定は guard に参加させない。ログインの hot path に DB write を加えず、
-better-auth の非原子的書き込み中に一時状態を観測し得る既存契約と Sentry 検知を維持する。
+better-auth の非原子的な書き込み中に一時状態を観測し得る既存契約と Sentry 検知を維持する。
 
 **登録済み未有効**で登録を再実行した場合は secret を回転せず、暗号化保管済みの TOTP URI と
 リカバリーコード、および同じ **MFA 登録識別子**を返す。最終的な有効化契約はこの識別子を必須入力とし、
@@ -285,22 +285,22 @@ request の利用が観測されなくなった後、第 2 段階で compatibili
 登録やり直しを同時に公開する。旧 SPA と各段階の server、新 SPA と旧 server の組合せを contract test で
 固定する。
 
-その前の phase 0 として guard migration と guard 参加を既存 wire 契約のまま全 server と management CLI へ
-先行配布し、旧 fleet を完全 drain してから第 1 段階を有効化する。rollback 先も guard 参加版へ限定する。
-guard 非参加版へ戻す場合は MFA write を停止し、全 process 停止と guard 残行解消を確認してから切り替える。
-旧 CLI artifact は実行禁止とし、CLI は guard protocol version が一致しなければ変更を始めず終了する。
+その前の phase 0 として guard migration と guard 参加を既存の wire 契約のまま全 server と management CLI へ
+先行配布し、旧 fleet を完全に drain してから第 1 段階を有効化する。rollback 先も guard 参加版へ限定する。
+guard 非参加版へ戻す場合は MFA write を停止し、全 process の停止と guard 残行の解消を確認してから切り替える。
+旧 CLI artifact は実行禁止とし、CLI は guard protocol version が一致しなければ変更を始めずに終了する。
 
-(2026-08-14 追記) 実配布では guard 参加と識別子の additive 追加を単一 changeset で配布した。本サービスの
+(2026-08-14 追記) 実配布では guard 参加と識別子の additive 追加を単一の changeset で配布した。本サービスの
 配布単位は版の一括切替 (Workers の版切替 / compose の単一 service 再作成) で、長期の混在 fleet を持たない。
 旧版 process が残る短い窓では guard が相互排他を提供しないが、その窓で交差しうるのは同一 user の並行 MFA
 操作に限られ、発生時の帰結も §7 の中断状態と既存の復旧契約に収まるため受容する。rollback 先を guard 参加版に
 限定する制約は維持する。
 
-この guard が保証するのは、自前の正規 write 経路で結果不明の writer と後続 writer を交差させない
+この guard が保証するのは、自前の正規 write 経路で結果不明の writer と後続の writer を交差させない
 ことであり、better-auth の複数書き込みを 1 DB transaction にまとめる原子性ではない。`auth.api.*` は
 別 connection で DB / Redis / session を更新するため、関連行の `FOR UPDATE` は自分が待つ書き込みを
 塞ぐので使わない。途中失敗で生じる中断状態と既存の復旧契約は残す。audit は guard 解放前に呼ぶ。
-guard 解放を試行した後、application service は通知を best-effort で開始する。通知失敗は観測へ回すが、
+guard の解放を試行した後、application service は通知を best-effort で開始する。通知失敗は観測へ回すが、
 確定済み状態を巻き戻さない。操作確定後から通知投入前の process crash では通知を失い得るという
 既存制約を受容し、durable delivery は別計画とする。外部メールの到着順は保証しない。
 
@@ -315,18 +315,18 @@ transaction 境界を再設計する必要があるため、別計画とする�
 それぞれの bound façade だけを使う。`getStatus` は同じ module が状態解釈を所有するため self-service
 façade に含めるが、guard は取得しない。(2026-08-21 追記) guard 非参加を構造でも表明するため、
 `getStatus` は operations port (`RegistrationOperations`) から外し、façade が状態所有側
-(`registration/status.ts` の `readStatus`) へ直接 bind する形にした — façade の操作名 5 つ (restart は第 2 段階まで非公開) は変わらない。
+(`registration/status.ts` の `readStatus`) へ直接 bind する形にした。façade の操作名 5 つ (restart は第 2 段階まで非公開) は変わらない。
 
 **MFA 登録やり直し**は通常の登録の再実行と分けた明示的な遷移とする。現在の **MFA 登録識別子**を必須にし、
 guard 取得時の最新登録と一致する場合だけ secret、リカバリーコード、識別子を回転する。有効化または
 登録やり直しで識別子が一致しない場合は `409 enrollment_changed` を返し、共通画面 SPA は現在の登録を
 取り直すよう案内する。
 
-module 内部には application-owned port と factory を置く。application core は Drizzle の
+module 内部には application-owned の port と factory を置く。application core は Drizzle の
 transaction 型、Redis、Sentry、email sender を参照しない。session 材料の `Headers` (WHATWG 標準型) は
-不透明値として operations へ受け渡すだけで、読み取り・生成は adapter / handler 側に置く。
+不透明な値として operations へ受け渡すだけで、読み取りと生成は adapter / handler 側に置く。
 composition root が better-auth / transition guard /
-attempt budget / audit / notification / observability adapter を結線する。本番 adapter と fault-injection 用
+attempt budget / audit / notification / observability の adapter を結線する。本番 adapter と fault-injection 用の
 test adapter の 2 つで seam を正当化する一方、factory と port は handler へ公開しない。既存の統合テストは
 façade 越しに残し、競合順序と部分失敗は test adapter で決定的に作る。
 
@@ -334,18 +334,18 @@ façade 越しに残し、競合順序と部分失敗は test adapter で決定�
 enroll × activate や activate × activate が同時に better-auth を呼ぶ余地が残るためである。
 反対に MFA 永続化を自前所有して 1 DB transaction へ入れる案も採らない。DB 状態の原子性と引き換えに、
 secret 暗号化、リカバリーコードの単回消費、session cache 更新という認証の中核を自前所有することになり、
-本 ADR が選んだハイブリッド構成の利点を失う。採用するのは永続 guard による正規経路の排他と、
+この ADR が選んだハイブリッド構成の利点を失う。採用するのは永続 guard による正規経路の排他と、
 結果不明時の guard 残置である。
 
-(2026-08-29 追記) 写像方針 (結果不明を rethrow して guard を残置するか、既知の失敗へ総写像するか)
-の選択を、gateway の関数名選択から構造へ昇格した。`runTransition` は guard 取得の証憑
+(2026-08-29 追記) 失敗の変換方針 (結果不明を rethrow して guard を残置するか、既知の失敗へ全て変換するか)
+の選択を、gateway の関数名の選択から構造へ昇格した。`runTransition` は guard 取得の証憑
 (**MFA 登録遷移 guard hold**。brand 付き `GuardHold`、用語定義: CONTEXT.md) から遷移内専用の
-窓口 `GuardedMfaGateway` を作って work へ配り、書き込み系 = rethrow / 読み取り
-(`readPendingTotpEnrollment`) = 総写像の選定を束縛 (registration/wiring.ts の `guardedGateway`) に
-内部固定する。operations は gateway module を import できず (封じ込めの静的テストで固定)、guard 外の総写像入口は
+窓口 `GuardedMfaGateway` を作って work へ配り、書き込み系は rethrow、読み取り
+(`readPendingTotpEnrollment`) は全て変換という選定を束縛 (registration/wiring.ts の `guardedGateway`) に
+内部固定する。operations は gateway module を import できず (封じ込めの静的テストで固定)、guard 外で全て変換する入口は
 ログイン時チャレンジ (complete-challenge) だけに固定する。gateway.ts 自体は guard の概念を知らない
 better-auth への純粋な窓口のまま保つ (façade を gateway 側が所有する案は、この純粋性を優先して
-不採用)。**読み取り = 総写像の内部固定に例外が必要になった場合は本 §8 を re-open して判断する。**
+不採用とした)。**「読み取りは全て変換する」という内部固定に例外が必要になった場合は、この §8 を再び開いて判断する。**
 
 ### 9. 共通画面 SPA は MFA チャレンジの継続可否を auth ホストの結果から決める (2026-08-21 追記)
 
@@ -363,40 +363,40 @@ MFA チャレンジを混同せず、wire contract を変更しても共通画�
 状態取得の GET は画面離脱時に中断できるが、送信済みの POST 検証は中断しない。POST 検証は auth ホスト側で
 MFA チャレンジを消費し、新 session を発行して response の `Set-Cookie` で browser へ渡す。共通画面 SPA が
 途中で中断すると、auth ホストでは成功したのに session cookie を受け取れない結果不明を作り得るためである。
-画面離脱後は POST を完了させたまま共通画面 SPA の state への反映だけを破棄する。
+画面離脱後は POST を完了させたまま、共通画面 SPA の state への反映だけを破棄する。
 
-検証成功時の redirect 先は、auth ホストが response を返す直前に行う出口検証を正本とする。
+検証成功時の redirect 先は、auth ホストが response を返す直前に行う出口検証で決める。
 共通画面 SPA は allowlist を複製せず、検証済みの redirect 先へ browser 遷移を実行するだけに留める。
 
 ## Consequences
 
-- **upstream 追随のコストを恒常的に負う**: better-auth の minor 更新で cookie 名・署名 scheme・
-  verification value のキー形式が変わると、MFA 有効ユーザーがログイン不能になる。静的テスト + 統合
-  テスト + 依存更新時の手順で PR 時点に検知を寄せているが、検知は「落ちる」ことであって自動修復ではない。
-- **緊急停止スイッチが必要になった**: 上記の drift や想定外の障害に対し、deploy の rollback なしで
+- **upstream 追随のコストを恒常的に負う**: better-auth の minor 更新で cookie 名、署名 scheme、
+  verification value のキー形式が変わると、MFA 有効ユーザーがログイン不能になる。静的テスト、統合
+  テスト、依存更新時の手順で PR の時点に検知を寄せているが、検知は「落ちる」ことであって自動修復ではない。
+- **緊急停止スイッチが必要になった**: 上記のずれや想定外の障害に対し、deploy の rollback なしで
   チャレンジ強制を止められるよう `MFA_CHALLENGE_ENABLED` を持つ。fail-safe 既定 (明示的な `"false"`
   のみ off、未設定 / 空文字 / 不正値は on) とし、off で動作している間は Sentry に warning を 6 時間おきに
-  出し続ける (「止めたまま気づかない」を防ぐ)。1 回きりにしないのは、通知済みフラグが isolate 常駐の
-  module state になるため — warm isolate は初回以降ずっと黙り、放置が長い定常状態でちょうど信号が
+  出し続ける (「止めたまま気付かない」を防ぐ)。1 回きりにしないのは、通知済みフラグが isolate 常駐の
+  module state になるためである。warm isolate は初回以降ずっと黙り、放置が長い定常状態でちょうど信号が
   消える。逆に cold isolate が並んで同じ窓に複数出るぶんは、同一 message の Sentry 側集約に委ねる。
-- **無効化の試行上限だけ fail-closed に倒す**: プラグインの試行カウントとアカウントロックは sign-in
+- **無効化の試行上限だけ fail-closed にする**: プラグインの試行カウントとアカウントロックは sign-in
   経路でしか動かず、セッションあり経路の `disable` には継承されない。session cookie を盗んだ攻撃者に
   よる 6 桁の総当たりを止めるのは `src/mfa/disable-attempt-budget.ts` のアカウント単位カウンタ
   (5 回 / 15 分、TTL は試行のたびに引き直すスライディング窓) だけである。計数は
-  `incrementRateWindow` の MULTI (INCR + EXPIRE を 1 往復) に載せて atomic にし、
+  `incrementRateWindow` の MULTI (INCR + EXPIRE を 1 往復) で atomic に行い、
   並行リクエストで加算を取りこぼさない。軸をセッションでなくアカウントに取るのは、cookie を
-  盗んだ攻撃者がセッションを取り直すたびに枠を得るのを防ぐため。汎用の `createRateLimitMiddleware` は
-  availability 優先で Redis 障害時に fail-open するが、**このカウンタは数えられない時に必ず拒否する**
-  — 逆に倒すと Redis を落とすだけで第二要素の総当たり防御が消えるため。代償として、Redis 障害中は
+  盗んだ攻撃者がセッションを取り直すたびに枠を得るのを防ぐためである。汎用の `createRateLimitMiddleware` は
+  availability 優先で Redis 障害時に fail-open するが、**このカウンタは数えられない時に必ず拒否する**。
+  逆にすると Redis を落とすだけで第二要素の総当たり防御が消えるためである。代償として、Redis 障害中は
   MFA の無効化が全ユーザーで不能になる (救済は `management/disable-user-mfa.ts`)。
 - **運用救済スクリプトが恒久的な運用資産になる**: `management/disable-user-mfa.ts` は、認証アプリと
   リカバリーコードを両方失ったユーザーの唯一の救済経路であり、上記 4 の鍵差し替え手順と 5 の締め出し
   復旧も同じスクリプトに依存する。削除・退避してはならない。
-- **挙動変更 (`sign_in` audit event)**: 観測点の移設に伴い、これまで写像から漏れて記録されていなかった
+- **挙動変更 (`sign_in` audit event)**: 観測点の移設に伴い、これまで対応表から漏れて記録されていなかった
   Magic Link ログインの `sign_in` が記録されるようになる。1 回のログインで記録される `sign_in` は
   1 件 (MFA 有効ユーザーはチャレンジ成功時点で 1 件) で、移設前後で welcome メールの送信条件と通数は
   変わらない。
-- **`src/auth.ts` が設定とプラグイン登録に痩せる**: hooks の移設により ADR-0012 の 200 行閾値からも
+- **`src/auth.ts` が設定とプラグイン登録だけの薄いファイルになる**: hooks の移設により ADR-0012 の 200 行閾値からも
   距離が取れる。代わりに、正しさの一部 (プラグイン登録順) がファイルの並び順という壊れやすい形で表現
   されるため、テストで固定する。
 - **チャレンジ画面は二本目の認証経路になる**: `/api/mfa/challenge*` は `two_factor` cookie を認証材料と
@@ -407,7 +407,7 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
   この順序は動かせないので、**有効化ダイアログで 6 桁コードを打ち間違えた場合でも他デバイスの
   セッションは失効する**。未登録・有効化済みの呼び出しは use-case 先頭の前提条件で弾き、「何も
   有効化しないまま全デバイスが落ちる」「audit と通知メールが 1 組増える」までは防ぐが、
-  コードの打ち間違いだけは本プラグイン構成では構造的に回避できないため受容する。
+  コードの打ち間違いだけはこのプラグイン構成では構造的に回避できないため受容する。
 - **revoke には最大 5 分の残余ウィンドウがある**: 有効化・無効化に伴う「操作セッション以外の revoke」は
   Redis 上のセッション実体を消すが、`cookieCache` (maxAge 5 分) が生きている間は他セッションが
   `requireActor` や consumer の VerifySession を通過し続ける (`two_factor_enabled` は revision
@@ -419,12 +419,12 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
 
 | # | 案 | 不採用理由 | 再評価トリガー |
 |---|---|---|---|
-| A | twoFactor プラグインを素のまま使う | 本サービスのログイン経路ではチャレンジが発火しない。要件を満たさない | upstream がチャレンジ範囲を再拡大した時 (= 本 ADR の撤退線) |
-| B | MFA を全自前実装する | secret の暗号化保管・コードの単回消費・試行ロック・リカバリーコードの正しさを全て所有することになる。認証の中核ほど既製実装の方が安全 | upstream への追随コストが自前実装の維持コストを上回った時 |
-| C | upstream に per-method opt-out を PR して待つ | 一度 revert された経緯があり、マージ時期を握れない。その間 MFA を出せない | — (撤退線として結果的に取り込む) |
-| D | 一次認証の handler 自体を fork / patch する | better-auth の内部 route 実装を丸ごと抱えることになり、封じ込め面積が cookie 形式 3 点よりはるかに広がる | — |
-| E | チャレンジ状態を自前テーブルで持つ | 内部形式への結合は切れるが、コード検証は結局プラグインの `auth.api` を通すため二重の状態管理になり、不整合の窓が増える | プラグインのチャレンジ状態を使わない構成 (全自前) に倒す時 |
-| F | チャレンジの遷移先 (`redirect_url`) を URL クエリで持ち回る | ADR-0003 で塞いだオープンリダイレクトを再導入することになる。採用したのは verification value 側に保持し、返す直前に出口検証する方式 | — |
+| A | twoFactor プラグインをそのまま使う | 本サービスのログイン経路ではチャレンジが発火しない。要件を満たさない | upstream がチャレンジ範囲を再拡大した時 (この ADR の撤退線) |
+| B | MFA を全自前実装する | secret の暗号化保管、コードの単回消費、試行ロック、リカバリーコードの正しさを全て所有することになる。認証の中核ほど既製実装の方が安全 | upstream への追随コストが自前実装の維持コストを上回った時 |
+| C | upstream に per-method opt-out を PR して待つ | 一度 revert された経緯があり、マージ時期を握れない。その間 MFA を出せない | なし (撤退線として結果的に取り込む) |
+| D | 一次認証の handler 自体を fork / patch する | better-auth の内部 route 実装を丸ごと抱えることになり、封じ込め面積が cookie 形式 3 点よりはるかに広がる | なし |
+| E | チャレンジ状態を自前テーブルで持つ | 内部形式への結合は切れるが、コード検証は結局プラグインの `auth.api` を通すため二重の状態管理になり、不整合の窓が増える | プラグインのチャレンジ状態を使わない構成 (全自前) にする時 |
+| F | チャレンジの遷移先 (`redirect_url`) を URL クエリで持ち回る | ADR-0003 で塞いだオープンリダイレクトを再導入することになる。採用したのは verification value 側に保持し、返す直前に出口検証する方式 | なし |
 | G | リカバリーコードを hash 保管にする | TOTP secret 自体が可逆保管必須である以上、同じ鍵で守られるリカバリーコードだけを hash にしても追加防御はほぼ無い。プラグイン既定の暗号化保管を受容する | TOTP secret の保管方式そのものを変える時 |
 | H | メールによる第二要素 / メール fallback | ログイン手段がメール (Magic Link) であるため、メール到達性を第二要素にするのは MFA 無効化と等価 | ログイン手段にパスワードが加わった時 |
 
@@ -436,11 +436,9 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
 
 ## 関連
 
-- ADR-0003 (redirect_url allowlist) — チャレンジ成功時の遷移先の出口検証が依拠する規則
-- ADR-0010 (削除ライフサイクル) — `two_factor.user_id` の `onDelete: cascade` の根拠
-- ADR-0011 (Workers 移行) — secondaryStorage 構成でチャレンジ状態が Redis で完結する前提
-- ADR-0012 (レイヤードアーキテクチャ) — プラグイン殻を `src/auth-plugins/` (Frameworks & Drivers)、
+- ADR-0003 (redirect_url allowlist): チャレンジ成功時の遷移先の出口検証が依拠する規則
+- ADR-0010 (削除ライフサイクル): `two_factor.user_id` の `onDelete: cascade` の根拠
+- ADR-0011 (Workers 移行): secondaryStorage 構成でチャレンジ状態が Redis で完結する前提
+- ADR-0012 (レイヤードアーキテクチャ): プラグイン殻を `src/auth-plugins/` (Frameworks & Drivers)、
   判定と業務手続を `src/mfa/` に置く層規律
 - 用語定義: [`CONTEXT.md`](../../CONTEXT.md) の「多要素認証 (MFA)」「TOTP」「MFA チャレンジ」「リカバリーコード」「MFA 登録遷移 guard hold」
-</content>
-</invoke>

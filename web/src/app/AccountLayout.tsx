@@ -64,7 +64,7 @@ export const AccountLayout = () => {
         </div>
       </main>
 
-      {/* /auth に sonner を配らないため App でなくここにマウントする */}
+      {/* /auth には sonner を含めないため、App ではなくここにマウントする */}
       <Toaster />
     </div>
   );

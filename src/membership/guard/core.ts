@@ -20,7 +20,7 @@ const failClosedAsUnauthorized = (failure: { readonly cause: unknown }) =>
     Effect.andThen(new Unauthorized()),
   );
 
-// better-auth cookieCache (最大 5 分) は user 行削除後も session を返すため DB の user 存在で fail-closed。
+// better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返すため、DB に user が存在しなければ fail-closed にする。
 export const requireActor = Effect.fn("membership.requireActor")(
   function* (headers: Headers) {
     const session = yield* AuthApi.use((authApi) => authApi.getSession(headers));
@@ -36,7 +36,7 @@ export const requireActor = Effect.fn("membership.requireActor")(
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),
 );
 
-// membership の読み取り失敗 (DbError) は捕捉せず 500 にする (fail-closed の対象は session 解決のみ)。
+// membership の読み取り失敗 (DbError) は捕捉せず 500 にする (fail-closed にするのは session の解決だけ)。
 export const requireMembershipOf = Effect.fn("membership.requireMembershipOf")(function* (
   actor: Actor,
   companyId: string,

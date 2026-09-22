@@ -1,20 +1,20 @@
 # 手動回帰 QA (QA-MR-*)
 
-自動化できない (実ブラウザ + 実ドメイン / 外部サービス実連携 / 実 workerd / 別 repo の build context が必要な) 回帰ケースの台帳。
+自動化できない回帰ケース (実ブラウザと実ドメイン、外部サービスとの実連携、実 workerd、別 repo の build context のいずれかが必要なもの) の台帳である。
 
-- **ID 体系**: `QA-MR-*` は本ドキュメント専用。`QA-D/E/H/I/M/R-*` は自動テスト名に埋め込まれた既存体系 (例: `src/handlers/__tests__/account-routes-migrated.test.ts`) で、別物。重なる領域は相互参照する
-- **実行契機**: 各ケースの「契機」列のイベントが起きる PR のマージ前。加えて本番デプロイ後スモークとして QA-MR-01 / QA-MR-03 を実施する
-- **担当**: 該当 PR の作者 (デプロイ後スモークはデプロイ実施者)
+- **ID 体系**: `QA-MR-*` はこの文書専用の体系である。`QA-D/E/H/I/M/R-*` は自動テスト名に埋め込まれた既存の体系 (例: `src/handlers/__tests__/account-routes-migrated.test.ts`) で、別物である。重なる領域は相互に参照する
+- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
+- **担当**: 該当 PR の作者 (デプロイ後のスモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
 
-自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / 招待受諾 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否 / 多要素認証 (MFA) の有効化 → チャレンジ通過 → リカバリーコード) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため本台帳の対象外。
+自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / 招待受諾 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否 / 多要素認証 (MFA) の有効化 → チャレンジ通過 → リカバリーコード) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため、この台帳の対象外である。
 
 ---
 
 ## QA-MR-01: cross-subdomain Cookie の実ドメイン共有 (#30 / #89 家系)
 
-- **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` 周辺を触る PR、および本番デプロイ後
-- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済み — ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有。session cookie の発行者は 2 つあり ([CONTEXT.md「session cookie」](../../CONTEXT.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済み。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
+- **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` の周辺を触る PR、および本番デプロイ後
+- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済みで、ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有である。session cookie の発行者は 2 つあり ([CONTEXT.md「session cookie」](../../CONTEXT.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済みである。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
 - **手順**:
   1. ブラウザで `https://auth.taimei-code.com` に **MFA 無効の user で** ログインする
   2. DevTools → Application → Cookies で session cookie の `Domain` が `.taimei-code.com`、`Secure` / `HttpOnly` が付与されていることを確認する
@@ -24,7 +24,7 @@
 ## QA-MR-02: GitHub OAuth 実連携 (第 2 の認証経路)
 
 - **契機**: better-auth `socialProviders` / OAuth callback / account linking / **MFA チャレンジ** の matcher (`/callback/:id`) を触る PR
-- **前提**: `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` を設定した環境 (local 可。未設定だと GitHub ボタン自体が機能しない)
+- **前提**: `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` を設定した環境 (local でもよい。未設定だと GitHub ボタン自体が機能しない)
 - **手順**:
   1. `/auth/?service_name=accounts&redirect_url=<有効 URL>` を開き「GitHub でログイン」を押す
   2. GitHub の認可画面で許可する
@@ -33,29 +33,29 @@
   5. 多要素認証 (MFA) を有効にした user がログイン済みの状態で GitHub アカウント連携を実行する
 - **期待結果**: callback が 500 にならず、新規 user は事業所登録へ、既存 user は redirect_url へ遷移する。audit log に `sign_in` (method=github) が記録される。**MFA 有効ユーザーは callback 後にチャレンジ画面 (`/auth/mfa`) へ遷移し、TOTP 通過後に本来の遷移先へ着地する** (その時点で `sign_in` が 1 件記録される)。既ログイン状態からのアカウント連携はチャレンジに飛ばされず、既存 session が維持される
 
-## QA-MR-03: workerd 固有挙動 — Worker hung 非再発 (#91)
+## QA-MR-03: workerd 固有挙動 (Worker hung 非再発、#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
-- **前提**: 実 workerd + 実バインディングでしか再現しない (local の miniflare では出ない — ルート CLAUDE.md の gotcha 参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う: `wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 連打し、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式、ADR-0019)
+- **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。ルート CLAUDE.md の gotcha を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する
-  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com <id>` を実行し、終わったら `<現在の id>@100%` に戻す (例外の不在は応答が 1101 の 500 でないことで判定する)
+  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com <id>` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
 - **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 
 ## QA-MR-04: Resend 実メールのレンダリング
 
 - **契機**: `src/email/` (テンプレート / sanitize / 差出人) を触る PR
-- **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信可能なテストアドレス
+- **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
-  1. magic link ログインを実行し、受信メールの件名・本文・リンクを実メールクライアントで確認する
-  2. 招待メール (事業所名・招待者名入り) を送信し、表示名に日本語・記号を含むケースで崩れないことを確認する
-- **期待結果**: リンクが正しい環境の URL を指す。表示名は `toDisplayText` 適用後の内容で、ヘッダ崩れ・方向制御文字による偽装表示がない
+  1. magic link ログインを実行し、受信メールの件名、本文、リンクを実メールクライアントで確認する
+  2. 招待メール (事業所名と招待者名入り) を送信し、表示名に日本語や記号を含むケースで崩れないことを確認する
+- **期待結果**: リンクが正しい環境の URL を指す。表示名は `toDisplayText` 適用後の内容で、ヘッダ崩れや方向制御文字による偽装表示がない
 
 ## QA-MR-05: magic link の期限切れ (5 分)
 
-- **契機**: better-auth `magicLink.expiresIn` / verification 保存方式を触る PR
-- **前提**: local で可 (使用済み link の拒否は `e2e/auth-flow.e2e.ts` が自動化済み。実時間の経過が必要な期限切れのみ手動)
+- **契機**: better-auth `magicLink.expiresIn` / verification の保存方式を触る PR
+- **前提**: local でよい (使用済み link の拒否は `e2e/auth-flow.e2e.ts` が自動化済み。実時間の経過が必要な期限切れのみ手動で見る)
 - **手順**:
   1. magic link を発行し、クリックせず 5 分以上待つ
   2. 期限切れの link を開く
@@ -64,7 +64,7 @@
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 
 - **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` を触る PR
-- **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済み — ここで見るのは実アプリが QR コードと URI を解釈できるか
+- **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済みで、ここで見るのは実アプリが QR コードと URI を解釈できるかである
 - **手順**:
   1. `/account/security` の「多要素認証 (MFA)」を有効化し、表示された QR コードを認証アプリのカメラで読み取る
   2. アプリ側に表示されるアカウント名と発行者を確認する
@@ -75,8 +75,8 @@
 
 ## QA-MR-07: MFA 有効化 / 無効化の実 Resend メール
 
-- **契機**: 多要素認証 (MFA) の有効化 / 無効化の通知メールテンプレート (`src/email/`) を触る PR (QA-MR-04 の MFA 版。同じ前提・同じ観点で見る)
-- **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信可能なテストアドレス
+- **契機**: 多要素認証 (MFA) の有効化 / 無効化の通知メールテンプレート (`src/email/`) を触る PR (QA-MR-04 の MFA 版。同じ前提、同じ観点で見る)
+- **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
   1. 多要素認証 (MFA) を有効化し、受信メールを実メールクライアントで確認する
   2. 続けて無効化し、同様に確認する
@@ -85,7 +85,7 @@
 ## QA-MR-08: 実機スマートフォンでのコード入力 (数字キーボード / OTP 自動入力)
 
 - **契機**: `use-mfa-code-entry` / `MfaChallenge` / 有効化・無効化ダイアログのコード入力欄を触る PR
-- **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済み — ここで見るのは実 OS がその属性にどう反応するか
+- **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済みで、ここで見るのは実 OS がその属性にどう反応するかである
 - **手順**:
   1. 実機で `/auth/mfa` を開き、コード入力欄をタップする
   2. 認証アプリからコードをコピーし、入力欄に貼り付けて送信する
@@ -94,8 +94,8 @@
 
 ## QA-MR-09: consumer repo (taimei) からの cross-repo build と起動
 
-- **契機**: Dockerfile の stage 構成 / `packages` COPY 方式を変える PR
-- **前提**: consumer repo `~/github/taimei` を clone 済み。port 3100 が競合するため本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **unpinned な main** を clone するため、マージした時点で全 taimei branch に即波及する (= 実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発 probe までで、consumer 側の compose から build して boot する経路はこのケースだけがカバーする
+- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR
+- **前提**: consumer repo `~/github/taimei` を clone 済みであること。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **pin していない main** を clone するため、マージした時点で全 taimei branch に即座に波及する (つまり実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、consumer 側の compose から build して起動する経路はこのケースだけがカバーする
 - **手順**:
   1. `cd ~/github/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
   2. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
@@ -116,7 +116,7 @@
 ## QA-MR-11: Effect runtime と ALS の共存 (remote workerd、ADR-0017)
 
 - **契機**: `effect` の version 変更、ADR-0017 の Stage 完了 PR (runtime / adapter / ports / Guard / Use-case を Effect 様式へ切り替える PR)、および本番デプロイ後
-- **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd + 実 binding で動くことと、guard の failure が wire に写像されることは `deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` 20 連打と未認証 `GET /api/account/memberships` の 401 `{"error":"unauthorized"}`)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime 機構は `/health` と同じ。残るリスクは adapter が Sentry に送る 500 と `wrangler rollback` で受ける)
+- **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd と実 binding で動くことと、guard の failure が client への応答の形に変換されることは、`deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` を 20 回連続で呼ぶことと、未認証の `GET /api/account/memberships` が 401 `{"error":"unauthorized"}` を返すこと)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime の機構は `/health` と同じで、残るリスクは adapter が Sentry に送る 500 と `wrangler rollback` で受ける)
 - **手順**:
   1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"error":"unauthorized"}` が出ていることを確認する
   2. デプロイ後、本番にブラウザでログインして `/account` を開き、現在の事業所と所属一覧が表示されることを確認する (guard の actor 解決 → ports → RoutingPool が Effect runtime 上で動くことの観測)

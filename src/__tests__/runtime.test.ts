@@ -10,8 +10,8 @@ const RUNTIME_SRC = readFileSync(
   "utf8",
 );
 
-// design §3.1 / AC-006 / AC-008: runtime は lazy accessor で isolate/process に 1 つ。Layer は I/O resource を
-// 持たない (pool は ALS、TTL store client は initTtlStore が持つ) ので、runtime.ts は db/client と ttl-store を import しない。
+// design §3.1、AC-006、AC-008 の確認。runtime は lazy accessor で isolate または process ごとに 1 つ作る。Layer は I/O resource を
+// 持たない (pool は ALS が、TTL store client は initTtlStore が持つ) ので、runtime.ts は db/client と ttl-store を import しない。
 describe("getRuntime", () => {
   test("2 回呼ぶと同一 object を返す (memo)", () => {
     expect(getRuntime()).toBe(getRuntime());

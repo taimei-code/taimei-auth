@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { UnaryRequest, UnaryResponse } from "@connectrpc/connect";
 import { createAuthClient, createServiceKeyInterceptor } from "../src/server";
 
-// createServiceKeyInterceptor は taimei-auth IdP の private contract
-// (`X-Service-Key`) を SDK 内に閉じる helper。Service Key header の set を機械検証する。
+// createServiceKeyInterceptor は taimei-auth IdP の内部契約
+// (`X-Service-Key`) を SDK の中に閉じる helper である。Service Key header が設定されることを機械的に検証する。
 
-// 最小限の UnaryRequest mock。interceptor 内で参照するのは `header` のみ。
+// 最小限の UnaryRequest の mock。interceptor の中で参照するのは `header` だけである。
 function makeFakeReq(): UnaryRequest {
   return {
     header: new Headers(),
@@ -38,7 +38,7 @@ describe("createServiceKeyInterceptor", () => {
 
 describe("createAuthClient", () => {
   test("S2: transport を直接渡せば authService / userService 両方が生える", () => {
-    // 実 RPC を発火しないため transport の中身は何でも良い (型構造のみ満たす dummy)。
+    // 実際の RPC は呼ばないため transport の中身は何でもよい (型の構造だけを満たす dummy)。
     const transport = {
       unary: async () => ({}),
       stream: async () => ({}),

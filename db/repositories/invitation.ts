@@ -6,7 +6,7 @@ import type { DbOrTx } from "../transaction";
 
 export const generateInvitationId = (): string => `inv_${nanoid(24)}`;
 
-// id は内部参照、token は推測困難な公開 secret として使い分ける。
+// id は内部参照用、token は推測されにくい公開 secret として使い分ける。
 export const generateInvitationToken = (): string => nanoid(32);
 
 export type InvitationRow = typeof invitation.$inferSelect;
@@ -36,7 +36,7 @@ export async function findInvitationById(
     .then((rows) => rows.at(0));
 }
 
-// migration 前データに大文字が残る可能性に備え lower() 比較にする。
+// migration 前のデータに大文字が残っている可能性があるため、lower() で比較する。
 export async function findActivePendingInvitation(
   companyId: string,
   email: string,
@@ -132,7 +132,7 @@ export async function markInvitationRevoked(
     .then((rows) => rows.at(0));
 }
 
-// soft-deleted company への受諾で所属が復活するのを防ぐ (受諾側のガードと対で効かせる)。
+// soft delete 済みの company への受諾で所属が復活するのを防ぐ (受諾側のガードと組で機能する)。
 export async function revokePendingInvitationsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,

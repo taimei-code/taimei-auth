@@ -15,7 +15,7 @@ import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
 // better-auth (getSession / signOut) と DB (UserRepo / SessionRepo) はすべて test Layer で差し替える
-// (mock.module はプロセス全体に効いて後続 file に漏れるため使わない)。
+// (mock.module はプロセス全体に作用して後続のファイルに漏れるため使わない)。
 const mockSignOut = mock();
 
 beforeEach(() => {
@@ -134,7 +134,7 @@ describe("verifySession outcome", () => {
   });
 
   test("cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
-    // legacy session payload (deploy 前に発行されて revision フィールドがない)
+    // 旧形式の session payload (deploy 前に発行されたため revision フィールドがない)
     const res = await run(
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1" })),

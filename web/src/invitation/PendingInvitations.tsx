@@ -14,7 +14,7 @@ type Props = {
   onChanged: () => Promise<unknown>;
 };
 
-// オプションは toLocaleString("ja-JP") の既定と同値 — 表示を変えずに formatter を再利用する
+// オプションは toLocaleString("ja-JP") の既定と同じにし、表示を変えずに formatter を再利用する
 const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
   year: "numeric",
   month: "numeric",

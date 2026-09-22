@@ -17,7 +17,7 @@ export type AuditLogEntry =
       userId: string;
       payload: { ip: string; userAgent: string };
     }
-  // secret / リカバリーコード / 残数は載せない (監査ログ閲覧を second factor の漏洩経路にしない)。
+  // secret、リカバリーコード、残数は記録しない (監査ログの閲覧が second factor の漏洩経路にならないようにする)。
   | {
       eventType: "mfa_enabled";
       userId: string;
@@ -147,7 +147,7 @@ export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db):
   await appendAuditLogs([entry], txOrDb);
 }
 
-// FOR UPDATE lock 保持中の tx で N 回 INSERT すると lock 時間が round trip × N に伸びるため batch にする。
+// FOR UPDATE lock を保持した tx の中で N 回 INSERT すると lock 時間が round trip の N 倍に伸びるため、1 回の batch INSERT にする。
 export async function appendAuditLogs(
   entries: AuditLogEntry[],
   txOrDb: DbOrTx = db,
@@ -257,7 +257,7 @@ export const recordInvitationRevoked = (
     txOrDb,
   );
 
-// payload の key set は監視 query 互換のため固定し PII は含めない。
+// payload のキー集合は監視 query との互換性のため固定し、PII は含めない。
 export const recordInvitationAcceptRejected = (
   params: {
     actor_user_id: string;

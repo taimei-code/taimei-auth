@@ -14,17 +14,17 @@ import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
 
 type Role = SeedInvitationOptions["role"];
 
-// e2e spec が前提にする固定ユーザー・事業所 (fixture) の作成・削除を担う唯一のモジュール。
-// DB 接触の例外 path は db/CLAUDE.md の「例外 path (正本)」のとおり fixture 再生成に限り、実体は db/testing/* (Promise) を使う。
-// DB 接触を spec プロセスへ持ち込ませないため、spec は helpers.ts の reseedFixture (子プロセス) 経由で e2e/seed.ts を呼ぶ。
+// e2e spec が前提にする固定ユーザーと事業所 (fixture) の作成と削除を担う唯一のモジュール。
+// DB に直接触れる例外は db/CLAUDE.md の「例外 path (正本)」のとおり fixture の再生成に限り、実体は db/testing/* (Promise) を使う。
+// DB への接続を spec のプロセスへ持ち込ませないため、spec は helpers.ts の reseedFixture (子プロセス) 経由で e2e/seed.ts を呼ぶ。
 
-// 破壊的 cleanup を伴う全操作の前提条件: 接続先がローカル DB であること。
-// 判定材料は APP_ENV でなく DATABASE_URL — 想定する操作ミス「本番 DATABASE_URL を export
-// したまま手動実行」では APP_ENV が未設定のままで、env 派生の判定は素通しする (fail-open)。
-// Bun/Node 経路では接続先を決めるのは DATABASE_URL そのもの (Workers は Hyperdrive binding
-// だが seed は Bun 限定)。allowlist 外・未設定・parse 不能は理由を出して即終了 (fail-closed)。
-// SSH トンネル等で本番 DB を localhost に露出させた状態までは判別できない。
-// IPv6 loopback は URL.hostname が角括弧付き "[::1]" を返すため、その表記で列挙する。
+// 破壊的な cleanup を伴うすべての操作は、接続先がローカル DB であることを前提にする。
+// 判定材料は APP_ENV ではなく DATABASE_URL である。想定する操作ミスである「本番の DATABASE_URL を export
+// したまま手動実行する」場合、APP_ENV は未設定のままなので、env から導く判定では通してしまう (fail-open になる)。
+// Bun と Node の経路では接続先を決めるのは DATABASE_URL そのものである (Workers は Hyperdrive binding
+// だが seed は Bun でしか動かさない)。allowlist 外、未設定、parse 不能の場合は理由を出して即終了する (fail-closed)。
+// SSH トンネルなどで本番 DB を localhost に露出させた状態までは判別できない。
+// IPv6 の loopback は URL.hostname が角括弧付きの "[::1]" を返すため、その表記で列挙する。
 const LOCAL_DB_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]", "auth-postgres"]);
 
 function assertLocalDatabase(): void {
@@ -38,8 +38,8 @@ function assertLocalDatabase(): void {
   }
 }
 
-// fixture の識別子は db/testing/seed.ts の ids(prefix) から導出する。seed と cleanup が同じ導出を
-// 共有することで、リテラルの手写しずれ (typo した側だけ削除が 0 件になり、次 run の duplicate key
+// fixture の識別子は db/testing/seed.ts の ids(prefix) から導く。seed と cleanup が同じ導き方を
+// 共有することで、リテラルを手で書き写した時のずれ (typo した側だけ削除が 0 件になり、次の実行で duplicate key
 // として別の場所で落ちる) を構造的に防ぐ。
 const E2E_PREFIX = "e2e-";
 const fixtureIds = ids(E2E_PREFIX);
@@ -56,12 +56,12 @@ const seedCompany = (suffix: string): Promise<string> => seed.seedCompany(suffix
 const seedMembership = (userId: string, companyId: string, role: Role): Promise<void> =>
   seed.seedMembership(userId, companyId, role).then(() => undefined);
 
-// 自 fixture の行だけを消して冪等な作り直しを可能にする (user.email は unique、company.name は
-// 非 unique のため、削除なしの再実行は duplicate key / 同名 company の重複になる)。
-// - email 検索: sign-up flow が作る user は id がランダムで、固定 id では回収できない
-// - 固定 id: アカウント連動削除で user 行が消えた後も audit_log (user FK なし) が残る
-// - FK: user 削除で session / membership / invitation は cascade、company は membership が
-//   restrict のため user → company の順で消す
+// 自分の fixture の行だけを消して、冪等に作り直せるようにする (user.email は unique、company.name は
+// unique ではないため、削除せずに再実行すると duplicate key になるか同名の company が重複する)。
+// - email で検索する理由: sign-up flow が作る user は id がランダムで、固定 id では回収できない
+// - 固定 id でも検索する理由: アカウント連動削除で user 行が消えた後も audit_log (user への FK が無い) が残る
+// - FK の都合: user を削除すると session、membership、invitation は cascade で消えるが、company は membership が
+//   restrict のため、user を消してから company を消す
 async function removeFixtureRows(rows: {
   userSuffixes: string[];
   companySuffixes?: string[];
@@ -92,13 +92,13 @@ async function ensureFixture(spec: FixtureSpec): Promise<void> {
   }
 }
 
-// sign-in flow + members 画面用 (再利用型 = spec が読むだけで消費しない fixture): OWNER /
-// ADMIN / MEMBER が同居する事業所。
+// sign-in flow と members 画面のための fixture (再利用型、つまり spec が読むだけで消費しない fixture)。OWNER、
+// ADMIN、MEMBER が同居する事業所である。
 // main は実行中にメンバー構成が変わる (invitation-flow が invitee を MEMBER として追加する)
-// ため、spec は main に対する件数 assertion を書かないこと。main を消費 (アカウント削除等で
-// 破壊) する spec も追加しないこと — 招待 fixture の再生成が main の実在を前提にしている。
-// 再作成は resetAllFixtures (全体 seed) 限定 — 招待 fixture が main を FK 参照しており、
-// 実行中の作り直しは cascade で招待行を道連れにする。
+// ため、spec は main に対する件数の assertion を書かない。main を消費する (アカウント削除などで
+// 壊す) spec も追加しない。招待 fixture の再生成が main の実在を前提にしているためである。
+// 作り直しは resetAllFixtures (全体 seed) に限る。招待 fixture が main を FK で参照しており、
+// 実行中に作り直すと cascade で招待行も消えてしまう。
 const MAIN_FIXTURE: FixtureSpec = {
   company: "main",
   members: [
@@ -108,11 +108,11 @@ const MAIN_FIXTURE: FixtureSpec = {
   ],
 };
 
-// company-leave flow 用 (消費型 = spec 実行がアカウントごと消費する fixture): OWNER が
-// 別にいる事業所だけに所属する MEMBER
-// (最後の所属から抜けると orphan としてアカウント連動削除される状態)。
-// leave は事業所のメンバー構成を実行中に変えるため、他 spec が共有する main には
-// 置かず専用事業所に隔離する (danger / delete と同じ規約)。
+// company-leave flow のための fixture (消費型、つまり spec の実行がアカウントごと消費する fixture)。OWNER が
+// 別にいる事業所だけに所属する MEMBER である
+// (最後の所属から抜けると、所属の無い user としてアカウントも連動して削除される状態)。
+// leave は事業所のメンバー構成を実行中に変えるため、他の spec が共有する main には
+// 置かず、専用の事業所に隔離する (danger と delete と同じ規約)。
 const LEAVE_FIXTURE: FixtureSpec = {
   company: "leave",
   members: [
@@ -121,24 +121,24 @@ const LEAVE_FIXTURE: FixtureSpec = {
   ],
 };
 
-// danger-zone 用 (再利用型): 唯一の OWNER (退会が PRECONDITION_FAILED で弾かれる状態)。
+// danger-zone のための fixture (再利用型)。唯一の OWNER で、退会が PRECONDITION_FAILED で弾かれる状態にある。
 const DANGER_FIXTURE: FixtureSpec = {
   company: "danger",
   members: [{ suffix: "danger", name: "E2E Danger", role: "OWNER" }],
 };
 
-// company-delete flow 用 (消費型): 唯一 OWNER + 単一事業所 (最後の事業所削除でアカウント
-// 連動削除される状態)。
+// company-delete flow のための fixture (消費型)。唯一の OWNER が単一の事業所に所属し、最後の事業所を削除するとアカウントも
+// 連動して削除される状態にある。
 const DELETE_FIXTURE: FixtureSpec = {
   company: "delete",
   members: [{ suffix: "delete", name: "E2E Delete", role: "OWNER" }],
 };
 
-// company-delete flow 用 (消費型): 2 事業所の OWNER を兼ねる 1 user。片方を削除しても所属が残る
-// ため、アカウント連動削除でなく所属事業所一覧への遷移で終わる。1 fixture = 1 事業所の
-// FixtureSpec では 1 user の複数所属を表現できないため個別に組む。
+// company-delete flow のための fixture (消費型)。2 つの事業所の OWNER を兼ねる 1 user である。片方を削除しても所属が残る
+// ため、アカウントの連動削除ではなく所属事業所一覧への遷移で終わる。1 fixture に 1 事業所という
+// FixtureSpec では 1 user の複数所属を表現できないため、個別に組み立てる。
 // current 側を last_used_company_id で固定するのは、未設定だと handler が membership の先頭
-// (SQL の行順は不定) へフォールバックし、spec 側でどちらが削除対象か決まらないため。
+// (SQL の行順は不定) へフォールバックし、spec 側でどちらが削除対象か決まらないためである。
 const DELETE_MULTI_USER = "delete-multi";
 const DELETE_MULTI_CURRENT_COMPANY = "delete-multi-current";
 const DELETE_MULTI_OTHER_COMPANY = "delete-multi-other";
@@ -156,23 +156,23 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   await seed.setLastUsedCompany(userId, currentCompanyId);
 }
 
-// mfa-flow 用 (消費型): 単一 OWNER。認証アプリの secret は server が enroll 時に生成し事前 seed
+// mfa-flow のための fixture (消費型)。単一の OWNER である。認証アプリの secret は server が enroll 時に生成し、事前に seed
 // できないため、fixture は「MFA 未設定の user」までを用意し、有効化は spec が実行中に行う。
-// test ごとに作り直すのは、有効化済みの user を次の test が掴むと enroll が 409 で落ちるため
-// (main に置かず専用事業所へ隔離するのは leave / delete と同じ規約)。
+// テストごとに作り直すのは、有効化済みの user を次のテストが使うと enroll が 409 で落ちるためである
+// (main に置かず専用の事業所へ隔離するのは leave と delete と同じ規約)。
 const MFA_FIXTURE: FixtureSpec = {
   company: "mfa",
   members: [{ suffix: "mfa", name: "E2E Mfa", role: "OWNER" }],
 };
 
-// invitation-flow 用 (消費型): e2e-invitee 宛の PENDING 招待。受諾すると招待行は ACCEPTED に
-// 落ち、invitee は signup で main のメンバーになるため、作り直しは invitee ユーザーの削除
+// invitation-flow のための fixture (消費型)。e2e-invitee 宛の PENDING の招待である。受諾すると招待行は ACCEPTED に
+// 変わり、invitee は signup で main のメンバーになるため、作り直しは invitee ユーザーの削除
 // (membership も cascade で消える) と PENDING 行の再作成の両方を含む。
 const INVITATION_TOKEN = "e2e-invitation-token";
 
 async function ensureInvitationFixture(): Promise<void> {
   assertLocalDatabase();
-  // main の検証は破壊 (invitee / 招待行の削除) より先 — 不整合時に消すだけ消して abort しない
+  // main の検証は破壊 (invitee と招待行の削除) より先に行う。不整合の時に、消すだけ消してから abort することを避ける
   const main = await findTheMainCompany();
   await removeFixtureRows({ userSuffixes: ["invitee"] });
   await deleteInvitationByToken(INVITATION_TOKEN);
@@ -185,10 +185,10 @@ async function ensureInvitationFixture(): Promise<void> {
   });
 }
 
-// 招待 fixture だけが持つ fixture 間依存の解決: 招待行は main の company id (ランダム生成で
-// run をまたいで固定できない) と招待者 user を FK 参照する。company.name は unique でないため
-// 「ちょうど 1 行」でなければ即 fail する — 2 件ヒットをどちらか silent に掴むと招待が誤った
-// 事業所へ入り、spec が無関係な文言で落ちる (本 fixture 分離が消したい症状そのもの)。
+// 招待 fixture だけが持つ、fixture 間の依存を解決する。招待行は main の company id (ランダムに生成されるため
+// 実行をまたいで固定できない) と招待者の user を FK で参照する。company.name は unique ではないため、
+// 「ちょうど 1 行」でなければ即座に失敗させる。2 件ヒットした時にどちらかを気付かれないまま使うと招待が誤った
+// 事業所へ入り、spec が無関係な文言で落ちる (この fixture の分離が無くしたい症状そのものである)。
 async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserId: string }> {
   const [companies, inviter] = await Promise.all([
     readCompanyIdsByName(fixtureCompanyName("main")),
@@ -203,9 +203,9 @@ async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserI
   return { companyId: companies[0], invitedByUserId: inviter.id };
 }
 
-// 消費型 fixture (spec 実行が消費する) の registry — 単一 fixture 再生成で指定できる名前の正本。
-// 再利用型 (main / danger) は載せない: 招待 fixture が main を FK 参照しており、実行中の
-// main 再作成は cascade で招待行を道連れにするため (再作成は entrypoint の全体 seed 限定)。
+// 消費型 fixture (spec の実行が消費する) の一覧。単一 fixture の再生成で指定できる名前はここで定義する。
+// 再利用型 (main と danger) は含めない。招待 fixture が main を FK で参照しており、実行中に
+// main を作り直すと cascade で招待行も消えてしまうためである (作り直しは entrypoint の全体 seed に限る)。
 export const consumableFixtures = new Map<string, () => Promise<void>>([
   ["leave", () => ensureFixture(LEAVE_FIXTURE)],
   ["delete", () => ensureFixture(DELETE_FIXTURE)],
@@ -215,19 +215,19 @@ export const consumableFixtures = new Map<string, () => Promise<void>>([
 ]);
 
 // e2e- prefix の全 fixture を冪等に作り直す (サーバ起動前の全体 seed 専用)。
-// グローバル cleanup をここ限定にするのは、e2e-% が auth-flow の e2e-newbie-* (spec 実行中に
-// 作られる使い捨てユーザー) にも一致し、spec から呼べる形にすると実行中の他 fixture を
-// 巻き込むため。
+// 全体の cleanup をここに限るのは、e2e-% が auth-flow の e2e-newbie-* (spec の実行中に
+// 作られる使い捨てユーザー) にも一致し、spec から呼べる形にすると実行中の他の fixture を
+// 巻き込むためである。
 export async function resetAllFixtures(): Promise<void> {
   assertLocalDatabase();
   const staleIds = await readUserIdsByEmailPrefix(E2E_PREFIX);
   await deleteAuditByUserIds(staleIds);
   await deleteUsersByIds(staleIds);
   // アカウント連動削除で消えた seed user は user 行が残らず staleIds に入らないため、
-  // その audit だけ固定 id prefix で回収する。company も prefix で回収する
+  // その audit だけ固定 id の prefix で回収する。company も prefix で回収する
   await seed.cleanup();
 
-  // 生成順は依存順: invitation が main の company / user を FK 参照する
+  // 生成は依存の順に行う。invitation が main の company と user を FK で参照する
   await ensureFixture(MAIN_FIXTURE);
   await ensureFixture(LEAVE_FIXTURE);
   await ensureFixture(DANGER_FIXTURE);

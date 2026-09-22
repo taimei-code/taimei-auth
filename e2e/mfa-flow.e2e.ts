@@ -3,31 +3,31 @@ import { createOTP } from "@better-auth/utils/otp";
 import { expect, test, type Page } from "@playwright/test";
 import { reseedFixture, signInWithMagicLink } from "./helpers";
 
-// 多要素認証 (MFA) のブラウザ実機スモーク。use-case / handler テストでは組み立てられない
-// 「一次認証 → チャレンジ画面 → 元の遷移先」の連鎖と、画面にしか存在しない状態 (一度きり表示の
-// リカバリーコード / 入力支援属性) を固定する。設計詳細: docs/adr/0016-mfa-self-owned-totp.md
+// 多要素認証 (MFA) を実際のブラウザでスモークテストする。use-case や handler のテストでは組み立てられない
+// 「一次認証からチャレンジ画面を経て元の遷移先へ着地する」連鎖と、画面にしか存在しない状態 (一度しか表示しない
+// リカバリーコード、入力支援の属性) を固定する。設計の詳細は docs/adr/0016-mfa-self-owned-totp.md を参照。
 
 const MFA_EMAIL = "e2e-mfa@example.com";
 
-// 1 test に magic link ログイン 2 回 (有効化前 + チャレンジ) と fixture 再生成が入り、既定の
+// 1 テストに magic link のログイン 2 回 (有効化前とチャレンジ) と fixture の再生成が入り、既定の
 // 30 秒に収まらない。
 test.describe.configure({ timeout: 90_000 });
 
 test.beforeEach(() => {
-  // mfa ユーザーは本 spec が MFA 状態ごと消費する (消費型 fixture)
+  // mfa ユーザーはこの spec が MFA の状態ごと消費する (消費型 fixture)
   reseedFixture("mfa");
 });
 
-// 認証アプリの代わりにコードを作る一式。src/mfa/__tests__/helpers.ts の同名関数は再利用せず
-// 書き下ろす — あちらは db / TTL store client を道連れに import するため、spec プロセスに pg Pool を
-// 開くことになる (biome の e2e override が禁じている理由そのもの)。生成そのものは本番と同じ
-// @better-auth/utils に委ねる。
-// 刻みは src/auth.ts の totpOptions と同値。プラグインに検証窓の option は無く、窓の広さ
+// 認証アプリの代わりにコードを作る一式。src/mfa/__tests__/helpers.ts の同名の関数は再利用せず
+// ここに書き直す。あちらは db と TTL store の client も一緒に import するため、spec のプロセスで pg の Pool を
+// 開くことになる (biome の e2e override が禁じている理由そのものである)。生成そのものは本番と同じ
+// @better-auth/utils に任せる。
+// 刻みは src/auth.ts の totpOptions と同じ値である。プラグインに検証窓の option は無く、窓の広さ
 // (前後 1 step) は @better-auth/utils の既定にしか書かれていないため、テストが刻みを自分で持つ。
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 
-// otpauth URI と画面が見せる secret は base32 表現で、createOTP が要求するのは復号後の値。
+// otpauth URI と画面に表示される secret は base32 表現で、createOTP が求めるのは復号後の値である。
 const decodeTotpSecret = (encoded: string): string =>
   new TextDecoder().decode(base32.decode(encoded));
 
@@ -43,8 +43,8 @@ const totpCode = (secret: string, stepOffset = 0): Promise<string> => {
   return otp.hotp(Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset);
 };
 
-// 固定の誤コードは検証窓 (前後 1 step) に偶然一致して間欠的に緑になる。窓に入る 3 本を実際に
-// 生成して避ける。
+// 固定の誤コードは検証窓 (前後 1 step) に偶然一致して、たまに緑になる。窓に入る 3 つを実際に
+// 生成して、それらを避ける。
 const wrongTotpCode = async (secret: string): Promise<string> => {
   const accepted = await Promise.all([-1, 0, 1].map((offset) => totpCode(secret, offset)));
   for (let candidate = 0; candidate < 1000; candidate++) {
@@ -56,8 +56,8 @@ const wrongTotpCode = async (secret: string): Promise<string> => {
 
 type EnabledMfa = { secret: string; recoveryCodes: string[] };
 
-// 画面からの有効化動線は QA-H-11 が受け持つ。他の test は「MFA 有効な user」を前提条件として
-// だけ必要とするので、SPA と同じ API で用意する。page.request は browser context の cookie を
+// 画面からの有効化の動線は QA-H-11 が受け持つ。他のテストは「MFA が有効な user」を前提条件として
+// 必要とするだけなので、SPA と同じ API で用意する。page.request は browser context の cookie を
 // 共有するため、そのまま画面側の続きに引き継がれる (activate はセッションを rotate しない)。
 const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   const enrolled = await page.request.post("/api/account/mfa/enroll");
@@ -69,8 +69,8 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   };
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
-  // 前 step のコードで有効化する — timestep は単調消費 (ADR-0016) のため、現 step を後続の
-  // 無効化・チャレンジ検証に残す (現 step で有効化すると同一 step の再利用がリプレイ拒否される)。
+  // 前の step のコードで有効化する。timestep は一度使うと戻らない (ADR-0016) ため、現在の step を後続の
+  // 無効化とチャレンジ検証のために残す (現在の step で有効化すると、同じ step の再利用がリプレイとして拒否される)。
   const activated = await page.request.post("/api/account/mfa/activate", {
     data: { code: await totpCode(secret, -1), enrollment_id: enrollment.enrollment_id },
   });
@@ -79,8 +79,8 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   return { secret, recoveryCodes: enrollment.recovery_codes };
 };
 
-// 有効化しても手元のセッションは生き続ける (チャレンジが挟まるのは一次認証の直後だけ) ため、
-// チャレンジ画面へはログアウトしてログインし直して到達する。
+// 有効化しても手元のセッションは残る (チャレンジが挟まるのは一次認証の直後だけ) ため、
+// チャレンジ画面へはログアウトしてログインし直すことで到達する。
 const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await page.getByRole("button", { name: "ログアウト" }).click();
   await expect(page).toHaveURL(/\/auth\//);
@@ -89,7 +89,7 @@ const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/auth\/mfa/);
 };
 
-// トーストは main の外に出るため、通知文言に含まれる語で行を誤判定しないよう main に絞る。
+// トーストは main の外に出るため、通知文言に含まれる語で行を誤って判定しないよう main に絞る。
 const mfaRow = (page: Page) =>
   page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
 
@@ -150,8 +150,8 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("img", { name: "認証アプリで読み取る QR コード" })).toBeVisible();
-  // 手入力用 secret は QR を読めない端末の唯一の登録手段。翻訳による書き換えを避ける
-  // translate="no" がこのステップで唯一の目印なので、そこから認証アプリの代わりを務める。
+  // 手入力用の secret は、QR を読めない端末にとって唯一の登録手段である。翻訳による書き換えを避けるための
+  // translate="no" がこのステップで唯一の目印なので、そこから値を取って認証アプリの代わりを務める。
   const secret = decodeTotpSecret((await dialog.locator('p[translate="no"]').innerText()).trim());
   await expect(dialog.getByRole("button", { name: "secret をコピー" })).toBeVisible();
 
@@ -164,7 +164,7 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
   const shownRecoveryCodes = await dialog.getByRole("listitem").count();
   expect(shownRecoveryCodes).toBeGreaterThan(0);
 
-  // 状態の再取得と成功トーストはダイアログを閉じた時に走る (途中離脱では有効化を確定させない)
+  // 状態の再取得と成功トーストはダイアログを閉じた時に走る (途中で離脱した場合は有効化を確定させない)
   await dialog.getByRole("button", { name: "控えたので閉じる" }).click();
   await expect(page.getByText("多要素認証 (MFA) を有効にしました。")).toBeVisible();
   await expect(
@@ -175,10 +175,10 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
   page,
 }) => {
-  // 登録途中の再 enroll はサーバが同じ登録内容を replay する (正本: docs/adr/0013 §8) ため
-  // secret は変わらない前提。この test が固定するのは client cache が余分な enroll 往復を
-  // 発生させないことと、開き直しでも同じ secret が表示されること。reload / 別タブ経路の
-  // 観測は手動 QA の担当。
+  // 登録途中の再 enroll ではサーバが同じ登録内容を返す (docs/adr/0013 §8 で定義する) ため、
+  // secret は変わらない前提である。このテストが固定するのは、client の cache が余分な enroll の往復を
+  // 発生させないことと、開き直しても同じ secret が表示されることである。reload や別タブの経路の
+  // 観測は手動 QA が担当する。
   let enrollCalls = 0;
   await page.route("**/api/account/mfa/enroll", async (route) => {
     enrollCalls++;
@@ -191,7 +191,7 @@ test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secre
 
   const dialog = page.getByRole("dialog");
   const firstSecret = (await dialog.locator('p[translate="no"]').innerText()).trim();
-  // readTotpSecret が失敗すると placeholder "—" が描画され、"—" === "—" で空疎に通ってしまう
+  // readTotpSecret が失敗すると placeholder の "—" が描画され、"—" === "—" の比較で中身の無いまま通ってしまう
   expect(firstSecret.length).toBeGreaterThan(1);
   expect(firstSecret).not.toBe("—");
   await page.keyboard.press("Escape");
@@ -234,7 +234,7 @@ test("QA-E-10 cookie 無しで /auth/mfa を直接開くと期限切れ案内だ
   await expect(page.getByText("セッションの有効期限が切れました")).toBeVisible();
   await expect(page.getByRole("link", { name: "ログイン画面へ" })).toBeVisible();
 
-  // 通らないコードを打てる形で出すと「入力したのに進めない」袋小路になる
+  // 通らないコードを入力できる形で出すと、「入力したのに進めない」行き止まりになる
   await expect(challengeCodeInput(page)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "ログインを続ける" })).toHaveCount(0);
 });
@@ -401,7 +401,7 @@ test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷�
     history.pushState({}, "", "/auth/error");
     dispatchEvent(new PopStateEvent("popstate"));
   });
-  // POST を解放する前に画面離脱が完了したことを固定し、未 mount 中の応答だけを検証する。
+  // POST を解放する前に画面からの離脱が完了したことを固定し、mount されていない間の応答だけを検証する。
   await expect(page).toHaveURL(/\/auth\/error$/);
   await expect(challengeCodeInput(page)).toHaveCount(0);
 
@@ -438,7 +438,7 @@ test("MFA 有効化後のログインはチャレンジ画面を挟み、通過�
   const { secret } = await enableMfaViaApi(page);
 
   await signOutAndReachChallenge(page);
-  // 期限切れ表示ではなく保留中のチャレンジとして描画されていること (着地しただけでは区別できない)
+  // 期限切れの表示ではなく、保留中のチャレンジとして描画されていることを確かめる (着地しただけでは区別できない)
   await expect(page.getByText("ログインを完了するには、追加の確認が必要です")).toBeVisible();
 
   await challengeCodeInput(page).fill(await totpCode(secret));
@@ -483,7 +483,7 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
   );
   await expect(page).toHaveURL(/\/auth\/mfa/);
 
-  // 文言解決 (use-mfa-code-entry の describeMfaChallengeError) を素通りして、プラグインの生の
-  // エラーコードが画面に出ていないこと
+  // 文言の解決 (use-mfa-code-entry の describeMfaChallengeError) を通らずに、プラグインの生の
+  // エラーコードが画面に出ていないことを確かめる
   await expect(page.locator("body")).not.toContainText(/invalid[_-]?code|two[_-]?factor/i);
 });

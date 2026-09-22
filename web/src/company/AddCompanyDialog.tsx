@@ -18,7 +18,7 @@ import { OrgCodeField } from "./OrgCodeField";
 import { addCompany, type OrgCode } from "./company-api";
 
 type Props = {
-  // server が作成時に last_used を更新済みなので refresh だけで現在の事業所が切り替わる
+  // server が作成時に last_used を更新しているため、refresh だけで現在の事業所が切り替わる
   onCreated: () => Promise<unknown>;
   trigger: ReactNode;
 };
@@ -36,7 +36,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     setErrorMessage(null);
   };
 
-  // server に作成の dedupe が無く、成功枝で submitting を解除すると再送信で事業所が 2 つできる
+  // server は作成の重複を除かないため、成功時に submitting を解除すると再送信で事業所が 2 つできる
   const handleOpenChange = (next: boolean) => {
     if (submitting) return;
     if (!next) reset();

@@ -43,7 +43,7 @@ export class MemoryKvStore {
     return [...this.entries.keys()].filter((k) => k.startsWith(prefix) && this.live(k) !== null);
   }
 
-  // Redis の TTL と同じ契約: 残秒 (切り上げ)、期限なしは -1、存在しなければ -2。
+  // Redis の TTL と同じ契約で、残り秒数 (切り上げ) を返し、期限なしは -1、存在しなければ -2 にする。
   ttl(key: string): number {
     const entry = this.live(key);
     if (!entry) return -2;

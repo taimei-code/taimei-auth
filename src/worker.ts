@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-// biome-ignore lint/style/noRestrictedImports: Workers は per-request に実 Pool を供給する経路だけ許可
+// biome-ignore lint/style/noRestrictedImports: Workers では request ごとに実際の Pool を供給する経路だけを許可する
 import { runWithRequestPool } from "@/db/client";
 import { initAuth } from "./auth";
 import { getRuntime } from "./runtime";
@@ -31,7 +31,7 @@ function copyEnvToProcess(env: Env): void {
   process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
-// 順序は load-bearing: env コピー → initTtlStore → initAuth → buildApp (後者が前者の結果を読む)。
+// この順序は必須。env のコピー、initTtlStore、initAuth、buildApp の順に、後のものが前のものの結果を読む。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
@@ -43,7 +43,7 @@ function bootstrap(env: Env): Hono {
       app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
-        // Static Assets は / 直下配信なので vite base=/auth/ の prefix を剥がす (残すと JS として index.html)。
+        // Static Assets は / 直下で配信されるため、vite の base=/auth/ の prefix を取り除く (残すと JS の代わりに index.html が返る)。
         if (url.pathname.startsWith("/auth/")) {
           url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
           return requestEnv.ASSETS.fetch(new Request(url, c.req.raw));
@@ -58,7 +58,7 @@ function bootstrap(env: Env): Hono {
 const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
-    // 早く閉じると waitUntil 中の DB 書き込みが壊れた接続を掴み hung するため background 完走後に閉じる。
+    // 早く閉じると waitUntil 中の DB 書き込みが壊れた接続を使って hung するため、background の完了後に閉じる。
     const backgroundPromises: Promise<unknown>[] = [];
     return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
       try {
@@ -81,8 +81,8 @@ const sentryOptions = (env: Env) => ({
   tracesSampleRate: 0.1,
 });
 
-// ここで拾えるのは Hono の外 (bootstrap / runWithRequestPool) の例外のみ。
+// ここで捕捉できるのは Hono の外 (bootstrap と runWithRequestPool) で起きた例外だけ。
 export default Sentry.withSentry(sentryOptions, handler);
 
-// alarm の例外は request の外で起きるため、DO 側も同じ option で Sentry に繋ぐ。
+// alarm の例外は request の外で起きるため、DO 側も同じ option で Sentry に接続する。
 export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);

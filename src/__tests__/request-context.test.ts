@@ -156,7 +156,7 @@ describe("getClientContext (bun test = Bun runtime)", () => {
     delete process.env.AUTH_TRUSTED_PROXY_HOPS;
   });
 
-  // process.env の丸ごと置換は Bun.env と desync する (Bun 1.4 で実測) ため key 単位で戻す。
+  // process.env を丸ごと置き換えると Bun.env と食い違う (Bun 1.4 で実測) ため、key 単位で戻す。
   afterEach(() => {
     for (const key of ENV_KEYS) {
       const value = originalEnv[key];
