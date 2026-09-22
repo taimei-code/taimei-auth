@@ -1,47 +1,21 @@
 name: Deploy
 
-# main の CI workflow が run 全体として success になったら、本番の Cloudflare Workers にデプロイする。
-# gate は run 全体の conclusion なので check、e2e、docker のすべての job に従属し、CI が赤い時この workflow は
-# failure ではなく skipped になる (通知が出ないため、「merge したのに出ていない」ことには CI の failure 通知で気づく)。
-# 緊急時の回避手段は下の workflow_dispatch である。
-# 詳細は docs/adr/0014-docker-runner-dev-stage-separation.md の Consequences を参照。
-# 手順は、build (auth-client SDK と web assets)、migration (drizzle/*.sql があれば)、versions upload、
-# 新 version を 0% で deployment に加える、version override header で smoke、100% に切り替える、の順である。
-# migration を deploy より先に行い、新コードが migrate されていない DB に当たらないようにする
-# (compose の auth-migrate から auth-service へ進むのと同じ順序。docker-compose.yml を参照)。
-# `wrangler deploy` を versions upload と deploy の 2 段に分けるのは、本番 traffic に流す前に、実際の workerd と
-# 実際の binding で新 version を呼ぶ gate (scripts/preview-smoke.sh) を挟むためである。smoke が落ちたら旧 version を
-# 100% に戻して失敗させる (以前の QA-MR-03 と QA-MR-11 の手動 remote 確認をここで自動化した)。
-# Preview URL は DO を持つ Worker では生成されない (Cloudflare の制約、ADR-0019) ため、0% の version を
-# Cloudflare-Workers-Version-Overrides header で指名して本番 URL から呼ぶ。
-# DO の lifecycle の変更 (migrations) を含む version は versions upload では上げられない。その時だけ手元で
-# `wrangler deploy` する (ADR-0019 の Consequences)。
-#
-# 必要な repo secret:
-#   - CLOUDFLARE_API_TOKEN  : Workers Scripts:Edit 権限の API token (versions upload と deploy、subdomain の取得に使う)
-#   - CLOUDFLARE_ACCOUNT_ID : 対象アカウントの ID (token が複数アカウントに紐づく場合は必須。preview URL の組み立てにも使う)
-#   - DATABASE_URL          : 本番 Neon の「直接接続」文字列 (Hyperdrive 経由ではなく直接接続。DDL に使う)
-
 on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
     branches: [main]
-  # CI を介さず main の現在の HEAD を手動でデプロイする緊急用。
   workflow_dispatch:
 
-# GITHUB_TOKEN は使わない (deploy は CLOUDFLARE_API_TOKEN、migration は DATABASE_URL を使う) ため、権限を最小に絞る。
 permissions:
   contents: read
 
-# 同時デプロイを直列化し、migration と deploy の競合を防ぐ。進行中の run は cancel せず待たせる。
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
   deploy:
-    # workflow_run 経由では CI が成功した時だけ実行する。workflow_dispatch は常に実行する。
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -49,31 +23,24 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          # workflow_run の時は CI が検証した commit を、それ以外 (workflow_dispatch) では既定の ref を取る。
           ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: "1.3"
 
-      # --ignore-scripts は、install の lifecycle script を経由した任意コード実行を防ぐ (ADR-0009 C。ci.yml と同じ)。
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      # wrangler が bundle する worker は @taimei-code/auth-client を dist 経由で解決するため、先に build する
-      # (Dockerfile の deps stage と同じ理由。docs/adr/0014-docker-runner-dev-stage-separation.md の Decision 2 を参照)。
+      # wrangler の bundle が @taimei-code/auth-client を dist 経由で解決するため先に build する
       - name: Build auth-client SDK
         working-directory: packages/auth-client
         run: bun run build
 
-      # wrangler.jsonc の assets.directory が ./web/dist なので、SPA を先に build しておく。
       - name: Build web SPA
         run: bun run build:web
 
-      # drizzle/*.sql が存在する場合だけ migration を適用する。
-      # drizzle-kit migrate は __drizzle_migrations で適用済みを追跡し、未適用のものだけを適用する冪等な処理なので、
-      # デプロイのたびに実行しても新しい migration だけが当たる。
-      # db:migrate (自動管理分) の後に db:migrate-manual (drizzle/manual/ の trigger) を実行する (CI と compose と同じ順序)。
+      # DATABASE_URL は Neon の直接接続文字列 (Hyperdrive 経由でなく DDL 用)
       - name: Apply migrations (drizzle/*.sql があれば)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -86,8 +53,7 @@ jobs:
             echo "no migration files under drizzle/ -> skip"
           fi
 
-      # vars は wrangler.jsonc にあり、secret (AUTH_SECRET、AUTH_SERVICE_KEY、SENTRY_DSN) は
-      # 事前に wrangler secret put で登録済みで、新 version にも引き継がれる。この時点の version にはまだ本番 traffic が流れない。
+      # DO の migrations を含む version は versions upload では上げられない。その時だけ手元で `wrangler deploy` する
       - name: Upload Worker version (not yet deployed)
         id: upload
         env:
@@ -100,8 +66,7 @@ jobs:
           [ -n "$version_id" ] || { echo "version id not found in wrangler output" >&2; exit 1; }
           echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
 
-      # 現在 100% の version を控え、新 version を 0% で deployment に加える (override header は deployment に含まれる
-      # version にしか適用されない)。通常の traffic はまだ旧 version にだけ流れる。
+      # override header は deployment に含まれる version にしか効かないため、0% で加えておく
       - name: Stage version at 0% traffic
         id: stage
         env:
@@ -115,13 +80,11 @@ jobs:
           echo "current_id=$current" >> "$GITHUB_OUTPUT"
           bunx wrangler versions deploy "${VERSION_ID}@0%" "${current}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} stage (${GITHUB_SHA::7})"
 
-      # smoke は、/health の version が新 version と一致することを最初に確かめる (override が適用されないまま中身の無い成功になるのを止める)。
       - name: Smoke new version via override header (gate)
         env:
           VERSION_ID: ${{ steps.upload.outputs.version_id }}
         run: bash scripts/preview-smoke.sh https://auth.taimei-code.com "$VERSION_ID"
 
-      # smoke が落ちたら旧 version を 100% に戻す (新 version を deployment から外す)。
       - name: Restore previous version on smoke failure
         if: failure() && steps.stage.outcome == 'success'
         env:
@@ -130,7 +93,6 @@ jobs:
           CURRENT_ID: ${{ steps.stage.outputs.current_id }}
         run: bunx wrangler versions deploy "${CURRENT_ID}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} restore after smoke failure"
 
-      # smoke を通った version だけを 100% に割り当てる。ここで初めて本番 traffic が新コードを通る。
       - name: Deploy version to production traffic
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

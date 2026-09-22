@@ -8,5 +8,5 @@ dist/
 .wrangler/
 test-results/
 playwright-report/
-# ローカル環境に固有の CA 証明書 (TLS を復号する proxy への対策)。commit しない
+# TLS を復号する proxy 用のローカル CA (Dockerfile が COPY する)
 certs/*.pem

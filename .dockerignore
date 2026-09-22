@@ -1,5 +1,4 @@
-# 先頭の **/ は必要である。dev stage の COPY . . が、stage 内で build 済みの dist と node_modules をホスト側の古い成果物で上書きするのを防ぐ (root からのパスだけでは packages/ 配下に適用されない)。
-# 詳細は docs/adr/0014-docker-runner-dev-stage-separation.md を参照。
+# 先頭の **/ は必要 (root からのパスだけでは packages/ 配下に効かず、dev stage の COPY . . が build 済み dist と node_modules をホストの古い成果物で上書きする)
 **/node_modules
 **/dist
 **/.env*
