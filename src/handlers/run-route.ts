@@ -39,6 +39,6 @@ function causeToResponse(c: Context, cause: Cause.Cause<RouteError>, adapter: Ad
     extra: { method: c.req.method, path: c.req.path },
   });
   const res = failure ? clientFacingErrorResponse(failure) : internalErrorResponse();
-  // program が c.header() で staged した header を error 応答にも載せる (c.newResponse が staged に重ねる)。
+  // program が c.header() で設定した header を error 応答にも付ける (c.newResponse は設定済みの header に重ねる)。
   return c.newResponse(res.body, res);
 }

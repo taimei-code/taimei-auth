@@ -85,7 +85,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", (c) =>
       const result = yield* createInvitation({ actorUserId: actor.id, companyId, email, role });
       const invitationRow = result.invitation;
 
-      // commit 後に background へ逃がして 200 を即返す (DB INSERT 失敗時は無送信)。
+      // commit 後に background で送信し、200 をすぐ返す (DB の INSERT に失敗したときは送信しない)。
       const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token)}`;
       const authApi = yield* AuthApi;
       const background = yield* Background;
@@ -121,7 +121,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations/:invitatio
   ),
 );
 
-// strict email match (invitation.email === session.email) で token 盗難の phishing を防ぐ。
+// email の厳密な一致 (invitation.email === session.email) で、token を盗んで使う phishing を防ぐ。
 accountInvitation.post("/api/account/accept-invitation", (c) =>
   runRoute(
     c,

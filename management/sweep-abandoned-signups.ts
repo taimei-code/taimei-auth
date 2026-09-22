@@ -1,4 +1,4 @@
-// 既定は dry-run、`--execute` で実削除 (削除した user_id を全件ログ)。
+// 既定では dry-run で、`--execute` を付けると実際に削除する (削除した user_id はすべてログに出す)。
 import { sweepAbandonedSignups } from "../src/account/sweep-abandoned-signups";
 import { initAuth } from "../src/auth";
 import { getRuntime } from "../src/runtime";

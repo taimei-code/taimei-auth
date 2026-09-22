@@ -39,7 +39,7 @@ export const setCurrentCompany = async (companyId: string): Promise<void> => {
 type CurrentCompanyContextValue = {
   loading: boolean;
   unauthorized: boolean;
-  // 401 以外の失敗は SessionGuard を素通しさせる (membership 0 件と誤判定して誤遮断しないため)
+  // 401 以外の失敗では SessionGuard を止めずにそのまま通す (membership 0 件と誤判定して誤って遮断しないため)
   loadFailed: boolean;
   memberships: Membership[];
   currentCompanyId: string | null;

@@ -10,7 +10,7 @@ export const OrgCodeField = ({
   value: OrgCode;
   onChange: (next: OrgCode) => void;
   disabled?: boolean;
-  // 同一ページ内に複数フォームが共存しても radio group が混線しないよう呼び出し側が一意に付ける
+  // 同じページに複数のフォームがあっても radio group が混ざらないよう、呼び出し側が一意な値を付ける
   name: string;
   order?: readonly OrgCode[];
 }) => (

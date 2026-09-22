@@ -8,7 +8,7 @@ import { captureCauseAs } from "../sentry";
 import { signInParamsSchema } from "../sign-in-params";
 import { runMiddleware } from "./run-route";
 
-// /auth/signup/company は含めない。含めると membership 0 件 user が同 path へ無限 redirect する。
+// /auth/signup/company は含めない。含めると membership が 0 件の user が同じパスへ無限に redirect される。
 const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
 
 export const authEntryRedirect = (c: Context, next: Next) => {
@@ -17,7 +17,7 @@ export const authEntryRedirect = (c: Context, next: Next) => {
   return runMiddleware(c, next, authEntryRedirectProgram(c));
 };
 
-// transient 障害は 5xx でなく pass-through に倒す (session-aware redirect は利便で認可ではない)。
+// 一時的な障害では 5xx を返さずそのまま通す (session に応じた redirect は利便のためで、認可ではない)。
 export const authEntryRedirectProgram = Effect.fn("handlers.authEntryRedirect")(
   function* (c: Context) {
     const headers = c.req.raw.headers;

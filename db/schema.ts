@@ -12,7 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { inArray, relations } from "drizzle-orm";
 
-// 用語の正本: CONTEXT.md (role / org_code / activation_status / 事業所 / audit log)
+// 用語 (role、org_code、activation_status、事業所、audit log) の定義元は CONTEXT.md。
 export const ROLES = ["OWNER", "ADMIN", "MEMBER"] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -75,7 +75,7 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // DeleteCompany は soft delete で ON DELETE が発火しないため、NULL 更新は handler が行う。
+    // DeleteCompany は soft delete なので ON DELETE は発火しない。NULL への更新は handler が行う。
     currentCompanyId: text("current_company_id").references(() => company.id, {
       onDelete: "set null",
     }),
@@ -133,7 +133,7 @@ export const mfaTotp = pgTable("mfa_totp", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   enrollmentId: text("enrollment_id").notNull(),
-  // AES-256-GCM (AAD = user_id)。列は base64 文字列 — repo に bytea の前例が無いため text を踏襲。
+  // AES-256-GCM で暗号化し、AAD には user_id を使う。列は base64 文字列にする (リポジトリに bytea の前例が無いため text に合わせた)。
   secretCiphertext: text("secret_ciphertext").notNull(),
   secretIv: text("secret_iv").notNull(),
   keyVersion: integer("key_version").notNull(),
@@ -145,7 +145,7 @@ export const mfaTotp = pgTable("mfa_totp", {
 export const mfaRecoveryCode = pgTable(
   "mfa_recovery_code",
   {
-    // "NN-<uuid>"。先頭 2 桁 = 挿入順で、id 昇順の読み出しが再表示順を固定する。
+    // 形式は "NN-<uuid>"。先頭 2 桁が挿入順を表し、id 昇順で読み出すと再表示の順序が固定される。
     id: text("id").primaryKey().notNull(),
     userId: text("user_id")
       .notNull()
@@ -153,13 +153,13 @@ export const mfaRecoveryCode = pgTable(
     codeCiphertext: text("code_ciphertext").notNull(),
     codeIv: text("code_iv").notNull(),
     keyVersion: integer("key_version").notNull(),
-    // 単回消費の条件列。消費は used_at IS NULL を WHERE に含む条件付き単文 UPDATE。
+    // 1 回だけ消費できることを表す列。消費は used_at IS NULL を WHERE に含む条件付きの単一 UPDATE で行う。
     usedAt: timestamp("used_at"),
   },
   (table) => [index("mfa_recovery_code_user_id_idx").on(table.userId)],
 );
 
-// account_delete 後も log を残すため意図的に user_id に FK を付けない
+// account_delete の後もログを残すため、user_id には意図的に FK を付けない
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -175,7 +175,7 @@ export const auditLog = pgTable(
   ],
 );
 
-// user_id は退会時に所属解除する CASCADE (OWNER pre-check があるため責任者不在は起きない: PR #55 → #63)。
+// user_id は退会時に CASCADE で所属を解除する (OWNER の事前チェックがあるため責任者不在は起きない。経緯は PR #55 と #63)。
 export const membership = pgTable(
   "membership",
   {
@@ -198,7 +198,7 @@ export const membership = pgTable(
     uniqueIndex("membership_user_company_key").on(table.userId, table.companyId),
     index("membership_company_id_idx").on(table.companyId),
     index("membership_user_id_idx").on(table.userId),
-    // inlineParams が無いと drizzle-kit は値を $1.. の placeholder で SQL に出し、CHECK が壊れる。
+    // inlineParams を付けないと drizzle-kit が値を $1.. の placeholder として SQL に出力し、CHECK が壊れる。
     check("membership_role_check", inArray(table.role, ROLES).inlineParams()),
   ],
 );
@@ -217,9 +217,9 @@ export const invitation = pgTable(
     status: text("status").$type<InvitationStatus>().notNull().default("PENDING"),
     acceptedAt: timestamp("accepted_at"),
     revokedAt: timestamp("revoked_at"),
-    // status の派生値 (COALESCE(accepted_at, revoked_at))。status 更新と同 transaction で set。
+    // status から導出する値 (COALESCE(accepted_at, revoked_at))。status の更新と同じ transaction で設定する。
     usedAt: timestamp("used_at"),
-    // 招待者の退会で道連れ削除 (NOT NULL のため SET NULL は不可)。
+    // 招待者が退会したら一緒に削除する (NOT NULL なので SET NULL にはできない)。
     invitedByUserId: text("invited_by_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

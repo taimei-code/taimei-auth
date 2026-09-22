@@ -18,8 +18,8 @@ export function createAuthClient(options: ClientOptions) {
   return { authService, userService };
 }
 
-// Service Key header (`X-Service-Key`) は IdP の private contract。Cookie 名と同格の隠蔽対象で、consumer は
-// header 名を直接書かないこと (docs/adr/0006-sdk-encapsulation.md / packages/auth-client/CLAUDE.md ルール 7)。
+// Service Key header (`X-Service-Key`) は IdP の内部契約である。Cookie 名と同じく隠す対象で、consumer は
+// header 名を直接書かない (docs/adr/0006-sdk-encapsulation.md と packages/auth-client/CLAUDE.md ルール 7 を参照)。
 export function createServiceKeyInterceptor(serviceKey: string): Interceptor {
   return (next) => async (req) => {
     req.header.set("X-Service-Key", serviceKey);

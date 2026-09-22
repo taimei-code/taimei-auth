@@ -21,7 +21,7 @@ const _verifyBodyMatchesWire: MatchesClientFacingShape<
   MfaChallengeVerifyRequest
 > = true;
 
-// 返すのは boolean 1 つに限る。他は cookie を拾った第三者への手掛かりになる。
+// 返すのは boolean 1 つだけにする。それ以外は cookie を入手した第三者への手掛かりになる。
 mfaChallenge.get("/api/mfa/challenge", (c) =>
   runRoute(
     c,

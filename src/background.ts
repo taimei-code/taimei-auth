@@ -1,7 +1,7 @@
 import { Context, Effect, Fiber, Layer } from "effect";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// Workers は response 後の未解決 promise を "hung" として cancel するため ctx.waitUntil に登録する。
+// Workers は response 後に未解決の promise を "hung" として cancel するため、ctx.waitUntil に登録する。
 type WaitUntil = (promise: Promise<unknown>) => void;
 
 const waitUntilStore = new AsyncLocalStorage<WaitUntil>();
@@ -10,7 +10,7 @@ export function withWaitUntil<T>(waitUntil: WaitUntil, fn: () => T): T {
   return waitUntilStore.run(waitUntil, fn);
 }
 
-// Bun / Node は fire-and-forget (監査ログは critical path でないため取りこぼしを許容)。
+// Bun と Node では fire-and-forget にする (監査ログは critical path ではないため、取りこぼしを許容する)。
 export function runBackground(promise: Promise<unknown>): void {
   const waitUntil = waitUntilStore.getStore();
   if (waitUntil) waitUntil(promise);

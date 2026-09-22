@@ -42,7 +42,7 @@ const createCompanyWithOwner = Effect.fn("company.createCompanyWithOwner")(funct
   return { company: created, membership } satisfies CreatedCompany;
 });
 
-// 2 tab 同時 submit は advisory lock + tx 内再 check で直列化する (xact lock は rollback でも解放)。
+// 2 つの tab からの同時 submit は advisory lock と tx 内の再チェックで直列化する (xact lock は rollback でも解放される)。
 export const createSignupCompany = Effect.fn("company.createSignupCompany")(function* (
   userId: string,
   input: CreateCompanyInput,
@@ -53,7 +53,7 @@ export const createSignupCompany = Effect.fn("company.createSignupCompany")(func
   return yield* tx.run(
     Effect.fn("company.createSignupCompany.apply")(function* (t: DbTx) {
       yield* memberships.lockUserForCompanyCreation(t, userId);
-      // ACTIVE 基準で数えるのは soft delete 行が残り、全件だと再 signup が redirect loop に陥るため。
+      // ACTIVE だけを数えるのは、soft delete された行が残るため、全件で数えると再 signup が redirect loop になるから。
       const rows = yield* memberships.findMembershipsByUserId(userId, t);
       if (rows.some((m) => m.companyActivationStatus === "ACTIVE")) {
         return yield* new AlreadyExists();

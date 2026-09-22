@@ -10,7 +10,7 @@ export const requireTransferOwnership = Effect.fn("membership.requireTransferOwn
   }) {
     const actor = yield* requireActor(opts.headers);
     const parsed = yield* opts.parseBody;
-    // self 委譲は actor を無意味に降格し audit も誤解を生むため 400 で弾く (現行 handler と同義)。
+    // 自分自身への委譲は actor を無意味に降格させ audit も誤解を生むため、400 で拒否する (現行の handler と同じ扱い)。
     if (parsed.toUserId === actor.id) return yield* new InvalidArgument({});
     yield* requireMembershipOf(actor, opts.companyId, "OWNER");
     const target = yield* requireTargetMembership(parsed.toUserId, opts.companyId);

@@ -4,7 +4,7 @@ import { validateRedirectUrl } from "./url-allowlist";
 
 const serviceNameSchema = z.enum(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]);
 
-// refine 前の object を別 export するのは、SPA が「転送してよい query キー集合」を shape から導出するため。
+// refine 前の object を別に export するのは、SPA が「転送してよい query キーの集合」を shape から導出するため。
 export const signInParamsObjectSchema = z.object({
   service_name: serviceNameSchema,
   redirect_url: z.string().min(1).max(2048),

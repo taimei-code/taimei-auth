@@ -9,10 +9,10 @@ import {
 import { mfaErrorCodeOf, type MfaCodeKind, type MfaErrorCode } from "./mfa-api";
 
 const WHITESPACE = /\s+/g;
-// NFKC が ASCII に畳まないダッシュ類。メール本文からの貼り付けで混ざる。
+// NFKC で ASCII に正規化されないダッシュ類。メール本文からの貼り付けで混ざる。
 const HYPHEN_LIKE = /[-‐-―−ー]/g;
 
-// ハイフンは 6 桁では飾りだが、リカバリーコードでは server の完全一致照合の一部で落とすと必ず不一致。
+// ハイフンは 6 桁のコードでは飾りだが、リカバリーコードでは server の完全一致照合の一部なので、落とすと必ず不一致になる。
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
   const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
   return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
@@ -20,7 +20,7 @@ export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
 
 const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
-// invalid_code に再試行を促さないのは、server が試行上限超過 (チャレンジ破棄済み) も同コードへ写すため。
+// invalid_code で再試行を促さないのは、server が試行上限の超過 (チャレンジ破棄済み) も同じコードで返すため。
 const MESSAGE_BY_ERROR_CODE: Record<MfaErrorCode, string> = {
   invalid_code: "入力されたコードが正しくありません。",
   challenge_expired: "ログインの有効期限が切れました。お手数ですが、もう一度ログインしてください。",
@@ -108,14 +108,14 @@ export function useMfaCodeInput(options: {
       onChange: (event: ChangeEvent<HTMLInputElement>) => setCode(event.target.value),
       disabled: options.submitting,
       required: true,
-      // one-time-code はモバイル OS の補完の合図。inputMode は英数混在のリカバリーコードで変える。
+      // one-time-code はモバイル OS に補完を促す指定。inputMode は英数混在のリカバリーコードでは変える。
       autoComplete: "one-time-code",
       inputMode: isTotp ? "numeric" : "text",
-      // リカバリーコードは大文字小文字まで含めて照合されるため IME の自動整形を全て切る。
+      // リカバリーコードは大文字小文字まで含めて照合されるため、IME の自動整形を全て切る。
       autoCapitalize: "off",
       autoCorrect: "off",
       spellCheck: false,
-      // 貼り付けを途中で切らない上限 (全角・区切り入りでも収まる)。桁数の正否は server が決める。
+      // 貼り付けを途中で切らない上限 (全角や区切り入りでも収まる)。桁数の正否は server が判定する。
       maxLength: 32,
       placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
       "aria-label": isTotp ? "確認コード" : "リカバリーコード",
@@ -133,7 +133,7 @@ export function useMfaCodeEntry(options: {
 }): MfaCodeInput {
   const [submitting, setSubmitting] = useState(false);
   const [errorCode, setErrorCode] = useState<MfaErrorCode | null>(null);
-  // submitting state の反映は同期でないため、同一 task 内の二重 submit は ref でしか弾けない。
+  // submitting state の反映は同期ではないため、同じ task 内の二重 submit は ref でしか防げない。
   const submitInFlight = useRef(false);
 
   const input = useMfaCodeInput({

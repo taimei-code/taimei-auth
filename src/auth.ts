@@ -17,17 +17,17 @@ import type { AppRuntime } from "./runtime";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
-// Workers は per-request env のため module ロード時でなく initAuth() で構築する。
+// Workers では env が request ごとに渡されるため、module のロード時ではなく initAuth() で構築する。
 function buildAuth(runtime: AppRuntime) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
-    // appName は MFA の TOTP issuer。enroll と再表示で同じ値でないと認証アプリのエントリが割れる。
+    // appName は MFA の TOTP issuer になる。enroll 時と再表示時で同じ値でないと認証アプリのエントリが分かれる。
     appName: getAppName(),
 
     secondaryStorage: ttlStorage,
 
-    // Workers は DB の verification token 消費が hang するため Bun の local 実行 (bun test / bun run dev) だけ true にする。
+    // Workers では DB の verification token の消費が hang するため、Bun でのローカル実行 (bun test、bun run dev) だけ true にする。
     verification: {
       storeInDatabase: isBunRuntime() && isLocalEnvironment(),
     },
@@ -39,7 +39,7 @@ function buildAuth(runtime: AppRuntime) {
 
     trustedOrigins: getTrustedOrigins(),
 
-    // better-auth の router は processRequest 内の throw を握って 500 にし Hono にも adapter にも届かない。
+    // better-auth の router は processRequest 内の throw を捕捉して 500 にするため、Hono にも adapter にも届かない。
     onAPIError: {
       onError: (error) => {
         if (isAPIError(error) && error.statusCode < 500) return;
@@ -56,11 +56,11 @@ function buildAuth(runtime: AppRuntime) {
 
     user: {
       additionalFields: {
-        // ++ は drizzle/manual/0001_user_revision_triggers.sql の DB trigger に閉じる (ここは宣言のみ)。
+        // 加算は drizzle/manual/0001_user_revision_triggers.sql の DB trigger だけが行う (ここは宣言のみ)。
         revision: { type: "number", required: true, defaultValue: 0, input: false },
         lastUsedCompanyId: { type: "string", required: false, input: false },
       },
-      // RPC の DeleteUser handler と二重防御 (SPA DangerZone は better-auth のこの経路を通る)。
+      // RPC の DeleteUser handler と合わせて二重に防御する (SPA の DangerZone は better-auth のこの経路を通る)。
       deleteUser: {
         enabled: true,
         beforeDelete: async (user) => {
@@ -98,7 +98,7 @@ function buildAuth(runtime: AppRuntime) {
           await runtime.runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: 300,
-        // local は test 高速化で緩め、production は Hono middleware (src/rate-limit.ts) と独立した二重防御。
+        // ローカルではテストを速くするため緩め、production では Hono middleware (src/rate-limit.ts) と独立した二重の防御にする。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
       mfaChallenge(runtime),
@@ -110,7 +110,7 @@ function buildAuth(runtime: AppRuntime) {
         enabled: true,
         maxAge: 5 * 60,
       },
-      // password 無しでは再認証できず退会が常に SESSION_NOT_FRESH になるため 0。password 有効化時は再検討。
+      // password が無いと再認証できず退会が常に SESSION_NOT_FRESH になるため 0 にする。password を有効にするときに再検討する。
       freshAge: 0,
     },
 

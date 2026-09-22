@@ -25,7 +25,7 @@ export const CompanySettings = () => {
   const navigate = useNavigate();
 
   const currentCompanyId = currentMembership?.company_id ?? null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: company 切替時のみ prefill する意図
+  // biome-ignore lint/correctness/useExhaustiveDependencies: company を切り替えた時だけ prefill する意図
   useEffect(() => {
     if (currentMembership) {
       setName(currentMembership.company_name);

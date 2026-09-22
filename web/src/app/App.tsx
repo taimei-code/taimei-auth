@@ -27,12 +27,12 @@ export const App = () => {
           <Route path="signup" element={<SignUp />} />
           <Route path="signup/company" element={<SignUpCompany />} />
           <Route path="signup/accept-invitation" element={<SignUpAcceptInvitation />} />
-          {/* 一次認証の後に server が 302 で送り込む着地先 */}
+          {/* 一次認証のあとに server が 302 で送る着地先 */}
           <Route path="mfa" element={<MfaChallenge />} />
           <Route path="error" element={<ErrorPage />} />
         </Route>
 
-        {/* Provider を guard の外に置き、認証判定と layout が 1 回の memberships fetch を共有する */}
+        {/* Provider を guard の外に置き、認証判定と layout が memberships の fetch 1 回を共有する */}
         <Route
           path="/account"
           element={

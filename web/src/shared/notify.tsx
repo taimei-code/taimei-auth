@@ -4,7 +4,7 @@ type ToasterComponent = ComponentType<ComponentProps<typeof import("sonner").Toa
 
 let toasterUnavailable = false;
 
-// chunk 取得失敗を Suspense へ throw すると error boundary の無い /account ごと unmount するため console だけ残す。
+// chunk の取得失敗を Suspense へ throw すると error boundary の無い /account ごと unmount されるため、console に残すだけにする。
 const SonnerToaster = lazy<ToasterComponent>(() =>
   import("sonner")
     .then((m) => ({ default: m.Toaster }))
@@ -15,7 +15,7 @@ const SonnerToaster = lazy<ToasterComponent>(() =>
     }),
 );
 
-// sonner 既定値と同値だが、render ごとに新しい配列を渡すと keydown listener が再登録されるため固定する
+// sonner の既定値と同じだが、render ごとに新しい配列を渡すと keydown listener が再登録されるため固定する
 const TOASTER_HOTKEY = ["altKey", "KeyT"];
 
 type Deferred = { promise: Promise<void>; resolve: () => void };
@@ -28,7 +28,7 @@ const deferred = (): Deferred => {
 };
 let toasterMounted = deferred();
 
-// 同じ commit で sonner の subscribe (useEffect) が先に走るため、この effect の resolve 時点で toast() は届く。
+// 同じ commit で sonner の subscribe (useEffect) が先に走るため、この effect が resolve する時点で toast() は届く。
 const ToasterMountedSignal = () => {
   useEffect(() => {
     toasterMounted.resolve();
@@ -56,7 +56,7 @@ export const Toaster = () => (
 
 const TOASTER_MOUNT_TIMEOUT_MS = 5_000;
 
-// sonner の toast() は publish 時点で subscribe 済みの Toaster にしか届かないため toasterMounted を待つ
+// sonner の toast() は publish の時点で subscribe 済みの Toaster にしか届かないため、toasterMounted を待つ
 const withToast = (): Promise<typeof import("sonner")["toast"]> =>
   Promise.all([
     import("sonner"),
@@ -68,7 +68,7 @@ const withToast = (): Promise<typeof import("sonner")["toast"]> =>
     ]),
   ]).then(([m]) => m.toast);
 
-// sonner に per-toast の role=alert は無いので長い duration + closeButton で代替する。duration は明示 (依存更新で寿命が変わる)
+// sonner には toast ごとの role=alert が無いので、長い duration と closeButton で代替する。duration は明示する (依存の更新で既定の寿命が変わるため)
 export const notifySuccess = (text: string): void => {
   if (toasterUnavailable) {
     console.error(text);
@@ -89,7 +89,7 @@ export const notifyError = (text: string): void => {
     .catch((e) => console.error(text, e));
 };
 
-// staleShort は「〜が、…失敗しました」に繋ぐ節で末尾に句点を付けない。location.replace 後の成功通知は届かない。
+// staleShort は「〜が、…失敗しました」に繋げる節なので末尾に句点を付けない。location.replace の後では成功通知は届かない。
 export const notifyAfterRefresh = (
   refresh: () => Promise<unknown>,
   text: { done?: string; staleShort: string },

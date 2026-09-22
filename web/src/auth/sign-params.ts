@@ -1,7 +1,7 @@
 import { acceptInvitationPath } from "@core/invitation/accept-path";
 import { signInParamsObjectSchema } from "@core/sign-in-params";
 
-// 相互リンクで error=signin_failed 等の stale な param を持ち込ませないための allowlist
+// 画面間のリンクで error=signin_failed などの古い param を引き継がせないための allowlist
 const ALLOWLIST = Object.keys(signInParamsObjectSchema.shape);
 
 export const buildSignParams = (searchParams: URLSearchParams): string => {
@@ -13,6 +13,6 @@ export const buildSignParams = (searchParams: URLSearchParams): string => {
   return out.toString();
 };
 
-// redirect_url へ直行すると membership が作られないまま signup/company へ流れ招待受諾から脱落する
+// redirect_url へ直接送ると membership が作られないまま signup/company へ進み、招待受諾の流れから外れる
 export const invitationAcceptCallbackUrl = (invitationToken: string): string =>
   `${window.location.origin}${acceptInvitationPath(invitationToken)}`;

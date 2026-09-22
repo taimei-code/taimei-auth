@@ -6,12 +6,12 @@ import type { DbOrTx, DbTx } from "../transaction";
 
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
-// user_id 単独の unique 制約は N:M と衝突するため advisory lock + tx 内 re-check で TOCTOU を防ぐ。
+// user_id 単独の unique 制約は N:M 関係と両立しないため、advisory lock と tx 内の再確認で TOCTOU を防ぐ。
 export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
-// 事業所削除と membership の減る変更を同じ OWNER 行で contend させる。WHERE が片方だけ変わると直列化が silent に外れる。
+// 事業所削除と membership を減らす変更を同じ OWNER 行で競合させる。WHERE を片方だけ変えると、直列化が気付かれないまま外れる。
 export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
   await tx.execute(
     sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
@@ -121,7 +121,7 @@ export async function findMembership(
     .then((rows) => rows.at(0));
 }
 
-// tx を必須にするのは autocommit だと FOR SHARE lock が statement 終了で解放され TOCTOU が復活するため。
+// tx を必須にするのは、autocommit だと FOR SHARE lock が statement の終了時に解放されて TOCTOU が再発するため。
 export async function lockMembershipForShare(
   tx: DbTx,
   userId: string,
