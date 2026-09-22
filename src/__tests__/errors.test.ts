@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { AuthApiError, DbError, TtlStoreError, tryAuthApi, tryDb, tryTtlStore } from "../errors";
 
-// 境界のエラー (design §3.6) のテスト。サードパーティ由来の失敗を、cause: unknown を付けて E channel の値にする。
 describe("boundary errors", () => {
   test("DbError は _tag と cause を own property に持ち、cause の identity を保つ", () => {
     const cause = new Error("db timeout");

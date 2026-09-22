@@ -5,7 +5,7 @@ import { DbError } from "../../errors";
 import { SentryLive, type SentryService } from "../../sentry";
 import { swallowAuditFailure } from "../report-failure";
 
-// 代入だけでは Effect<number | undefined> も void として通ってしまうため、A の型を直接検査する (AC-019)。
+// 代入だけでは Effect<number | undefined> も void に通るため、A の型を直接検査する。
 const swallowed = swallowAuditFailure("sign_in")(Effect.succeed(1));
 const _assignableToVoidNeverSentry: Effect.Effect<void, never, SentryService> = swallowed;
 const _programValueDoesNotLeak: number extends Effect.Success<typeof swallowed> ? never : true =

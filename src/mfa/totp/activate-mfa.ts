@@ -8,7 +8,7 @@ import { decryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
 import { matchTotpCode } from "./totp-engine";
 
-// revoke を確定の UPDATE より先に置くのは、逆順だと有効化済みなのに他の session が残る時間が生じるため。
+// revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
 export const activate = Effect.fn("mfa.activate")(function* (input: {
   actor: MfaTotpActor;
   headers: Headers;
@@ -29,7 +29,7 @@ export const activate = Effect.fn("mfa.activate")(function* (input: {
   const sessions = yield* MfaSessions;
   const sessionChanges = yield* sessions.revokeOthers(input.headers);
 
-  // false は並行して負けたことを表す (勝者が既に verified にしている)。
+  // false は並行して負けた (勝者が verified 済み)。
   if (!(yield* mfa.activateMfaTotp(input.actor.id, row.enrollmentId, timestep))) {
     return yield* new AlreadyEnabled();
   }

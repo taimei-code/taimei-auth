@@ -1,4 +1,3 @@
-// MFA のロックアウトから救済する運用 CLI。ロックアウトの唯一の出口で、手順は README の運用節にある。
 import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
 import { appendAuditLogBestEffort } from "../src/audit/report-failure";

@@ -6,16 +6,16 @@ export const FALLBACK_REDIRECT = "/account";
 
 type RejectionReason = "not_a_same_origin_path" | "origin_not_trusted";
 
-// better-auth 1.6.23 の matchesOriginPattern と同じ判定 (公開 export が無い)。素朴な判定では `/\evil.com` が別 origin へのリンクとして解釈される。
+// better-auth 1.6.23 の matchesOriginPattern と同じ (公開 export が無い)。`/` 始まりだけの判定では `/\evil.com` が別 origin になる。
 const SAME_ORIGIN_PATH = /^\/(?!\/|\\|%2f|%5c)[\w\-.+/@]*(?:\?[\w\-.+/=&%@]*)?$/;
 
-// 出口は入口 (trustedOrigins) より意図的に厳しくし、origin が完全に一致するものだけを通す。
+// 入口 (trustedOrigins) の pattern 一致より厳しく、origin 完全一致だけを通す。
 function isTrustedAbsoluteUrl(candidate: string): boolean {
   const url = parseUrl(candidate);
   if (!url) return false;
   if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   if (url.username !== "" || url.password !== "") return false;
-  // fragment を拒否するのは、相対パス側の regex (`$` で終端) と挙動を揃えるため。
+  // 相対パス側の regex (`$` 終端) と揃えて fragment を拒否する。
   if (url.hash !== "") return false;
   return getTrustedOrigins().some((entry) => parseUrl(entry)?.origin === url.origin);
 }
@@ -28,7 +28,6 @@ function parseUrl(candidate: string): URL | null {
   }
 }
 
-// 拒否を記録に残す。「ログインはできるが元の画面に戻れない」という問い合わせの唯一の手掛かりがこの記録になる。
 const fallBackAndReport = Effect.fn("mfa.rejectChallengeRedirect")(function* (
   rejected: string,
   reason: RejectionReason,

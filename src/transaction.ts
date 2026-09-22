@@ -3,7 +3,7 @@ import type { DbTx } from "@/db/transaction";
 import { runInTransaction } from "@/db/transaction";
 import { DbError } from "./errors";
 
-// drizzle は callback が throw したときにしか rollback しない。仕組みは ADR-0017「実装の機構」
+// drizzle は callback が throw した時にしか rollback しない。
 class RollbackSignal<E> extends Error {
   constructor(readonly exit: Exit.Exit<never, E>) {
     super("transaction rolled back (Effect failure inside callback)");

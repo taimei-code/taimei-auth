@@ -1,7 +1,7 @@
 declare const displayTextBrand: unique symbol;
 export type DisplayText = string & { readonly [displayTextBrand]: true };
 
-// 不可視の unicode 文字と方向制御文字を除去し、表示名を偽装する phishing と SMTP ヘッダインジェクションを防ぐ。
+// 表示名の偽装 (phishing) と SMTP ヘッダインジェクションを防ぐ。
 const isInvisibleOrDirectional = (cp: number): boolean =>
   cp <= 0x1f || // C0 制御文字 (CR の 0x0d と LF の 0x0a を含む)
   (cp >= 0x7f && cp <= 0x9f) || // DEL と C1 制御文字

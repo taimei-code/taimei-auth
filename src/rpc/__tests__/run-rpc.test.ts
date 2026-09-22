@@ -7,7 +7,6 @@ import { Forbidden, NotFound } from "../../membership/guard/errors";
 import { RateLimited } from "../../invitation/errors";
 import { RpcError, runRpc, statusToCode } from "../run-rpc";
 
-// design §3.2 / AC-016 / AC-017 に従い、runRpc は failure を ConnectError に変換する唯一の点である。
 const captured = recordSentryExceptions();
 
 const rejectsWith = async (p: Promise<unknown>) => {

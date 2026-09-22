@@ -11,10 +11,8 @@ import { recordSentryExceptions } from "./sentry-recorder";
 
 const ORIGIN = "http://auth.taimei-code.com";
 
-// cookie が無い経路は AuthApi に触れないので、live runtime (runRoute) のまま通す。
 const app = new Hono().route("/", loginShortcut);
 
-// cookie が有る経路は program を直接走らせ、AuthApi をテスト用の Layer で差し替える (auth-entry-redirect と同じ形)。
 const runProgram = (path: string, auth: Layer.Layer<AuthApi>, cookie = true) =>
   runProgramInRoute(
     path,

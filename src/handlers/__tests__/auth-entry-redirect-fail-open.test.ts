@@ -10,8 +10,6 @@ import { SentryLive } from "../../sentry";
 import { authEntryRedirectProgram } from "../auth-entry-redirect";
 import { runProgramInRoute } from "./run-program-in-route";
 
-// session に応じた redirect は利便のためであって認可ではないため、better-auth や TTL store の一時的な障害では 500 を
-// 返さず、そのまま SPA へ通す (login-shortcut と同じ fail-open)。Sentry には warning で残る。
 const captured = recordSentryExceptions();
 
 describe("authEntryRedirectProgram (fail-open)", () => {
@@ -21,7 +19,6 @@ describe("authEntryRedirectProgram (fail-open)", () => {
       "/auth/",
       "/auth/?service_name=accounts&redirect_url=http://localhost/account",
       authEntryRedirectProgram,
-      // MembershipRepo は AuthApi 失敗で到達しないが、program の要求型を満たすため空 Layer を渡す。
       Layer.mergeAll(authFailing(cause), userRepoLayer([]), membershipRepoLayer([]), SentryLive),
     );
     expect(outcome).toBeUndefined();

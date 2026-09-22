@@ -13,9 +13,7 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
-      # effect は 4.0.0-rc.112 に固定している (ADR-0017)。RC は 2〜5 日周期で publish されるため、追従 PR を
-      # 出すと毎週 minimumReleaseAge (7 日、ADR-0009 §H) で止められて CI が落ちる。除外範囲を RC (< 4.0.0) に
-      # 限定し、stable の 4.0.0 以降の version と security update は Dependabot に出るようにする。stable になったら外す。
+      # effect の RC は 2〜5 日周期で publish され、追従 PR が minimumReleaseAge (7 日) で止まって CI が落ちる。stable 4.0.0 が出たら外す
       - dependency-name: "effect"
         versions: ["< 4.0.0"]
     groups:

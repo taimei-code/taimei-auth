@@ -9,7 +9,6 @@ import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { MfaDisableBudget, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
 import { verifyAndConsumeOwnedCode } from "./verify-code";
 
-// 行とコードの削除を 1 つの tx にするのは、途中で止まっても再実行すれば同じ結果に収束させるため。
 export const disable = Effect.fn("mfa.disable")(function* (input: {
   actor: MfaTotpActor;
   headers: Headers;
@@ -17,7 +16,7 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
   kind: MfaCodeKind;
 }) {
   const mfa = yield* MfaTotpRepo;
-  // MFA が有効でない user に budget を消費させないための事前判定。
+  // spend より前に判定し、未有効の user に budget を消費させない。
   const enrollment = yield* mfa.readMfaVerification(input.actor.id);
   if (!isMfaEnabled(enrollment)) return yield* new NotEnabled();
 

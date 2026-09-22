@@ -17,7 +17,6 @@ import {
   userRepoLayer,
 } from "./test-layers";
 
-// 判定、fail-closed、Sentry の観測を旧 guard.test.ts (Promise と deps factory、19 テスト) から引き継ぐ (AC-036)。
 const captured = recordSentryExceptions();
 const headers = new Headers();
 

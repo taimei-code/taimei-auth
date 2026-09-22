@@ -31,7 +31,7 @@ function copyEnvToProcess(env: Env): void {
   process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
-// この順序は必須。env のコピー、initTtlStore、initAuth、buildApp の順に、後のものが前のものの結果を読む。
+// 後のものが前のものの結果を読むので、この順序は必須。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
@@ -43,7 +43,7 @@ function bootstrap(env: Env): Hono {
       app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
-        // Static Assets は / 直下で配信されるため、vite の base=/auth/ の prefix を取り除く (残すと JS の代わりに index.html が返る)。
+        // Static Assets は / 直下で配信されるので vite の base=/auth/ を取り除く (残すと JS の代わりに index.html が返る)。
         if (url.pathname.startsWith("/auth/")) {
           url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
           return requestEnv.ASSETS.fetch(new Request(url, c.req.raw));
@@ -58,7 +58,7 @@ function bootstrap(env: Env): Hono {
 const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
-    // 早く閉じると waitUntil 中の DB 書き込みが壊れた接続を使って hung するため、background の完了後に閉じる。
+    // 早く閉じると waitUntil 中の DB 書き込みが壊れた接続で hung するため、background の完了後に閉じる。
     const backgroundPromises: Promise<unknown>[] = [];
     return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
       try {
@@ -81,8 +81,7 @@ const sentryOptions = (env: Env) => ({
   tracesSampleRate: 0.1,
 });
 
-// ここで捕捉できるのは Hono の外 (bootstrap と runWithRequestPool) で起きた例外だけ。
 export default Sentry.withSentry(sentryOptions, handler);
 
-// alarm の例外は request の外で起きるため、DO 側も同じ option で Sentry に接続する。
+// alarm の例外は request の外で起きるため、DO 側も Sentry に接続する。
 export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);

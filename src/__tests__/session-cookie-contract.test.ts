@@ -17,17 +17,11 @@ import { MfaSessions } from "../mfa/totp/ports";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
-// session cookie の契約 (CONTEXT.md「session cookie」) を固定する。発行者が 2 つ (better-auth 本体と src/mfa/gateway.ts) あっても
-// 値は同じ形 (percent-encoded の署名付き値) で、SDK がそのまま渡した値を server が受理し、属性は 2 つの発行者で同一である
-// (QA-MR-01 が実ブラウザで確認する対象のうち、発行者間の差にあたる部分)。
-// gateway へは MfaSessions port (production の結線) で到達し、gateway を直接 import しない (containment AC-150a)。
-// テスト環境は local と判定されるため Secure と Domain は付かず、同一性の証明は Max-Age、Path、HttpOnly、SameSite に限る。
-
+// テスト環境は local 判定で Secure と Domain が付かないため、同一性の証明は Max-Age、Path、HttpOnly、SameSite に限る。
 const { run, cleanup } = dbTest("cookie-contract-");
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
-// hono の serialize (gateway が属性を渡す先) が扱う CookieOptions の key。better-auth がこれ以外の key を足すと
-// gateway 経由の cookie だけが気付かれないまま欠けるので、T3 が先に失敗するようにしてある。
+// hono の serialize が扱う CookieOptions の key。better-auth がこれ以外を足すと gateway 経由の cookie だけが欠けるので T3 で先に落とす。
 const HANDLED_ATTRIBUTE_KEYS = [
   "domain",
   "expires",
@@ -42,24 +36,21 @@ const HANDLED_ATTRIBUTE_KEYS = [
 ];
 const isSubsetOfHandledKeys = (attributes: object) =>
   Object.keys(attributes).every((key) => HANDLED_ATTRIBUTE_KEYS.includes(key));
-// module の評価時に $context を待たない (reject した時の handler が T3 まで無く、ファイル全体が unhandled で落ちる)。
+// module 評価時に $context を待たない (reject 時の handler が無く、ファイル全体が unhandled で落ちる)。
 const sessionCookieAttributes = () =>
   auth.$context.then((context) => context.createAuthCookie("session_token").attributes);
 
-// ブラウザが送り返す request の Cookie header は、Set-Cookie の先頭の pair と同じ形になる。
 const asRequestCookieHeader = (setCookie: string) => setCookie.split(";")[0];
-// TTL store の session key は、署名を除いた token である。
 const tokenWithoutSignature = (value: string) => {
   const decoded = decodeURIComponent(value);
   return decoded.slice(0, decoded.lastIndexOf("."));
 };
-// Set-Cookie 上の値は percent-encoded されていて、decode すると署名付きの値の形になる。
 const expectEncodedSignedValue = (value: string) => {
   expect(value).toBe(encodeURIComponent(decodeURIComponent(value)));
   expect(decodeURIComponent(value)).toMatch(SIGNED_COOKIE_VALUE);
 };
 
-// 先頭の pair を除き、Max-Age は数値を捨てて key だけにする (2 つの発行者で 1 秒ずれることがある)。
+// Max-Age は 2 発行者で 1 秒ずれることがあるので key だけにする。
 const attributeSet = (setCookie: string) =>
   new Set(
     setCookie
@@ -69,7 +60,6 @@ const attributeSet = (setCookie: string) =>
       .map((part) => (part.startsWith("Max-Age=") ? "Max-Age" : part)),
   );
 
-// 発行した session は TTL store にしか無いので、テストが消す (7 日の TTL を待たない)。
 const issuedTokens: string[] = [];
 const rememberForCleanup = (setCookies: string[]) => {
   issuedTokens.push(...setCookies.map((cookie) => tokenWithoutSignature(setCookieValue(cookie))));
@@ -139,7 +129,6 @@ describe("T2 2 発行者の値の形と属性同一性", () => {
           callbackURL: CONSUMER_CALLBACK,
         });
         const [issued] = rememberForCleanup(yield* issuedSessionSetCookies(login.response.headers));
-        // ここが失敗したら、better-call の serializer が変わっている。
         expectEncodedSignedValue(setCookieValue(issued));
       }),
     ));

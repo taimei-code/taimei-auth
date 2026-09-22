@@ -6,8 +6,6 @@ import { NotFound } from "../membership/guard/errors";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
 
-// 変更前後の diff を tx 内で集めるのは、tx 外だと別の tx の update と混ざり audit の before が正しくなくなるため。
-
 type UpdateCompanyInput = { name: string; orgCode: OrgCode };
 
 export const updateCompanyInfo = Effect.fn("company.updateCompanyInfo")(function* (params: {

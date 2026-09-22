@@ -41,7 +41,7 @@ export const loginShortcutProgram = Effect.fn("handlers.loginShortcut")(function
       )
     : false;
 
-  // 302 の Location が Cookie によって変わるため、CDN や proxy の共有 cache を禁止する (session の漏洩を防ぐ)
+  // Location が Cookie で変わるため、共有 cache を禁止して session の漏洩を防ぐ。
   c.header("Cache-Control", "private, no-store");
   c.header("Vary", "Cookie");
 

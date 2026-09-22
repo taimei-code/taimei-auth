@@ -6,7 +6,6 @@ import { redirectAfterAuthChange } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
 import { Button } from "../shared/ui/button";
 
-// Magic Link や OAuth のユーザーは password を持たず、better-auth 側で session ごと完全に削除されるため、再認証の手順は挟まない
 export const DangerZone = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -14,7 +13,7 @@ export const DangerZone = () => {
     setErrorMessage(null);
     const { error } = await authClient.deleteUser({});
     if (error) {
-      // toast にせず inline で固定する。role=alert の即時読み上げを保つためで、e2e も alert role を契約にしている
+      // toast にしない。e2e が role=alert を契約にしている
       setErrorMessage(error.message ?? "退会処理に失敗しました");
       return;
     }

@@ -4,9 +4,6 @@ modules:
 breaking:
   use:
     - WIRE
-  # PR #55 で、reserved field の解除 (過去に予約した field 番号を再び使うこと) を許可した。
-  # 今回は予約時と同名・同型 (field 8 が company_id、field 12 が default_company_id) で再利用して
-  # いるため wire の互換性は保たれる (旧 client は再利用された field を unknown field として読み飛ばす)。
-  # 将来また再利用する時は、型が一致することを別途確認する必要がある。
+  # reserved field の再利用を許可している。再利用は予約時と同名・同型の時だけ wire 互換 (旧 client は unknown field として読み飛ばす)
   except:
     - RESERVED_MESSAGE_NO_DELETE

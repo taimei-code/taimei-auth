@@ -3,18 +3,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// web が @core alias で読む server 実装 (sign-in-params、role-label、policy など) の依存
-// クロージャに server 専用の runtime import (db、drizzle、resend、hono など) が入ると、
-// SPA の bundle に取り込まれるが、typecheck も lint も build:web も exit 0 のままで気付けない
-// (CLAUDE.md「リポジトリ共通規則」の build 設定のパス解決と同じ形の、気付かれない失敗)。web/src の @core import から共有ファイルの集合を
-// 動的に導出し、相対 import を推移的に辿った全ファイルについて「外部パッケージの runtime
-// import は browser-safe な allowlist のものだけ」を CI で固定する (allowlist に無いものは fail-closed で違反にする)。
-
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
-// 共有クロージャの中で runtime import してよい外部パッケージ。増やすときは、
-// browser で動作することと、secrets や I/O を持たないことを確認したうえで意識的に追加する。
+// 増やす時は browser で動くこと、secrets や I/O を持たないことを確認する。
 const BROWSER_SAFE_PACKAGES = new Set(["zod"]);
 
 function walk(dir: string): string[] {
@@ -41,7 +33,6 @@ function coreFilesImportedFromWeb(): string[] {
   return [...modules].map((mod) => join(REPO_ROOT, "src", `${mod}.ts`));
 }
 
-// import 宣言と export 宣言の from 句を statement 単位で拾う (複数行の import にも一致する)。
 const IMPORT_FROM = /(?:^|\n)\s*(import|export)\s+(type\b)?[^'"]*?from\s*["']([^"']+)["']/g;
 
 function runtimeImportSpecifiers(content: string): string[] {

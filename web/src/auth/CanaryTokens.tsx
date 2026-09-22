@@ -19,7 +19,7 @@ export const CanaryTokens = () => {
 
   return (
     <>
-      {/* biome-ignore lint/a11y/useAnchorContent: scraper 検知用のおとりリンク。実利用者 (スクリーンリーダー含む) から隠すのが仕様 (docs/adr/0005-canary-token-embedding.md) */}
+      {/* biome-ignore lint/a11y/useAnchorContent: scraper 検知用のおとりリンクで、利用者からは隠す (ADR-0005) */}
       <a
         href={`/auth/canary-token/${tokenId}`}
         aria-hidden="true"

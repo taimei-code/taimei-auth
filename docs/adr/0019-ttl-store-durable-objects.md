@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-20)。判断主体は maintainer。実装は 3 つの PR に分ける: この ADR と runner stage の撤去、Durable Object class と migration の追加、Redis 撤去の本体。この ADR は ADR-0011 の Decision 3「Redis は Bun=node-redis / Workers=Upstash REST」と Consequences の Upstash 項、ADR-0014 の runner / prod-deps stage に関する部分 (Status に列挙) を supersede する。
+Accepted (2026-09-20)。判断主体は maintainer。実装は 3 つの PR に分ける: この ADR と runner stage の撤去、Durable Object class と migration の追加、Redis 撤去の本体。この ADR は ADR-0011 の Decision 3 (当時の見出しは「Redis は Bun=node-redis / Workers=Upstash REST」)と Consequences の Upstash 項、ADR-0014 の runner / prod-deps stage に関する部分 (Status に列挙) を supersede する。
 
 関連: ADR-0011 (Workers 移行)、ADR-0014 (Docker stage)、CONTEXT.md の **session** / **試行枠** / **MFA チャレンジ** (TTL store の項は Redis 撤去の PR で登録する)。PoC / Prototype の観測値は PR #197 / #198 にある。
 

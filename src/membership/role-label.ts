@@ -1,4 +1,4 @@
-// 相対 import にするのは、web 側の "@/" alias として誤って解決されるため。
+// 相対 import ("@/" は web 側の alias として解決される)。
 import type { Role } from "../../db/repositories/membership";
 
 export const ROLE_LABELS_JA: Record<Role, string> = {
@@ -7,5 +7,5 @@ export const ROLE_LABELS_JA: Record<Role, string> = {
   MEMBER: "メンバー",
 };
 
-// 古い SPA bundle が server の新しい role を受け取る version skew では型が実態と合わないため、raw の値を返して空欄にしない。
+// 古い SPA bundle が新しい role を受け取る version skew では型が実態と合わない。raw を返して空欄にしない。
 export const roleLabelJa = (role: Role): string => ROLE_LABELS_JA[role] ?? role;

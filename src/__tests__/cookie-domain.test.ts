@@ -1,10 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { resolveCrossSubDomainCookies } from "../cookie-domain";
 
-// AUTH_TRUSTED_ORIGINS の誤設定や cross-subdomain で Cookie が共有されない不具合は、実際のブラウザでしか
-// 症状が出ない種類のバグである。ただし判定自体は env の値から boolean と domain を導く純ロジックなので、
-// ここで固定する (ADR-0004 の決定表)。
-
 describe("resolveCrossSubDomainCookies", () => {
   test.each([
     ["未指定 (undefined)", undefined, { enabled: false, domain: "taimei-code.com" }],

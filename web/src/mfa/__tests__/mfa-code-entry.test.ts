@@ -168,9 +168,6 @@ describe("describeMfaChallengeError", () => {
   });
 });
 
-// error code の解決 (旧 resolveMfaErrorCode の表による対応付け) は、公開関数を通した検証へ移した
-// (web/src/mfa/__tests__/mfa-api.test.ts の AC-011)。
-
 describe("useMfaCodeInput", () => {
   test("AC-024 controlled submitting と error を入力属性へ反映する", () => {
     let observed: MfaCodeInput | undefined;

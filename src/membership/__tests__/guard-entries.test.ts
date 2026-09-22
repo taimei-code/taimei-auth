@@ -21,10 +21,6 @@ import {
   signedOut,
 } from "./test-layers";
 
-// 旧 guard-entries.test.ts (22 テスト) との対応 (AC-036) として、describe / test 名を同じ順序で維持し、
-// deps factory は test Layer に、Result object は Effect.flip で取り出した failure class に置き換えた。
-// parseBody は Effect (lazy) を渡し、呼ばれたかどうかを parseCalls で数える (短絡の固定)。
-
 const headers = new Headers();
 
 const parser = <T>(result: { ok: true; data: T } | { ok: false; details?: unknown }) => {

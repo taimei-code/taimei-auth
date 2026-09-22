@@ -3,7 +3,6 @@ import { db } from "../client";
 import { session } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// AND revoked_at IS NULL により、2 回目の revoke が 1 回目の時刻を上書きしない (調査時の時刻の正確さを保つ)。
 export async function revokeAllSessionsForUser(userId: string, txOrDb: DbOrTx = db): Promise<void> {
   await txOrDb
     .update(session)

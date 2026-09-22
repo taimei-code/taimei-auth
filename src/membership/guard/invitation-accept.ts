@@ -8,7 +8,6 @@ import { EmailMismatch, ExpiredOrUsed, NotFound } from "./errors";
 
 type InvitationAcceptGrant =
   | { mode: "proceed"; actor: Actor; invitation: InvitationRow }
-  // reused の分岐では handler が company_id しか使わないため、companyId だけに narrow する (PR #107 の規律)。
   | { mode: "reused"; companyId: string };
 
 export const requireInvitationAccept = Effect.fn("membership.requireInvitationAccept")(
@@ -21,7 +20,7 @@ export const requireInvitationAccept = Effect.fn("membership.requireInvitationAc
     if (!invitation) return yield* new NotFound();
     if (invitation.email.toLowerCase() !== actor.email.toLowerCase())
       return yield* new EmailMismatch();
-    // 既に所属していればここで返す (isAcceptable より先)。期限切れでも既所属なら 200 reused を返す冪等の契約を保つ。
+    // 既所属の判定は isAcceptableAt より先 (期限切れでも既所属なら reused を返す契約)。
     const existingMembership = yield* MembershipRepo.use((memberships) =>
       memberships.findMembership(actor.id, invitation.companyId),
     );

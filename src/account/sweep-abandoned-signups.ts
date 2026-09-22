@@ -9,7 +9,6 @@ type SweepReport = {
   deletedUserIds: string[];
 };
 
-// 候補の抽出から削除までの間に事業所が作成される race は、tx 内の deleteAccountIfOrphaned が再判定して防ぐ。
 export const sweepAbandonedSignups = Effect.fn("account.sweepAbandonedSignups")(function* (opts: {
   olderThanMs: number;
   execute: boolean;

@@ -4,7 +4,7 @@ import { captureCause } from "../sentry";
 import { spendAttemptBudget } from "../attempt-budget";
 import { Locked } from "./error-mapping";
 
-// セッションがある経路で 6 桁コードの総当たりを止める唯一の防御。
+// セッション有りの経路で 6 桁コードの総当たりを止める唯一の防御。
 
 const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
 
@@ -22,7 +22,7 @@ export const spendDisableAttempt = Effect.fn("mfa.spendDisableAttempt")(function
   if (verdict !== "accepted") return yield* new Locked();
 });
 
-// 消し損ねても処理は止めない。残った counter は TTL で消え、影響は次の枠が狭いままになることだけ。
+// 消し損ねは fail-open でよい。counter は TTL で消え、次の枠が狭いままになるだけ。
 export const resetDisableAttempts = Effect.fn("mfa.resetDisableAttempts")(function* (
   userId: string,
 ) {

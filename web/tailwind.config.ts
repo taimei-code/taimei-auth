@@ -4,7 +4,6 @@ import type { Config } from "tailwindcss";
 import formsPlugin from "@tailwindcss/forms";
 import animatePlugin from "tailwindcss-animate";
 
-// content のパスは CWD に依存しない絶対パスで書く (CLAUDE.md「リポジトリ共通規則」)
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 const config: Config = {

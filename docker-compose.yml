@@ -1,19 +1,11 @@
-# taimei-auth (認証サーバー) を単独で起動するための compose。
-# taimei (Next.js) と組み合わせる場合は、この compose を先に `docker compose up` してから
-# taimei 側の docker-compose.yml を起動する。
-# 共有ネットワーク `taimei-network` はこの compose が作成する。taimei 側は external として参照する。
-# サブドメインをまたぐ Cookie (.taimei-code.local) を成立させるため、auth-service には
-# network alias `auth.taimei-code.local` を付ける。
-
-# APP_ENV を build args に渡す理由は、web/vite.config.ts が define で APP_ENV を bundle に
-# 埋め込むため、build 時に値が決まっていないと Vite は "production" でビルドしてしまい、
-# services.ts の isLocalEnv が false になって localhost と .local が allowlist で弾かれるからである。
+# APP_ENV は web/vite.config.ts が define で bundle に埋め込むため build args で渡す (無いと "production" で build され、services.ts の isLocalEnv が false になって localhost と .local が allowlist で弾かれる)
 x-dev-build: &dev-build
   context: .
   target: dev
   args:
     APP_ENV: development
 
+# taimei 側の compose が external として参照する
 networks:
   taimei-network:
     name: taimei-network
@@ -38,14 +30,8 @@ services:
     networks:
       - taimei-network
 
-  # drizzle-kit migrate を起動のたびに実行する一回限りの service。
-  # auth-service の起動を depends_on (service_completed_successfully) で待たせて、
-  # schema が不整合のままサーバが起動して 500 を返すのを防ぐ。冪等なので毎回走らせて問題ない。
   auth-migrate:
     build: *dev-build
-    # drizzle migrate (自動管理分) の後に、手動の trigger SQL (drizzle/manual/) を適用する。
-    # trigger は drizzle-kit が管理しないため別のディレクトリに置く (db/CLAUDE.md ルール 8、PR #43)。
-    # psql client を image に入れず、drizzle-orm の sql.raw で実行する (db/migrate-manual.ts)。
     command: ["sh", "-c", "bun run db:migrate && bun run db:migrate-manual"]
     environment:
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
@@ -65,21 +51,16 @@ services:
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
-      # taimei (app.taimei-code.local:3001) とのサブドメインをまたぐ Cookie を成立させるため、
-      # localhost ではなく .taimei-code.local 系の host を使う。
+      # taimei (app.taimei-code.local:3001) とサブドメインをまたぐ Cookie を成立させるため localhost でなく .taimei-code.local の host を使う
       AUTH_SERVICE_URL: http://auth.taimei-code.local:3100
       AUTH_COOKIE_DOMAIN: taimei-code.local
       AUTH_TRUSTED_ORIGINS: http://app.taimei-code.local:3001,http://auth.taimei-code.local:3100
-      # MFA の secret とリカバリーコードを暗号化する鍵の一覧 (形式と手順は README「MFA 暗号鍵」節で定義する)
       MFA_TOTP_ENCRYPTION_KEYS: ${MFA_TOTP_ENCRYPTION_KEYS}
       APP_ENV: development
       APP_NAME: taimei
-      # taimei (application) と Cookie の署名検証を一致させるため、両方の compose に同じ開発用 secret を直接書いている。
-      # 本番ではこの環境変数を docker-compose 経由ではなく、ホスト側の secret manager などで注入する。
+      # taimei 側の compose と同じ値にする (Cookie の署名検証を一致させる)
       AUTH_SECRET: dev-secret-for-local-development-32chars
-      # ConnectRPC の X-Service-Key の検証に使う。taimei application の AUTH_SERVICE_KEY と一致している必要がある。
-      # .env 経由でも上書きできるが、両方の compose に同じ値を直接書いて、設定し忘れたまま検証が
-      # 気付かれずに省略される (index.ts の AUTH_SERVICE_KEY 未設定時の経路に入る) のを防ぐ。
+      # taimei 側の AUTH_SERVICE_KEY と同じ値にする。.env 任せにすると設定し忘れたまま検証が省略される経路に入るため直接書く
       AUTH_SERVICE_KEY: local-dev-key
       AUTH_SERVICE_KEY_PREVIOUS: ${AUTH_SERVICE_KEY_PREVIOUS:-}
     depends_on:
@@ -97,8 +78,7 @@ services:
           target: /app/db
         - action: rebuild
           path: package.json
-        # advisory への対応では bun.lock だけが変わるため、package.json の trigger では rebuild が
-        # 起きず、古い依存のまま QA してしまう。
+        # advisory 対応では bun.lock だけが変わり package.json の trigger では rebuild が起きない
         - action: rebuild
           path: bun.lock
     networks:

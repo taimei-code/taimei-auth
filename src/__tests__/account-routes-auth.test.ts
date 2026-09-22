@@ -2,10 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { mountAccountRoutes } from "../app";
 
-// cookie の無い未認証リクエストで全 account route が 401 を返すことを確認し、guard の呼び忘れ (認可の
-// 抜け) を検知する。getSession は cookie が無ければ null を返す (throw しても guard が fail-closed で
-// null として扱う) ため、この smoke テストは DB にも TTL store にも依存しない。
-// 登録は app.ts と同じ mountAccountRoutes を通すので、router への追加漏れ (guard を通らない route) も検知できる。
+// getSession は cookie が無ければ null (throw しても guard が fail-closed) なので、DB にも TTL store にも依存しない。
 const buildApp = () => {
   const app = new Hono();
   mountAccountRoutes(app);
@@ -48,8 +45,6 @@ describe("account routes は cookie 無しで全て 401", () => {
   }
 });
 
-// MFA の 4 route は個別の app.route ではなく mountAccountRoutes に登録する。外れると 404 になって上の 401
-// smoke テストの対象から外れ、guard を通らない route が気付かれないまま増える (認可の抜けを CI で検知できない)。
 describe("QA-M-15 MFA route が mountAccountRoutes 経由で登録される", () => {
   test("4 route すべてが mountAccountRoutes だけのアプリで 401 に解決する", async () => {
     const mfaRoutes = routes.filter(({ path }) => path.startsWith(MFA_ROUTE_PREFIX));

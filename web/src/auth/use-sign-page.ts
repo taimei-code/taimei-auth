@@ -8,7 +8,6 @@ import { invitationAcceptCallbackUrl } from "./sign-params";
 
 type SignSubmitting = "magic-link" | "github" | null;
 
-// 片方の画面だけ直して招待の経路が壊れる退行 (PR #116 と同じ形) を防ぐため、2 画面で共有する
 export function useSignPage(options: { preferSignUpUrl?: boolean; githubErrorFallback: string }) {
   const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");

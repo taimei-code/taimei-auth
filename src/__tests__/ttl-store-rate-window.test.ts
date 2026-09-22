@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { toRateWindowResult } from "../ttl-store";
 
-// incrementWindow の応答 (number) を RateWindowResult に変換する純関数のテスト。
 describe("toRateWindowResult", () => {
   const contractError = /^incrementRateWindow:/;
 

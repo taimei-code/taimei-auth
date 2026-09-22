@@ -11,9 +11,7 @@ import { auth } from "../auth";
 import { DbError } from "../errors";
 import { recordSentryExceptions } from "./sentry-recorder";
 
-// better-auth の router は hook や callback の throw を自分で受け止めて 500 Response を返し、`onAPIError.onError` にだけ渡す
-// (dist/api/index.mjs の onError)。src/auth.ts の onAPIError はこの機構を前提にしているので、その前提を better-auth の
-// version に対して固定する。production の auth は runtime を差し替えられないため、memoryAdapter の最小 instance を使う。
+// better-auth の router は hook の throw を自分で 500 にして onAPIError.onError にだけ渡す (dist/api/index.mjs)。production の auth は差し替えられないので memoryAdapter で組む。
 const thrown = new Error("boom");
 
 function buildThrowingAuth(phase: "hook" | "onRequest" | "endpoint-5xx" = "hook") {
@@ -78,8 +76,7 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
     expect(calls).toHaveLength(0);
   });
 
-  // better-call の router handler は onRequest を processRequest の try/catch の外で await する。rate limiter
-  // (secondaryStorage である TTL store) の throw はこの経路を通るため、onError には来ず auth.handler の reject になる (src/app.ts が拾う)。
+  // better-call は onRequest を processRequest の try/catch の外で await する (rate limiter の TTL store の throw はこの経路)。
   test("onRequest 段の throw は onError に来ず auth.handler が reject する", async () => {
     const { instance, calls } = buildThrowingAuth("onRequest");
     await expect(
@@ -88,8 +85,6 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
     expect(calls).toHaveLength(0);
   });
 
-  // dispatch は endpoint が throw した APIError を Response に変換するので、5xx であっても router の catch (onError) には来ない。
-  // onError の 5xx 分岐が拾うのは router middleware (originCheck) 由来の APIError だけで、endpoint 内部の 5xx は対象外である。
   test("endpoint 内で throw した 5xx APIError は 500 応答になるが onError には来ない", async () => {
     const { instance, calls } = buildThrowingAuth("endpoint-5xx");
     const res = await instance.handler(new Request("http://localhost:3000/api/auth/boom"));
@@ -98,14 +93,11 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
   });
 });
 
-// src/auth.ts の onAPIError.onError の結線を確認する (設計 AC-015〜020)。ctx (AuthContext) は handler が触らないので空で足りる。
 describe("src/auth.ts の onAPIError.onError", () => {
   const captured = recordSentryExceptions();
   const ctx = {} as AuthContext;
-  // auth.options は literal 型なので、better-auth の option 型 (ctx 引数と throw を持つ形) に広げて読む。
   const onAPIError = (auth.options as BetterAuthOptions).onAPIError;
-  // 結線の有無はテストの中で判定する。describe 本体で throw すると、bun は describe ごと落として "0 fail" のまま
-  // テスト数だけが減る (名前付きの失敗にならない)。
+  // describe 本体で throw すると、bun は describe ごと落として "0 fail" のままテスト数だけが減る。
   const onError = (error: unknown): unknown => {
     if (!onAPIError?.onError) throw new Error("src/auth.ts に onAPIError.onError が無い");
     return onAPIError.onError(error, ctx);
@@ -131,8 +123,6 @@ describe("src/auth.ts の onAPIError.onError", () => {
     expect(captured.length - n).toBe(0);
   });
 
-  // router middleware (originCheck) 由来の 5xx APIError が通る経路。endpoint 内部の 5xx APIError は dispatch が Response に
-  // 変換するので onError には来ない (上で固定した機構を参照)。
   test("5xx の APIError は better-auth 内部の失敗なので error で送る", () => {
     const n = captured.length;
     onError(new APIError("INTERNAL_SERVER_ERROR"));

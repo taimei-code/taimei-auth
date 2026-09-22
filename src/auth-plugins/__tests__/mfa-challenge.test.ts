@@ -30,11 +30,6 @@ import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
 
-// チャレンジ強制プラグイン (src/auth-plugins/mfa-challenge.ts) の統合テスト。
-// magic link は実際の HTTP 経路で動かす。OAuth (/callback/:id) は GitHub の資格情報が無いと
-// provider 自体が登録されないため、hook を実際の auth context を付けた transport ctx で直接呼ぶ
-// (状態の書き込みは本物である。実際の OAuth 連携の確認は手動台帳 QA-MR-02 で行う)。
-
 const P = "mfa-plugin-";
 const run = runTest(P);
 const sentry = installSentryRecorder();
@@ -67,10 +62,9 @@ const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
 
 const CHALLENGE_PAGE_PATH = "/auth/mfa";
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
-// baseURL が未設定の時は request の origin が採用されるため、テストがリクエストする origin と揃える。
+// baseURL 未設定では request の origin が採用されるため、テストの origin と揃える。
 const AUTH_ORIGIN = "http://localhost:3100";
 
-// テストが発行させたチャレンジの TTL store 上の状態を明示的に消す (TTL の期限切れを待たない)。
 const issuedIds: string[] = [];
 const trackChallengeFrom = (headers: Headers) =>
   peekLoginChallenge(headers).pipe(
@@ -103,8 +97,6 @@ type OAuthCallbackOutcome = {
   browserHeaders: Headers;
 };
 
-// after-hook が使う機能だけを持たせた transport ctx。context は実物 (internalAdapter と baseURL) を
-// そのまま持たせるので、セッションの破棄もチャレンジの発行も実際の TTL store と DB に反映される。
 const runOAuthCallbackHook = (
   newSession: { session: { token: string }; user: Record<string, unknown> } | null,
   runtime = getRuntime(),
@@ -150,7 +142,7 @@ const runOAuthCallbackHook = (
     return outcome;
   });
 
-// recorder の restore はファイル全体の最後に行う (後続の describe も同じ recorder を読む)。
+// 後続の describe も同じ recorder を読むため、restore はファイル全体の最後に行う。
 afterAll(() => sentry.restore());
 
 describe("チャレンジ強制プラグイン", () => {
@@ -173,9 +165,7 @@ describe("チャレンジ強制プラグイン", () => {
 
         expect(login.response.status).toBe(302);
         expect(login.location?.pathname).toBe(CHALLENGE_PAGE_PATH);
-        // 一次認証だけでセッションが作られると MFA が意味を持たなくなる。session cookie が 1 つも出ていないことが確認の中心になる。
         expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(0);
-        // チャレンジ cookie が実在することは、名前があるかではなく、そのまま読み戻せるかで確認する。
         expect(yield* readLoginChallengeState(browserHeaders)).toEqual({ pending: true });
         expect(yield* peekLoginChallenge(browserHeaders)).toMatchObject({
           userId: user.id,
@@ -211,7 +201,7 @@ describe("チャレンジ強制プラグイン", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e12");
         yield* enableMfaFor(user);
-        // リンクの発行と session の書き込みも ttlStorage.set を通るため、失敗の注入はチャレンジの key に限る。
+        // リンク発行と session 書き込みも ttlStorage.set を通るため、失敗の注入はチャレンジの key に限る。
         const link = yield* requestMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
         const originalSet = ttlStorage.set.bind(ttlStorage);
 
@@ -226,7 +216,6 @@ describe("チャレンジ強制プラグイン", () => {
           () => followMagicLink(link),
         );
 
-        // 元の 302 をそのまま通す fail-open にすると、MFA を有効にした user が第二要素なしでセッションを得てしまう。
         expect(login.location?.pathname).toBe(CHALLENGE_PAGE_PATH);
         expect(login.location?.toString()).not.toBe(CONSUMER_CALLBACK);
         expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(0);
@@ -262,7 +251,6 @@ describe("チャレンジ強制プラグイン", () => {
         );
 
         expect(login.location?.pathname).toBe(CHALLENGE_PAGE_PATH);
-        // 破棄が失敗しても、cookie が出ていなければブラウザは使えるセッションを持たない。
         expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(0);
         expect(yield* readLoginChallengeState(browserCookieHeaders(login.response))).toEqual({
           pending: true,
@@ -293,15 +281,12 @@ describe("チャレンジ強制プラグイン", () => {
               expect(login.location?.toString()).toBe(CONSUMER_CALLBACK);
               expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(1);
             }
-            // 停止中であることは通知したいが、すべてのログインで警告を出すとノイズに埋もれる。
             expect(killSwitchWarnings().length).toBe(1);
             expect(killSwitchWarnings()[0]?.message).toBe(
               "mfa: challenge enforcement disabled by kill switch",
             );
             expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
 
-            // 間隔を越えたら再び通知する。1 回きりだと、常駐する isolate が初回以降ずっと通知しなくなる。時計を進めても
-            // 安全なのは、kill switch の判定が介入より前で return するため。
             const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
             yield* withClockAt(
               afterInterval,
@@ -359,15 +344,12 @@ describe("チャレンジ強制プラグイン", () => {
         const user = yield* db.seedUser("r02");
         const enabled = yield* enableMfaFor(user);
 
-        // accountLinking は既存のセッションのまま /callback/:id を通り、新しいセッションを作らない。
         const linking = yield* runOAuthCallbackHook(null);
 
         expect(linking.redirectedTo).toBeNull();
         expect(linking.newSessionUpdates).toEqual([]);
         expect(yield* countLiveSessions([enabled.session.token])).toBe(1);
 
-        // 同じ route でも、一次認証としてセッションが作られた時は介入する (matcher が動いている証拠)。
-        // チャレンジの要否は自前の mfa_totp 行から導出されるため、user object に flag は要らない。
         const signingIn = yield* runOAuthCallbackHook({
           session: { token: enabled.session.token },
           user: { id: user.id },
@@ -381,9 +363,7 @@ describe("チャレンジ強制プラグイン", () => {
     ));
 });
 
-// program 単体のテスト。偽の Layer を内側で provide し、判定、介入、kill switch の各分岐を DB に依存せずに固定する。
-// kill switch の最終通知時刻は module-level の Ref で QA-D-11 と共有するため、この describe は QA-D-11 の後に置き、
-// 時計は QA-D-11 が残した値より INTERVAL 以上先から始める (初回の通知を確実に起こすため)。
+// kill switch の最終通知時刻は module-level の Ref で QA-D-11 と共有するため、この describe は QA-D-11 の後に置き、時計は INTERVAL 以上先から始める。
 describe("enforceChallenge (program 単体)", () => {
   beforeEach(() => sentry.reset());
 
@@ -414,7 +394,6 @@ describe("enforceChallenge (program 単体)", () => {
         Effect.fail(new DbError({ cause: new Error("mfa_totp unavailable") })),
     }),
   );
-  // method を渡さない partial は呼ばれた時点で die するので、呼び出しが 0 回であることの決定的な証拠になる。
   const repoUntouched = Layer.succeed(MfaTotpRepo, partial<MfaTotpRepo["Service"]>({}));
   const ttlStoreUntouched = Layer.succeed(TtlStore, partial<TtlStore["Service"]>({}));
   const untouched = Layer.mergeAll(
@@ -581,7 +560,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  // kill switch が off の 4 ケース。時計の起点は、QA-D-11 が残した「実時刻 + INTERVAL + 1」より INTERVAL 以上先に置く。
+  // 時計の起点は QA-D-11 が残した値より INTERVAL 以上先に置く。
 
   test("AC-001 kill switch off は Pass、判定も介入も 0 回", () =>
     run(
@@ -616,7 +595,7 @@ describe("enforceChallenge (program 単体)", () => {
     run(
       Effect.gen(function* () {
         const layer = Layer.mergeAll(mfaEnabled, untouched);
-        // AC-002 が残した値より INTERVAL 以上先に置き、ここで最終通知時刻を t0 に確定させる。
+        // AC-002 が残した値より INTERVAL 以上先に置く。
         const t0 = Date.now() + 6 * KILL_SWITCH_REPORT_INTERVAL_MS;
         const at = (offset: number) =>
           withClockAt(t0 + offset, decide(killSwitchOff(), layer)).pipe(

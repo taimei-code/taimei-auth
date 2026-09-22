@@ -33,8 +33,7 @@ const seedUser = (suffix: string) =>
     return u.id;
   });
 
-// better-auth の secondaryStorage が実際に保存する形を再現する。session の実体は token 文字列をキーに持ち、
-// user の有効な session の一覧は active-sessions-{userId} (deleteUserSessions が読む索引) に持つ。
+// better-auth の secondaryStorage の保存形 (session は token キー、索引は active-sessions-{userId}) を再現する。
 const seedSessions = (userId: string, tokens: string[]) =>
   Effect.sync(() => {
     const s = getMemoryKvStore();
@@ -115,9 +114,7 @@ describe("deleteAccountIfOrphaned", () => {
       }),
     ));
 
-  // secondaryStorage の構成では session の実体は TTL store にしか無い (Postgres の session テーブルは常に空)。
-  // DB 側の revoke だけでは削除済み user の session が生き残り、その cookie で事業所作成を呼ぶと
-  // membership の insert が FK 違反で 500 になる障害が実際にあった。orphan の削除は TTL store 側も purge すること。
+  // secondaryStorage 構成では session の実体は TTL store にしか無い (Postgres の session テーブルは常に空)。
   test("orphan 削除は secondaryStorage (TTL store) の session 実体と索引も purge する", () =>
     run(
       Effect.gen(function* () {

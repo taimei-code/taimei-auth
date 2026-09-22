@@ -7,8 +7,6 @@ import { DbError } from "../../errors";
 import { Forbidden } from "../../membership/guard/errors";
 import { runMiddleware, runRoute } from "../run-route";
 
-// design §3.2 (2 次・3 次改訂) では runRoute が唯一の変換点である。failure は client-facing 応答に、boundary error / defect / interrupt は
-// Sentry 送信と 500 にする。Hono が Error を握りつぶすため adapter が自分で Sentry に送る (AC-010〜015, 060, 061)。
 const captured = recordSentryExceptions();
 
 const boom = new Error("boom");
@@ -139,7 +137,6 @@ describe("runRoute", () => {
     const collected: Promise<unknown>[] = [];
     const p = Promise.resolve("bg");
     const app = new Hono();
-    // Effect.sleep で fiber を一度 suspend させ、scheduler の resume を挟んだ後でも ALS store が残ることを見る。
     app.get("/bg", (c) =>
       runRoute(
         c,

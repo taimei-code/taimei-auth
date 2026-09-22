@@ -6,10 +6,6 @@ import { toDisplayText } from "../../email/sanitize";
 import { acceptInvitationPath } from "../accept-path";
 import { resolveInvitationEmailContext } from "../resolve-email-context";
 
-// magic link URL の callbackURL に invitation_token が含まれていれば、招待メールの文脈
-// (company 名 / 招待者 / roleLabel) を DB から解決する分岐の統合テスト。
-// null を返すと通常の magic link メールへ fallback するため、null 側の分岐も固定する。
-
 const P = "rec-test-";
 const { run, cleanup } = dbTest(P);
 
@@ -109,8 +105,4 @@ describe("resolveInvitationEmailContext", () => {
         expect(context).toBeNull();
       }),
     ));
-
-  // inviter 不在時に空文字で続ける分岐と company 不在時に null を返す分岐は、invitation の FK (invited_by_user_id と
-  // company_id の両方が onDelete: cascade) により invitation 行が残ったまま参照先だけ消える状態を
-  // DB 上に作れないため、実装側の防御的な分岐としてテスト対象外とする。
 });

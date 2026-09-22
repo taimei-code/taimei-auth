@@ -10,10 +10,6 @@ import {
 import { TestDb } from "../../__tests__/test-db";
 import { switchCompany } from "../switch-company";
 
-// switch-company use-case (src/account/switch-company.ts) の DB 統合テスト。
-// 同じ company への切り替えで短絡して tx を開かないこと、非メンバーで 403 になること、tx 内で findMembership を再取得する TOCTOU 再検証の 3 つを検証する。
-// 認可 (session の確認) は Guard 層 (requireActor) の責務である。
-
 const P = "swco-test-";
 const { run, cleanup } = dbTest(P);
 
@@ -76,8 +72,6 @@ describe("switchCompany", () => {
         const co2 = yield* db.seedCompany("nm-b");
         const u = yield* db.seedUser("nm", { lastUsedCompanyId: co1 });
         yield* db.seedMembership(u.id, co1, "OWNER");
-        // co2 には所属させない。
-
         const e = yield* Effect.flip(
           switchCompany({ actorUserId: u.id, fromCompanyId: co1, targetCompanyId: co2 }),
         );
@@ -90,9 +84,6 @@ describe("switchCompany", () => {
   test("QA-E-05 tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden", () =>
     run(
       Effect.gen(function* () {
-        // tx 内で findMembership を再取得し、tx 外の事前確認と更新の間に除名 (別 tx の
-        // deleteMembership) が入った場合は forbidden を返す。tx 外の事前確認だけに退化すると、
-        // 無効な company_id が気付かれないまま last_used に書き込まれる。
         const db = yield* TestDb;
         const co1 = yield* db.seedCompany("toctou-a");
         const co2 = yield* db.seedCompany("toctou-b");
@@ -100,9 +91,7 @@ describe("switchCompany", () => {
         yield* db.seedMembership(u.id, co1, "OWNER");
         yield* db.seedMembership(u.id, co2, "MEMBER");
 
-        // 事前に co2 の membership を削除して、tx 内の findMembership が null を返す状態を作る。
-        // (本当の race を再現するには実行時の介入が要るが、tx 外の確認を持たない現行の use-case では
-        // 「tx の開始時点で既に無い」ケースも同じ経路を通るため、この simulation で契約の検証が成立する)。
+        // use-case は tx 外の事前確認を持たないため、tx 開始時点で既に無いケースが race と同じ経路を通る。
         yield* db.removeMembership(u.id, co2);
 
         const e = yield* Effect.flip(

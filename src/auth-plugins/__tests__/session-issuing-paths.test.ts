@@ -30,8 +30,7 @@ const registeredRoutePaths = (): string[] =>
     .filter((path): path is string => typeof path === "string")
     .sort();
 
-// better-auth 1.6.23 (twoFactor プラグイン無し) が登録する全 route。version を上げて増減したら、増えた route が一次認証の
-// セッション発行経路かどうかを分類し直すこと (allowlist の網羅性は、この pin だけが検知できる)。
+// better-auth 1.6.23 (twoFactor 無し) の全 route。version を上げて増減したら、一次認証のセッション発行経路かどうかを分類し直す。
 const EXPECTED_ROUTE_CATALOG = [
   "/account-info",
   "/callback/:id",

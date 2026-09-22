@@ -4,9 +4,6 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { parseZodBody, parseZodBodyWithDetails } from "../parse-body";
 
-// 400 への変換は adapter (run-route.ts) の責務で、account-routes-migrated.test.ts が検証する。
-// ここは Effect が返す data と InvalidArgument.details のユニット境界だけを固定する (AC-035)。
-
 const schema = z.object({ name: z.string().min(1) });
 const renamed = schema.transform((d) => ({ upper: d.name.toUpperCase() }));
 

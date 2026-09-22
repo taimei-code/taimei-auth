@@ -19,7 +19,6 @@ const seedUserAt = (suffix: string, createdAt: Date) =>
 const userExists = (id: string) =>
   TestDb.use((db) => db.readUser(id)).pipe(Effect.map((row) => row !== undefined));
 
-// signup を途中で放棄した user (古く、所属 0 件)、直近に signup した user (新しく、所属 0 件)、所属のある user (古いが ACTIVE な所属あり) を作る。
 const seedScenario = Effect.gen(function* () {
   const db = yield* TestDb;
   const old = new Date(Date.now() - 2 * TTL_MS);

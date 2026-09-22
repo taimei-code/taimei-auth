@@ -11,7 +11,7 @@ export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Prom
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
-// 事業所削除と membership を減らす変更を同じ OWNER 行で競合させる。WHERE を片方だけ変えると、直列化が気付かれないまま外れる。
+// 事業所削除と membership を減らす変更を同じ OWNER 行で競合させる。WHERE を片方だけ変えると直列化が外れる。
 export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
   await tx.execute(
     sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
@@ -121,7 +121,7 @@ export async function findMembership(
     .then((rows) => rows.at(0));
 }
 
-// tx を必須にするのは、autocommit だと FOR SHARE lock が statement の終了時に解放されて TOCTOU が再発するため。
+// autocommit だと FOR SHARE が statement 終了で解放され TOCTOU が再発するため tx 必須。
 export async function lockMembershipForShare(
   tx: DbTx,
   userId: string,

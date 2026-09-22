@@ -13,7 +13,6 @@ type Write = (
 
 const orNotFound = Effect.filterOrFail(Predicate.isNotUndefined, () => new NotFound());
 
-// tx 外で読んだ role で「OWNER が減るか」を判定すると、並行する transfer で OWNER が 0 になるため常に lock する。
 const keepingAnOwner = Effect.fn("membership.keepingAnOwner")(function* (
   tx: DbTx,
   companyId: string,

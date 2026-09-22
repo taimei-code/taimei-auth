@@ -1,7 +1,7 @@
 import { acceptInvitationPath } from "@core/invitation/accept-path";
 import { signInParamsObjectSchema } from "@core/sign-in-params";
 
-// 画面間のリンクで error=signin_failed などの古い param を引き継がせないための allowlist
+// error=signin_failed などの古い param を画面間で引き継がせない
 const ALLOWLIST = Object.keys(signInParamsObjectSchema.shape);
 
 export const buildSignParams = (searchParams: URLSearchParams): string => {

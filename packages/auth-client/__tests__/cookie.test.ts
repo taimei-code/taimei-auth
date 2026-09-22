@@ -37,7 +37,6 @@ describe("getSessionToken", () => {
   });
 
   test("両方存在する場合は配列順 (HTTP 名が先) に従い HTTP 側を返す", () => {
-    // 実運用では HTTP 用か HTTPS 用のどちらか一方しか発行されないため、両方あるのは理論上のケースである。
     expect(
       getSessionToken(
         makeReader({
@@ -100,16 +99,13 @@ describe("extractSessionTokenFromCookieHeader", () => {
   });
 
   test("値に '=' が含まれていても全体を返す (split ではなく indexOf で 1 回区切り)", () => {
-    // JWT 形式やパディングを含む token は '=' を含む可能性があるため、最初の '=' だけを区切りとして扱う。
     expect(extractSessionTokenFromCookieHeader("better-auth.session_token=tok=abc=def")).toBe(
       "tok=abc=def",
     );
   });
 });
 
-// server 側の発行者との往復は src/__tests__/session-cookie-contract.test.ts が固定する (CONTEXT.md「session cookie」を参照)。
 describe("session cookie 契約の SDK 側", () => {
-  // 44 文字の標準 base64 署名 (`+` `/` `=` を含む) を模した生の値。
   const SIGNED = `tok-abc.${"A".repeat(20)}+/${"B".repeat(21)}=`;
 
   test("build → extract の往復で + / = を含む raw 値がそのまま戻る", () => {

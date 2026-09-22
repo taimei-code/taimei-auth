@@ -20,7 +20,6 @@ const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
   const issuer = yield* MfaIssuer.use((i) => i.appName);
 
   const secret = yield* Effect.promise(() => decryptValue(ring, secretCipher(row), actor.id));
-  // 有効化前は消費する経路が無いため、全件が未使用のまま残っている。
   const stored = yield* MfaTotpRepo.use((mfa) => mfa.listUnusedRecoveryCodes(actor.id));
   const recoveryCodes = yield* Effect.all(
     stored.map((code) => Effect.promise(() => decryptText(ring, codeCipher(code), actor.id))),
@@ -90,7 +89,7 @@ export const enroll = Effect.fn("mfa.enroll")(function* (input: { actor: MfaTotp
     } satisfies TotpEnrollmentMaterial;
   }
 
-  // 並行して負けた側は再読して勝者の内容に合わせる。行が消えていた場合は「もう一度最初から」として扱う。
+  // 並行して負けた側は勝者の内容を返す。行が消えていれば最初からやり直させる。
   const winner = yield* mfa.findMfaTotp(input.actor.id);
   if (!winner) return yield* new ChallengeExpired();
   return yield* replayPendingEnrollment(input.actor, winner);

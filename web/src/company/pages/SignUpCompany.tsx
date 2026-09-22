@@ -30,7 +30,7 @@ import { createCompany, type OrgCode } from "../company-api";
 
 type GuardStatus = "loading" | "needs-input" | "already-has-company";
 
-// server の guard はこのパスを除外し、SessionGuard も /auth/* を覆わないため、client の guard をここに置く
+// server の guard はこのパスを除外し SessionGuard も /auth/* を覆わないため、guard をここに置く
 export const SignUpCompany = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -59,7 +59,7 @@ export const SignUpCompany = () => {
         return listMyMemberships();
       })
       .then((memberships) => {
-        if (memberships === null) return; // 未認証のため既に redirect している
+        if (memberships === null) return;
         if (memberships.length > 0) {
           setStatus("already-has-company");
           window.location.replace(redirectUrl);
@@ -84,7 +84,7 @@ export const SignUpCompany = () => {
     createCompany({ name: name.trim(), org_code: orgCode })
       .then(() => window.location.replace(redirectUrl))
       .catch((err) => {
-        // 別 tab で同じ user の CreateCompany が成功している (409) ので、そのまま redirect する。
+        // 409 は別 tab で作成済み
         if (err instanceof RequestJsonError && err.status === 409) {
           window.location.replace(redirectUrl);
           return;

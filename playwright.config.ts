@@ -1,15 +1,12 @@
 import { defineConfig } from "@playwright/test";
 
-// e2e は、実際のブラウザでしか再現しない動線 (magic link の着地、SessionGuard、役割別の UI) の
-// スモークテストである。compose の 3100 と衝突しない 3110 で専用のサーバを立て、magic link は
-// local 環境の console 出力 (e2e/.server.log) から取得する。
-// spec のファイル名は *.e2e.ts にする。*.test.ts や *.spec.ts にすると bun test が拾って二重に実行される。
+// spec は *.e2e.ts にする (*.test.ts や *.spec.ts だと bun test も拾って二重に実行される)
 const PORT = 3110;
 
 export default defineConfig({
   testDir: "./e2e",
   testMatch: /.*\.e2e\.ts/,
-  // magic link のログと seed データを全 spec が共有するため、直列実行に固定する
+  // magic link のログと seed データを全 spec が共有するため直列
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,

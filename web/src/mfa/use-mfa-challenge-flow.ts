@@ -20,7 +20,7 @@ export const mfaChallengePort: ChallengePort = {
       return pending ? { kind: "present" } : { kind: "absent" };
     } catch (error) {
       if (signal.aborted) throw error;
-      // 通信失敗も形の崩れた 2xx も、チャレンジが無いとは推測せず、入力を許す状態として扱う。
+      // 通信失敗も崩れた 2xx も absent とは推測せず、入力を許す
       return { kind: "unavailable" };
     }
   },
@@ -44,7 +44,7 @@ export type MfaChallengeFlow = {
 const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
   state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
-// port は useEffect の依存に入る。render ごとに新しい object を渡すと、観測用 GET の abort と再実行が繰り返される。
+// port は useEffect の依存なので、render ごとに新しい object を渡すと観測用 GET の abort と再実行を繰り返す
 export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): MfaChallengeFlow {
   const [state, dispatch] = useReducer(
     reduceMfaChallengeFlow<MfaErrorCode>,
@@ -64,7 +64,6 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
           dispatch({ type: "observation_resolved", observation });
         }
       })
-      // 想定外の reject でも observing のまま止めず、入力を許す unavailable にする。
       .catch(() => {
         if (!controller.signal.aborted) {
           dispatch({
@@ -99,7 +98,7 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
           dispatch({ type: "verification_resolved", verification });
         }
       })
-      // "unknown" に固定しないと、終端である challenge_expired が ready の状態に入り、有効な入力欄と並んで表示される。
+      // "unknown" 固定。終端の challenge_expired を ready に入れると有効な入力欄と並ぶ
       .catch(() => {
         if (!controller.signal.aborted) {
           dispatch({
@@ -116,7 +115,7 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
   const entry = useMfaCodeInput({
     inputId: "mfa-challenge-code",
     submitting: state.phase === "verifying",
-    // expired へ移った直後に直前の失敗文言が残ると、打ち直せば通るように読めてしまうため出さない。
+    // expired では直前の失敗文言を出さない (打ち直せば通るように読める)
     errorCode: state.phase === "ready" ? state.errorCode : null,
     submit,
     onKindChange: () => dispatch({ type: "error_cleared" }),
@@ -125,7 +124,6 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
   const redirectUrl = state.phase === "redirecting" ? state.redirectUrl : null;
   useEffect(() => {
     if (redirectUrl !== null) {
-      // redirect 先の検証は auth ホストの出口で行う (client 側では再検証しない)。
       window.location.assign(redirectUrl);
     }
   }, [redirectUrl]);

@@ -51,6 +51,6 @@ function causeToConnectError(cause: Cause.Cause<RouteError | RpcError>): Connect
   });
   if (failure instanceof RpcError) return new ConnectError(failure.message, failure.code);
   if (failure) return new ConnectError(failure.error, statusToCode(failure.status));
-  // consumer は message を表示に使うため、Code.Unknown と元の message を保ち "internal error" に置き換えない。
+  // consumer は message を表示に使うため、"internal error" に置き換えない。
   return ConnectError.from(reported[0]);
 }

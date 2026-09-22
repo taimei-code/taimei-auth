@@ -5,7 +5,7 @@ plugins:
     out: src/gen
     include_imports: true
     opt: target=ts
-  # SDK 側のコピー。cp では削除や rename が反映されないため、buf に両方を書かせる (clean: true が両方のディレクトリを消してから生成する)。
+  # SDK 側のコピー。cp では削除や rename が反映されないため buf に両方へ生成させる
   - local: protoc-gen-es
     out: packages/auth-client/src/gen
     include_imports: true

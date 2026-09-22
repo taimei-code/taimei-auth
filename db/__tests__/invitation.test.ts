@@ -135,7 +135,6 @@ describe("invitation repository", () => {
     const after = await listPendingInvitations(companyId);
     expect(after.length).toBe(0);
 
-    // 二重に revoke すると undefined が返る
     expect(await markInvitationRevoked(id, companyId)).toBeUndefined();
   });
 });
