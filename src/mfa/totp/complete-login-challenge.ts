@@ -20,7 +20,7 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   const challenge = yield* peekLoginChallenge(headers);
   if (!challenge) return yield* new ChallengeExpired();
 
-  // 上限に達したらチャレンジを破棄して invalid_code を返し、SPA の「再照会して expired を表示する」契約を保つ。
+  // 枯渇時は破棄して invalid_code のまま。SPA は再照会して expired を出す契約。
   const attempt = yield* spendLoginChallengeAttempt(challenge.challengeId);
   if (attempt === "unavailable") return yield* new Locked();
   if (attempt === "exhausted") {
@@ -28,14 +28,14 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
     return yield* new InvalidCode();
   }
 
-  // コードの消費をチャレンジの消費より後に置くのは、並行して負けたときに再生成できないリカバリーコードを使い切らないため。
+  // コードの消費はチャレンジの消費より後。逆順だと並行して負けた側が再生成できないリカバリーコードを使い切る。
   const matched = yield* matchOwnedCode(challenge.userId, input).pipe(
     Effect.catchTag("NotEnabled", () => new ChallengeExpired()),
   );
   const clearCookie = yield* consumeLoginChallenge(challenge.challengeId);
   yield* consumeMatchedCode(challenge.userId, matched);
 
-  // ここから先は巻き戻せないため、失敗をそのまま伝播させる。成功扱いにすると session の無い成功応答になる。
+  // 失敗を握ると session の無い成功応答になる。
   const sessionHeaders = yield* MfaSessions.use((s) => s.issueSession(challenge.userId));
 
   const { ip, userAgent } = getClientContext(headers);
@@ -45,10 +45,10 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
     payload: { method: challenge.method, ip, userAgent },
   });
 
-  // append で追加する。set だと後段が前段の Set-Cookie を消してしまう。
+  // set だと前段の Set-Cookie が消える。
   for (const cookie of clearCookie.getSetCookie()) sessionHeaders.append("set-cookie", cookie);
 
-  // 返す直前に検証する。AUTH_TRUSTED_ORIGINS は保存してから取り出すまでの間に変わりうる。
+  // 保存時でなく返す直前に検証する。AUTH_TRUSTED_ORIGINS はその間に変わりうる。
   return {
     redirectUrl: yield* validateChallengeRedirect(challenge.redirectUrl),
     forwardedHeaders: sessionHeaders,

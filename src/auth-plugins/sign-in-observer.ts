@@ -14,8 +14,6 @@ import {
   type PrimaryAuthRoute,
 } from "./primary-auth-routes";
 
-// mfa-challenge の後に登録し、newSession が null にされていればスキップする。この登録順が前提になる (ADR-0013)。
-
 const NEW_USER_THRESHOLD_MS = 10000;
 
 type SignedIn = {
@@ -31,7 +29,6 @@ export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (i
   const now = yield* Clock.currentTimeMillis;
 
   if (now - new Date(user.createdAt).getTime() < NEW_USER_THRESHOLD_MS) {
-    // Workers では fire-and-forget を waitUntil 経由にしないと "hung" になる。
     yield* background.run(
       email
         .sendWelcome(user.email, toDisplayText(user.name))
@@ -41,7 +38,7 @@ export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (i
 
   if (input.route._tag === "Unmapped") return;
 
-  // 型付きの property に関数呼び出しの結果や spread を渡すと excess-property check が働かず、余分な項目が気付かれないまま入る。
+  // 型付き property に spread や関数の戻りを渡すと excess-property check が効かず、余分な項目が混入する。
   const { ip, userAgent } = getClientContext(input.headers);
   yield* background.run(
     appendAuditLogBestEffort({
@@ -54,6 +51,7 @@ export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (i
 
 const observeSignIn = (runtime: AppRuntime) =>
   createAuthMiddleware(async (ctx) => {
+    // mfa-challenge の後に登録される前提で、null にされた newSession は skip する。
     const establishedSession = ctx.context.newSession;
     if (!establishedSession) return;
     await runtime.runPromise(

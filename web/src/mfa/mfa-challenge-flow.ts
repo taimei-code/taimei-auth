@@ -17,7 +17,7 @@ export type MfaChallengeVerification<ErrorCode extends string> =
 
 export type MfaChallengePort<Input, ErrorCode extends string> = {
   observe(signal: AbortSignal): Promise<MfaChallengeObservation>;
-  // expired を終端と判断するのは resolveMfaChallengeVerification なので、port からは Exclude で外す。
+  // expired の判定は resolveMfaChallengeVerification が行う
   verify(input: Input): Promise<Exclude<MfaChallengeVerification<ErrorCode>, { kind: "expired" }>>;
 };
 

@@ -8,7 +8,7 @@ import { matchTotpCode } from "./totp-engine";
 
 type MatchedOwnedCode = { kind: "totp"; timestep: number } | { kind: "recovery_code"; id: string };
 
-// リカバリーコードは一様乱数で attacker が制御できる秘密との相関が無いため、等値比較の timing サイドチャネルは許容する。
+// リカバリーコードは一様乱数で attacker が制御する値と相関しないため、等値比較の timing 差は許容する。
 export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (
   userId: string,
   input: { code: string; kind: MfaCodeKind },
@@ -34,7 +34,7 @@ export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (
   return yield* new InvalidCode();
 });
 
-// リプレイ、過去の timestep、並行して負けた側は、条件付きの単一 statement の WHERE が拒否する。
+// リプレイ・過去の timestep・並行して負けた側は単一 statement の WHERE が拒否する (app 側で読んで判定しない)。
 export const consumeMatchedCode = Effect.fn("mfa.consumeMatchedCode")(function* (
   userId: string,
   matched: MatchedOwnedCode,

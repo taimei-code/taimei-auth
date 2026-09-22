@@ -11,8 +11,6 @@ import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
 
-// 招待者の再検証を tx 内に置くのは、降格の UPDATE が割り込む TOCTOU の隙間を無くすため。
-
 const ACCEPT_REJECTED_LOG = "invitation_accept_rejected" as const;
 
 class DoubleAccept extends Data.TaggedError("DoubleAccept") {
@@ -94,7 +92,7 @@ const recordRejectionAndFail = Effect.fn("invitation.accept.recordRejection")(fu
     inviter: rejected.inviter,
     reason: rejected.reason,
   };
-  // console.warn を DB 書き込みの前に置くのは、DB に接続できなくても痕跡を残すため。この行の形式は運用の log filter が前提にしている。
+  // warn は DB 書き込みの前 (DB 不通でも痕跡を残す)。この行の形式は運用の log filter が前提にしている。
   yield* Effect.sync(() => console.warn(ACCEPT_REJECTED_LOG, JSON.stringify(payload)));
   yield* audit
     .recordInvitationAcceptRejected(payload)

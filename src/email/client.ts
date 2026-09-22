@@ -12,7 +12,7 @@ export const renderAndSendEmail = Effect.fn("email.renderAndSend")(function* (pa
   component: ReactElement;
   kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }) {
-  // workerd の bundle では render の lazy な CJS 初期化が走らず undefined になるため、dynamic import で module の初期化を強制する。
+  // workerd の bundle では static import の render が undefined になる (lazy な CJS 初期化が走らない)。
   const { render } = yield* tryEmail(() => import("@react-email/components"));
   const [html, text] = yield* Effect.all(
     [
@@ -52,7 +52,7 @@ function getResendClient(): Resend {
   return resendInstance;
 }
 
-// env は呼び出しごとに読む (module ロード時に固定すると、worker の再バインドやテストでの差し替えが反映されない)。
+// module ロード時に固定すると worker の再バインドやテストの差し替えが効かない。
 const envOr = (key: string, fallback: string): string => process.env[key] || fallback;
 
 export const getWelcomeFromEmail = () => envOr("AUTH_FROM_EMAIL_WELCOME", "onboarding@resend.dev");

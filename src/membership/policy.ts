@@ -1,4 +1,4 @@
-// 相対 import にするのは、web 側の "@/" alias として誤って解決されるのを避けるため。
+// 相対 import ("@/" は web 側の alias として解決される)。
 import type { InviterSeen, Role } from "../../db/repositories/membership";
 
 export type { Role } from "../../db/repositories/membership";
@@ -14,7 +14,6 @@ export function canChangeRole(actorRole: Role, beforeRole: Role, nextRole: Role)
   return touchesOwner ? actorRole === "OWNER" : true;
 }
 
-// ADMIN が invitation 経由で OWNER を作り出す抜け道を塞ぐ (Issue #104)。
 export function canInviteRole(actorRole: Role, invitedRole: Role): boolean {
   return invitedRole === "OWNER" ? actorRole === "OWNER" : true;
 }

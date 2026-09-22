@@ -50,7 +50,7 @@ export function registerUserService(router: ConnectRouter) {
     deleteUser: (req) =>
       runRpc(
         Effect.gen(function* () {
-          // 事前チェックと delete を同じ tx に置き、チェック後に actor が OWNER へ昇格される race を避ける。
+          // チェックと delete を同じ tx に置き、チェック後に OWNER へ昇格される race を避ける。
           const memberships = yield* MembershipRepo;
           const tx = yield* Transaction;
           const row = yield* tx.run(
@@ -65,7 +65,7 @@ export function registerUserService(router: ConnectRouter) {
               return yield* deleteAccount(req.userId, t);
             }),
           );
-          // NotFound は tx の外で判定する (tx 内で失敗にすると deleteAccount の audit 行まで rollback される)。
+          // tx 内で NotFound にすると deleteAccount の audit 行まで rollback される。
           if (!row) return yield* new RpcError({ code: Code.NotFound, message: "User not found" });
           return { success: true };
         }),

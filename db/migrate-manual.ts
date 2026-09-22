@@ -19,7 +19,7 @@ if (sqlFilesInApplyOrder.length === 0) {
   process.exit(0);
 }
 
-// 複数ファイルのうち一部だけが適用された状態を防ぐため、全体を 1 つの transaction で実行する (PostgreSQL の DDL は rollback できる)。
+// 一部だけ適用された状態を防ぐため 1 tx にまとめる (PostgreSQL の DDL は rollback できる)。
 await db.transaction(async (tx) => {
   for (const f of sqlFilesInApplyOrder) {
     const content = readFileSync(join(manualDir, f), "utf-8");

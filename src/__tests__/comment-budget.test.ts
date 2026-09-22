@@ -4,8 +4,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./grep-files";
 
-// 2026-09-10 に実測した値。ブロック数を増減させた PR は、必ずこの値を実測に合わせて更新する。
-const BUDGET = 242;
+// ブロック数を増減させた PR は、この値を実測に合わせて更新する。
+const BUDGET = 184;
 const DIRS = ["src", "db", "management", "web/src"];
 const EXEMPT = [
   "src/request-context.ts",

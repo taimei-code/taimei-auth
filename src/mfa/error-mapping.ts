@@ -11,7 +11,7 @@ export class Locked extends Data.TaggedError("Locked") {
   readonly status = 429 as const;
 }
 
-// cookie 無し、改ざん、期限切れ、消費済みのすべてをここに集め、どの段階で失敗したかを外に漏らさない。
+// cookie 無し・改ざん・期限切れ・消費済みを 1 つに集め、どの段階で失敗したかを漏らさない。
 export class ChallengeExpired extends Data.TaggedError("ChallengeExpired") {
   readonly error = "challenge_expired" as const;
   readonly status = 401 as const;
@@ -32,7 +32,6 @@ export class NotEnabled extends Data.TaggedError("NotEnabled") {
   readonly status = 409 as const;
 }
 
-// MfaNotFound という名前は、同じ error code を持つ guard の NotFound と区別して読めるようにするため。
 export class MfaNotFound extends Data.TaggedError("MfaNotFound") {
   readonly error = "not_found" as const;
   readonly status = 404 as const;

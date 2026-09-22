@@ -1,9 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// `vite build --config web/vite.config.ts` を taimei-auth の root から実行すると、
-// PostCSS の CWD は taimei-auth/ になり、tailwind が web/tailwind.config.ts を見つけられない。
-// 絶対パスで明示し、実行時の CWD に依存せず解決できるようにする。
+// root からの vite build では PostCSS の CWD が root になり、相対パスだと tailwind.config.ts を見失う
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default {

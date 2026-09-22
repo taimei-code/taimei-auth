@@ -4,7 +4,6 @@ import { AuditLog } from "../audit/ports";
 import { UserRepo } from "./ports";
 import { revokeUserSessions } from "./revoke-sessions";
 
-// audit を tx の先頭に置くのは、tx が失敗したときに audit の行だけが残らないようにするため (audit_log.user_id には FK が無い)。
 export const deleteAccount = Effect.fn("account.deleteAccount")(function* (
   userId: string,
   tx: DbTx,

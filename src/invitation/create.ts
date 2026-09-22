@@ -7,9 +7,9 @@ import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
 import { consumeInvitationQuota } from "./rate-limit";
 
-// rate-limit を tx 内に統合しないのは、並行した重複招待での TTL store のカウンタ消費が変わり、監視系との対応がずれるため。
+// rate-limit を tx 内に入れると並行した重複招待でカウンタ消費が変わり、監視系との対応がずれる。
 
-const INVITE_TTL_MS = 24 * 60 * 60 * 1000; // invitation は 24 時間有効 (CONTEXT.md 'invitation')
+const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const createInvitation = Effect.fn("invitation.create")(function* (params: {
   actorUserId: string;

@@ -30,7 +30,7 @@ export function toProtoSession(sessionRow: SessionRowLike) {
   };
 }
 
-// password や idToken などは proto に含めない (漏れると password hash の leak になる) ため、明示的な許可リストで mapping する。
+// password や idToken を漏らさないよう、明示的な許可リストで mapping する。
 export function toProtoAccount(accountRow: AccountRow) {
   return {
     id: accountRow.id,

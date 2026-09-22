@@ -44,7 +44,7 @@ export const Members = () => {
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // 招待一覧は ADMIN 未満だと 403 になるため取得しない
+  // 招待一覧は ADMIN 未満だと 403
   const refresh = useCallback(() => {
     if (!companyId) return Promise.resolve();
     return Promise.all([
@@ -59,7 +59,7 @@ export const Members = () => {
       return;
     }
     setLoading(true);
-    // 取得に失敗した時に前の事業所の行が残ると別の事業所の一覧に混ざる (残った行への操作は誤った POST になる) ため、先に空にする
+    // 先に空にしないと、取得失敗時に前の事業所の行が残り、その行への操作が誤った POST になる
     setMembers([]);
     setInvitations([]);
     refresh()

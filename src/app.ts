@@ -24,7 +24,7 @@ import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins, isLocalEnvironment } from "./env";
 
 export type AppOptions = {
-  // catch-all (SPA fallback) を含むので、共有ルートをすべて登録し終えてから呼ぶ。
+  // catch-all を含むので、共有 route を登録し終えてから呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
@@ -67,7 +67,7 @@ export function buildApp(options: AppOptions): Hono {
 
   const isLocal = isLocalEnvironment();
 
-  // 認証なしで Sentry へ直接送るため、連打で quota が尽きて検知チャネルが使えなくなるのを IP 単位で抑える。
+  // 認証なしで Sentry に直送するため、連打で quota が尽きないよう IP 単位で抑える。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
@@ -78,7 +78,7 @@ export function buildApp(options: AppOptions): Hono {
   );
   app.route("/", canaryToken);
 
-  // plugin の試行制限はチャレンジ単位とアカウント単位しか無いため、チャレンジを取り直しながら別アカウントを試す攻撃を IP 単位で防ぐ。
+  // plugin の試行制限はチャレンジ単位とアカウント単位だけなので、別アカウント総当たりを IP 単位で防ぐ。
   app.use(
     "/api/mfa/challenge/verify",
     createRateLimitMiddleware({
@@ -92,7 +92,7 @@ export function buildApp(options: AppOptions): Hono {
     "/api/mfa/challenge",
     createRateLimitMiddleware({
       keyFn: (c) => `rate-limit:mfa-challenge-status:ip:${getClientContext(c.req.raw.headers).ip}`,
-      // 未認証で到達でき、challenge cookie があると TTL store と 3 往復する。30 は表示 1 回と verify 上限 10 回を NAT 同居の数人分と見た値。
+      // 30 は表示 1 回 + verify 上限 10 回を NAT 同居の数人分と見た値。
       limit: isLocal ? LOCAL_RELAXED_LIMIT : 30,
       windowSec: 60,
     }),
@@ -108,7 +108,7 @@ export function buildApp(options: AppOptions): Hono {
     }),
     createRateLimitMiddleware({
       keyFn: async (c) => {
-        // workerd は body を clone して二重に読むと hang するため、ここで raw body を Hono の cache に先読みさせる。
+        // workerd は body を clone して二重に読むと hang するため、raw body を Hono の cache に先読みさせる。
         const body = await c.req
           .json<Record<string, unknown>>()
           .catch(() => ({}) as Record<string, unknown>);
@@ -120,7 +120,7 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  // GET と POST 以外へ広げ忘れると static fallback が 200 の HTML を返し、気付かれないまま壊れる。
+  // method を広げ忘れると static fallback が 200 の HTML を返し、気付かれない。
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();
     const request =
@@ -137,7 +137,7 @@ export function buildApp(options: AppOptions): Hono {
     });
   });
 
-  // wildcard にしないのは、前置パス自身にも一致して状態参照まで 429 になるため (実測で確認)。
+  // wildcard にすると前置パス自身にも一致し、状態参照まで 429 になる (実測)。
   const mfaAttemptRateLimit = createRateLimitMiddleware({
     keyFn: (c) => mfaAttemptKey(c.req.raw.headers, getClientContext(c.req.raw.headers).ip),
     limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
@@ -149,7 +149,6 @@ export function buildApp(options: AppOptions): Hono {
 
   mountAccountRoutes(app);
 
-  // session に応じた redirect は静的配信より前に登録する。
   app.use("/auth/*", authEntryRedirect);
 
   app.route("/", health);

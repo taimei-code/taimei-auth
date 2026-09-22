@@ -44,7 +44,7 @@ export const Companies = () => {
     removeMember(m.company_id, selfUserId)
       .then(({ accountDeleted }) => {
         if (accountDeleted) {
-          // 遷移が完了するまで busy を維持する (解除すると再クリックでき、2 回目の 401 が誤って表示される)
+          // 遷移完了まで busy を保つ (解除すると再クリックの 401 が表示される)
           redirecting = true;
           redirectAfterAuthChange("deleteAccount");
           return;

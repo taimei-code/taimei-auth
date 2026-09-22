@@ -35,7 +35,7 @@ const sessionCookieHeaders = (sessionToken: string) =>
 export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (req: {
   sessionToken: string;
 }) {
-  // 参照するのは cookieCache ではなく TTL store 側の payload (handler は cookie を送らないため)。
+  // session cookie だけを送るので、getSession は cookieCache でなく TTL store の payload を返す。
   const headers = sessionCookieHeaders(req.sessionToken);
   const authApi = yield* AuthApi;
   const result = yield* authApi.getSession(headers);
@@ -57,7 +57,7 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
     return verifySessionError(Result.REVOKED);
   }
 
-  // revision 導入前の payload はこの field を持たない。undefined なら判定を skip し、一斉ログアウトの loop を防ぐ。
+  // revision 導入前の payload は field を持たない。undefined で判定を skip し、一斉ログアウトの loop を防ぐ。
   const cachedRevision: number | undefined = result.user.revision;
   if (cachedRevision !== undefined && dbUser.revision !== cachedRevision) {
     yield* authApi

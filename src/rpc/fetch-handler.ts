@@ -6,7 +6,7 @@ const RPC_PREFIX = "/rpc";
 
 let handlers: Map<string, (req: Request) => Promise<Response>> | null = null;
 
-// auth は ESM の live binding である。module のロード時に事前構築すると auth が undefined のまま map を組むため、lazy にしておく。
+// auth は ESM の live binding で module ロード時は undefined のため、lazy に組む。
 function ensureHandlers(): Map<string, (req: Request) => Promise<Response>> {
   if (handlers) return handlers;
   const router = createConnectRouter();
@@ -22,10 +22,10 @@ function ensureHandlers(): Map<string, (req: Request) => Promise<Response>> {
 export async function handleRpc(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
   if (!url.pathname.startsWith(`${RPC_PREFIX}/`)) return null;
-  const connectPath = url.pathname.slice(RPC_PREFIX.length); // "/auth.v1.AuthService/SignOut"
+  const connectPath = url.pathname.slice(RPC_PREFIX.length);
   const handler = ensureHandlers().get(connectPath);
   if (!handler) return null;
-  // createFetchHandler は handler 自身の requestPath と照合するため、prefix を取り除いた Request を渡す。
+  // createFetchHandler は requestPath と照合するため、prefix を取り除いた Request を渡す。
   url.pathname = connectPath;
   return handler(new Request(url, req));
 }

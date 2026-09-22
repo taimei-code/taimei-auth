@@ -34,7 +34,7 @@ const _routeFailuresAreClientFacing: [Exclude<RouteError, BoundaryError>] extend
   ? true
   : never = true;
 
-// charset 無しの application/json を明示する (byte 単位で不変にする理由は ADR-0012「error Response builder は Hono 非依存」)
+// charset 無しで固定し、Hono の c.json と byte 単位で一致させる。
 export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 export function clientFacingErrorResponse(failure: ClientFacingErrorShape): Response {
@@ -48,7 +48,7 @@ export function internalErrorResponse(): Response {
   return new Response("Internal Server Error", { status: 500, headers: TEXT_HEADERS });
 }
 
-// catalog に無い failure も実行時に形で判定する (fail-open を防ぐ理由は ADR-0017「実装の機構」)
+// catalog でなく形で判定し、catalog 漏れの failure を 500 に倒さない。
 export const parseClientFacingError = (e: unknown): ClientFacingErrorShape | undefined =>
   Predicate.isObject(e) && Predicate.isString(e.error) && Predicate.isNumber(e.status)
     ? (e as ClientFacingErrorShape)
@@ -89,7 +89,6 @@ export function settleCause<W>(
   return { failure, reported: internal.map((r) => r.error) };
 }
 
-// Effect の外で起きた throw も同じ規則で送る (捕捉する理由は ADR-0017「実装の機構」)
 export function captureThrown(error: unknown, component: string): void {
   try {
     send(toInternal(error), { label: `[${component}]`, tags: { component } });

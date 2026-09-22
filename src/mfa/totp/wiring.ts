@@ -33,7 +33,6 @@ const MfaSessionsLive: Layer.Layer<MfaSessions> = Layer.succeed(
   MfaSessions.of({ revokeOthers: revokeOtherSessions, issueSession: issueSessionFor }),
 );
 
-// 通知を取り違えると「無効化したのに有効化のメールが届く」ことになり、利用者には乗っ取りに見える。
 const MfaNotifierLive = Layer.succeed(
   MfaNotifier,
   MfaNotifier.of({

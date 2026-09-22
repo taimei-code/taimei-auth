@@ -4,7 +4,7 @@ import { MfaDisableDialog } from "./MfaDisableDialog";
 import { MfaEnrollDialog } from "./MfaEnrollDialog";
 import type { MfaStatus } from "./mfa-api";
 
-// 再発行の導線が無い (復旧は運用スクリプト経由) ため、使い切る前に気づける残数で警告を出す。
+// 再発行の導線が無い (復旧は運用スクリプト経由) ため使い切る前に警告する
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
 
 const describeRecoveryCodeShortage = (remaining: number): string =>

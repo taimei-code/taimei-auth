@@ -17,7 +17,7 @@ export type AuditLogEntry =
       userId: string;
       payload: { ip: string; userAgent: string };
     }
-  // secret、リカバリーコード、残数は記録しない (監査ログの閲覧が second factor の漏洩経路にならないようにする)。
+  // secret、リカバリーコード、残数は載せない (監査ログの閲覧を第二要素の漏洩経路にしない)。
   | {
       eventType: "mfa_enabled";
       userId: string;
@@ -147,7 +147,7 @@ export async function appendAuditLog(entry: AuditLogEntry, txOrDb: DbOrTx = db):
   await appendAuditLogs([entry], txOrDb);
 }
 
-// FOR UPDATE lock を保持した tx の中で N 回 INSERT すると lock 時間が round trip の N 倍に伸びるため、1 回の batch INSERT にする。
+// FOR UPDATE を保持した tx 内で N 回 INSERT すると lock 時間が N 倍に伸びるため batch INSERT にする。
 export async function appendAuditLogs(
   entries: AuditLogEntry[],
   txOrDb: DbOrTx = db,

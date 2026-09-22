@@ -6,7 +6,6 @@ import type { DbOrTx } from "../transaction";
 
 export const generateInvitationId = (): string => `inv_${nanoid(24)}`;
 
-// id は内部参照用、token は推測されにくい公開 secret として使い分ける。
 export const generateInvitationToken = (): string => nanoid(32);
 
 export type InvitationRow = typeof invitation.$inferSelect;
@@ -132,7 +131,7 @@ export async function markInvitationRevoked(
     .then((rows) => rows.at(0));
 }
 
-// soft delete 済みの company への受諾で所属が復活するのを防ぐ (受諾側のガードと組で機能する)。
+// soft delete 済み company への受諾で所属が復活するのを防ぐ (受諾側のガードと組)。
 export async function revokePendingInvitationsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,

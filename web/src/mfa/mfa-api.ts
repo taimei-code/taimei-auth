@@ -15,12 +15,12 @@ export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
 
 export type MfaStatus = {
   enabled: boolean;
-  // 旧応答との互換用の field。server は常に enabled と同じ値を返す (ADR-0016)。
+  // 旧応答との互換 field。server は enabled と同じ値を返す (ADR-0016)
   inEffect: boolean;
   recoveryCodesRemaining: number;
 };
 
-// recoveryCodes を本人に渡せるのはこの応答だけである (有効化後は残数しか取れない)。画面より先へは持ち出さない。
+// recoveryCodes を本人に渡せるのはこの応答だけ (有効化後は残数しか取れない)。画面より先へ持ち出さない
 export type MfaEnrollment = {
   enrollmentId: string;
   totpUri: string;
@@ -35,7 +35,7 @@ export type MfaErrorCode = MfaClientFacingErrorCode | "rate_limited" | "unknown"
 
 const CLIENT_FACING_ERROR_CODES: ReadonlySet<string> = new Set(MFA_WIRE_ERROR_CODES);
 
-// ロックアウトと rate limit は同じ 429 で返るため、判別は status ではなく body の error コードで行う。
+// ロックアウトと rate limit は同じ 429 なので body の error コードで判別する
 const resolveMfaErrorCode = (
   status: number,
   clientFacingError: string | undefined,
@@ -53,7 +53,6 @@ class MfaApiError extends Error {
   }
 }
 
-// MfaApiError 以外 (通信断や想定外の throw) は原因を識別できないため、fail-closed として "unknown" にする。
 export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
   error instanceof MfaApiError ? error.code : "unknown";
 
@@ -66,7 +65,7 @@ function readClientFacingError(body: unknown): string | undefined {
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
-  // credentials は cookie の送信に加えて、ローテート後の session の Set-Cookie を受け取るためにも必要である (外すと操作直後にログアウトする)。
+  // credentials を外すとローテート後の session の Set-Cookie を受け取れず、操作直後にログアウトする
   const res = await fetch(url, { credentials: "include", ...init });
   const body: unknown = await res.json().catch(() => undefined);
   if (!res.ok) throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(body)));
@@ -89,7 +88,7 @@ const requireRecord = (body: unknown): Record<string, unknown> => {
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === "string");
 
-// satisfies は応答契約の定義元に必須 field が増えた時にここを型エラーにする (増えた field は無視し、追加だけの変更は通す)。
+// satisfies は契約に必須 field が増えた時に型エラーで知らせる
 const readMfaStatus = (body: unknown): MfaStatus => {
   const record = requireRecord(body);
   if (
@@ -111,7 +110,7 @@ const readMfaStatus = (body: unknown): MfaStatus => {
   };
 };
 
-// 空の値も不正として扱う。空の totp_uri は QR も secret も無い scan 画面になり、空の recovery_codes は復旧手段の無い有効化になる。
+// 空の totp_uri は QR も secret も無い scan 画面に、空の recovery_codes は復旧手段の無い有効化になる
 const readMfaEnrollment = (body: unknown): MfaEnrollment => {
   const record = requireRecord(body);
   if (
@@ -142,7 +141,7 @@ const readMfaChallengeState = (body: unknown): MfaChallengeState => {
   return { pending: record.pending } satisfies MfaChallengeStateResponse;
 };
 
-// 空文字も不正として扱う。passed のまま進めると flow の assign("") が現在の URL へ再遷移する。
+// 空文字を通すと assign("") が現在の URL へ再遷移する
 const readMfaChallengePassed = (body: unknown): MfaChallengePassed => {
   const record = requireRecord(body);
   if (typeof record.redirect_url !== "string" || record.redirect_url === "") {
