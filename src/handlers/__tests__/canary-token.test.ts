@@ -4,8 +4,8 @@ import { createRateLimitMiddleware } from "../../rate-limit";
 import { consoleSentryBackend, setSentryBackend, type CaptureContext } from "../../sentry";
 import { canaryToken } from "../canary-token";
 
-// Sentry backend は module-global のため、spy 注入後は console fallback 相当へ戻して
-// 同一プロセスで走る後続 test file に spy を漏らさない。
+// Sentry backend は module 全体で共有されるため、spy を注入した後は console fallback 相当へ戻して
+// 同じプロセスで走る後続のテストファイルに spy を漏らさない。
 
 type Captured = { message: string; context?: CaptureContext };
 
@@ -87,7 +87,7 @@ describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
 
   test("上限超過は 429 になり Sentry 送信自体が止まる (quota 保護)", async () => {
     const app = new Hono();
-    // 実行ごとに固有キーで実 TTL store の窓を汚さない (windowSec 内の再実行でも衝突しない)
+    // 実行ごとに固有のキーを使い、実 TTL store の窓を汚さない (windowSec 内に再実行しても衝突しない)
     const key = `rate-limit:canary-test:${crypto.randomUUID()}`;
     app.use(
       "/auth/canary-token/*",

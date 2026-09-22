@@ -48,13 +48,13 @@ describe("session revoke repository", () => {
     const revokedB = await findSessionRevokedAt(testSessionB);
     expect(revokedA).not.toBeNull();
     expect(revokedB).not.toBeNull();
-    // revoked_at は DB の NOW() で書かれるため、上限も DB の時計で取る。host の Date.now() と比べると
-    // DB (Docker VM) の時計が数 ms 進んでいるだけで落ちる (時計の違いであって revoke の欠陥ではない)。
+    // revoked_at は DB の NOW() で書かれるため、上限も DB の時計から取る。host の Date.now() と比べると、
+    // DB (Docker VM) の時計が数 ms 進んでいるだけで失敗する (時計の差であって revoke の欠陥ではない)。
     const { rows } = await db.execute<{ now_ms: number }>(
       sql`select extract(epoch from now()) * 1000 as now_ms`,
     );
     expect(revokedA!.getTime()).toBeLessThanOrEqual(Number(rows[0]!.now_ms));
-    // 桁違いにずれた値 (未来や epoch) を書いていないことは host の時計で粗く確認する。
+    // 桁違いに離れた値 (未来や epoch) を書いていないことだけは、host の時計で大まかに確認する。
     expect(Math.abs(revokedA!.getTime() - Date.now())).toBeLessThan(60_000);
   });
 

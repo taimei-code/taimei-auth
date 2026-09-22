@@ -1,5 +1,5 @@
-// biome の web 専用 ban / connect-node ban と package.json の依存 section が食い違っていないかを
-// 見る config invariant。分類規約そのものの正本: docs/adr/0014-docker-runner-dev-stage-separation.md
+// biome の web 専用 ban と connect-node ban が package.json の依存 section と食い違っていないかを
+// 見る config invariant。分類規約そのものは docs/adr/0014-docker-runner-dev-stage-separation.md で定義する。
 
 import { describe, expect, test } from "bun:test";
 import {
@@ -27,10 +27,10 @@ import {
   webOnlyGroups,
 } from "./config-invariant-helpers";
 
-// devDependencies のうち web 専用 ban の対象外にするもの。
-// 判定基準は「server コードから import され得る runtime module か」。CLI / build 設定 / 型定義 /
-// test 専用 runtime は許可、それ以外は ban 側。「ship される server コードが import しない」という
-// 基準にすると全 devDependencies が該当して分類にならないため採らない。
+// devDependencies のうち、web 専用 ban の対象外にするもの。
+// 判定基準は「server コードから import され得る runtime module か」である。CLI、build 設定、型定義、
+// テスト専用の runtime は許可し、それ以外は ban 側にする。「ship される server コードが import しない」という
+// 基準にすると全 devDependencies が該当して分類にならないため、採らない。
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",
@@ -72,13 +72,13 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
       classificationViolations(classificationDiff(devDeps, ALLOWED_DEV_DEPENDENCIES, group)),
     ).toEqual([]);
 
-    // 許可リストの各エントリは 3 分類 (build-tool / type-only / test-only-runtime) の理由を持つ。
+    // 許可リストの各エントリは、3 分類 (build-tool / type-only / test-only-runtime) のいずれかの理由を持つ。
     const reasonless = Object.entries(ALLOWED_DEV_DEPENDENCIES)
       .filter(([, reason]) => !/^(build-tool|type-only|test-only-runtime):/.test(reason))
       .map(([name]) => name);
     expect(reasonless).toEqual([]);
 
-    // 許可リストに載っているのに devDependencies から消えた package (stale entry) も検出する。
+    // 許可リストにあるのに devDependencies から消えた package (古くなったエントリ) も検出する。
     expect(Object.keys(ALLOWED_DEV_DEPENDENCIES).filter((name) => !devDeps.includes(name))).toEqual(
       [],
     );
@@ -91,12 +91,12 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     expect(Object.keys(pkg.dependencies ?? {}).includes(CONNECT_NODE)).toBe(false);
     expect(Object.keys(pkg.devDependencies ?? {}).includes(CONNECT_NODE)).toBe(false);
 
-    // web 専用 group とは別 pattern entry (message が違う) なので別 assert にする。
+    // web 専用 group とは別の pattern entry (message が違う) なので、別の assert にする。
     const bans = (config.overrides ?? []).filter(hasConnectNodeBan);
     expect(bans.length).toBe(EXPECTED_CONNECT_NODE_COPY_COUNT);
 
-    // copy 数だけだと、ban を src にマッチしない override へ移しても 2 件のまま緑になる。
-    // 実効的にどの override が効くかは「最後にマッチした override」で決まるのでそちらを見る。
+    // コピー数だけを見ると、ban を src にマッチしない override へ移しても 2 件のまま緑になる。
+    // 実際にどの override が適用されるかは最後にマッチした override で決まるので、そちらを見る。
     const effective = effectiveOverride(config, REPRESENTATIVE_SERVER_FILE);
     expect(effective).not.toBeNull();
     expect(hasConnectNodeBan(effective as BiomeOverride)).toBe(true);
@@ -104,7 +104,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
 
   test("QA-E-02: 片方の override だけに追記すると group 集合の不一致で落ちる", () => {
     const config = readBiomeConfig();
-    // 呼ぶたびに parse し直すため patched への破壊的変更は config 側に漏れない。
+    // 呼ぶたびに parse し直すため、patched への破壊的変更は config 側に影響しない。
     const patched = readBiomeConfig();
     const firstGroup = webOnlyGroups(patched)[0] as string[];
     firstGroup.push("react-day-picker");
@@ -113,7 +113,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     expect(groups.length).toBe(EXPECTED_WEB_ONLY_COPY_COUNT);
     expect(groups[0]).not.toEqual(groups[1] as string[]);
 
-    // 元の config は一致したまま (fixture 改変が実ファイルに漏れていないことの確認)。
+    // 元の config は一致したままである (fixture の改変が実ファイルに影響していないことの確認)。
     const original = webOnlyGroups(config).map((group) => [...group].sort());
     expect(original[0]).toEqual(original[1] as string[]);
   });
@@ -150,8 +150,8 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
       })),
     });
 
-    // fixture の copy 数を数え直すのではなく、実ファイルにかけている検査関数へ通す
-    // (「2 でなければ violation」を production 側が本当に持っていることの確認)。
+    // fixture のコピー数を数え直すのではなく、実ファイルにかけている検査関数へ通す
+    // (「2 でなければ violation」という判定を production 側が本当に持っていることの確認)。
     for (const count of [0, 1, 3]) {
       expect(webOnlyBanViolations(withCopies(count)).join("\n")).toContain(
         `web 専用 ban の copy 数が ${count} 個`,
@@ -159,7 +159,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     }
     expect(webOnlyBanViolations(withCopies(EXPECTED_WEB_ONLY_COPY_COUNT))).toEqual([]);
 
-    // message 文言がズレた fixture では selector が空振りする (named 定数を直す必要がある証拠)。
+    // message の文言がずれた fixture では selector がどこにも一致しない (名前付き定数を直す必要がある証拠)。
     const renamed = withCopies(EXPECTED_WEB_ONLY_COPY_COUNT);
     for (const override of renamed.overrides ?? []) {
       const patterns = restrictedPatterns(override);
@@ -167,8 +167,8 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     }
     expect(webOnlyGroups(renamed).length).toBe(0);
 
-    // 代表 file にマッチする override を後ろに足すと、2 copy は残るのに実効 ban が消える。
-    // 出現回数 assert は素通りし、実効内容 assert だけが落ちること。3 scope それぞれで確認する。
+    // 代表ファイルにマッチする override を後ろに足すと、2 つのコピーは残るのに実効的な ban が消える。
+    // 出現回数の assert は通り、実効内容の assert だけが失敗すること。3 つの scope それぞれで確認する。
     for (const [scope, path] of [
       ["src/**", REPRESENTATIVE_SERVER_FILE],
       ["db/**", REPRESENTATIVE_DB_FILE],
@@ -185,16 +185,16 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     }
   });
 
-  // biome 2.4.14 実測: `includes` は順に評価して最後にマッチした pattern が勝つ。
-  // ここを取り違えると、実 config の override[1] (`["src/**", "!src/**/__tests__/**", "!src/auth.ts"]`)
-  // に対する「最後にマッチする override」の判定がズレて、実効 ban の検査が別 override を見る。
+  // biome 2.4.14 の実測では、`includes` は順に評価して最後にマッチした pattern が勝つ。
+  // ここを取り違えると、実際の config の override[1] (`["src/**", "!src/**/__tests__/**", "!src/auth.ts"]`)
+  // に対する「最後にマッチする override」の判定がずれて、実効的な ban の検査が別の override を見てしまう。
   test("overrideMatches は includes の後勝ち semantics に従う", () => {
     const matches = (includes: string[], path: string) => overrideMatches({ includes }, path);
 
     expect(matches(["!src/handlers/**", "src/**"], "src/handlers/account-company.ts")).toBe(true);
     expect(matches(["!src/auth.ts", "src/**"], "src/auth.ts")).toBe(true);
     expect(matches(["src/**", "!src/auth.ts"], "src/auth.ts")).toBe(false);
-    // どの pattern にもマッチしなければ対象外。
+    // どの pattern にもマッチしなければ対象外になる。
     expect(matches(["db/**"], "src/auth.ts")).toBe(false);
     expect(matches([], "src/auth.ts")).toBe(false);
   });
@@ -208,7 +208,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
       ],
     }`;
     expect(parseJsonc(jsonc).overrides?.length).toBe(1);
-    // 文字列中の // はコメントとして削らない
+    // 文字列の中にある // はコメントとして削らない
     expect(
       parseJsonc('{ "overrides": [{ "includes": ["https://x//y"] }] }').overrides?.[0],
     ).toEqual({

@@ -27,7 +27,7 @@ const membershipExists = (userId: string, companyId: string) =>
     Effect.map((row) => row !== undefined),
   );
 
-// アカウント存否は実テーブルを直接見て判定する (被験体の repository に依らず actual state を検証する)。
+// アカウントの有無は実テーブルを直接見て判定する (テスト対象の repository に依存せず、実際の状態を検証する)。
 const userExists = (id: string) =>
   TestDb.use((db) => db.readUser(id)).pipe(Effect.map((row) => row !== undefined));
 

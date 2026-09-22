@@ -34,8 +34,8 @@ describe("redirectAfterAuthChange", () => {
     redirectAfterAuthChange("deleteAccount");
 
     const url = new URL(stub.location.href, "http://auth.taimei-code.local:3100");
-    // 末尾スラッシュ付き /auth/ は auth-entry-redirect (AUTH_ENTRY_PATHS) の対象になり、
-    // 削除直後の stale session (cookieCache 最大 5 分) が事業所作成画面へ誘導されてしまう
+    // 末尾スラッシュ付きの /auth/ は auth-entry-redirect (AUTH_ENTRY_PATHS) の対象になるため、
+    // 削除直後の stale session (cookieCache は最大 5 分) が事業所作成画面へ誘導されてしまう
     expect(url.pathname).toBe("/auth");
     expect(url.searchParams.get("service_name")).toBe("accounts");
     expect(url.searchParams.get("redirect_url")).toBe("http://auth.taimei-code.local:3100/account");
@@ -93,7 +93,7 @@ describe("discardStaleSession", () => {
     expect(order).toEqual(["signOut"]);
     expect(replaced).toHaveLength(1);
     const url = new URL(replaced[0] ?? "", "http://auth.taimei-code.local:3100");
-    // /auth/ (末尾スラッシュ付き) は auth-entry-redirect の対象で、同じ session が事業所登録へ送り返される。
+    // 末尾スラッシュ付きの /auth/ は auth-entry-redirect の対象なので、同じ session が事業所登録へ送り返される。
     expect(url.pathname).toBe("/auth");
     expect(url.searchParams.get("service_name")).toBe("accounts");
     expect(url.searchParams.get("redirect_url")).toBe("http://auth.taimei-code.local:3100/account");

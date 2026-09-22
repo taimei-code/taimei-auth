@@ -5,7 +5,7 @@ import { TestDb } from "../../__tests__/test-db";
 import { addCompany, createSignupCompany } from "../create";
 import { AlreadyExists } from "../errors";
 
-// use-case が作る company も prefix 名 (db.ids.companyName) にして cleanup の対象に載せる。
+// use-case が作る company も prefix 付きの名前 (db.ids.companyName) にして cleanup の対象に含める。
 const P = "create-test-";
 const { run, cleanup } = dbTest(P);
 const seedUser = (suffix: string) =>
@@ -73,9 +73,9 @@ describe("createSignupCompany", () => {
       }),
     ));
 
-  // 0 件ガードが ACTIVE 基準であること (根拠: src/company/create.ts) を固定する。
-  // 全 membership 基準に退化すると、全削除した user の再 signup が残存 membership に弾かれ
-  // /account ⇄ signup/company の redirect loop に陥る。
+  // 0 件ガードが ACTIVE な membership を基準にすること (根拠: src/company/create.ts) を固定する。
+  // 全 membership を基準にしてしまうと、全削除した user の再 signup が残存 membership に拒否され、
+  // /account と signup/company のあいだで redirect loop に陥る。
   test("所属事業所を全削除した後は ACTIVE 0 件として再作成できる", () =>
     run(
       Effect.gen(function* () {
@@ -123,7 +123,7 @@ describe("addCompany", () => {
         expect(added.membership.role).toBe("OWNER");
 
         const userRow = yield* db.readUser(userId);
-        expect(userRow?.lastUsedCompanyId).toBe(added.company.id); // 新事業所へ切替
+        expect(userRow?.lastUsedCompanyId).toBe(added.company.id); // 新しい事業所へ切り替わる
         expect(yield* countCompanyCreatedAudit(userId, added.company.id)).toBe(1);
 
         const memberships = yield* db.readMemberships(userId);
@@ -153,7 +153,7 @@ describe("addCompany", () => {
         expect(memberships.length).toBe(2);
 
         const userRow = yield* db.readUser(userId);
-        expect(userRow?.lastUsedCompanyId).toBe(two.company.id); // 最後に作った方が current
+        expect(userRow?.lastUsedCompanyId).toBe(two.company.id); // 最後に作った方が current になる
       }),
     ));
 });

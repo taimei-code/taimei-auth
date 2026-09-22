@@ -67,7 +67,7 @@ describe("MFA チャレンジ API", () => {
 
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({ redirect_url: "/account/security" });
-        // 転送漏れは「ログインできたのにセッションが無い」で、画面からは原因不明の再ログインに見える。
+        // 転送漏れがあると「ログインできたのにセッションが無い」状態になり、画面からは原因不明の再ログインに見える。
         const setCookies = res.headers.getSetCookie();
         expect(setCookies.length).toBeGreaterThan(0);
       }),
@@ -132,7 +132,7 @@ describe("MFA チャレンジ API", () => {
           redirectUrl: "/account/security",
           method: "magic_link",
         });
-        // TTL 経過の決定的な再現: 実 store の key を消す (固定 sleep は使わない)。
+        // TTL の経過を決定的に再現するため、実 store の key を消す (固定の sleep は使わない)。
         yield* Effect.sync(() => getMemoryKvStore().delete(challengeKey(challenge.challengeId)));
 
         const res = yield* verifyWith(buildApp(), challenge.headers, {
@@ -141,7 +141,7 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(res.status).toBe(401);
-        // cookie 無し / 改ざんと同一 body — どの段階で落ちたかを未認証のブラウザに教えない。
+        // cookie 無し / 改ざんの場合と同じ body にして、どの段階で失敗したかを未認証のブラウザに教えない。
         expect(yield* responseJson(res)).toEqual({ error: "challenge_expired" });
         expect(res.headers.getSetCookie()).toEqual([]);
       }),

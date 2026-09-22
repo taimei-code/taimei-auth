@@ -6,9 +6,9 @@ import { TestDb } from "../../__tests__/test-db";
 import { authEntryRedirect } from "../auth-entry-redirect";
 import { requestApp, restoreActor, SESSION_COOKIE_HEADER, stubActor } from "./helpers";
 
-// /auth/ エントリの session-aware redirect の分岐 (session 有無 × invitation_token ×
-// membership 件数 × query 妥当性) を固定する。redirect loop (#74) と削除後 session (#112)
-// の再発面。SPA 静的配信は fixture route で代替し、pass-through の成立を body で確認する
+// /auth/ エントリの session に応じた redirect の分岐 (session の有無、invitation_token、
+// membership 件数、query の妥当性の組み合わせ) を固定する。redirect loop (#74) と削除後の session (#112)
+// が再発しうる箇所である。SPA の静的配信は fixture route で代替し、そのまま通ったことを body で確認する
 // (web/dist は CI に存在しないため)。
 
 const P = "aer-test-";
@@ -27,7 +27,7 @@ const buildApp = () => {
 
 const request = (path: string, init?: RequestInit) => requestApp(buildApp(), path, init);
 
-// pass-through の検証は「302 でない」だけでなく fixture body の到達まで確認する
+// そのまま通したことの検証は「302 でない」だけでなく、fixture の body が届いたことまで確認する
 const expectPassThrough = (res: Response) =>
   Effect.promise(async () => {
     expect(res.status).toBe(200);
@@ -80,7 +80,7 @@ describe("authEntryRedirect", () => {
     test("削除済み user の stale session (cookieCache 窓) は membership 0 件扱いで /auth/signup/company へ 302", () =>
       run(
         Effect.gen(function* () {
-          // user 行を seed しない = cookieCache が返す「削除済み user の session」を再現。
+          // user 行を seed しないことで、cookieCache が返す「削除済み user の session」を再現する。
           // この先の POST /api/account/companies が 401 で fail-closed する契約は
           // deleted-user-session.test.ts が固定している。
           stubActor({ id: `${P}u-ghost`, email: `${P}ghost@example.com` });
@@ -135,8 +135,8 @@ describe("authEntryRedirect", () => {
     test("DELETED company のみの membership (直接 seed) は /auth/signup/company へ 302", () =>
       run(
         Effect.gen(function* () {
-          // 削除ライフサイクル適用後は通常経路で作れない状態だが、server 側 ACTIVE filter の
-          // 防御を固定する (SPA page guard 側との 2 者契約は account-routes-migrated 側で pin)。
+          // 削除ライフサイクル適用後は通常経路で作れない状態だが、server 側の ACTIVE filter による
+          // 防御を固定する (SPA の page guard 側との 2 者間の契約は account-routes-migrated 側で固定する)。
           const db = yield* TestDb;
           const actor = yield* db.seedUser("del");
           const companyId = yield* db.seedCompany("del");

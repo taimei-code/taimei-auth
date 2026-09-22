@@ -168,7 +168,7 @@ describe("describeMfaChallengeError", () => {
   });
 });
 
-// error code 解決 (旧 resolveMfaErrorCode の表駆動) は公開関数越しの検証へ移した
+// error code の解決 (旧 resolveMfaErrorCode の表による対応付け) は、公開関数を通した検証へ移した
 // (web/src/mfa/__tests__/mfa-api.test.ts の AC-011)。
 
 describe("useMfaCodeInput", () => {

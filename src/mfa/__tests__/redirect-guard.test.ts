@@ -23,7 +23,7 @@ const spyBackend = {
   },
 };
 
-// Sentry backend も AUTH_TRUSTED_ORIGINS も module-global で、戻し忘れは後続 test file に漏れる。
+// Sentry backend も AUTH_TRUSTED_ORIGINS も module 全体で共有され、戻し忘れると後続のテストファイルに漏れる。
 // 出口検証は同期のまま (Sentry 報告も Effect.sync) なので runSync で観測できる。
 const validateChallengeRedirect = (raw: string | undefined): string =>
   Effect.runSync(Effect.provide(validateEffect(raw), SentryLive));

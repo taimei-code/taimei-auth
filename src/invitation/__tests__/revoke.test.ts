@@ -6,8 +6,8 @@ import { NotFoundOrNotPending } from "../errors";
 import { revokeInvitation } from "../revoke";
 
 // invitation/revoke use-case (src/invitation/revoke.ts) の DB 統合テスト。
-// 正常 revoke / not_found_or_not_pending + audit 非発火 を検証。
-// 認可 (OWNER/ADMIN) は Guard 層 (requireMembership "ADMIN") の責務。
+// 正常な revoke と、not_found_or_not_pending で audit が発火しないことを検証する。
+// 認可 (OWNER/ADMIN) は Guard 層 (requireMembership "ADMIN") の責務である。
 
 const P = "revinv-test-";
 const { run, cleanup } = dbTest(P);
@@ -103,12 +103,12 @@ describe("revokeInvitation", () => {
           invitedByUserId: owner.id,
         });
 
-        // co2 で co1 の invitation を revoke しようとしても markInvitationRevoked が 0 件更新。
+        // co2 から co1 の invitation を revoke しようとしても markInvitationRevoked は 0 件更新になる。
         const e = yield* Effect.flip(
           revokeInvitation({ actorUserId: owner.id, companyId: co2, invitationId: inv.id }),
         );
         expectFailure(e, NotFoundOrNotPending, "not_found_or_not_pending", 404);
-        // 元の invitation は影響なし (PENDING のまま)。
+        // 元の invitation には影響しない (PENDING のまま)。
         const persisted = yield* db.readInvitation(inv.id);
         expect(persisted?.status).toBe("PENDING");
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);

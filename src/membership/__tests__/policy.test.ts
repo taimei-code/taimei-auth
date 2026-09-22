@@ -9,7 +9,7 @@ import {
   verifyInviter,
 } from "../policy";
 
-// src の test は @/db を runtime import しない (test-db-boundary gate)。
+// src のテストは @/db を runtime で import しない (test-db-boundary gate)。
 const ROLES = ["OWNER", "ADMIN", "MEMBER"] as const satisfies readonly Role[];
 
 describe("isAtLeast", () => {
@@ -24,7 +24,7 @@ describe("isAtLeast", () => {
     }
   }
 
-  // 未知 role は DB の CHECK 制約で存在しない (ADR-0018)。typecheck が gate で、runtime の assert は持たない。
+  // 未知の role は DB の CHECK 制約により存在しない (ADR-0018)。typecheck が gate であり、runtime の assert は持たない。
   test("想定外 role 文字列は型で拒否される", () => {
     // @ts-expect-error Role 以外の文字列は引数に取れない
     isAtLeast("SUPERVISOR", "MEMBER");
@@ -32,7 +32,7 @@ describe("isAtLeast", () => {
 });
 
 describe("canChangeRole", () => {
-  // before/next のどちらかが OWNER に触れる変更は OWNER のみ許可、それ以外は所属していれば可。
+  // before と next のどちらかが OWNER である変更は OWNER だけに許可し、それ以外は所属していれば許可する。
   for (const actor of ROLES) {
     for (const before of ROLES) {
       for (const next of ROLES) {
@@ -47,7 +47,7 @@ describe("canChangeRole", () => {
 });
 
 describe("canInviteRole", () => {
-  // role=OWNER の招待は OWNER のみ、それ以外 (ADMIN/MEMBER 招待) は所属権限内で発行可 (不変)。
+  // role=OWNER の招待は OWNER だけができ、それ以外 (ADMIN/MEMBER の招待) は所属権限の範囲内で発行できる (不変)。
   for (const actor of ROLES) {
     for (const invited of ROLES) {
       const expected = invited === "OWNER" ? actor === "OWNER" : true;
@@ -59,7 +59,7 @@ describe("canInviteRole", () => {
 });
 
 describe("canAttemptRemoval", () => {
-  // 本人退会は無条件、他者除名は ADMIN 以上。
+  // 本人の退会は無条件で、他者の除名は ADMIN 以上に限る。
   for (const actor of ROLES) {
     for (const isSelf of [true, false]) {
       const expected = isSelf || actor === "OWNER" || actor === "ADMIN";
@@ -71,7 +71,7 @@ describe("canAttemptRemoval", () => {
 });
 
 describe("canRemoveTarget", () => {
-  // OWNER を他者が抜くのは OWNER のみ。それ以外は許可。
+  // OWNER を他者が除名できるのは OWNER だけである。それ以外は許可する。
   for (const actor of ROLES) {
     for (const isSelf of [true, false]) {
       for (const target of ROLES) {

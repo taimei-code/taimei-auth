@@ -7,8 +7,8 @@ import { DbError } from "../../errors";
 import { Forbidden } from "../../membership/guard/errors";
 import { runMiddleware, runRoute } from "../run-route";
 
-// design §3.2 (2 次・3 次改訂): runRoute は唯一の写像点。failure → client-facing 応答、boundary error / defect / interrupt →
-// Sentry + 500。Hono が Error を飲み込むため adapter が自分で Sentry に送る (AC-010〜015, 060, 061)。
+// design §3.2 (2 次・3 次改訂) では runRoute が唯一の変換点である。failure は client-facing 応答に、boundary error / defect / interrupt は
+// Sentry 送信と 500 にする。Hono が Error を握りつぶすため adapter が自分で Sentry に送る (AC-010〜015, 060, 061)。
 const captured = recordSentryExceptions();
 
 const boom = new Error("boom");

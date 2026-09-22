@@ -1,12 +1,12 @@
-// biome の SDK 境界 override (packages/auth-client/**) が ban する consumer framework 集合の
-// config invariant。方針の正本: packages/auth-client/CLAUDE.md ルール 7
+// biome の SDK 境界 override (packages/auth-client/**) が ban する consumer framework の集合を固定する
+// config invariant。方針は packages/auth-client/CLAUDE.md のルール 7 で定義する。
 
 import { describe, expect, test } from "bun:test";
 import { type BiomeOverride, readBiomeConfig, webOnlyGroupOf } from "./config-invariant-helpers";
 
-// SDK 境界 override (packages/auth-client/**) が ban する consumer framework の path。
-// 件数でなく集合で比較する (件数一致のまま中身が入れ替わる drift を検出する)。
-// SDK を consumer framework に依存させない方針の正本: packages/auth-client/CLAUDE.md (経緯: PR #41)
+// SDK 境界 override (packages/auth-client/**) が ban する consumer framework のパス。
+// 件数ではなく集合で比較する (件数は一致したまま中身が入れ替わるずれを検出する)。
+// SDK を consumer framework に依存させない方針は packages/auth-client/CLAUDE.md で定義する (経緯は PR #41)。
 const SDK_BANNED_PATHS = [
   "@connectrpc/connect-node",
   "@connectrpc/connect-web",

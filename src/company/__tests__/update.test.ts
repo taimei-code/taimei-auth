@@ -6,8 +6,8 @@ import { TestDb } from "../../__tests__/test-db";
 import { updateCompanyInfo } from "../update";
 
 // company/update use-case (src/company/update.ts) の DB 統合テスト。
-// tx 内 before/after diff / inactive → rollback (404) で audit 非発火 を検証。
-// 認可 (OWNER のみ) は Guard 層 (requireMembership "OWNER") の責務。
+// tx 内の before/after の差分と、inactive な company では rollback (404) して audit が発火しないことを検証する。
+// 認可 (OWNER のみ) は Guard 層 (requireMembership "OWNER") の責務である。
 
 const P = "coupd-test-";
 const { run, cleanup } = dbTest(P);
@@ -66,7 +66,7 @@ describe("updateCompanyInfo", () => {
         );
         expectFailure(e, NotFound, "not_found", 404);
 
-        // rollback: audit 発火なし + company 状態 unchanged (name / orgCode)
+        // rollback により audit は発火せず、company の状態 (name / orgCode) も変わらない
         const after = yield* db.readCompany(co);
         expect(after?.name).toBe(`${P}co-d06`);
         expect(after?.activationStatus).toBe("DELETED");
@@ -77,7 +77,7 @@ describe("updateCompanyInfo", () => {
   test("QA-E-11 not_found 経路の rollback → mutation なし + audit 非発火", () =>
     run(
       Effect.gen(function* () {
-        // updateCompany は存在しない companyId で 0 件更新 → not_found。tx 内 audit も rollback で消える。
+        // updateCompany は存在しない companyId では 0 件更新となり not_found になる。tx 内の audit も rollback で消える。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("owner");
         const co = yield* db.seedCompany("e11-existing");
@@ -98,9 +98,9 @@ describe("updateCompanyInfo", () => {
   test("QA-H-12 mutation → audit 発火順 pin (audit.payload.after が UPDATE 完了後の DB state と一致)", () =>
     run(
       Effect.gen(function* () {
-        // ADR-0012 の invariant: mutation を audit の前に同 tx で emit する。UPDATE 完了後の
+        // ADR-0012 の invariant として、mutation を audit の前に同じ tx で emit する。UPDATE 完了後の
         // company 行 (readCompany の返す name / org_code) と audit.after が一致することで、
-        // 順序が逆 (audit を先に写像 → UPDATE で変更) の regression を検知する。
+        // 順序が逆 (audit を先に書き、その後の UPDATE で値が変わる) になる regression を検知する。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("owner-order");
         const co = yield* db.seedCompany("h12", "PERSONAL");

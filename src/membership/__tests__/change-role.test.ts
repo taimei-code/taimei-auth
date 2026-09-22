@@ -12,10 +12,10 @@ import { LastOwner } from "../errors";
 import { NotFound } from "../guard/errors";
 
 // change-role use-case (src/membership/change-role.ts) の DB 統合テスト。
-// 成功 / 200 短絡 (tx open せず audit 発火なし) / OWNER≥1 違反 → LastOwner /
-// NotFound (targetUserId 不在) / audit payload 全 key と mutation → audit の発火順を検証する。
-// 認可 (誰が誰の role を変えられるか) は Guard 層 (requireRoleChange) の責務なので本テストは
-// 認可通過後の呼び出しのみを扱う。
+// 成功、200 の短絡 (tx を開かず audit も発火しない)、OWNER≥1 違反で LastOwner になること、
+// NotFound (targetUserId 不在)、audit payload の全 key、mutation の後に audit が発火する順序を検証する。
+// 認可 (誰が誰の role を変えられるか) は Guard 層 (requireRoleChange) の責務なので、このテストは
+// 認可通過後の呼び出しだけを扱う。
 
 const P = "chrole-test-";
 const { run, cleanup } = dbTest(P);
@@ -130,9 +130,9 @@ describe("changeRole", () => {
   test("QA-E-09 / QA-E-11 last_owner reject → audit 非発火 (rollback 契約)", () =>
     run(
       Effect.gen(function* () {
-        // apply-change.ts 内で OWNER≥1 が破れた場合、mutation (UPDATE) と audit INSERT を
-        // 同 tx で rollback する。role_changed audit が漏れないことを直接検証する (accept 側の
-        // recordInvitationAcceptRejected と違い、role 変更には rejected 用の別 tx audit は無い)。
+        // apply-change.ts 内で OWNER≥1 が破られた場合、mutation (UPDATE) と audit の INSERT を
+        // 同じ tx で rollback する。role_changed audit が残らないことを直接検証する (accept 側の
+        // recordInvitationAcceptRejected と違い、role 変更には rejected 用の別 tx の audit は無い)。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("only-owner-rollback");
         const co = yield* db.seedCompany("e09");
@@ -155,8 +155,8 @@ describe("changeRole", () => {
   test("QA-H-12 mutation → audit の発火順 pin (audit createdAt が UPDATE 完了後)", () =>
     run(
       Effect.gen(function* () {
-        // ADR-0012 の invariant: mutation を同 tx 内で audit の前に emit する (順序が逆だと
-        // audit が反映前の状態を根拠にする silent drift が発生する)。role_changed audit の payload
+        // ADR-0012 の invariant として、mutation を同じ tx 内で audit の前に emit する (順序が逆だと
+        // audit が反映前の状態を根拠にし、気付かれないままずれが生じる)。role_changed audit の payload
         // の before_role / after_role が UPDATE 完了後の状態と一致することで担保する。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("owner-order");

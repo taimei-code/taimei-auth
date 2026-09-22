@@ -9,9 +9,9 @@ import { SentryLive, type SentryService } from "../../sentry";
 import { RateLimited } from "../errors";
 import { consumeInvitationQuota } from "../rate-limit";
 
-// company 単位の invitation 試行枠 (設計 AC-024〜AC-029)。倒し方は fail-open。
-// 上限は env の既定 50 を前提に、env を書き換えず bucket に pre-set して観測する
-// (env を変えると同 process で後続する create.test.ts の既定 50 前提を壊す)。
+// company 単位の invitation 試行枠 (設計 AC-024〜AC-029)。障害時は fail-open にする。
+// 上限は env の既定 50 を前提にし、env を書き換えずに bucket へ先に値を入れて観測する
+// (env を変えると同じプロセスで後続する create.test.ts の既定 50 の前提を壊す)。
 const COMPANY = "invitation-rate-limit-test";
 const bucketKey = () =>
   `invitation_rate:${COMPANY}:${new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length)}`;
@@ -26,7 +26,7 @@ const run = <A, E>(
   ttlStore: Layer.Layer<TtlStore> = TtlStoreLive,
 ) => Effect.runPromise(Effect.provide(p, Layer.mergeAll(ttlStore, SentryLive)));
 
-// AC-029: E channel に TtlStoreError が無い (kernel が畳む)。上限到達だけが RateLimited。
+// AC-029: E channel に TtlStoreError は現れない (kernel が吸収する)。上限到達だけが RateLimited になる。
 consumeInvitationQuota satisfies (
   companyId: string,
 ) => Effect.Effect<void, RateLimited, TtlStore | SentryService>;

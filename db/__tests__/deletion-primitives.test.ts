@@ -20,8 +20,8 @@ import { company, invitation, membership, user } from "../schema";
 
 const P = "delprim-test-";
 
-// FK: invitation.invited_by_user_id / company_id は cascade、membership.company_id は restrict。
-// 物理 company 削除 (cleanup) のため membership → company の順、invitation は先に消す。
+// FK は invitation.invited_by_user_id と company_id が cascade、membership.company_id が restrict。
+// company を物理削除する cleanup のため、invitation を先に消し、次に membership、最後に company の順で消す。
 async function cleanup() {
   await db.delete(invitation).where(like(invitation.email, `${P}%`));
   await db.delete(membership).where(like(membership.userId, `${P}%`));
@@ -110,7 +110,7 @@ describe("reassignLastUsedCompanyForDeletedCompany", () => {
     const surviving = await seedCompany("re-surviving");
     const userId = await seedUser("re-1", deleted);
     await join(userId, surviving);
-    // 削除フローでは先に対象 company の membership が消える
+    // 削除フローでは、対象 company の membership が先に消える
     await removeMembershipsOfCompany(deleted);
 
     await reassignLastUsedCompanyForDeletedCompany(deleted);

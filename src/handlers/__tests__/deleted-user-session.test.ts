@@ -5,10 +5,10 @@ import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { buildTestApp, requestApp, responseJson, restoreActor, stubActor } from "./helpers";
 
-// 削除済み user の session で書き込み route を叩いた時の fail-closed 契約を固定する。
-// better-auth cookieCache (最大 5 分) は user 行の削除後も session を返し続けるため、
-// guard が DB の user 存在で fail-closed しないと membership insert が FK 違反 500 になる
-// (事業所削除 → 連動アカウント削除 → 同 browser で signup/company 再送信、の実障害を再現)。
+// 削除済み user の session で書き込み route を呼んだ時の fail-closed 契約を固定する。
+// better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返し続けるため、
+// guard が DB に user が存在するかで fail-closed しないと、membership の insert が FK 違反で 500 になる
+// (事業所削除に連動してアカウントが削除され、同じブラウザで signup/company を再送信した実障害を再現する)。
 const P = "dus-test-";
 const { run, cleanup } = dbTest(P);
 

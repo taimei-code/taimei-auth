@@ -18,19 +18,19 @@ import { TestDb } from "../../__tests__/test-db";
 import { accountMfa } from "../account-mfa";
 
 // account MFA API (src/handlers/account-mfa.ts) の統合テスト。
-// 対象ユーザーは requireActor が解決した 1 人だけで、body の内容では動かない — セッションを
-// 持つ誰もが他人の第二要素を外せる状態にしないための境界がここ。
-// 応答の期待 JSON は旧実装のテストから不変 (「応答不変」の最終観測 — ADR-0016)。
+// 対象ユーザーは requireActor が解決した 1 人だけで、body の内容では変わらない。セッションを
+// 持つ誰もが他人の第二要素を外せる状態にしないための境界がここにある。
+// 応答の期待 JSON は旧実装のテストから変えていない (「応答不変」の最終観測、ADR-0016)。
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
 
-// src/app.ts の production 値と同値。local は 1000 に緩和されるため、実 app では枠の境界を
+// src/app.ts の production 値と同じ。local では 1000 に緩和されるため、実 app では枠の境界を
 // 観測できない。
 const MFA_ATTEMPT_LIMIT = 10;
 
-// src/mfa/disable-attempt-budget.ts の MAX_ATTEMPTS と同値。環境で緩和されないアカウント単位の
-// 上限で、session 軸の rate limit より先に効く。
+// src/mfa/disable-attempt-budget.ts の MAX_ATTEMPTS と同じ。環境で緩和されないアカウント単位の
+// 上限で、session 単位の rate limit より先に到達する。
 const DISABLE_ATTEMPT_LIMIT = 5;
 
 const buildApp = (): Hono => {
@@ -78,7 +78,7 @@ describe("account MFA API", () => {
         expect(yield* responseJson(res)).toEqual({ ok: true });
         expect(yield* countMfaTotpRows(actorUser.id)).toBe(0);
         expect(yield* countRecoveryCodeRows(actorUser.id)).toBe(0);
-        // 被害者側は 1 bit も動かない。
+        // 被害者側の状態は何も変わらない。
         expect(yield* countMfaTotpRows(victimUser.id)).toBe(1);
         expect((yield* findMfaTotpRow(victimUser.id))?.verifiedAt).not.toBeNull();
       }),
@@ -101,8 +101,8 @@ describe("account MFA API", () => {
           attempts.push({ status: res.status, body: yield* responseJson(res) });
         }
 
-        // 枠を使い切るまでは 400、超えた分は use-case のロックアウトで 429。user 軸で数えるため
-        // セッションを取り直しても枠が戻らない。SPA は body の error で待ち時間を書き分ける。
+        // 枠を使い切るまでは 400、超えた分は use-case のロックアウトで 429 になる。user 単位で数えるため
+        // セッションを取り直しても枠は戻らない。SPA は body の error で待ち時間の表示を切り替える。
         expect(attempts.slice(0, DISABLE_ATTEMPT_LIMIT).map((attempt) => attempt.status)).toEqual(
           Array(DISABLE_ATTEMPT_LIMIT).fill(400) as number[],
         );
@@ -125,7 +125,7 @@ describe("account MFA API", () => {
         });
 
         expect(res.status).toBe(200);
-        // secret とリカバリーコードの実体を後から読み戻せる経路を作らないための response 形。
+        // secret とリカバリーコードの実体を後から読み戻せる経路を作らないための response の形。
         expect(yield* responseJson(res)).toEqual({
           enabled: true,
           in_effect: true,
@@ -152,7 +152,7 @@ describe("account MFA API", () => {
           totp_uri: string;
           recovery_codes: string[];
         };
-        // secret 単体のキーを増やさない (実体は totp_uri のクエリにのみ載る)。
+        // secret 単体のキーを増やさない (実体は totp_uri のクエリにだけ含まれる)。
         expect(Object.keys(body).sort()).toEqual(["enrollment_id", "recovery_codes", "totp_uri"]);
         expect(body.enrollment_id.length).toBeGreaterThan(0);
         expect(new URL(body.totp_uri).searchParams.get("secret")).not.toBeNull();
@@ -194,8 +194,8 @@ describe("account MFA API", () => {
         const res = yield* requestApp(app, "/api/account/mfa", { headers: session.headers });
 
         expect(res.status).toBe(200);
-        // 「中断した有効化 / 無効化」はフラグ×行の不整合の化石で、行のみが状態を持つ現構成では
-        // 構造的に不在 (ADR-0016 §3.1)。in_effect は互換 field として enabled と常に同値。
+        // 「中断した有効化 / 無効化」はフラグと行の不整合が残した過去の状態で、行だけが状態を持つ現構成では
+        // 構造的に存在しない (ADR-0016 §3.1)。in_effect は互換フィールドとして enabled と常に同じ値になる。
         expect(yield* responseJson(res)).toEqual({
           enabled: false,
           in_effect: false,
@@ -218,7 +218,7 @@ describe("account MFA API", () => {
 
         expect(res.status).toBe(409);
         expect(yield* responseJson(res)).toEqual({ error: "already_enabled" });
-        // 失敗応答に Retry-After が付かないことを固定 (busy 経路は消滅 — ADR-0016 §5.4)。
+        // 失敗応答に Retry-After が付かないことを固定する (busy 経路は無くなった。ADR-0016 §5.4)。
         expect(res.headers.get("retry-after")).toBeNull();
       }),
     ));
@@ -239,7 +239,7 @@ describe("account MFA API", () => {
 
         expect(res.status).toBe(409);
         expect(yield* responseJson(res)).toEqual({ error: "already_enabled" });
-        // revoke が走っていないこと (走ると本人の他デバイスが理由なく失効する)。
+        // revoke が実行されていないことを確かめる (実行されると本人の他デバイスが理由なく失効する)。
         expect(res.headers.getSetCookie()).toEqual([]);
       }),
     ));

@@ -2,8 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { createAuthGuard } from "../src/guard";
 import { Result } from "../src/gen/auth/v1/auth_pb";
 
-// VerifyResult discriminated union 戻り型 (0.6.0 breaking)。
-// SDK は副作用なし。consumer framework 固有の制御フロー (redirect 等) は consumer 側 wrapper に委ねる。
+// 戻り値は VerifyResult の discriminated union である (0.6.0 の breaking change)。
+// SDK は副作用を持たない。consumer の framework に固有の制御フロー (redirect など) は consumer 側の wrapper に任せる。
 
 type VerifyArgs = { sessionToken: string };
 
@@ -127,7 +127,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.data.session.id).toBe("sess-1");
     expect(result.data.session.kind).toBe("user");
     expect(result.data.companyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
-    // IdP 隠蔽: SessionData.session に余計なフィールドが乗らないこと (companyId は top-level に上げる)
+    // IdP を隠すため、SessionData.session に余計なフィールドが入らないことを確かめる (companyId は top-level に置く)
     expect(Object.keys(result.data.session).sort()).toEqual(["expiresAt", "id", "kind"]);
   });
 
@@ -212,11 +212,11 @@ describe("createAuthGuard.getSession", () => {
   });
 });
 
-// MFA チャレンジ保留中の user は、一次認証の session が破棄済みで第二要素も未検証という
+// MFA チャレンジが保留中の user は、一次認証の session が破棄済みで第二要素も未検証という
 // 中間状態にある。SDK はこの状態を表す新しい戻り値を持たず、consumer からは単に未認証に見える。
 describe("MFA チャレンジ保留中の consumer 表面", () => {
-  // MFA 材料の sentinel — SDK の whitelist 写像がこれらを consumer へ運ばないことを
-  // 下の leak 検査 (allKeys / should-not-leak) が実際に検証できる状態を保つ。
+  // MFA の材料を表す sentinel。SDK の whitelist による変換がこれらを consumer へ渡さないことを、
+  // 下の leak 検査 (allKeys と should-not-leak) が実際に検証できる状態を保つ。
   const userWithMfaEnabled = {
     ...validUser,
     twoFactorEnabled: true,

@@ -10,7 +10,7 @@ import { MembershipRepoLive } from "../wiring";
 const P = "race-test-";
 const { run, cleanup } = dbTest(P);
 
-// lock 取得後・削除前に 100ms 止め、2 tx の FOR UPDATE 窓を確実に重ねる。
+// lock 取得後、削除前に 100ms 止めて、2 つの tx の FOR UPDATE の窓を確実に重ねる。
 const slowDelete = Layer.effect(
   MembershipRepo,
   Effect.map(MembershipRepo, (live) =>
@@ -26,7 +26,7 @@ describe("OWNER race", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  // flake 検知のため 5 回連続で同じ不変条件を要求する (旧 db/__tests__/membership.race.test.ts を踏襲)。
+  // 不安定な失敗を検知するため、5 回連続で同じ不変条件を要求する (旧 db/__tests__/membership.race.test.ts と同じ方式)。
   for (let i = 1; i <= 5; i++) {
     test(`iteration ${i}: 2 OWNER の同時退会は片方だけ成功し、もう片方は last_owner で OWNER が 1 名残る`, () =>
       run(

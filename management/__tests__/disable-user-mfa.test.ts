@@ -37,8 +37,8 @@ describe("toDisableUserMfaReport", () => {
   });
 });
 
-// MFA 運用救済 (CONTEXT.md) の本体。本人のコード検証なしに第二要素を外す唯一の経路なので、tx 2 文 → best-effort 記帳 →
-// 完走待ちの通知、という合成を production の AppLayer + TestDb で観測する。
+// MFA 運用救済 (CONTEXT.md) の本体。本人のコード検証なしに第二要素を外す唯一の経路なので、tx 2 文、best-effort の記帳、
+// 完走を待つ通知、という順の合成を production の AppLayer と TestDb で観測する。
 const { run, cleanup } = dbTest("mgmt-mfa-");
 const DISABLED_EMAIL_LOG = "[TEST] mfa disabled email for";
 
@@ -50,7 +50,7 @@ describe("forceDisableMfa (統合)", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const user = yield* db.seedUser("enabled");
-        // 有効化通知 (background) を先に drain し、無効化側の log 観測に混ぜない。
+        // background で走る有効化通知を先に drain し、無効化側のログ観測に混ぜない。
         yield* observing(enableMfaFor(user));
 
         const { value: first, logs } = yield* observing(forceDisableMfa(user.id));
@@ -64,7 +64,7 @@ describe("forceDisableMfa (統合)", () => {
           true,
         );
 
-        // 再実行は冪等: 変更なし、記帳も通知も増えない。
+        // 再実行は冪等で、変更は起きず、記帳も通知も増えない。
         const { value: second, logs: secondLogs } = yield* observing(forceDisableMfa(user.id));
         expect(second).toEqual({ ok: true, changed: false });
         expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(1);

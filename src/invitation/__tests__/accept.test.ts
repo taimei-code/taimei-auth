@@ -6,8 +6,8 @@ import { TestDb } from "../../__tests__/test-db";
 import { acceptInvitation } from "../accept";
 
 // invitation accept use-case (src/invitation/accept.ts) の DB 統合テスト。
-// FOR SHARE lock + verifyInviter の再検証 / audit event / reused 冪等 /
-// 並行 double-accept / 降格レース の invariant を検証する。
+// FOR SHARE lock と verifyInviter の再検証、audit event、reused の冪等性、
+// 並行 double-accept、降格レースの invariant を検証する。
 
 const P = "acc-test-";
 const { run, cleanup } = dbTest(P);
@@ -62,7 +62,7 @@ describe("acceptInvitation", () => {
               invitation: invitationRow,
             });
             expect(result).toEqual({ companyId: co });
-            // 正常 accept で warn は発火しない (拒否経路との対称性)。
+            // 正常な accept では warn は発火しない (拒否経路との対比)。
             expect(warn).not.toHaveBeenCalled();
           }),
         );
@@ -76,9 +76,9 @@ describe("acceptInvitation", () => {
   test("QA-M-01 reused (既所属短絡) は entry 層で 200 に短絡するため、accept use-case は呼ばれない (契約テスト)", () =>
     run(
       Effect.gen(function* () {
-        // acceptInvitation は entry で proceed 判定が下りた invitation のみを受ける契約。
-        // reused の分岐 (既所属短絡) は entry 側の test でカバー。ここでは use-case が
-        // 「既所属 user へ再 accept を渡された」ケースで unique 制約 error が伝播することを確認。
+        // acceptInvitation は entry で proceed と判定された invitation だけを受ける契約である。
+        // reused の分岐 (既所属の短絡) は entry 側のテストが検証する。ここでは use-case が
+        // 「既所属の user への再 accept を渡された」ケースで unique 制約の error が伝播することを確認する。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("m01-owner");
         const co = yield* db.seedCompany("m01");
@@ -93,8 +93,8 @@ describe("acceptInvitation", () => {
         });
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        // 契約: entry が reused に振り分けた後は use-case 呼ばない。誤って呼ぶと INSERT が unique 制約
-        // 違反となり DbError が E に載る。この失敗を handler 側で握るのは責務外なので、
+        // entry が reused に振り分けた後は use-case を呼ばない契約である。誤って呼ぶと INSERT が unique 制約
+        // 違反となり DbError が E channel に現れる。この失敗を handler 側で処理するのは責務外なので、
         // ここでは失敗することだけを固定する (fail-closed で運用ミスを検知する仕組み)。
         const exit = yield* withWarnSpy(() =>
           Effect.exit(
@@ -128,7 +128,7 @@ describe("acceptInvitation", () => {
         yield* db.setMembershipRole(inviter.id, co, "ADMIN");
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        // warn call の検証は withSpy の release 前に済ませる (restore が call 履歴も消す。実測: PR #109)。
+        // warn の呼び出しの検証は withSpy の release 前に済ませる (restore が呼び出し履歴も消す。PR #109 で実測)。
         const { e, warnCalls } = yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
             const e = yield* Effect.flip(
@@ -140,10 +140,10 @@ describe("acceptInvitation", () => {
             return { e, warnCalls: warn.mock.calls.map((c) => Array.from(c)) };
           }),
         );
-        // 拒否は E channel の ExpiredOrUsed (410 / expired_or_used)。内訳は下の audit payload の reason が持つ。
+        // 拒否は E channel の ExpiredOrUsed (410 / expired_or_used) になる。内訳は下の audit payload の reason が持つ。
         expectFailure(e, ExpiredOrUsed, "expired_or_used", 410);
 
-        // reject 経路は tx を rollback させるため、invitation は PENDING のまま (accept 誤 commit の regression 検知)。
+        // reject 経路は tx を rollback させるため、invitation は PENDING のままである (accept を誤って commit する regression の検知)。
         expect((yield* reloadInvitation(inv.token)).status).toBe("PENDING");
         expect(yield* db.readMembership(invitee.id, co)).toBeUndefined();
         expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(1);
@@ -160,8 +160,8 @@ describe("acceptInvitation", () => {
         expect(payload).not.toHaveProperty("email");
         expect(payload).not.toHaveProperty("invited_email");
 
-        // warn は DB 書込みより前に呼ばれる (isolate crash 対策の先行 emit)。同 payload を
-        // JSON でエコーしていることを確認する (順序は audit との対応で担保)。
+        // warn は DB 書き込みより前に呼ばれる (isolate crash に備えて先に emit する)。同じ payload を
+        // JSON で出力していることを確認する (順序は audit との対応で担保する)。
         expect(warnCalls.length).toBeGreaterThanOrEqual(1);
         const call = warnCalls.at(-1);
         expect(call?.[0]).toBe("invitation_accept_rejected");
@@ -185,7 +185,7 @@ describe("acceptInvitation", () => {
           role: "OWNER",
           invitedByUserId: inviter.id,
         });
-        // inviter membership を除名 (row 削除) して不在状態を作る。他 OWNER が残るため lock guard 通過。
+        // inviter の membership を除名 (行削除) して不在状態を作る。他の OWNER が残るため lock guard を通過する。
         yield* db.removeMembership(inviter.id, co);
 
         const invitationRow = yield* reloadInvitation(inv.token);
@@ -249,14 +249,14 @@ describe("acceptInvitation", () => {
         });
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        // 1 度 accept で PENDING を消費する。
+        // 1 度目の accept で PENDING を消費する。
         const first = yield* acceptInvitation({
           actor: { id: invitee.id, email: invitee.email },
           invitation: invitationRow,
         });
         expect(first.companyId).toBe(co);
 
-        // 再度同じ invitation を渡すと markInvitationAccepted が 0 件更新 → double_accept で reject。
+        // 再度同じ invitation を渡すと markInvitationAccepted が 0 件更新となり、double_accept で reject される。
         const stale = yield* reloadInvitation(inv.token);
 
         const second = yield* withWarnSpy(() =>
@@ -298,8 +298,8 @@ describe("acceptInvitation", () => {
         const results = yield* withWarnSpy(() =>
           Effect.all([Effect.exit(accept), Effect.exit(accept)], { concurrency: "unbounded" }),
         );
-        // 片方は成功、もう片方は ExpiredOrUsed (410) か unique 制約の DbError で失敗
-        // (どちらも membership を重複作らない)。
+        // 片方は成功し、もう片方は ExpiredOrUsed (410) か unique 制約の DbError で失敗する
+        // (どちらの場合も membership を重複して作らない)。
         expect(results.filter(Exit.isSuccess).length).toBe(1);
         // membership は 1 行だけ。
         expect((yield* membershipRowsOf(invitee.id, co)).length).toBe(1);
@@ -324,7 +324,7 @@ describe("acceptInvitation", () => {
             role: "OWNER",
             invitedByUserId: inviter.id,
           });
-          yield* db.setMembershipRole(inviter.id, co, "ADMIN"); // 降格 先行 commit
+          yield* db.setMembershipRole(inviter.id, co, "ADMIN"); // 降格を先に commit する
           const invitationRow = yield* reloadInvitation(inv.token);
           const failure = yield* withWarnSpy(() =>
             Effect.flip(
@@ -359,7 +359,7 @@ describe("acceptInvitation", () => {
           });
           expect(acceptResult.companyId).toBe(co);
           expect((yield* db.readMembership(invitee.id, co))?.role).toBe("OWNER");
-          // accept 後の降格は通常通り適用可能 (別 OWNER 残存)。
+          // accept 後の降格は通常どおり適用できる (別の OWNER が残っている)。
           yield* db.setMembershipRole(inviter.id, co, "ADMIN");
           expect((yield* db.readMembership(inviter.id, co))?.role).toBe("ADMIN");
         }

@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import { expectSignInLanding, reseedFixture, signInWithMagicLink } from "./helpers";
 
-// leaver は本テストがアカウントごと消費する (消費型 fixture)
+// leaver はこのテストがアカウントごと消費する (使い切りの fixture)
 test.beforeEach(() => reseedFixture("leave"));
 
-// 最後の所属事業所から「抜ける」は退会と同じアカウント連動削除になる (ADR-0010 D2)。
-// 削除成功後にそのまま membership refresh へ進むと 401 を拾って
-// 「事業所から抜けられませんでした。」と誤表示される退行があったため、
+// 最後の所属事業所から「抜ける」と、退会と同じくアカウントも連動して削除される (ADR-0010 D2)。
+// 削除に成功した後そのまま membership の再取得へ進むと 401 を受け取り、
+// 「事業所から抜けられませんでした。」と誤って表示される退行があったため、
 // ログイン画面への着地までを確認して固定する。
 
 test("最後の所属事業所から抜けるとアカウントごと削除され、ログイン画面に着地する", async ({

@@ -18,17 +18,17 @@ import {
 } from "./helpers";
 
 // account handler 群の HTTP response (status / body / Content-Type) が Guard 層完成の refactor で
-// 崩れないことを固定する。初回実行 (fixture 未存在) では現行 handler の response を
-// __fixtures__/expected/*.json に書き出し、以後は deep-equal で assert する。fixture が commit されると
-// migration 後の run では純粋な assertion として振る舞う。fixture のリセットは disk 上のファイル削除で行う。
+// 崩れないことを固定する。初回実行 (fixture が無い時) では現行 handler の response を
+// __fixtures__/expected/*.json に書き出し、以後は deep-equal で assert する。fixture が commit された後は
+// migration 後の実行で純粋な assertion として振る舞う。fixture のリセットはディスク上のファイル削除で行う。
 //
 // テスト対象 QA-ID:
 // - QA-H-02 / QA-H-03 / QA-H-04 (成功 body deep-equal)
-// - QA-E-01 (#104: ADMIN が role=OWNER 招待 → 403)
-// - QA-E-02 (14 route error 文字列 × status snapshot)
+// - QA-E-01 (#104: ADMIN による role=OWNER の招待は 403)
+// - QA-E-02 (14 route の error 文字列と status の snapshot)
 // - QA-E-03 (details 付き 400 の 3 route)
-// - QA-D-01 (401 が 400/403/404 に優先)
-// - QA-D-02 (期限切れ cookie fail-closed 401)
+// - QA-D-01 (401 が 400/403/404 に優先する)
+// - QA-D-02 (期限切れ cookie は fail-closed で 401)
 // - QA-M-03 / QA-M-08 (Content-Type)
 // - QA-R-06 (envelope 1 行化した route も既存 response 契約を維持)
 
@@ -45,8 +45,8 @@ function loadOrCapture(name: string, actual: NormalizedResponse): NormalizedResp
   return JSON.parse(readFileSync(path, "utf8")) as NormalizedResponse;
 }
 
-// scenario の生成過程で作られる ID は random (companyId 等) のため、fixture 化する前に
-// stable な placeholder に置き換える。生成 ID の桁数は保存しない (deep-equal を安定させるため)。
+// scenario の生成過程で作られる ID (companyId 等) はランダムなため、fixture にする前に
+// 固定の placeholder に置き換える。生成 ID の桁数は保存しない (deep-equal を安定させるため)。
 function normalizeIds(input: unknown, replacements: Record<string, string>): unknown {
   const json = JSON.stringify(input);
   let out = json;
@@ -350,7 +350,7 @@ describe("account routes migration snapshot", () => {
           yield* db.seedMembership(owner.id, co, "OWNER");
           const other = yield* db.seedUser("rm-other");
           yield* db.seedMembership(other.id, co, "OWNER");
-          // 自身 (other) を退会。他 OWNER が 1 名残るため lock guard を通過する。
+          // 自身 (other) を退会させる。他の OWNER が 1 名残るため lock guard を通過する。
           stubActor(other);
           const app = buildTestApp();
           const actual = yield* invoke(
@@ -968,8 +968,8 @@ describe("account routes migration snapshot", () => {
       run(
         Effect.gen(function* () {
           const app = buildTestApp();
-          // helpers.stubActor は Promise を返すが、生 throw も fail-closed で 401 に落ちる契約を
-          // 確認する。auth.api.getSession を同期 throw に差し替える。
+          // helpers.stubActor は Promise を返すが、同期の throw も fail-closed で 401 になる契約を
+          // 確認する。auth.api.getSession を同期 throw する関数に差し替える。
           const original = auth.api.getSession;
           auth.api.getSession = (() => {
             throw new Error("sync throw simulating expired session lookup");
@@ -1001,8 +1001,8 @@ describe("account routes migration snapshot", () => {
             app,
             `http://localhost/api/account/companies/${co}/members`,
           );
-          // Hono c.json は charset なしの `application/json` を返す (移行後も同一)。
-          // guardErrorResponse も同 Content-Type を明示 header で付与し byte-invariant を守る。
+          // Hono の c.json は charset なしの `application/json` を返す (移行後も同じ)。
+          // guardErrorResponse も同じ Content-Type を明示的な header で付与し、byte 単位の不変を守る。
           expect(res.headers.get("content-type")).toMatch(/^application\/json/);
         }),
       ));
@@ -1020,8 +1020,8 @@ describe("account routes migration snapshot", () => {
   });
 
   describe("QA-M-01 accept-invitation reused 短絡の route レベル担保", () => {
-    // entry (requireInvitationAccept) が既所属 short-circuit を返し、accept use-case が起動しない
-    // 契約を route レベルで固定する。PENDING invitation と期限切れ invitation の両方をカバーし、
+    // entry (requireInvitationAccept) が既所属の short-circuit を返し、accept use-case が起動しない
+    // 契約を route レベルで固定する。PENDING の invitation と期限切れの invitation の両方を対象にし、
     // 「既に member なら invitation の期限に関係なく 200 reused を返す」冪等契約を維持する
     // (isAcceptable より先に短絡させることで、期限切れでも既所属なら 200 という現行挙動を保つ)。
     test("QA-M-01 既所属 member が PENDING invitation を再 accept → 200 reused", () =>
@@ -1110,10 +1110,10 @@ describe("account routes migration snapshot", () => {
   });
 });
 
-// server 側 auth-entry-redirect と SPA page guard (SignUpCompany) は同じ「ACTIVE membership の
-// 有無」を別実装で判定する 2 者契約 (#74 redirect loop はこの不一致で再発する)。server 側は
+// server 側の auth-entry-redirect と SPA の page guard (SignUpCompany) は、同じ「ACTIVE membership の
+// 有無」を別実装で判定する 2 者間の契約である (#74 の redirect loop はこの不一致で再発する)。server 側は
 // auth-entry-redirect.test.ts が固定するため、ここでは SPA が読む GET /api/account/memberships が
-// DELETED company を返さないことを対で固定する。
+// DELETED な company を返さないことを対にして固定する。
 describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 者契約 pin)", () => {
   beforeEach(cleanup);
 

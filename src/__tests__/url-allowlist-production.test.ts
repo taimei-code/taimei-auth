@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-// allowedHostPattern は module ロード時に APP_ENV で確定するため、production 値の検証は
-// APP_ENV=production を注入した子プロセスで行う (テストプロセス全体を production 化すると
-// rate-limit 等の local 緩和が外れ他テストが壊れる)。
+// allowedHostPattern は module のロード時に APP_ENV で確定するため、production の値の検証は
+// APP_ENV=production を注入した子プロセスで行う (テストプロセス全体を production にすると、
+// rate-limit などの local の緩和が外れて他のテストが壊れる)。
 
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 

@@ -3,11 +3,11 @@ import { Hono } from "hono";
 import { mountAccountRoutes } from "../../app";
 import { auth } from "../../auth";
 
-// account handler / use-case の DB 統合テストで共用する auth stub と app 組み立て。
-// DB 側の seed / 観測 (事後状態の読み取り) は TestDb service (src/__tests__/test-db.ts、実体は db/testing/*) を test 本体が yield* する。
-// - session 側: auth.api.getSession を monkey-patch して任意 actor に固定する (stubActor / restoreActor)
-// 実 route を叩くには DB 上の membership 行と `auth.api.getSession` が返す actor の両方が必要
-// (RoutingPool 経由の DB は per-request 切替、セッションは module 定数 `requireActor` の内側で解決)。
+// account handler と use-case の DB 統合テストで共用する auth stub と app の組み立て。
+// DB 側の seed と観測 (事後状態の読み取り) は TestDb service (src/__tests__/test-db.ts、実体は db/testing/*) をテスト本体が yield* する。
+// - session 側は auth.api.getSession を monkey-patch して任意の actor に固定する (stubActor / restoreActor)
+// 実 route を呼ぶには DB 上の membership 行と `auth.api.getSession` が返す actor の両方が必要である
+// (RoutingPool 経由の DB は request ごとに切り替わり、セッションは module 定数 `requireActor` の内側で解決される)。
 
 export const TEST_PREFIX = "mig-test-";
 
@@ -17,9 +17,9 @@ let originalGetSession: typeof auth.api.getSession | null = null;
 let currentActor: StubActor = null;
 
 // getSession を stub して guard/core.ts の requireActor が任意の actor を返すようにする。
-// module ロード時に requireActor は `auth.api.getSession` の値を closure captured せず、
-// call 時に auth.api.getSession を lookup する ((headers) => auth.api.getSession({ headers }))
-// ため実行時に patched 版が読まれる。
+// requireActor は module ロード時に `auth.api.getSession` の値を closure に取り込まず、
+// 呼び出し時に auth.api.getSession を参照する ((headers) => auth.api.getSession({ headers }))
+// ため、実行時に差し替え後の版が読まれる。
 export function stubActor(actor: StubActor): void {
   if (!originalGetSession) {
     originalGetSession = auth.api.getSession;
@@ -39,9 +39,9 @@ export function restoreActor(): void {
   currentActor = null;
 }
 
-// auth-entry-redirect は getSession の前段で getSessionCookie(headers) を通すため、
-// stubActor だけでは cookie 不在の早期 next() に落ちて「pass-through が正解」のテストが
-// 理由を問わず緑になる。session 分岐を検証するテストは必ずこの header を付与し、
+// auth-entry-redirect は getSession の前に getSessionCookie(headers) を通すため、
+// stubActor だけでは cookie が無いとして早期に next() へ進み、「そのまま通すのが正解」のテストが
+// 理由を問わず成功してしまう。session の分岐を検証するテストは必ずこの header を付与し、
 // 「cookie 無し」のケースと分岐理由を分離する (cookie 名は local 環境の非 Secure 版)。
 export const SESSION_COOKIE_HEADER = { cookie: "better-auth.session_token=stub-session" };
 
@@ -63,8 +63,8 @@ export type NormalizedResponse = {
   body: unknown;
 };
 
-// レスポンスを比較可能な JSON 化する。Content-Type と status を明示的に含める
-// (fixture の deep-equal 対象がこの 3 点セット)。
+// レスポンスを比較できる JSON にする。Content-Type と status を明示的に含める
+// (fixture の deep-equal の対象はこの 3 点である)。
 export async function normalizeResponse(res: Response): Promise<NormalizedResponse> {
   const contentType = res.headers.get("content-type");
   let body: unknown;

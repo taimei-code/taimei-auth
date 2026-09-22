@@ -1,5 +1,5 @@
-// GitHub Actions の action を 40 桁 commit SHA で pin し続けているかの config invariant。
-// pin 規約の正本: docs/adr/0009-supply-chain-hardening.md §A
+// GitHub Actions の action を 40 桁の commit SHA で pin し続けているかを見る config invariant。
+// pin の規約は docs/adr/0009-supply-chain-hardening.md §A で定義する。
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -14,7 +14,7 @@ import {
 describe("GitHub Actions の action pin invariant", () => {
   test("QA-M-16: workflow の uses は全て 40 桁 SHA + version コメント", () => {
     const names = workflowFileNames();
-    // 現行 3 本 (ci / deploy / publish-auth-client) を下回る = 読み取り path の取り違え。
+    // 現行の 3 本 (ci、deploy、publish-auth-client) を下回るなら、読み取るパスを取り違えている。
     expect(names.length).toBeGreaterThanOrEqual(3);
 
     let total = 0;
@@ -23,14 +23,14 @@ describe("GitHub Actions の action pin invariant", () => {
       total += usesLines(text).length;
       expect(workflowPinViolations(text, name)).toEqual([]);
     }
-    // uses が 1 件も無い = selector 空振りの検出。
+    // uses が 1 件も無いなら、selector がどこにも一致していない。それを検出する。
     expect(total).toBeGreaterThan(0);
 
-    // tag 形式は違反として検出できる (assert が形式を実際に見ていることの positive control)。
+    // tag 形式は違反として検出できる (assert が形式を実際に見ていることを確かめる positive control)。
     expect(workflowPinViolations("      - uses: actions/checkout@v4\n", "fixture").length).toBe(1);
 
-    // 大文字 SHA / version コメント後ろの補足 / ローカル composite action は違反にしない
-    // (どれも供給元は変わらないのに落ちると、pin 検査を止める方向の圧力になる)。
+    // 大文字の SHA、version コメントの後ろの補足、ローカルの composite action は違反にしない
+    // (どれも供給元は変わらないのに失敗すると、pin 検査を止める方向に圧力がかかる)。
     expect(
       workflowPinViolations(
         "      - uses: actions/checkout@DE0FAC2E4500DABE0009E67214FF5F5447CE83DD # v6.0.2\n",

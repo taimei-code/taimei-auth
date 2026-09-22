@@ -12,8 +12,8 @@ import {
 } from "../repositories/mfa-totp";
 import { mfaRecoveryCode, mfaTotp, user } from "../schema";
 
-// 並行決着が「操作文そのもの」で確定することの実証 (ADR-0016 §3.3)。勝者はちょうど 1。
-// 暗号列は repository にとって不透明なので固定値でよい (復号は use-case の担当)。
+// 並行時の勝敗が操作文そのものだけで確定することを実証する (ADR-0016 §3.3)。勝者はちょうど 1 つになる。
+// 暗号化された値は repository にとって中身を解釈しないものなので固定値でよい (復号は use-case の担当)。
 
 const P = "mfa-race-";
 

@@ -9,7 +9,7 @@ describe("roleLabelJa", () => {
     });
   }
 
-  // 型では起きないが、古い bundle が新 role を受ける version skew の web 側保護 (Finding ledger F1)。
+  // 型の上では起きないが、古い bundle が新しい role を受け取る version のずれに対する web 側の保護 (Finding ledger F1)。
   test("bundle が知らない role は raw を返し空欄にしない", () => {
     expect(roleLabelJa("SUPERVISOR" as never)).toBe("SUPERVISOR");
   });

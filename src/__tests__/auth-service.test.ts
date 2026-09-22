@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { AuthApi } from "../auth-service";
 import { AuthApiLive } from "../auth-wiring";
 
-// design §3.8: better-auth API 面の Effect face。失敗は AuthApiError (cause: unknown)。
+// design §3.8 の、better-auth API を包む Effect face のテスト。失敗は cause: unknown を持つ AuthApiError になる。
 describe("AuthApiLive", () => {
   test("cookie の無い Headers では session が null", async () => {
     const program = AuthApi.use((authApi) => authApi.getSession(new Headers()));

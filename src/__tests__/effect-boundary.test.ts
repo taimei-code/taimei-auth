@@ -4,17 +4,17 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { type GrepOptions, grepFiles, REPO_ROOT } from "./grep-files";
 
-// ADR-0017 / design §4 の import 境界 (I2): Repository 境界 db/ と 共通画面 SPA web/ は effect を持ち込まない。
-// biome の noRestrictedImports は override の「最後に一致した copy が勝つ」semantics のため db/** 専用 override を
-// 足すと web 専用 ban の 2 copy invariant (dependency-classification.test.ts) が崩れる。grep で固定する。
+// ADR-0017 と design §4 の import 境界 (I2) を固定する。Repository 境界の db/ と共通画面 SPA の web/ は effect を持ち込まない。
+// biome の noRestrictedImports は override のうち最後に一致したコピーが勝つ semantics なので、db/** 専用の override を
+// 足すと web 専用 ban の 2 コピー invariant (dependency-classification.test.ts) が崩れる。そのため grep で固定する。
 
-// `from "effect"` / `import "effect"` / `require("effect")` / `import("effect")` と `effect/...` 配下を拾う。
+// `from "effect"`、`import "effect"`、`require("effect")`、`import("effect")` と、`effect/...` 配下を拾う。
 const EFFECT_IMPORT = String.raw`(from|import|require\(|import\()\s*["']effect(/[^"']*)?["']`;
 
 const effectImports = (dir: string): string[] =>
   grepFiles(EFFECT_IMPORT, dir, { include: ["*.ts", "*.tsx"] });
 
-// Stage ゲートはいずれも src/ の production code (テスト除外) を対象にする。
+// Stage ゲートはいずれも、src/ の production コード (テストを除く) を対象にする。
 const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { excludeTests: true });
 
 describe("effect の import 境界 (ADR-0017)", () => {
@@ -27,7 +27,7 @@ describe("effect の import 境界 (ADR-0017)", () => {
   });
 });
 
-// ---- Stage 完了ゲート (ADR-0017 Stage 表)。旧様式が src/ に残っていないことを grep で固定する ----
+// ---- Stage 完了ゲート (ADR-0017 の Stage 表)。旧様式が src/ に残っていないことを grep で固定する ----
 
 describe("Stage 2 ゲート (Use-case): Repository は ports 経由", () => {
   test("db/repositories と db/transaction の runtime import は wiring / id-generator / transaction / auth.ts に限る", () => {
@@ -66,9 +66,9 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
   });
 
   // client-facing-error の報告口は Effect の外で Sentry に触る裏口になるので、呼び出し側を adapter と better-auth の結線に固定する
-  // (use-case / handler は SentryService を yield* する: src/CLAUDE.md「Effect様式」)。
-  // best-effort 記帳 (CONTEXT.md): use-case は appendAuditLogBestEffort を通す。raw appendAuditLog を直接 yield* すると
-  // DbError が E channel に残り、成立済みの操作 (行削除 / verified 化 / session 発行) が 500 で返る。
+  // (use-case と handler は SentryService を yield* する。src/CLAUDE.md「Effect様式」を参照)。
+  // best-effort の記帳 (CONTEXT.md) では、use-case は appendAuditLogBestEffort を通す。素の appendAuditLog を直接 yield* すると
+  // DbError が E channel に残り、成立済みの操作 (行の削除、verified への変更、session の発行) が 500 で返ってしまう。
   test("AuditLog.appendAuditLog の直呼びと swallowAuditFailure の pipe は src/audit/report-failure.ts (+ invitation accept の record* 経由) だけ", () => {
     expect(
       srcFiles("\\.appendAuditLog\\(").filter((f) => f !== "src/audit/report-failure.ts"),
@@ -77,7 +77,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("swallowAuditFailure\\(").filter((f) => !allowed.has(f))).toEqual([]);
   });
 
-  // CONTEXT.md「fail-open で通した事実は Sentry に残し、silent には通さない」の code 側。
+  // CONTEXT.md「fail-open で通した事実は Sentry に残し、気付かれないまま通すことはしない」をコード側で固定する。
   test("silent な fold (orElseSucceed / Effect.ignore / logError だけの catch) は production src に無く、captureCause の直呼びは fail-closed / void 経路だけ (値に倒す経路は captureCauseAs)", () => {
     expect(srcFiles("orElseSucceed\\(|Effect\\.ignore\\(")).toEqual([]);
     expect(srcFiles("Effect\\.logError\\(")).toEqual(["src/email/client.ts"]);
@@ -95,8 +95,8 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ]);
   });
 
-  // OWNER が減りうる write の呼び手を固定する。per-member の write は OWNER≥1 の判定を持つ apply-change.ts だけ、
-  // 全削除 (removeMembershipsOfCompany) は事後 count が無い company/delete と backfill だけ。
+  // OWNER が減り得る write の呼び出し側を固定する。member 単位の write は OWNER が 1 以上残る判定を持つ apply-change.ts だけ、
+  // 全削除 (removeMembershipsOfCompany) は事後の count が無い company/delete と backfill だけに限る。
   test("OWNER を減らしうる membership write の呼び手は apply-change / company delete / backfill だけ", () => {
     expect(
       srcFiles("\\.(updateMembershipRole|deleteMembership|removeMembershipsOfCompany)\\(").sort(),
@@ -119,19 +119,19 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
   });
 });
 
-// ---- test の DB 接触 (08-liftall-and-test-seeds §3.3): src の test と e2e は db/testing/* だけを runtime import する ----
+// ---- テストの DB 接触 (08-liftall-and-test-seeds §3.3)。src のテストと e2e は db/testing/* だけを runtime import する ----
 
-// 静的 import (named / namespace / default / side-effect / re-export) と動的 import (import 関数呼び出し) を拾い、
-// `import type` / `export type` は除く。1 行の形は grep で拾う (default import の識別子は `type` にも当たるので、hit 行を
-// 読んで型 import を落とす)。biome (lineWidth 100) が折り返した複数行の形は `} from "…"` の行を grep で拾い、その
-// statement の先頭行を読んで型 import かどうかを判定する (行 grep だけだと複数行の runtime import が素通りする)。
+// 静的 import (named、namespace、default、side-effect、re-export) と動的 import (import 関数の呼び出し) を拾い、
+// `import type` と `export type` は除く。1 行の形は grep で拾う (default import の識別子は `type` にも一致するので、hit した行を
+// 読んで型 import を除外する)。biome (lineWidth 100) が折り返した複数行の形は `} from "…"` の行を grep で拾い、その
+// statement の先頭行を読んで型 import かどうかを判定する (行単位の grep だけだと、複数行の runtime import が検出されずに通る)。
 type ImportGate = {
   readonly specifier: RegExp;
   readonly oneLine: string;
   readonly closing: string;
 };
 // `import { x } from` / `import * as x from` / `import x from` / `import x, { y } from` / `export { x } from` /
-// `export * from` と side-effect の `import "…"`。
+// `export * from` と、side-effect だけの `import "…"` に一致する。
 const STATIC_FORMS = String.raw`^(import|export) (\{|\*|[A-Za-z_$][A-Za-z0-9_$]*).* from|^import`;
 const TYPE_ONLY = /^(import|export) type\b/;
 const gateFor = (specifier: string): ImportGate => ({
@@ -201,7 +201,7 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
   test("positive control: 静的 (1 行 / 複数行) と動的 import は検出され、型 import は検出されない", () => {
     const dir = mkdtempSync(join(tmpdir(), "db-import-gate-"));
     try {
-      // 本 file 自身が gate に当たらないよう、動的 import の形は文字列連結で組む。
+      // このファイル自身が gate に引っかからないよう、動的 import の形は文字列連結で組む。
       const dynamicImport = ["imp", "ort("].join("");
       writeFileSync(join(dir, "static.ts"), 'import { db } from "@/db/client";\n');
       writeFileSync(join(dir, "multi.ts"), 'import {\n  db,\n  schema,\n} from "@/db/client";\n');
@@ -249,11 +249,11 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
   });
 });
 
-// ---- revokeAllSessionsForUser の窓口 (08 設計 A): ports が repository の全 export を公開するため、呼び出しを grep で閉じる ----
+// ---- revokeAllSessionsForUser の窓口 (08 設計 A)。ports が repository の全 export を公開するため、呼び出し箇所を grep で閉じる ----
 
 describe("revokeAllSessionsForUser の窓口", () => {
   test("port 経由の呼び出しは src/account/revoke-sessions.ts に限る (TTL store 側の失効を伴う唯一の窓口)", () => {
-    // biome の importNames ban は src/** だけに効くため、ports を組める management / e2e も同じ gate で閉じる。
+    // biome の importNames ban は src/** にしか適用されないため、ports を組める management と e2e も同じ gate で閉じる。
     const offenders = ["src", "management", "e2e"].flatMap((dir) =>
       grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
     );
@@ -261,9 +261,9 @@ describe("revokeAllSessionsForUser の窓口", () => {
   });
 });
 
-// ---- AppLayer の構築失敗経路が無い (ADR-0017 Decision の runtime 項): ManagedRuntime.make は Layer を初回 run で構築するため、
-// 構築で失敗しうる Layer (Layer.effect / scoped / unwrap 等) を足すと bootstrap でなく本番の初回 request で落ちる。
-// Layer.succeed / mergeAll に限る間はその経路が無い。必要になったら、この gate と一緒に bootstrap の eager 構築を戻す ----
+// ---- AppLayer に構築失敗の経路が無いこと (ADR-0017 Decision の runtime 項)。ManagedRuntime.make は Layer を初回の run で構築するため、
+// 構築で失敗し得る Layer (Layer.effect、scoped、unwrap など) を足すと、bootstrap ではなく本番の初回 request で落ちる。
+// Layer.succeed と mergeAll に限る間はその経路が無い。必要になったら、この gate と一緒に bootstrap の eager 構築を戻す ----
 
 describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
   test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {

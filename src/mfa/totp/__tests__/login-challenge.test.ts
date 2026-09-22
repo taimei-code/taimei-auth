@@ -32,8 +32,8 @@ import { MfaSessions } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 
-// ログインチャレンジの発行 → 通過 (§10-4)。実 TTL store + 実 gateway (issueSessionFor)。
-// sign_in audit は live Layer の実書き込みを実 DB で観測する。
+// ログインチャレンジの発行から通過まで (§10-4)。実 TTL store と実 gateway (issueSessionFor) を使う。
+// sign_in audit は live Layer の実際の書き込みを実 DB で観測する。
 
 const P = "mfa-lc-";
 const run = runTest(P);
@@ -70,7 +70,7 @@ describe("ログインチャレンジ", () => {
           method: "magic_link",
         });
 
-        // 発行 (openLoginChallenge) の cookie 素材が載る Set-Cookie の形をここで固定する。
+        // 発行 (openLoginChallenge) の cookie の材料が入る Set-Cookie の形をここで固定する。
         const issued = yield* openLoginChallenge({
           userId: user.id,
           redirectUrl: CONSUMER_CALLBACK,
@@ -88,7 +88,7 @@ describe("ログインチャレンジ", () => {
         expect(setCookie[0]).toContain("HttpOnly");
         expect(setCookie[0]).toContain("SameSite=Lax");
         expect(setCookie[0]).not.toContain("Domain=");
-        // 後片付け対象に載せる。
+        // 後片付けの対象に加える。
         const opened = yield* peekLoginChallenge(
           browserCookieHeaders(new Response(null, { headers: reissued })),
         );
@@ -111,8 +111,8 @@ describe("ログインチャレンジ", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("pass");
         const enabled = yield* enableMfaFor(user);
-        // 出口検証は trusted origin の完全一致 — テスト env の信頼外 origin は fallback するため、
-        // ここは same-origin path で「保存した遷移先が返る」ことを見る (信頼外は AC-142 の担当)。
+        // 出口検証は trusted origin との完全一致で行う。テスト env では信頼外の origin は fallback するため、
+        // ここは same-origin のパスで「保存した遷移先が返る」ことを見る (信頼外は AC-142 の担当)。
         const challenge = yield* issueTestChallenge({
           userId: user.id,
           redirectUrl: "/account/security",
@@ -131,7 +131,7 @@ describe("ログインチャレンジ", () => {
           c.startsWith(`${authCookies.sessionToken.name}=`),
         );
         expect(sessionCookies.length).toBe(1);
-        // Max-Age 明示付与 — browser-session cookie 化で寿命が揺れない (ADR-0016 §4.7)。
+        // Max-Age を明示的に付与する。browser-session cookie になって寿命が変わることを防ぐ (ADR-0016 §4.7)。
         expect(sessionCookies[0]).toMatch(/Max-Age=\d+/);
         expect(Number(/Max-Age=(\d+)/.exec(sessionCookies[0])?.[1])).toBeGreaterThan(0);
         // cookieCache (session_data) は発行時に作らない。
@@ -143,7 +143,7 @@ describe("ログインチャレンジ", () => {
           setCookies.some((c) => c.startsWith("mfa_login_challenge=") && /max-age=0/i.test(c)),
         ).toBe(true);
 
-        // 発行 session で getSession が user を解決する (PoC 0003 の再固定)。
+        // 発行された session で getSession が user を解決する (PoC 0003 の再固定)。
         const browserHeaders = browserCookieHeaders(
           new Response(null, { headers: passed.forwardedHeaders }),
         );
@@ -161,7 +161,7 @@ describe("ログインチャレンジ", () => {
           userAgent: TEST_USER_AGENT,
         });
 
-        // 同一チャレンジの再使用 → 401、pending false。
+        // 同一チャレンジの再使用は 401 で、pending は false になる。
         const replayed = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",
@@ -222,7 +222,7 @@ describe("ログインチャレンジ", () => {
           expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
         }
 
-        // 6 回目: 400 のままチャレンジ破棄 (SPA の invalid_code → 再照会 → expired 契約を保存)。
+        // 6 回目は 400 のままチャレンジを破棄する (SPA が invalid_code を受けて再照会すると expired になる契約を保つ)。
         const exhausted = yield* verifyFails(challenge.headers, {
           code: yield* wrongTotpCode(enabled.secret),
           kind: "totp",
@@ -254,7 +254,7 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        // INCR できない値を置く — mock でなく実際に失敗する storage 操作で fail-closed を確かめる。
+        // INCR できない値を置く。mock でなく実際に失敗する storage 操作で fail-closed を確かめる。
         yield* Effect.sync(() =>
           getMemoryKvStore().set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60),
         );
@@ -337,7 +337,7 @@ describe("ログインチャレンジ", () => {
           }),
         );
 
-        // boundary error (AuthApiError) として E channel に載る = 成功応答にならない (adapter は 500)。
+        // boundary error (AuthApiError) として E channel に現れるため、成功応答にはならない (adapter は 500 にする)。
         const failed = yield* Effect.flip(
           completeLoginChallenge(challenge.headers, {
             code: yield* totpCode(enabled.secret),
@@ -346,7 +346,7 @@ describe("ログインチャレンジ", () => {
         );
         expect(failed).toBeInstanceOf(AuthApiError);
 
-        // 消費済み fail-closed = 再ログイン導線 (成功扱いにすると session 無しの成功応答になる)。
+        // 消費済みは fail-closed にして再ログインへ導く (成功扱いにすると session の無い成功応答になる)。
         const after = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",

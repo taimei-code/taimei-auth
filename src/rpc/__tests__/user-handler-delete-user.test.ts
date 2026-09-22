@@ -5,10 +5,10 @@ import { TestDb } from "../../__tests__/test-db";
 import { normalizeResponse } from "../../handlers/__tests__/helpers";
 import { handleRpc } from "../fetch-handler";
 
-// Connect transport を test から立てる唯一の点。program を分離せず、
-// production の handleRpc に Connect の JSON request を渡し、path 解決 → proto decode → runRpc の写像 →
+// Connect transport をテストから立ち上げる唯一の点。program を分離せず、
+// production の handleRpc に Connect の JSON request を渡し、パス解決、proto の decode、runRpc の変換、
 // error JSON までを応答 (status / content-type / body の 3 点) で固定する。requireServiceKey は src/app.ts の
-// 前段 middleware なので対象外。
+// 前段の middleware なので対象外である。
 
 const { run, cleanup } = dbTest("rpc-del-");
 

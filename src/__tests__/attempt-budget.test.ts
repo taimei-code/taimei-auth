@@ -6,8 +6,8 @@ import { SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "./test-layers";
 
-// 試行枠 kernel (設計 AC-017〜AC-021)。数えられない時の unavailable への倒し方と上限の境界を TTL store 無しで観測する。
-// TTL store stub と Sentry だけで観測できるので、DB を要求する runTest は使わない。
+// 試行枠 kernel (設計 AC-017〜AC-021) のテスト。数えられない時に unavailable として扱う挙動と上限の境界を、TTL store 無しで観測する。
+// TTL store の stub と Sentry だけで観測できるので、DB を要求する runTest は使わない。
 describe("spendAttemptBudget", () => {
   const captured = recordSentryExceptions();
   const spend = (ttlStore: Layer.Layer<TtlStore>, maxAttempts = 5) =>
@@ -28,7 +28,7 @@ describe("spendAttemptBudget", () => {
     expect(await spend(failingTtlStoreLayer)).toBe("unavailable");
     expect(captured.length).toBe(before + 1);
     expect(captured.at(-1)?.[1]?.tags?.component).toBe("c");
-    // boundary error は warning (ADR-0017 Decision の Sentry 項)。level は呼び手で変えない。
+    // 境界のエラーは warning にする (ADR-0017 Decision の Sentry 項)。level は呼び出し側で変えない。
     expect(captured.at(-1)?.[1]?.level).toBe("warning");
   });
 
