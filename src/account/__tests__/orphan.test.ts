@@ -19,6 +19,8 @@ const cleanup = () =>
         `active-sessions-${P}u-store`,
         `${P}rtok-kept`,
         `active-sessions-${P}u-rkept`,
+        `${P}rtok-absent`,
+        `active-sessions-${P}u-absent`,
       ]) {
         s.delete(key);
       }
@@ -105,12 +107,18 @@ describe("deleteAccountIfOrphaned", () => {
       }),
     ));
 
-  test("既に存在しない user への適用は二重削除せず安全 (true / no-op)", () =>
+  test("存在しない user には何もせず false を返し、記帳も TTL store の purge もしない", () =>
     run(
       Effect.gen(function* () {
         const userId = `${P}u-absent`;
+        yield* seedSessions(userId, [`${P}rtok-absent`]);
+
         const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
-        expect(deleted).toBe(true);
+
+        expect(deleted).toBe(false);
+        expect(yield* countAccountDeleteAudit(userId)).toBe(0);
+        expect(yield* storeGet(`${P}rtok-absent`)).not.toBeNull();
+        expect(yield* storeGet(`active-sessions-${userId}`)).not.toBeNull();
       }),
     ));
 

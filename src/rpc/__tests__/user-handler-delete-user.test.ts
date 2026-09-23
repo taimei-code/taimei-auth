@@ -59,4 +59,18 @@ describe("UserService/DeleteUser via handleRpc", () => {
         expect((yield* auditRowsFor(user.id, "account_delete")).length).toBe(1);
       }),
     ));
+
+  test("存在しない user は not_found (404) で account_delete を記帳しない", () =>
+    run(
+      Effect.gen(function* () {
+        const userId = "rpc-del-absent";
+
+        expect(yield* callDeleteUser(userId)).toEqual({
+          status: 404,
+          contentType: "application/json",
+          body: { code: "not_found", message: "User not found" },
+        });
+        expect((yield* auditRowsFor(userId, "account_delete")).length).toBe(0);
+      }),
+    ));
 });
