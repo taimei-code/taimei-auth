@@ -103,7 +103,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("GET /api/account/mfa は有効状態・in_effect・リカバリーコード残数だけを返す", () =>
+  test("GET /api/account/mfa は有効状態とリカバリーコード残数だけを返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -117,7 +117,6 @@ describe("account MFA API", () => {
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({
           enabled: true,
-          in_effect: true,
           recovery_codes_remaining: enabled.recoveryCodes.length,
         });
       }),
@@ -148,7 +147,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-04 未登録ユーザーの GET /api/account/mfa も同じキー形 (enabled/in_effect false)", () =>
+  test("QA-M-04 未登録ユーザーの GET /api/account/mfa も同じキー形 (enabled false)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -160,13 +159,12 @@ describe("account MFA API", () => {
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({
           enabled: false,
-          in_effect: false,
           recovery_codes_remaining: 0,
         });
       }),
     ));
 
-  test("QA-M-25 登録済み未有効も enabled/in_effect false (in_effect ≡ enabled の恒等)", () =>
+  test("QA-M-25 登録済み未有効も enabled false", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -184,7 +182,6 @@ describe("account MFA API", () => {
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({
           enabled: false,
-          in_effect: false,
           recovery_codes_remaining: 0,
         });
       }),

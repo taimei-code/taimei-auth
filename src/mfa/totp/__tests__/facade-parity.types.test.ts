@@ -26,7 +26,6 @@ const _enrollWire = (r: EnrollOk): MfaEnrollResponse => ({
 type StatusResult = Effect.Success<ReturnType<Facade["readOwnedMfaStatus"]>>;
 const _statusWire = (r: StatusResult): MfaStatusResponse => ({
   enabled: r.enabled,
-  in_effect: r.enabled,
   recovery_codes_remaining: r.recoveryCodesRemaining,
 });
 

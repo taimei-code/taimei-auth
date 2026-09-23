@@ -10,7 +10,7 @@ describe("MfaSettingsItem", () => {
   test("enabled は badge、残数、警告、disable を既存順で表示する", () => {
     const html = renderToStaticMarkup(
       createElement(MfaSettingsItem, {
-        status: { enabled: true, inEffect: true, recoveryCodesRemaining: 3 },
+        status: { enabled: true, recoveryCodesRemaining: 3 },
         refresh,
       }),
     );
@@ -23,23 +23,10 @@ describe("MfaSettingsItem", () => {
     expect(html).not.toContain("有効にする");
   });
 
-  test("enabled=false でも inEffect=true は自己復旧用 disable を表示する", () => {
+  test("enabled=false は enroll を表示する", () => {
     const html = renderToStaticMarkup(
       createElement(MfaSettingsItem, {
-        status: { enabled: false, inEffect: true, recoveryCodesRemaining: 0 },
-        refresh,
-      }),
-    );
-
-    expect(html).toContain("無効");
-    expect(html).toContain("無効にする");
-    expect(html).not.toContain("有効にする");
-  });
-
-  test("inEffect=false は enroll を表示する", () => {
-    const html = renderToStaticMarkup(
-      createElement(MfaSettingsItem, {
-        status: { enabled: false, inEffect: false, recoveryCodesRemaining: 0 },
+        status: { enabled: false, recoveryCodesRemaining: 0 },
         refresh,
       }),
     );

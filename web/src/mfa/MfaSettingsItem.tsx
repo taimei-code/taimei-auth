@@ -42,7 +42,7 @@ export const MfaSettingsItem = ({
       <Badge variant={status.enabled ? "default" : "secondary"}>
         {status.enabled ? "有効" : "無効"}
       </Badge>
-      {status.inEffect ? (
+      {status.enabled ? (
         <MfaDisableDialog
           onDisabled={refresh}
           trigger={

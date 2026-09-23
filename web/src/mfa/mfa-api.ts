@@ -15,8 +15,6 @@ export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
 
 export type MfaStatus = {
   enabled: boolean;
-  // 旧応答との互換 field。server は enabled と同じ値を返す (ADR-0016)
-  inEffect: boolean;
   recoveryCodesRemaining: number;
 };
 
@@ -91,21 +89,14 @@ const isStringArray = (value: unknown): value is string[] =>
 // satisfies は契約に必須 field が増えた時に型エラーで知らせる
 const readMfaStatus = (body: unknown): MfaStatus => {
   const record = requireRecord(body);
-  if (
-    typeof record.enabled !== "boolean" ||
-    typeof record.in_effect !== "boolean" ||
-    typeof record.recovery_codes_remaining !== "number"
-  ) {
+  if (typeof record.enabled !== "boolean" || typeof record.recovery_codes_remaining !== "number")
     throw new MfaApiError("unknown");
-  }
   const checked = {
     enabled: record.enabled,
-    in_effect: record.in_effect,
     recovery_codes_remaining: record.recovery_codes_remaining,
   } satisfies MfaStatusResponse;
   return {
     enabled: checked.enabled,
-    inEffect: checked.in_effect,
     recoveryCodesRemaining: checked.recovery_codes_remaining,
   };
 };

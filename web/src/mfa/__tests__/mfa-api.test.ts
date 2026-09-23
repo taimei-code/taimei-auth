@@ -20,11 +20,10 @@ const codeOfRejection = (promise: Promise<unknown>): Promise<string> =>
 
 describe("応答 → view 変換", () => {
   test("AC-006 getMfaStatus は snake 応答 を camel view へ変換する", async () => {
-    stubFetch(Response.json({ enabled: true, in_effect: true, recovery_codes_remaining: 7 }));
+    stubFetch(Response.json({ enabled: true, recovery_codes_remaining: 7 }));
 
     expect(await getMfaStatus()).toEqual({
       enabled: true,
-      inEffect: true,
       recoveryCodesRemaining: 7,
     });
   });
@@ -60,7 +59,7 @@ describe("応答 → view 変換", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  test("AC-010 未知の追加 field は無視して同じ view 値を返す", async () => {
+  test("AC-010 旧 server が返していた field を含む未知の追加 field は無視して同じ view 値を返す", async () => {
     stubFetch(
       Response.json({
         enabled: false,
@@ -72,7 +71,6 @@ describe("応答 → view 変換", () => {
 
     expect(await getMfaStatus()).toEqual({
       enabled: false,
-      inEffect: false,
       recoveryCodesRemaining: 0,
     });
   });
@@ -93,16 +91,8 @@ describe("応答 → view 変換", () => {
 
 describe("positive check — 形の崩れた 2xx を unknown へ縮退", () => {
   test.each([
-    [
-      "status: in_effect 欠け",
-      () => getMfaStatus(),
-      { enabled: true, recovery_codes_remaining: 1 },
-    ],
-    [
-      "status: 型違い",
-      () => getMfaStatus(),
-      { enabled: "yes", in_effect: true, recovery_codes_remaining: 1 },
-    ],
+    ["status: enabled 欠け", () => getMfaStatus(), { recovery_codes_remaining: 1 }],
+    ["status: 型違い", () => getMfaStatus(), { enabled: "yes", recovery_codes_remaining: 1 }],
     [
       "enroll: recovery_codes 欠け",
       () => enrollMfa(),
