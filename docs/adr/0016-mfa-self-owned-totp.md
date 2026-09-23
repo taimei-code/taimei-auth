@@ -41,8 +41,10 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
 - リカバリーコードは secret と同じ鍵 ring で可逆暗号にする (登録済み未有効の間に再表示する契約と hash 保管は
   両立しない)。書式は `xxxxx-xxxxx` を 10 個
 - sign_in audit はチャレンジ通過の手続が記録する (一次認証の観測は sign-in-observer に残る)
-- wire contract の変更は 2 点のみ: `temporarily_unavailable` の削除 (発生源が消滅した) と
-  `MfaActivateRequest.enrollment_id` の必須化。他の 6 endpoint の形は変えない
+- wire contract の変更は 3 点: `temporarily_unavailable` の削除 (発生源が消滅した)、
+  `MfaActivateRequest.enrollment_id` の必須化、`MfaStatusResponse.in_effect` の削除 (2026-09-23 追記)。他の endpoint の
+  形は変えない。`in_effect` は ADR-0013 の「中断した無効化」を SPA へ伝える field だった。状態の実体を行だけにする
+  上記の決定でその状態は生じなくなり、`in_effect` は常に `enabled` と同じ値を返していた
 - 展開は 2 段に分ける。デプロイ ① (切替。旧テーブルを温存しロールバック可) の後、安定稼働を確認してからデプロイ ②
   (旧オブジェクトの DROP と `drizzle/manual/0004` の削除。以降ロールバック不可) を行う
 
