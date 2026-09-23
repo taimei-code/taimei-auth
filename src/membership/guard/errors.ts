@@ -1,4 +1,4 @@
-import { Data } from "effect";
+import { Data, Effect, Predicate } from "effect";
 
 export class Unauthorized extends Data.TaggedError("Unauthorized") {
   readonly error = "unauthorized" as const;
@@ -14,6 +14,8 @@ export class NotFound extends Data.TaggedError("NotFound") {
   readonly error = "not_found" as const;
   readonly status = 404 as const;
 }
+
+export const orNotFound = Effect.filterOrFail(Predicate.isNotUndefined, () => new NotFound());
 
 export class InvalidArgument extends Data.TaggedError("InvalidArgument")<{
   readonly details?: unknown;

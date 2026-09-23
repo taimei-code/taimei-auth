@@ -1,17 +1,15 @@
-import { Effect, Predicate } from "effect";
+import { Effect } from "effect";
 import type { MembershipRow, Role } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
 import type { DbError } from "../errors";
 import { LastOwner } from "./errors";
-import { NotFound } from "./guard/errors";
+import { orNotFound } from "./guard/errors";
 import { MembershipRepo } from "./ports";
 
 type Write = (
   repo: MembershipRepo["Service"],
   tx: DbTx,
 ) => Effect.Effect<MembershipRow | undefined, DbError>;
-
-const orNotFound = Effect.filterOrFail(Predicate.isNotUndefined, () => new NotFound());
 
 const keepingAnOwner = Effect.fn("membership.keepingAnOwner")(function* (
   tx: DbTx,

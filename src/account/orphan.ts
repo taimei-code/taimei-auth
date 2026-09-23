@@ -9,6 +9,8 @@ export const deleteAccountIfOrphaned = Effect.fn("account.deleteAccountIfOrphane
 ) {
   const memberships = yield* MembershipRepo;
   if ((yield* memberships.countActiveMembershipsByUserId(userId, tx)) > 0) return false;
-  yield* deleteAccount(userId, tx);
-  return true;
+  return yield* deleteAccount(userId, tx).pipe(
+    Effect.as(true),
+    Effect.catchTag("NotFound", () => Effect.succeed(false)),
+  );
 });
