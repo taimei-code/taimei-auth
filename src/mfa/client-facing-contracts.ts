@@ -18,7 +18,6 @@ export type MfaClientFacingErrorCode = (typeof MFA_WIRE_ERROR_CODES)[number];
 
 export type MfaStatusResponse = {
   enabled: boolean;
-  in_effect: boolean;
   recovery_codes_remaining: number;
 };
 

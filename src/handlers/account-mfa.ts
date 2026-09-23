@@ -37,7 +37,6 @@ accountMfa.get("/api/account/mfa", (c) =>
       const status = yield* readOwnedMfaStatus(actor);
       return c.json({
         enabled: status.enabled,
-        in_effect: status.enabled,
         recovery_codes_remaining: status.recoveryCodesRemaining,
       } satisfies MfaStatusResponse);
     }),
