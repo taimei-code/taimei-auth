@@ -69,6 +69,8 @@ CI の `buf breaking --against '.git#branch=main'` が機械的に検証する�
 | 新 RPC method 追加 | minor |
 | 既存 RPC の wire format 変更 | major (v2.0.0)。この文書に従って Dual Read/Write を行う |
 | TypeScript 型 signature の breaking 変更 (再 narrow / 型名変更等) | major |
+| 公開 API の deprecation marker の追加 | minor |
+| JSDoc / proto のコメントだけの変更 | patch |
 | 内部実装の refactor で外部 API 不変 | patch (v1.0.1) |
 
 ## 関連
