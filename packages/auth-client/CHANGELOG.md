@@ -1,10 +1,22 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-09-24
+
+振る舞いは変えない。公開 API の deprecation を含むので minor bump。
+
+### Documentation
+
+- `companyId` の約束を proto の `User.default_company_id` のコメントに書いた (生成型の JSDoc にも出る)
+- proto の `Session.company_id` のコメントを事実に合わせた (書き込む処理が無く、値は常に空)
 
 ### Deprecations
 
 - `buildAuthLogoutUrl` / `BuildAuthLogoutUrlOptions` を `@deprecated` にした。組み立てた `/auth/sign-out` に応答する route は auth ホストに無く (SPA の fallback が 200 を返すだけで session は残る)、sign-out は共通画面 SPA の `authClient.signOut()` で行う。公開 export の削除は breaking なので次の major (v2.0.0) で行う
+
+### Internal
+
+- `createAuthGuard` の応答の変換を `toVerifyResult` に切り出し、cookie の読み取り関数の引数名を `readCookie` にした (外部 API は不変)
+- build に使う TypeScript を 5.9.2 から 7.0.2 に上げた
 
 ## 1.1.0 — 2026-05-26
 
