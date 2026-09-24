@@ -74,7 +74,6 @@ export const session = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // 事業所削除は soft delete なので ON DELETE は発火しない。NULL 化は handler が行う。
     currentCompanyId: text("current_company_id").references(() => company.id, {
       onDelete: "set null",
     }),
