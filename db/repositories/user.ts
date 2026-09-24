@@ -75,6 +75,12 @@ export async function reassignLastUsedCompanyAfterLeaving(
   txOrDb: DbOrTx = db,
 ): Promise<void> {
   await txOrDb
+    .select({ id: user.id })
+    .from(user)
+    .where(inArray(user.id, [...userIds]))
+    .orderBy(user.id)
+    .for("update");
+  await txOrDb
     .update(user)
     .set({
       lastUsedCompanyId: sql`(
