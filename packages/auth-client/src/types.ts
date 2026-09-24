@@ -16,7 +16,7 @@ export type SessionData = {
     expiresAt: string;
     kind: "user";
   };
-  // 出どころは proto の User.default_company_id で、値の約束もそこに書いてある。undefined は事業所未選択なので、consumer は /auth/signup/company へ誘導する。
+  /** 出どころは proto の User.default_company_id で、値の約束もそこに書いてある。undefined は事業所未選択なので、consumer は /auth/signup/company へ誘導する。 */
   companyId?: string;
 };
 
