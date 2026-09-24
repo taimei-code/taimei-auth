@@ -64,6 +64,7 @@ describe("acceptInvitation", () => {
         expect((yield* db.readMembership(invitee.id, co))?.role).toBe("OWNER");
         expect(yield* auditCountByType(invitee.id, "invitation_accepted")).toBe(1);
         expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(0);
+        expect((yield* db.readUser(invitee.id))?.lastUsedCompanyId).toBe(co);
       }),
     ));
 
@@ -131,6 +132,7 @@ describe("acceptInvitation", () => {
 
         expect((yield* reloadInvitation(inv.token)).status).toBe("PENDING");
         expect(yield* db.readMembership(invitee.id, co)).toBeUndefined();
+        expect((yield* db.readUser(invitee.id))?.lastUsedCompanyId).toBeNull();
         expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(1);
 
         const rejectAudit = yield* firstAudit(invitee.id, "invitation_accept_rejected");
