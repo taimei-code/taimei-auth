@@ -36,8 +36,8 @@ const fixtureEmail = fixtureIds.email;
 const seededUserId = fixtureIds.userId;
 const fixtureCompanyName = fixtureIds.companyName;
 
-const seedUser = (suffix: string, name: string): Promise<string> =>
-  seed.seedUser(suffix, { name }).then((u) => u.id);
+const seedUser = (suffix: string, name: string, lastUsedCompanyId?: string): Promise<string> =>
+  seed.seedUser(suffix, { name, lastUsedCompanyId }).then((u) => u.id);
 
 const seedCompany = (suffix: string): Promise<string> => seed.seedCompany(suffix);
 
@@ -72,7 +72,7 @@ async function ensureFixture(spec: FixtureSpec): Promise<void> {
   });
   const companyId = await seedCompany(spec.company);
   for (const m of spec.members) {
-    await seedMembership(await seedUser(m.suffix, m.name), companyId, m.role);
+    await seedMembership(await seedUser(m.suffix, m.name, companyId), companyId, m.role);
   }
 }
 
