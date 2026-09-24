@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1 — 2026-09-24
+
+### Documentation
+
+- `SessionData.companyId` のコメントを JSDoc にし、`.d.ts` に出るようにした (1.2.0 では行コメントだったため consumer の型に出ていなかった)
+
 ## 1.2.0 — 2026-09-24
 
 振る舞いは変えない。公開 API の deprecation を含むので minor bump。
