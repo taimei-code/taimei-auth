@@ -62,9 +62,11 @@ export type User = Message<"auth.v1.User"> & {
   revision: number;
 
   /**
-   * 新規 session 確立時の default 候補事業所。
-   * better-auth lifecycle hook がこの値を Session.company_id に copy する。
-   * membership 0 件 / 削除済 company を参照していた場合は NULL。
+   * この user の現在の事業所 ID。SDK の companyId はこの値を返す。
+   * 値がある時は、この user が今所属している ACTIVE な事業所のどれか 1 つの ID である。
+   * ACTIVE な所属が 1 件も無い時だけ空になる。
+   * 所属を失った事業所や削除された事業所を指したまま残らない。
+   * 空の時、consumer は事業所未選択として扱う。
    * 対応 DB 列は `user.last_used_company_id` (proto field 名と異なる)。
    *
    * @generated from field: optional string default_company_id = 12;
@@ -102,9 +104,8 @@ export type Session = Message<"auth.v1.Session"> & {
   sessionKind: string;
 
   /**
-   * 現在 active な事業所 ID。1 session 内で操作対象となる事業所。
-   * /account の CompanySwitcher で切替、SetCurrentCompany RPC で UPDATE + cookieCache invalidate。
-   * NULL = 「事業所未選択」(membership 0 件 / 唯一 company DELETED 直後)。
+   * 書き込む処理が無く、値は常に空。
+   * 現在の事業所は User.default_company_id を使う。
    *
    * @generated from field: optional string company_id = 8;
    */

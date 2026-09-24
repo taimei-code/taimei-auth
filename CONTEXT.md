@@ -16,7 +16,7 @@ _Avoid_: メンバーシップ (カタカナ語で、UI では冗長), affiliati
 
 **current_company_id** / **last_used_company_id**:
 近接する 2 つの概念を分けて使う (詳細: PR #55 → #63)。
-- `user.last_used_company_id` (`User.default_company_id` proto field): **現在の事業所**。auth-client の guard はこの値を consumer に `companyId` として渡す。membership の増減に合わせて `src/membership/apply-change.ts` が書き換える。加入すると加入先になり、この値が指す事業所の所属を失うと残る ACTIVE な所属のどれかになり、所属が 0 件になると `NULL` になる。`/account` の CompanySwitcher (`POST /api/account/current-company`) で切り替えられる。
+- `user.last_used_company_id` (`User.default_company_id` proto field): **現在の事業所**。auth-client の guard はこの値を consumer に `companyId` として渡す。membership の増減に合わせて `src/membership/apply-change.ts` が書き換える。加入すると加入先になり、この値が指す事業所の所属を失うと残る ACTIVE な所属のどれかになり、所属が 0 件になると `NULL` になる。`/account` の CompanySwitcher (`POST /api/account/current-company`) で切り替えられる。consumer への約束は proto の `User.default_company_id` のコメントを正本とする。
 - `session.current_company_id` (`Session.company_id` proto field): 書き込む処理が無い列。値は常に `NULL` なので、guard は `user.last_used_company_id` を使う。
 _Avoid_: default_company_id (user の列だが proto field にしか無い。DB の列名は last_used_company_id), active_company_id (current_company_id の同義語で、混在させない)
 
