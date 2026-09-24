@@ -2,6 +2,7 @@ import { Data, Effect } from "effect";
 import type { InvitationRow } from "@/db/repositories/invitation";
 import type { InviterSeen } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
+import { UserRepo } from "../account/ports";
 import { AuditLog } from "../audit/ports";
 import { swallowAuditFailure } from "../audit/report-failure";
 import { IdGenerator } from "../id-generator";
@@ -31,6 +32,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
   const { actor, invitation } = params;
   const invitations = yield* InvitationRepo;
   const memberships = yield* MembershipRepo;
+  const users = yield* UserRepo;
   const audit = yield* AuditLog;
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
@@ -55,6 +57,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
       },
       t,
     );
+    yield* users.updateUserLastUsedCompany(actor.id, invitation.companyId, t);
     yield* audit.recordInvitationAccepted(
       {
         actor_user_id: actor.id,
