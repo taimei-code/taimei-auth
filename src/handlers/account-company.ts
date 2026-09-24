@@ -28,14 +28,9 @@ accountCompany.get("/api/account/memberships", (c) =>
       const membershipRepo = yield* MembershipRepo;
       const rows = yield* membershipRepo.findMembershipsByUserId(actor.id);
       const activeMemberships = rows.filter((m) => m.companyActivationStatus === "ACTIVE");
-      const lastUsedCompanyId = actor.lastUsedCompanyId;
-      const currentCompanyId =
-        lastUsedCompanyId && activeMemberships.some((m) => m.companyId === lastUsedCompanyId)
-          ? lastUsedCompanyId
-          : (activeMemberships.at(0)?.companyId ?? null);
 
       return c.json({
-        current_company_id: currentCompanyId,
+        current_company_id: actor.lastUsedCompanyId,
         memberships: activeMemberships.map((row) => ({
           id: row.id,
           company_id: row.companyId,

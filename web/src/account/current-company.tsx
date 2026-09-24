@@ -76,9 +76,7 @@ export const CurrentCompanyProvider = ({ children }: { children: ReactNode }) =>
 
   const value = useMemo<CurrentCompanyContextValue>(() => {
     const currentMembership =
-      memberships.find((membership) => membership.company_id === currentCompanyId) ??
-      memberships.at(0) ??
-      null;
+      memberships.find((membership) => membership.company_id === currentCompanyId) ?? null;
     return {
       loading,
       unauthorized,

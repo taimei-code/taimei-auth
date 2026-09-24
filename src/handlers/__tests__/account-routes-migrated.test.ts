@@ -1104,3 +1104,54 @@ describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 �
       }),
     ));
 });
+
+type MembershipsBody = { current_company_id: string | null; memberships: { company_id: string }[] };
+
+describe("GET /api/account/memberships の current_company_id", () => {
+  beforeEach(cleanup);
+
+  test("保存された current 事業所が一覧の先頭でなくても、その値を返す", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const actor = yield* db.seedUser("cur-second");
+        const first = yield* db.seedCompany("cur-first");
+        const second = yield* db.seedCompany("cur-second");
+        yield* db.seedMembership(actor.id, first, "OWNER");
+        yield* db.seedMembership(actor.id, second, "MEMBER");
+        stubActor(actor);
+
+        const listed = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+        const notFirst = (listed.body as MembershipsBody).memberships.at(-1)?.company_id ?? "";
+        yield* db.setLastUsedCompany(actor.id, notFirst);
+        const actual = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+
+        const body = actual.body as MembershipsBody;
+        expect(actual.status).toBe(200);
+        expect(body.memberships[0]?.company_id).not.toBe(notFirst);
+        expect(body.current_company_id).toBe(notFirst);
+        restoreActor();
+      }),
+    ));
+
+  test("保存された current 事業所が所属していない事業所でも、先頭の所属へ置き換えない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const actor = yield* db.seedUser("cur-stale");
+        const member = yield* db.seedCompany("cur-member");
+        const stale = yield* db.seedCompany("cur-stale");
+        yield* db.seedMembership(actor.id, member, "OWNER");
+        yield* db.setLastUsedCompany(actor.id, stale);
+        stubActor(actor);
+
+        const actual = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+
+        const body = actual.body as MembershipsBody;
+        expect(actual.status).toBe(200);
+        expect(body.memberships).toHaveLength(1);
+        expect(body.current_company_id).toBe(stale);
+        restoreActor();
+      }),
+    ));
+});

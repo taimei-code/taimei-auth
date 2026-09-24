@@ -118,7 +118,7 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   const currentCompanyId = await seedCompany(DELETE_MULTI_CURRENT_COMPANY);
   await seedMembership(userId, currentCompanyId, "OWNER");
   await seedMembership(userId, await seedCompany(DELETE_MULTI_OTHER_COMPANY), "OWNER");
-  // 未設定だと handler が membership の先頭 (行順不定) へ fallback し、削除対象が決まらない
+  // seed は src/membership/apply-change.ts を通らないので、current 事業所を明示する
   await seed.setLastUsedCompany(userId, currentCompanyId);
 }
 
