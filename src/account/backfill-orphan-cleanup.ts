@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import { InvitationRepo } from "../invitation/ports";
+import { applyCompanyRemoval } from "../membership/apply-change";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { deleteAccountIfOrphaned } from "./orphan";
-import { UserRepo } from "./ports";
 
 type BackfillReport = {
   executed: boolean;
@@ -52,16 +52,13 @@ const previewGhostMembershipPurge = Effect.fn("account.previewGhostMembershipPur
 const purgeGhostMemberships = Effect.fn("account.purgeGhostMemberships")(function* (
   companyId: string,
 ) {
-  const memberships = yield* MembershipRepo;
   const invitations = yield* InvitationRepo;
-  const users = yield* UserRepo;
   const tx = yield* Transaction;
 
   return yield* tx.run(
     Effect.fn("account.purgeGhostMemberships.apply")(function* (t) {
       yield* invitations.revokePendingInvitationsOfCompany(companyId, t);
-      const removed = yield* memberships.removeMembershipsOfCompany(companyId, t);
-      yield* users.reassignLastUsedCompanyForDeletedCompany(companyId, t);
+      const removed = yield* applyCompanyRemoval(t, companyId);
       const orphanUserIds = yield* Effect.filter(
         [...new Set(removed.map((m) => m.userId))],
         (userId) => deleteAccountIfOrphaned(userId, t),

@@ -83,12 +83,14 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ]);
   });
 
-  test("OWNER を減らしうる membership write の呼び手は apply-change / company delete / backfill だけ", () => {
+  test("membership 行の増減と role 変更、それに伴う current 事業所の付け替えは apply-change だけが呼ぶ", () => {
     expect(
-      srcFiles("\\.(updateMembershipRole|deleteMembership|removeMembershipsOfCompany)\\(").sort(),
-    ).toEqual([
-      "src/account/backfill-orphan-cleanup.ts",
-      "src/company/delete.ts",
+      srcFiles(
+        "\\.(insertMembership|updateMembershipRole|deleteMembership|removeMembershipsOfCompany|reassignLastUsedCompanyAfterLeaving)\\(",
+      ),
+    ).toEqual(["src/membership/apply-change.ts"]);
+    expect(srcFiles("\\.updateUserLastUsedCompany\\(").sort()).toEqual([
+      "src/account/switch-company.ts",
       "src/membership/apply-change.ts",
     ]);
   });

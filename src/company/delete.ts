@@ -1,9 +1,9 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
-import { UserRepo } from "../account/ports";
 import { deleteAccountIfOrphaned } from "../account/orphan";
 import { AuditLog } from "../audit/ports";
 import { InvitationRepo } from "../invitation/ports";
+import { applyCompanyRemoval } from "../membership/apply-change";
 import { Forbidden } from "../membership/guard/errors";
 import { isAtLeast } from "../membership/policy";
 import { MembershipRepo } from "../membership/ports";
@@ -17,7 +17,6 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
   const companies = yield* CompanyRepo;
   const memberships = yield* MembershipRepo;
   const invitations = yield* InvitationRepo;
-  const users = yield* UserRepo;
   const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
@@ -42,7 +41,7 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
         t,
       );
 
-      const removed = yield* memberships.removeMembershipsOfCompany(companyId, t);
+      const removed = yield* applyCompanyRemoval(t, companyId);
       yield* audit.recordMembershipsRemoved(
         {
           actor_user_id: actorUserId,
@@ -51,8 +50,6 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
         },
         t,
       );
-
-      yield* users.reassignLastUsedCompanyForDeletedCompany(companyId, t);
 
       const orphanUserIds = yield* Effect.filter(
         [...new Set(removed.map((m) => m.userId))],
