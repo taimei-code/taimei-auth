@@ -95,11 +95,13 @@
 ## QA-MR-09: consumer repo (taimei) からの cross-repo build と起動
 
 - **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR
-- **前提**: consumer repo `~/github/taimei` を clone 済みであること。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。taimei は本 repo の **pin していない main** を clone するため、マージした時点で全 taimei branch に即座に波及する (つまり実施はマージ前)。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、consumer 側の compose から build して起動する経路はこのケースだけがカバーする
+- **前提**: consumer repo `~/github/taimei` を clone 済みであること。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。taimei の e2e は本 repo を submodule `vendor/taimei-auth` で commit に固定して build する (taimei の ADR-0003)。本 repo の変更が taimei に届くのは、Dependabot の bump PR を taimei で merge した時で、その PR の e2e が build と起動を自動で確かめる。このケースは、その前 (本 repo のマージ前) に同じ経路を確かめるためのもの。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、consumer 側の compose から build して起動する経路は、このケースと taimei の bump PR だけがカバーする
 - **手順**:
-  1. `cd ~/github/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
-  2. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
-  3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
+  1. `cd ~/github/taimei/vendor/taimei-auth && git fetch origin <本 PR の branch> && git checkout FETCH_HEAD` で、submodule を検証する commit に一時的に向ける
+  2. `cd ~/github/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
+  3. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
+  4. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
+  5. `cd ~/github/taimei && git submodule update` で submodule を固定された commit に戻す
 - **期待結果**: build が `Workspace dependency not found` 等で落ちず、`bunx drizzle-kit migrate` が完走して `/health` が 200 を返す
 
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
