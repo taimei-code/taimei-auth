@@ -1,6 +1,5 @@
 import { create } from "@bufbuild/protobuf";
 import type { ConnectRouter } from "@connectrpc/connect";
-import { Code } from "@connectrpc/connect";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { Effect } from "effect";
 import { AccountRepo, SessionRepo, UserRepo } from "../account/ports";
@@ -19,7 +18,7 @@ import {
 import { getClientContext } from "../request-context";
 import { captureCause, captureCauseAs } from "../sentry";
 import { toProtoAccount, toProtoSession, toProtoUser, userResponse } from "./mappers";
-import { RpcError, runRpc } from "./run-rpc";
+import { runRpc } from "./run-rpc";
 
 const verifySessionError = (reason: Result) =>
   create(VerifySessionResponseSchema, {
@@ -100,6 +99,16 @@ export const signOutProgram = Effect.fn("rpc.signOut")(function* (req: { session
   return { success: true };
 });
 
+export const sendMagicLinkProgram = Effect.fn("rpc.sendMagicLink")(function* (req: {
+  email: string;
+  callbackUrl: string;
+}) {
+  yield* AuthApi.use((api) =>
+    api.signInMagicLink({ email: req.email, callbackURL: req.callbackUrl }),
+  );
+  return { success: true };
+});
+
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     verifySession: (req) => runRpc(verifySessionProgram(req)),
@@ -118,20 +127,6 @@ export function registerAuthService(router: ConnectRouter) {
 
     signOut: (req) => runRpc(signOutProgram(req)),
 
-    sendMagicLink: (req) =>
-      runRpc(
-        AuthApi.use((api) =>
-          api.signInMagicLink({ email: req.email, callbackURL: req.callbackUrl }),
-        ).pipe(
-          Effect.mapError(
-            (failure) =>
-              new RpcError({
-                code: Code.Internal,
-                message: `Failed to send magic link: ${failure.cause}`,
-              }),
-          ),
-          Effect.as({ success: true }),
-        ),
-      ),
+    sendMagicLink: (req) => runRpc(sendMagicLinkProgram(req)),
   });
 }
