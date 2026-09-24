@@ -65,6 +65,7 @@ describe("backfillOrphanCleanup", () => {
     run(
       Effect.gen(function* () {
         const { deleted, active, orphan, survivor } = yield* seedGhostScenario;
+        yield* TestDb.use((db) => db.setLastUsedCompany(survivor, deleted));
 
         const report = yield* backfillOrphanCleanup({ execute: true });
 
@@ -75,6 +76,7 @@ describe("backfillOrphanCleanup", () => {
         expect(yield* userExists(orphan)).toBe(false);
         expect(yield* userExists(survivor)).toBe(true);
         expect(yield* membershipCount(active)).toBe(1);
+        expect((yield* TestDb.use((db) => db.readUser(survivor)))?.lastUsedCompanyId).toBe(active);
       }),
     ));
 

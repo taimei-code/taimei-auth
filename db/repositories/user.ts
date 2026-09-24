@@ -1,4 +1,4 @@
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { user } from "../schema";
 import type { DbOrTx } from "../transaction";
@@ -69,8 +69,9 @@ export async function findAbandonedSignupUserIds(
   return rows.map((r) => r.id);
 }
 
-export async function reassignLastUsedCompanyForDeletedCompany(
+export async function reassignLastUsedCompanyAfterLeaving(
   companyId: string,
+  userIds: readonly string[],
   txOrDb: DbOrTx = db,
 ): Promise<void> {
   await txOrDb
@@ -83,5 +84,5 @@ export async function reassignLastUsedCompanyForDeletedCompany(
         LIMIT 1
       )`,
     })
-    .where(eq(user.lastUsedCompanyId, companyId));
+    .where(and(inArray(user.id, [...userIds]), eq(user.lastUsedCompanyId, companyId)));
 }

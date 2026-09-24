@@ -30,6 +30,12 @@ const membershipExists = (userId: string, companyId: string) =>
 const userExists = (id: string) =>
   TestDb.use((db) => db.readUser(id)).pipe(Effect.map((row) => row !== undefined));
 
+const setLastUsed = (userId: string, companyId: string) =>
+  TestDb.use((db) => db.setLastUsedCompany(userId, companyId));
+
+const lastUsedOf = (userId: string) =>
+  TestDb.use((db) => db.readUser(userId)).pipe(Effect.map((row) => row?.lastUsedCompanyId));
+
 describe("removeMember", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
@@ -87,6 +93,7 @@ describe("removeMember", () => {
         const ownerId = yield* seedUser("last-owner");
         const companyId = yield* seedCompany("last");
         yield* join(ownerId, companyId, "OWNER");
+        yield* setLastUsed(ownerId, companyId);
 
         const e = yield* Effect.flip(
           removeMember({
@@ -100,6 +107,80 @@ describe("removeMember", () => {
         expectFailure(e, LastOwner, "last_owner", 409);
         expect(yield* membershipExists(ownerId, companyId)).toBe(true);
         expect(yield* userExists(ownerId)).toBe(true);
+        expect(yield* lastUsedOf(ownerId)).toBe(companyId);
+      }),
+    ));
+
+  test("除名した事業所を current に持つ user は、残る所属へ current が移る", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("cur-owner");
+        const memberId = yield* seedUser("cur-member");
+        const target = yield* seedCompany("cur-target");
+        const other = yield* seedCompany("cur-other");
+        yield* join(ownerId, target, "OWNER");
+        yield* join(memberId, target, "MEMBER");
+        yield* join(memberId, other, "MEMBER");
+        yield* setLastUsed(memberId, target);
+
+        const result = yield* removeMember({
+          actorUserId: ownerId,
+          targetUserId: memberId,
+          companyId: target,
+          targetRole: "MEMBER",
+        });
+
+        expect(result).toEqual({ accountDeleted: false });
+        expect(yield* lastUsedOf(memberId)).toBe(other);
+      }),
+    ));
+
+  test("除名した事業所以外を current に持つ user の current は変わらない", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("keep-owner");
+        const memberId = yield* seedUser("keep-member");
+        const target = yield* seedCompany("keep-target");
+        const other = yield* seedCompany("keep-other");
+        yield* join(ownerId, target, "OWNER");
+        yield* join(memberId, target, "MEMBER");
+        yield* join(memberId, other, "MEMBER");
+        yield* setLastUsed(memberId, other);
+
+        yield* removeMember({
+          actorUserId: ownerId,
+          targetUserId: memberId,
+          companyId: target,
+          targetRole: "MEMBER",
+        });
+
+        expect(yield* membershipExists(memberId, target)).toBe(false);
+        expect(yield* lastUsedOf(memberId)).toBe(other);
+      }),
+    ));
+
+  test("同じ事業所に残るメンバーの current は、除名があっても変わらない", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("stay-owner");
+        const leaverId = yield* seedUser("stay-leaver");
+        const other = yield* seedCompany("stay-other");
+        const target = yield* seedCompany("stay-target");
+        yield* join(ownerId, other, "OWNER");
+        yield* join(ownerId, target, "OWNER");
+        yield* join(leaverId, target, "MEMBER");
+        yield* join(leaverId, other, "MEMBER");
+        yield* setLastUsed(ownerId, target);
+
+        yield* removeMember({
+          actorUserId: ownerId,
+          targetUserId: leaverId,
+          companyId: target,
+          targetRole: "MEMBER",
+        });
+
+        expect(yield* membershipExists(leaverId, target)).toBe(false);
+        expect(yield* lastUsedOf(ownerId)).toBe(target);
       }),
     ));
 

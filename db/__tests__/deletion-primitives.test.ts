@@ -15,7 +15,7 @@ import {
   removeMembershipsOfCompany,
   type Role,
 } from "../repositories/membership";
-import { findUserById, reassignLastUsedCompanyForDeletedCompany } from "../repositories/user";
+import { findUserById, reassignLastUsedCompanyAfterLeaving } from "../repositories/user";
 import { company, invitation, membership, user } from "../schema";
 
 const P = "delprim-test-";
@@ -100,7 +100,7 @@ describe("removeMembershipsOfCompany", () => {
   });
 });
 
-describe("reassignLastUsedCompanyForDeletedCompany", () => {
+describe("reassignLastUsedCompanyAfterLeaving", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -111,7 +111,7 @@ describe("reassignLastUsedCompanyForDeletedCompany", () => {
     await join(userId, surviving);
     await removeMembershipsOfCompany(deleted);
 
-    await reassignLastUsedCompanyForDeletedCompany(deleted);
+    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBe(surviving);
   });
@@ -122,9 +122,24 @@ describe("reassignLastUsedCompanyForDeletedCompany", () => {
     await join(userId, deleted);
     await removeMembershipsOfCompany(deleted);
 
-    await reassignLastUsedCompanyForDeletedCompany(deleted);
+    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBeNull();
+  });
+
+  test("渡した user だけを付け替え、同じ company を current に持つ他の user は変えない", async () => {
+    const other = await seedCompany("re-left-other");
+    const left = await seedCompany("re-left");
+    const leaver = await seedUser("re-leaver", left);
+    const stayer = await seedUser("re-stayer", left);
+    await join(leaver, other);
+    await join(stayer, other);
+    await join(stayer, left);
+
+    await reassignLastUsedCompanyAfterLeaving(left, [leaver]);
+
+    expect((await findUserById(leaver))?.lastUsedCompanyId).toBe(other);
+    expect((await findUserById(stayer))?.lastUsedCompanyId).toBe(left);
   });
 
   test("削除 company 以外を last_used に持つ user は不変", async () => {
@@ -133,7 +148,7 @@ describe("reassignLastUsedCompanyForDeletedCompany", () => {
     const userId = await seedUser("re-3", other);
     await join(userId, other);
 
-    await reassignLastUsedCompanyForDeletedCompany(deleted);
+    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBe(other);
   });

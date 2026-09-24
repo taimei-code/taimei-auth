@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { MembershipRow, Role } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
+import { UserRepo } from "../account/ports";
 import type { DbError } from "../errors";
 import { LastOwner } from "./errors";
 import { orNotFound } from "./guard/errors";
@@ -30,9 +31,40 @@ export const applyRoleChange = (
     repo.updateMembershipRole(change.targetUserId, change.companyId, change.nextRole, t),
   );
 
+const reassignLastUsedCompanyAfterLeaving = (
+  tx: DbTx,
+  companyId: string,
+  userIds: readonly string[],
+) => UserRepo.use((users) => users.reassignLastUsedCompanyAfterLeaving(companyId, userIds, tx));
+
+export const applyJoin = (
+  tx: DbTx,
+  row: { id: string; userId: string; companyId: string; role: Role },
+) =>
+  MembershipRepo.use((repo) => repo.insertMembership(row, tx)).pipe(
+    Effect.tap(() =>
+      UserRepo.use((users) => users.updateUserLastUsedCompany(row.userId, row.companyId, tx)),
+    ),
+  );
+
 export const applyRemoval = (tx: DbTx, change: { targetUserId: string; companyId: string }) =>
   keepingAnOwner(tx, change.companyId, (repo, t) =>
     repo.deleteMembership(change.targetUserId, change.companyId, t),
+  ).pipe(
+    Effect.andThen(
+      reassignLastUsedCompanyAfterLeaving(tx, change.companyId, [change.targetUserId]),
+    ),
+  );
+
+export const applyCompanyRemoval = (tx: DbTx, companyId: string) =>
+  MembershipRepo.use((repo) => repo.removeMembershipsOfCompany(companyId, tx)).pipe(
+    Effect.tap((removed) =>
+      reassignLastUsedCompanyAfterLeaving(
+        tx,
+        companyId,
+        removed.map((m) => m.userId),
+      ),
+    ),
   );
 
 export const applyTransfer = (
