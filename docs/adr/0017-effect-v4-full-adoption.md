@@ -83,7 +83,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 - `ParseBody` (`src/handlers/parse-body.ts` / `src/membership/guard/core.ts`): Effect 値は `yield*` まで実行されないため、guard が 401 / 403 を先に判定した request では body を読まない。zod を残す理由は Decision の zod 項
 - Redis retry (`src/redis-service.ts`): retry は冪等な呼び出しに限る (対象と値は Decision の非同期項)。INCR 系と `getAndDelete` は再送が二重計上 / 二重消費になり、`/health` の ping は失敗を degraded にまとめるだけで応答時間を伸ばしたくないため、どちらも 1 回 (`attemptOnce`) にする
 - CLI (`management/*.ts`): pg pool が開いたままだと process が終わらないため明示的に `process.exit` する (runtime の共有は Decision の依存項)
-- 非慣用に見えるが直さない形: `src/rpc/run-rpc.ts` の `STATUS_TO_CODE` 外部対応表 (Connect code は Transport 固有の語彙で、class に生やすと failure class 20 個に複製される)、`attempt-budget.ts` の 3 値 verdict (`unavailable` と `exhausted` の区別が、fail-closed / fail-open を同じ kernel から出す条件になる。CONTEXT.md「試行枠」)、`RollbackSignal` の sentinel throw、`mfa/totp/wiring.ts` の `let cached` (`Effect.cached` は `Layer.effect` を要し、`effect-boundary.test.ts` が `Layer.succeed` に限る)、`parseChallenge` の try/catch (Effect の外の純関数で「どの段階の失敗も null」を 1 箇所に保つ)、hook / `captureThrown` の try/catch (上記)
+- 非慣用に見えるが直さない形: `src/rpc/run-rpc.ts` の `STATUS_TO_CODE` 外部対応表 (Connect code は Transport 固有の語彙で、class に生やすと failure class 20 個に複製される)、`RollbackSignal` の sentinel throw、`mfa/totp/wiring.ts` の `let cached` (`Effect.cached` は `Layer.effect` を要し、`effect-boundary.test.ts` が `Layer.succeed` に限る)、`parseChallenge` の try/catch (Effect の外の純関数で「どの段階の失敗も null」を 1 箇所に保つ)、hook / `captureThrown` の try/catch (上記)
 
 ## Stable 移行手順
 

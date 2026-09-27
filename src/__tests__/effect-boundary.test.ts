@@ -83,6 +83,14 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ]);
   });
 
+  test("試行枠の計数 (incrementRateWindow) を呼ぶのは attempt-budget だけ (fail-open / fail-closed の宣言を迂回させない)", () => {
+    expect(srcFiles("\\bincrementRateWindow\\b").sort()).toEqual([
+      "src/attempt-budget.ts",
+      "src/ttl-store-service.ts",
+      "src/ttl-store.ts",
+    ]);
+  });
+
   test("membership 行の増減と role 変更、それに伴う current 事業所の付け替えは apply-change だけが呼ぶ", () => {
     expect(
       srcFiles(

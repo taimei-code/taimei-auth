@@ -6,7 +6,7 @@ import { AuthApi } from "../../auth-service";
 import { isLocalEnvironment } from "../../env";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
-import { spendAttemptBudget } from "../../attempt-budget";
+import { spendAttemptBudgetFailClosed } from "../../attempt-budget";
 import { ChallengeExpired } from "../error-mapping";
 
 const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
@@ -91,25 +91,24 @@ export const destroyLoginChallenge = Effect.fn("mfa.destroyLoginChallenge")(func
   yield* TtlStore.use((r) => r.delete(challengeKey(challengeId)));
 });
 
-export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(function* (
-  challengeId: string,
-) {
-  const verdict = yield* spendAttemptBudget({
-    key: attemptsKey(challengeId),
-    windowSeconds: CHALLENGE_TTL_SECONDS,
-    maxAttempts: MAX_ATTEMPTS,
-    component: "mfa-login-challenge",
-  });
-  if (verdict === "exhausted") {
-    yield* SentryService.use((sentry) =>
+export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(
+  function* (challengeId: string) {
+    yield* spendAttemptBudgetFailClosed({
+      key: attemptsKey(challengeId),
+      windowSeconds: CHALLENGE_TTL_SECONDS,
+      maxAttempts: MAX_ATTEMPTS,
+      component: "mfa-login-challenge",
+    });
+  },
+  Effect.tapErrorTag("AttemptBudgetExhausted", () =>
+    SentryService.use((sentry) =>
       sentry.captureMessage("mfa: login challenge attempt budget exhausted", {
         level: "warning",
         tags: { component: "mfa-login-challenge" },
       }),
-    );
-  }
-  return verdict;
-});
+    ),
+  ),
+);
 
 const challengeSchema = z.object({
   userId: z.string().min(1),
