@@ -18,16 +18,26 @@ export async function runRoute(c: Context, program: RouteEffect<Response>): Prom
   return causeToResponse(c, exit.cause, "runRoute");
 }
 
+export type MiddlewareDecision =
+  | { readonly _tag: "Continue" }
+  | { readonly _tag: "Respond"; readonly response: Response };
+
+export const CONTINUE: MiddlewareDecision = { _tag: "Continue" };
+
+export const respondWith = (response: Response): MiddlewareDecision => ({
+  _tag: "Respond",
+  response,
+});
+
 export async function runMiddleware(
   c: Context,
   next: Next,
-  program: RouteEffect<Response | undefined>,
-): Promise<Response | undefined> {
+  program: RouteEffect<MiddlewareDecision>,
+): Promise<Response | void> {
   const exit = await getRuntime().runPromiseExit(program);
   if (!Exit.isSuccess(exit)) return causeToResponse(c, exit.cause, "runMiddleware");
-  if (exit.value) return exit.value;
-  await next();
-  return undefined;
+  if (exit.value._tag === "Respond") return exit.value.response;
+  return next();
 }
 
 type Adapter = "runRoute" | "runMiddleware";

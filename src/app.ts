@@ -1,3 +1,4 @@
+import { Effect } from "effect";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
@@ -12,7 +13,7 @@ import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
 import { mfaChallenge } from "./handlers/mfa-challenge";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
-import { runMiddleware } from "./handlers/run-route";
+import { CONTINUE, runMiddleware } from "./handlers/run-route";
 import {
   captureThrown,
   internalErrorResponse,
@@ -53,7 +54,11 @@ export function buildApp(options: AppOptions): Hono {
   );
 
   app.use("/rpc/*", (c, next) =>
-    runMiddleware(c, next, verifyServiceKey(c.req.header("X-Service-Key"))),
+    runMiddleware(
+      c,
+      next,
+      verifyServiceKey(c.req.header("X-Service-Key")).pipe(Effect.as(CONTINUE)),
+    ),
   );
 
   app.all(

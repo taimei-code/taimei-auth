@@ -1,5 +1,5 @@
 import { Clock, Effect } from "effect";
-import { spendAttemptBudget } from "../attempt-budget";
+import { spendAttemptBudgetFailOpen } from "../attempt-budget";
 import { RateLimited } from "./errors";
 
 const DEFAULT_HOURLY_LIMIT_PER_COMPANY = 50;
@@ -13,18 +13,18 @@ function hourlyLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOURLY_LIMIT_PER_COMPANY;
 }
 
-export const consumeInvitationQuota = Effect.fn("invitation.consumeQuota")(function* (
-  companyId: string,
-) {
-  const nowMillis = yield* Clock.currentTimeMillis;
-  const verdict = yield* spendAttemptBudget({
-    key: `invitation_rate:${companyId}:${hourBucket(nowMillis)}`,
-    windowSeconds: HOUR_BUCKET_TTL_SEC,
-    maxAttempts: hourlyLimit(),
-    component: "invitation-rate-limit",
-  });
-  if (verdict === "exhausted") return yield* new RateLimited();
-});
+export const consumeInvitationQuota = Effect.fn("invitation.consumeQuota")(
+  function* (companyId: string) {
+    const nowMillis = yield* Clock.currentTimeMillis;
+    yield* spendAttemptBudgetFailOpen({
+      key: `invitation_rate:${companyId}:${hourBucket(nowMillis)}`,
+      windowSeconds: HOUR_BUCKET_TTL_SEC,
+      maxAttempts: hourlyLimit(),
+      component: "invitation-rate-limit",
+    });
+  },
+  Effect.catchTag("AttemptBudgetExhausted", () => new RateLimited()),
+);
 
 function hourBucket(nowMillis: number): string {
   return new Date(nowMillis).toISOString().slice(0, HOUR_BUCKET_LENGTH);

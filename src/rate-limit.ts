@@ -1,8 +1,8 @@
 import { getSessionCookie } from "better-auth/cookies";
 import { Effect } from "effect";
 import type { Context, MiddlewareHandler } from "hono";
-import { spendAttemptBudget } from "./attempt-budget";
-import { runMiddleware } from "./handlers/run-route";
+import { spendAttemptBudgetFailOpen } from "./attempt-budget";
+import { CONTINUE, respondWith, runMiddleware } from "./handlers/run-route";
 import { JSON_HEADERS } from "./handlers/client-facing-error";
 
 export type RateLimitOptions = {
@@ -28,22 +28,32 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-// INCR のたびに EXPIRE するため、Retry-After は常に windowSec になる。
 type RateLimitInput = Omit<RateLimitOptions, "keyFn"> & { key: string };
 
-export const rateLimitProgram = Effect.fn("rateLimit.check")(function* (input: RateLimitInput) {
-  const verdict = yield* spendAttemptBudget({
-    key: input.key,
-    windowSeconds: input.windowSec,
-    maxAttempts: input.limit,
-    component: "rate-limit",
-  });
-  if (verdict !== "exhausted") return undefined;
-  return new Response(JSON.stringify({ error: "Too Many Requests" }), {
+const tooManyRequests = (retryAfterSec: number) =>
+  new Response(JSON.stringify({ error: "Too Many Requests" }), {
     status: 429,
-    headers: { ...JSON_HEADERS, "Retry-After": String(input.windowSec) },
+    headers: { ...JSON_HEADERS, "Retry-After": String(retryAfterSec) },
   });
-});
+
+export const rateLimitProgram = Effect.fn("rateLimit.check")(
+  function* (input: RateLimitInput) {
+    yield* spendAttemptBudgetFailOpen({
+      key: input.key,
+      windowSeconds: input.windowSec,
+      maxAttempts: input.limit,
+      component: "rate-limit",
+    });
+    return CONTINUE;
+  },
+  (rateLimitCheck, input) =>
+    rateLimitCheck.pipe(
+      // INCR のたびに EXPIRE するため、Retry-After は常に windowSec になる。
+      Effect.catchTag("AttemptBudgetExhausted", () =>
+        Effect.succeed(respondWith(tooManyRequests(input.windowSec))),
+      ),
+    ),
+);
 
 export function createRateLimitMiddleware(options: RateLimitOptions): MiddlewareHandler {
   return (c, next) =>

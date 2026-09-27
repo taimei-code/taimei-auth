@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
+import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
 import { createRateLimitMiddleware, rateLimitProgram } from "../rate-limit";
 import { getMemoryKvStore } from "../ttl-store";
 import type { TtlStore } from "../ttl-store-service";
@@ -12,7 +13,7 @@ rateLimitProgram satisfies (input: {
   key: string;
   limit: number;
   windowSec: number;
-}) => Effect.Effect<Response | undefined, never, TtlStore | SentryService>;
+}) => Effect.Effect<MiddlewareDecision, never, TtlStore | SentryService>;
 
 describe("rateLimitProgram (TTL store 無し)", () => {
   const captured = recordSentryExceptions();
@@ -26,22 +27,24 @@ describe("rateLimitProgram (TTL store 無し)", () => {
 
   test("計数不能 (TtlStoreError) は fail-open で通し、Sentry に rate-limit / warning を 1 回記録する", async () => {
     const before = captured.length;
-    expect(await check(failingTtlStoreLayer)).toBeUndefined();
+    expect(await check(failingTtlStoreLayer)).toEqual(CONTINUE);
     expect(captured.length).toBe(before + 1);
     expect(captured.at(-1)?.[1]?.tags?.component).toBe("rate-limit");
     expect(captured.at(-1)?.[1]?.level).toBe("warning");
   });
 
   test("上限 + 1 は 429 で Retry-After は windowSec", async () => {
-    const res = await check(ttlStoreReturning({ count: 6 }));
-    expect(res?.status).toBe(429);
-    expect(res?.headers.get("Retry-After")).toBe("60");
-    expect(res?.headers.get("content-type")).toBe("application/json");
-    expect(await res?.json<unknown>()).toEqual({ error: "Too Many Requests" });
+    const decision = await check(ttlStoreReturning({ count: 6 }));
+    if (decision._tag !== "Respond") throw new Error(`expected Respond, got ${decision._tag}`);
+    const res = decision.response;
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("60");
+    expect(res.headers.get("content-type")).toBe("application/json");
+    expect(await res.json<unknown>()).toEqual({ error: "Too Many Requests" });
   });
 
   test("上限ちょうどは通す", async () => {
-    expect(await check(ttlStoreReturning({ count: 5 }))).toBeUndefined();
+    expect(await check(ttlStoreReturning({ count: 5 }))).toEqual(CONTINUE);
   });
 });
 

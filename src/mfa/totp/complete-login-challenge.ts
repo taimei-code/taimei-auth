@@ -21,12 +21,13 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   if (!challenge) return yield* new ChallengeExpired();
 
   // 枯渇時は破棄して invalid_code のまま。SPA は再照会して expired を出す契約。
-  const attempt = yield* spendLoginChallengeAttempt(challenge.challengeId);
-  if (attempt === "unavailable") return yield* new Locked();
-  if (attempt === "exhausted") {
-    yield* destroyLoginChallenge(challenge.challengeId);
-    return yield* new InvalidCode();
-  }
+  yield* spendLoginChallengeAttempt(challenge.challengeId).pipe(
+    Effect.catchTags({
+      AttemptBudgetUnavailable: () => new Locked(),
+      AttemptBudgetExhausted: () =>
+        destroyLoginChallenge(challenge.challengeId).pipe(Effect.andThen(new InvalidCode())),
+    }),
+  );
 
   // コードの消費はチャレンジの消費より後。逆順だと並行して負けた側が再生成できないリカバリーコードを使い切る。
   const matched = yield* matchOwnedCode(challenge.userId, input).pipe(

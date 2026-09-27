@@ -29,17 +29,17 @@ const matchesInConstantTime = (presented: string, accepted: readonly string[]): 
 
 export const verifyServiceKey = (
   presented: string | undefined,
-): Effect.Effect<undefined, ServiceKeyError> =>
-  Effect.suspend<undefined, ServiceKeyError, never>(() => {
+): Effect.Effect<void, ServiceKeyError> =>
+  Effect.suspend<void, ServiceKeyError, never>(() => {
     const accepted = getValidServiceKeys();
     if (accepted.length === 0) {
       if (!isLocalEnvironment()) return new ServiceKeyMisconfigured();
       console.warn(
         "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
       );
-      return Effect.succeed(undefined);
+      return Effect.void;
     }
     return presented && matchesInConstantTime(presented, accepted)
-      ? Effect.succeed(undefined)
+      ? Effect.void
       : new ServiceKeyRejected();
   });
