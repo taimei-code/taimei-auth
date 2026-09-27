@@ -2,7 +2,7 @@ import { getSessionCookie } from "better-auth/cookies";
 import { Effect } from "effect";
 import type { Context, MiddlewareHandler } from "hono";
 import { spendAttemptBudgetFailOpen } from "./attempt-budget";
-import { runMiddleware } from "./handlers/run-route";
+import { CONTINUE, respondWith, runMiddleware } from "./handlers/run-route";
 import { JSON_HEADERS } from "./handlers/client-facing-error";
 
 export type RateLimitOptions = {
@@ -44,13 +44,13 @@ export const rateLimitProgram = Effect.fn("rateLimit.check")(
       maxAttempts: input.limit,
       component: "rate-limit",
     });
-    return undefined;
+    return CONTINUE;
   },
   (rateLimitCheck, input) =>
     rateLimitCheck.pipe(
       // INCR のたびに EXPIRE するため、Retry-After は常に windowSec になる。
       Effect.catchTag("AttemptBudgetExhausted", () =>
-        Effect.succeed(tooManyRequests(input.windowSec)),
+        Effect.succeed(respondWith(tooManyRequests(input.windowSec))),
       ),
     ),
 );

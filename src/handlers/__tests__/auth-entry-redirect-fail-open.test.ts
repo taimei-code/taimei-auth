@@ -8,12 +8,13 @@ import {
 } from "../../membership/__tests__/test-layers";
 import { SentryLive } from "../../sentry";
 import { authEntryRedirectProgram } from "../auth-entry-redirect";
+import { CONTINUE } from "../run-route";
 import { runProgramInRoute } from "./run-program-in-route";
 
 const captured = recordSentryExceptions();
 
 describe("authEntryRedirectProgram (fail-open)", () => {
-  test("AuthApi が AuthApiError → undefined (pass-through) と Sentry warning", async () => {
+  test("AuthApi が AuthApiError → CONTINUE (次の handler へ進む) と Sentry warning", async () => {
     const cause = new Error("upstash down");
     const outcome = await runProgramInRoute(
       "/auth/",
@@ -21,7 +22,7 @@ describe("authEntryRedirectProgram (fail-open)", () => {
       authEntryRedirectProgram,
       Layer.mergeAll(authFailing(cause), userRepoLayer([]), membershipRepoLayer([]), SentryLive),
     );
-    expect(outcome).toBeUndefined();
+    expect(outcome).toEqual(CONTINUE);
     expect(captured.length).toBe(1);
     expect(captured[0]?.[0]).toBe(cause);
     expect(captured[0]?.[1]).toMatchObject({

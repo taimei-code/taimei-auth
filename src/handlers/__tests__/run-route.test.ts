@@ -5,7 +5,7 @@ import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { runBackground, withWaitUntil } from "../../background";
 import { DbError } from "../../errors";
 import { Forbidden } from "../../membership/guard/errors";
-import { runMiddleware, runRoute } from "../run-route";
+import { CONTINUE, respondWith, runMiddleware, runRoute } from "../run-route";
 
 const captured = recordSentryExceptions();
 
@@ -159,17 +159,17 @@ describe("runRoute", () => {
 });
 
 describe("runMiddleware", () => {
-  test("program が undefined を返すと next() に進む", async () => {
+  test("program が CONTINUE を返すと next() に進む", async () => {
     const app = new Hono();
-    app.use("*", (c, next) => runMiddleware(c, next, Effect.succeed(undefined)));
+    app.use("*", (c, next) => runMiddleware(c, next, Effect.succeed(CONTINUE)));
     app.get("/x", (c) => c.text("handled"));
     expect(await (await app.request("/x")).text()).toBe("handled");
   });
 
-  test("program が Response を返すと短絡する", async () => {
+  test("program が respondWith(response) を返すと、その response で打ち切り next() に進まない", async () => {
     const app = new Hono();
     app.use("*", (c, next) =>
-      runMiddleware(c, next, Effect.succeed(new Response("blocked", { status: 401 }))),
+      runMiddleware(c, next, Effect.succeed(respondWith(new Response("blocked", { status: 401 })))),
     );
     app.get("/x", (c) => c.text("handled"));
     const res = await app.request("/x");
