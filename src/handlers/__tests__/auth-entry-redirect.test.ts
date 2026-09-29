@@ -1,10 +1,16 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { authEntryRedirect } from "../auth-entry-redirect";
-import { requestApp, restoreActor, SESSION_COOKIE_HEADER, stubActor } from "./helpers";
+import {
+  provideAuthApi,
+  requestApp,
+  SESSION_COOKIE_HEADER,
+  type StubActor,
+  stubAuthApi,
+} from "./helpers";
 
 const P = "aer-test-";
 const { run, cleanup } = dbTest(P);
@@ -13,14 +19,15 @@ const FIXTURE_BODY = "spa-shell-fixture";
 const REDIRECT_URL = "http://auth.taimei-code.local:3100/account";
 const VALID_QUERY = `service_name=accounts&redirect_url=${encodeURIComponent(REDIRECT_URL)}`;
 
-const buildApp = () => {
+const buildApp = (actor: StubActor) => {
   const app = new Hono();
-  app.use("/auth/*", authEntryRedirect);
+  app.use("/auth/*", provideAuthApi(stubAuthApi(actor)), authEntryRedirect);
   app.get("/auth/*", (c) => c.html(FIXTURE_BODY));
   return app;
 };
 
-const request = (path: string, init?: RequestInit) => requestApp(buildApp(), path, init);
+const request = (actor: StubActor, path: string, init?: RequestInit) =>
+  requestApp(buildApp(actor), path, init);
 
 const expectPassThrough = (res: Response) =>
   Effect.promise(async () => {
@@ -35,19 +42,18 @@ const seedAuthenticated = (suffix: string) =>
     const actor = yield* db.seedUser(suffix);
     const companyId = yield* db.seedCompany(suffix);
     yield* db.seedMembership(actor.id, companyId, "OWNER");
-    stubActor(actor);
+    return actor;
   });
 
 describe("authEntryRedirect", () => {
   beforeEach(cleanup);
-  afterEach(restoreActor);
   afterAll(cleanup);
 
   describe("未認証 (session cookie 無し)", () => {
     test("有効 query の GET /auth/ は pass-through で SPA が返る", () =>
       run(
         Effect.gen(function* () {
-          const res = yield* request(`/auth/?${VALID_QUERY}`);
+          const res = yield* request(null, `/auth/?${VALID_QUERY}`);
           yield* expectPassThrough(res);
         }),
       ));
@@ -55,7 +61,7 @@ describe("authEntryRedirect", () => {
     test("invitation_token 付きでも未認証なら pass-through (招待メールを未ログインで開く最頻経路)", () =>
       run(
         Effect.gen(function* () {
-          const res = yield* request(`/auth/?${VALID_QUERY}&invitation_token=inv-abc`);
+          const res = yield* request(null, `/auth/?${VALID_QUERY}&invitation_token=inv-abc`);
           yield* expectPassThrough(res);
         }),
       ));
@@ -65,8 +71,9 @@ describe("authEntryRedirect", () => {
     test("getSession null (失効済み) は pass-through で 500 にしない", () =>
       run(
         Effect.gen(function* () {
-          stubActor(null);
-          const res = yield* request(`/auth/?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const res = yield* request(null, `/auth/?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
           yield* expectPassThrough(res);
         }),
       ));
@@ -74,8 +81,10 @@ describe("authEntryRedirect", () => {
     test("削除済み user の stale session (cookieCache 窓) は membership 0 件扱いで /auth/signup/company へ 302", () =>
       run(
         Effect.gen(function* () {
-          stubActor({ id: `${P}u-ghost`, email: `${P}ghost@example.com` });
-          const res = yield* request(`/auth/?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const ghost = { id: `${P}u-ghost`, email: `${P}ghost@example.com` };
+          const res = yield* request(ghost, `/auth/?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
 
           expect(res.status).toBe(302);
           const location = new URL(res.headers.get("location") ?? "", "http://localhost");
@@ -92,9 +101,9 @@ describe("authEntryRedirect", () => {
           const actor = yield* db.seedUser("m1");
           const companyId = yield* db.seedCompany("m1");
           yield* db.seedMembership(actor.id, companyId, "OWNER");
-          stubActor(actor);
-
-          const res = yield* request(`/auth/?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const res = yield* request(actor, `/auth/?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
 
           expect(res.status).toBe(302);
           expect(res.headers.get("location")).toBe(REDIRECT_URL);
@@ -106,10 +115,9 @@ describe("authEntryRedirect", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("m0");
-          stubActor(actor);
-
           const signUpUrl = "http://auth.taimei-code.local:3100/welcome";
           const res = yield* request(
+            actor,
             `/auth/?${VALID_QUERY}&sign_up_url=${encodeURIComponent(signUpUrl)}`,
             { headers: SESSION_COOKIE_HEADER },
           );
@@ -131,9 +139,9 @@ describe("authEntryRedirect", () => {
           const companyId = yield* db.seedCompany("del");
           yield* db.seedMembership(actor.id, companyId, "OWNER");
           yield* db.markCompanyDeleted(companyId, { deletedAt: false });
-          stubActor(actor);
-
-          const res = yield* request(`/auth/?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const res = yield* request(actor, `/auth/?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
 
           expect(res.status).toBe(302);
           const location = new URL(res.headers.get("location") ?? "", "http://localhost");
@@ -151,9 +159,9 @@ describe("authEntryRedirect", () => {
           yield* db.seedMembership(actor.id, activeCompanyId, "OWNER");
           yield* db.seedMembership(actor.id, deletedCompanyId, "OWNER");
           yield* db.markCompanyDeleted(deletedCompanyId, { deletedAt: false });
-          stubActor(actor);
-
-          const res = yield* request(`/auth/?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const res = yield* request(actor, `/auth/?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
 
           expect(res.status).toBe(302);
           expect(res.headers.get("location")).toBe(REDIRECT_URL);
@@ -165,9 +173,9 @@ describe("authEntryRedirect", () => {
     test("membership 判定より優先で /auth/signup/accept-invitation へ 302 (redirect_url は伝播しない現状仕様)", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("inv");
+          const actor = yield* seedAuthenticated("inv");
 
-          const res = yield* request(`/auth/?${VALID_QUERY}&invitation_token=inv-abc`, {
+          const res = yield* request(actor, `/auth/?${VALID_QUERY}&invitation_token=inv-abc`, {
             headers: SESSION_COOKIE_HEADER,
           });
 
@@ -184,8 +192,9 @@ describe("authEntryRedirect", () => {
     test("redirect_url が allowlist 外なら認証済でも pass-through し Location に現れない", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("evil");
+          const actor = yield* seedAuthenticated("evil");
           const res = yield* request(
+            actor,
             `/auth/?service_name=accounts&redirect_url=${encodeURIComponent("https://evil.com/")}`,
             { headers: SESSION_COOKIE_HEADER },
           );
@@ -196,8 +205,9 @@ describe("authEntryRedirect", () => {
     test("service_name が未知値なら pass-through", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("unknown-svc");
+          const actor = yield* seedAuthenticated("unknown-svc");
           const res = yield* request(
+            actor,
             `/auth/?service_name=nazo&redirect_url=${encodeURIComponent(REDIRECT_URL)}`,
             { headers: SESSION_COOKIE_HEADER },
           );
@@ -208,19 +218,21 @@ describe("authEntryRedirect", () => {
     test("redirect_url 2049 文字は invalid で pass-through、2048 文字は 302 (境界の両側)", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("len");
+          const actor = yield* seedAuthenticated("len");
           const build = (total: number) => {
             const base = `${REDIRECT_URL}?p=`;
             return base + "a".repeat(total - base.length);
           };
 
           const over = yield* request(
+            actor,
             `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(build(2049))}`,
             { headers: SESSION_COOKIE_HEADER },
           );
           yield* expectPassThrough(over);
 
           const exact = yield* request(
+            actor,
             `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(build(2048))}`,
             { headers: SESSION_COOKIE_HEADER },
           );
@@ -234,8 +246,8 @@ describe("authEntryRedirect", () => {
     test("GET /auth/signup も認証済 + ACTIVE membership なら redirect_url へ 302 (対象パス 2 本目)", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("signup");
-          const res = yield* request(`/auth/signup?${VALID_QUERY}`, {
+          const actor = yield* seedAuthenticated("signup");
+          const res = yield* request(actor, `/auth/signup?${VALID_QUERY}`, {
             headers: SESSION_COOKIE_HEADER,
           });
           expect(res.status).toBe(302);
@@ -249,8 +261,10 @@ describe("authEntryRedirect", () => {
     ])("認証済でも %s は pass-through (%s)", (path) =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated(`excl${path.length}`);
-          const res = yield* request(`${path}?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const actor = yield* seedAuthenticated(`excl${path.length}`);
+          const res = yield* request(actor, `${path}?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
           yield* expectPassThrough(res);
         }),
       ));
@@ -260,8 +274,7 @@ describe("authEntryRedirect", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("loop");
-          stubActor(actor);
-          const res = yield* request(`/auth/signup/company?${VALID_QUERY}`, {
+          const res = yield* request(actor, `/auth/signup/company?${VALID_QUERY}`, {
             headers: SESSION_COOKIE_HEADER,
           });
           yield* expectPassThrough(res);
@@ -271,8 +284,10 @@ describe("authEntryRedirect", () => {
     test("GET /auth (末尾スラッシュ無し) は認証済でも pass-through (AUTH_ENTRY_PATHS 非対象。退会後遷移先 /auth の素通り保証)", () =>
       run(
         Effect.gen(function* () {
-          yield* seedAuthenticated("bare");
-          const res = yield* request(`/auth?${VALID_QUERY}`, { headers: SESSION_COOKIE_HEADER });
+          const actor = yield* seedAuthenticated("bare");
+          const res = yield* request(actor, `/auth?${VALID_QUERY}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
           yield* expectPassThrough(res);
         }),
       ));

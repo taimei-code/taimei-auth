@@ -1,9 +1,9 @@
-import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { buildTestApp, requestApp, responseJson, restoreActor, stubActor } from "./helpers";
+import { buildTestApp, requestApp, responseJson } from "./helpers";
 
 // better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返し続ける。
 const P = "dus-test-";
@@ -18,15 +18,13 @@ const postCompany = (app: Hono) =>
 
 describe("削除済み user の session actor", () => {
   beforeEach(cleanup);
-  afterEach(restoreActor);
   afterAll(cleanup);
 
   test("user 行が存在しない actor の事業所作成は 401 (FK 500 にしない)", () =>
     run(
       Effect.gen(function* () {
-        stubActor({ id: `${P}u-ghost`, email: `${P}ghost@example.com` });
-
-        const res = yield* postCompany(buildTestApp());
+        const ghost = { id: `${P}u-ghost`, email: `${P}ghost@example.com` };
+        const res = yield* postCompany(buildTestApp(ghost));
 
         expect(res.status).toBe(401);
         expect(yield* responseJson(res)).toEqual({ error: "unauthorized" });
@@ -38,9 +36,8 @@ describe("削除済み user の session actor", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const actor = yield* db.seedUser("alive");
-        stubActor(actor);
 
-        const res = yield* postCompany(buildTestApp());
+        const res = yield* postCompany(buildTestApp(actor));
 
         expect(res.status).toBe(200);
         const body = (yield* responseJson(res)) as { membership: { role: string } };
