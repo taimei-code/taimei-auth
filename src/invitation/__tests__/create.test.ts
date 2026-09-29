@@ -1,17 +1,16 @@
-import { afterAll, beforeEach, describe, expect, type Mock, spyOn, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { auth } from "../../auth";
+import type { Hono } from "hono";
 import {
   buildTestApp,
   requestApp,
   responseJson,
-  restoreActor,
-  stubActor,
   TEST_PREFIX,
 } from "../../handlers/__tests__/helpers";
-import { auditRowsFor, dbTest, drained, expectFailure, withSpy } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest, drained, expectFailure } from "../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
+import { tryAuthApi } from "../../errors";
 import { getMemoryKvStore } from "../../ttl-store";
 import { createInvitation } from "../create";
 import { RateLimited } from "../errors";
@@ -229,20 +228,28 @@ describe("createInvitation (use-case)", () => {
     ));
 });
 
-const withMagicLinkSpy = <A, E, R>(
-  use: (spy: Mock<typeof auth.api.signInMagicLink>) => Effect.Effect<A, E, R>,
-) => withSpy(() => spyOn(auth.api, "signInMagicLink"), use);
+const postInvitation = (app: Hono, companyId: string, email: string) =>
+  drained(
+    requestApp(app, `http://localhost/api/account/companies/${companyId}/invitations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, role: "MEMBER" }),
+    }),
+  );
+
+const recordMagicLinks = () => {
+  const sentTo: string[] = [];
+  const signInMagicLink = ({ email }: { email: string }) =>
+    Effect.sync(() => {
+      sentTo.push(email);
+    });
+  return { sentTo, signInMagicLink };
+};
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
   const captured = recordSentryExceptions();
-  beforeEach(() => {
-    restoreActor();
-    return cleanup();
-  });
-  afterAll(() => {
-    restoreActor();
-    return cleanup();
-  });
+  beforeEach(cleanup);
+  afterAll(cleanup);
 
   test("magic-link は handler post-commit で reused=false 経路 1 回だけ呼ばれる", () =>
     run(
@@ -251,25 +258,19 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
         const owner = yield* db.seedUser("ml-new-owner");
         const co = yield* db.seedCompany("ml-new");
         yield* db.seedMembership(owner.id, co, "OWNER");
-        stubActor(owner);
         const email = `${TEST_PREFIX}ml-new-invitee@example.com`;
+        const magicLinks = recordMagicLinks();
 
-        yield* withMagicLinkSpy((spy) =>
-          Effect.gen(function* () {
-            const app = buildTestApp();
-            const res = yield* drained(
-              requestApp(app, `http://localhost/api/account/companies/${co}/invitations`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ email, role: "MEMBER" }),
-              }),
-            );
-            expect(res.status).toBe(200);
-            const body = (yield* responseJson(res)) as { reused: boolean };
-            expect(body.reused).toBe(false);
-            expect(spy).toHaveBeenCalledTimes(1);
-          }),
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
         );
+
+        expect(res.status).toBe(200);
+        const body = (yield* responseJson(res)) as { reused: boolean };
+        expect(body.reused).toBe(false);
+        expect(magicLinks.sentTo).toEqual([email]);
       }),
     ));
 
@@ -280,34 +281,23 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
         const owner = yield* db.seedUser("ml-fail-owner");
         const co = yield* db.seedCompany("ml-fail");
         yield* db.seedMembership(owner.id, co, "OWNER");
-        stubActor(owner);
         const email = `${TEST_PREFIX}ml-fail-invitee@example.com`;
         const cause = new Error("resend down");
+        const before = captured.length;
 
-        yield* withMagicLinkSpy((spy) =>
-          Effect.gen(function* () {
-            spy.mockRejectedValue(cause);
-            const before = captured.length;
-            const res = yield* drained(
-              requestApp(
-                buildTestApp(),
-                `http://localhost/api/account/companies/${co}/invitations`,
-                {
-                  method: "POST",
-                  headers: { "content-type": "application/json" },
-                  body: JSON.stringify({ email, role: "MEMBER" }),
-                },
-              ),
-            );
-            expect(res.status).toBe(200);
-            expect(captured.length).toBe(before + 1);
-            expect(captured.at(-1)?.[0]).toBe(cause);
-            expect(captured.at(-1)?.[1]).toMatchObject({
-              level: "warning",
-              tags: { handler: "accountInvitation" },
-            });
-          }),
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: () => tryAuthApi(() => Promise.reject(cause)) }),
+          co,
+          email,
         );
+
+        expect(res.status).toBe(200);
+        expect(captured.length).toBe(before + 1);
+        expect(captured.at(-1)?.[0]).toBe(cause);
+        expect(captured.at(-1)?.[1]).toMatchObject({
+          level: "warning",
+          tags: { handler: "accountInvitation" },
+        });
       }),
     ));
 
@@ -325,24 +315,18 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
           role: "MEMBER",
           invitedByUserId: owner.id,
         });
-        stubActor(owner);
+        const magicLinks = recordMagicLinks();
 
-        yield* withMagicLinkSpy((spy) =>
-          Effect.gen(function* () {
-            const app = buildTestApp();
-            const res = yield* drained(
-              requestApp(app, `http://localhost/api/account/companies/${co}/invitations`, {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ email, role: "MEMBER" }),
-              }),
-            );
-            expect(res.status).toBe(200);
-            const body = (yield* responseJson(res)) as { reused: boolean };
-            expect(body.reused).toBe(true);
-            expect(spy).toHaveBeenCalledTimes(1);
-          }),
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
         );
+
+        expect(res.status).toBe(200);
+        const body = (yield* responseJson(res)) as { reused: boolean };
+        expect(body.reused).toBe(true);
+        expect(magicLinks.sentTo).toEqual([email]);
       }),
     ));
 });

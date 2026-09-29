@@ -4,15 +4,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import type { Hono } from "hono";
-import { auth } from "../../auth";
 import { dbTest } from "../../__tests__/live-runner";
+import { tryAuthApi } from "../../errors";
 import { TestDb } from "../../__tests__/test-db";
 import {
   buildTestApp,
   normalizeResponse,
   requestApp,
-  restoreActor,
-  stubActor,
   TEST_PREFIX,
   type NormalizedResponse,
 } from "./helpers";
@@ -72,14 +70,8 @@ function assertMatchesFixture(
 }
 
 describe("account routes migration snapshot", () => {
-  beforeEach(() => {
-    restoreActor();
-    return cleanup();
-  });
-  afterAll(() => {
-    restoreActor();
-    return cleanup();
-  });
+  beforeEach(cleanup);
+  afterAll(cleanup);
 
   describe("QA-H-04 success bodies (12 移行 route) — 変更前 fixture との JSON deep-equal", () => {
     test("QA-H-02 GET /api/account/memberships (active membership 1 件)", () =>
@@ -91,8 +83,7 @@ describe("account routes migration snapshot", () => {
           const memId = yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.setLastUsedCompany(owner.id, co);
 
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "GET", "/api/account/memberships");
           assertMatchesFixture(actual, "success-memberships", {
             [co]: "__COMPANY_ID__",
@@ -106,8 +97,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("signup-ok");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/companies", {
             name: `${TEST_PREFIX}signup-created`,
             org_code: "CORPORATE",
@@ -132,8 +122,7 @@ describe("account routes migration snapshot", () => {
           const actor = yield* db.seedUser("add-ok");
           const existing = yield* db.seedCompany("add-existing");
           yield* db.seedMembership(actor.id, existing, "OWNER");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/companies/add", {
             name: `${TEST_PREFIX}add-created`,
             org_code: "PERSONAL",
@@ -156,8 +145,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("upd-owner");
           const co = yield* db.seedCompany("upd-target", "PERSONAL");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}`, {
             name: `${TEST_PREFIX}upd-renamed`,
             org_code: "CORPORATE",
@@ -173,8 +161,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("mem-owner");
           const co = yield* db.seedCompany("mem");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "GET", `/api/account/companies/${co}/members`);
           const listed = (actual.body as { members: { membership_id: string; user_id: string }[] })
             .members[0];
@@ -200,8 +187,7 @@ describe("account routes migration snapshot", () => {
             role: "MEMBER",
             invitedByUserId: owner.id,
           });
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "GET", `/api/account/companies/${co}/invitations`);
           assertMatchesFixture(actual, "success-invitations-list", {
             [co]: "__COMPANY_ID__",
@@ -217,8 +203,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("inv-create-owner");
           const co = yield* db.seedCompany("inv-create");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/invitations`, {
             email: `${TEST_PREFIX}new-invitee@example.com`,
             role: "MEMBER",
@@ -243,8 +228,7 @@ describe("account routes migration snapshot", () => {
             role: "MEMBER",
             invitedByUserId: owner.id,
           });
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/invitations`, {
             email: `${TEST_PREFIX}reuse-invitee@example.com`,
             role: "MEMBER",
@@ -268,8 +252,7 @@ describe("account routes migration snapshot", () => {
             role: "MEMBER",
             invitedByUserId: owner.id,
           });
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -293,8 +276,7 @@ describe("account routes migration snapshot", () => {
             role: "OWNER",
             invitedByUserId: owner.id,
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -311,8 +293,7 @@ describe("account routes migration snapshot", () => {
           yield* db.seedMembership(owner.id, co, "OWNER");
           const target = yield* db.seedUser("role-target");
           yield* db.seedMembership(target.id, co, "MEMBER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -333,8 +314,7 @@ describe("account routes migration snapshot", () => {
           yield* db.seedMembership(owner.id, co, "OWNER");
           const other = yield* db.seedUser("rm-other");
           yield* db.seedMembership(other.id, co, "OWNER");
-          stubActor(other);
-          const app = buildTestApp();
+          const app = buildTestApp(other);
           const actual = yield* invoke(
             app,
             "POST",
@@ -353,8 +333,7 @@ describe("account routes migration snapshot", () => {
           yield* db.seedMembership(owner.id, co, "OWNER");
           const target = yield* db.seedUser("xfer-target");
           yield* db.seedMembership(target.id, co, "MEMBER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -380,8 +359,7 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("i104");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(admin.id, co, "ADMIN");
-          stubActor(admin);
-          const app = buildTestApp();
+          const app = buildTestApp(admin);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/invitations`, {
             email: `${TEST_PREFIX}i104-invitee@example.com`,
             role: "OWNER",
@@ -399,8 +377,7 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("mif");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(memberActor.id, co, "MEMBER");
-          stubActor(memberActor);
-          const app = buildTestApp();
+          const app = buildTestApp(memberActor);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/invitations`, {
             email: `${TEST_PREFIX}mif-invitee@example.com`,
             role: "MEMBER",
@@ -414,8 +391,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("iv-signup");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/companies", {
             name: "",
             org_code: "CORPORATE",
@@ -429,8 +405,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("iv-add");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/companies/add", {
             name: "",
             org_code: "CORPORATE",
@@ -446,8 +421,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("iv-inv-owner");
           const co = yield* db.seedCompany("iv-inv");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}/invitations`, {
             email: "not-an-email",
             role: "MEMBER",
@@ -461,8 +435,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("upd-nf");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/companies/cmp_does_not_exist", {
             name: `${TEST_PREFIX}whatever`,
             org_code: "PERSONAL",
@@ -478,8 +451,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("upd-iv-owner");
           const co = yield* db.seedCompany("upd-iv");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(app, "POST", `/api/account/companies/${co}`, {
             name: "",
           });
@@ -494,8 +466,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rc-nf-owner");
           const co = yield* db.seedCompany("rc-nf");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -513,8 +484,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rc-iv-owner");
           const co = yield* db.seedCompany("rc-iv");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -538,8 +508,7 @@ describe("account routes migration snapshot", () => {
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(admin.id, co, "ADMIN");
           yield* db.seedMembership(target.id, co, "MEMBER");
-          stubActor(admin);
-          const app = buildTestApp();
+          const app = buildTestApp(admin);
           const actual = yield* invoke(
             app,
             "POST",
@@ -557,8 +526,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rc-lo-owner");
           const co = yield* db.seedCompany("rc-lo");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -576,8 +544,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("xfer-nf-owner");
           const co = yield* db.seedCompany("xfer-nf");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -597,8 +564,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("xfer-self-owner");
           const co = yield* db.seedCompany("xfer-self");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -620,8 +586,7 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("xfer-ao");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(other.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -643,8 +608,7 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("xfer-fb");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(admin.id, co, "ADMIN");
-          stubActor(admin);
-          const app = buildTestApp();
+          const app = buildTestApp(admin);
           const actual = yield* invoke(
             app,
             "POST",
@@ -664,8 +628,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rm-nf-owner");
           const co = yield* db.seedCompany("rm-nf");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -684,8 +647,7 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("rm-fb");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(admin.id, co, "ADMIN");
-          stubActor(admin);
-          const app = buildTestApp();
+          const app = buildTestApp(admin);
           const actual = yield* invoke(
             app,
             "POST",
@@ -702,8 +664,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rm-lo-owner");
           const co = yield* db.seedCompany("rm-lo");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -718,8 +679,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("acc-iv");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {});
           assertMatchesFixture(actual, "error-accept-invalid");
         }),
@@ -730,8 +690,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("acc-nf");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: "does-not-exist",
           });
@@ -753,8 +712,7 @@ describe("account routes migration snapshot", () => {
             role: "MEMBER",
             invitedByUserId: owner.id,
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -777,8 +735,7 @@ describe("account routes migration snapshot", () => {
             invitedByUserId: owner.id,
             expiresAt: new Date(Date.now() - 60_000),
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -793,8 +750,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("rev-nf-owner");
           const co = yield* db.seedCompany("rev-nf");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const actual = yield* invoke(
             app,
             "POST",
@@ -816,9 +772,8 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("del-fb");
           yield* db.seedMembership(owner.id, co, "OWNER");
           yield* db.seedMembership(actor.id, co, role);
-          stubActor(actor);
           const actual = yield* invoke(
-            buildTestApp(),
+            buildTestApp(actor),
             "POST",
             `/api/account/companies/${co}/delete`,
           );
@@ -836,8 +791,7 @@ describe("account routes migration snapshot", () => {
           const deleted = yield* db.seedCompany("del-nm-deleted");
           yield* db.markCompanyDeleted(deleted, { deletedAt: false });
           const active = yield* db.seedCompany("del-nm-active");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const unknown = yield* invoke(
             app,
             "POST",
@@ -861,8 +815,7 @@ describe("account routes migration snapshot", () => {
           const other = yield* db.seedCompany("del-ok-other");
           yield* db.seedMembership(owner.id, target, "OWNER");
           yield* db.seedMembership(owner.id, other, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const first = yield* invoke(app, "POST", `/api/account/companies/${target}/delete`);
           assertMatchesFixture(first, "success-delete-company");
           expect((yield* db.readCompany(target))?.activationStatus).toBe("DELETED");
@@ -876,8 +829,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("cur-iv");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/current-company", {});
           assertMatchesFixture(actual, "error-current-company-invalid");
         }),
@@ -888,8 +840,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("cur-fb");
-          stubActor(actor);
-          const app = buildTestApp();
+          const app = buildTestApp(actor);
           const actual = yield* invoke(app, "POST", "/api/account/current-company", {
             company_id: "cmp_not_membership",
           });
@@ -902,8 +853,7 @@ describe("account routes migration snapshot", () => {
     test("cookie 無しで invalid body 付き invite → 401 unauthorized (400 に落ちない)", () =>
       run(
         Effect.gen(function* () {
-          stubActor(null);
-          const app = buildTestApp();
+          const app = buildTestApp(null);
           const actual = yield* invoke(app, "POST", "/api/account/companies/co_x/invitations", {
             email: "not-an-email",
             role: "OWNER",
@@ -916,8 +866,7 @@ describe("account routes migration snapshot", () => {
     test("cookie 無しで unknown companyId 付き role change → 401 unauthorized (403/404 に落ちない)", () =>
       run(
         Effect.gen(function* () {
-          stubActor(null);
-          const app = buildTestApp();
+          const app = buildTestApp(null);
           const actual = yield* invoke(
             app,
             "POST",
@@ -934,8 +883,7 @@ describe("account routes migration snapshot", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const active = yield* db.seedCompany("del-401-active");
-          stubActor(null);
-          const app = buildTestApp();
+          const app = buildTestApp(null);
           const unknown = yield* invoke(app, "POST", "/api/account/companies/cmp_missing/delete");
           const onActive = yield* invoke(app, "POST", `/api/account/companies/${active}/delete`);
           expect(unknown.status).toBe(401);
@@ -946,21 +894,20 @@ describe("account routes migration snapshot", () => {
   });
 
   describe("QA-D-02 getSession が同期 throw (期限切れ cookie の DI 差替相当) でも fail-closed 401", () => {
-    test("getSession throw → 401 unauthorized", () =>
+    test("所属のある actor でも getSession が同期 throw すれば 401 unauthorized", () =>
       run(
         Effect.gen(function* () {
-          const app = buildTestApp();
-          const original = auth.api.getSession;
-          auth.api.getSession = (() => {
-            throw new Error("sync throw simulating expired session lookup");
-          }) as any;
-          const actual = yield* invoke(app, "GET", "/api/account/memberships").pipe(
-            Effect.ensuring(
-              Effect.sync(() => {
-                auth.api.getSession = original;
+          const db = yield* TestDb;
+          const owner = yield* db.seedUser("d02-owner");
+          const co = yield* db.seedCompany("d02");
+          yield* db.seedMembership(owner.id, co, "OWNER");
+          const app = buildTestApp(owner, {
+            getSession: () =>
+              tryAuthApi(() => {
+                throw new Error("sync throw simulating expired session lookup");
               }),
-            ),
-          );
+          });
+          const actual = yield* invoke(app, "GET", "/api/account/memberships");
           expect(actual.status).toBe(401);
           expect(actual.body).toEqual({ error: "unauthorized" });
         }),
@@ -975,8 +922,7 @@ describe("account routes migration snapshot", () => {
           const owner = yield* db.seedUser("ct-owner");
           const co = yield* db.seedCompany("ct");
           yield* db.seedMembership(owner.id, co, "OWNER");
-          stubActor(owner);
-          const app = buildTestApp();
+          const app = buildTestApp(owner);
           const res = yield* requestApp(
             app,
             `http://localhost/api/account/companies/${co}/members`,
@@ -988,8 +934,7 @@ describe("account routes migration snapshot", () => {
     test("error response の Content-Type", () =>
       run(
         Effect.gen(function* () {
-          stubActor(null);
-          const app = buildTestApp();
+          const app = buildTestApp(null);
           const res = yield* requestApp(app, "http://localhost/api/account/memberships");
           expect(res.status).toBe(401);
           expect(res.headers.get("content-type")).toMatch(/^application\/json/);
@@ -1013,8 +958,7 @@ describe("account routes migration snapshot", () => {
             role: "MEMBER",
             invitedByUserId: owner.id,
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -1040,8 +984,7 @@ describe("account routes migration snapshot", () => {
             invitedByUserId: owner.id,
             expiresAt: new Date(Date.now() - 60_000),
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -1066,8 +1009,7 @@ describe("account routes migration snapshot", () => {
             role: "OWNER",
             invitedByUserId: owner.id,
           });
-          stubActor(invitee);
-          const app = buildTestApp();
+          const app = buildTestApp(invitee);
           const actual = yield* invoke(app, "POST", "/api/account/accept-invitation", {
             invitation_token: inv.token,
           });
@@ -1094,13 +1036,11 @@ describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 �
         const co = yield* db.seedCompany("mem-deleted-only");
         yield* db.seedMembership(actor.id, co, "OWNER");
         yield* db.markCompanyDeleted(co, { deletedAt: false });
-        stubActor(actor);
 
-        const actual = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+        const actual = yield* invoke(buildTestApp(actor), "GET", "/api/account/memberships");
 
         expect(actual.status).toBe(200);
         expect(actual.body).toEqual({ current_company_id: null, memberships: [] });
-        restoreActor();
       }),
     ));
 });
@@ -1119,18 +1059,16 @@ describe("GET /api/account/memberships の current_company_id", () => {
         const second = yield* db.seedCompany("cur-second");
         yield* db.seedMembership(actor.id, first, "OWNER");
         yield* db.seedMembership(actor.id, second, "MEMBER");
-        stubActor(actor);
 
-        const listed = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+        const listed = yield* invoke(buildTestApp(actor), "GET", "/api/account/memberships");
         const notFirst = (listed.body as MembershipsBody).memberships.at(-1)?.company_id ?? "";
         yield* db.setLastUsedCompany(actor.id, notFirst);
-        const actual = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+        const actual = yield* invoke(buildTestApp(actor), "GET", "/api/account/memberships");
 
         const body = actual.body as MembershipsBody;
         expect(actual.status).toBe(200);
         expect(body.memberships[0]?.company_id).not.toBe(notFirst);
         expect(body.current_company_id).toBe(notFirst);
-        restoreActor();
       }),
     ));
 
@@ -1143,15 +1081,13 @@ describe("GET /api/account/memberships の current_company_id", () => {
         const stale = yield* db.seedCompany("cur-stale");
         yield* db.seedMembership(actor.id, member, "OWNER");
         yield* db.setLastUsedCompany(actor.id, stale);
-        stubActor(actor);
 
-        const actual = yield* invoke(buildTestApp(), "GET", "/api/account/memberships");
+        const actual = yield* invoke(buildTestApp(actor), "GET", "/api/account/memberships");
 
         const body = actual.body as MembershipsBody;
         expect(actual.status).toBe(200);
         expect(body.memberships).toHaveLength(1);
         expect(body.current_company_id).toBe(stale);
-        restoreActor();
       }),
     ));
 });

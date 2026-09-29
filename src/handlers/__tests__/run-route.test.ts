@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, type Layer } from "effect";
 import { Hono } from "hono";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { mountAccountRoutes } from "../../app";
+import { AuthApi } from "../../auth-service";
 import { runBackground, withWaitUntil } from "../../background";
 import { DbError } from "../../errors";
 import { Forbidden } from "../../membership/guard/errors";
 import { CONTINUE, respondWith, runMiddleware, runRoute } from "../run-route";
+import { provideAuthApi, stubAuthApi } from "./helpers";
 
 const captured = recordSentryExceptions();
 
@@ -182,5 +185,34 @@ describe("runMiddleware", () => {
     app.get("/x", (c) => c.text("handled"));
     const res = await app.request("/x");
     expect([res.status, await res.text()]).toEqual([403, '{"error":"forbidden"}']);
+  });
+});
+
+describe("authApiLayer", () => {
+  const buildSessionApp = (layer: Layer.Layer<AuthApi>) => {
+    const app = new Hono();
+    app.use("*", provideAuthApi(layer));
+    app.get("/session", (c) =>
+      runRoute(
+        c,
+        AuthApi.use((authApi) => authApi.getSession(c.req.raw.headers)).pipe(
+          Effect.map((session) => c.json({ userId: session?.user.id ?? null })),
+        ),
+      ),
+    );
+    return app;
+  };
+
+  test("設定しない app は live の AuthApi を使い、cookie 無しの account route は 401", async () => {
+    const app = new Hono();
+    mountAccountRoutes(app);
+    const res = await app.request("/api/account/memberships");
+    expect([res.status, await res.text()]).toEqual([401, '{"error":"unauthorized"}']);
+  });
+
+  test("設定した app は、その Layer の AuthApi で session を読む", async () => {
+    const app = buildSessionApp(stubAuthApi({ id: "u-stub", email: "stub@example.com" }));
+    const res = await app.request("/session");
+    expect(await res.text()).toBe('{"userId":"u-stub"}');
   });
 });

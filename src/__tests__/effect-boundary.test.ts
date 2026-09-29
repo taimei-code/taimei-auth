@@ -114,6 +114,11 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ]);
     expect(srcFiles("(settleCause|captureThrown)\\(").filter((f) => !allowed.has(f))).toEqual([]);
   });
+
+  test("route の AuthApi を差し替える authApiLayer は、テストだけが設定する", () => {
+    expect(srcFiles("authApiLayer")).toEqual(["src/handlers/run-route.ts"]);
+    expect(srcFiles(String.raw`\.set\(\s*["']authApiLayer["']`)).toEqual([]);
+  });
 });
 
 // biome (lineWidth 100) が折り返した複数行 import は `} from` 行から先頭行を辿って型 import を除外する (行 grep だけだと検出されない)。
