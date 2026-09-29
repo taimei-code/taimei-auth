@@ -1,12 +1,13 @@
 import { Effect } from "effect";
 import type { MfaTotpRow } from "@/db/repositories/mfa-totp";
+import { getAppName } from "../../email/client";
 import { IdGenerator } from "../../id-generator";
 import { Transaction } from "../../transaction";
 import { AlreadyEnabled, ChallengeExpired } from "../error-mapping";
 import { isMfaEnabled } from "../policy";
 import type { MfaTotpActor, TotpEnrollmentMaterial } from "./contracts";
 import { codeCipher, decryptText, decryptValue, encryptValue, secretCipher } from "./cipher";
-import { MfaIssuer, MfaKeyring, MfaTotpRepo } from "./ports";
+import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { generateRecoveryCodes } from "./recovery-codes";
 import { buildTotpUri, generateTotpSecret } from "./totp-engine";
 
@@ -17,7 +18,6 @@ const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
   if (isMfaEnabled(row)) return yield* new AlreadyEnabled();
 
   const ring = yield* MfaKeyring.use((k) => k.ring);
-  const issuer = yield* MfaIssuer.use((i) => i.appName);
 
   const secret = yield* Effect.promise(() => decryptValue(ring, secretCipher(row), actor.id));
   const stored = yield* MfaTotpRepo.use((mfa) => mfa.listUnusedRecoveryCodes(actor.id));
@@ -28,7 +28,7 @@ const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
 
   return {
     enrollmentId: row.enrollmentId,
-    totpUri: buildTotpUri({ issuer, accountLabel: actor.email, secret }),
+    totpUri: buildTotpUri({ issuer: getAppName(), accountLabel: actor.email, secret }),
     recoveryCodes,
   } satisfies TotpEnrollmentMaterial;
 });
@@ -39,7 +39,6 @@ export const enroll = Effect.fn("mfa.enroll")(function* (input: { actor: MfaTotp
   if (existing) return yield* replayPendingEnrollment(input.actor, existing);
 
   const ring = yield* MfaKeyring.use((k) => k.ring);
-  const issuer = yield* MfaIssuer.use((i) => i.appName);
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
@@ -84,7 +83,7 @@ export const enroll = Effect.fn("mfa.enroll")(function* (input: { actor: MfaTotp
   if (won) {
     return {
       enrollmentId,
-      totpUri: buildTotpUri({ issuer, accountLabel: input.actor.email, secret }),
+      totpUri: buildTotpUri({ issuer: getAppName(), accountLabel: input.actor.email, secret }),
       recoveryCodes,
     } satisfies TotpEnrollmentMaterial;
   }

@@ -125,15 +125,6 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
-  test("QA-M-06 有効化通知と無効化通知の結線が入れ替わらない", () => {
-    expect(filesWithCodeLiteral("notifyEnabled: notifyMfaEnabled,", "src/mfa/totp")).toEqual([
-      "src/mfa/totp/wiring.ts",
-    ]);
-    expect(filesWithCodeLiteral("notifyDisabled: notifyMfaDisabled,", "src/mfa/totp")).toEqual([
-      "src/mfa/totp/wiring.ts",
-    ]);
-  });
-
   test("QA-E-03 management/ の import 面は全列挙で固定する", () => {
     expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
       `management/backfill-orphan-cleanup.ts:from "../src/account/backfill-orphan-cleanup"`,

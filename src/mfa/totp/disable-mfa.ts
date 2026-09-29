@@ -2,11 +2,13 @@ import { Effect } from "effect";
 import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { Transaction } from "../../transaction";
+import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
 import { NotEnabled } from "../error-mapping";
+import { notifyMfaDisabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
 import type { MfaCodeKind } from "../client-facing-contracts";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
-import { MfaDisableBudget, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
+import { MfaSessions, MfaTotpRepo } from "./ports";
 import { verifyAndConsumeOwnedCode } from "./verify-code";
 
 export const disable = Effect.fn("mfa.disable")(function* (input: {
@@ -16,15 +18,12 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
   kind: MfaCodeKind;
 }) {
   const mfa = yield* MfaTotpRepo;
-  // spend より前に判定し、未有効の user に budget を消費させない。
   const enrollment = yield* mfa.readMfaVerification(input.actor.id);
   if (!isMfaEnabled(enrollment)) return yield* new NotEnabled();
 
-  const budget = yield* MfaDisableBudget;
-  yield* budget.spend(input.actor.id);
-
+  yield* spendDisableAttempt(input.actor.id);
   yield* verifyAndConsumeOwnedCode(input.actor.id, { code: input.code, kind: input.kind });
-  yield* budget.reset(input.actor.id);
+  yield* resetDisableAttempts(input.actor.id);
 
   const sessions = yield* MfaSessions;
   const sessionChanges = yield* sessions.revokeOthers(input.headers);
@@ -43,6 +42,6 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
     userId: input.actor.id,
     payload: { ip, userAgent },
   });
-  yield* MfaNotifier.use((n) => n.notifyDisabled(input.actor.email));
+  yield* notifyMfaDisabled(input.actor.email);
   return { sessionChanges } satisfies TotpSessionChanges;
 });

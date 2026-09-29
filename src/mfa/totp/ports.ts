@@ -1,12 +1,9 @@
 import type { Effect } from "effect";
 import { Context } from "effect";
 import type * as repo from "@/db/repositories/mfa-totp";
-import type { Background } from "../../background";
-import type { EmailSender } from "../../email/ports";
 import type { AuthApiError, LiftedModule } from "../../errors";
-import type { TtlStore } from "../../ttl-store-service";
 import type { SentryService } from "../../sentry";
-import type { ChallengeExpired, Locked } from "../error-mapping";
+import type { ChallengeExpired } from "../error-mapping";
 import type { MfaKeyRing } from "./cipher";
 
 export class MfaTotpRepo extends Context.Service<MfaTotpRepo, LiftedModule<typeof repo>>()(
@@ -19,11 +16,6 @@ export class MfaKeyring extends Context.Service<
   { readonly ring: Effect.Effect<MfaKeyRing> }
 >()("taimei/MfaKeyring") {}
 
-export class MfaIssuer extends Context.Service<
-  MfaIssuer,
-  { readonly appName: Effect.Effect<string> }
->()("taimei/MfaIssuer") {}
-
 export class MfaSessions extends Context.Service<
   MfaSessions,
   {
@@ -33,24 +25,3 @@ export class MfaSessions extends Context.Service<
     issueSession(userId: string): Effect.Effect<Headers, AuthApiError>;
   }
 >()("taimei/MfaSessions") {}
-
-export class MfaNotifier extends Context.Service<
-  MfaNotifier,
-  {
-    notifyEnabled(
-      email: string,
-    ): Effect.Effect<void, never, EmailSender | Background | SentryService>;
-    notifyDisabled(
-      email: string,
-    ): Effect.Effect<void, never, EmailSender | Background | SentryService>;
-  }
->()("taimei/MfaNotifier") {}
-
-// 数えられない時も Locked (fail-closed)。
-export class MfaDisableBudget extends Context.Service<
-  MfaDisableBudget,
-  {
-    spend(userId: string): Effect.Effect<void, Locked, TtlStore | SentryService>;
-    reset(userId: string): Effect.Effect<void, never, TtlStore | SentryService>;
-  }
->()("taimei/MfaDisableBudget") {}
