@@ -28,6 +28,7 @@ export const spendAttemptBudgetFailClosed = Effect.fn("attemptBudget.spendFailCl
   );
   if (!counted) return yield* new AttemptBudgetUnavailable();
   if (counted.count > input.maxAttempts) return yield* new AttemptBudgetExhausted();
+  return { attemptsLeft: input.maxAttempts - counted.count };
 });
 
 export const spendAttemptBudgetFailOpen = Effect.fn("attemptBudget.spendFailOpen")(
