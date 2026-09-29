@@ -9,6 +9,7 @@ import {
   requestHeaders,
   tamperCookieSignature,
   totpCode,
+  wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
 import { getMemoryKvStore } from "../../ttl-store";
@@ -136,6 +137,49 @@ describe("MFA チャレンジ API", () => {
         expect(res.status).toBe(401);
         expect(yield* responseJson(res)).toEqual({ error: "challenge_expired" });
         expect(res.headers.getSetCookie()).toEqual([]);
+      }),
+    ));
+
+  test("最後の試行を誤コードで使う → チャレンジ期限切れと同じ 401 を返し、Set-Cookie を付けない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("exhausted");
+        const enabled = yield* enableMfaFor(user);
+        const app = buildApp();
+        const issue = () =>
+          issueTestChallenge({
+            userId: user.id,
+            redirectUrl: "/account/security",
+            method: "magic_link",
+          });
+
+        const exhaustedChallenge = yield* issue();
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          yield* verifyWith(app, exhaustedChallenge.headers, {
+            code: yield* wrongTotpCode(enabled.secret),
+            kind: "totp",
+          });
+        }
+        const exhausted = yield* verifyWith(app, exhaustedChallenge.headers, {
+          code: yield* wrongTotpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        const vanishedChallenge = yield* issue();
+        yield* Effect.sync(() =>
+          getMemoryKvStore().delete(challengeKey(vanishedChallenge.challengeId)),
+        );
+        const vanished = yield* verifyWith(app, vanishedChallenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        expect(exhausted.status).toBe(401);
+        expect(exhausted.status).toBe(vanished.status);
+        expect(yield* responseJson(exhausted)).toEqual(yield* responseJson(vanished));
+        expect(exhausted.headers.getSetCookie()).toEqual([]);
+        expect(vanished.headers.getSetCookie()).toEqual([]);
       }),
     ));
 

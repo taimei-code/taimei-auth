@@ -2,8 +2,9 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
-import { AuthApiError } from "../../../errors";
+import { AuthApiError, TtlStoreError } from "../../../errors";
 import { getMemoryKvStore } from "../../../ttl-store";
+import { TtlStore } from "../../../ttl-store-service";
 import { runTest, expectFailure, auditRowsFor, partial } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
@@ -50,6 +51,12 @@ const verify = completeLoginChallenge;
 const verifyFails = (headers: Headers, input: { code: string; kind: "totp" | "recovery_code" }) =>
   Effect.flip(completeLoginChallenge(headers, input));
 const challengeState = readLoginChallengeState;
+const sendWrongTotpCodes = (headers: Headers, secret: string, times: number) =>
+  Effect.gen(function* () {
+    for (let attempt = 1; attempt <= times; attempt++) {
+      yield* verifyFails(headers, { code: yield* wrongTotpCode(secret), kind: "totp" });
+    }
+  });
 
 describe("ログインチャレンジ", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
@@ -188,7 +195,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-138/139 試行枠: 5 回目まで 400 + pending true、6 回目で破棄", () =>
+  test("AC-138/139 試行枠: 4 回目まで 400 + pending true、最後の 5 回目の誤コードで破棄して challenge_expired", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -199,8 +206,14 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
+        const exhaustedWarnings = () =>
+          sentry.messages.filter(
+            (m) =>
+              m.message === "mfa: login challenge attempt budget exhausted" &&
+              m.context?.tags?.component === "mfa-login-challenge",
+          );
 
-        for (let attempt = 1; attempt <= 5; attempt++) {
+        for (let attempt = 1; attempt <= 4; attempt++) {
           const rejected = yield* verifyFails(challenge.headers, {
             code: yield* wrongTotpCode(enabled.secret),
             kind: "totp",
@@ -208,16 +221,22 @@ describe("ログインチャレンジ", () => {
           expectFailure(rejected, InvalidCode, "invalid_code", 400);
           expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
         }
+        expect(exhaustedWarnings()).toHaveLength(0);
 
-        const exhausted = yield* verifyFails(challenge.headers, {
+        const lastAttempt = yield* verifyFails(challenge.headers, {
           code: yield* wrongTotpCode(enabled.secret),
           kind: "totp",
         });
-        expectFailure(exhausted, InvalidCode, "invalid_code", 400);
+        expectFailure(lastAttempt, ChallengeExpired, "challenge_expired", 401);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
-        expect(sentry.messages.some((m) => m.message.includes("attempt budget exhausted"))).toBe(
-          true,
-        );
+        expect(exhaustedWarnings()).toHaveLength(1);
+
+        const sixth = yield* verifyFails(challenge.headers, {
+          code: yield* wrongTotpCode(enabled.secret),
+          kind: "totp",
+        });
+        expectFailure(sixth, ChallengeExpired, "challenge_expired", 401);
+        expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
 
         const after = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret),
@@ -225,6 +244,109 @@ describe("ログインチャレンジ", () => {
         });
         expectFailure(after, ChallengeExpired, "challenge_expired", 401);
         expect(yield* auditRowsFor(user.id, "sign_in")).toEqual([]);
+      }),
+    ));
+
+  test("試行枠の境界: 誤コード 4 回の後なら 5 回目の正しいコードで通過する", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("budget-inside");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "magic_link",
+        });
+        yield* sendWrongTotpCodes(challenge.headers, enabled.secret, 4);
+
+        const passed = yield* verify(challenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        expect(passed.forwardedHeaders.getSetCookie().length).toBeGreaterThan(0);
+        expect(yield* auditRowsFor(user.id, "sign_in")).toHaveLength(1);
+      }),
+    ));
+
+  test("試行枠の境界: 誤コード 5 回の後は 6 回目の正しいコードでも challenge_expired", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("budget-outside");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "magic_link",
+        });
+        yield* sendWrongTotpCodes(challenge.headers, enabled.secret, 5);
+
+        const rejected = yield* verifyFails(challenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expect(yield* auditRowsFor(user.id, "sign_in")).toEqual([]);
+      }),
+    ));
+
+  test("並行送信で枠を超えた送信は、正しいコードでも破棄して challenge_expired", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("budget-overrun");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "magic_link",
+        });
+        yield* Effect.sync(() =>
+          getMemoryKvStore().set(attemptsKeyOf(challenge.challengeId), "5", 60),
+        );
+
+        const rejected = yield* verifyFails(challenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
+      }),
+    ));
+
+  test("チャレンジを消せなくても最後の誤コードには challenge_expired を返し、消し損ねを Sentry に記録する", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("expire-delete-fails");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "magic_link",
+        });
+        yield* sendWrongTotpCodes(challenge.headers, enabled.secret, 4);
+        const ttlStore = yield* TtlStore;
+
+        const rejected = yield* verifyFails(challenge.headers, {
+          code: yield* wrongTotpCode(enabled.secret),
+          kind: "totp",
+        }).pipe(
+          Effect.provideService(TtlStore, {
+            ...ttlStore,
+            delete: () =>
+              Effect.fail(new TtlStoreError({ cause: new Error("test: delete failed") })),
+          }),
+        );
+
+        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expect(
+          sentry.exceptions.filter((e) => e.context?.tags?.component === "mfa-login-challenge"),
+        ).toHaveLength(1);
       }),
     ));
 

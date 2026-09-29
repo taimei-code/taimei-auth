@@ -5,9 +5,9 @@ import { z } from "zod";
 import { AuthApi } from "../../auth-service";
 import { isLocalEnvironment } from "../../env";
 import { TtlStore } from "../../ttl-store-service";
-import { SentryService } from "../../sentry";
+import { captureCause, SentryService } from "../../sentry";
 import { spendAttemptBudgetFailClosed } from "../../attempt-budget";
-import { ChallengeExpired } from "../error-mapping";
+import { ChallengeExpired, type InvalidCode, Locked } from "../error-mapping";
 
 const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
 
@@ -84,30 +84,37 @@ export const consumeLoginChallenge = Effect.fn("mfa.consumeLoginChallenge")(func
   return clearCookieHeaders();
 });
 
-// 失効 cookie は返さない。呼び出し側は invalid_code のまま返す契約。
-export const destroyLoginChallenge = Effect.fn("mfa.destroyLoginChallenge")(function* (
-  challengeId: string,
-) {
-  yield* TtlStore.use((r) => r.delete(challengeKey(challengeId)));
+const expireLoginChallenge = Effect.fn("mfa.expireLoginChallenge")(function* (challengeId: string) {
+  yield* SentryService.use((sentry) =>
+    sentry.captureMessage("mfa: login challenge attempt budget exhausted", {
+      level: "warning",
+      tags: { component: "mfa-login-challenge" },
+    }),
+  );
+  yield* TtlStore.use((r) => r.delete(challengeKey(challengeId))).pipe(
+    Effect.catchTag("TtlStoreError", captureCause({ tags: { component: "mfa-login-challenge" } })),
+  );
+  return yield* new ChallengeExpired();
 });
 
 export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(
   function* (challengeId: string) {
-    yield* spendAttemptBudgetFailClosed({
+    const { attemptsLeft } = yield* spendAttemptBudgetFailClosed({
       key: attemptsKey(challengeId),
       windowSeconds: CHALLENGE_TTL_SECONDS,
       maxAttempts: MAX_ATTEMPTS,
       component: "mfa-login-challenge",
     });
+    return Effect.fn("mfa.rejectWrongCode")(function* (wrongCode: InvalidCode) {
+      if (attemptsLeft === 0) return yield* expireLoginChallenge(challengeId);
+      return yield* wrongCode;
+    });
   },
-  Effect.tapErrorTag("AttemptBudgetExhausted", () =>
-    SentryService.use((sentry) =>
-      sentry.captureMessage("mfa: login challenge attempt budget exhausted", {
-        level: "warning",
-        tags: { component: "mfa-login-challenge" },
-      }),
-    ),
-  ),
+  (spent, challengeId) =>
+    Effect.catchTags(spent, {
+      AttemptBudgetUnavailable: () => new Locked(),
+      AttemptBudgetExhausted: () => expireLoginChallenge(challengeId),
+    }),
 );
 
 const challengeSchema = z.object({
