@@ -15,12 +15,6 @@ export type MfaChallengeVerification<ErrorCode extends string> =
   | { kind: "expired" }
   | { kind: "rejected"; errorCode: ErrorCode };
 
-export type MfaChallengePort<Input, ErrorCode extends string> = {
-  observe(signal: AbortSignal): Promise<MfaChallengeObservation>;
-  // expired の判定は resolveMfaChallengeVerification が行う
-  verify(input: Input): Promise<Exclude<MfaChallengeVerification<ErrorCode>, { kind: "expired" }>>;
-};
-
 export type MfaChallengeFlowEvent<ErrorCode extends string> =
   | {
       type: "observation_resolved";
@@ -31,25 +25,6 @@ export type MfaChallengeFlowEvent<ErrorCode extends string> =
   | { type: "error_cleared" };
 
 export const initialMfaChallengeFlowState = { phase: "observing" } as const;
-
-export async function resolveMfaChallengeVerification<Input, ErrorCode extends string>(
-  port: MfaChallengePort<Input, ErrorCode>,
-  input: Input,
-  signal: AbortSignal,
-): Promise<MfaChallengeVerification<ErrorCode>> {
-  const result = await port.verify(input);
-  if (result.kind === "passed") {
-    return result;
-  }
-  if (result.errorCode === "challenge_expired") {
-    return { kind: "expired" };
-  }
-  if (result.errorCode === "invalid_code") {
-    const observation = await port.observe(signal);
-    if (observation.kind === "absent") return { kind: "expired" };
-  }
-  return result;
-}
 
 export function reduceMfaChallengeFlow<ErrorCode extends string>(
   state: MfaChallengeFlowState<ErrorCode>,

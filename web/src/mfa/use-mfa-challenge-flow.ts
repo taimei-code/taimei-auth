@@ -2,19 +2,17 @@ import { useEffect, useReducer, useRef } from "react";
 import {
   initialMfaChallengeFlowState,
   reduceMfaChallengeFlow,
-  resolveMfaChallengeVerification,
   type MfaChallengeFlowState,
-  type MfaChallengePort,
+  type MfaChallengeObservation,
+  type MfaChallengeVerification,
 } from "./mfa-challenge-flow";
 import { getMfaChallenge, mfaErrorCodeOf, verifyMfaChallenge, type MfaErrorCode } from "./mfa-api";
 import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
 
 type MfaChallengeCodeInput = Parameters<typeof verifyMfaChallenge>[0];
 
-type ChallengePort = MfaChallengePort<MfaChallengeCodeInput, MfaErrorCode>;
-
-export const mfaChallengePort: ChallengePort = {
-  observe: async (signal) => {
+export const mfaChallengePort = {
+  readChallengeState: async (signal: AbortSignal): Promise<MfaChallengeObservation> => {
     try {
       const { pending } = await getMfaChallenge(signal);
       return pending ? { kind: "present" } : { kind: "absent" };
@@ -24,12 +22,15 @@ export const mfaChallengePort: ChallengePort = {
       return { kind: "unavailable" };
     }
   },
-  verify: async (input) => {
+  verify: async (input: MfaChallengeCodeInput): Promise<MfaChallengeVerification<MfaErrorCode>> => {
     try {
       const { redirectUrl } = await verifyMfaChallenge(input);
       return { kind: "passed", redirectUrl };
     } catch (error) {
-      return { kind: "rejected", errorCode: mfaErrorCodeOf(error) };
+      const errorCode = mfaErrorCodeOf(error);
+      return errorCode === "challenge_expired"
+        ? { kind: "expired" }
+        : { kind: "rejected", errorCode };
     }
   },
 };
@@ -44,8 +45,7 @@ export type MfaChallengeFlow = {
 const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
   state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
-// port は useEffect の依存なので、render ごとに新しい object を渡すと観測用 GET の abort と再実行を繰り返す
-export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): MfaChallengeFlow {
+export function useMfaChallengeFlow(): MfaChallengeFlow {
   const [state, dispatch] = useReducer(
     reduceMfaChallengeFlow<MfaErrorCode>,
     initialMfaChallengeFlowState,
@@ -57,8 +57,8 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
     const controller = new AbortController();
     readController.current = controller;
 
-    void port
-      .observe(controller.signal)
+    void mfaChallengePort
+      .readChallengeState(controller.signal)
       .then((observation) => {
         if (!controller.signal.aborted) {
           dispatch({ type: "observation_resolved", observation });
@@ -77,7 +77,7 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
       controller.abort();
       readController.current = null;
     };
-  }, [port]);
+  }, []);
 
   const submit = (input: MfaChallengeCodeInput) => {
     const controller = readController.current;
@@ -92,7 +92,8 @@ export function useMfaChallengeFlow(port: ChallengePort = mfaChallengePort): Mfa
 
     verificationInFlight.current = true;
     dispatch({ type: "verification_started" });
-    void resolveMfaChallengeVerification(port, input, controller.signal)
+    void mfaChallengePort
+      .verify(input)
       .then((verification) => {
         if (!controller.signal.aborted) {
           dispatch({ type: "verification_resolved", verification });
