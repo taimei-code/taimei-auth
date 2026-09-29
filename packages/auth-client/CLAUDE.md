@@ -15,3 +15,5 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 層 4 だけは root `biome.json` の `packages/auth-client/**` override が禁止し、`src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。
 
 `effect` は `src/errors.ts` の `Data.TaggedError` だけが使う `dependencies` で、汎用 library なので禁止の対象外である。外すと `./errors` の class の runtime 上の形が変わって breaking になるので、外すなら次の major に同梱する。
+
+この package の `effect` は v3 系 (`packages/auth-client/node_modules/effect`) なので、root の「Effect」節 (v4 rc の `node_modules/effect/AGENTS.md`) は当てはまらない。

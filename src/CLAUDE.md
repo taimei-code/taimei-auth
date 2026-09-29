@@ -8,7 +8,7 @@
 
 - **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`ClientFacingError` から HTTP / Connect へ) に変換するのは adapter だけが行う。policy 述語、repository への直接 write、transaction は持たない。
 - **Guard** (`membership/guard/`、`membership/policy.ts`): Hono に依存しない、操作単位の認可。公開 API は `Effect<A, GuardError, R>`。
-- **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。失敗は各 domain の `errors.ts` にある failure class で表す。
+- **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。失敗は各 domain の failure class (`errors.ts`、mfa は `error-mapping.ts`) で表す。
 - **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が定義元。
 - domain が肥大化したら、技術分類ではなく操作名で下位ディレクトリを作る。`services/` や `utils/` のような、無関係な実装の寄せ集めを作らない。
 - web から `@core` として参照される module は、browser-safe な依存だけを持つ。
