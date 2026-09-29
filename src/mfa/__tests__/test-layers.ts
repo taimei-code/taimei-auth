@@ -1,12 +1,9 @@
 import { Effect, Layer } from "effect";
 import { AuditLog } from "../../audit/ports";
+import { EmailSender } from "../../email/ports";
 import { DbError } from "../../errors";
 import { partial } from "../../__tests__/live-runner";
-import { Locked } from "../error-mapping";
-import { MfaDisableBudget, MfaIssuer, MfaNotifier, MfaSessions } from "../totp/ports";
-
-export const issuerLayer = (appName: string): Layer.Layer<MfaIssuer> =>
-  Layer.succeed(MfaIssuer, MfaIssuer.of({ appName: Effect.succeed(appName) }));
+import { MfaSessions } from "../totp/ports";
 
 export const sessionsLayer = (recorded: { revokes: Headers[] }): Layer.Layer<MfaSessions> =>
   Layer.succeed(
@@ -22,28 +19,12 @@ export const sessionsLayer = (recorded: { revokes: Headers[] }): Layer.Layer<Mfa
     }),
   );
 
-export const notifierLayer = (notified: string[]): Layer.Layer<MfaNotifier> =>
+export const mfaMailRecorderLayer = (sent: string[]): Layer.Layer<EmailSender> =>
   Layer.succeed(
-    MfaNotifier,
-    MfaNotifier.of({
-      notifyEnabled: (email) => Effect.sync(() => notified.push(`enabled:${email}`)),
-      notifyDisabled: (email) => Effect.sync(() => notified.push(`disabled:${email}`)),
-    }),
-  );
-
-export const disableBudgetLayer = (
-  recorded: { spends: string[]; resets: string[] },
-  locked = false,
-): Layer.Layer<MfaDisableBudget> =>
-  Layer.succeed(
-    MfaDisableBudget,
-    MfaDisableBudget.of({
-      spend: (userId) =>
-        Effect.suspend(() => {
-          recorded.spends.push(userId);
-          return locked ? Effect.fail(new Locked()) : Effect.void;
-        }),
-      reset: (userId) => Effect.sync(() => recorded.resets.push(userId)),
+    EmailSender,
+    partial<EmailSender["Service"]>({
+      sendMfaEnabled: (email) => Effect.sync(() => sent.push(`enabled:${email}`)),
+      sendMfaDisabled: (email) => Effect.sync(() => sent.push(`disabled:${email}`)),
     }),
   );
 

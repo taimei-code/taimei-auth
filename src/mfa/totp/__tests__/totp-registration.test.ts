@@ -1,7 +1,8 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
-import { auditRowsFor, dbTest, expectFailure } from "../../../__tests__/live-runner";
+import { auditRowsFor, dbTest, drained, expectFailure } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
+import { getMemoryKvStore } from "../../../ttl-store";
 import {
   countMfaTotpRows,
   countRecoveryCodeRows,
@@ -13,11 +14,10 @@ import {
 } from "../../__tests__/helpers";
 import {
   auditFailingLayer,
-  disableBudgetLayer,
-  issuerLayer,
-  notifierLayer,
+  mfaMailRecorderLayer,
   sessionsLayer,
 } from "../../__tests__/test-layers";
+import { disableAttemptsKey } from "../../disable-attempt-budget";
 import {
   AlreadyEnabled,
   EnrollmentChanged,
@@ -33,32 +33,41 @@ import { readOwnedMfaStatus } from "../read-status";
 import { verifyAndConsumeOwnedCode } from "../verify-code";
 
 const P = "mfa-totp-reg-";
+const ISSUER = "taimei-test";
 const { run, cleanup } = dbTest(P);
 const sentry = installSentryRecorder();
 
-const ISSUER = "taimei-test";
-
-type Recorded = {
-  revokes: Headers[];
-  notified: string[];
-  spends: string[];
-  resets: string[];
-};
-
-function buildOps(overrides?: { locked?: boolean; auditFails?: boolean }) {
-  const recorded: Recorded = { revokes: [], notified: [], spends: [], resets: [] };
+function buildOps(overrides?: { auditFails?: boolean }) {
+  const recorded = { revokes: [] as Headers[], mailed: [] as string[] };
   const layers = Layer.mergeAll(
-    issuerLayer(ISSUER),
     sessionsLayer(recorded),
-    notifierLayer(recorded.notified),
-    disableBudgetLayer(recorded, overrides?.locked ?? false),
+    mfaMailRecorderLayer(recorded.mailed),
     ...(overrides?.auditFails ? [auditFailingLayer(new Error("audit store unavailable"))] : []),
   );
   return {
     ...recorded,
-    run: <A, E, R>(program: Effect.Effect<A, E, R>) => Effect.provide(program, layers),
+    run: <A, E, R>(program: Effect.Effect<A, E, R>) => drained(Effect.provide(program, layers)),
   };
 }
+
+const disableAttemptCount = (userId: string) => getMemoryKvStore().get(disableAttemptsKey(userId));
+
+const seedUserWithMfaEnabled = (ops: ReturnType<typeof buildOps>, seedName: string) =>
+  Effect.gen(function* () {
+    const user = yield* (yield* TestDb).seedUser(seedName);
+    const actor = { id: user.id, email: user.email };
+    const enrolled = yield* ops.run(enroll({ actor }));
+    const secret = secretFromTotpUri(enrolled.totpUri);
+    yield* ops.run(
+      activate({
+        actor,
+        headers,
+        enrollmentId: enrolled.enrollmentId,
+        code: yield* totpCode(secret, -1),
+      }),
+    );
+    return { user, actor, enrolled, secret };
+  });
 
 const headers = new Headers({ "user-agent": "totp-reg-test", "x-forwarded-for": "203.0.113.9" });
 
@@ -68,8 +77,16 @@ const sentryAuditFailureEvents = () =>
     .map((e) => e.context?.tags?.event);
 
 describe("MFA 登録遷移 (自前 totp)", () => {
+  const originalAppName = process.env.APP_NAME;
+  beforeAll(() => {
+    process.env.APP_NAME = ISSUER;
+  });
   beforeEach(() => cleanup().then(() => sentry.reset()));
-  afterAll(() => cleanup().then(() => sentry.restore()));
+  afterAll(() => {
+    if (originalAppName === undefined) delete process.env.APP_NAME;
+    else process.env.APP_NAME = originalAppName;
+    return cleanup().then(() => sentry.restore());
+  });
 
   test("AC-102/103/104 未登録: status 全 false・activate 404・disable 409", () =>
     run(
@@ -108,7 +125,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           ops.run(disable({ actor, headers, code: "123456", kind: "totp" })),
         );
         expectFailure(notEnabled, NotEnabled, "not_enabled", 409);
-        expect(ops.spends).toEqual([]);
+        expect(disableAttemptCount(user.id)).toBeNull();
       }),
     ));
 
@@ -152,6 +169,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         );
         expectFailure(wrong, InvalidCode, "invalid_code", 400);
         expect(ops.revokes.length).toBe(0);
+        expect(ops.mailed).toEqual([]);
 
         const activated = yield* ops.run(
           activate({
@@ -163,7 +181,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         );
         expect(activated.sessionChanges.getSetCookie()).toEqual(["revoked=stub"]);
         expect(ops.revokes.length).toBe(1);
-        expect(ops.notified).toEqual([`enabled:${user.email}`]);
+        expect(ops.mailed).toEqual([`enabled:${user.email}`]);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).not.toBeNull();
         expect(yield* ops.run(readOwnedMfaStatus(actor))).toEqual({
           enabled: true,
@@ -216,8 +234,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect(yield* countRecoveryCodeRows(user.id)).toBe(0);
         expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(1);
         expect(sentryAuditFailureEvents()).toEqual([]);
-        expect(ops.notified).toEqual([`enabled:${user.email}`, `disabled:${user.email}`]);
-        expect(ops.resets).toEqual([user.id]);
+        expect(ops.mailed).toEqual([`enabled:${user.email}`, `disabled:${user.email}`]);
       }),
     ));
 
@@ -281,47 +298,68 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-116/117 disable の試行枠: 誤コードで budget 消費、枯渇で locked", () =>
+  test("AC-116/117 disable の試行枠: 誤コードで消費し、成功で戻す", () =>
     run(
       Effect.gen(function* () {
-        const db = yield* TestDb;
-        const user = yield* db.seedUser("budget");
-        const actor = { id: user.id, email: user.email };
         const ops = buildOps();
-        const enrolled = yield* ops.run(enroll({ actor }));
-        const secret = secretFromTotpUri(enrolled.totpUri);
-        yield* ops.run(
-          activate({
-            actor,
-            headers,
-            enrollmentId: enrolled.enrollmentId,
-            code: yield* totpCode(secret, -1),
-          }),
-        );
+        const { user, actor, enrolled, secret } = yield* seedUserWithMfaEnabled(ops, "budget");
 
         const wrong = yield* Effect.flip(
           ops.run(disable({ actor, headers, code: yield* wrongTotpCode(secret), kind: "totp" })),
         );
         expectFailure(wrong, InvalidCode, "invalid_code", 400);
-        expect(ops.spends).toEqual([user.id]);
+        expect(disableAttemptCount(user.id)).toBe("1");
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
+        expect(ops.mailed).toEqual([`enabled:${user.email}`]);
 
-        const locked = buildOps({ locked: true });
+        const byRecovery = yield* ops.run(
+          disable({ actor, headers, code: enrolled.recoveryCodes[0], kind: "recovery_code" }),
+        );
+        expect(byRecovery.sessionChanges).toBeInstanceOf(Headers);
+        expect(disableAttemptCount(user.id)).toBeNull();
+        expect(yield* countMfaTotpRows(user.id)).toBe(0);
+        expect(yield* countRecoveryCodeRows(user.id)).toBe(0);
+        expect(ops.mailed).toEqual([`enabled:${user.email}`, `disabled:${user.email}`]);
+      }),
+    ));
+
+  test("AC-116 disable の試行枠を使い切ると、正しいコードでも locked", () =>
+    run(
+      Effect.gen(function* () {
+        const ops = buildOps();
+        const { user, actor, secret } = yield* seedUserWithMfaEnabled(ops, "budget-exhausted");
+        yield* Effect.sync(() => getMemoryKvStore().set(disableAttemptsKey(user.id), "5", 60));
+
         expectFailure(
           yield* Effect.flip(
-            locked.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
+            ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
           ),
           Locked,
           "locked",
           429,
         );
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
+      }),
+    ));
 
-        const byRecovery = yield* ops.run(
-          disable({ actor, headers, code: enrolled.recoveryCodes[0], kind: "recovery_code" }),
+  test("AC-116 disable の試行枠を数えられない時も、正しいコードで locked (fail-closed)", () =>
+    run(
+      Effect.gen(function* () {
+        const ops = buildOps();
+        const { user, actor, secret } = yield* seedUserWithMfaEnabled(ops, "budget-unavailable");
+        yield* Effect.sync(() =>
+          getMemoryKvStore().set(disableAttemptsKey(user.id), "not-a-number", 60),
         );
-        expect(byRecovery.sessionChanges).toBeInstanceOf(Headers);
-        expect(yield* countMfaTotpRows(user.id)).toBe(0);
+
+        expectFailure(
+          yield* Effect.flip(
+            ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
+          ),
+          Locked,
+          "locked",
+          429,
+        );
+        expect(yield* countMfaTotpRows(user.id)).toBe(1);
       }),
     ));
 

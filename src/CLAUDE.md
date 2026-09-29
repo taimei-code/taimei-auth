@@ -18,6 +18,7 @@
 
 - Guard と Use-case は `Effect.fn` で書き、依存は ports の service を `yield*` して取る。combinator は `Effect.fn` の第 2 引数以降に渡し、戻り値に `.pipe` を付けない。method を 1 つだけ呼ぶ時は `Service.use((s) => s.method())` を使う。failure class の instance はそのまま Effect なので、`Effect.fail(new X())` とは書かない。
 - 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側が直接 import する。
+- Repository 以外の port は、Layer で差し替えた時に何かを隠せる場合だけ置く。既存の service (`TtlStore` / `EmailSender` など) を使う関数は use-case から直接呼び、テストはその service の Layer を差し替えて、起きた結果 (計数、送信) を観測する。
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置く。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` を使う (渡す effect の失敗は渡す前に catch する)。
 - サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で表し、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。

@@ -6,7 +6,7 @@ import { Locked } from "./error-mapping";
 
 // セッション有りの経路で 6 桁コードの総当たりを止める唯一の防御。
 
-const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
+export const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
 
 const WINDOW_SECONDS = 15 * 60;
 const MAX_ATTEMPTS = 5;

@@ -2,10 +2,11 @@ import { Clock, Effect } from "effect";
 import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
 import { AlreadyEnabled, EnrollmentChanged, InvalidCode, MfaNotFound } from "../error-mapping";
+import { notifyMfaEnabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { decryptValue, secretCipher } from "./cipher";
-import { MfaKeyring, MfaNotifier, MfaSessions, MfaTotpRepo } from "./ports";
+import { MfaKeyring, MfaSessions, MfaTotpRepo } from "./ports";
 import { matchTotpCode } from "./totp-engine";
 
 // revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
@@ -40,6 +41,6 @@ export const activate = Effect.fn("mfa.activate")(function* (input: {
     userId: input.actor.id,
     payload: { ip, userAgent },
   });
-  yield* MfaNotifier.use((n) => n.notifyEnabled(input.actor.email));
+  yield* notifyMfaEnabled(input.actor.email);
   return { sessionChanges } satisfies TotpSessionChanges;
 });
