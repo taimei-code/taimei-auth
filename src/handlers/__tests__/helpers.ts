@@ -1,11 +1,15 @@
-import { Effect } from "effect";
-import { Hono } from "hono";
+import { Effect, Layer } from "effect";
+import { Hono, type MiddlewareHandler } from "hono";
 import { mountAccountRoutes } from "../../app";
 import { auth } from "../../auth";
+import { AuthApi } from "../../auth-service";
+import { authApiLive } from "../../auth-wiring";
 
 export const TEST_PREFIX = "mig-test-";
 
 export type StubActor = { id: string; email: string } | null;
+
+type Session = NonNullable<Effect.Success<ReturnType<AuthApi["Service"]["getSession"]>>>;
 
 let originalGetSession: typeof auth.api.getSession | null = null;
 let currentActor: StubActor = null;
@@ -32,6 +36,29 @@ export function restoreActor(): void {
 
 // auth-entry-redirect は getSession の前に getSessionCookie(headers) を通るため、session の分岐を検証するテストはこの header を付ける。
 export const SESSION_COOKIE_HEADER = { cookie: "better-auth.session_token=stub-session" };
+
+export const stubAuthApi = (
+  actor: StubActor,
+  overrides: Partial<AuthApi["Service"]> = {},
+): Layer.Layer<AuthApi> =>
+  Layer.succeed(
+    AuthApi,
+    AuthApi.of({
+      ...authApiLive,
+      getSession: () =>
+        Effect.succeed(
+          actor && ({ user: { id: actor.id, email: actor.email } } as unknown as Session),
+        ),
+      ...overrides,
+    }),
+  );
+
+export const provideAuthApi =
+  (layer: Layer.Layer<AuthApi>): MiddlewareHandler =>
+  (c, next) => {
+    c.set("authApiLayer", layer);
+    return next();
+  };
 
 export function buildTestApp(): Hono {
   const app = new Hono();

@@ -1,6 +1,7 @@
-import type { Cause } from "effect";
+import type { Cause, Layer } from "effect";
 import { Effect, Exit } from "effect";
 import type { Context, Next } from "hono";
+import type { AuthApi } from "../auth-service";
 import { type AppServices, getRuntime } from "../runtime";
 import {
   internalErrorResponse,
@@ -10,10 +11,23 @@ import {
   clientFacingErrorResponse,
 } from "./client-facing-error";
 
+declare module "hono" {
+  interface ContextVariableMap {
+    authApiLayer?: Layer.Layer<AuthApi>;
+  }
+}
+
 export type RouteEffect<A> = Effect.Effect<A, RouteError, AppServices>;
 
+const runToExit = <A>(c: Context, program: RouteEffect<A>) => {
+  const authApiLayer = c.get("authApiLayer");
+  return getRuntime().runPromiseExit(
+    authApiLayer ? Effect.provide(program, authApiLayer) : program,
+  );
+};
+
 export async function runRoute(c: Context, program: RouteEffect<Response>): Promise<Response> {
-  const exit = await getRuntime().runPromiseExit(program);
+  const exit = await runToExit(c, program);
   if (Exit.isSuccess(exit)) return exit.value;
   return causeToResponse(c, exit.cause, "runRoute");
 }
@@ -34,7 +48,7 @@ export async function runMiddleware(
   next: Next,
   program: RouteEffect<MiddlewareDecision>,
 ): Promise<Response | void> {
-  const exit = await getRuntime().runPromiseExit(program);
+  const exit = await runToExit(c, program);
   if (!Exit.isSuccess(exit)) return causeToResponse(c, exit.cause, "runMiddleware");
   if (exit.value._tag === "Respond") return exit.value.response;
   return next();
