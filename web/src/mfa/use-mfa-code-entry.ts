@@ -20,11 +20,11 @@ export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
 
 const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
-// invalid_code で再試行を促さない。server は試行上限の超過 (チャレンジ破棄済み) も同じコードで返す
 const MESSAGE_BY_ERROR_CODE: Record<MfaErrorCode, string> = {
   invalid_code: "入力されたコードが正しくありません。",
   challenge_expired: "ログインの有効期限が切れました。お手数ですが、もう一度ログインしてください。",
-  locked: "試行回数の上限に達しました。15 分ほど経ってからやり直してください。",
+  locked:
+    "試行回数が上限に達したか、確認を一時的に受け付けられません。15 分ほど経ってからやり直してください。",
   rate_limited: "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
   already_enabled: "多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。",
   enrollment_changed: "登録情報が更新されました。もう一度登録を開始してください。",

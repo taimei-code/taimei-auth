@@ -158,6 +158,14 @@ describe("describeMfaChallengeError", () => {
     expect(describeMfaChallengeError("constructor")).toBe(generic);
   });
 
+  test("locked は試行枠の使い切りと計数できない時の両方で返るので、どちらの場合にも合う文言にする", () => {
+    const locked = describeMfaChallengeError("locked");
+
+    expect(locked).toContain("上限");
+    expect(locked).toContain("一時的");
+    expect(locked).toContain("15 分");
+  });
+
   test("QA-E-11 ロックアウトと rate limit は待ち時間の違う別文言になる", () => {
     const locked = describeMfaChallengeError("locked");
     const rateLimited = describeMfaChallengeError("rate_limited");

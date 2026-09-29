@@ -1,12 +1,11 @@
 import { Effect } from "effect";
 import { appendAuditLogBestEffort } from "../../audit/report-failure";
 import { getClientContext } from "../../request-context";
-import { ChallengeExpired, InvalidCode, Locked } from "../error-mapping";
+import { ChallengeExpired } from "../error-mapping";
 import { validateChallengeRedirect } from "../redirect-guard";
 import type { MfaCodeKind } from "../client-facing-contracts";
 import {
   consumeLoginChallenge,
-  destroyLoginChallenge,
   peekLoginChallenge,
   spendLoginChallengeAttempt,
 } from "./login-challenge";
@@ -20,18 +19,12 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   const challenge = yield* peekLoginChallenge(headers);
   if (!challenge) return yield* new ChallengeExpired();
 
-  // 枯渇時は破棄して invalid_code のまま。SPA は再照会して expired を出す契約。
-  yield* spendLoginChallengeAttempt(challenge.challengeId).pipe(
-    Effect.catchTags({
-      AttemptBudgetUnavailable: () => new Locked(),
-      AttemptBudgetExhausted: () =>
-        destroyLoginChallenge(challenge.challengeId).pipe(Effect.andThen(new InvalidCode())),
-    }),
-  );
+  const rejectWrongCode = yield* spendLoginChallengeAttempt(challenge.challengeId);
 
   // コードの消費はチャレンジの消費より後。逆順だと並行して負けた側が再生成できないリカバリーコードを使い切る。
   const matched = yield* matchOwnedCode(challenge.userId, input).pipe(
     Effect.catchTag("NotEnabled", () => new ChallengeExpired()),
+    Effect.catchTag("InvalidCode", rejectWrongCode),
   );
   const clearCookie = yield* consumeLoginChallenge(challenge.challengeId);
   yield* consumeMatchedCode(challenge.userId, matched);

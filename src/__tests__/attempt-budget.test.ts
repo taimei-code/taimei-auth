@@ -19,7 +19,7 @@ spendAttemptBudgetFailOpen satisfies (
 spendAttemptBudgetFailClosed satisfies (
   input: BudgetInput,
 ) => Effect.Effect<
-  void,
+  { attemptsLeft: number },
   AttemptBudgetExhausted | AttemptBudgetUnavailable,
   TtlStore | SentryService
 >;
@@ -28,7 +28,7 @@ const input = { key: "attempt-budget-test", windowSeconds: 60, maxAttempts: 5, c
 
 const resultOf = (
   program: Effect.Effect<
-    void,
+    { attemptsLeft: number } | void,
     AttemptBudgetExhausted | AttemptBudgetUnavailable,
     TtlStore | SentryService
   >,
@@ -43,9 +43,15 @@ describe.each([
     "spendAttemptBudgetFailClosed",
     spendAttemptBudgetFailClosed,
     Result.fail(new AttemptBudgetUnavailable()),
+    Result.succeed({ attemptsLeft: 0 }),
   ],
-  ["spendAttemptBudgetFailOpen", spendAttemptBudgetFailOpen, Result.succeed(undefined)],
-] as const)("%s", (_, spend, whenUncountable) => {
+  [
+    "spendAttemptBudgetFailOpen",
+    spendAttemptBudgetFailOpen,
+    Result.succeed(undefined),
+    Result.succeed(undefined),
+  ],
+] as const)("%s", (_, spend, whenUncountable, whenAtLimit) => {
   const captured = recordSentryExceptions();
 
   test("計数不能 (TtlStoreError) は fail-closed なら拒否、fail-open なら通し、Sentry に component 付き warning で 1 回記録する", async () => {
@@ -65,9 +71,7 @@ describe.each([
   });
 
   test("count が上限ちょうどなら通す", async () => {
-    expect(await resultOf(spend(input), ttlStoreReturning({ count: 5 }))).toEqual(
-      Result.succeed(undefined),
-    );
+    expect(await resultOf(spend(input), ttlStoreReturning({ count: 5 }))).toEqual(whenAtLimit);
   });
 
   test("count が上限を 1 超えたら AttemptBudgetExhausted", async () => {
@@ -75,4 +79,10 @@ describe.each([
       Result.fail(new AttemptBudgetExhausted()),
     );
   });
+});
+
+test("fail-closed 版は上限未満なら残りの試行回数を返す", async () => {
+  expect(
+    await resultOf(spendAttemptBudgetFailClosed(input), ttlStoreReturning({ count: 3 })),
+  ).toEqual(Result.succeed({ attemptsLeft: 2 }));
 });
