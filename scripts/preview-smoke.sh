@@ -35,12 +35,25 @@ probe() {
 echo "preview smoke: $base (version $version)"
 
 # override が効かないと旧 version の 200 で通ってしまうため、先に /health の version を照合する
-result=$(probe GET /health)
-body="${result##*|}"
-case "$body" in
-  *"\"version\":\"$version\""*) echo "/health version: $version (override applied)" ;;
-  *) fail "/health version mismatch -> $result (expected \"version\":\"$version\"; override header not applied?)" ;;
-esac
+# override は deployment 変更後、全世界で有効になるまで数秒かかる (Cloudflare docs "Version overrides")
+override_wait="${PREVIEW_SMOKE_OVERRIDE_WAIT:-30}"
+override_deadline=$((SECONDS + override_wait))
+while :; do
+  result=$(probe GET /health)
+  body="${result##*|}"
+  case "$body" in
+    *"\"version\":\"$version\""*)
+      echo "/health version: $version (override applied)"
+      break
+      ;;
+  esac
+  if [ "$SECONDS" -ge "$override_deadline" ]; then
+    fail "/health version mismatch after ${override_wait}s -> $result (expected \"version\":\"$version\"; override header not applied?)"
+    break
+  fi
+  echo "/health version not yet $version: $body"
+  sleep 2
+done
 
 ok=0
 for i in $(seq 1 "$health_rounds"); do
