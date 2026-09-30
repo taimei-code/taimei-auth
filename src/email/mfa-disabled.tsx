@@ -1,17 +1,15 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Section,
-  Text,
-  Tailwind,
-} from "@react-email/components";
+import { Body } from "@react-email/body";
+import { Button } from "@react-email/button";
+import { Container } from "@react-email/container";
+import { Head } from "@react-email/head";
+import { Heading } from "@react-email/heading";
+import { Hr } from "@react-email/hr";
+import { Html } from "@react-email/html";
+import { Link } from "@react-email/link";
+import { Preview } from "@react-email/preview";
+import { Section } from "@react-email/section";
+import { Text } from "@react-email/text";
+import * as styles from "./styles";
 
 type MfaDisabledEmailProps = {
   appName: string;
@@ -34,71 +32,51 @@ export default function MfaDisabledEmail({
         </style>
       </Head>
       <Preview>多要素認証 (MFA) を無効にしました</Preview>
-      <Tailwind>
-        <Body className="mx-auto bg-white font-sans">
-          <Container className="mx-auto max-w-[480px] px-6 py-12">
-            <Section className="mt-4">
-              <Heading
-                className="m-0 text-center text-2xl font-medium tracking-tight"
-                style={{ color: "#171717" }}
-              >
-                多要素認証 (MFA) を無効にしました
-              </Heading>
+      <Body style={styles.body}>
+        <Container style={styles.container}>
+          <Section style={styles.headerSection}>
+            <Heading style={styles.heading}>多要素認証 (MFA) を無効にしました</Heading>
 
-              <Text
-                className="mt-4 text-center text-base leading-relaxed"
-                style={{ color: "#737373" }}
-              >
-                {appName} のアカウントで多要素認証 (MFA) が無効になりました。
-                <br />
-                以後のログインでは、認証アプリのコードは求められません。
-              </Text>
-            </Section>
-
-            <Section className="mt-6">
-              <Text
-                className="m-0 text-center text-sm leading-relaxed"
-                style={{ color: "#dc2626" }}
-              >
-                この操作に心当たりがない場合、第三者があなたのアカウントと第二要素の両方を
-                手に入れている可能性があります。
-                <br />
-                ただちに多要素認証 (MFA) を再度有効にし、
-                <Link href={`mailto:${supportEmail}`}>{supportEmail}</Link> までご連絡ください。
-              </Text>
-            </Section>
-
-            <Section className="mt-8 text-center">
-              <Button
-                href={securityUrl}
-                className="inline-block rounded-lg px-8 py-3 text-center text-base font-medium text-white no-underline"
-                style={{ backgroundColor: "#171717" }}
-              >
-                セキュリティ設定を開く
-              </Button>
-            </Section>
-
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
-
-            <Section>
-              <Text
-                className="m-0 text-center text-sm leading-relaxed"
-                style={{ color: "#737373" }}
-              >
-                これまでに発行したリカバリーコードは無効になりました。
-                <br />
-                再度有効にすると、新しい認証アプリの登録とリカバリーコードの発行をやり直します。
-              </Text>
-            </Section>
-
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
-
-            <Text className="m-0 text-center text-xs" style={{ color: "#d4d4d4" }}>
-              © {new Date().getFullYear()} {appName}
+            <Text style={styles.introText}>
+              {appName} のアカウントで多要素認証 (MFA) が無効になりました。
+              <br />
+              以後のログインでは、認証アプリのコードは求められません。
             </Text>
-          </Container>
-        </Body>
-      </Tailwind>
+          </Section>
+
+          <Section style={styles.detailSection}>
+            <Text style={styles.warningText}>
+              この操作に心当たりがない場合、第三者があなたのアカウントと第二要素の両方を
+              手に入れている可能性があります。
+              <br />
+              ただちに多要素認証 (MFA) を再度有効にし、
+              <Link href={`mailto:${supportEmail}`}>{supportEmail}</Link> までご連絡ください。
+            </Text>
+          </Section>
+
+          <Section style={styles.buttonSection}>
+            <Button href={securityUrl} style={styles.button}>
+              セキュリティ設定を開く
+            </Button>
+          </Section>
+
+          <Hr style={styles.divider} />
+
+          <Section>
+            <Text style={styles.secondaryText}>
+              これまでに発行したリカバリーコードは無効になりました。
+              <br />
+              再度有効にすると、新しい認証アプリの登録とリカバリーコードの発行をやり直します。
+            </Text>
+          </Section>
+
+          <Hr style={styles.divider} />
+
+          <Text style={styles.copyrightText}>
+            © {new Date().getFullYear()} {appName}
+          </Text>
+        </Container>
+      </Body>
     </Html>
   );
 }

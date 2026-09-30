@@ -19,3 +19,6 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+      react-email:
+        patterns:
+          - "@react-email/*"

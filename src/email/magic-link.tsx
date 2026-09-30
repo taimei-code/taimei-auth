@@ -1,18 +1,16 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-  Tailwind,
-} from "@react-email/components";
+import { Body } from "@react-email/body";
+import { Button } from "@react-email/button";
+import { Container } from "@react-email/container";
+import { Head } from "@react-email/head";
+import { Heading } from "@react-email/heading";
+import { Hr } from "@react-email/hr";
+import { Html } from "@react-email/html";
+import { Img } from "@react-email/img";
+import { Link } from "@react-email/link";
+import { Preview } from "@react-email/preview";
+import { Section } from "@react-email/section";
+import { Text } from "@react-email/text";
+import * as styles from "./styles";
 
 type MagicLinkEmailProps = {
   url: string;
@@ -36,84 +34,58 @@ export default function MagicLinkEmail({
         </style>
       </Head>
       <Preview>{appName} へのログインリンク - 5分間有効</Preview>
-      <Tailwind>
-        <Body className="mx-auto bg-white font-sans">
-          <Container className="mx-auto max-w-[480px] px-6 py-12">
-            <Section className="text-center">
-              <Img src={logoUrl} width="80" height="80" alt={appName} className="mx-auto" />
-            </Section>
+      <Body style={styles.body}>
+        <Container style={styles.container}>
+          <Section style={styles.logoSection}>
+            <Img src={logoUrl} width="80" height="80" alt={appName} style={styles.logo} />
+          </Section>
 
-            <Section className="mt-10">
-              <Heading
-                className="m-0 text-center text-2xl font-medium tracking-tight"
-                style={{ color: "#171717" }}
-              >
-                ログインリクエスト
-              </Heading>
+          <Section style={styles.headerSectionBelowLogo}>
+            <Heading style={styles.heading}>ログインリクエスト</Heading>
 
-              <Text
-                className="mt-4 text-center text-base leading-relaxed"
-                style={{ color: "#737373" }}
-              >
-                {appName} へのログインリンクをお送りします。
-                <br />
-                下のボタンをクリックしてログインしてください。
-              </Text>
-            </Section>
-
-            <Section className="mt-8 text-center">
-              <Button
-                href={url}
-                className="inline-block rounded-lg px-8 py-3 text-center text-base font-medium text-white no-underline"
-                style={{ backgroundColor: "#171717" }}
-              >
-                ログインする
-              </Button>
-            </Section>
-
-            <Text className="mt-6 text-center text-sm" style={{ color: "#dc2626" }}>
-              このリンクは5分間有効です
+            <Text style={styles.introText}>
+              {appName} へのログインリンクをお送りします。
+              <br />
+              下のボタンをクリックしてログインしてください。
             </Text>
+          </Section>
 
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
+          <Section style={styles.buttonSection}>
+            <Button href={url} style={styles.button}>
+              ログインする
+            </Button>
+          </Section>
 
-            <Section>
-              <Text
-                className="m-0 text-center text-xs leading-relaxed"
-                style={{ color: "#a3a3a3" }}
-              >
-                ボタンが機能しない場合は、以下のURLをコピーしてブラウザに貼り付けてください
-              </Text>
-              <Text className="mt-2 text-center">
-                <Link
-                  href={url}
-                  className="break-all text-xs underline"
-                  style={{ color: "#dc2626" }}
-                >
-                  {url}
-                </Link>
-              </Text>
-            </Section>
+          <Text style={styles.expiryNotice}>このリンクは5分間有効です</Text>
 
-            <Section className="mt-8">
-              <Text
-                className="m-0 text-center text-xs leading-relaxed"
-                style={{ color: "#a3a3a3" }}
-              >
-                このリンクは1回のみ使用可能です。
-                <br />
-                心当たりのない場合は、このメールを無視してください。
-              </Text>
-            </Section>
+          <Hr style={styles.divider} />
 
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
-
-            <Text className="m-0 text-center text-xs" style={{ color: "#d4d4d4" }}>
-              © {new Date().getFullYear()} {appName}
+          <Section>
+            <Text style={styles.smallSecondaryText}>
+              ボタンが機能しない場合は、以下のURLをコピーしてブラウザに貼り付けてください
             </Text>
-          </Container>
-        </Body>
-      </Tailwind>
+            <Text style={styles.fallbackUrlParagraph}>
+              <Link href={url} style={styles.fallbackUrlLink}>
+                {url}
+              </Link>
+            </Text>
+          </Section>
+
+          <Section style={styles.closingNoteSection}>
+            <Text style={styles.smallSecondaryText}>
+              このリンクは1回のみ使用可能です。
+              <br />
+              心当たりのない場合は、このメールを無視してください。
+            </Text>
+          </Section>
+
+          <Hr style={styles.divider} />
+
+          <Text style={styles.copyrightText}>
+            © {new Date().getFullYear()} {appName}
+          </Text>
+        </Container>
+      </Body>
     </Html>
   );
 }
