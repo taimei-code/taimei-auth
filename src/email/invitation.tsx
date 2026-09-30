@@ -1,17 +1,15 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Link,
-  Preview,
-  Section,
-  Text,
-  Tailwind,
-} from "@react-email/components";
+import { Body } from "@react-email/body";
+import { Button } from "@react-email/button";
+import { Container } from "@react-email/container";
+import { Head } from "@react-email/head";
+import { Heading } from "@react-email/heading";
+import { Hr } from "@react-email/hr";
+import { Html } from "@react-email/html";
+import { Link } from "@react-email/link";
+import { Preview } from "@react-email/preview";
+import { Section } from "@react-email/section";
+import { Text } from "@react-email/text";
+import * as styles from "./styles";
 import type { DisplayText } from "./sanitize";
 
 type InvitationEmailProps = {
@@ -49,93 +47,64 @@ export default function InvitationEmail({
       <Preview>
         {inviterName} さんから「{companyName}」への招待
       </Preview>
-      <Tailwind>
-        <Body className="mx-auto bg-white font-sans">
-          <Container className="mx-auto max-w-[480px] px-6 py-12">
-            <Section className="mt-4">
-              <Heading
-                className="m-0 text-center text-2xl font-medium tracking-tight"
-                style={{ color: "#171717" }}
-              >
-                事業所への招待
-              </Heading>
-              <Text
-                className="mt-4 text-center text-base leading-relaxed"
-                style={{ color: "#737373" }}
-              >
-                {inviterName} さん ({inviterEmail}) から
-                <br />「{companyName}」への参加 ({roleLabel}) に招待されています。
-              </Text>
-            </Section>
-
-            <Section className="mt-8 text-center">
-              <Button
-                href={url}
-                className="inline-block rounded-lg px-8 py-3 text-center text-base font-medium text-white no-underline"
-                style={{ backgroundColor: "#171717" }}
-              >
-                招待を受諾する
-              </Button>
-            </Section>
-
-            <Text className="mt-6 text-center text-sm" style={{ color: "#dc2626" }}>
-              この招待リンクは24時間有効です
+      <Body style={styles.body}>
+        <Container style={styles.container}>
+          <Section style={styles.headerSection}>
+            <Heading style={styles.heading}>事業所への招待</Heading>
+            <Text style={styles.introText}>
+              {inviterName} さん ({inviterEmail}) から
+              <br />「{companyName}」への参加 ({roleLabel}) に招待されています。
             </Text>
+          </Section>
 
-            <Section className="mt-6">
-              <Text
-                className="m-0 text-center text-sm leading-relaxed"
-                style={{ color: "#737373" }}
-              >
-                この招待は <strong>{inviteeEmail}</strong> 宛です。
-                <br />
-                受諾には同じメールアドレスでのログインが必要です。
-              </Text>
-            </Section>
+          <Section style={styles.buttonSection}>
+            <Button href={url} style={styles.button}>
+              招待を受諾する
+            </Button>
+          </Section>
 
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
+          <Text style={styles.expiryNotice}>この招待リンクは24時間有効です</Text>
 
-            <Section>
-              <Text
-                className="m-0 text-center text-xs leading-relaxed"
-                style={{ color: "#a3a3a3" }}
-              >
-                ボタンが機能しない場合は、以下の URL をブラウザに貼り付けてください。 URL が
-                auth.taimei-code.com で始まることを確認してください。
-              </Text>
-              <Text className="mt-2 text-center">
-                <Link
-                  href={url}
-                  className="break-all text-xs underline"
-                  style={{ color: "#dc2626" }}
-                >
-                  {url}
-                </Link>
-              </Text>
-            </Section>
-
-            <Section className="mt-8">
-              <Text
-                className="m-0 text-center text-xs leading-relaxed"
-                style={{ color: "#a3a3a3" }}
-              >
-                招待に心当たりがない場合は、このメールを無視してください。
-                <br />
-                不審なメールは <Link href={`mailto:${supportEmail}`}>{supportEmail}</Link>{" "}
-                までご連絡ください。
-                <br />
-                IT 管理者向け SPF/DKIM 情報: <Link href={abuseUrl}>{abuseUrl}</Link>
-              </Text>
-            </Section>
-
-            <Hr className="my-10" style={{ borderColor: "#e5e5e5" }} />
-
-            <Text className="m-0 text-center text-xs" style={{ color: "#d4d4d4" }}>
-              © {new Date().getFullYear()} {appName}
+          <Section style={styles.detailSection}>
+            <Text style={styles.secondaryText}>
+              この招待は <strong>{inviteeEmail}</strong> 宛です。
+              <br />
+              受諾には同じメールアドレスでのログインが必要です。
             </Text>
-          </Container>
-        </Body>
-      </Tailwind>
+          </Section>
+
+          <Hr style={styles.divider} />
+
+          <Section>
+            <Text style={styles.smallSecondaryText}>
+              ボタンが機能しない場合は、以下の URL をブラウザに貼り付けてください。 URL が
+              auth.taimei-code.com で始まることを確認してください。
+            </Text>
+            <Text style={styles.fallbackUrlParagraph}>
+              <Link href={url} style={styles.fallbackUrlLink}>
+                {url}
+              </Link>
+            </Text>
+          </Section>
+
+          <Section style={styles.closingNoteSection}>
+            <Text style={styles.smallSecondaryText}>
+              招待に心当たりがない場合は、このメールを無視してください。
+              <br />
+              不審なメールは <Link href={`mailto:${supportEmail}`}>{supportEmail}</Link>{" "}
+              までご連絡ください。
+              <br />
+              IT 管理者向け SPF/DKIM 情報: <Link href={abuseUrl}>{abuseUrl}</Link>
+            </Text>
+          </Section>
+
+          <Hr style={styles.divider} />
+
+          <Text style={styles.copyrightText}>
+            © {new Date().getFullYear()} {appName}
+          </Text>
+        </Container>
+      </Body>
     </Html>
   );
 }

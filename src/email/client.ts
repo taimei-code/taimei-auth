@@ -13,7 +13,7 @@ export const renderAndSendEmail = Effect.fn("email.renderAndSend")(function* (pa
   kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }) {
   // workerd の bundle では static import の render が undefined になる (lazy な CJS 初期化が走らない)。
-  const { render } = yield* tryEmail(() => import("@react-email/components"));
+  const { render } = yield* tryEmail(() => import("@react-email/render"));
   const [html, text] = yield* Effect.all(
     [
       tryEmail(() => render(params.component)),
