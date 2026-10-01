@@ -8,8 +8,9 @@ import { notifyMfaDisabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
 import type { MfaCodeKind } from "../client-facing-contracts";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
-import { MfaSessions, MfaTotpRepo } from "./ports";
-import { verifyAndConsumeOwnedCode } from "./verify-code";
+import { MfaTotpRepo } from "./ports";
+import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
+import { consumeMatchedCode, matchOwnedCode } from "./verify-code";
 
 export const disable = Effect.fn("mfa.disable")(function* (input: {
   actor: MfaTotpActor;
@@ -22,11 +23,10 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
   if (!isMfaEnabled(enrollment)) return yield* new NotEnabled();
 
   yield* spendDisableAttempt(input.actor.id);
-  yield* verifyAndConsumeOwnedCode(input.actor.id, { code: input.code, kind: input.kind });
+  const matched = yield* matchOwnedCode(input.actor.id, { code: input.code, kind: input.kind });
+  const sessionChanges = yield* revokeOtherSessionsOrUnauthorized(input.headers);
+  yield* consumeMatchedCode(input.actor.id, matched);
   yield* resetDisableAttempts(input.actor.id);
-
-  const sessions = yield* MfaSessions;
-  const sessionChanges = yield* sessions.revokeOthers(input.headers);
 
   const tx = yield* Transaction;
   yield* tx.run(

@@ -2,10 +2,12 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
+import { AuthApi } from "../../../auth-service";
+import { authApiLive } from "../../../auth-wiring";
 import { AuthApiError, TtlStoreError } from "../../../errors";
 import { getMemoryKvStore } from "../../../ttl-store";
 import { TtlStore } from "../../../ttl-store-service";
-import { runTest, expectFailure, auditRowsFor, partial } from "../../../__tests__/live-runner";
+import { runTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
   browserCookieHeaders,
@@ -29,7 +31,6 @@ import {
   peekLoginChallenge,
   readLoginChallengeState,
 } from "../login-challenge";
-import { MfaSessions } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 
@@ -436,21 +437,21 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        const failingSessions = Layer.succeed(
-          MfaSessions,
-          partial<MfaSessions["Service"]>({
-            issueSession: () =>
-              Effect.fail(new AuthApiError({ cause: new Error("session store unavailable") })),
-          }),
+        const sessionStoreDown = new AuthApiError({
+          cause: new Error("session store unavailable"),
+        });
+        const failingAuthApi = Layer.succeed(
+          AuthApi,
+          AuthApi.of({ ...authApiLive, issueSession: () => sessionStoreDown }),
         );
 
         const failed = yield* Effect.flip(
           completeLoginChallenge(challenge.headers, {
             code: yield* totpCode(enabled.secret),
             kind: "totp",
-          }).pipe(Effect.provide(failingSessions)),
+          }).pipe(Effect.provide(failingAuthApi)),
         );
-        expect(failed).toBeInstanceOf(AuthApiError);
+        expect(failed).toBe(sessionStoreDown);
 
         const after = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret, 1),

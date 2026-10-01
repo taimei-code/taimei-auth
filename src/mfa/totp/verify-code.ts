@@ -46,10 +46,3 @@ export const consumeMatchedCode = Effect.fn("mfa.consumeMatchedCode")(function* 
   );
   if (!consumed) return yield* new InvalidCode();
 });
-
-export const verifyAndConsumeOwnedCode = Effect.fn("mfa.verifyAndConsumeOwnedCode")(function* (
-  userId: string,
-  input: { code: string; kind: MfaCodeKind },
-) {
-  yield* consumeMatchedCode(userId, yield* matchOwnedCode(userId, input));
-});

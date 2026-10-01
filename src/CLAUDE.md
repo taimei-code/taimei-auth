@@ -21,7 +21,7 @@
 - Repository 以外の port は、Layer で差し替えた時に何かを隠せる場合だけ置く。既存の service (`TtlStore` / `EmailSender` など) を使う関数は use-case から直接呼び、テストはその service の Layer を差し替えて、起きた結果 (計数、送信) を観測する。
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置く。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` を使う (渡す effect の失敗は渡す前に catch する)。
-- サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で表し、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。
+- サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で表し、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。better-auth が session を受け付けなかった結果は境界の失敗ではないので、`AuthApi` が `SessionRejected` で返し、呼び手が写像する (activate / disable は `Unauthorized`)。
 - `auth.ts` から辿れる module は `runtime.ts` を import せず、`initAuth(runtime)` で受け取った runtime を使う (import の循環は fallow の `circular-dependency` が止める)。
 - 副作用の置き場は「Layer で差し替えられるか」で決める。差し替えられる副作用 (`AuthApi` / `TtlStore` などの service) は program に置く。runtime が所有しない object (`ctx`、`Response`、`process.env`、`throw`) への副作用は、`runPromise` を呼ぶ adapter (`runRoute` / `runMiddleware` / `runRpc`、better-auth の hook) が行う。program はそれを closure で受け取らず、「何をすべきか」を直和型の値で返す (例: `src/auth-plugins/mfa-challenge.ts` の `ChallengeDecision`)。program の入力に `() => void` が混ざり、テストが呼び出し順を recorder で assert し始めたら、この境界が崩れている。
 - 以上の境界は `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。

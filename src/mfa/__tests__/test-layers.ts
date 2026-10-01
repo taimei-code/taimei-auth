@@ -1,21 +1,21 @@
 import { Effect, Layer } from "effect";
 import { AuditLog } from "../../audit/ports";
+import { AuthApi, type SessionRejected } from "../../auth-service";
 import { EmailSender } from "../../email/ports";
-import { DbError } from "../../errors";
+import { type AuthApiError, DbError } from "../../errors";
 import { partial } from "../../__tests__/live-runner";
-import { MfaSessions } from "../totp/ports";
 
-export const sessionsLayer = (recorded: { revokes: Headers[] }): Layer.Layer<MfaSessions> =>
+export const revokeRecordingLayer = (
+  recorded: { revokes: Headers[] },
+  outcome: Effect.Effect<Headers, SessionRejected | AuthApiError> = Effect.sync(
+    () => new Headers({ "set-cookie": "revoked=stub" }),
+  ),
+): Layer.Layer<AuthApi> =>
   Layer.succeed(
-    MfaSessions,
-    partial<MfaSessions["Service"]>({
-      revokeOthers: (headers) =>
-        Effect.sync(() => {
-          recorded.revokes.push(headers);
-          const stub = new Headers();
-          stub.append("set-cookie", "revoked=stub");
-          return stub;
-        }),
+    AuthApi,
+    partial<AuthApi["Service"]>({
+      revokeOtherSessions: (headers) =>
+        Effect.sync(() => recorded.revokes.push(headers)).pipe(Effect.andThen(outcome)),
     }),
   );
 

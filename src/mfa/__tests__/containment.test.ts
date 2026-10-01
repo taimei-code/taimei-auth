@@ -58,29 +58,15 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
 });
 
 describe("MFA totp module boundary", () => {
-  test("AC-150a gateway の runtime export は revokeOtherSessions / issueSessionFor の 2 つ", async () => {
-    const source = await Bun.file(resolve(REPO_ROOT, "src/mfa/gateway.ts")).text();
-    const typeExports = [...source.matchAll(/^export type (?:\{ )?(\w+)/gm)].map((m) => m[1]);
-    const scanned = new Bun.Transpiler({ loader: "ts" })
-      .scan(source)
-      .exports.filter((name) => !typeExports.includes(name))
-      .sort();
-    expect(scanned).toEqual(["issueSessionFor", "revokeOtherSessions"]);
-  });
-
-  test("AC-150a gateway の production importer は totp/wiring.ts のみ", () => {
-    expect(
-      filesWithCodeLiteral(`(from|import)[ (]['"](\\.{1,2}/gateway|.*mfa/gateway)['"]`, "src"),
-    ).toEqual(["src/mfa/totp/wiring.ts"]);
-  });
-
-  test("AC-150f gateway の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
-    // root にファイルパスを渡すとファイルが無い時に空集合ですり抜ける。login-challenge.ts の一致が positive control。
-    expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa")).toEqual([
-      "src/mfa/gateway.ts",
+  test("AC-150f AuthApi.issueSession の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
+    // root にファイルパスを渡すとファイルが無い時に空集合ですり抜ける。auth-wiring.ts と login-challenge.ts の一致が positive control。
+    expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa src/auth-wiring.ts")).toEqual([
+      "src/auth-wiring.ts",
       "src/mfa/totp/login-challenge.ts",
     ]);
-    expect(filesWithCodeLiteral("Max-Age=|HttpOnly|SameSite=", "src/mfa")).toEqual([]);
+    expect(
+      filesWithCodeLiteral("Max-Age=|HttpOnly|SameSite=", "src/mfa src/auth-wiring.ts"),
+    ).toEqual([]);
   });
 
   test("AC-150b db/repositories/mfa-totp の production importer 列挙", () => {

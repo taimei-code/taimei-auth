@@ -165,7 +165,7 @@ TTL 付きの短命な状態 (**session**、verification、**試行枠** の計�
 _Avoid_: Redis (2026-09 に撤去した実装名), secondaryStorage (better-auth の API の語), KV (Cloudflare KV と紛らわしく、結果整合の含意がある), cache (失うと session が消えるので cache ではない), 揮発 store (Durable Objects は永続)
 
 **session cookie**:
-**session** を識別する署名付き cookie (`better-auth.session_token`、HTTPS では `__Secure-` 接頭辞)。発行者は 2 つあり、通常ログイン (better-auth) と **MFA チャレンジ** 通過後の発行 (`src/mfa/gateway.ts`) である。Set-Cookie に入る値はどちらも percent-encoding 済みの署名付き値で、属性 (Max-Age / Path / Domain / HttpOnly / Secure / SameSite) も 2 つの発行者で同一である。`@taimei-code/auth-client` と consumer app は値の中身を解釈せず、decode も encode もしない。値の形式と属性の同一性は `src/__tests__/session-cookie-contract.test.ts` が固定する。
+**session** を識別する署名付き cookie (`better-auth.session_token`、HTTPS では `__Secure-` 接頭辞)。発行者は 2 つあり、通常ログイン (better-auth) と **MFA チャレンジ** 通過後の発行 (`AuthApi` の `issueSession`、`src/auth-wiring.ts`) である。Set-Cookie に入る値はどちらも percent-encoding 済みの署名付き値で、属性 (Max-Age / Path / Domain / HttpOnly / Secure / SameSite) も 2 つの発行者で同一である。`@taimei-code/auth-client` と consumer app は値の中身を解釈せず、decode も encode もしない。値の形式と属性の同一性は `src/__tests__/session-cookie-contract.test.ts` が固定する。
 _Avoid_: session token (署名を除いた **TTL store** の key の方), session (識別される状態の方)
 
 **sign-out**:
