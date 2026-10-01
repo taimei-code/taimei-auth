@@ -1,9 +1,9 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
 import { auth } from "../auth";
-import { AuthApi } from "../auth-service";
+import { AuthApi, SessionRejected } from "../auth-service";
 import { AuthApiLive } from "../auth-wiring";
-import { AuthApiError } from "../errors";
+import { AuthApiError, isBoundaryError } from "../errors";
 import { withSpy } from "./live-runner";
 
 describe("AuthApiLive", () => {
@@ -38,5 +38,60 @@ describe("AuthApiLive", () => {
     const requests = await Effect.runPromise(Effect.provide(program, AuthApiLive));
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({ body: input });
+  });
+});
+
+describe("AuthApiLive.revokeOtherSessions", () => {
+  const revoke = AuthApi.use((authApi) => authApi.revokeOtherSessions(new Headers()));
+
+  test("session cookie の無い Headers は better-auth に拒否され SessionRejected になる", async () => {
+    const failure = await Effect.runPromise(Effect.provide(Effect.flip(revoke), AuthApiLive));
+    expect(failure).toBeInstanceOf(SessionRejected);
+  });
+
+  const revokeWithBetterAuthMock = <T>(impl: () => Promise<T>) =>
+    withSpy(
+      () => spyOn(auth.api, "revokeOtherSessions").mockImplementation(impl as never),
+      () => Effect.exit(revoke),
+    ).pipe(Effect.provide(AuthApiLive), Effect.runPromise);
+
+  const failureWithBetterAuthMock = async <T>(impl: () => Promise<T>) =>
+    Effect.runSync(Effect.flip(await revokeWithBetterAuthMock(impl)));
+
+  test("plain Error の throw は AuthApiError のまま、cause も同じ", async () => {
+    const down = new Error("down");
+    const failure = await failureWithBetterAuthMock(() => Promise.reject(down));
+    expect(failure).toBeInstanceOf(AuthApiError);
+    expect((failure as AuthApiError).cause).toBe(down);
+  });
+
+  test.each([
+    ["code が FORBIDDEN", { body: { code: "FORBIDDEN" } }],
+    ["code が 42", { body: { code: 42 } }],
+    ["body が無い", { body: undefined }],
+    ["null", null],
+  ])("%s の throw は AuthApiError のまま", async (_label, thrown) => {
+    const failure = await failureWithBetterAuthMock(() => Promise.reject(thrown));
+    expect(failure).toBeInstanceOf(AuthApiError);
+  });
+
+  test("成功時は返った headers をそのまま返す", async () => {
+    const revoked = new Headers({ "set-cookie": "a=1" });
+    const headers = Effect.runSync(
+      await revokeWithBetterAuthMock(() => Promise.resolve({ headers: revoked })),
+    );
+    expect(headers.getSetCookie()).toEqual(["a=1"]);
+  });
+
+  test("成功して headers が無ければ空の Headers を返す", async () => {
+    const headers = Effect.runSync(
+      await revokeWithBetterAuthMock(() => Promise.resolve({ headers: undefined })),
+    );
+    expect(headers).toBeInstanceOf(Headers);
+    expect(headers.getSetCookie()).toEqual([]);
+  });
+
+  test("SessionRejected は境界の失敗 (500 と Sentry の対象) に含まれない", () => {
+    expect(isBoundaryError(new SessionRejected())).toBe(false);
   });
 });
