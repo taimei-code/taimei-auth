@@ -127,9 +127,6 @@ describe("MFA totp module boundary", () => {
 
   test("QA-E-03 management/ の import 面は全列挙で固定する", () => {
     expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
-      `management/backfill-orphan-cleanup.ts:from "../src/account/backfill-orphan-cleanup"`,
-      `management/backfill-orphan-cleanup.ts:from "../src/auth"`,
-      `management/backfill-orphan-cleanup.ts:from "../src/runtime"`,
       `management/disable-user-mfa.ts:from "../src/account/ports"`,
       `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
       `management/disable-user-mfa.ts:from "../src/auth"`,

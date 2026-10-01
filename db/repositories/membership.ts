@@ -72,15 +72,6 @@ export async function removeMembershipsOfCompany(
   return txOrDb.delete(membership).where(eq(membership.companyId, companyId)).returning();
 }
 
-export async function findDeletedCompanyIdsWithMemberships(txOrDb: DbOrTx = db): Promise<string[]> {
-  const rows = await txOrDb
-    .selectDistinct({ companyId: membership.companyId })
-    .from(membership)
-    .innerJoin(company, eq(company.id, membership.companyId))
-    .where(eq(company.activationStatus, "DELETED"));
-  return rows.map((r) => r.companyId);
-}
-
 export type MemberRow = {
   membershipId: string;
   userId: string;

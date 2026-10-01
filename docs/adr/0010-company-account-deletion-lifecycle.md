@@ -71,7 +71,7 @@ signup 中の一時的な 0 件アカウントは許容するが、恒久化さ�
 
 - **挙動変更**: 「最後の事業所を削除するとアカウントが消える」。UI の警告とログアウト遷移が必須になる。
 - **PR #74 の位置づけの変更**: `createSignupCompany` の active-filter ガードは、この ADR の後は「新規 signup (一度も事業所を持たないアカウントが最初の 1 件を作る)」専用の安全弁になる。既存の orphan の再 onboarding 経路 (全削除して `/auth/signup/company` に滞留する) は D1 と D2 により発生しなくなる。filter 自体は二重の安全弁として残す。
-- **データ移行 (backfill) が必要**: 既に `DELETED` な company にぶら下がる残存 membership を一度物理削除し、その結果 orphan になったアカウントを回収する one-shot 処理を、`drizzle/manual/` ではなく管理スクリプト (`management/`) として用意する。
+- **データ移行 (backfill) が必要**: 既に `DELETED` な company にぶら下がる残存 membership を一度物理削除し、その結果 orphan になったアカウントを回収する one-shot 処理を、`drizzle/manual/` ではなく管理スクリプト (`management/`) として用意する。本番での実行を終えたので、2026-10-01 に削除した。同じ状態が再び生じた時は、git の履歴 (`5e70c61` の `src/account/backfill-orphan-cleanup.ts`、`management/backfill-orphan-cleanup.ts`、`db/repositories/membership.ts` にあった DELETED 事業所を探す関数) から作り直す。
 - **新規バッチ基盤**: D5 の TTL sweep ジョブの定期実行 (cron / scheduler) を追加する。
 - **マイグレーション不要な部分**: D1 自体は tx 内の DELETE だけでスキーマ変更が無い。`membership.company_id` の `ON DELETE RESTRICT` は「company を物理削除しない」という現状の方針と矛盾しないため維持する。
 - **race と冪等性**: 事業所削除の 2 度押しは、逐次なら membership 消滅後の 2 回目が membership guard で 403 になり (2026-09-21、ADR-0012 (B))、並行なら `softDeleteCompany` の `WHERE activation_status='ACTIVE'` で冪等になる。membership の物理削除も対象が 0 行なら no-op である。

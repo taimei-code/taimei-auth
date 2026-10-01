@@ -1,7 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import type { Session } from "../auth";
-import { backfillOrphanCleanup } from "../account/backfill-orphan-cleanup";
 import { switchCompany } from "../account/switch-company";
 import { addCompany, createSignupCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
@@ -131,20 +130,6 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
       const { co: other } = yield* seedOwnedCompany("survive");
       const member = yield* seedMemberOf("survivor", [co, other], co);
       yield* deleteCompany(owner.id, co);
-      yield* expectDefaultCompanyIsActiveMembership(member.id);
-    }),
-  );
-
-  scenario(
-    "src/account/backfill-orphan-cleanup.ts",
-    "DELETED の事業所に membership が残る user を backfill で掃除する",
-    Effect.gen(function* () {
-      const db = yield* TestDb;
-      const { co: ghost } = yield* seedOwnedCompany("ghost");
-      const { co: active } = yield* seedOwnedCompany("active");
-      const member = yield* seedMemberOf("ghosted", [ghost, active], ghost);
-      yield* db.markCompanyDeleted(ghost, { deletedAt: true });
-      yield* backfillOrphanCleanup({ execute: true });
       yield* expectDefaultCompanyIsActiveMembership(member.id);
     }),
   );
