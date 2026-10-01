@@ -118,6 +118,34 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("authApiLayer")).toEqual(["src/handlers/run-route.ts"]);
     expect(srcFiles(String.raw`\.set\(\s*["']authApiLayer["']`)).toEqual([]);
   });
+
+  test("better-auth の auth instance を値で import するのは app.ts と auth-wiring.ts だけ (Effect からの入口は AuthApi)", () => {
+    expect(
+      srcFiles(
+        String.raw`^import \{([^}]*[ ,])?auth([ ,][^}]*)?\} from ["'](\.\.?/)+auth["']`,
+      ).sort(),
+    ).toEqual(["src/app.ts", "src/auth-wiring.ts"]);
+  });
+
+  test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ index.ts と worker.ts だけ (複数行・名前空間・動的 import も数える)", () => {
+    expect(
+      valueImportFiles(gateFor(`["'](@/src/|(\\.\\.?/)+)auth["']`), "src", { excludeTests: true }),
+    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/index.ts", "src/worker.ts"]);
+  });
+
+  test("資格情報を確かめずに session を発行する AuthApi.issueSession を呼ぶのは、第二要素の検証を終えた complete-login-challenge.ts だけ", () => {
+    expect(srcFiles("(^|[^A-Za-z0-9_$])issueSession([^A-Za-z0-9_$]|$)").sort()).toEqual([
+      "src/auth-service.ts",
+      "src/auth-wiring.ts",
+      "src/mfa/totp/complete-login-challenge.ts",
+    ]);
+  });
+
+  test("better-auth の APIError の形 (body.code) を読むのは auth-wiring.ts だけ", () => {
+    expect(srcFiles(String.raw`UNAUTHORIZED|cause\.body|body\.code`)).toEqual([
+      "src/auth-wiring.ts",
+    ]);
+  });
 });
 
 // biome (lineWidth 100) が折り返した複数行 import は `} from` 行から先頭行を辿って型 import を除外する (行 grep だけだと検出されない)。
