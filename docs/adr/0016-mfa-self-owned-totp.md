@@ -37,7 +37,8 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
 - チャレンジの要否は、一次認証成功後の after-hook が `mfa_totp.verified_at` の最小射影を読んで決める (+1 SELECT、
   PK で引く 1 行、secret 列には触れない)。flag の複製は再導入しない
 - 検証順序: activate は復号とコード検証、revoke、確定 UPDATE の順に行う。誤コードは他の session を失効させない。
-  session の rotate は行わない
+  session の rotate は行わない。(2026-10-01 追記) disable も、コードの照合、revoke、コードの消費の順に行う。
+  消費を revoke の後に置くので、revoke が拒否されても、送ったリカバリーコードは使用済みにならない
 - リカバリーコードは secret と同じ鍵 ring で可逆暗号にする (登録済み未有効の間に再表示する契約と hash 保管は
   両立しない)。書式は `xxxxx-xxxxx` を 10 個
 - sign_in audit はチャレンジ通過の手続が記録する (一次認証の観測は sign-in-observer に残る)

@@ -20,6 +20,7 @@ import {
   mfaMailRecorderLayer,
   revokeRecordingLayer,
 } from "../../__tests__/test-layers";
+import type { MfaCodeKind } from "../../client-facing-contracts";
 import { disableAttemptsKey } from "../../disable-attempt-budget";
 import {
   AlreadyEnabled,
@@ -33,7 +34,7 @@ import { activate } from "../activate-mfa";
 import { disable } from "../disable-mfa";
 import { enroll } from "../enroll-mfa";
 import { readOwnedMfaStatus } from "../read-status";
-import { verifyAndConsumeOwnedCode } from "../verify-code";
+import { consumeMatchedCode, matchOwnedCode } from "../verify-code";
 
 const P = "mfa-totp-reg-";
 const ISSUER = "taimei-test";
@@ -55,6 +56,9 @@ function buildOps(overrides?: {
     run: <A, E, R>(program: Effect.Effect<A, E, R>) => drained(Effect.provide(program, layers)),
   };
 }
+
+const verifyAndConsumeOwnedCode = (userId: string, input: { code: string; kind: MfaCodeKind }) =>
+  Effect.flatMap(matchOwnedCode(userId, input), (matched) => consumeMatchedCode(userId, matched));
 
 const disableAttemptCount = (userId: string) => getMemoryKvStore().get(disableAttemptsKey(userId));
 
@@ -285,22 +289,27 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("disable: better-auth が操作中の session を拒否したら 401 unauthorized で、MFA は有効のまま", () =>
+  test("disable: better-auth が操作中の session を拒否したら 401 unauthorized で、MFA は有効のまま、送ったリカバリーコードも未使用のまま", () =>
     run(
       Effect.gen(function* () {
-        const { user, actor, secret } = yield* seedUserWithMfaEnabled(
+        const { user, actor, enrolled } = yield* seedUserWithMfaEnabled(
           buildOps(),
           "disable-rejected",
         );
         const ops = buildOps({ revoke: new SessionRejected() });
 
         const rejected = yield* Effect.flip(
-          ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
+          ops.run(
+            disable({ actor, headers, code: enrolled.recoveryCodes[0], kind: "recovery_code" }),
+          ),
         );
 
         expectFailure(rejected, Unauthorized, "unauthorized", 401);
         expect(ops.revokes.length).toBe(1);
-        expect(yield* ops.run(readOwnedMfaStatus(actor))).toMatchObject({ enabled: true });
+        expect(yield* ops.run(readOwnedMfaStatus(actor))).toEqual({
+          enabled: true,
+          recoveryCodesRemaining: 10,
+        });
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
         expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(0);
         expect(ops.mailed).toEqual([]);
