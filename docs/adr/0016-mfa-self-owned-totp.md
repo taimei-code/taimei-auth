@@ -32,7 +32,7 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
   勝者はちょうど 1 つになる
 - チャレンジ状態は Redis の 1 key (`mfa:login-challenge:*`、TTL 600 秒) と自前で署名した cookie
   `mfa_login_challenge` (HMAC 鍵は AUTH_SECRET を共有) で持つ。単回消費は getAndDelete で行う。試行枠は
-  per-challenge 5 回で fail-closed とする。session 発行は gateway の `issueSessionFor` の 1 窓口で行う
+  per-challenge 5 回で fail-closed とする。session 発行は `AuthApi` の `issueSession` (`src/auth-wiring.ts`) の 1 窓口で行う
   (`internalAdapter.createSession` と公開 export の `makeSignature` を使い、Max-Age を明示的に付与する)
 - チャレンジの要否は、一次認証成功後の after-hook が `mfa_totp.verified_at` の最小射影を読んで決める (+1 SELECT、
   PK で引く 1 行、secret 列には触れない)。flag の複製は再導入しない
@@ -65,7 +65,7 @@ redirect-guard (出口検証)、チャレンジ verify の IP rate limit、sign-
 ## Consequences
 
 - 全ログイン (一次認証成功時) に +1 SELECT が加わる。発火点は after-hook のみで、リクエスト毎ではない
-- better-auth の非公開形式への結合はゼロになり、残る依存は公開 export (`makeSignature`) と gateway 内の
+- better-auth の非公開形式への結合はゼロになり、残る依存は公開 export (`makeSignature`) と `src/auth-wiring.ts` 内の
   `internalAdapter` / `createAuthCookie` のみになる。twoFactor プラグイン、生 path の遮断、遷移 guard、
   guard 解除 CLI、protocol 照合、`temporarily_unavailable` 系の runbook は消滅する
 - AUTH_SECRET の固定制約 (差し替えると全登録ユーザーが恒久的にロックアウトされる) が解消する。鍵ローテーションは
