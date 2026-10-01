@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { requestApp, responseJson } from "./helpers";
-import { Effect } from "effect";
+import { provideAuthApi, requestApp, responseJson } from "./helpers";
+import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import {
   countMfaTotpRows,
@@ -8,9 +8,13 @@ import {
   createSessionFor,
   enableMfaFor,
   findMfaTotpRow,
+  secretFromTotpUri,
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
+import { AuthApi, SessionRejected } from "../../auth-service";
+import { authApiLive } from "../../auth-wiring";
+import type { MfaEnrollResponse } from "../../mfa/client-facing-contracts";
 import { createRateLimitMiddleware, mfaAttemptKey } from "../../rate-limit";
 import { getClientContext } from "../../request-context";
 import { dbTest } from "../../__tests__/live-runner";
@@ -262,6 +266,48 @@ describe("account MFA API", () => {
 
         expect(res.status).toBe(409);
         expect(yield* responseJson(res)).toEqual({ error: "enrollment_changed" });
+        expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
+      }),
+    ));
+
+  test("activate の revoke を better-auth が拒否 → 401 unauthorized (行は未 verified のまま)", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("revoke-rejected");
+        const session = yield* createSessionFor(user.id);
+        const revokes: Headers[] = [];
+        const app = new Hono();
+        app.use(
+          "*",
+          provideAuthApi(
+            Layer.succeed(
+              AuthApi,
+              AuthApi.of({
+                ...authApiLive,
+                revokeOtherSessions: (headers) => {
+                  revokes.push(headers);
+                  return new SessionRejected();
+                },
+              }),
+            ),
+          ),
+        );
+        app.route("/", accountMfa);
+        const enrolled = yield* requestApp(app, "/api/account/mfa/enroll", {
+          method: "POST",
+          headers: Object.fromEntries(session.headers),
+        });
+        const enrollment = (yield* responseJson(enrolled)) as MfaEnrollResponse;
+
+        const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
+          code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),
+          enrollment_id: enrollment.enrollment_id,
+        });
+
+        expect(res.status).toBe(401);
+        expect(yield* responseJson(res)).toEqual({ error: "unauthorized" });
+        expect(revokes.length).toBe(1);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
       }),
     ));

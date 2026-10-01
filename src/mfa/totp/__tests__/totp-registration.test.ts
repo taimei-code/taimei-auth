@@ -12,10 +12,13 @@ import {
   totpCode,
   wrongTotpCode,
 } from "../../__tests__/helpers";
+import { SessionRejected } from "../../../auth-service";
+import { AuthApiError } from "../../../errors";
+import { Unauthorized } from "../../../membership/guard/errors";
 import {
   auditFailingLayer,
   mfaMailRecorderLayer,
-  sessionsLayer,
+  revokeRecordingLayer,
 } from "../../__tests__/test-layers";
 import { disableAttemptsKey } from "../../disable-attempt-budget";
 import {
@@ -37,10 +40,13 @@ const ISSUER = "taimei-test";
 const { run, cleanup } = dbTest(P);
 const sentry = installSentryRecorder();
 
-function buildOps(overrides?: { auditFails?: boolean }) {
+function buildOps(overrides?: {
+  auditFails?: boolean;
+  revoke?: Effect.Effect<Headers, SessionRejected | AuthApiError>;
+}) {
   const recorded = { revokes: [] as Headers[], mailed: [] as string[] };
   const layers = Layer.mergeAll(
-    sessionsLayer(recorded),
+    revokeRecordingLayer(recorded, overrides?.revoke),
     mfaMailRecorderLayer(recorded.mailed),
     ...(overrides?.auditFails ? [auditFailingLayer(new Error("audit store unavailable"))] : []),
   );
@@ -235,6 +241,80 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(1);
         expect(sentryAuditFailureEvents()).toEqual([]);
         expect(ops.mailed).toEqual([`enabled:${user.email}`, `disabled:${user.email}`]);
+      }),
+    ));
+
+  const activateWhenRevokeReturns = (
+    revoke: Effect.Effect<Headers, SessionRejected | AuthApiError>,
+    seedName: string,
+  ) =>
+    Effect.gen(function* () {
+      const user = yield* (yield* TestDb).seedUser(seedName);
+      const actor = { id: user.id, email: user.email };
+      const ops = buildOps({ revoke });
+      const enrolled = yield* ops.run(enroll({ actor }));
+      const failure = yield* Effect.flip(
+        ops.run(
+          activate({
+            actor,
+            headers,
+            enrollmentId: enrolled.enrollmentId,
+            code: yield* totpCode(secretFromTotpUri(enrolled.totpUri)),
+          }),
+        ),
+      );
+      return { user, ops, failure };
+    });
+
+  test("activate: better-auth が操作中の session を拒否したら 401 unauthorized で、MFA は有効にならない", () =>
+    run(
+      Effect.gen(function* () {
+        const {
+          user,
+          ops,
+          failure: rejected,
+        } = yield* activateWhenRevokeReturns(new SessionRejected(), "activate-rejected");
+
+        expectFailure(rejected, Unauthorized, "unauthorized", 401);
+        expect(ops.revokes.length).toBe(1);
+        expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
+        expect((yield* auditRowsFor(user.id, "mfa_enabled")).length).toBe(0);
+        expect(ops.mailed).toEqual([]);
+        expect(sentry.exceptions).toEqual([]);
+        expect(sentry.messages).toEqual([]);
+      }),
+    ));
+
+  test("disable: better-auth が操作中の session を拒否したら 401 unauthorized で、MFA は有効のまま", () =>
+    run(
+      Effect.gen(function* () {
+        const { user, actor, secret } = yield* seedUserWithMfaEnabled(
+          buildOps(),
+          "disable-rejected",
+        );
+        const ops = buildOps({ revoke: new SessionRejected() });
+
+        const rejected = yield* Effect.flip(
+          ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
+        );
+
+        expectFailure(rejected, Unauthorized, "unauthorized", 401);
+        expect(ops.revokes.length).toBe(1);
+        expect(yield* ops.run(readOwnedMfaStatus(actor))).toMatchObject({ enabled: true });
+        expect(yield* countMfaTotpRows(user.id)).toBe(1);
+        expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(0);
+        expect(ops.mailed).toEqual([]);
+        expect(sentry.exceptions).toEqual([]);
+        expect(sentry.messages).toEqual([]);
+      }),
+    ));
+
+  test("activate: revoke が AuthApiError なら Unauthorized にせずそのまま返す", () =>
+    run(
+      Effect.gen(function* () {
+        const down = new AuthApiError({ cause: new Error("session store unavailable") });
+        const { failure } = yield* activateWhenRevokeReturns(down, "activate-revoke-down");
+        expect(failure).toBe(down);
       }),
     ));
 

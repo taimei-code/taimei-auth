@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { appendAuditLogBestEffort } from "../../audit/report-failure";
+import { AuthApi } from "../../auth-service";
 import { getClientContext } from "../../request-context";
 import { ChallengeExpired } from "../error-mapping";
 import { validateChallengeRedirect } from "../redirect-guard";
@@ -9,7 +10,6 @@ import {
   peekLoginChallenge,
   spendLoginChallengeAttempt,
 } from "./login-challenge";
-import { MfaSessions } from "./ports";
 import { consumeMatchedCode, matchOwnedCode } from "./verify-code";
 
 export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(function* (
@@ -30,7 +30,7 @@ export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(fu
   yield* consumeMatchedCode(challenge.userId, matched);
 
   // 失敗を握ると session の無い成功応答になる。
-  const sessionHeaders = yield* MfaSessions.use((s) => s.issueSession(challenge.userId));
+  const sessionHeaders = yield* AuthApi.use((authApi) => authApi.issueSession(challenge.userId));
 
   const { ip, userAgent } = getClientContext(headers);
   yield* appendAuditLogBestEffort({

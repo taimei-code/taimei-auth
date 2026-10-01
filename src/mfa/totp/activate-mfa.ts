@@ -6,7 +6,8 @@ import { notifyMfaEnabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { decryptValue, secretCipher } from "./cipher";
-import { MfaKeyring, MfaSessions, MfaTotpRepo } from "./ports";
+import { MfaKeyring, MfaTotpRepo } from "./ports";
+import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { matchTotpCode } from "./totp-engine";
 
 // revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
@@ -27,8 +28,7 @@ export const activate = Effect.fn("mfa.activate")(function* (input: {
   const timestep = matchTotpCode(secret, input.code, yield* Clock.currentTimeMillis);
   if (timestep === null) return yield* new InvalidCode();
 
-  const sessions = yield* MfaSessions;
-  const sessionChanges = yield* sessions.revokeOthers(input.headers);
+  const sessionChanges = yield* revokeOtherSessionsOrUnauthorized(input.headers);
 
   // false は並行して負けた (勝者が verified 済み)。
   if (!(yield* mfa.activateMfaTotp(input.actor.id, row.enrollmentId, timestep))) {

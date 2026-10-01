@@ -1,9 +1,8 @@
 import { Effect, Layer } from "effect";
 import * as repo from "@/db/repositories/mfa-totp";
 import { liftAll } from "../../errors";
-import { issueSessionFor, revokeOtherSessions } from "../gateway";
 import { type MfaKeyRing, parseMfaKeyRing } from "./cipher";
-import { MfaKeyring, MfaSessions, MfaTotpRepo } from "./ports";
+import { MfaKeyring, MfaTotpRepo } from "./ports";
 
 const MfaTotpRepoLive = Layer.succeed(MfaTotpRepo, liftAll(repo));
 
@@ -16,9 +15,4 @@ const MfaKeyringLive = Layer.succeed(
   }),
 );
 
-const MfaSessionsLive: Layer.Layer<MfaSessions> = Layer.succeed(
-  MfaSessions,
-  MfaSessions.of({ revokeOthers: revokeOtherSessions, issueSession: issueSessionFor }),
-);
-
-export const MfaLayers = Layer.mergeAll(MfaTotpRepoLive, MfaKeyringLive, MfaSessionsLive);
+export const MfaLayers = Layer.mergeAll(MfaTotpRepoLive, MfaKeyringLive);

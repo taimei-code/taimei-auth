@@ -8,7 +8,8 @@ import { notifyMfaDisabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
 import type { MfaCodeKind } from "../client-facing-contracts";
 import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
-import { MfaSessions, MfaTotpRepo } from "./ports";
+import { MfaTotpRepo } from "./ports";
+import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { verifyAndConsumeOwnedCode } from "./verify-code";
 
 export const disable = Effect.fn("mfa.disable")(function* (input: {
@@ -25,8 +26,7 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
   yield* verifyAndConsumeOwnedCode(input.actor.id, { code: input.code, kind: input.kind });
   yield* resetDisableAttempts(input.actor.id);
 
-  const sessions = yield* MfaSessions;
-  const sessionChanges = yield* sessions.revokeOthers(input.headers);
+  const sessionChanges = yield* revokeOtherSessionsOrUnauthorized(input.headers);
 
   const tx = yield* Transaction;
   yield* tx.run(

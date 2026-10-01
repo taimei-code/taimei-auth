@@ -76,7 +76,6 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
       "src/handlers/account-invitation.ts",
       "src/membership/guard/core.ts",
       "src/mfa/disable-attempt-budget.ts",
-      "src/mfa/gateway.ts",
       "src/mfa/notification-adapter.ts",
       "src/mfa/totp/login-challenge.ts",
       "src/rpc/auth-handler.ts",

@@ -13,7 +13,6 @@ import {
   SIGNED_COOKIE_VALUE,
   setCookieValue,
 } from "../mfa/__tests__/helpers";
-import { MfaSessions } from "../mfa/totp/ports";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
@@ -21,7 +20,7 @@ import { TestDb } from "./test-db";
 const { run, cleanup } = dbTest("cookie-contract-");
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
-// hono の serialize が扱う CookieOptions の key。better-auth がこれ以外を足すと gateway 経由の cookie だけが欠けるので T3 で先に落とす。
+// hono の serialize が扱う CookieOptions の key。better-auth がこれ以外を足すと AuthApi.issueSession の cookie だけが欠けるので T3 で先に落とす。
 const HANDLED_ATTRIBUTE_KEYS = [
   "domain",
   "expires",
@@ -66,9 +65,9 @@ const rememberForCleanup = (setCookies: string[]) => {
   return setCookies;
 };
 
-const issueViaGateway = (userId: string) =>
+const issueViaAuthApi = (userId: string) =>
   Effect.gen(function* () {
-    const headers = yield* (yield* MfaSessions).issueSession(userId);
+    const headers = yield* (yield* AuthApi).issueSession(userId);
     return rememberForCleanup(yield* issuedSessionSetCookies(headers));
   });
 
@@ -78,11 +77,11 @@ afterAll(async () => {
 });
 
 describe("T1 発行 → SDK が読む → RPC 形式で戻す → server が検証", () => {
-  test("gateway は session cookie をちょうど 1 本、percent-encoded の署名付き値で発行する", () =>
+  test("AuthApi.issueSession は session cookie をちょうど 1 本、percent-encoded の署名付き値で発行する", () =>
     run(
       Effect.gen(function* () {
         const user = yield* (yield* TestDb).seedUser("t1-shape");
-        const cookies = yield* issueViaGateway(user.id);
+        const cookies = yield* issueViaAuthApi(user.id);
         expect(cookies.length).toBe(1);
         expectEncodedSignedValue(setCookieValue(cookies[0]));
       }),
@@ -92,7 +91,7 @@ describe("T1 発行 → SDK が読む → RPC 形式で戻す → server が検�
     run(
       Effect.gen(function* () {
         const user = yield* (yield* TestDb).seedUser("t1-roundtrip");
-        const [issued] = yield* issueViaGateway(user.id);
+        const [issued] = yield* issueViaAuthApi(user.id);
         const extracted = extractSessionTokenFromCookieHeader(asRequestCookieHeader(issued));
         expect(extracted).toBe(setCookieValue(issued));
         const headers = new Headers({ cookie: buildSessionCookieHeader(extracted ?? "") });
@@ -120,7 +119,7 @@ describe("T1 発行 → SDK が読む → RPC 形式で戻す → server が検�
 });
 
 describe("T2 2 発行者の値の形と属性同一性", () => {
-  test("better-auth 本体の値も percent-encoded の署名付き値 (gateway と同じ形)", () =>
+  test("better-auth 本体の値も percent-encoded の署名付き値 (AuthApi.issueSession と同じ形)", () =>
     run(
       Effect.gen(function* () {
         const user = yield* (yield* TestDb).seedUser("t2-primary-shape");
@@ -133,12 +132,12 @@ describe("T2 2 発行者の値の形と属性同一性", () => {
       }),
     ));
 
-  test("gateway の Set-Cookie は better-auth 本体 (magic link ログイン) と同じ属性集合を持つ", () =>
+  test("AuthApi.issueSession の Set-Cookie は better-auth 本体 (magic link ログイン) と同じ属性集合を持つ", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
-        const gatewayUser = yield* db.seedUser("t2-gateway");
-        const [viaGateway] = yield* issueViaGateway(gatewayUser.id);
+        const authApiUser = yield* db.seedUser("t2-auth-api");
+        const [viaAuthApi] = yield* issueViaAuthApi(authApiUser.id);
 
         const primaryUser = yield* db.seedUser("t2-primary");
         const login = yield* loginWithMagicLink({
@@ -150,7 +149,7 @@ describe("T2 2 発行者の値の形と属性同一性", () => {
         );
         expect(viaPrimary.length).toBe(1);
 
-        expect(attributeSet(viaGateway)).toEqual(attributeSet(viaPrimary[0]));
+        expect(attributeSet(viaAuthApi)).toEqual(attributeSet(viaPrimary[0]));
       }),
     ));
 
