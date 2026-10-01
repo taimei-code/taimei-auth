@@ -12,10 +12,10 @@ import {
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { getMemoryKvStore } from "../../ttl-store";
 import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mfaChallenge } from "../mfa-challenge";
+import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-h-challenge-";
 const run = runTest(P);
@@ -127,7 +127,7 @@ describe("MFA チャレンジ API", () => {
           redirectUrl: "/account/security",
           method: "magic_link",
         });
-        yield* Effect.sync(() => getMemoryKvStore().delete(challengeKey(challenge.challengeId)));
+        yield* Effect.sync(() => testKvStore.delete(challengeKey(challenge.challengeId)));
 
         const res = yield* verifyWith(buildApp(), challenge.headers, {
           code: yield* totpCode(enabled.secret),
@@ -167,9 +167,7 @@ describe("MFA チャレンジ API", () => {
         });
 
         const vanishedChallenge = yield* issue();
-        yield* Effect.sync(() =>
-          getMemoryKvStore().delete(challengeKey(vanishedChallenge.challengeId)),
-        );
+        yield* Effect.sync(() => testKvStore.delete(challengeKey(vanishedChallenge.challengeId)));
         const vanished = yield* verifyWith(app, vanishedChallenge.headers, {
           code: yield* totpCode(enabled.secret),
           kind: "totp",

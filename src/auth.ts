@@ -12,13 +12,13 @@ import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
 import { captureThrown } from "./handlers/client-facing-error";
 import { MembershipRepo } from "./membership/ports";
-import { ttlStorage } from "./ttl-store";
+import type { TtlStorage } from "./ttl-store";
 import type { AppRuntime } from "./runtime";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
 // Workers では env が request ごとに渡されるため、module ロード時でなく initAuth() で構築する。
-function buildAuth(runtime: AppRuntime) {
+function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
@@ -125,9 +125,9 @@ function buildAuth(runtime: AppRuntime) {
 
 export let auth: ReturnType<typeof buildAuth>;
 
-export function initAuth(runtime: AppRuntime): void {
+export function initAuth(runtime: AppRuntime, ttlStorage: TtlStorage): void {
   if (auth) return;
-  auth = buildAuth(runtime);
+  auth = buildAuth(runtime, ttlStorage);
 }
 
 export type Session = ReturnType<typeof buildAuth>["$Infer"]["Session"];

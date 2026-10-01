@@ -2,17 +2,20 @@ import { expect } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { withWaitUntil } from "../background";
-import { AppLayer, type AppServices } from "../runtime";
+import { type AppServices, appLayer } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer } from "./test-db";
+import { testTtlStore } from "./test-ttl-store";
 
 type TestServices = AppServices | TestDb;
+
+const testAppLayer = appLayer(testTtlStore);
 
 // service を差し替えるテストは program 側で `Effect.provide(layer)` する (内側の provide が勝つ)。
 export const runTest =
   (prefix: string) =>
   <A, E>(program: Effect.Effect<A, E, TestServices>): Promise<A> =>
-    Effect.runPromise(Effect.provide(Effect.provide(program, testDbLayer(prefix)), AppLayer));
+    Effect.runPromise(Effect.provide(Effect.provide(program, testDbLayer(prefix)), testAppLayer));
 
 export const dbTest = (prefix: string) => {
   const run = runTest(prefix);

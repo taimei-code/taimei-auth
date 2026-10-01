@@ -1,9 +1,9 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { getMemoryKvStore } from "../../ttl-store";
 import { runTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteAccountIfOrphaned } from "../orphan";
+import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "orphan-test-";
 const run = runTest(P);
@@ -12,7 +12,6 @@ const cleanup = () =>
   run(
     Effect.gen(function* () {
       yield* (yield* TestDb).cleanup();
-      const s = getMemoryKvStore();
       for (const key of [
         `${P}rtok-1`,
         `${P}rtok-2`,
@@ -22,7 +21,7 @@ const cleanup = () =>
         `${P}rtok-absent`,
         `active-sessions-${P}u-absent`,
       ]) {
-        s.delete(key);
+        testKvStore.delete(key);
       }
     }),
   );
@@ -38,18 +37,17 @@ const seedUser = (suffix: string) =>
 // better-auth の secondaryStorage の保存形 (session は token キー、索引は active-sessions-{userId}) を再現する。
 const seedSessions = (userId: string, tokens: string[]) =>
   Effect.sync(() => {
-    const s = getMemoryKvStore();
     const expiresAt = Date.now() + 86_400_000;
     for (const token of tokens) {
-      s.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
+      testKvStore.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
     }
-    s.set(
+    testKvStore.set(
       `active-sessions-${userId}`,
       JSON.stringify(tokens.map((token) => ({ token, expiresAt }))),
     );
   });
 
-const storeGet = (key: string) => Effect.sync(() => getMemoryKvStore().get(key));
+const storeGet = (key: string) => Effect.sync(() => testKvStore.get(key));
 
 const countAccountDeleteAudit = (userId: string) =>
   TestDb.use((db) => db.readAuditRows(userId, "account_delete")).pipe(

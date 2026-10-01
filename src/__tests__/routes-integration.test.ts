@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { requestApp } from "../handlers/__tests__/helpers";
 import { Effect } from "effect";
 import { app } from "../index";
-import { getMemoryKvStore } from "../ttl-store";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
+import { testKvStore } from "./test-ttl-store";
 
 const P = "enum-test-";
 const { run } = dbTest(P);
@@ -64,7 +64,7 @@ describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
 
 describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () => {
   // 429 で確認しない (local の緩和値では到達しない)。
-  const windowCount = (key: string) => Effect.sync(() => Number(getMemoryKvStore().get(key) ?? 0));
+  const windowCount = (key: string) => Effect.sync(() => Number(testKvStore.get(key) ?? 0));
 
   // IP literal 以外は unknown として窓を共有する (request-context.ts) ので、下位 2 octet を乱数にする。
   const isolatedClientIp = (): string =>

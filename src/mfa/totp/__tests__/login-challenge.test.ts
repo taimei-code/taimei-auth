@@ -5,7 +5,6 @@ import { auth } from "../../../auth";
 import { AuthApi } from "../../../auth-service";
 import { authApiLive } from "../../../auth-wiring";
 import { AuthApiError, TtlStoreError } from "../../../errors";
-import { getMemoryKvStore } from "../../../ttl-store";
 import { TtlStore } from "../../../ttl-store-service";
 import { runTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
@@ -33,6 +32,7 @@ import {
 } from "../login-challenge";
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
+import { testKvStore } from "../../../__tests__/test-ttl-store";
 
 const P = "mfa-lc-";
 const run = runTest(P);
@@ -96,7 +96,7 @@ describe("ログインチャレンジ", () => {
           browserCookieHeaders(new Response(null, { headers: reissued })),
         );
         if (opened) {
-          yield* Effect.sync(() => getMemoryKvStore().delete(challengeKey(opened.challengeId)));
+          yield* Effect.sync(() => testKvStore.delete(challengeKey(opened.challengeId)));
         }
 
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
@@ -305,9 +305,7 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        yield* Effect.sync(() =>
-          getMemoryKvStore().set(attemptsKeyOf(challenge.challengeId), "5", 60),
-        );
+        yield* Effect.sync(() => testKvStore.set(attemptsKeyOf(challenge.challengeId), "5", 60));
 
         const rejected = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret),
@@ -364,7 +362,7 @@ describe("ログインチャレンジ", () => {
         });
         // INCR できない値で実際に失敗させる。
         yield* Effect.sync(() =>
-          getMemoryKvStore().set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60),
+          testKvStore.set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60),
         );
 
         const rejected = yield* verifyFails(challenge.headers, {

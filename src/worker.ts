@@ -1,10 +1,9 @@
 import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: Workers では request ごとに実際の Pool を供給する経路だけを許可する
 import { runWithRequestPool } from "@/db/client";
-import { initAuth } from "./auth";
-import { getRuntime } from "./runtime";
+import { boot } from "./boot";
 import { KvStore as KvStoreBase } from "./kv-store.do";
-import { initTtlStore, type KvStoreNamespace } from "./ttl-store";
+import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
@@ -31,13 +30,12 @@ function copyEnvToProcess(env: Env): void {
   process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
-// 後のものが前のものの結果を読むので、この順序は必須。
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
+  // 後続の初期化が process.env を読むので先頭に置く。
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  initTtlStore(env.KV_STORE);
-  initAuth(getRuntime());
+  boot(durableObjectBackend(env.KV_STORE));
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
       app.all("*", (c) => {

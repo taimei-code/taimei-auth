@@ -127,10 +127,17 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ).toEqual(["src/app.ts", "src/auth-wiring.ts"]);
   });
 
-  test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ index.ts と worker.ts だけ (複数行・名前空間・動的 import も数える)", () => {
+  test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ boot.ts だけ (複数行・名前空間・動的 import も数える)", () => {
     expect(
       valueImportFiles(gateFor(`["'](@/src/|(\\.\\.?/)+)auth["']`), "src", { excludeTests: true }),
-    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/index.ts", "src/worker.ts"]);
+    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/boot.ts"]);
+  });
+
+  test("initRuntime と initAuth を呼ぶのは boot.ts だけ (runtime と better-auth に同じ TTL store を渡す)", () => {
+    const pattern = String.raw`\b(initRuntime|initAuth)\(`;
+    expect(
+      [...srcFiles(pattern), ...grepFiles(pattern, "management", { excludeTests: true })].sort(),
+    ).toEqual(["src/auth.ts", "src/boot.ts", "src/runtime.ts"]);
   });
 
   test("資格情報を確かめずに session を発行する AuthApi.issueSession を呼ぶのは、第二要素の検証を終えた complete-login-challenge.ts だけ", () => {
@@ -282,7 +289,7 @@ describe("revokeAllSessionsForUser の窓口", () => {
 });
 
 // ManagedRuntime.make は初回 run で Layer を構築するため、失敗し得る Layer (Layer.effect / scoped / unwrap) は本番の初回 request で落ちる。
-describe("AppLayer は構築で失敗しない Layer だけで組む", () => {
+describe("appLayer は構築で失敗しない Layer だけで組む", () => {
   test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {
     const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
       excludeTests: true,

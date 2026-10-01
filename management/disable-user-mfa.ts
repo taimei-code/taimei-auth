@@ -4,8 +4,7 @@ import { appendAuditLogBestEffort } from "../src/audit/report-failure";
 import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
 import { isMfaEnabled } from "../src/mfa/policy";
 import { MfaTotpRepo } from "../src/mfa/totp/ports";
-import { initAuth } from "../src/auth";
-import { getRuntime } from "../src/runtime";
+import { bootInMemory } from "../src/boot";
 import { Transaction } from "../src/transaction";
 
 export type ForceDisableResult =
@@ -77,11 +76,8 @@ if (import.meta.main) {
     process.exit(1);
   }
 
-  initAuth(getRuntime());
-  const report = toDisableUserMfaReport(
-    userId,
-    await getRuntime().runPromise(forceDisableMfa(userId)),
-  );
+  const runtime = bootInMemory();
+  const report = toDisableUserMfaReport(userId, await runtime.runPromise(forceDisableMfa(userId)));
   const json = JSON.stringify(report.body, null, 2);
   if (report.stream === "stdout") console.log(json);
   else console.error(json);

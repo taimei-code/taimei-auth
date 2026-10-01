@@ -1,4 +1,4 @@
-import { initAuth } from "../auth";
-import { getRuntime } from "../runtime";
+import { boot } from "../boot";
+import { testTtlStore } from "./test-ttl-store";
 
-initAuth(getRuntime());
+boot(testTtlStore);

@@ -3,11 +3,11 @@ import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
 import { createRateLimitMiddleware, rateLimitProgram } from "../rate-limit";
-import { getMemoryKvStore } from "../ttl-store";
 import type { TtlStore } from "../ttl-store-service";
 import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "./test-layers";
+import { testKvStore } from "./test-ttl-store";
 
 rateLimitProgram satisfies (input: {
   key: string;
@@ -57,8 +57,7 @@ const buildApp = (key: string, limit: number, windowSec = 60) => {
 
 describe("rate-limit middleware", () => {
   beforeEach(() => {
-    const store = getMemoryKvStore();
-    for (const key of store.keys("rate-limit:test:")) store.delete(key);
+    for (const key of testKvStore.keys("rate-limit:test:")) testKvStore.delete(key);
   });
 
   test("limit 5 で 6 req 目に 429 + Retry-After", async () => {
