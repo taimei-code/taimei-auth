@@ -115,15 +115,13 @@ describe("MFA totp module boundary", () => {
     expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
       `management/disable-user-mfa.ts:from "../src/account/ports"`,
       `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
-      `management/disable-user-mfa.ts:from "../src/auth"`,
+      `management/disable-user-mfa.ts:from "../src/boot"`,
       `management/disable-user-mfa.ts:from "../src/mfa/notification-adapter"`,
       `management/disable-user-mfa.ts:from "../src/mfa/policy"`,
       `management/disable-user-mfa.ts:from "../src/mfa/totp/ports"`,
-      `management/disable-user-mfa.ts:from "../src/runtime"`,
       `management/disable-user-mfa.ts:from "../src/transaction"`,
       `management/sweep-abandoned-signups.ts:from "../src/account/sweep-abandoned-signups"`,
-      `management/sweep-abandoned-signups.ts:from "../src/auth"`,
-      `management/sweep-abandoned-signups.ts:from "../src/runtime"`,
+      `management/sweep-abandoned-signups.ts:from "../src/boot"`,
     ]);
   });
 

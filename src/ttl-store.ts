@@ -1,6 +1,5 @@
-import { isBunRuntime } from "./env";
 import type { KvStore } from "./kv-store.do";
-import { MemoryKvStore } from "./kv-store.memory";
+import type { MemoryKvStore } from "./kv-store.memory";
 
 export interface TtlStorage {
   get(key: string): Promise<string | null>;
@@ -20,57 +19,40 @@ export function toRateWindowResult(count: number): RateWindowResult {
   return { count };
 }
 
-export let ttlStorage: TtlStorage;
-export let incrementRateWindow: (key: string, windowSec: number) => Promise<RateWindowResult>;
-export let pingTtlStore: () => Promise<void>;
-export let getMemoryKvStore: () => MemoryKvStore;
+export type TtlStoreBackend = TtlStorage & {
+  incrementRateWindow(key: string, windowSec: number): Promise<RateWindowResult>;
+  ping(): Promise<void>;
+};
 
 export type KvStoreNamespace = DurableObjectNamespace<KvStore>;
 
-function initDurableObject(ns: KvStoreNamespace): void {
+export function durableObjectBackend(ns: KvStoreNamespace): TtlStoreBackend {
+  if (!ns)
+    throw new Error(
+      "durableObjectBackend: Workers では KV_STORE binding が必須 (in-memory へは落とさない)",
+    );
   const stub = (key: string) => ns.getByName(key);
-  ttlStorage = {
+  return {
     get: (key) => stub(key).get(),
     set: (key, value, ttl) => stub(key).set(value, ttl),
     delete: (key) => stub(key).delete(),
     getAndDelete: (key) => stub(key).getAndDelete(),
-  };
-  incrementRateWindow = async (key, windowSec) =>
-    toRateWindowResult(await stub(key).incrementWindow(windowSec));
-  pingTtlStore = async () => {
-    await stub("health:ping").get();
-  };
-  getMemoryKvStore = () => {
-    throw new Error(
-      "getMemoryKvStore は Bun (in-memory) 専用の test accessor。Workers では利用できない",
-    );
+    incrementRateWindow: async (key, windowSec) =>
+      toRateWindowResult(await stub(key).incrementWindow(windowSec)),
+    ping: async () => {
+      await stub("health:ping").get();
+    },
   };
 }
 
-function initMemory(): void {
-  const store = new MemoryKvStore();
-  ttlStorage = {
+export function memoryBackend(store: MemoryKvStore): TtlStoreBackend {
+  return {
     get: async (key) => store.get(key),
     set: async (key, value, ttl) => store.set(key, value, ttl),
     delete: async (key) => store.delete(key),
     getAndDelete: async (key) => store.getAndDelete(key),
+    incrementRateWindow: async (key, windowSec) =>
+      toRateWindowResult(store.incrementWindow(key, windowSec)),
+    ping: async () => {},
   };
-  incrementRateWindow = async (key, windowSec) =>
-    toRateWindowResult(store.incrementWindow(key, windowSec));
-  pingTtlStore = async () => {};
-  getMemoryKvStore = () => store;
-}
-
-export function initTtlStore(kvStore?: KvStoreNamespace): void {
-  if (ttlStorage) return;
-  if (kvStore) initDurableObject(kvStore);
-  else if (isBunRuntime()) initMemory();
-  else
-    throw new Error(
-      "initTtlStore: Workers では KV_STORE binding が必須 (in-memory へは落とさない)",
-    );
-}
-
-if (isBunRuntime()) {
-  initTtlStore();
 }

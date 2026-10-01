@@ -2,7 +2,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:tes
 import { Effect, Exit, Layer } from "effect";
 import { auditRowsFor, dbTest, drained, expectFailure } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
-import { getMemoryKvStore } from "../../../ttl-store";
 import {
   countMfaTotpRows,
   countRecoveryCodeRows,
@@ -35,6 +34,7 @@ import { disable } from "../disable-mfa";
 import { enroll } from "../enroll-mfa";
 import { readOwnedMfaStatus } from "../read-status";
 import { consumeMatchedCode, matchOwnedCode } from "../verify-code";
+import { testKvStore } from "../../../__tests__/test-ttl-store";
 
 const P = "mfa-totp-reg-";
 const ISSUER = "taimei-test";
@@ -60,7 +60,7 @@ function buildOps(overrides?: {
 const verifyAndConsumeOwnedCode = (userId: string, input: { code: string; kind: MfaCodeKind }) =>
   Effect.flatMap(matchOwnedCode(userId, input), (matched) => consumeMatchedCode(userId, matched));
 
-const disableAttemptCount = (userId: string) => getMemoryKvStore().get(disableAttemptsKey(userId));
+const disableAttemptCount = (userId: string) => testKvStore.get(disableAttemptsKey(userId));
 
 const seedUserWithMfaEnabled = (ops: ReturnType<typeof buildOps>, seedName: string) =>
   Effect.gen(function* () {
@@ -417,7 +417,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       Effect.gen(function* () {
         const ops = buildOps();
         const { user, actor, secret } = yield* seedUserWithMfaEnabled(ops, "budget-exhausted");
-        yield* Effect.sync(() => getMemoryKvStore().set(disableAttemptsKey(user.id), "5", 60));
+        yield* Effect.sync(() => testKvStore.set(disableAttemptsKey(user.id), "5", 60));
 
         expectFailure(
           yield* Effect.flip(
@@ -436,9 +436,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       Effect.gen(function* () {
         const ops = buildOps();
         const { user, actor, secret } = yield* seedUserWithMfaEnabled(ops, "budget-unavailable");
-        yield* Effect.sync(() =>
-          getMemoryKvStore().set(disableAttemptsKey(user.id), "not-a-number", 60),
-        );
+        yield* Effect.sync(() => testKvStore.set(disableAttemptsKey(user.id), "not-a-number", 60));
 
         expectFailure(
           yield* Effect.flip(

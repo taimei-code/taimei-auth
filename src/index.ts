@@ -1,13 +1,12 @@
 import { serveStatic } from "hono/bun";
 import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "./app";
-import { initAuth } from "./auth";
+import { bootInMemory } from "./boot";
 import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
 import { proxyTrustFromEnv } from "./request-context";
-import { getRuntime } from "./runtime";
 
 initBunSentry();
-initAuth(getRuntime());
+bootInMemory();
 
 // 未設定だと /rpc/* の service key 検査が skip されて誰でも呼べる。
 if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {

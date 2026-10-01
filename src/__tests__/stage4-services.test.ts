@@ -4,12 +4,12 @@ import { Background, BackgroundLive, withWaitUntil } from "../background";
 import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
-import { getMemoryKvStore, pingTtlStore } from "../ttl-store";
-import { TtlStore, TtlStoreLive } from "../ttl-store-service";
+import { TtlStore } from "../ttl-store-service";
+import { testKvStore, testTtlStore, testTtlStoreLayer } from "./test-ttl-store";
 
 describe("TtlStore service (live)", () => {
   const run = <A, E>(p: Effect.Effect<A, E, TtlStore>) =>
-    Effect.runPromise(Effect.provide(p, TtlStoreLive));
+    Effect.runPromise(Effect.provide(p, testTtlStoreLayer));
   const key = `stage4-test:${Date.now()}`;
 
   test("set → get → delete が Effect で往復する", async () => {
@@ -28,13 +28,13 @@ describe("TtlStore service (live)", () => {
 
   test("ping は成功で resolve する (in-memory は常に到達可能)", async () => {
     expect(await run(TtlStore.use((ttlStore) => ttlStore.ping()))).toBeUndefined();
-    expect(await pingTtlStore()).toBeUndefined();
+    expect(await testTtlStore.ping()).toBeUndefined();
   });
 
   test("incrementRateWindow は count を返し EXPIRE を付ける (再試行しない書き込み系)", async () => {
     const r = await run(TtlStore.use((ttlStore) => ttlStore.incrementRateWindow(`${key}:w`, 5)));
     expect(r.count).toBe(1);
-    const rawTtl = getMemoryKvStore().ttl(`${key}:w`);
+    const rawTtl = testKvStore.ttl(`${key}:w`);
     expect(rawTtl).toBeGreaterThanOrEqual(1);
     expect(rawTtl).toBeLessThanOrEqual(5);
     await run(TtlStore.use((ttlStore) => ttlStore.delete(`${key}:w`)));

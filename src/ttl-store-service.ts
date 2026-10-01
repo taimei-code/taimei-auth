@@ -1,6 +1,6 @@
 import { Context, Effect, Layer, Schedule } from "effect";
 import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "./errors";
-import { incrementRateWindow, pingTtlStore, type RateWindowResult, ttlStorage } from "./ttl-store";
+import type { RateWindowResult, TtlStoreBackend } from "./ttl-store";
 
 export class TtlStore extends Context.Service<
   TtlStore,
@@ -34,14 +34,16 @@ const attemptOnce = <A>(thunk: () => Promise<A>): Effect.Effect<A, TtlStoreError
 const readWithRetry = <A>(thunk: () => Promise<A>): Effect.Effect<A, TtlStoreError> =>
   withTtlStoreRetry(attemptOnce(thunk));
 
-export const TtlStoreLive = Layer.succeed(
-  TtlStore,
-  TtlStore.of({
-    get: (key) => readWithRetry(() => ttlStorage.get(key)),
-    set: (key, value, ttl) => attemptOnce(() => ttlStorage.set(key, value, ttl)),
-    delete: (key) => attemptOnce(() => ttlStorage.delete(key)),
-    getAndDelete: (key) => attemptOnce(() => ttlStorage.getAndDelete(key)),
-    incrementRateWindow: (key, windowSec) => attemptOnce(() => incrementRateWindow(key, windowSec)),
-    ping: () => attemptOnce(() => pingTtlStore()),
-  }),
-);
+export const ttlStoreLayer = (backend: TtlStoreBackend) =>
+  Layer.succeed(
+    TtlStore,
+    TtlStore.of({
+      get: (key) => readWithRetry(() => backend.get(key)),
+      set: (key, value, ttl) => attemptOnce(() => backend.set(key, value, ttl)),
+      delete: (key) => attemptOnce(() => backend.delete(key)),
+      getAndDelete: (key) => attemptOnce(() => backend.getAndDelete(key)),
+      incrementRateWindow: (key, windowSec) =>
+        attemptOnce(() => backend.incrementRateWindow(key, windowSec)),
+      ping: () => attemptOnce(backend.ping),
+    }),
+  );

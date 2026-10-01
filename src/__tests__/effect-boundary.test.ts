@@ -127,10 +127,10 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ).toEqual(["src/app.ts", "src/auth-wiring.ts"]);
   });
 
-  test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ index.ts と worker.ts だけ (複数行・名前空間・動的 import も数える)", () => {
+  test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ boot.ts だけ (複数行・名前空間・動的 import も数える)", () => {
     expect(
       valueImportFiles(gateFor(`["'](@/src/|(\\.\\.?/)+)auth["']`), "src", { excludeTests: true }),
-    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/index.ts", "src/worker.ts"]);
+    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/boot.ts"]);
   });
 
   test("資格情報を確かめずに session を発行する AuthApi.issueSession を呼ぶのは、第二要素の検証を終えた complete-login-challenge.ts だけ", () => {

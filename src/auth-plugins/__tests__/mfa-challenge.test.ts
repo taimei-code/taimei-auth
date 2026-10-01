@@ -22,13 +22,13 @@ import {
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
 import { type AppRuntime, getRuntime } from "../../runtime";
-import { getMemoryKvStore, ttlStorage } from "../../ttl-store";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
 import { partial, runTest, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
+import { testKvStore, testTtlStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-plugin-";
 const run = runTest(P);
@@ -75,9 +75,8 @@ const trackChallengeFrom = (headers: Headers) =>
     ),
   );
 const cleanupTrackedChallenges = Effect.sync(() => {
-  const store = getMemoryKvStore();
   for (const key of issuedIds.flatMap((id) => [challengeKey(id), attemptsKey(id)]))
-    store.delete(key);
+    testKvStore.delete(key);
   issuedIds.length = 0;
 });
 
@@ -201,13 +200,13 @@ describe("チャレンジ強制プラグイン", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e12");
         yield* enableMfaFor(user);
-        // リンク発行と session 書き込みも ttlStorage.set を通るため、失敗の注入はチャレンジの key に限る。
+        // リンク発行と session 書き込みも testTtlStore.set を通るため、失敗の注入はチャレンジの key に限る。
         const link = yield* requestMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
-        const originalSet = ttlStorage.set.bind(ttlStorage);
+        const originalSet = testTtlStore.set.bind(testTtlStore);
 
         const login = yield* withSpy(
           () =>
-            spyOn(ttlStorage, "set").mockImplementation((key, value, ttl) => {
+            spyOn(testTtlStore, "set").mockImplementation((key, value, ttl) => {
               if (key.startsWith("mfa:login-challenge:")) {
                 return Promise.reject(new Error("challenge store unavailable"));
               }

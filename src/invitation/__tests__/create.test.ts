@@ -11,9 +11,9 @@ import { auditRowsFor, dbTest, drained, expectFailure } from "../../__tests__/li
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
 import { tryAuthApi } from "../../errors";
-import { getMemoryKvStore } from "../../ttl-store";
 import { createInvitation } from "../create";
 import { RateLimited } from "../errors";
+import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const { run, cleanup } = dbTest(TEST_PREFIX);
 const INVITATION_HOURLY_LIMIT_DEFAULT = "50";
@@ -23,21 +23,19 @@ const invitationRowsByEmail = (companyId: string, email: string) =>
 
 const rateCount = (companyId: string) =>
   Effect.sync(() => {
-    const s = getMemoryKvStore();
-    return s
+    return testKvStore
       .keys(`invitation_rate:${companyId}:`)
-      .reduce((acc, k) => acc + Number(s.get(k) ?? 0), 0);
+      .reduce((acc, k) => acc + Number(testKvStore.get(k) ?? 0), 0);
   });
 
 const clearRateKey = (companyId: string) =>
   Effect.sync(() => {
-    const s = getMemoryKvStore();
-    for (const k of s.keys(`invitation_rate:${companyId}:`)) s.delete(k);
+    for (const k of testKvStore.keys(`invitation_rate:${companyId}:`)) testKvStore.delete(k);
   });
 
 const presetRate = (companyId: string, value: string) =>
   Effect.sync(() =>
-    getMemoryKvStore().set(
+    testKvStore.set(
       `invitation_rate:${companyId}:${new Date().toISOString().slice(0, 13)}`,
       value,
       3600,
