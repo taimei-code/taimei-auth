@@ -1,8 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import type { UserRepo } from "../account/ports";
 import { auth } from "../auth";
-import { UpdateUserRequestSchema } from "../gen/auth/v1/auth_pb";
+import { UserService } from "../gen/auth/v1/auth_pb";
 import { createSessionFor } from "../mfa/__tests__/helpers";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
@@ -52,15 +51,7 @@ describe("公開している経路からはメールアドレスを変更でき�
       }),
     ));
 
-  test("RPC の UpdateUserRequest に email を含む名前の項目が無い", () => {
-    const names = UpdateUserRequestSchema.fields.map((f) => f.name);
-    expect(names.filter((name) => name.includes("email"))).toEqual([]);
-  });
-
-  test("UserRepo.updateUser に email は渡せない", () => {
-    const writeEmail = (users: UserRepo["Service"]) =>
-      // @ts-expect-error email は UserRepo.updateUser の更新項目に無い
-      users.updateUser("user-id", { email: newEmail });
-    expect(writeEmail).toBeFunction();
+  test("service key で呼べる UserService の RPC は findUserByEmail と findUserById だけ (RPC を足す時はこの一覧で email を書き換えないことを確かめ直す)", () => {
+    expect(Object.keys(UserService.method).sort()).toEqual(["findUserByEmail", "findUserById"]);
   });
 });
