@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
 import { authClient } from "../auth/auth-client";
-import { redirectAfterAuthChange } from "../auth/auth-redirect";
+import { discardStaleSession } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
+import { describeRequestJsonError, postJson } from "../shared/request-json";
 import { Button } from "../shared/ui/button";
 
 export const DangerZone = () => {
@@ -11,13 +12,18 @@ export const DangerZone = () => {
 
   const deleteAccount = async () => {
     setErrorMessage(null);
-    const { error } = await authClient.deleteUser({});
-    if (error) {
-      // toast にしない。e2e が role=alert を契約にしている
-      setErrorMessage(error.message ?? "退会処理に失敗しました");
+    try {
+      await postJson("/api/account/delete");
+    } catch (error) {
+      setErrorMessage(
+        describeRequestJsonError(error, {
+          409: "所有者として残っている事業所があります。先に委譲または削除してください。",
+          fallback: "退会処理に失敗しました",
+        }),
+      );
       return;
     }
-    redirectAfterAuthChange("deleteAccount");
+    await discardStaleSession(() => authClient.signOut());
   };
 
   return (

@@ -99,6 +99,14 @@ const DANGER_FIXTURE: FixtureSpec = {
   members: [{ suffix: "danger", name: "E2E Danger", role: "OWNER" }],
 };
 
+const WITHDRAW_FIXTURE: FixtureSpec = {
+  company: "withdraw",
+  members: [
+    { suffix: "withdraw", name: "E2E Withdraw", role: "OWNER" },
+    { suffix: "withdraw-co-owner", name: "E2E WithdrawCoOwner", role: "OWNER" },
+  ],
+};
+
 const DELETE_FIXTURE: FixtureSpec = {
   company: "delete",
   members: [{ suffix: "delete", name: "E2E Delete", role: "OWNER" }],
@@ -161,6 +169,7 @@ async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserI
 export const consumableFixtures = new Map<string, () => Promise<void>>([
   ["leave", () => ensureFixture(LEAVE_FIXTURE)],
   ["delete", () => ensureFixture(DELETE_FIXTURE)],
+  ["withdraw", () => ensureFixture(WITHDRAW_FIXTURE)],
   ["delete-multi", ensureDeleteMultiFixture],
   ["invitation", ensureInvitationFixture],
   ["mfa", () => ensureFixture(MFA_FIXTURE)],
@@ -180,6 +189,7 @@ export async function resetAllFixtures(): Promise<void> {
   await ensureFixture(LEAVE_FIXTURE);
   await ensureFixture(DANGER_FIXTURE);
   await ensureFixture(DELETE_FIXTURE);
+  await ensureFixture(WITHDRAW_FIXTURE);
   await ensureDeleteMultiFixture();
   await ensureFixture(MFA_FIXTURE);
   await ensureInvitationFixture();
