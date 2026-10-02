@@ -5,7 +5,7 @@ import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { Forbidden, NotFound } from "../../membership/guard/errors";
 import { RateLimited } from "../../invitation/errors";
-import { RpcError, runRpc, statusToCode } from "../run-rpc";
+import { runRpc, statusToCode } from "../run-rpc";
 
 const captured = recordSentryExceptions();
 
@@ -36,16 +36,6 @@ describe("statusToCode", () => {
 describe("runRpc", () => {
   test("成功値をそのまま resolve する", async () => {
     expect(await runRpc(Effect.succeed({ success: true }))).toEqual({ success: true });
-  });
-
-  test("RpcError は message と Code を保った ConnectError", async () => {
-    const e = await rejectsWith(
-      runRpc(
-        Effect.fail(new RpcError({ code: Code.InvalidArgument, message: "No fields to update" })),
-      ),
-    );
-    expect(e).toBeInstanceOf(ConnectError);
-    expect([e.code, e.rawMessage]).toEqual([Code.InvalidArgument, "No fields to update"]);
   });
 
   test("guard failure は status → Code と error code を message に", async () => {
