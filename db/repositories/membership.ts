@@ -7,14 +7,20 @@ import type { DbOrTx, DbTx } from "../transaction";
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
 // user_id 単独の unique 制約は N:M 関係と両立しないため、advisory lock と tx 内の再確認で TOCTOU を防ぐ。
-export async function lockUserForCompanyCreation(tx: DbTx, userId: string): Promise<void> {
+export async function lockMembershipChangesOfUser(tx: DbTx, userId: string): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
 // 事業所削除と membership を減らす変更を同じ OWNER 行で競合させる。WHERE を片方だけ変えると直列化が外れる。
 export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
   await tx.execute(
-    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' FOR UPDATE`,
+    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' ORDER BY id FOR UPDATE`,
+  );
+}
+
+export async function lockOwnerMembershipsOfUserCompanies(tx: DbTx, userId: string): Promise<void> {
+  await tx.execute(
+    sql`SELECT id FROM membership WHERE role = 'OWNER' AND company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId}) ORDER BY id FOR UPDATE`,
   );
 }
 
@@ -183,13 +189,11 @@ export async function countOwnerMemberships(tx: DbTx, companyId: string): Promis
   return rows.at(0)?.count ?? 0;
 }
 
-export type BlockingCompany = { companyId: string; companyName: string };
-
 export async function findCompaniesBlockingUserDeletion(
   userId: string,
-  txOrDb: DbOrTx = db,
-): Promise<BlockingCompany[]> {
-  const ownerCountByCompany = txOrDb
+  tx: DbTx,
+): Promise<{ companyId: string }[]> {
+  const ownerCountByCompany = tx
     .select({
       companyId: membership.companyId,
       ownerCount: sql<number>`count(*)::int`.as("owner_count"),
@@ -199,8 +203,8 @@ export async function findCompaniesBlockingUserDeletion(
     .groupBy(membership.companyId)
     .as("owner_counts");
 
-  return txOrDb
-    .select({ companyId: company.id, companyName: company.name })
+  return tx
+    .select({ companyId: company.id })
     .from(membership)
     .innerJoin(company, eq(company.id, membership.companyId))
     .innerJoin(ownerCountByCompany, eq(ownerCountByCompany.companyId, membership.companyId))

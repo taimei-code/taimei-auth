@@ -50,7 +50,7 @@ export const createSignupCompany = Effect.fn("company.createSignupCompany")(func
 
   return yield* tx.run(
     Effect.fn("company.createSignupCompany.apply")(function* (t: DbTx) {
-      yield* memberships.lockUserForCompanyCreation(t, userId);
+      yield* memberships.lockMembershipChangesOfUser(t, userId);
       const rows = yield* memberships.findMembershipsByUserId(userId, t);
       if (rows.some((m) => m.companyActivationStatus === "ACTIVE")) {
         return yield* new AlreadyExists();

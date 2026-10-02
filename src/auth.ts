@@ -1,4 +1,4 @@
-import { betterAuth, APIError } from "better-auth";
+import { betterAuth } from "better-auth";
 import { isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
@@ -11,7 +11,6 @@ import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
 import { captureThrown } from "./handlers/client-facing-error";
-import { MembershipRepo } from "./membership/ports";
 import type { TtlStorage } from "./ttl-store";
 import type { AppRuntime } from "./runtime";
 
@@ -60,21 +59,6 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         revision: { type: "number", required: true, defaultValue: 0, input: false },
         lastUsedCompanyId: { type: "string", required: false, input: false },
       },
-      // SPA の DangerZone はこの経路を通る (RPC の DeleteUser と同じ防御を二重に置く)。
-      deleteUser: {
-        enabled: true,
-        beforeDelete: async (user) => {
-          const blocking = await runtime.runPromise(
-            MembershipRepo.use((m) => m.findCompaniesBlockingUserDeletion(user.id)),
-          );
-          if (blocking.length > 0) {
-            throw new APIError("PRECONDITION_FAILED", {
-              code: "OWNER_OF_ACTIVE_COMPANY",
-              message: `所有者として残っている事業所が ${blocking.length} 件あります。先に委譲または削除してください。`,
-            });
-          }
-        },
-      },
     },
 
     emailAndPassword: {
@@ -110,7 +94,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         enabled: true,
         maxAge: 5 * 60,
       },
-      // password が無いと再認証できず、退会が常に SESSION_NOT_FRESH になるため 0 にする。
+      // password が無いと再認証できず、listSessions が SESSION_NOT_FRESH になるため 0 にする。
       freshAge: 0,
     },
 

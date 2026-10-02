@@ -70,6 +70,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("orElseSucceed\\(|Effect\\.ignore\\(")).toEqual([]);
     expect(srcFiles("Effect\\.logError\\(")).toEqual(["src/email/client.ts"]);
     expect(srcFiles("captureCause\\(").sort()).toEqual([
+      "src/account/delete-account.ts",
       "src/audit/report-failure.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",

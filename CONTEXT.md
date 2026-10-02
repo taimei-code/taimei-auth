@@ -36,6 +36,9 @@ _Avoid_: ユーザー (より広義で、global な user を指す時に使う),
 **membership** が表す権限の階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階がある。事業所の削除、課金の変更、OWNER 権限の委譲は OWNER だけが行える。ADMIN は OWNER を作れず、自分を昇格させることもできない (OWNER への昇格を承認できるのは OWNER だけである)。1 事業所に複数の OWNER を置けるが、OWNER は常に 1 人以上いなければならない。最後の OWNER を減らす操作 (降格、除名、退会) は `last_owner` として拒否される。**membership** と **invitation** の role は常にこの 3 値のいずれかで、それ以外の値は保存されない (未知の role という状態は存在しない)。詳細: PR #55 → #63 / ADR-0010 / ADR-0018。
 _Avoid_: 役職 (人事ドメインの語と紛らわしい), permission (個別アクションの認可と混同する), member_type (freee の `Membership.Type` は業種分類で、role とは別の概念)
 
+**退会**:
+user が自分の要求で自分のアカウントを削除する操作。所属するすべての事業所から抜け、アカウントは復元できない。ACTIVE な事業所の唯一の OWNER である間は `last_owner` として拒否される。事業所から 1 つだけ抜ける操作は退会ではなく、自分を対象にした除名である。所属が 0 件になったアカウントがシステムによって削除される場合 (orphan の削除、ADR-0010) も退会とは呼ばない。どちらの削除も audit log に `account_delete` を残す。
+
 **invitation**:
 **事業所** から外部の email 宛に出す「メンバー参加」の打診 1 件。`token` と `expires_at` (24h) を持つ verification に似た独立テーブルで、状態は `status` (PENDING / ACCEPTED / REVOKED) を正とし、`used_at` は派生値である。受諾されると **membership** 行を新規作成する (INVITED 状態の宙に浮いた membership 行は作らない)。期限切れと取消は、invitation 行の update と audit 記録で表す。
 _Avoid_: 招待状態 (membership に invitation_status 列を持たせるパターン。PR #55 → #63 で不採用), pending member (status の表現と紛らわしい)
