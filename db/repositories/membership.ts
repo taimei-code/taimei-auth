@@ -189,13 +189,11 @@ export async function countOwnerMemberships(tx: DbTx, companyId: string): Promis
   return rows.at(0)?.count ?? 0;
 }
 
-export type BlockingCompany = { companyId: string; companyName: string };
-
 export async function findCompaniesBlockingUserDeletion(
   userId: string,
-  txOrDb: DbOrTx = db,
-): Promise<BlockingCompany[]> {
-  const ownerCountByCompany = txOrDb
+  tx: DbTx,
+): Promise<{ companyId: string }[]> {
+  const ownerCountByCompany = tx
     .select({
       companyId: membership.companyId,
       ownerCount: sql<number>`count(*)::int`.as("owner_count"),
@@ -205,8 +203,8 @@ export async function findCompaniesBlockingUserDeletion(
     .groupBy(membership.companyId)
     .as("owner_counts");
 
-  return txOrDb
-    .select({ companyId: company.id, companyName: company.name })
+  return tx
+    .select({ companyId: company.id })
     .from(membership)
     .innerJoin(company, eq(company.id, membership.companyId))
     .innerJoin(ownerCountByCompany, eq(ownerCountByCompany.companyId, membership.companyId))

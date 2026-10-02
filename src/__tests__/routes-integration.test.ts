@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { requestApp } from "../handlers/__tests__/helpers";
+import { requestApp, responseJson } from "../handlers/__tests__/helpers";
+import { createSessionFor } from "../mfa/__tests__/helpers";
 import { Effect } from "effect";
 import { app } from "../index";
 import { dbTest } from "./live-runner";
@@ -127,6 +128,36 @@ describe("Magic Link の user enumeration 防止 (ADR-0007)", () => {
         );
         expect(registeredBody).toEqual(unregisteredBody);
 
+        yield* db.cleanup();
+      }),
+    ));
+});
+
+describe("better-auth の退会 endpoint", () => {
+  test("有効な session でも POST /api/auth/delete-user は 404 で、user は残る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        yield* db.cleanup();
+        const user = yield* db.seedUser("ba-delete");
+        const { headers: session } = yield* createSessionFor(user.id);
+        const current = yield* request("http://localhost/api/auth/get-session", {
+          headers: session,
+        });
+        expect(((yield* responseJson(current)) as { user: { id: string } }).user.id).toBe(user.id);
+
+        const res = yield* request("http://localhost/api/auth/delete-user", {
+          method: "POST",
+          headers: new Headers([
+            ...session,
+            ["content-type", "application/json"],
+            ["origin", "http://localhost"],
+          ]),
+          body: "{}",
+        });
+
+        expect(res.status).toBe(404);
+        expect(yield* db.readUser(user.id)).toBeDefined();
         yield* db.cleanup();
       }),
     ));
