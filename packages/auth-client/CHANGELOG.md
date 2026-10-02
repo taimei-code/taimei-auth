@@ -11,6 +11,10 @@
 - `mapConnectError` と `AuthServiceUnavailable` / `AuthServiceTimeout` / `AuthServiceUnauthorized`、`./errors` subpath を削除した
 - `effect` を `dependencies` から外した (上の error class だけが使っていた)
 
+### Internal
+
+- build は `tsconfig.build.json` で test を除いて compile し、build の前に `dist` を消すようにした (今までは削除済みの出力や test の compile 結果が tarball に入りえた)。test の型検査は root の `bun run typecheck` が行う
+
 ## 1.2.1 — 2026-09-24
 
 ### Documentation
