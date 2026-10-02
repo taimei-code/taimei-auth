@@ -1,12 +1,5 @@
-import {
-  createClient,
-  ConnectError,
-  Code,
-  type Interceptor,
-  type Transport,
-} from "@connectrpc/connect";
+import { createClient, type Interceptor, type Transport } from "@connectrpc/connect";
 import { AuthService, UserService } from "./gen/auth/v1/auth_pb";
-import { AuthServiceUnavailable, AuthServiceTimeout, AuthServiceUnauthorized } from "./errors";
 
 type ClientOptions = {
   transport: Transport;
@@ -23,37 +16,4 @@ export function createServiceKeyInterceptor(serviceKey: string): Interceptor {
     req.header.set("X-Service-Key", serviceKey);
     return next(req);
   };
-}
-
-export function mapConnectError(
-  error: unknown,
-): AuthServiceUnavailable | AuthServiceTimeout | AuthServiceUnauthorized {
-  if (error instanceof ConnectError) {
-    switch (error.code) {
-      case Code.Unavailable:
-        return new AuthServiceUnavailable({
-          message: "認証サービスに接続できません",
-          cause: error,
-        });
-      case Code.DeadlineExceeded:
-        return new AuthServiceTimeout({
-          message: "認証サービスがタイムアウトしました",
-          cause: error,
-        });
-      case Code.Unauthenticated:
-        return new AuthServiceUnauthorized({
-          message: "サービス認証に失敗しました",
-        });
-      default:
-        return new AuthServiceUnavailable({
-          message: `認証サービスエラー: ${error.message}`,
-          cause: error,
-        });
-    }
-  }
-
-  return new AuthServiceUnavailable({
-    message: "認証サービスとの通信で予期しないエラーが発生しました",
-    cause: error,
-  });
 }

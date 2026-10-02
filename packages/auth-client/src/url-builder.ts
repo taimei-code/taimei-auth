@@ -18,20 +18,3 @@ export const buildAuthLoginUrl = (opts: BuildAuthLoginUrlOptions): string => {
   }
   return url.toString();
 };
-
-/** @deprecated v2.0.0 で削除する。sign-out は `authClient.signOut()` で行う。 */
-export interface BuildAuthLogoutUrlOptions {
-  authBaseUrl: string;
-  service: string;
-  redirectTo?: string;
-}
-
-/** @deprecated v2.0.0 で削除する。sign-out は `authClient.signOut()` で行う。 */
-export const buildAuthLogoutUrl = (opts: BuildAuthLogoutUrlOptions): string => {
-  const url = new URL(`${opts.authBaseUrl.replace(/\/$/, "")}/auth/sign-out`);
-  url.searchParams.set("service_name", opts.service);
-  if (opts.redirectTo !== undefined) {
-    url.searchParams.set("redirect_url", opts.redirectTo);
-  }
-  return url.toString();
-};

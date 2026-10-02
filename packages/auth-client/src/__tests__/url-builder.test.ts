@@ -1,5 +1,5 @@
 import { test, expect, describe } from "bun:test";
-import { buildAuthLoginUrl, buildAuthLogoutUrl } from "../url-builder";
+import { buildAuthLoginUrl } from "../url-builder";
 
 describe("buildAuthLoginUrl", () => {
   test("必須引数: authBaseUrl + service + returnTo", () => {
@@ -53,29 +53,5 @@ describe("buildAuthLoginUrl", () => {
       hash: "magic-link",
     });
     expect(new URL(url).hash).toBe("#magic-link");
-  });
-});
-
-describe("buildAuthLogoutUrl", () => {
-  test("必須引数のみで /auth/sign-out が生成される", () => {
-    const url = buildAuthLogoutUrl({
-      authBaseUrl: "https://auth.taimei-code.com",
-      service: "taimei",
-    });
-    const parsed = new URL(url);
-    expect(parsed.pathname).toBe("/auth/sign-out");
-    expect(parsed.searchParams.get("service_name")).toBe("taimei");
-    expect(parsed.searchParams.has("redirect_url")).toBe(false);
-  });
-
-  test("redirectTo 指定時は redirect_url クエリ付与", () => {
-    const url = buildAuthLogoutUrl({
-      authBaseUrl: "https://auth.taimei-code.com",
-      service: "taimei",
-      redirectTo: "https://app.taimei-code.com/goodbye",
-    });
-    expect(new URL(url).searchParams.get("redirect_url")).toBe(
-      "https://app.taimei-code.com/goodbye",
-    );
   });
 });

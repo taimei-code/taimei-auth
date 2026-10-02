@@ -1,6 +1,6 @@
 {
   "name": "@taimei-code/auth-client",
-  "version": "1.2.1",
+  "version": "2.0.0",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,10 +23,6 @@
     "./cookie": {
       "types": "./dist/cookie.d.ts",
       "default": "./dist/cookie.js"
-    },
-    "./errors": {
-      "types": "./dist/errors.d.ts",
-      "default": "./dist/errors.js"
     }
   },
   "files": [
@@ -39,9 +35,6 @@
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.0.0",
     "@connectrpc/connect": "^2.0.0"
-  },
-  "dependencies": {
-    "effect": "^3.19.0"
   },
   "devDependencies": {
     "typescript": "7.0.2"

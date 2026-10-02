@@ -1,4 +1,4 @@
-export { createAuthClient, createServiceKeyInterceptor, mapConnectError } from "./server";
+export { createAuthClient, createServiceKeyInterceptor } from "./server";
 export { createAuthGuard } from "./guard";
 export type { SessionData, VerifyResult } from "./types";
 export { Result } from "./gen/auth/v1/auth_pb";
@@ -9,14 +9,4 @@ export {
   hasAuthCookie,
   type CookieReader,
 } from "./cookie";
-export {
-  AuthServiceUnavailable,
-  AuthServiceTimeout,
-  AuthServiceUnauthorized,
-} from "./errors";
-export {
-  buildAuthLoginUrl,
-  buildAuthLogoutUrl,
-  type BuildAuthLoginUrlOptions,
-  type BuildAuthLogoutUrlOptions,
-} from "./url-builder";
+export { buildAuthLoginUrl, type BuildAuthLoginUrlOptions } from "./url-builder";
