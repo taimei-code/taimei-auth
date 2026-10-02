@@ -7,8 +7,8 @@
 | 操作 | 実装 | membership | 出典 |
 |---|---|---|---|
 | 事業所削除 | soft delete (`activation_status=DELETED`) | 残す (`company_id` は `ON DELETE RESTRICT`) | `src/handlers/account-company.ts:166`, `db/schema.ts:146-170` |
-| メンバー除名 / 退会 | membership を物理 DELETE | その 1 行を消す | `src/handlers/account-membership.ts:127-177` |
-| アカウント削除 (退会) | user を物理 DELETE (cascade) | `user_id` の cascade で全消去 | `src/rpc/user-handler.ts:52-77`, `db/schema.ts:152` |
+| メンバー除名 (自分で抜ける場合を含む) | membership を物理 DELETE | その 1 行を消す | `src/handlers/account-membership.ts:127-177` |
+| アカウント削除 (退会) | user を物理 DELETE (cascade) | `user_id` の cascade で全消去 | `src/account/delete-account.ts`, `db/schema.ts:152` |
 
 この非対称のため、**所属 0 件のまま生存するアカウント (orphan)** が複数の経路で発生し、しかも cleanup が存在しない (grep で確認した。`deleteUser` は明示的な退会からしか呼ばれず、membership 0 件を起因とする自動削除は無い)。PR #74 の signup ループ (`createSignupCompany` の 0 件ガードが削除済み company の残存 membership を数えて 409 を返し、`/account` と `/auth/signup/company` を往復する) は、この orphan を「正規の状態」として扱おうとして壊れた事例だった。
 
@@ -42,11 +42,11 @@ deleteAccountIfOrphaned(userId, tx):
 
 適用点:
 - **事業所削除 (D1)**: OWNER の認可、audit、全 membership の物理削除、各元メンバーへの `deleteAccountIfOrphaned`、company の soft delete の順に行う。
-- **退会 / 除名**: `deleteMembership` の直後に対象ユーザーへ `deleteAccountIfOrphaned` を行う。
+- **除名 (自分で抜ける場合を含む)**: `deleteMembership` の直後に対象ユーザーへ `deleteAccountIfOrphaned` を行う。
 
 ### D3. 「最後の事業所削除」はアカウントも連動削除する
 
-唯一の事業所を OWNER が削除した場合、その OWNER は membership 0 件の orphan になり、アカウントごと削除される (実質的な退会)。削除を実行する前に UI で「この操作でアカウントも閉じます」と明示的に警告し、削除後はログアウト状態へ遷移させる。actor が自分自身を削除するケースは handler で扱う (フロントへログアウト誘導の signal を返す)。
+唯一の事業所を OWNER が削除した場合、その OWNER は membership 0 件の orphan になり、アカウントごと削除される (実質的なアカウント削除)。削除を実行する前に UI で「この操作でアカウントも閉じます」と明示的に警告し、削除後はログアウト状態へ遷移させる。actor が自分自身を削除するケースは handler で扱う (フロントへログアウト誘導の signal を返す)。
 
 ### D4. アカウント削除 (退会) は物理削除のまま据え置く
 
@@ -95,7 +95,7 @@ signup 中の一時的な 0 件アカウントは許容するが、恒久化さ�
 1. **PR-1 (core: D1 + D2)**
    - repository: `removeMembershipsOfCompany(companyId, tx)`、`countActiveMembershipsByUserId(userId, tx)`、`deleteAccountIfOrphaned(userId, tx)` を `db/repositories/membership.ts` / `user.ts` に追加する。
    - `account-company.ts` の `DeleteCompany`: membership の物理削除、各元メンバーの orphan 削除、company の soft delete の順に行う。actor の自己削除時にはレスポンスで signal を返す。
-   - `account-membership.ts` の除名 / 退会: `deleteMembership` の直後に `deleteAccountIfOrphaned` を行う。
+   - `account-membership.ts` の除名 (自分で抜ける場合を含む): `deleteMembership` の直後に `deleteAccountIfOrphaned` を行う。
    - テスト: 唯一の事業所を削除するとアカウントが消滅する / 複数所属の 1 件を削除しても他は無傷 / 2 度押しは冪等 / 事業所削除から退会まで dangling が無い。
 2. **PR-2 (UX: D3)**: web の DangerZone / CompanySettings に「最後の事業所削除はアカウントを閉じる」警告とログアウト遷移を入れる。
 3. **PR-3 (backfill)**: 既存の DELETED company の残存 membership の物理削除と orphan の回収。**rollback できない物理削除を初めて適用するため 2 段階** にする: まず dry-run で対象の membership / orphan user_id を全件出力して件数を確認し、確認後に小バッチと全 user_id のログ付きで実削除する。可能なら orphan を即座に物理削除せず、短い grace を置く。
@@ -130,7 +130,7 @@ DeleteCompany は 1 つの `runInTransaction` 内で以下の順に行う。
 
 ### session 失効の cookieCache が stale になる窓を受容する
 
-orphan 削除は本人がいない経路 (DeleteCompany / member remove / batch) で起きるため、`auth.api.signOut({headers})` を呼べない。`revokeAllSessionsForUser` (DB の `revoked_at`) と `deleteUser` の cascade で失効するが、better-auth の Redis secondaryStorage の cookieCache (`src/auth.ts` の `maxAge: 5*60`) は即時には無効化されず、**最大 5 分間、stale な session が valid に見える**。これは既存の退会 (`deleteUser` handler) が既に抱えている同根の制約で、orphan 削除も同じ経路を踏襲し、**同じ 5 分の窓を受容する** (詳細: `db/CLAUDE.md` ルール 2 の例外)。tx 内には DB 操作だけを置き、`auth.api.*` (HTTP / Redis の IO) を tx 内で呼ばない。
+orphan 削除は本人がいない経路 (DeleteCompany / member remove / batch) で起きるため、`auth.api.signOut({headers})` を呼べない。`revokeAllSessionsForUser` (DB の `revoked_at`) と `deleteUser` の cascade で失効するが、better-auth の cookieCache (`src/auth.ts` の `maxAge: 5*60`) は即時には無効化されず、**最大 5 分間、stale な session が valid に見える**。退会 (`POST /api/account/delete`) は本人の request なので、SPA が退会の後に sign-out して cookie を消す。orphan 削除にはその request が無いため、**この 5 分の窓を受容する** (詳細: `db/CLAUDE.md` ルール 2 の例外)。tx 内には DB 操作だけを置き、`auth.api.*` (HTTP / TTL store の IO) を tx 内で呼ばない。
 
 ### 既存の soft-delete セマンティクスとの統合
 
