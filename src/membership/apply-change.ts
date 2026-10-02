@@ -41,7 +41,11 @@ export const applyJoin = (
   tx: DbTx,
   row: { id: string; userId: string; companyId: string; role: Role },
 ) =>
-  MembershipRepo.use((repo) => repo.insertMembership(row, tx)).pipe(
+  MembershipRepo.use((repo) =>
+    repo
+      .lockMembershipChangesOfUser(tx, row.userId)
+      .pipe(Effect.andThen(repo.insertMembership(row, tx))),
+  ).pipe(
     Effect.tap(() =>
       UserRepo.use((users) => users.updateUserLastUsedCompany(row.userId, row.companyId, tx)),
     ),
