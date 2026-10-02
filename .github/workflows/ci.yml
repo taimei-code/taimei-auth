@@ -142,7 +142,7 @@ jobs:
       - name: Create sentinels and leak canaries
         run: bash scripts/docker-smoke.sh seed
 
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # load: true は buildx の docker-container driver が image を local store に入れないため要る (後続の docker run と inspect が見つけられない)
       # context: . を省くと Git context になり、gitignore された sentinel が build に入らず不在 assert が中身の無い成功になる
