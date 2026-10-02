@@ -6,6 +6,7 @@ import { Effect } from "effect";
 import type { Hono } from "hono";
 import { dbTest } from "../../__tests__/live-runner";
 import { tryAuthApi } from "../../errors";
+import { JSON_HEADERS } from "../client-facing-error";
 import { TestDb } from "../../__tests__/test-db";
 import {
   buildTestApp,
@@ -49,11 +50,8 @@ const invoke = (
   path: string,
   body?: unknown,
 ): Effect.Effect<NormalizedResponse> => {
-  const init: RequestInit = { method };
-  if (body !== undefined) {
-    init.headers = { "content-type": "application/json" };
-    init.body = JSON.stringify(body);
-  }
+  const init: RequestInit = { method, headers: JSON_HEADERS };
+  if (body !== undefined) init.body = JSON.stringify(body);
   return requestApp(app, `http://localhost${path}`, init).pipe(
     Effect.flatMap((res) => Effect.promise(() => normalizeResponse(res))),
   );

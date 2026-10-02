@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { Hono } from "hono";
+import { csrf } from "hono/csrf";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
@@ -30,6 +31,7 @@ export type AppOptions = {
 };
 
 export function mountAccountRoutes(app: Hono): void {
+  app.use("/api/account/*", csrf());
   app.route("/", accountAvatar);
   app.route("/", accountCompany);
   app.route("/", accountInvitation);

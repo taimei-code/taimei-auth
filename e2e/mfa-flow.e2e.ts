@@ -43,7 +43,9 @@ const wrongTotpCode = async (secret: string): Promise<string> => {
 type EnabledMfa = { secret: string; recoveryCodes: string[] };
 
 const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
-  const enrolled = await page.request.post("/api/account/mfa/enroll");
+  const enrolled = await page.request.post("/api/account/mfa/enroll", {
+    headers: { "content-type": "application/json" },
+  });
   expect(enrolled.status()).toBe(200);
   const enrollment = (await enrolled.json()) as {
     totp_uri: string;

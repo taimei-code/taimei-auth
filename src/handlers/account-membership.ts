@@ -2,6 +2,7 @@ import { Effect } from "effect";
 import { Hono } from "hono";
 import { z } from "zod";
 
+import { deleteAccountUnlessLastOwner } from "../account/delete-account";
 import { switchCompany } from "../account/switch-company";
 import { changeRole } from "../membership/change-role";
 import {
@@ -102,6 +103,17 @@ accountMembership.post("/api/account/companies/:companyId/transfer-ownership", (
         toUserId: grant.toUserId,
         companyId,
       });
+      return c.json({ ok: true });
+    }),
+  ),
+);
+
+accountMembership.post("/api/account/delete", (c) =>
+  runRoute(
+    c,
+    Effect.gen(function* () {
+      const actor = yield* requireActor(c.req.raw.headers);
+      yield* deleteAccountUnlessLastOwner(actor.id);
       return c.json({ ok: true });
     }),
   ),
