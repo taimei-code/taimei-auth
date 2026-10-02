@@ -22,7 +22,7 @@
     "lint": "biome check && fallow audit",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json && tsc --noEmit -p packages/auth-client/tsconfig.json",
     "types": "wrangler types --include-env=false",
     "types:check": "bun run types --check"
   },

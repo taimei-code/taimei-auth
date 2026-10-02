@@ -50,7 +50,7 @@ deleteAccountIfOrphaned(userId, tx):
 
 ### D4. アカウント削除 (退会) は物理削除のまま据え置く
 
-`DeleteUser` は現状の物理削除 (cascade) を維持する。`audit_log` は `user_id` に FK を持たない設計 (`db/schema.ts:125-140`) なので、account_delete の証跡は残る。論理削除と PII 消去への移行は、コンプライアンス要件が出た時点で別の ADR にする。sole-OWNER の事前チェック (`findCompaniesBlockingUserDeletion`) と OWNER が 1 人以上いるという不変条件 (`src/membership/apply-change.ts`) は維持する。(2026-09-10 追記) 不変条件の定義は CONTEXT.md「role」を定義元とする。判定の置き場は Repository の `withOwnerLockGuard` から Use-case 層の `src/membership/apply-change.ts` へ移した (ADR-0012 の層表「不変条件は Use-case」に合わせる)。OWNER が減りうる write の呼び出し側は `src/__tests__/effect-boundary.test.ts` の gate で固定する。
+退会は現状の物理削除 (cascade) を維持する。`audit_log` は `user_id` に FK を持たない設計 (`db/schema.ts:125-140`) なので、account_delete の証跡は残る。論理削除と PII 消去への移行は、コンプライアンス要件が出た時点で別の ADR にする。sole-OWNER の事前チェック (`findCompaniesBlockingUserDeletion`) と OWNER が 1 人以上いるという不変条件 (`src/membership/apply-change.ts`) は維持する。(2026-09-10 追記) 不変条件の定義は CONTEXT.md「role」を定義元とする。判定の置き場は Repository の `withOwnerLockGuard` から Use-case 層の `src/membership/apply-change.ts` へ移した (ADR-0012 の層表「不変条件は Use-case」に合わせる)。OWNER が減りうる write の呼び出し側は `src/__tests__/effect-boundary.test.ts` の gate で固定する。
 
 ### D5. 登録途中の放棄は TTL sweep バッチで回収する
 

@@ -1,21 +1,14 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Cause, Effect } from "effect";
-import { Data, Exit } from "effect";
-import type { BoundaryError } from "../errors";
+import { Exit } from "effect";
 import {
   parseClientFacingError,
   type RouteError,
   settleCause,
-  type ClientFacingErrorShape,
 } from "../handlers/client-facing-error";
 import { type AppServices, getRuntime } from "../runtime";
 
-export class RpcError extends Data.TaggedError("RpcError")<{
-  readonly code: Code;
-  readonly message: string;
-}> {}
-
-export type RpcEffect<A> = Effect.Effect<A, RouteError | RpcError, AppServices>;
+export type RpcEffect<A> = Effect.Effect<A, RouteError, AppServices>;
 
 const STATUS_TO_CODE: Record<number, Code> = {
   400: Code.InvalidArgument,
@@ -35,21 +28,11 @@ export async function runRpc<A>(program: RpcEffect<A>): Promise<A> {
   throw causeToConnectError(exit.cause);
 }
 
-const _rpcFailuresAreParsed: [Exclude<RouteError | RpcError, BoundaryError>] extends [
-  RpcError | ClientFacingErrorShape,
-]
-  ? true
-  : never = true;
-
-const parseConnectClientFacing = (e: unknown): RpcError | ClientFacingErrorShape | undefined =>
-  e instanceof RpcError ? e : parseClientFacingError(e);
-
-function causeToConnectError(cause: Cause.Cause<RouteError | RpcError>): ConnectError {
-  const { failure, reported } = settleCause(cause, parseConnectClientFacing, {
+function causeToConnectError(cause: Cause.Cause<RouteError>): ConnectError {
+  const { failure, reported } = settleCause(cause, parseClientFacingError, {
     label: "[runRpc]",
     tags: { handler: "runRpc" },
   });
-  if (failure instanceof RpcError) return new ConnectError(failure.message, failure.code);
   if (failure) return new ConnectError(failure.error, statusToCode(failure.status));
   // consumer は message を表示に使うため、"internal error" に置き換えない。
   return ConnectError.from(reported[0]);

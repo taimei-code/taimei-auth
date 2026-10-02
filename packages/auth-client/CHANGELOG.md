@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.0 — 2026-10-03
+
+使われていない公開 API を削除する。consumer は taimei だけで、削除した API をどれも使っていないので、code の変更は要らない (version を上げるだけでよい)。deprecate を挟まずに削除したのは、consumer が 1 つで利用が無いことを確認できたため。削除した RPC を 1.x の client から呼ぶと、auth ホストは 404 を返す。
+
+### Breaking changes
+
+- `UserService.UpdateUser` と `UserService.DeleteUser` の RPC を削除した。service key だけで任意の user を書き換え・削除できる API で、呼び手が無かった。名前と画像の変更、退会は共通画面 SPA で本人の session を使って行う
+- `buildAuthLogoutUrl` / `BuildAuthLogoutUrlOptions` を削除した (1.2.0 で `@deprecated`)。sign-out は共通画面 SPA の `authClient.signOut()` で行う
+- `mapConnectError` と `AuthServiceUnavailable` / `AuthServiceTimeout` / `AuthServiceUnauthorized`、`./errors` subpath を削除した
+- `effect` を `dependencies` から外した (上の error class だけが使っていた)
+
+### Internal
+
+- build は `tsconfig.build.json` で test を除いて compile し、build の前に `dist` を消すようにした (今までは削除済みの出力や test の compile 結果が tarball に入りえた)。test の型検査は root の `bun run typecheck` が行う
+
 ## 1.2.1 — 2026-09-24
 
 ### Documentation

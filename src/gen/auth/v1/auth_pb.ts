@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file auth/v1/auth.proto.
  */
 export const file_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24ixwEKB0FjY291bnQSCgoCaWQYASABKAkSEgoKYWNjb3VudF9pZBgCIAEoCRITCgtwcm92aWRlcl9pZBgDIAEoCRIPCgd1c2VyX2lkGAQgASgJEhkKDGFjY2Vzc190b2tlbhgFIAEoCUgAiAEBEhoKDXJlZnJlc2hfdG9rZW4YBiABKAlIAYgBARISCgVzY29wZRgHIAEoCUgCiAEBQg8KDV9hY2Nlc3NfdG9rZW5CEAoOX3JlZnJlc2hfdG9rZW5CCAoGX3Njb3BlIi0KFFZlcmlmeVNlc3Npb25SZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiUQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbiI1ChJWZXJpZnlTZXNzaW9uRXJyb3ISHwoGcmVhc29uGAEgASgOMg8uYXV0aC52MS5SZXN1bHQieAoVVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEiYKAm9rGAEgASgLMhguYXV0aC52MS5WZXJpZnlTZXNzaW9uT2tIABIsCgVlcnJvchgCIAEoCzIbLmF1dGgudjEuVmVyaWZ5U2Vzc2lvbkVycm9ySABCCQoHb3V0Y29tZSIhCg5HZXRVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIjwKD0dldFVzZXJSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiLQoaRmluZEFjY291bnRCeVVzZXJJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJRChtGaW5kQWNjb3VudEJ5VXNlcklkUmVzcG9uc2USJgoHYWNjb3VudBgBIAEoCzIQLmF1dGgudjEuQWNjb3VudEgAiAEBQgoKCF9hY2NvdW50IicKDlNpZ25PdXRSZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiIgoPU2lnbk91dFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiOwoUU2VuZE1hZ2ljTGlua1JlcXVlc3QSDQoFZW1haWwYASABKAkSFAoMY2FsbGJhY2tfdXJsGAIgASgJIigKFVNlbmRNYWdpY0xpbmtSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIicKFkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QSDQoFZW1haWwYASABKAkiRAoXRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USIAoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlckgAiAEBQgcKBV91c2VyIiYKE0ZpbmRVc2VyQnlJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJBChRGaW5kVXNlckJ5SWRSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIicwoRVXBkYXRlVXNlclJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCRIRCgRuYW1lGAIgASgJSACIAQESEgoFaW1hZ2UYAyABKAlIAYgBARITCgtjbGVhcl9pbWFnZRgEIAEoCEIHCgVfbmFtZUIICgZfaW1hZ2UiMQoSVXBkYXRlVXNlclJlc3BvbnNlEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXIiJAoRRGVsZXRlVXNlclJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSIlChJEZWxldGVVc2VyUmVzcG9uc2USDwoHc3VjY2VzcxgBIAEoCCrMAQoGUmVzdWx0EhYKElJFU1VMVF9VTlNQRUNJRklFRBAAEg0KCVJFU1VMVF9PSxABEhwKGFJFU1VMVF9TRVNTSU9OX05PVF9GT1VORBACEhoKFlJFU1VMVF9TRVNTSU9OX0VYUElSRUQQAxIXChNSRVNVTFRfVVNFUl9ERUxFVEVEEAQSFgoSUkVTVUxUX1VTRVJfTE9DS0VEEAUSEgoOUkVTVUxUX1JFVk9LRUQQBhIcChhSRVNVTFRfUkVWSVNJT05fT1VUREFURUQQBzKLAwoLQXV0aFNlcnZpY2USTgoNVmVyaWZ5U2Vzc2lvbhIdLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlcXVlc3QaHi5hdXRoLnYxLlZlcmlmeVNlc3Npb25SZXNwb25zZRI8CgdHZXRVc2VyEhcuYXV0aC52MS5HZXRVc2VyUmVxdWVzdBoYLmF1dGgudjEuR2V0VXNlclJlc3BvbnNlEmAKE0ZpbmRBY2NvdW50QnlVc2VySWQSIy5hdXRoLnYxLkZpbmRBY2NvdW50QnlVc2VySWRSZXF1ZXN0GiQuYXV0aC52MS5GaW5kQWNjb3VudEJ5VXNlcklkUmVzcG9uc2USPAoHU2lnbk91dBIXLmF1dGgudjEuU2lnbk91dFJlcXVlc3QaGC5hdXRoLnYxLlNpZ25PdXRSZXNwb25zZRJOCg1TZW5kTWFnaWNMaW5rEh0uYXV0aC52MS5TZW5kTWFnaWNMaW5rUmVxdWVzdBoeLmF1dGgudjEuU2VuZE1hZ2ljTGlua1Jlc3BvbnNlMr4CCgtVc2VyU2VydmljZRJUCg9GaW5kVXNlckJ5RW1haWwSHy5hdXRoLnYxLkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QaIC5hdXRoLnYxLkZpbmRVc2VyQnlFbWFpbFJlc3BvbnNlEksKDEZpbmRVc2VyQnlJZBIcLmF1dGgudjEuRmluZFVzZXJCeUlkUmVxdWVzdBodLmF1dGgudjEuRmluZFVzZXJCeUlkUmVzcG9uc2USRQoKVXBkYXRlVXNlchIaLmF1dGgudjEuVXBkYXRlVXNlclJlcXVlc3QaGy5hdXRoLnYxLlVwZGF0ZVVzZXJSZXNwb25zZRJFCgpEZWxldGVVc2VyEhouYXV0aC52MS5EZWxldGVVc2VyUmVxdWVzdBobLmF1dGgudjEuRGVsZXRlVXNlclJlc3BvbnNlYgZwcm90bzM");
+  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24ixwEKB0FjY291bnQSCgoCaWQYASABKAkSEgoKYWNjb3VudF9pZBgCIAEoCRITCgtwcm92aWRlcl9pZBgDIAEoCRIPCgd1c2VyX2lkGAQgASgJEhkKDGFjY2Vzc190b2tlbhgFIAEoCUgAiAEBEhoKDXJlZnJlc2hfdG9rZW4YBiABKAlIAYgBARISCgVzY29wZRgHIAEoCUgCiAEBQg8KDV9hY2Nlc3NfdG9rZW5CEAoOX3JlZnJlc2hfdG9rZW5CCAoGX3Njb3BlIi0KFFZlcmlmeVNlc3Npb25SZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiUQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbiI1ChJWZXJpZnlTZXNzaW9uRXJyb3ISHwoGcmVhc29uGAEgASgOMg8uYXV0aC52MS5SZXN1bHQieAoVVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEiYKAm9rGAEgASgLMhguYXV0aC52MS5WZXJpZnlTZXNzaW9uT2tIABIsCgVlcnJvchgCIAEoCzIbLmF1dGgudjEuVmVyaWZ5U2Vzc2lvbkVycm9ySABCCQoHb3V0Y29tZSIhCg5HZXRVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIjwKD0dldFVzZXJSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiLQoaRmluZEFjY291bnRCeVVzZXJJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJRChtGaW5kQWNjb3VudEJ5VXNlcklkUmVzcG9uc2USJgoHYWNjb3VudBgBIAEoCzIQLmF1dGgudjEuQWNjb3VudEgAiAEBQgoKCF9hY2NvdW50IicKDlNpZ25PdXRSZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiIgoPU2lnbk91dFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiOwoUU2VuZE1hZ2ljTGlua1JlcXVlc3QSDQoFZW1haWwYASABKAkSFAoMY2FsbGJhY2tfdXJsGAIgASgJIigKFVNlbmRNYWdpY0xpbmtSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIicKFkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QSDQoFZW1haWwYASABKAkiRAoXRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USIAoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlckgAiAEBQgcKBV91c2VyIiYKE0ZpbmRVc2VyQnlJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJBChRGaW5kVXNlckJ5SWRSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIqzAEKBlJlc3VsdBIWChJSRVNVTFRfVU5TUEVDSUZJRUQQABINCglSRVNVTFRfT0sQARIcChhSRVNVTFRfU0VTU0lPTl9OT1RfRk9VTkQQAhIaChZSRVNVTFRfU0VTU0lPTl9FWFBJUkVEEAMSFwoTUkVTVUxUX1VTRVJfREVMRVRFRBAEEhYKElJFU1VMVF9VU0VSX0xPQ0tFRBAFEhIKDlJFU1VMVF9SRVZPS0VEEAYSHAoYUkVTVUxUX1JFVklTSU9OX09VVERBVEVEEAcyiwMKC0F1dGhTZXJ2aWNlEk4KDVZlcmlmeVNlc3Npb24SHS5hdXRoLnYxLlZlcmlmeVNlc3Npb25SZXF1ZXN0Gh4uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVzcG9uc2USPAoHR2V0VXNlchIXLmF1dGgudjEuR2V0VXNlclJlcXVlc3QaGC5hdXRoLnYxLkdldFVzZXJSZXNwb25zZRJgChNGaW5kQWNjb3VudEJ5VXNlcklkEiMuYXV0aC52MS5GaW5kQWNjb3VudEJ5VXNlcklkUmVxdWVzdBokLmF1dGgudjEuRmluZEFjY291bnRCeVVzZXJJZFJlc3BvbnNlEjwKB1NpZ25PdXQSFy5hdXRoLnYxLlNpZ25PdXRSZXF1ZXN0GhguYXV0aC52MS5TaWduT3V0UmVzcG9uc2USTgoNU2VuZE1hZ2ljTGluaxIdLmF1dGgudjEuU2VuZE1hZ2ljTGlua1JlcXVlc3QaHi5hdXRoLnYxLlNlbmRNYWdpY0xpbmtSZXNwb25zZTKwAQoLVXNlclNlcnZpY2USVAoPRmluZFVzZXJCeUVtYWlsEh8uYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXF1ZXN0GiAuYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXNwb25zZRJLCgxGaW5kVXNlckJ5SWQSHC5hdXRoLnYxLkZpbmRVc2VyQnlJZFJlcXVlc3QaHS5hdXRoLnYxLkZpbmRVc2VyQnlJZFJlc3BvbnNlYgZwcm90bzM");
 
 /**
  * 共通メッセージ
@@ -468,91 +468,6 @@ export const FindUserByIdResponseSchema: GenMessage<FindUserByIdResponse> = /*@_
   messageDesc(file_auth_v1_auth, 18);
 
 /**
- * @generated from message auth.v1.UpdateUserRequest
- */
-export type UpdateUserRequest = Message<"auth.v1.UpdateUserRequest"> & {
-  /**
-   * @generated from field: string user_id = 1;
-   */
-  userId: string;
-
-  /**
-   * @generated from field: optional string name = 2;
-   */
-  name?: string;
-
-  /**
-   * @generated from field: optional string image = 3;
-   */
-  image?: string;
-
-  /**
-   * true で image を null に設定（clearImage 相当）
-   *
-   * @generated from field: bool clear_image = 4;
-   */
-  clearImage: boolean;
-};
-
-/**
- * Describes the message auth.v1.UpdateUserRequest.
- * Use `create(UpdateUserRequestSchema)` to create a new message.
- */
-export const UpdateUserRequestSchema: GenMessage<UpdateUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 19);
-
-/**
- * @generated from message auth.v1.UpdateUserResponse
- */
-export type UpdateUserResponse = Message<"auth.v1.UpdateUserResponse"> & {
-  /**
-   * @generated from field: auth.v1.User user = 1;
-   */
-  user?: User;
-};
-
-/**
- * Describes the message auth.v1.UpdateUserResponse.
- * Use `create(UpdateUserResponseSchema)` to create a new message.
- */
-export const UpdateUserResponseSchema: GenMessage<UpdateUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 20);
-
-/**
- * @generated from message auth.v1.DeleteUserRequest
- */
-export type DeleteUserRequest = Message<"auth.v1.DeleteUserRequest"> & {
-  /**
-   * @generated from field: string user_id = 1;
-   */
-  userId: string;
-};
-
-/**
- * Describes the message auth.v1.DeleteUserRequest.
- * Use `create(DeleteUserRequestSchema)` to create a new message.
- */
-export const DeleteUserRequestSchema: GenMessage<DeleteUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 21);
-
-/**
- * @generated from message auth.v1.DeleteUserResponse
- */
-export type DeleteUserResponse = Message<"auth.v1.DeleteUserResponse"> & {
-  /**
-   * @generated from field: bool success = 1;
-   */
-  success: boolean;
-};
-
-/**
- * Describes the message auth.v1.DeleteUserResponse.
- * Use `create(DeleteUserResponseSchema)` to create a new message.
- */
-export const DeleteUserResponseSchema: GenMessage<DeleteUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 22);
-
-/**
  * VerifySession の失敗理由を表現する enum。
  * SESSION_EXPIRED / USER_LOCKED は現状到達不能、将来
  * session.expires_at による期限切れ判定 / user lock を実装した時点で活性化する。
@@ -677,22 +592,6 @@ export const UserService: GenService<{
     methodKind: "unary";
     input: typeof FindUserByIdRequestSchema;
     output: typeof FindUserByIdResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.UserService.UpdateUser
-   */
-  updateUser: {
-    methodKind: "unary";
-    input: typeof UpdateUserRequestSchema;
-    output: typeof UpdateUserResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.UserService.DeleteUser
-   */
-  deleteUser: {
-    methodKind: "unary";
-    input: typeof DeleteUserRequestSchema;
-    output: typeof DeleteUserResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_auth_v1_auth, 1);

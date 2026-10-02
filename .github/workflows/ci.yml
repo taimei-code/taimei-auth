@@ -134,7 +134,7 @@ jobs:
 
     # docker-smoke.sh dev が末尾に出す assert 件数。script の assert や probe 対象 (auth-client の exports キー) を増減したら更新する
     env:
-      EXPECTED_DEV_ASSERTS: "21"
+      EXPECTED_DEV_ASSERTS: "20"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

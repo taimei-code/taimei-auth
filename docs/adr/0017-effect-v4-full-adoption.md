@@ -55,7 +55,7 @@ remote の workerd と本番 bundle の起動は local の観測で足りると�
 - テストの DB 接触: seed (前提状態の書き込み) / 観測 (事後状態の読み取り) / cleanup の実体は `db/testing/*` (Promise、db/ が所有) に置き、src のテストはそれを `liftAll` で持ち上げた `TestDb` service (`src/__tests__/test-db.ts`) を `yield*` する。理由は 3 つある。db/ は effect を持てない (この ADR の境界表 1 行目)、schema と drizzle は db/ の所有物である (db/CLAUDE.md ルール 1)、テスト本体を 1 つの `Effect.gen` にして production と同じ idiom (Promise module → `liftAll` → `Context.Service`) にするためである。テストは repository と drizzle を直接呼ばない (ゲートは `src/__tests__/effect-boundary.test.ts`)。e2e は Effect の範囲外で、`e2e/fixtures.ts` が同じ module を Promise のまま使う
 - 非同期: `Effect.all` / `Effect.timeout` / `Effect.retry` を使う。timeout は境界 service に既定値を置く (Redis 2s、email 10s)。retry は冪等な境界 (Redis 読み取り系) にだけ `src/redis-service.ts` の policy (`withRedisRetry`) で宣言し、再試行 3 回、backoff の合計 1s 未満とする (attempt ごとの timeout は別。帰結は Consequences)
 - zod は残す: 400 の `details` が zod v4 の message 文字列 (`"Invalid email address"` 等) を wire として含むため、Effect Schema では byte-invariant を保てない。`parseZodBody` が zod の `safeParse` を `Effect<T, InvalidArgument>` に持ち上げる
-- 対象外: `web/` と `@core` 共有 module (effect-free を維持する。`web-shared-core-runtime-free.test.ts`)、SDK `packages/auth-client` の公開 API (effect 3.x のまま。v4 stable 後に別件で扱う)、`db/`
+- 対象外: `web/` と `@core` 共有 module (effect-free を維持する。`web-shared-core-runtime-free.test.ts`)、SDK `packages/auth-client` (2.0.0 で effect への依存を外した)、`db/`
 
 Stage は層単位で進める。Stage の途中では main に 2 様式が共存してよい。完了 PR で旧様式ゼロを `src/handlers/__tests__/no-transport-tx.test.ts` (Stage 1) と `src/__tests__/effect-boundary.test.ts` (Stage 2〜4 のゲート) に累積する invariant で固定する。
 
@@ -94,7 +94,7 @@ rc.112 → 4.0.0 を 1 PR で上げ、全テストと typecheck で API 差を�
 - Transport に adapter が加わり (Decision の境界表 2 行目)、失敗の変換点はその 3 つに閉じる。`membership/guard/respond.ts` (`guardErrorResponse` / `reasonToGuardError`) は廃止する
 - Guard の公開 API は `Effect<A, GuardError, R>` とする。deps factory (`createMembershipGuard` / `makeRequireX`) は廃止し、依存は ports の service を `yield*` する。判定順 (401 → 400 → 403 → 404 → ...) と fail-closed (session 解決だけ 401、membership 断は 500) は変えない
 - Use-case が ports (`src/<domain>/ports.ts`) を所有し、Repository の Effect face は src 側に置く。`db/repositories/` は薄い Promise のまま。port の method 名は repository の関数名と同一で、ports は `LiftedModule<typeof repo>`、wiring は `liftAll(repo)` として repository module から導出する (port 側で名前を付け替えない。同期 helper `generate*` / `isAcceptable` は `liftAll` の対象外で、必要な側が直接 import する)
-- 1 ファイル 200 行以下、1 操作 1 ファイル、Guard は hono 非依存、Transport は tx を所有しない (`src/rpc/user-handler.ts` の既存 Scope out は Stage 1 で動かさない) は維持する
+- 1 ファイル 200 行以下、1 操作 1 ファイル、Guard は hono 非依存、Transport は tx を所有しない (`src/rpc/user-handler.ts` の例外は退会の use-case への移動で 2026-10 に解消した) は維持する
 
 ## Did not adopt
 
