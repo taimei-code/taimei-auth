@@ -1,11 +1,9 @@
 import type { ConnectRouter } from "@connectrpc/connect";
 import { Code } from "@connectrpc/connect";
 import { Effect } from "effect";
-import { deleteAccount } from "../account/delete-account";
+import { deleteAccountUnlessLastOwner } from "../account/delete-account";
 import { UserRepo } from "../account/ports";
 import { UserService } from "../gen/auth/v1/auth_pb";
-import { MembershipRepo } from "../membership/ports";
-import { Transaction } from "../transaction";
 import { toProtoUser, userResponse } from "./mappers";
 import { RpcError, runRpc } from "./run-rpc";
 
@@ -49,33 +47,13 @@ export function registerUserService(router: ConnectRouter) {
 
     deleteUser: (req) =>
       runRpc(
-        Effect.gen(function* () {
-          // チェックと delete を同じ tx に置き、チェック後に OWNER へ昇格される race を避ける。
-          const memberships = yield* MembershipRepo;
-          const tx = yield* Transaction;
-          yield* tx.run(
-            Effect.fn("rpc.deleteUser.apply")(
-              function* (t) {
-                const blocking = yield* memberships.findCompaniesBlockingUserDeletion(
-                  req.userId,
-                  t,
-                );
-                if (blocking.length > 0) {
-                  return yield* new RpcError({
-                    code: Code.FailedPrecondition,
-                    message: `cannot delete user: sole OWNER of ${blocking.length} active company(ies)`,
-                  });
-                }
-                yield* deleteAccount(req.userId, t);
-              },
-              Effect.catchTag(
-                "NotFound",
-                () => new RpcError({ code: Code.NotFound, message: "User not found" }),
-              ),
-            ),
-          );
-          return { success: true };
-        }),
+        deleteAccountUnlessLastOwner(req.userId).pipe(
+          Effect.catchTag(
+            "NotFound",
+            () => new RpcError({ code: Code.NotFound, message: "User not found" }),
+          ),
+          Effect.as({ success: true }),
+        ),
       ),
   });
 }

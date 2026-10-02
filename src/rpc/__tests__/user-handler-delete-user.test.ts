@@ -36,7 +36,7 @@ describe("UserService/DeleteUser via handleRpc", () => {
           contentType: "application/json",
           body: {
             code: "failed_precondition",
-            message: "cannot delete user: sole OWNER of 1 active company(ies)",
+            message: "last_owner",
           },
         });
         expect(yield* db.readUser(owner.id)).toBeDefined();
