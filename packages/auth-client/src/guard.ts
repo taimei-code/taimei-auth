@@ -1,6 +1,7 @@
 import type { createAuthClient } from "./server";
 import type { SessionData, VerifyResult } from "./types";
 import { Result, type VerifySessionResponse } from "./gen/auth/v1/auth_pb";
+import { toRole } from "./role";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
 
@@ -33,7 +34,7 @@ const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
     case "error":
       return { ok: false, reason: response.outcome.value.reason };
     case "ok": {
-      const { user, session } = response.outcome.value;
+      const { user, session, currentRole } = response.outcome.value;
       if (!user || !session) {
         return { ok: false, reason: Result.UNSPECIFIED };
       }
@@ -54,6 +55,7 @@ const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
         },
         // secondaryStorage 構成では session.companyId は常に空なので user.defaultCompanyId (last_used_company_id) を正とする。
         companyId: session.companyId ?? user.defaultCompanyId,
+        role: toRole(currentRole),
       });
       return { ok: true, data: internal };
     }

@@ -3,6 +3,7 @@ package auth.v1;
 
 service AuthService {
   rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
+  rpc GetMembership(GetMembershipRequest) returns (GetMembershipResponse);
 }
 
 service UserService {
@@ -21,6 +22,14 @@ enum Result {
   RESULT_USER_LOCKED = 5;
   RESULT_REVOKED = 6;
   RESULT_REVISION_OUTDATED = 7;
+}
+
+// membership.role と同じ 3 値。
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_OWNER = 1;
+  ROLE_ADMIN = 2;
+  ROLE_MEMBER = 3;
 }
 
 // 共通メッセージ
@@ -84,6 +93,8 @@ message VerifySessionRequest {
 message VerifySessionOk {
   User user = 1;
   Session session = 2;
+  // User.default_company_id の事業所での role。default_company_id が空の時は空。
+  optional Role current_role = 3;
 }
 
 message VerifySessionError {
@@ -95,6 +106,16 @@ message VerifySessionResponse {
     VerifySessionOk ok = 1;
     VerifySessionError error = 2;
   }
+}
+
+message GetMembershipRequest {
+  string user_id = 1;
+  string company_id = 2;
+}
+
+message GetMembershipResponse {
+  // 所属していない時は空。
+  optional Role role = 1;
 }
 
 // UserService メッセージ

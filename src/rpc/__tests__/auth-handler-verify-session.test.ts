@@ -7,6 +7,7 @@ import { AuthApi } from "../../auth-service";
 import { AuthApiError } from "../../errors";
 import {
   authLayer as sharedAuthLayer,
+  membershipRepoLayer,
   userRepoLayer,
 } from "../../membership/__tests__/test-layers";
 import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
@@ -50,7 +51,10 @@ const userRow = (revision: number): UserRow =>
 
 const run = (layers: Layer.Layer<AuthApi | UserRepo>): Promise<VerifySessionResponse> =>
   Effect.runPromise(
-    Effect.provide(verifySessionProgram({ sessionToken: "x" }), Layer.mergeAll(layers, SentryLive)),
+    Effect.provide(
+      verifySessionProgram({ sessionToken: "x" }),
+      Layer.mergeAll(layers, membershipRepoLayer([]), SentryLive),
+    ),
   );
 
 describe("verifySession outcome", () => {
