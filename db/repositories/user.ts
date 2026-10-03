@@ -1,7 +1,7 @@
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { user } from "../schema";
-import type { DbOrTx } from "../transaction";
+import type { DbOrTx, DbTx } from "../transaction";
 
 export type UserRow = typeof user.$inferSelect;
 
@@ -59,18 +59,22 @@ export async function findAbandonedSignupUserIds(
   return rows.map((r) => r.id);
 }
 
-export async function reassignLastUsedCompanyAfterLeaving(
-  companyId: string,
-  userIds: readonly string[],
-  txOrDb: DbOrTx = db,
-): Promise<void> {
-  await txOrDb
+export async function lockUsers(tx: DbTx, userIds: readonly string[]): Promise<void> {
+  await tx
     .select({ id: user.id })
     .from(user)
     .where(inArray(user.id, [...userIds]))
     .orderBy(user.id)
     .for("update");
-  await txOrDb
+}
+
+export async function reassignLastUsedCompanyAfterLeaving(
+  companyId: string,
+  userIds: readonly string[],
+  tx: DbTx,
+): Promise<void> {
+  await lockUsers(tx, userIds);
+  await tx
     .update(user)
     .set({
       lastUsedCompanyId: sql`(

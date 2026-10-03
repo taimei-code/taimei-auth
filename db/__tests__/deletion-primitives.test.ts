@@ -17,6 +17,7 @@ import {
 } from "../repositories/membership";
 import { findUserById, reassignLastUsedCompanyAfterLeaving } from "../repositories/user";
 import { company, invitation, membership, user } from "../schema";
+import { runInTransaction } from "../transaction";
 
 const P = "delprim-test-";
 
@@ -111,7 +112,7 @@ describe("reassignLastUsedCompanyAfterLeaving", () => {
     await join(userId, surviving);
     await removeMembershipsOfCompany(deleted);
 
-    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(deleted, [userId], tx));
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBe(surviving);
   });
@@ -122,7 +123,7 @@ describe("reassignLastUsedCompanyAfterLeaving", () => {
     await join(userId, deleted);
     await removeMembershipsOfCompany(deleted);
 
-    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(deleted, [userId], tx));
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBeNull();
   });
@@ -136,7 +137,7 @@ describe("reassignLastUsedCompanyAfterLeaving", () => {
     await join(stayer, other);
     await join(stayer, left);
 
-    await reassignLastUsedCompanyAfterLeaving(left, [leaver]);
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(left, [leaver], tx));
 
     expect((await findUserById(leaver))?.lastUsedCompanyId).toBe(other);
     expect((await findUserById(stayer))?.lastUsedCompanyId).toBe(left);
@@ -148,7 +149,7 @@ describe("reassignLastUsedCompanyAfterLeaving", () => {
     const userId = await seedUser("re-3", other);
     await join(userId, other);
 
-    await reassignLastUsedCompanyAfterLeaving(deleted, [userId]);
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(deleted, [userId], tx));
 
     expect((await findUserById(userId))?.lastUsedCompanyId).toBe(other);
   });

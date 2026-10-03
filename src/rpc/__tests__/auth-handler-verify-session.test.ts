@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import type { UserRow } from "@/db/repositories/user";
-import { SessionRepo, UserRepo } from "../../account/ports";
+import { UserRepo } from "../../account/ports";
 import type { Session } from "../../auth";
 import { AuthApi } from "../../auth-service";
 import { AuthApiError } from "../../errors";
@@ -48,14 +48,7 @@ const userRow = (revision: number): UserRow =>
     updatedAt: new Date("2025-01-01"),
   }) as unknown as UserRow;
 
-const sessionRepoLayer = (revokedAt: Date | null): Layer.Layer<SessionRepo> =>
-  Layer.succeed(SessionRepo, {
-    findSessionRevokedAt: () => Effect.succeed(revokedAt),
-  } as unknown as SessionRepo["Service"]);
-
-const run = (
-  layers: Layer.Layer<AuthApi | UserRepo | SessionRepo>,
-): Promise<VerifySessionResponse> =>
+const run = (layers: Layer.Layer<AuthApi | UserRepo>): Promise<VerifySessionResponse> =>
   Effect.runPromise(
     Effect.provide(verifySessionProgram({ sessionToken: "x" }), Layer.mergeAll(layers, SentryLive)),
   );
@@ -67,7 +60,6 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => null),
         userRepoLayer([]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("error");
@@ -80,25 +72,11 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1", revision: 0 })),
         userRepoLayer([]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("error");
     if (res.outcome.case !== "error") throw new Error();
     expect(res.outcome.value.reason).toBe(Result.USER_DELETED);
-  });
-
-  test("returns REVOKED when the session row is revoked", async () => {
-    const res = await run(
-      Layer.mergeAll(
-        authLayer(() => sessionOf({ id: "u1", revision: 5 })),
-        userRepoLayer([userRow(5)]),
-        sessionRepoLayer(new Date("2025-01-01")),
-      ),
-    );
-    expect(res.outcome.case).toBe("error");
-    if (res.outcome.case !== "error") throw new Error();
-    expect(res.outcome.value.reason).toBe(Result.REVOKED);
   });
 
   test("returns REVISION_OUTDATED and calls signOut on revision mismatch", async () => {
@@ -107,7 +85,6 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1", revision: 3 })),
         userRepoLayer([userRow(5)]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("error");
@@ -121,7 +98,6 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1", revision: 7 })),
         userRepoLayer([userRow(7)]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("ok");
@@ -136,7 +112,6 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1" })),
         userRepoLayer([userRow(5)]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("ok");
@@ -151,7 +126,6 @@ describe("verifySession outcome", () => {
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1", revision: 3 })),
         userRepoLayer([userRow(5)]),
-        sessionRepoLayer(null),
       ),
     );
     expect(res.outcome.case).toBe("error");

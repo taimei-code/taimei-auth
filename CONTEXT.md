@@ -176,7 +176,7 @@ _Avoid_: session token (署名を除いた **TTL store** の key の方), sessio
 _Avoid_: logout (英語との混在を避ける), session 終了 (より広義)
 
 **session revoke**:
-better-auth の lifecycle hook や admin の操作によって、user 自身の意思とは独立に **session** を強制的に無効化する操作。`session.revoked_at` 列に時刻を記録し、VerifySession が `RESULT_REVOKED` を返す状態にする。**sign-out** (ユーザーの自発) と対比される。契機は password change や account delete などの security-sensitive な操作。
+user 自身の意思とは独立に、**session** を **TTL store** から消して無効化する操作。**sign-out** (ユーザーの自発) と対比される。契機は **多要素認証 (MFA)** の有効化・無効化 (操作した session 以外) と、アカウントの削除 (退会と orphan の削除。手順: ADR-0010)。消えた session を VerifySession は `RESULT_SESSION_NOT_FOUND` として返す。Postgres の `session.revoked_at` 列と proto の `RESULT_REVOKED` は残っているが、書く処理も返す処理も無い。
 _Avoid_: invalidate (より広義), terminate, kill
 
 **Service Key**:

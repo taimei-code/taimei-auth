@@ -87,7 +87,7 @@ session cookie がクリアされた状態で再ログインへ誘導し `Sentry
   静的テストで固定する (`no-hono-import.test.ts` と同形)。「壊れた」しか検知できない e2e ではなく、
   「漏れた」を検知するのがこの静的テストの役割である。
 - **`src/mfa/gateway.ts`**: `auth.api.*` / `auth.$context` への唯一の窓口
-  (`src/account/revoke-sessions.ts` の「唯一の正規窓口」規律と同形)。戻り値は plain data と転送用の
+  (`src/account/delete-sessions.ts` の「唯一の正規窓口」規律と同形)。戻り値は plain data と転送用の
   `Headers` に限り、プラグインの型や内部知識を外に出さない。
 - **統合テスト**: challenge-store が作ったチャレンジ状態を gateway 経由の verify が消費できることを確かめる。
   upstream が形式を変えた場合に PR の時点で落ちる。依存更新時は

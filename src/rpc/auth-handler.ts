@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import type { ConnectRouter } from "@connectrpc/connect";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { Effect } from "effect";
-import { SessionRepo, UserRepo } from "../account/ports";
+import { UserRepo } from "../account/ports";
 import { AuthApi } from "../auth-service";
 import {
   AuthService,
@@ -37,17 +37,9 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
     return verifySessionError(Result.SESSION_NOT_FOUND);
   }
 
-  const users = yield* UserRepo;
-  const sessions = yield* SessionRepo;
-  const [dbUser, revokedAt] = yield* Effect.all(
-    [users.findUserById(result.user.id), sessions.findSessionRevokedAt(result.session.id)],
-    { concurrency: "unbounded" },
-  );
+  const dbUser = yield* UserRepo.use((users) => users.findUserById(result.user.id));
   if (!dbUser) {
     return verifySessionError(Result.USER_DELETED);
-  }
-  if (revokedAt !== null) {
-    return verifySessionError(Result.REVOKED);
   }
 
   // revision 導入前の payload は field を持たない。undefined で判定を skip し、一斉ログアウトの loop を防ぐ。

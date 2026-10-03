@@ -1,7 +1,11 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Ref } from "effect";
 import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
+import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
+import { failingSessionDeletion } from "../../__tests__/test-layers";
+import { storedSessionOf } from "../../__tests__/test-ttl-store";
+import { createSessionFor } from "../../mfa/__tests__/helpers";
 import { LastOwner } from "../errors";
 import { NotFound } from "../guard/errors";
 import { removeMember } from "../remove";
@@ -226,6 +230,81 @@ describe("removeMember", () => {
 
         expectFailure(e, NotFound, "not_found", 404);
         expect((yield* auditRowsFor(ownerId, "membership_removed")).length).toBe(1);
+      }),
+    ));
+});
+
+describe("removeMember の TTL store の session 削除", () => {
+  const sentry = recordSentryExceptions();
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  const seedRemoval = (suffix: string) =>
+    Effect.gen(function* () {
+      const ownerId = yield* seedUser(`${suffix}-owner`);
+      const memberId = yield* seedUser(`${suffix}-member`);
+      const companyId = yield* seedCompany(suffix);
+      yield* join(ownerId, companyId, "OWNER");
+      yield* join(memberId, companyId, "MEMBER");
+      const session = yield* createSessionFor(memberId);
+      const remove = removeMember({
+        actorUserId: ownerId,
+        targetUserId: memberId,
+        companyId,
+        targetRole: "MEMBER",
+      });
+      return { memberId, session, remove };
+    });
+
+  test("最後の所属を除名すると、commit 後に対象の session と索引が消える", () =>
+    run(
+      Effect.gen(function* () {
+        const { memberId, session, remove } = yield* seedRemoval("ttl-orphan");
+
+        expect(yield* remove).toEqual({ accountDeleted: true });
+
+        expect(yield* storedSessionOf(memberId, session.token)).toEqual({
+          session: false,
+          index: false,
+        });
+      }),
+    ));
+
+  test("所属が残る user を除名しても、session と索引は残る", () =>
+    run(
+      Effect.gen(function* () {
+        const { memberId, session, remove } = yield* seedRemoval("ttl-kept");
+        yield* join(memberId, yield* seedCompany("ttl-kept-other"), "MEMBER");
+
+        expect(yield* remove).toEqual({ accountDeleted: false });
+
+        expect(yield* storedSessionOf(memberId, session.token)).toEqual({
+          session: true,
+          index: true,
+        });
+      }),
+    ));
+
+  test("TTL store が失敗しても除名は成功し、user 行が消えた後に呼ばれ、Sentry に記録される", () =>
+    run(
+      Effect.gen(function* () {
+        const { memberId, remove } = yield* seedRemoval("ttl-failing");
+        const failing = yield* failingSessionDeletion;
+        sentry.length = 0;
+
+        expect(yield* remove.pipe(Effect.provide(failing.layer))).toEqual({
+          accountDeleted: true,
+        });
+
+        expect(yield* userExists(memberId)).toBe(false);
+        expect(yield* Ref.get(failing.userRowPresentAtCall)).toEqual([false]);
+        expect(sentry.map(([error, context]) => [error, context?.tags, context?.extra])).toEqual([
+          [
+            "ttl store down",
+            { component: "deleteAccount", flow: "member-remove" },
+            { userId: memberId },
+          ],
+        ]);
       }),
     ));
 });

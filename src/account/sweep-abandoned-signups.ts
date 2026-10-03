@@ -1,5 +1,6 @@
 import { Clock, Effect } from "effect";
 import { Transaction } from "../transaction";
+import { deleteSessionsOf } from "./delete-sessions";
 import { deleteAccountIfOrphaned } from "./orphan";
 import { UserRepo } from "./ports";
 
@@ -26,7 +27,9 @@ export const sweepAbandonedSignups = Effect.fn("account.sweepAbandonedSignups")(
 
   const tx = yield* Transaction;
   const deletedUserIds = yield* Effect.filter(candidates, (userId) =>
-    tx.run((t) => deleteAccountIfOrphaned(userId, t)),
+    tx
+      .run((t) => deleteAccountIfOrphaned(userId, t))
+      .pipe(Effect.tap((deleted) => (deleted ? deleteSessionsOf([userId], "sweep") : Effect.void))),
   );
   return {
     executed: true,

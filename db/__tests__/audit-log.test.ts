@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq } from "drizzle-orm";
 import { db } from "../client";
 import { appendAuditLog, recordCompanyCreated } from "../repositories/audit-log";
-import { revokeAllSessionsForUser } from "../repositories/session";
 import { deleteUser as deleteUserRepo } from "../repositories/user";
 import { auditLog, session, user } from "../schema";
 import { runInTransaction } from "../transaction";
@@ -100,10 +99,9 @@ describe("audit log survives cascade delete (no FK on user_id)", () => {
     });
   });
 
-  test("audit → revoke → delete を tx で atomic 実行、audit_log は user delete 後も残存", async () => {
+  test("audit → delete を tx で atomic 実行、audit_log は user delete 後も残存", async () => {
     await runInTransaction(async (tx) => {
       await appendAuditLog({ eventType: "account_delete", userId: txUserId, payload: {} }, tx);
-      await revokeAllSessionsForUser(txUserId, tx);
       return deleteUserRepo(txUserId, tx);
     });
 

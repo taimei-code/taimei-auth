@@ -1,30 +1,18 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { runTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import { auditLogWith, holdBeforeCommit } from "../../__tests__/test-layers";
+import { addCompany } from "../../company/create";
+import { removeMember } from "../../membership/remove";
 import { deleteAccountIfOrphaned } from "../orphan";
-import { testKvStore } from "../../__tests__/test-ttl-store";
+import { storedSessionOf } from "../../__tests__/test-ttl-store";
+import { createSessionFor } from "../../mfa/__tests__/helpers";
 
 const P = "orphan-test-";
 const run = runTest(P);
 
-const cleanup = () =>
-  run(
-    Effect.gen(function* () {
-      yield* (yield* TestDb).cleanup();
-      for (const key of [
-        `${P}rtok-1`,
-        `${P}rtok-2`,
-        `active-sessions-${P}u-store`,
-        `${P}rtok-kept`,
-        `active-sessions-${P}u-rkept`,
-        `${P}rtok-absent`,
-        `active-sessions-${P}u-absent`,
-      ]) {
-        testKvStore.delete(key);
-      }
-    }),
-  );
+const cleanup = () => run(TestDb.use((db) => db.cleanup()));
 
 const seedUser = (suffix: string) =>
   Effect.gen(function* () {
@@ -33,21 +21,6 @@ const seedUser = (suffix: string) =>
     yield* db.seedSession(u.id, suffix);
     return u.id;
   });
-
-// better-auth の secondaryStorage の保存形 (session は token キー、索引は active-sessions-{userId}) を再現する。
-const seedSessions = (userId: string, tokens: string[]) =>
-  Effect.sync(() => {
-    const expiresAt = Date.now() + 86_400_000;
-    for (const token of tokens) {
-      testKvStore.set(token, JSON.stringify({ session: { token, userId, expiresAt }, user: {} }));
-    }
-    testKvStore.set(
-      `active-sessions-${userId}`,
-      JSON.stringify(tokens.map((token) => ({ token, expiresAt }))),
-    );
-  });
-
-const storeGet = (key: string) => Effect.sync(() => testKvStore.get(key));
 
 const countAccountDeleteAudit = (userId: string) =>
   TestDb.use((db) => db.readAuditRows(userId, "account_delete")).pipe(
@@ -105,52 +78,136 @@ describe("deleteAccountIfOrphaned", () => {
       }),
     ));
 
-  test("存在しない user には何もせず false を返し、記帳も TTL store の purge もしない", () =>
+  test("存在しない user には何もせず false を返し、記帳しない", () =>
     run(
       Effect.gen(function* () {
         const userId = `${P}u-absent`;
-        yield* seedSessions(userId, [`${P}rtok-absent`]);
 
         const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
 
         expect(deleted).toBe(false);
         expect(yield* countAccountDeleteAudit(userId)).toBe(0);
-        expect(yield* storeGet(`${P}rtok-absent`)).not.toBeNull();
-        expect(yield* storeGet(`active-sessions-${userId}`)).not.toBeNull();
       }),
     ));
 
-  // secondaryStorage 構成では session の実体は TTL store にしか無い (Postgres の session テーブルは常に空)。
-  test("orphan 削除は secondaryStorage (TTL store) の session 実体と索引も purge する", () =>
-    run(
-      Effect.gen(function* () {
-        const userId = yield* seedUser("store");
-        const tokens = [`${P}rtok-1`, `${P}rtok-2`];
-        yield* seedSessions(userId, tokens);
-
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
-
-        expect(deleted).toBe(true);
-        expect(yield* storeGet(`${P}rtok-1`)).toBeNull();
-        expect(yield* storeGet(`${P}rtok-2`)).toBeNull();
-        expect(yield* storeGet(`active-sessions-${userId}`)).toBeNull();
-      }),
-    ));
-
-  test("membership が残り削除しない場合は TTL store の session に触れない", () =>
+  test("削除する user と残す user のどちらでも、tx の中では TTL store の session に触れない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
-        const userId = yield* seedUser("rkept");
-        const companyId = yield* db.seedCompany("rkept");
-        yield* db.seedMembership(userId, companyId, "OWNER");
-        yield* seedSessions(userId, [`${P}rtok-kept`]);
+        const orphanId = yield* seedUser("store-orphan");
+        const keptId = yield* seedUser("store-kept");
+        yield* db.seedMembership(keptId, yield* db.seedCompany("store-kept"), "OWNER");
+        const orphanSession = yield* createSessionFor(orphanId);
+        const keptSession = yield* createSessionFor(keptId);
 
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
+        const deleted = yield* inTx((tx) =>
+          Effect.all([deleteAccountIfOrphaned(orphanId, tx), deleteAccountIfOrphaned(keptId, tx)]),
+        );
+
+        expect(deleted).toEqual([true, false]);
+        const both = { session: true, index: true };
+        expect(yield* storedSessionOf(orphanId, orphanSession.token)).toEqual(both);
+        expect(yield* storedSessionOf(keptId, keptSession.token)).toEqual(both);
+      }),
+    ));
+});
+
+const addCompanyPausedBeforeCommit = (userId: string, name: string) =>
+  Effect.gen(function* () {
+    const written = yield* Deferred.make<void>();
+    const release = yield* Deferred.make<void>();
+    const adding = addCompany(userId, { name: `${P}${name}`, orgCode: "PERSONAL" }).pipe(
+      Effect.provide(
+        auditLogWith((live) => ({
+          recordCompanyCreated: (...args) =>
+            holdBeforeCommit(written, release)(live.recordCompanyCreated(...args)),
+        })),
+      ),
+    );
+    const releaseShortlyAfterWrite = Deferred.await(written).pipe(
+      Effect.andThen(Effect.sleep("50 millis")),
+      Effect.andThen(Deferred.succeed(release, undefined)),
+    );
+    return { adding, written, releaseShortlyAfterWrite };
+  });
+
+describe("orphan の判定と事業所追加の競合", () => {
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  test("最後の所属を除名される user が事業所を追加中なら、追加の commit を待って数え、user と追加した事業所の OWNER が残る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const owner = yield* db.seedUser("race-owner");
+        const member = yield* db.seedUser("race-member");
+        const company = yield* db.seedCompany("race-x");
+        yield* db.seedMembership(owner.id, company, "OWNER");
+        yield* db.seedMembership(member.id, company, "MEMBER");
+        const { adding, written, releaseShortlyAfterWrite } = yield* addCompanyPausedBeforeCommit(
+          member.id,
+          "race-y",
+        );
+        const removal = Deferred.await(written).pipe(
+          Effect.andThen(
+            removeMember({
+              actorUserId: owner.id,
+              targetUserId: member.id,
+              companyId: company,
+              targetRole: "MEMBER",
+            }),
+          ),
+        );
+
+        const [added, removed] = yield* Effect.all([adding, removal, releaseShortlyAfterWrite], {
+          concurrency: "unbounded",
+        });
+
+        expect(removed).toEqual({ accountDeleted: false });
+        expect(yield* db.readUser(member.id)).toBeDefined();
+        expect((yield* db.readMembership(member.id, added.company.id))?.role).toBe("OWNER");
+      }),
+    ));
+
+  test("所属 0 件の user が事業所を追加中なら、追加の commit を待って数え、user と追加した事業所の OWNER が残る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("sweep-race");
+        const { adding, written, releaseShortlyAfterWrite } = yield* addCompanyPausedBeforeCommit(
+          userId,
+          "sweep-race-y",
+        );
+        const orphanCheck = Deferred.await(written).pipe(
+          Effect.andThen(inTx((tx) => deleteAccountIfOrphaned(userId, tx))),
+        );
+
+        const [added, deleted] = yield* Effect.all(
+          [adding, orphanCheck, releaseShortlyAfterWrite],
+          {
+            concurrency: "unbounded",
+          },
+        );
 
         expect(deleted).toBe(false);
-        expect(yield* storeGet(`${P}rtok-kept`)).not.toBeNull();
-        expect(yield* storeGet(`active-sessions-${userId}`)).not.toBeNull();
+        expect(yield* db.readUser(userId)).toBeDefined();
+        expect((yield* db.readMembership(userId, added.company.id))?.role).toBe("OWNER");
+      }),
+    ));
+
+  test("orphan として削除された後の user の事業所追加は失敗し、事業所の行を残さない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const userId = yield* seedUser("gone");
+        expect(yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx))).toBe(true);
+
+        const exit = yield* Effect.exit(
+          addCompany(userId, { name: `${P}gone-co`, orgCode: "PERSONAL" }),
+        );
+
+        expect(exit._tag).toBe("Failure");
+        expect(yield* db.readCompanyIdsByName(`${P}gone-co`)).toEqual([]);
       }),
     ));
 });

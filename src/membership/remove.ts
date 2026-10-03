@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Role } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
+import { deleteSessionsOf } from "../account/delete-sessions";
 import { deleteAccountIfOrphaned } from "../account/orphan";
 import { AuditLog } from "../audit/ports";
 import { Transaction } from "../transaction";
@@ -16,7 +17,7 @@ export const removeMember = Effect.fn("membership.removeMember")(function* (para
   const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
-  return yield* tx.run(
+  const result = yield* tx.run(
     Effect.fn("membership.removeMember.apply")(function* (t: DbTx) {
       yield* applyRemoval(t, { targetUserId, companyId });
       yield* audit.recordMembershipRemoved(
@@ -31,4 +32,6 @@ export const removeMember = Effect.fn("membership.removeMember")(function* (para
       return { accountDeleted: yield* deleteAccountIfOrphaned(targetUserId, t) };
     }),
   );
+  if (result.accountDeleted) yield* deleteSessionsOf([targetUserId], "member-remove");
+  return result;
 });
