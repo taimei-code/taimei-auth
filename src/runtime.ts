@@ -1,5 +1,5 @@
 import { Layer, ManagedRuntime } from "effect";
-import { AccountLayers } from "./account/wiring";
+import { UserRepoLive } from "./account/wiring";
 import { BackgroundLive } from "./background";
 import { EmailSenderLive } from "./email/wiring";
 import { HealthRepoLive } from "./health/wiring";
@@ -18,7 +18,7 @@ import { TransactionLive } from "./transaction";
 export const appLayer = (ttlStore: TtlStoreBackend) =>
   Layer.mergeAll(
     AuthApiLive,
-    AccountLayers,
+    UserRepoLive,
     MembershipRepoLive,
     InvitationRepoLive,
     CompanyRepoLive,

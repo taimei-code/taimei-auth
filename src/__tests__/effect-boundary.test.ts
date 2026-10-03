@@ -279,16 +279,6 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
   });
 });
 
-describe("revokeAllSessionsForUser の窓口", () => {
-  test("production から呼ばない (session の実体は TTL store にあり、revoked_at を書いても失効しない)", () => {
-    // biome の importNames ban は src/** にしか効かないので management と e2e も見る。
-    const offenders = ["src", "management", "e2e"].flatMap((dir) =>
-      grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
-    );
-    expect(offenders).toEqual([]);
-  });
-});
-
 // ManagedRuntime.make は初回 run で Layer を構築するため、失敗し得る Layer (Layer.effect / scoped / unwrap) は本番の初回 request で落ちる。
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
   test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {

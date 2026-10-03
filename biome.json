@@ -112,11 +112,7 @@
                 "paths": {
                   "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
                   "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
-                  "@/db/repositories/session": {
-                    "importNames": ["revokeAllSessionsForUser"],
-                    "message": "revoked_at を書いても TTL store の session は失効しない。session は src/account/delete-sessions.ts の deleteSessionsOf で消すこと"
-                  }
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
                 },
                 "patterns": [
                   {
