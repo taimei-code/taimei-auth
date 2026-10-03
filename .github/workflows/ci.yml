@@ -47,8 +47,9 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       # GHSA-qwww-vcr4-c8h2 (react-router RSC Mode の CSRF) は修正が 8.x のみで、このリポジトリは RSC Mode を使わない。v8 へ上げるか 7.x の backport が出たら外す
+      # GHSA-vfj7-8cjw-p6xm (braces の DoS) は修正版が無く、braces は tailwindcss 経由の dev 依存で Worker に入らない。braces の修正版が出たら外す
       - name: Audit dependencies
-        run: bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2
+        run: bun audit --audit-level=high --ignore=GHSA-qwww-vcr4-c8h2 --ignore=GHSA-vfj7-8cjw-p6xm
 
       # typecheck が SDK の dist/*.d.ts を解決するため先に build する
       - name: Build auth-client SDK
