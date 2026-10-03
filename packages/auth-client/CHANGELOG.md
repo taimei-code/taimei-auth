@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.0.0 — 2026-10-03
+
+consumer が使っていない RPC を削除する。consumer は taimei だけで、本番の経路で呼ぶのは `AuthService.VerifySession` と `UserService.FindUserByEmail` だけだった。削除した RPC を 2.x の client から呼ぶと、auth ホストは 404 を返す。
+
+### Breaking changes
+
+- `AuthService.GetUser` / `AuthService.FindAccountByUserId` / `AuthService.SignOut` / `AuthService.SendMagicLink` と `UserService.FindUserById` の RPC を削除した。`createAuthClient` が返す `authService` と `userService` から、対応する method (`getUser` / `findAccountByUserId` / `signOut` / `sendMagicLink` / `findUserById`) が消える
+- 上の RPC だけが使っていた message を削除した: `GetUserRequest` / `GetUserResponse` / `FindAccountByUserIdRequest` / `FindAccountByUserIdResponse` / `Account` / `SignOutRequest` / `SignOutResponse` / `SendMagicLinkRequest` / `SendMagicLinkResponse` / `FindUserByIdRequest` / `FindUserByIdResponse`
+- service key で呼べる操作は `VerifySession` (session token の検証) と `FindUserByEmail` (email による user の参照) だけになった。OAuth の token を返す `FindAccountByUserId` も無くなる
+
+### 移行
+
+- `userService.findUserById` を呼んでいるコードを消す (taimei は test からしか呼ばない wrapper を消す)。他の削除した method は taimei が呼んでいない
+- sign-out と magic link の送信は、今までどおり共通画面 SPA が better-auth で行う
+
 ## 2.0.0 — 2026-10-03
 
 使われていない公開 API を削除する。consumer は taimei だけで、削除した API をどれも使っていないので、code の変更は要らない (version を上げるだけでよい)。deprecate を挟まずに削除したのは、consumer が 1 つで利用が無いことを確認できたため。削除した RPC を 1.x の client から呼ぶと、auth ホストは 404 を返す。

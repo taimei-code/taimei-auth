@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file auth/v1/auth.proto.
  */
 export const file_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24ixwEKB0FjY291bnQSCgoCaWQYASABKAkSEgoKYWNjb3VudF9pZBgCIAEoCRITCgtwcm92aWRlcl9pZBgDIAEoCRIPCgd1c2VyX2lkGAQgASgJEhkKDGFjY2Vzc190b2tlbhgFIAEoCUgAiAEBEhoKDXJlZnJlc2hfdG9rZW4YBiABKAlIAYgBARISCgVzY29wZRgHIAEoCUgCiAEBQg8KDV9hY2Nlc3NfdG9rZW5CEAoOX3JlZnJlc2hfdG9rZW5CCAoGX3Njb3BlIi0KFFZlcmlmeVNlc3Npb25SZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiUQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbiI1ChJWZXJpZnlTZXNzaW9uRXJyb3ISHwoGcmVhc29uGAEgASgOMg8uYXV0aC52MS5SZXN1bHQieAoVVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEiYKAm9rGAEgASgLMhguYXV0aC52MS5WZXJpZnlTZXNzaW9uT2tIABIsCgVlcnJvchgCIAEoCzIbLmF1dGgudjEuVmVyaWZ5U2Vzc2lvbkVycm9ySABCCQoHb3V0Y29tZSIhCg5HZXRVc2VyUmVxdWVzdBIPCgd1c2VyX2lkGAEgASgJIjwKD0dldFVzZXJSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiLQoaRmluZEFjY291bnRCeVVzZXJJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJRChtGaW5kQWNjb3VudEJ5VXNlcklkUmVzcG9uc2USJgoHYWNjb3VudBgBIAEoCzIQLmF1dGgudjEuQWNjb3VudEgAiAEBQgoKCF9hY2NvdW50IicKDlNpZ25PdXRSZXF1ZXN0EhUKDXNlc3Npb25fdG9rZW4YASABKAkiIgoPU2lnbk91dFJlc3BvbnNlEg8KB3N1Y2Nlc3MYASABKAgiOwoUU2VuZE1hZ2ljTGlua1JlcXVlc3QSDQoFZW1haWwYASABKAkSFAoMY2FsbGJhY2tfdXJsGAIgASgJIigKFVNlbmRNYWdpY0xpbmtSZXNwb25zZRIPCgdzdWNjZXNzGAEgASgIIicKFkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QSDQoFZW1haWwYASABKAkiRAoXRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USIAoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlckgAiAEBQgcKBV91c2VyIiYKE0ZpbmRVc2VyQnlJZFJlcXVlc3QSDwoHdXNlcl9pZBgBIAEoCSJBChRGaW5kVXNlckJ5SWRSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIqzAEKBlJlc3VsdBIWChJSRVNVTFRfVU5TUEVDSUZJRUQQABINCglSRVNVTFRfT0sQARIcChhSRVNVTFRfU0VTU0lPTl9OT1RfRk9VTkQQAhIaChZSRVNVTFRfU0VTU0lPTl9FWFBJUkVEEAMSFwoTUkVTVUxUX1VTRVJfREVMRVRFRBAEEhYKElJFU1VMVF9VU0VSX0xPQ0tFRBAFEhIKDlJFU1VMVF9SRVZPS0VEEAYSHAoYUkVTVUxUX1JFVklTSU9OX09VVERBVEVEEAcyiwMKC0F1dGhTZXJ2aWNlEk4KDVZlcmlmeVNlc3Npb24SHS5hdXRoLnYxLlZlcmlmeVNlc3Npb25SZXF1ZXN0Gh4uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVzcG9uc2USPAoHR2V0VXNlchIXLmF1dGgudjEuR2V0VXNlclJlcXVlc3QaGC5hdXRoLnYxLkdldFVzZXJSZXNwb25zZRJgChNGaW5kQWNjb3VudEJ5VXNlcklkEiMuYXV0aC52MS5GaW5kQWNjb3VudEJ5VXNlcklkUmVxdWVzdBokLmF1dGgudjEuRmluZEFjY291bnRCeVVzZXJJZFJlc3BvbnNlEjwKB1NpZ25PdXQSFy5hdXRoLnYxLlNpZ25PdXRSZXF1ZXN0GhguYXV0aC52MS5TaWduT3V0UmVzcG9uc2USTgoNU2VuZE1hZ2ljTGluaxIdLmF1dGgudjEuU2VuZE1hZ2ljTGlua1JlcXVlc3QaHi5hdXRoLnYxLlNlbmRNYWdpY0xpbmtSZXNwb25zZTKwAQoLVXNlclNlcnZpY2USVAoPRmluZFVzZXJCeUVtYWlsEh8uYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXF1ZXN0GiAuYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXNwb25zZRJLCgxGaW5kVXNlckJ5SWQSHC5hdXRoLnYxLkZpbmRVc2VyQnlJZFJlcXVlc3QaHS5hdXRoLnYxLkZpbmRVc2VyQnlJZFJlc3BvbnNlYgZwcm90bzM");
+  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24iLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSJRCg9WZXJpZnlTZXNzaW9uT2sSGwoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlchIhCgdzZXNzaW9uGAIgASgLMhAuYXV0aC52MS5TZXNzaW9uIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIicKFkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QSDQoFZW1haWwYASABKAkiRAoXRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USIAoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlckgAiAEBQgcKBV91c2VyKswBCgZSZXN1bHQSFgoSUkVTVUxUX1VOU1BFQ0lGSUVEEAASDQoJUkVTVUxUX09LEAESHAoYUkVTVUxUX1NFU1NJT05fTk9UX0ZPVU5EEAISGgoWUkVTVUxUX1NFU1NJT05fRVhQSVJFRBADEhcKE1JFU1VMVF9VU0VSX0RFTEVURUQQBBIWChJSRVNVTFRfVVNFUl9MT0NLRUQQBRISCg5SRVNVTFRfUkVWT0tFRBAGEhwKGFJFU1VMVF9SRVZJU0lPTl9PVVREQVRFRBAHMl0KC0F1dGhTZXJ2aWNlEk4KDVZlcmlmeVNlc3Npb24SHS5hdXRoLnYxLlZlcmlmeVNlc3Npb25SZXF1ZXN0Gh4uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVzcG9uc2UyYwoLVXNlclNlcnZpY2USVAoPRmluZFVzZXJCeUVtYWlsEh8uYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXF1ZXN0GiAuYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXNwb25zZWIGcHJvdG8z");
 
 /**
  * 共通メッセージ
@@ -120,53 +120,6 @@ export const SessionSchema: GenMessage<Session> = /*@__PURE__*/
   messageDesc(file_auth_v1_auth, 1);
 
 /**
- * @generated from message auth.v1.Account
- */
-export type Account = Message<"auth.v1.Account"> & {
-  /**
-   * @generated from field: string id = 1;
-   */
-  id: string;
-
-  /**
-   * @generated from field: string account_id = 2;
-   */
-  accountId: string;
-
-  /**
-   * @generated from field: string provider_id = 3;
-   */
-  providerId: string;
-
-  /**
-   * @generated from field: string user_id = 4;
-   */
-  userId: string;
-
-  /**
-   * @generated from field: optional string access_token = 5;
-   */
-  accessToken?: string;
-
-  /**
-   * @generated from field: optional string refresh_token = 6;
-   */
-  refreshToken?: string;
-
-  /**
-   * @generated from field: optional string scope = 7;
-   */
-  scope?: string;
-};
-
-/**
- * Describes the message auth.v1.Account.
- * Use `create(AccountSchema)` to create a new message.
- */
-export const AccountSchema: GenMessage<Account> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 2);
-
-/**
  * AuthService メッセージ
  *
  * @generated from message auth.v1.VerifySessionRequest
@@ -183,7 +136,7 @@ export type VerifySessionRequest = Message<"auth.v1.VerifySessionRequest"> & {
  * Use `create(VerifySessionRequestSchema)` to create a new message.
  */
 export const VerifySessionRequestSchema: GenMessage<VerifySessionRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 3);
+  messageDesc(file_auth_v1_auth, 2);
 
 /**
  * VerifySession の成功と失敗を proto の oneof で union 化。
@@ -208,7 +161,7 @@ export type VerifySessionOk = Message<"auth.v1.VerifySessionOk"> & {
  * Use `create(VerifySessionOkSchema)` to create a new message.
  */
 export const VerifySessionOkSchema: GenMessage<VerifySessionOk> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 4);
+  messageDesc(file_auth_v1_auth, 3);
 
 /**
  * @generated from message auth.v1.VerifySessionError
@@ -225,7 +178,7 @@ export type VerifySessionError = Message<"auth.v1.VerifySessionError"> & {
  * Use `create(VerifySessionErrorSchema)` to create a new message.
  */
 export const VerifySessionErrorSchema: GenMessage<VerifySessionError> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 5);
+  messageDesc(file_auth_v1_auth, 4);
 
 /**
  * @generated from message auth.v1.VerifySessionResponse
@@ -254,148 +207,7 @@ export type VerifySessionResponse = Message<"auth.v1.VerifySessionResponse"> & {
  * Use `create(VerifySessionResponseSchema)` to create a new message.
  */
 export const VerifySessionResponseSchema: GenMessage<VerifySessionResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 6);
-
-/**
- * @generated from message auth.v1.GetUserRequest
- */
-export type GetUserRequest = Message<"auth.v1.GetUserRequest"> & {
-  /**
-   * @generated from field: string user_id = 1;
-   */
-  userId: string;
-};
-
-/**
- * Describes the message auth.v1.GetUserRequest.
- * Use `create(GetUserRequestSchema)` to create a new message.
- */
-export const GetUserRequestSchema: GenMessage<GetUserRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 7);
-
-/**
- * @generated from message auth.v1.GetUserResponse
- */
-export type GetUserResponse = Message<"auth.v1.GetUserResponse"> & {
-  /**
-   * @generated from field: optional auth.v1.User user = 1;
-   */
-  user?: User;
-};
-
-/**
- * Describes the message auth.v1.GetUserResponse.
- * Use `create(GetUserResponseSchema)` to create a new message.
- */
-export const GetUserResponseSchema: GenMessage<GetUserResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 8);
-
-/**
- * @generated from message auth.v1.FindAccountByUserIdRequest
- */
-export type FindAccountByUserIdRequest = Message<"auth.v1.FindAccountByUserIdRequest"> & {
-  /**
-   * @generated from field: string user_id = 1;
-   */
-  userId: string;
-};
-
-/**
- * Describes the message auth.v1.FindAccountByUserIdRequest.
- * Use `create(FindAccountByUserIdRequestSchema)` to create a new message.
- */
-export const FindAccountByUserIdRequestSchema: GenMessage<FindAccountByUserIdRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 9);
-
-/**
- * @generated from message auth.v1.FindAccountByUserIdResponse
- */
-export type FindAccountByUserIdResponse = Message<"auth.v1.FindAccountByUserIdResponse"> & {
-  /**
-   * @generated from field: optional auth.v1.Account account = 1;
-   */
-  account?: Account;
-};
-
-/**
- * Describes the message auth.v1.FindAccountByUserIdResponse.
- * Use `create(FindAccountByUserIdResponseSchema)` to create a new message.
- */
-export const FindAccountByUserIdResponseSchema: GenMessage<FindAccountByUserIdResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 10);
-
-/**
- * @generated from message auth.v1.SignOutRequest
- */
-export type SignOutRequest = Message<"auth.v1.SignOutRequest"> & {
-  /**
-   * @generated from field: string session_token = 1;
-   */
-  sessionToken: string;
-};
-
-/**
- * Describes the message auth.v1.SignOutRequest.
- * Use `create(SignOutRequestSchema)` to create a new message.
- */
-export const SignOutRequestSchema: GenMessage<SignOutRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 11);
-
-/**
- * @generated from message auth.v1.SignOutResponse
- */
-export type SignOutResponse = Message<"auth.v1.SignOutResponse"> & {
-  /**
-   * @generated from field: bool success = 1;
-   */
-  success: boolean;
-};
-
-/**
- * Describes the message auth.v1.SignOutResponse.
- * Use `create(SignOutResponseSchema)` to create a new message.
- */
-export const SignOutResponseSchema: GenMessage<SignOutResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 12);
-
-/**
- * @generated from message auth.v1.SendMagicLinkRequest
- */
-export type SendMagicLinkRequest = Message<"auth.v1.SendMagicLinkRequest"> & {
-  /**
-   * @generated from field: string email = 1;
-   */
-  email: string;
-
-  /**
-   * @generated from field: string callback_url = 2;
-   */
-  callbackUrl: string;
-};
-
-/**
- * Describes the message auth.v1.SendMagicLinkRequest.
- * Use `create(SendMagicLinkRequestSchema)` to create a new message.
- */
-export const SendMagicLinkRequestSchema: GenMessage<SendMagicLinkRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 13);
-
-/**
- * @generated from message auth.v1.SendMagicLinkResponse
- */
-export type SendMagicLinkResponse = Message<"auth.v1.SendMagicLinkResponse"> & {
-  /**
-   * @generated from field: bool success = 1;
-   */
-  success: boolean;
-};
-
-/**
- * Describes the message auth.v1.SendMagicLinkResponse.
- * Use `create(SendMagicLinkResponseSchema)` to create a new message.
- */
-export const SendMagicLinkResponseSchema: GenMessage<SendMagicLinkResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 14);
+  messageDesc(file_auth_v1_auth, 5);
 
 /**
  * UserService メッセージ
@@ -414,7 +226,7 @@ export type FindUserByEmailRequest = Message<"auth.v1.FindUserByEmailRequest"> &
  * Use `create(FindUserByEmailRequestSchema)` to create a new message.
  */
 export const FindUserByEmailRequestSchema: GenMessage<FindUserByEmailRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 15);
+  messageDesc(file_auth_v1_auth, 6);
 
 /**
  * @generated from message auth.v1.FindUserByEmailResponse
@@ -431,41 +243,7 @@ export type FindUserByEmailResponse = Message<"auth.v1.FindUserByEmailResponse">
  * Use `create(FindUserByEmailResponseSchema)` to create a new message.
  */
 export const FindUserByEmailResponseSchema: GenMessage<FindUserByEmailResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 16);
-
-/**
- * @generated from message auth.v1.FindUserByIdRequest
- */
-export type FindUserByIdRequest = Message<"auth.v1.FindUserByIdRequest"> & {
-  /**
-   * @generated from field: string user_id = 1;
-   */
-  userId: string;
-};
-
-/**
- * Describes the message auth.v1.FindUserByIdRequest.
- * Use `create(FindUserByIdRequestSchema)` to create a new message.
- */
-export const FindUserByIdRequestSchema: GenMessage<FindUserByIdRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 17);
-
-/**
- * @generated from message auth.v1.FindUserByIdResponse
- */
-export type FindUserByIdResponse = Message<"auth.v1.FindUserByIdResponse"> & {
-  /**
-   * @generated from field: optional auth.v1.User user = 1;
-   */
-  user?: User;
-};
-
-/**
- * Describes the message auth.v1.FindUserByIdResponse.
- * Use `create(FindUserByIdResponseSchema)` to create a new message.
- */
-export const FindUserByIdResponseSchema: GenMessage<FindUserByIdResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 18);
+  messageDesc(file_auth_v1_auth, 7);
 
 /**
  * VerifySession の失敗理由を表現する enum。
@@ -523,8 +301,6 @@ export const ResultSchema: GenEnum<Result> = /*@__PURE__*/
   enumDesc(file_auth_v1_auth, 0);
 
 /**
- * 認証（セッション管理、OAuth、Magic Link）
- *
  * @generated from service auth.v1.AuthService
  */
 export const AuthService: GenService<{
@@ -536,44 +312,10 @@ export const AuthService: GenService<{
     input: typeof VerifySessionRequestSchema;
     output: typeof VerifySessionResponseSchema;
   },
-  /**
-   * @generated from rpc auth.v1.AuthService.GetUser
-   */
-  getUser: {
-    methodKind: "unary";
-    input: typeof GetUserRequestSchema;
-    output: typeof GetUserResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.AuthService.FindAccountByUserId
-   */
-  findAccountByUserId: {
-    methodKind: "unary";
-    input: typeof FindAccountByUserIdRequestSchema;
-    output: typeof FindAccountByUserIdResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.AuthService.SignOut
-   */
-  signOut: {
-    methodKind: "unary";
-    input: typeof SignOutRequestSchema;
-    output: typeof SignOutResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.AuthService.SendMagicLink
-   */
-  sendMagicLink: {
-    methodKind: "unary";
-    input: typeof SendMagicLinkRequestSchema;
-    output: typeof SendMagicLinkResponseSchema;
-  },
 }> = /*@__PURE__*/
   serviceDesc(file_auth_v1_auth, 0);
 
 /**
- * ユーザー管理（user テーブルが auth-service DB に存在するため必要）
- *
  * @generated from service auth.v1.UserService
  */
 export const UserService: GenService<{
@@ -584,14 +326,6 @@ export const UserService: GenService<{
     methodKind: "unary";
     input: typeof FindUserByEmailRequestSchema;
     output: typeof FindUserByEmailResponseSchema;
-  },
-  /**
-   * @generated from rpc auth.v1.UserService.FindUserById
-   */
-  findUserById: {
-    methodKind: "unary";
-    input: typeof FindUserByIdRequestSchema;
-    output: typeof FindUserByIdResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_auth_v1_auth, 1);

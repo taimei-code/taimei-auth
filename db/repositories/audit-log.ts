@@ -12,11 +12,6 @@ export type AuditLogEntry =
       userId: string;
       payload: { method: "magic_link" | "github"; ip: string; userAgent: string };
     }
-  | {
-      eventType: "sign_out";
-      userId: string;
-      payload: { ip: string; userAgent: string };
-    }
   // secret、リカバリーコード、残数は載せない (監査ログの閲覧を第二要素の漏洩経路にしない)。
   | {
       eventType: "mfa_enabled";

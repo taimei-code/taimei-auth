@@ -1,4 +1,3 @@
-import type { AccountRow } from "@/db/repositories/account";
 import type { UserRow } from "@/db/repositories/user";
 import type { Session } from "../auth";
 
@@ -16,10 +15,6 @@ export function toProtoUser(userRow: UserRow) {
   };
 }
 
-export function userResponse(row: UserRow | undefined) {
-  return { user: row ? toProtoUser(row) : undefined };
-}
-
 type SessionRowLike = Pick<Session["session"], "id" | "expiresAt">;
 
 export function toProtoSession(sessionRow: SessionRowLike) {
@@ -27,18 +22,5 @@ export function toProtoSession(sessionRow: SessionRowLike) {
     id: sessionRow.id,
     expiresAt: sessionRow.expiresAt.toISOString(),
     sessionKind: "user",
-  };
-}
-
-// password や idToken を漏らさないよう、明示的な許可リストで mapping する。
-export function toProtoAccount(accountRow: AccountRow) {
-  return {
-    id: accountRow.id,
-    accountId: accountRow.accountId,
-    providerId: accountRow.providerId,
-    userId: accountRow.userId,
-    accessToken: accountRow.accessToken ?? undefined,
-    refreshToken: accountRow.refreshToken ?? undefined,
-    scope: accountRow.scope ?? undefined,
   };
 }

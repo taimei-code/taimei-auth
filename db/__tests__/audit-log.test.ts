@@ -31,16 +31,6 @@ describe("audit log repository", () => {
     });
   });
 
-  test("sign_out event を 1 行追加 + payload に ip / userAgent 含む", async () => {
-    await appendAuditLog({
-      eventType: "sign_out",
-      userId: testUserId,
-      payload: { ip: "1.2.3.4", userAgent: "test/1.0" },
-    });
-    const rows = await db.select().from(auditLog).where(eq(auditLog.userId, testUserId));
-    expect(rows[0]?.eventType).toBe("sign_out");
-  });
-
   test("account_delete event を 1 行追加 + payload は空オブジェクト", async () => {
     await appendAuditLog({ eventType: "account_delete", userId: testUserId, payload: {} });
     const rows = await db.select().from(auditLog).where(eq(auditLog.userId, testUserId));

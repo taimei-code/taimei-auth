@@ -188,15 +188,15 @@ _Avoid_: API key (end user 向けの credential と紛らわしい), shared secr
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態の名前)
 
 **audit log**:
-user の意図した action (**sign-in** / **sign-out** / account delete など) を append-only で記録する DB テーブル (`audit_log`)。**session revoke** などの内部の state change は記録しない (action の結果として暗黙に推定できる)。forensic 用途を想定し、`session` の cascade delete で失われる IP と userAgent も payload に保存する。
+user の意図した action (**sign-in** / account delete など) を append-only で記録する DB テーブル (`audit_log`)。**sign-out** は記録しない。**session revoke** などの内部の state change は記録しない (action の結果として暗黙に推定できる)。forensic 用途を想定し、`session` の cascade delete で失われる IP と userAgent も payload に保存する。
 _Avoid_: event log (より広義), activity log
 
 **audit event**:
-**audit log** に記録する 1 行。`event_type` は user action の分類に限る (現状 `sign_in` / `sign_out` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user の意図ではなくシステム側の防御が発火した記録 (ADR-0012 の OWNER 招待再検証 / double_accept) だが、他の user action の event と対称に扱う (発火と非発火の両方を同じように観測できるようにするため)。詳細: ADR-0012 / ADR-0016。
+**audit log** に記録する 1 行。`event_type` は user action の分類に限る (現状 `sign_in` / `account_delete` / `company_created` / `company_updated` / `company_deleted` / `invitation_sent` / `invitation_accepted` / `invitation_accept_rejected` / `invitation_revoked` / `role_changed` / `membership_removed` / `ownership_transferred` / `company_switched` / `mfa_enabled` / `mfa_disabled`)。`invitation_accept_rejected` だけは user の意図ではなくシステム側の防御が発火した記録 (ADR-0012 の OWNER 招待再検証 / double_accept) だが、他の user action の event と対称に扱う (発火と非発火の両方を同じように観測できるようにするため)。詳細: ADR-0012 / ADR-0016。
 _Avoid_: log entry, audit record
 
 **best-effort 記帳**:
-記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立条件にすると audit 保存の障害がそのまま user の操作の失敗になるので、失敗は Sentry に集約し、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと rollback する「tx 内記帳」と対になる。sign-in、sign-out、MFA の有効化と無効化、`invitation_accept_rejected` がこちらに当たる。
+記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立条件にすると audit 保存の障害がそのまま user の操作の失敗になるので、失敗は Sentry に集約し、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと rollback する「tx 内記帳」と対になる。sign-in、MFA の有効化と無効化、`invitation_accept_rejected` がこちらに当たる。
 _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
 
 ## Relationships
