@@ -1,13 +1,14 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Deferred, Effect, Exit, Layer, Ref } from "effect";
-import { AuditLog } from "../../audit/ports";
-import { AuditLogLive } from "../../audit/wiring";
-import { AuthApi } from "../../auth-service";
 import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor, sessionUserIdOf } from "../../mfa/__tests__/helpers";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import { AuthApiError } from "../../errors";
+import {
+  auditLogWith,
+  failingSessionDeletion,
+  holdBeforeCommit,
+} from "../../__tests__/test-layers";
 import { LastOwner } from "../../membership/errors";
 import { MembershipRepo } from "../../membership/ports";
 import { MembershipRepoLive } from "../../membership/wiring";
@@ -24,11 +25,6 @@ const { run, cleanup } = dbTest(P);
 const ownerIdsOf = (companyId: string) =>
   TestDb.use((db) => db.readMembershipsOfCompany(companyId)).pipe(
     Effect.map((rows) => rows.filter((m) => m.role === "OWNER").map((m) => m.userId)),
-  );
-
-const sessionUserId = (headers: Headers) =>
-  AuthApi.use((authApi) => authApi.getSession(headers)).pipe(
-    Effect.map((session) => session?.user.id),
   );
 
 describe("deleteAccountUnlessLastOwner", () => {
@@ -56,11 +52,11 @@ describe("deleteAccountUnlessLastOwner", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("signed-in");
         const { headers } = yield* createSessionFor(user.id);
-        expect(yield* sessionUserId(headers)).toBe(user.id);
+        expect(yield* sessionUserIdOf(headers)).toBe(user.id);
 
         yield* deleteAccountUnlessLastOwner(user.id);
 
-        expect(yield* sessionUserId(headers)).toBeUndefined();
+        expect(yield* sessionUserIdOf(headers)).toBeUndefined();
         expect(yield* db.readSessions(user.id)).toEqual([]);
       }),
     ));
@@ -184,20 +180,6 @@ describe("退会と OWNER の race (不安定な失敗を検知するため 5 �
   }
 });
 
-const holdBeforeCommit =
-  (written: Deferred.Deferred<void>, release: Deferred.Deferred<void>) =>
-  <A, E>(write: Effect.Effect<A, E>) =>
-    write.pipe(
-      Effect.tap(() => Deferred.succeed(written, undefined)),
-      Effect.tap(() => Deferred.await(release)),
-    );
-
-const auditLogWith = (override: (live: AuditLog["Service"]) => Partial<AuditLog["Service"]>) =>
-  Layer.effect(
-    AuditLog,
-    Effect.map(AuditLog, (live) => AuditLog.of({ ...live, ...override(live) })),
-  ).pipe(Layer.provide(AuditLogLive));
-
 const signalLockRequest = (lockRequested: Deferred.Deferred<void>) =>
   Layer.effect(
     MembershipRepo,
@@ -320,28 +302,12 @@ describe("TTL store の session 削除", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const user = yield* db.seedUser("ttl-after-commit");
-        const userRowSeenByTtlDelete = yield* Ref.make<"present" | "absent" | "not-called">(
-          "not-called",
-        );
-        const failingTtlDelete = Layer.effect(
-          AuthApi,
-          Effect.map(AuthApi, (live) =>
-            AuthApi.of({
-              ...live,
-              deleteUserSessions: (userId) =>
-                db.readUser(userId).pipe(
-                  Effect.tap((row) => Ref.set(userRowSeenByTtlDelete, row ? "present" : "absent")),
-                  Effect.orDie,
-                  Effect.andThen(new AuthApiError({ cause: "ttl store down" })),
-                ),
-            }),
-          ),
-        );
+        const failing = yield* failingSessionDeletion;
         sentry.length = 0;
 
-        yield* deleteAccountUnlessLastOwner(user.id).pipe(Effect.provide(failingTtlDelete));
+        yield* deleteAccountUnlessLastOwner(user.id).pipe(Effect.provide(failing.layer));
 
-        expect(yield* Ref.get(userRowSeenByTtlDelete)).toBe("absent");
+        expect(yield* Ref.get(failing.userRowPresentAtCall)).toEqual([false]);
         expect(yield* db.readUser(user.id)).toBeUndefined();
         expect(sentry.map(([error]) => error)).toEqual(["ttl store down"]);
       }),

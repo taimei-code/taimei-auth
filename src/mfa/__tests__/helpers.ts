@@ -3,6 +3,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import { makeSignature } from "better-auth/crypto";
 import { Effect } from "effect";
 import { auth } from "../../auth";
+import { AuthApi } from "../../auth-service";
 import { TtlStore } from "../../ttl-store-service";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
@@ -75,6 +76,11 @@ export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
     );
     return { token: session.token, headers: yield* sessionHeaders(session.token) };
   });
+
+export const sessionUserIdOf = (headers: Headers) =>
+  AuthApi.use((authApi) => authApi.getSession(headers)).pipe(
+    Effect.map((session) => session?.user.id),
+  );
 
 export const issuedSessionCookieCount = (forwarded: Headers): Effect.Effect<number> =>
   Effect.map(issuedSessionSetCookies(forwarded), (cookies) => cookies.length);
