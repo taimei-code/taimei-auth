@@ -1,12 +1,11 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { AuditLog } from "../audit/ports";
-import { AuthApi } from "../auth-service";
 import { LastOwner } from "../membership/errors";
 import { orNotFound } from "../membership/guard/errors";
 import { MembershipRepo } from "../membership/ports";
-import { captureCause } from "../sentry";
 import { Transaction } from "../transaction";
+import { deleteSessionsOf } from "./delete-sessions";
 import { UserRepo } from "./ports";
 
 export const deleteAccount = Effect.fn("account.deleteAccount")(function* (
@@ -32,8 +31,6 @@ export const deleteAccountUnlessLastOwner = Effect.fn("account.deleteAccountUnle
         yield* deleteAccount(userId, t);
       }),
     );
-    yield* AuthApi.use((authApi) => authApi.deleteUserSessions(userId)).pipe(
-      Effect.catchTag("AuthApiError", captureCause({ tags: { component: "deleteAccount" } })),
-    );
+    yield* deleteSessionsOf([userId], "account-delete");
   },
 );

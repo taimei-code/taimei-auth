@@ -36,9 +36,11 @@ membership が減るすべての経路の直後に、所属 0 件になったユ
 
 ```
 deleteAccountIfOrphaned(userId, tx):
-  active membership を数え、0 件なら deleteUser(userId, tx)
-  (session / account / membership は schema の cascade で連動して削除される)
+  user 行を FOR UPDATE で取ってから active membership を数え、0 件なら deleteUser(userId, tx)
+  (account / membership は schema の cascade で連動して削除される)
 ```
+
+行を取る前に数えると、同時の事業所追加・招待受諾が作った membership を見落とす。TTL store の session は、user の削除を commit した後に消す (「session 失効の cookieCache が stale になる窓を受容する」)。
 
 適用点:
 - **事業所削除 (D1)**: OWNER の認可、audit、全 membership の物理削除、各元メンバーへの `deleteAccountIfOrphaned`、company の soft delete の順に行う。
@@ -114,7 +116,7 @@ signup 中の一時的な 0 件アカウントは許容するが、恒久化さ�
 
 - handler (薄い): RBAC、zod、`requireActor` / `requireMembership` の guard、`runInTransaction` の起動、エラーから status への変換だけを行う。
 - use-case (厚い): `src/company/delete.ts` の DeleteCompany の orchestration と、`src/account/orphan.ts` の `deleteAccountIfOrphaned(userId, tx)` (orphan 判定はドメインルールなので use-case 層に置く)。
-- repository (純粋なクエリ): `countActiveMembershipsByUserId` / `removeMembershipsOfCompany` を新設する。session 失効は既存の `revokeAllSessionsForUser`、user 削除は既存の `deleteUser`、company は既存の `softDeleteCompany` を再利用する。`deleteMembership` のような「判定と削除」の複合を repository に置かない。
+- repository (純粋なクエリ): `countActiveMembershipsByUserId` / `removeMembershipsOfCompany` を新設する。user 削除は既存の `deleteUser`、company は既存の `softDeleteCompany` を再利用する。`deleteMembership` のような「判定と削除」の複合を repository に置かない。
 
 ### 単一 transaction の順序 (FK / RESTRICT との整合)
 
@@ -122,7 +124,7 @@ DeleteCompany は 1 つの `runInTransaction` 内で以下の順に行う。
 1. その company の PENDING invitation を REVOKED にする
 2. company の membership を物理削除する (`removeMembershipsOfCompany`)
 3. **削除する company を `last_used_company_id` で指している全 user のその列を、その user の残存する active membership のいずれか (なければ NULL) に再解決する** (company は soft delete、つまり UPDATE なので `last_used_company_id` の `set null` FK が発火せず、SDK が `defaultCompanyId` で削除済み company を指し続ける dangling 参照になるのを防ぐ)
-4. 元メンバー (重複排除済み) ごとに `deleteAccountIfOrphaned` を行い、残りの active membership が 0 件なら `revokeAllSessionsForUser` と `deleteUser` を行う
+4. 元メンバー (重複排除済み) ごとに `deleteAccountIfOrphaned` を行う (手順は D2)
 5. company を soft delete する (`activation_status=DELETED`、`deletedAt`)
 6. audit を記録する (`company_deleted` と `membership_removed`)
 
@@ -130,7 +132,9 @@ DeleteCompany は 1 つの `runInTransaction` 内で以下の順に行う。
 
 ### session 失効の cookieCache が stale になる窓を受容する
 
-orphan 削除は本人がいない経路 (DeleteCompany / member remove / batch) で起きるため、`auth.api.signOut({headers})` を呼べない。`revokeAllSessionsForUser` (DB の `revoked_at`) と `deleteUser` の cascade で失効するが、better-auth の cookieCache (`src/auth.ts` の `maxAge: 5*60`) は即時には無効化されず、**最大 5 分間、stale な session が valid に見える**。退会 (`POST /api/account/delete`) は本人の request なので、SPA が退会の後に sign-out して cookie を消す。orphan 削除にはその request が無いため、**この 5 分の窓を受容する** (詳細: `db/CLAUDE.md` ルール 2 の例外)。tx 内には DB 操作だけを置き、`auth.api.*` (HTTP / TTL store の IO) を tx 内で呼ばない。
+orphan 削除は本人がいない経路 (DeleteCompany / member remove / batch) で起きるため、`auth.api.signOut({headers})` を呼べない。TTL store の session は commit の後に `deleteSessionsOf` (`src/account/delete-sessions.ts`) で消す。TTL store が失敗しても削除は戻さず Sentry に記録する。batch (`management/sweep-abandoned-signups.ts`) は process 内の TTL store で動くので、本番の session には届かない。どの場合も残った session は、user 行が無いので `requireActor` と `VerifySession` が拒否し、SPA が 401 を受けて sign-out する (`web/src/auth/auth-redirect.ts` の `discardStaleSession`)。
+
+better-auth の cookieCache (`src/auth.ts` の `maxAge: 5*60`) は即時には無効化されず、**最大 5 分間、stale な session が valid に見える**。退会 (`POST /api/account/delete`) は本人の request なので、SPA が退会の後に sign-out して cookie を消す。orphan 削除にはその request が無いため、**この 5 分の窓を受容する** (詳細: `db/CLAUDE.md`「認証ドメインのモデルは repository 経由で触る」)。tx 内には DB 操作だけを置き、`auth.api.*` (HTTP / TTL store の IO) を tx 内で呼ばない。
 
 ### 既存の soft-delete セマンティクスとの統合
 

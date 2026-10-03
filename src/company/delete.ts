@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
+import { deleteSessionsOf } from "../account/delete-sessions";
 import { deleteAccountIfOrphaned } from "../account/orphan";
 import { AuditLog } from "../audit/ports";
 import { InvitationRepo } from "../invitation/ports";
@@ -20,12 +21,12 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
   const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
-  return yield* tx.run(
+  const deletedUserIds = yield* tx.run(
     Effect.fn("company.deleteCompany.apply")(function* (t: DbTx) {
       yield* memberships.lockOwnerMembershipsOfCompany(t, companyId);
       const target = yield* companies.findCompanyById(companyId, t);
       if (!target) return yield* new Forbidden();
-      if (target.activationStatus !== "ACTIVE") return { actorDeleted: false };
+      if (target.activationStatus !== "ACTIVE") return [];
 
       const actorMembership = yield* memberships.findMembership(actorUserId, companyId, t);
       if (!actorMembership || !isAtLeast(actorMembership.role, "OWNER"))
@@ -51,8 +52,8 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
         t,
       );
 
-      const orphanUserIds = yield* Effect.filter(
-        [...new Set(removed.map((m) => m.userId))],
+      const deletedOrphanIds = yield* Effect.filter(
+        [...new Set(removed.map((m) => m.userId))].sort(),
         (userId) => deleteAccountIfOrphaned(userId, t),
       );
 
@@ -62,7 +63,9 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
         t,
       );
 
-      return { actorDeleted: orphanUserIds.includes(actorUserId) };
+      return deletedOrphanIds;
     }),
   );
+  yield* deleteSessionsOf(deletedUserIds, "company-delete");
+  return { actorDeleted: deletedUserIds.includes(actorUserId) };
 });

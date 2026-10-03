@@ -1,8 +1,13 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Exit } from "effect";
+import { Effect, Exit, Ref } from "effect";
 import { Forbidden } from "../../membership/guard/errors";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
+import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
+import { auditLogWith, authApiWith, failingSessionDeletion } from "../../__tests__/test-layers";
+import { storedSessionsOf } from "../../__tests__/test-ttl-store";
+import { DbError } from "../../errors";
+import { createSessionFor } from "../../mfa/__tests__/helpers";
 import { deleteCompany } from "../delete";
 
 const P = "delco-test-";
@@ -207,4 +212,140 @@ describe("deleteCompany", () => {
         expect(yield* membershipCount(target)).toBe(0);
       }),
     ));
+});
+
+describe("deleteCompany の TTL store の session 削除", () => {
+  const sentry = recordSentryExceptions();
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  const seedTwoOrphans = (suffix: string) =>
+    Effect.gen(function* () {
+      const ownerId = yield* seedUser(`${suffix}-owner`);
+      const memberId = yield* seedUser(`${suffix}-member`);
+      const companyId = yield* seedCompany(suffix);
+      yield* join(ownerId, companyId, "OWNER");
+      yield* join(memberId, companyId, "MEMBER");
+      const sessions = [
+        { userId: ownerId, token: (yield* createSessionFor(ownerId)).token },
+        { userId: memberId, token: (yield* createSessionFor(memberId)).token },
+      ];
+      return { ownerId, memberId, companyId, sessions };
+    });
+
+  test("他に所属の無い 2 人は commit 後にどちらも session と索引が消える", () =>
+    run(
+      Effect.gen(function* () {
+        const { ownerId, companyId, sessions } = yield* seedTwoOrphans("ttl-both");
+
+        expect(yield* deleteCompany(ownerId, companyId)).toEqual({ actorDeleted: true });
+
+        expect(yield* storedSessionsOf(sessions)).toEqual([
+          { session: false, index: false },
+          { session: false, index: false },
+        ]);
+      }),
+    ));
+
+  test("TTL store が失敗しても削除は成功し、user 行が消えた後に呼ばれ、Sentry に 2 件記録される", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const { ownerId, memberId, companyId } = yield* seedTwoOrphans("ttl-failing");
+        const failing = yield* failingSessionDeletion;
+        sentry.length = 0;
+
+        yield* deleteCompany(ownerId, companyId).pipe(Effect.provide(failing.layer));
+
+        expect((yield* db.readCompany(companyId))?.activationStatus).toBe("DELETED");
+        expect(yield* db.readUser(ownerId)).toBeUndefined();
+        expect(yield* db.readUser(memberId)).toBeUndefined();
+        expect(yield* Ref.get(failing.userRowPresentAtCall)).toEqual([false, false]);
+        expect(sentry.map(([error, context]) => [error, context?.tags, context?.extra])).toEqual(
+          [ownerId, memberId]
+            .sort()
+            .map((userId) => [
+              "ttl store down",
+              { component: "deleteAccount", flow: "company-delete" },
+              { userId },
+            ]),
+        );
+      }),
+    ));
+
+  test("orphan の削除の後で tx が失敗すると、user と session と索引が残る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const { ownerId, memberId, companyId, sessions } = yield* seedTwoOrphans("ttl-rollback");
+        const failingAudit = auditLogWith(() => ({
+          recordCompanyDeleted: () => new DbError({ cause: "audit down" }),
+        }));
+
+        const exit = yield* Effect.exit(
+          deleteCompany(ownerId, companyId).pipe(Effect.provide(failingAudit)),
+        );
+
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(yield* db.readUser(ownerId)).toBeDefined();
+        expect(yield* db.readUser(memberId)).toBeDefined();
+        expect(yield* storedSessionsOf(sessions)).toEqual([
+          { session: true, index: true },
+          { session: true, index: true },
+        ]);
+      }),
+    ));
+
+  test("DELETED の事業所の再削除では TTL store を呼ばない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("ttl-deleted-owner");
+        const companyId = yield* seedCompany("ttl-deleted");
+        yield* join(ownerId, companyId, "OWNER");
+        yield* db.markCompanyDeleted(companyId);
+        const calls = yield* Ref.make(0);
+        const counting = authApiWith((live) => ({
+          deleteUserSessions: (userId) =>
+            Ref.update(calls, (n) => n + 1).pipe(Effect.andThen(live.deleteUserSessions(userId))),
+        }));
+
+        expect(yield* deleteCompany(ownerId, companyId).pipe(Effect.provide(counting))).toEqual({
+          actorDeleted: false,
+        });
+        expect(yield* Ref.get(calls)).toBe(0);
+      }),
+    ));
+});
+
+describe("共通の member を持つ事業所の同時削除 (不安定な失敗を検知するため 5 回繰り返す)", () => {
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  for (let i = 1; i <= 5; i++) {
+    test(`iteration ${i}: 両方の削除が成功し、他に所属の無い共通の member 2 人はどちらも消える`, () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const shared = [yield* seedUser(`shared-${i}-a`), yield* seedUser(`shared-${i}-b`)];
+          const deletions = [];
+          for (const side of ["x", "y"]) {
+            const ownerId = yield* seedUser(`shared-${i}-${side}-owner`);
+            const companyId = yield* seedCompany(`shared-${i}-${side}`);
+            yield* join(ownerId, companyId, "OWNER");
+            yield* db.seedMembership(
+              ownerId,
+              yield* seedCompany(`shared-${i}-${side}-keep`),
+              "OWNER",
+            );
+            for (const userId of shared) yield* join(userId, companyId, "MEMBER");
+            deletions.push(deleteCompany(ownerId, companyId));
+          }
+
+          yield* Effect.all(deletions, { concurrency: "unbounded" });
+
+          for (const userId of shared) expect(yield* db.readUser(userId)).toBeUndefined();
+        }),
+      ));
+  }
 });

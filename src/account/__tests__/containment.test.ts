@@ -34,3 +34,22 @@ describe("退会の判定は deleteAccountUnlessLastOwner だけが持つ", () =
     expect(grepFiles("deleteUser:", "src/auth.ts")).toEqual([]);
   });
 });
+
+describe("TTL store の session 削除は commit 後の deleteSessionsOf だけが行う", () => {
+  test("AuthApi の実装 (auth-wiring.ts) の外で deleteUserSessions を呼ぶ production file は delete-sessions.ts だけ (tx の中から呼ばせない)", () => {
+    expect(grepFiles("\\.deleteUserSessions\\(", "src", { excludeTests: true }).sort()).toEqual([
+      "src/account/delete-sessions.ts",
+      "src/auth-wiring.ts",
+    ]);
+  });
+
+  test("deleteAccountIfOrphaned を呼ぶ production file は全て deleteSessionsOf も呼ぶ", () => {
+    const orphanCallers = grepFiles("deleteAccountIfOrphaned\\(", "src", { excludeTests: true })
+      .filter((file) => file !== "src/account/orphan.ts")
+      .sort();
+    expect(orphanCallers.length).toBeGreaterThanOrEqual(3);
+    expect(grepFiles("deleteSessionsOf\\(", "src", { excludeTests: true })).toEqual(
+      expect.arrayContaining(orphanCallers),
+    );
+  });
+});

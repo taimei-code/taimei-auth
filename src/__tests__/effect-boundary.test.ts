@@ -70,7 +70,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("orElseSucceed\\(|Effect\\.ignore\\(")).toEqual([]);
     expect(srcFiles("Effect\\.logError\\(")).toEqual(["src/email/client.ts"]);
     expect(srcFiles("captureCause\\(").sort()).toEqual([
-      "src/account/delete-account.ts",
+      "src/account/delete-sessions.ts",
       "src/audit/report-failure.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
@@ -280,12 +280,12 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
 });
 
 describe("revokeAllSessionsForUser の窓口", () => {
-  test("port 経由の呼び出しは src/account/revoke-sessions.ts に限る (TTL store 側の失効を伴う唯一の窓口)", () => {
+  test("production から呼ばない (session の実体は TTL store にあり、revoked_at を書いても失効しない)", () => {
     // biome の importNames ban は src/** にしか効かないので management と e2e も見る。
     const offenders = ["src", "management", "e2e"].flatMap((dir) =>
       grepFiles(String.raw`\.revokeAllSessionsForUser\(`, dir, { excludeTests: true }),
     );
-    expect(offenders).toEqual(["src/account/revoke-sessions.ts"]);
+    expect(offenders).toEqual([]);
   });
 });
 
