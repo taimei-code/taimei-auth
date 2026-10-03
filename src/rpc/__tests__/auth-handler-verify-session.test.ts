@@ -6,10 +6,12 @@ import type { Session } from "../../auth";
 import { AuthApi } from "../../auth-service";
 import { AuthApiError } from "../../errors";
 import {
+  type Membership,
+  membershipRepoLayer,
   authLayer as sharedAuthLayer,
   userRepoLayer,
 } from "../../membership/__tests__/test-layers";
-import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
+import { Role as ProtoRole, Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
 import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
@@ -36,7 +38,7 @@ const sessionOf = (user: Record<string, unknown> | undefined, sessionId = "s1"):
     session: { id: sessionId, expiresAt: new Date("2030-01-01") },
   }) as unknown as Session;
 
-const userRow = (revision: number): UserRow =>
+const userRow = (revision: number, lastUsedCompanyId: string | null = null): UserRow =>
   ({
     id: "u1",
     name: "n",
@@ -44,14 +46,55 @@ const userRow = (revision: number): UserRow =>
     emailVerified: true,
     image: null,
     revision,
+    lastUsedCompanyId,
     createdAt: new Date("2025-01-01"),
     updatedAt: new Date("2025-01-01"),
   }) as unknown as UserRow;
 
-const run = (layers: Layer.Layer<AuthApi | UserRepo>): Promise<VerifySessionResponse> =>
+const run = (
+  layers: Layer.Layer<AuthApi | UserRepo>,
+  memberships: Membership[] = [],
+): Promise<VerifySessionResponse> =>
   Effect.runPromise(
-    Effect.provide(verifySessionProgram({ sessionToken: "x" }), Layer.mergeAll(layers, SentryLive)),
+    Effect.provide(
+      verifySessionProgram({ sessionToken: "x" }),
+      Layer.mergeAll(layers, membershipRepoLayer(memberships), SentryLive),
+    ),
   );
+
+const currentRoleOf = async (user: UserRow, memberships: Membership[]) => {
+  const res = await run(
+    Layer.mergeAll(
+      authLayer(() => sessionOf({ id: "u1", revision: 7 })),
+      userRepoLayer([user]),
+    ),
+    memberships,
+  );
+  if (res.outcome.case !== "ok") throw new Error();
+  return res.outcome.value.currentRole;
+};
+
+describe("verifySession currentRole", () => {
+  test("returns the role in the user's current company", async () => {
+    const role = await currentRoleOf(userRow(7, "c1"), [
+      { userId: "u1", companyId: "c2", role: "OWNER" },
+      { userId: "u1", companyId: "c1", role: "ADMIN" },
+    ]);
+    expect(role).toBe(ProtoRole.ADMIN);
+  });
+
+  test("leaves currentRole empty when the user has no current company", async () => {
+    const role = await currentRoleOf(userRow(7), [
+      { userId: "u1", companyId: "c1", role: "ADMIN" },
+    ]);
+    expect(role).toBeUndefined();
+  });
+
+  test("leaves currentRole empty when the membership is gone after the user row was read", async () => {
+    const role = await currentRoleOf(userRow(7, "c1"), []);
+    expect(role).toBeUndefined();
+  });
+});
 
 describe("verifySession outcome", () => {
   const captured = recordSentryExceptions();
