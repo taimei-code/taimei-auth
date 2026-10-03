@@ -6,6 +6,7 @@ import { UserRepo } from "../account/ports";
 import { AuthApi } from "../auth-service";
 import {
   AuthService,
+  GetMembershipResponseSchema,
   Result,
   SessionSchema,
   UserSchema,
@@ -13,8 +14,9 @@ import {
   VerifySessionOkSchema,
   VerifySessionResponseSchema,
 } from "../gen/auth/v1/auth_pb";
+import { MembershipRepo } from "../membership/ports";
 import { captureCause } from "../sentry";
-import { toProtoSession, toProtoUser } from "./mappers";
+import { toProtoRole, toProtoSession, toProtoUser } from "./mappers";
 import { runRpc } from "./run-rpc";
 
 const verifySessionError = (reason: Result) =>
@@ -51,19 +53,34 @@ export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (re
     return verifySessionError(Result.REVISION_OUTDATED);
   }
 
+  const companyId = dbUser.lastUsedCompanyId;
+  const currentMembership = companyId
+    ? yield* MembershipRepo.use((repo) => repo.findMembership(dbUser.id, companyId))
+    : undefined;
+
   return create(VerifySessionResponseSchema, {
     outcome: {
       case: "ok",
       value: create(VerifySessionOkSchema, {
         user: create(UserSchema, toProtoUser(dbUser)),
         session: create(SessionSchema, toProtoSession(result.session)),
+        currentRole: currentMembership ? toProtoRole(currentMembership.role) : undefined,
       }),
     },
   });
 });
 
+export const getMembershipProgram = Effect.fn("rpc.getMembership")(function* (req: {
+  userId: string;
+  companyId: string;
+}) {
+  const row = yield* MembershipRepo.use((repo) => repo.findMembership(req.userId, req.companyId));
+  return create(GetMembershipResponseSchema, { role: row ? toProtoRole(row.role) : undefined });
+});
+
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     verifySession: (req) => runRpc(verifySessionProgram(req)),
+    getMembership: (req) => runRpc(getMembershipProgram(req)),
   });
 }
