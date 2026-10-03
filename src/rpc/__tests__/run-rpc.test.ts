@@ -56,6 +56,7 @@ describe("runRpc", () => {
     const e = await rejectsWith(runRpc(Effect.fail(new DbError({ cause }))));
     expect([e.code, e.rawMessage]).toEqual([Code.Unknown, "db down"]);
     expect(captured.map(([e]) => e)).toEqual([cause]);
+    expect(captured[0]?.[1]).toMatchObject({ level: "warning", tags: { handler: "runRpc" } });
   });
 
   test("defect は Sentry(原 Error) + Code.Unknown で元 message を保つ", async () => {

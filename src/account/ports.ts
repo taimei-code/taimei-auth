@@ -1,5 +1,4 @@
 import { Context } from "effect";
-import type * as accountRepo from "@/db/repositories/account";
 import type * as sessionRepo from "@/db/repositories/session";
 import type * as userRepo from "@/db/repositories/user";
 import type { LiftedModule } from "../errors";
@@ -10,8 +9,4 @@ export class UserRepo extends Context.Service<UserRepo, LiftedModule<typeof user
 
 export class SessionRepo extends Context.Service<SessionRepo, LiftedModule<typeof sessionRepo>>()(
   "taimei/SessionRepo",
-) {}
-
-export class AccountRepo extends Context.Service<AccountRepo, LiftedModule<typeof accountRepo>>()(
-  "taimei/AccountRepo",
 ) {}
