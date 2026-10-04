@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.1.0 — 2026-10-04
+
+consumer が現在の事業所での role で操作を分けられるよう、VerifySession の応答に role を足す。追加の RPC は要らず、`getSession()` 1 回で companyId と role がそろう。proto の field 追加だけで、wire 互換は保つ (`buf breaking` 通過)。
+
+### Features
+
+- `SessionData.role?: Role` (`"OWNER" | "ADMIN" | "MEMBER"`) を追加した。値の約束 (どの事業所の role か、`undefined` の扱い) は proto の `VerifySessionOk.current_role` のコメントにある
+- `Role` 型を export した
+- proto に `Role` enum と `VerifySessionOk.current_role` を追加した
+
+### Breaking changes
+
+なし。`SessionData` への optional field の追加だけ (additive)。
+
+### 移行
+
+- auth ホストを先に展開してから 3.1.0 に上げる。`current_role` を返さない auth ホストに 3.1.0 から接続すると、`role` は常に `undefined` (権限なし) になる
+
 ## 3.0.0 — 2026-10-03
 
 consumer が使っていない RPC を削除する。consumer は taimei だけで、本番の経路で呼ぶのは `AuthService.VerifySession` と `UserService.FindUserByEmail` だけだった。削除した RPC を 2.x の client から呼ぶと、auth ホストは 404 を返す。

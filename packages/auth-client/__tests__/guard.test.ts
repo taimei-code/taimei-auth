@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createAuthGuard } from "../src/guard";
-import { Result } from "../src/gen/auth/v1/auth_pb";
+import { Result, Role as ProtoRole } from "../src/gen/auth/v1/auth_pb";
 
 type VerifyArgs = { sessionToken: string };
 
@@ -167,6 +167,29 @@ describe("createAuthGuard.getSession", () => {
     expect(result.data.companyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
   });
 
+  test("G5d: currentRole を role に変換し、空と UNSPECIFIED は undefined にする", async () => {
+    const roleOf = async (currentRole?: ProtoRole) => {
+      const guard = createAuthGuard({
+        client: makeClient(async () => ({
+          outcome: {
+            case: "ok" as const,
+            value: { user: validUser, session: validSession, currentRole },
+          },
+        })),
+        getSessionToken: async () => "valid-token",
+      });
+      const result = await guard.getSession();
+      if (!result.ok) throw new Error();
+      return result.data.role;
+    };
+
+    expect(await roleOf(ProtoRole.OWNER)).toBe("OWNER");
+    expect(await roleOf(ProtoRole.ADMIN)).toBe("ADMIN");
+    expect(await roleOf(ProtoRole.MEMBER)).toBe("MEMBER");
+    expect(await roleOf(undefined)).toBeUndefined();
+    expect(await roleOf(ProtoRole.UNSPECIFIED)).toBeUndefined();
+  });
+
   test("G6: cache 省略時も token 不在で SESSION_NOT_FOUND を返す", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => okResponse),
@@ -263,7 +286,7 @@ describe("MFA チャレンジ保留中の consumer 表面", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error();
 
-    expect(Object.keys(result.data).sort()).toEqual(["companyId", "session", "user"]);
+    expect(Object.keys(result.data).sort()).toEqual(["companyId", "role", "session", "user"]);
     expect(Object.keys(result.data.user).sort()).toEqual([
       "createdAt",
       "email",
