@@ -1,5 +1,9 @@
+import type { Role } from "@/db/repositories/membership";
 import type { UserRow } from "@/db/repositories/user";
 import type { Session } from "../auth";
+import { Role as ProtoRole } from "../gen/auth/v1/auth_pb";
+
+export const toProtoRole = (role: Role): ProtoRole => ProtoRole[role];
 
 export function toProtoUser(userRow: UserRow) {
   return {

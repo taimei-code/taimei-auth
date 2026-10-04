@@ -5,11 +5,15 @@ import { UserRepo } from "../../account/ports";
 import type { Session } from "../../auth";
 import { AuthApi } from "../../auth-service";
 import { AuthApiError } from "../../errors";
+import type { MembershipRepo } from "../../membership/ports";
 import {
+  type Membership,
+  membershipRepoFailing,
+  membershipRepoLayer,
   authLayer as sharedAuthLayer,
   userRepoLayer,
 } from "../../membership/__tests__/test-layers";
-import { Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
+import { Role as ProtoRole, Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
 import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
@@ -36,7 +40,7 @@ const sessionOf = (user: Record<string, unknown> | undefined, sessionId = "s1"):
     session: { id: sessionId, expiresAt: new Date("2030-01-01") },
   }) as unknown as Session;
 
-const userRow = (revision: number): UserRow =>
+const userRow = (revision: number, lastUsedCompanyId: string | null = null): UserRow =>
   ({
     id: "u1",
     name: "n",
@@ -44,14 +48,102 @@ const userRow = (revision: number): UserRow =>
     emailVerified: true,
     image: null,
     revision,
+    lastUsedCompanyId,
     createdAt: new Date("2025-01-01"),
     updatedAt: new Date("2025-01-01"),
   }) as unknown as UserRow;
 
-const run = (layers: Layer.Layer<AuthApi | UserRepo>): Promise<VerifySessionResponse> =>
+const run = (
+  layers: Layer.Layer<AuthApi | UserRepo>,
+  membershipRepo: Layer.Layer<MembershipRepo> = membershipRepoLayer([]),
+): Promise<VerifySessionResponse> =>
   Effect.runPromise(
-    Effect.provide(verifySessionProgram({ sessionToken: "x" }), Layer.mergeAll(layers, SentryLive)),
+    Effect.provide(
+      verifySessionProgram({ sessionToken: "x" }),
+      Layer.mergeAll(layers, membershipRepo, SentryLive),
+    ),
   );
+
+const currentRoleOf = async (user: UserRow, memberships: Membership[]) => {
+  const res = await run(
+    Layer.mergeAll(
+      authLayer(() => sessionOf({ id: "u1", revision: 7 })),
+      userRepoLayer([user]),
+    ),
+    membershipRepoLayer(memberships),
+  );
+  if (res.outcome.case !== "ok") throw new Error();
+  return res.outcome.value.currentRole;
+};
+
+describe("verifySession currentRole", () => {
+  test("returns the role in the user's current company", async () => {
+    const role = await currentRoleOf(userRow(7, "c1"), [
+      { userId: "u1", companyId: "c2", role: "OWNER" },
+      { userId: "u1", companyId: "c1", role: "ADMIN" },
+    ]);
+    expect(role).toBe(ProtoRole.ADMIN);
+  });
+
+  test("leaves currentRole empty when the user has no current company", async () => {
+    const role = await currentRoleOf(userRow(7), [
+      { userId: "u1", companyId: "c1", role: "ADMIN" },
+    ]);
+    expect(role).toBeUndefined();
+  });
+
+  test("leaves currentRole empty when the membership is gone after the user row was read", async () => {
+    const role = await currentRoleOf(userRow(7, "c1"), []);
+    expect(role).toBeUndefined();
+  });
+});
+
+describe("verifySession currentRole の前提と失敗", () => {
+  const userInCompany = () =>
+    Layer.mergeAll(
+      authLayer(() => sessionOf({ id: "u1", revision: 7 })),
+      userRepoLayer([userRow(7, "c1")]),
+    );
+
+  test("Session.company_id は空のまま返す (SDK は companyId を session.companyId 優先で決めるので、埋めると currentRole と別の事業所を指す)", async () => {
+    const res = await run(
+      userInCompany(),
+      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "ADMIN" }]),
+    );
+    if (res.outcome.case !== "ok") throw new Error();
+    expect(res.outcome.value.user?.defaultCompanyId).toBe("c1");
+    expect(res.outcome.value.session?.companyId).toBeUndefined();
+  });
+
+  test("membership の読み取りが失敗したら、空の role に縮退せず RPC 全体を失敗させる", async () => {
+    await expect(
+      run(userInCompany(), membershipRepoFailing(new Error("db down"))),
+    ).rejects.toThrow();
+  });
+
+  test("user 削除と revision 不一致の応答では membership を読まない", async () => {
+    mockSignOut.mockResolvedValue(undefined);
+    const failing = membershipRepoFailing(new Error("must not be read"));
+    const deleted = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 0 })),
+        userRepoLayer([]),
+      ),
+      failing,
+    );
+    const outdated = await run(
+      Layer.mergeAll(
+        authLayer(() => sessionOf({ id: "u1", revision: 3 })),
+        userRepoLayer([userRow(5, "c1")]),
+      ),
+      failing,
+    );
+    const reasons = [deleted, outdated].map((res) =>
+      res.outcome.case === "error" ? res.outcome.value.reason : res.outcome.case,
+    );
+    expect(reasons).toEqual([Result.USER_DELETED, Result.REVISION_OUTDATED]);
+  });
+});
 
 describe("verifySession outcome", () => {
   const captured = recordSentryExceptions();
