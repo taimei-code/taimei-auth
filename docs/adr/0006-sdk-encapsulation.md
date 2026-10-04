@@ -30,3 +30,7 @@ SDK の interface は consumer のロックイン面である。ここに漏れ�
 - consumer 側で「session token を直接見たい」という要求が出たら、helper 関数の追加で対応する (生の cookie 値を返す関数を増やすのはよいが、`SessionData` の構造は拡張しない)
 - `cookie.ts` のテストでは、公開 API だけで全シナリオを通すことで、`SESSION_COOKIE_NAMES` が export されていないことを間接的に確認する
 - IdP を差し替える時に触るのは `packages/auth-client/src/cookie.ts` と **auth ホスト** の better-auth の接続部 (`src/auth.ts`) だけである。consumer のコードは変更しなくてよい
+
+## 追記 (2026-10-04): `SessionData` に足してよいもの
+
+Decision の「`SessionData` 型は `user` と `session` だけを持つ」と Consequences の「`SessionData` の構造は拡張しない」は、IdP の内部表現 (session token、better-auth の型、cookie 名) を `SessionData` に載せないという意味である。taimei-auth 自身のドメイン概念を optional field として足すことは妨げない。前例は PR #57 の `companyId` (現在の事業所) と、SDK 3.1.0 の `role` (現在の事業所での role) である。`SessionData` 型は今 `packages/auth-client/src/types.ts` にある。

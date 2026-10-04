@@ -33,7 +33,7 @@ _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 _Avoid_: ユーザー (より広義で、global な user を指す時に使う), メンバーシップ (関係の方を指す時は **membership**)
 
 **role**:
-**membership** が表す権限の階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階がある。事業所の削除、課金の変更、OWNER 権限の委譲は OWNER だけが行える。ADMIN は OWNER を作れず、自分を昇格させることもできない (OWNER への昇格を承認できるのは OWNER だけである)。1 事業所に複数の OWNER を置けるが、OWNER は常に 1 人以上いなければならない。最後の OWNER を減らす操作 (降格、除名、退会) は `last_owner` として拒否される。**membership** と **invitation** の role は常にこの 3 値のいずれかで、それ以外の値は保存されない (未知の role という状態は存在しない)。詳細: PR #55 → #63 / ADR-0010 / ADR-0018。
+**membership** が表す権限の階層。`OWNER` / `ADMIN` / `MEMBER` の 3 段階がある。事業所の削除、課金の変更、OWNER 権限の委譲は OWNER だけが行える。ADMIN は OWNER を作れず、自分を昇格させることもできない (OWNER への昇格を承認できるのは OWNER だけである)。1 事業所に複数の OWNER を置けるが、OWNER は常に 1 人以上いなければならない。最後の OWNER を減らす操作 (降格、除名、退会) は `last_owner` として拒否される。**membership** と **invitation** の role は常にこの 3 値のいずれかで、それ以外の値は保存されない (未知の role という状態は存在しない)。auth-client の guard は **現在の事業所** での role を consumer に `role` として渡す。consumer への約束は proto の `VerifySessionOk.current_role` のコメントを正本とする。詳細: PR #55 → #63 / ADR-0010 / ADR-0018。
 _Avoid_: 役職 (人事ドメインの語と紛らわしい), permission (個別アクションの認可と混同する), member_type (freee の `Membership.Type` は業種分類で、role とは別の概念)
 
 **退会**:
