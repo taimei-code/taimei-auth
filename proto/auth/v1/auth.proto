@@ -23,6 +23,14 @@ enum Result {
   RESULT_REVISION_OUTDATED = 7;
 }
 
+// membership.role と同じ 3 値。
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_OWNER = 1;
+  ROLE_ADMIN = 2;
+  ROLE_MEMBER = 3;
+}
+
 // 共通メッセージ
 message User {
   string id = 1;
@@ -84,6 +92,12 @@ message VerifySessionRequest {
 message VerifySessionOk {
   User user = 1;
   Session session = 2;
+
+  // User.default_company_id の事業所での、この user の role。SDK の role はこの値を返す。
+  // default_company_id が空の時は空。
+  // default_company_id があっても、user 行を読んだ後に除名されると空になりうる。
+  // 空の時、consumer は権限なしとして扱う。
+  optional Role current_role = 3;
 }
 
 message VerifySessionError {

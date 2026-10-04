@@ -12,11 +12,12 @@ import { grepFiles } from "./grep-files";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 import { verifySessionProgram } from "../rpc/auth-handler";
+import { Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 const P = "dcc-test-";
 const { run, cleanup } = dbTest(P);
 
-const defaultCompanyIdSeenByConsumer = (userId: string) =>
+const companySeenByConsumer = (userId: string) =>
   verifySessionProgram({ sessionToken: "contract" }).pipe(
     Effect.provide(
       authLayer(
@@ -29,25 +30,32 @@ const defaultCompanyIdSeenByConsumer = (userId: string) =>
     ),
     Effect.map((res) => {
       if (res.outcome.case !== "ok") throw new Error(`VerifySession: ${res.outcome.case}`);
-      return res.outcome.value.user?.defaultCompanyId;
+      return {
+        companyId: res.outcome.value.user?.defaultCompanyId,
+        role: res.outcome.value.currentRole,
+      };
     }),
   );
 
-const expectDefaultCompanyIsActiveMembership = (userId: string) =>
+const expectConsumerSeesAnActiveCompanyAndItsRole = (userId: string) =>
   Effect.gen(function* () {
-    const seen = yield* defaultCompanyIdSeenByConsumer(userId);
-    const active = (yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(userId)))
+    const seen = yield* companySeenByConsumer(userId);
+    const memberships = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(userId));
+    const active = memberships
       .filter((m) => m.companyActivationStatus === "ACTIVE")
       .map((m) => m.companyId);
-    if (active.length === 0) expect(seen).toBeUndefined();
-    else expect(active).toContain(String(seen));
+    if (active.length === 0) expect(seen.companyId).toBeUndefined();
+    else expect(active).toContain(String(seen.companyId));
+    const currentMembership = memberships.find((m) => m.companyId === seen.companyId);
+    expect(seen.role).toBe(currentMembership ? ProtoRole[currentMembership.role] : undefined);
   });
 
 const seedMemberOf = (suffix: string, companies: string[], current: string) =>
   Effect.gen(function* () {
     const db = yield* TestDb;
     const u = yield* db.seedUser(suffix, { lastUsedCompanyId: current });
-    for (const co of companies) yield* db.seedMembership(u.id, co, "MEMBER");
+    for (const [i, co] of companies.entries())
+      yield* db.seedMembership(u.id, co, i === 0 ? "MEMBER" : "ADMIN");
     return u;
   });
 
@@ -68,7 +76,7 @@ const scenario = (writer: string, name: string, body: Scenario) => {
   test(`${writer}: ${name}`, () => run(body));
 };
 
-describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属のどれかか空", () => {
+describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属のどれかか空で、currentRole はその所属の role", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -78,9 +86,9 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
     Effect.gen(function* () {
       const u = yield* TestDb.use((db) => db.seedUser("creator"));
       yield* createSignupCompany(u.id, { name: `${P}co-signup`, orgCode: "PERSONAL" });
-      yield* expectDefaultCompanyIsActiveMembership(u.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(u.id);
       yield* addCompany(u.id, { name: `${P}co-added`, orgCode: "CORPORATE" });
-      yield* expectDefaultCompanyIsActiveMembership(u.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(u.id);
     }),
   );
 
@@ -95,13 +103,13 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
       const inv = yield* db.seedInvitation({
         companyId: co,
         email: invitee.email,
-        role: "MEMBER",
+        role: "ADMIN",
         invitedByUserId: owner.id,
       });
       const invitation = yield* db.readInvitationByToken(inv.token);
       if (!invitation) throw new Error("seed failed");
       yield* acceptInvitation({ actor: { id: invitee.id, email: invitee.email }, invitation });
-      yield* expectDefaultCompanyIsActiveMembership(invitee.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(invitee.id);
     }),
   );
 
@@ -118,7 +126,7 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
         companyId: co,
         targetRole: "MEMBER",
       });
-      yield* expectDefaultCompanyIsActiveMembership(member.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
     }),
   );
 
@@ -130,7 +138,7 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
       const { co: other } = yield* seedOwnedCompany("survive");
       const member = yield* seedMemberOf("survivor", [co, other], co);
       yield* deleteCompany(owner.id, co);
-      yield* expectDefaultCompanyIsActiveMembership(member.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
     }),
   );
 
@@ -142,7 +150,7 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
       const { co: to } = yield* seedOwnedCompany("to");
       const member = yield* seedMemberOf("switcher", [from, to], from);
       yield* switchCompany({ actorUserId: member.id, fromCompanyId: from, targetCompanyId: to });
-      yield* expectDefaultCompanyIsActiveMembership(member.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
     }),
   );
 

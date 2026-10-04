@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { toProtoSession, toProtoUser } from "../mappers";
+import { Role as ProtoRole } from "../../gen/auth/v1/auth_pb";
+import { toProtoRole, toProtoSession, toProtoUser } from "../mappers";
 
 describe("toProtoUser", () => {
   test("UserRow を proto User に変換し image: null と Date を正規化する", () => {
@@ -69,6 +70,16 @@ describe("toProtoUser", () => {
       updatedAt: new Date(),
     });
     expect(result.defaultCompanyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
+  });
+});
+
+describe("toProtoRole", () => {
+  test("membership.role の 3 値を proto の Role に写す", () => {
+    expect([toProtoRole("OWNER"), toProtoRole("ADMIN"), toProtoRole("MEMBER")]).toEqual([
+      ProtoRole.OWNER,
+      ProtoRole.ADMIN,
+      ProtoRole.MEMBER,
+    ]);
   });
 });
 
