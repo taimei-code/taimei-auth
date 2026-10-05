@@ -50,6 +50,8 @@ const guard = createAuthGuard({
 });
 
 export const getSession = guard.getSession;
+// 現在の事業所のメンバー一覧。事業所が getSession と食い違う時は ok: false を返す
+export const listMembers = guard.listMembers;
 
 // redirect は consumer が所有する。SDK には持たせない (framework 中立のため)
 export const requireSession = async ({ returnTo }: { returnTo: string }) => {
@@ -101,7 +103,7 @@ const cookieHeader = request.headers.get("cookie") ?? "";
 
 ## 4. `requireSession` 自前実装 (Next.js 以外の framework)
 
-SDK は `getSession` だけを提供する (`packages/auth-client/CLAUDE.md` ルール 7)。redirect の制御フロー (副作用) は consumer 側の wrapper で書く。Next.js 版は §1 Quickstart を参照。他の framework での例:
+SDK は `getSession` と `listMembers` を提供し、redirect は持たない (`packages/auth-client/CLAUDE.md` ルール 7)。redirect の制御フロー (副作用) は consumer 側の wrapper で書く。Next.js 版は §1 Quickstart を参照。他の framework での例:
 
 ```ts
 // Hono

@@ -1,6 +1,11 @@
 import type { createAuthClient } from "./server";
-import type { Role, SessionData, VerifyResult } from "./types";
-import { Role as ProtoRole, Result, type VerifySessionResponse } from "./gen/auth/v1/auth_pb";
+import type { ListMembersResult, Member, Role, SessionData, VerifyResult } from "./types";
+import {
+  type ListCurrentCompanyMembersResponse,
+  Role as ProtoRole,
+  Result,
+  type VerifySessionResponse,
+} from "./gen/auth/v1/auth_pb";
 
 type AuthClient = ReturnType<typeof createAuthClient>;
 
@@ -69,25 +74,64 @@ const toVerifyResult = (response: VerifySessionResponse): VerifyResult => {
   }
 };
 
+const toListMembersResult = (response: ListCurrentCompanyMembersResponse): ListMembersResult => {
+  switch (response.outcome.case) {
+    case "error":
+      return { ok: false, reason: response.outcome.value.reason };
+    case "ok": {
+      const { companyId, members: protoMembers } = response.outcome.value;
+      const members: Member[] = protoMembers.map(({ userId, name, email, role }) => ({
+        userId,
+        name,
+        email,
+        role: ROLE_BY_PROTO[role],
+      }));
+      return { ok: true, data: { companyId, members } };
+    }
+    default:
+      return { ok: false, reason: Result.UNSPECIFIED };
+  }
+};
+
 export function createAuthGuard(options: GuardOptions) {
   const { client, getSessionToken, cache = identity } = options;
 
-  const getSession = cache(async (): Promise<VerifyResult> => {
+  const callWithSessionToken = async <R, T>(
+    rpc: (request: { sessionToken: string }) => Promise<R>,
+    toResult: (response: R) => T,
+  ): Promise<T | { ok: false; reason: Result }> => {
     const raw = await getSessionToken();
     if (!raw) {
       return { ok: false, reason: Result.SESSION_NOT_FOUND };
     }
     const token: ExternalToken = asExternalToken(raw);
 
-    const response = await client.authService
-      .verifySession({ sessionToken: token.raw })
-      .catch(() => null);
+    const response = await rpc({ sessionToken: token.raw }).catch(() => null);
     if (!response) {
       return { ok: false, reason: Result.UNSPECIFIED };
     }
 
-    return toVerifyResult(response);
+    return toResult(response);
+  };
+
+  const getSession = cache(
+    (): Promise<VerifyResult> =>
+      callWithSessionToken((req) => client.authService.verifySession(req), toVerifyResult),
+  );
+
+  const listMembers = cache(async (): Promise<ListMembersResult> => {
+    const session = await getSession();
+    if (!session.ok) return session;
+
+    const list = await callWithSessionToken(
+      (req) => client.authService.listCurrentCompanyMembers(req),
+      toListMembersResult,
+    );
+    if (list.ok && list.data.companyId !== session.data.companyId) {
+      return { ok: false, reason: Result.UNSPECIFIED };
+    }
+    return list;
   });
 
-  return { getSession };
+  return { getSession, listMembers };
 }

@@ -1,6 +1,6 @@
 export { createAuthClient, createServiceKeyInterceptor } from "./server";
 export { createAuthGuard } from "./guard";
-export type { Role, SessionData, VerifyResult } from "./types";
+export type { ListMembersResult, Member, Role, SessionData, VerifyResult } from "./types";
 export { Result } from "./gen/auth/v1/auth_pb";
 export {
   buildSessionCookieHeader,
