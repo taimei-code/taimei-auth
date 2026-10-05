@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file auth/v1/auth.proto.
  */
 export const file_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24iLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSKMAQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbhIoCgxjdXJyZW50X3JvbGUYAyABKA4yDS5hdXRoLnYxLlJvbGVIAIgBAUIPCg1fY3VycmVudF9yb2xlIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIicKFkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QSDQoFZW1haWwYASABKAkiRAoXRmluZFVzZXJCeUVtYWlsUmVzcG9uc2USIAoEdXNlchgBIAEoCzINLmF1dGgudjEuVXNlckgAiAEBQgcKBV91c2VyKswBCgZSZXN1bHQSFgoSUkVTVUxUX1VOU1BFQ0lGSUVEEAASDQoJUkVTVUxUX09LEAESHAoYUkVTVUxUX1NFU1NJT05fTk9UX0ZPVU5EEAISGgoWUkVTVUxUX1NFU1NJT05fRVhQSVJFRBADEhcKE1JFU1VMVF9VU0VSX0RFTEVURUQQBBIWChJSRVNVTFRfVVNFUl9MT0NLRUQQBRISCg5SRVNVTFRfUkVWT0tFRBAGEhwKGFJFU1VMVF9SRVZJU0lPTl9PVVREQVRFRBAHKk0KBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEg4KClJPTEVfT1dORVIQARIOCgpST0xFX0FETUlOEAISDwoLUk9MRV9NRU1CRVIQAzJdCgtBdXRoU2VydmljZRJOCg1WZXJpZnlTZXNzaW9uEh0uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVxdWVzdBoeLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlc3BvbnNlMmMKC1VzZXJTZXJ2aWNlElQKD0ZpbmRVc2VyQnlFbWFpbBIfLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVxdWVzdBogLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVzcG9uc2ViBnByb3RvMw");
+  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24iLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSKMAQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbhIoCgxjdXJyZW50X3JvbGUYAyABKA4yDS5hdXRoLnYxLlJvbGVIAIgBAUIPCg1fY3VycmVudF9yb2xlIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIloKDUNvbXBhbnlNZW1iZXISDwoHdXNlcl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEg0KBWVtYWlsGAMgASgJEhsKBHJvbGUYBCABKA4yDS5hdXRoLnYxLlJvbGUiOQogTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc1JlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSJuChtMaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzT2sSFwoKY29tcGFueV9pZBgBIAEoCUgAiAEBEicKB21lbWJlcnMYAiADKAsyFi5hdXRoLnYxLkNvbXBhbnlNZW1iZXJCDQoLX2NvbXBhbnlfaWQikAEKIUxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnNSZXNwb25zZRIyCgJvaxgBIAEoCzIkLmF1dGgudjEuTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc09rSAASLAoFZXJyb3IYAiABKAsyGy5hdXRoLnYxLlZlcmlmeVNlc3Npb25FcnJvckgAQgkKB291dGNvbWUiJwoWRmluZFVzZXJCeUVtYWlsUmVxdWVzdBINCgVlbWFpbBgBIAEoCSJEChdGaW5kVXNlckJ5RW1haWxSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIqzAEKBlJlc3VsdBIWChJSRVNVTFRfVU5TUEVDSUZJRUQQABINCglSRVNVTFRfT0sQARIcChhSRVNVTFRfU0VTU0lPTl9OT1RfRk9VTkQQAhIaChZSRVNVTFRfU0VTU0lPTl9FWFBJUkVEEAMSFwoTUkVTVUxUX1VTRVJfREVMRVRFRBAEEhYKElJFU1VMVF9VU0VSX0xPQ0tFRBAFEhIKDlJFU1VMVF9SRVZPS0VEEAYSHAoYUkVTVUxUX1JFVklTSU9OX09VVERBVEVEEAcqTQoEUm9sZRIUChBST0xFX1VOU1BFQ0lGSUVEEAASDgoKUk9MRV9PV05FUhABEg4KClJPTEVfQURNSU4QAhIPCgtST0xFX01FTUJFUhADMtEBCgtBdXRoU2VydmljZRJOCg1WZXJpZnlTZXNzaW9uEh0uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVxdWVzdBoeLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEnIKGUxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnMSKS5hdXRoLnYxLkxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnNSZXF1ZXN0GiouYXV0aC52MS5MaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzUmVzcG9uc2UyYwoLVXNlclNlcnZpY2USVAoPRmluZFVzZXJCeUVtYWlsEh8uYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXF1ZXN0GiAuYXV0aC52MS5GaW5kVXNlckJ5RW1haWxSZXNwb25zZWIGcHJvdG8z");
 
 /**
  * 共通メッセージ
@@ -220,6 +220,115 @@ export const VerifySessionResponseSchema: GenMessage<VerifySessionResponse> = /*
   messageDesc(file_auth_v1_auth, 5);
 
 /**
+ * @generated from message auth.v1.CompanyMember
+ */
+export type CompanyMember = Message<"auth.v1.CompanyMember"> & {
+  /**
+   * @generated from field: string user_id = 1;
+   */
+  userId: string;
+
+  /**
+   * 未設定の時は空文字。
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string email = 3;
+   */
+  email: string;
+
+  /**
+   * @generated from field: auth.v1.Role role = 4;
+   */
+  role: Role;
+};
+
+/**
+ * Describes the message auth.v1.CompanyMember.
+ * Use `create(CompanyMemberSchema)` to create a new message.
+ */
+export const CompanyMemberSchema: GenMessage<CompanyMember> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 6);
+
+/**
+ * @generated from message auth.v1.ListCurrentCompanyMembersRequest
+ */
+export type ListCurrentCompanyMembersRequest = Message<"auth.v1.ListCurrentCompanyMembersRequest"> & {
+  /**
+   * @generated from field: string session_token = 1;
+   */
+  sessionToken: string;
+};
+
+/**
+ * Describes the message auth.v1.ListCurrentCompanyMembersRequest.
+ * Use `create(ListCurrentCompanyMembersRequestSchema)` to create a new message.
+ */
+export const ListCurrentCompanyMembersRequestSchema: GenMessage<ListCurrentCompanyMembersRequest> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 7);
+
+/**
+ * @generated from message auth.v1.ListCurrentCompanyMembersOk
+ */
+export type ListCurrentCompanyMembersOk = Message<"auth.v1.ListCurrentCompanyMembersOk"> & {
+  /**
+   * 一覧を引いた事業所の ID。VerifySession の User.default_company_id と同じ事業所を指す。
+   * 空の時は事業所未選択か、user 行を読んだ後に現在の事業所から除名されたかで、members も空。
+   * VerifySession の default_company_id と違う時は一覧を使わない (2 回の呼び出しの間に事業所が切り替わった)。
+   * auth-client の guard の listMembers はこの比較を行い、違えば失敗を返す。
+   *
+   * @generated from field: optional string company_id = 1;
+   */
+  companyId?: string;
+
+  /**
+   * company_id の事業所のメンバー全員 (呼んだ本人を含む)。加入の古い順で、加入日時が同じ人は membership の ID 順。
+   *
+   * @generated from field: repeated auth.v1.CompanyMember members = 2;
+   */
+  members: CompanyMember[];
+};
+
+/**
+ * Describes the message auth.v1.ListCurrentCompanyMembersOk.
+ * Use `create(ListCurrentCompanyMembersOkSchema)` to create a new message.
+ */
+export const ListCurrentCompanyMembersOkSchema: GenMessage<ListCurrentCompanyMembersOk> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 8);
+
+/**
+ * @generated from message auth.v1.ListCurrentCompanyMembersResponse
+ */
+export type ListCurrentCompanyMembersResponse = Message<"auth.v1.ListCurrentCompanyMembersResponse"> & {
+  /**
+   * @generated from oneof auth.v1.ListCurrentCompanyMembersResponse.outcome
+   */
+  outcome: {
+    /**
+     * @generated from field: auth.v1.ListCurrentCompanyMembersOk ok = 1;
+     */
+    value: ListCurrentCompanyMembersOk;
+    case: "ok";
+  } | {
+    /**
+     * @generated from field: auth.v1.VerifySessionError error = 2;
+     */
+    value: VerifySessionError;
+    case: "error";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message auth.v1.ListCurrentCompanyMembersResponse.
+ * Use `create(ListCurrentCompanyMembersResponseSchema)` to create a new message.
+ */
+export const ListCurrentCompanyMembersResponseSchema: GenMessage<ListCurrentCompanyMembersResponse> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 9);
+
+/**
  * UserService メッセージ
  *
  * @generated from message auth.v1.FindUserByEmailRequest
@@ -236,7 +345,7 @@ export type FindUserByEmailRequest = Message<"auth.v1.FindUserByEmailRequest"> &
  * Use `create(FindUserByEmailRequestSchema)` to create a new message.
  */
 export const FindUserByEmailRequestSchema: GenMessage<FindUserByEmailRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 6);
+  messageDesc(file_auth_v1_auth, 10);
 
 /**
  * @generated from message auth.v1.FindUserByEmailResponse
@@ -253,7 +362,7 @@ export type FindUserByEmailResponse = Message<"auth.v1.FindUserByEmailResponse">
  * Use `create(FindUserByEmailResponseSchema)` to create a new message.
  */
 export const FindUserByEmailResponseSchema: GenMessage<FindUserByEmailResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 7);
+  messageDesc(file_auth_v1_auth, 11);
 
 /**
  * VerifySession の失敗理由を表現する enum。
@@ -354,6 +463,14 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof VerifySessionRequestSchema;
     output: typeof VerifySessionResponseSchema;
+  },
+  /**
+   * @generated from rpc auth.v1.AuthService.ListCurrentCompanyMembers
+   */
+  listCurrentCompanyMembers: {
+    methodKind: "unary";
+    input: typeof ListCurrentCompanyMembersRequestSchema;
+    output: typeof ListCurrentCompanyMembersResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_auth_v1_auth, 0);
