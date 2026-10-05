@@ -3,6 +3,7 @@ package auth.v1;
 
 service AuthService {
   rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
+  rpc ListCurrentCompanyMembers(ListCurrentCompanyMembersRequest) returns (ListCurrentCompanyMembersResponse);
 }
 
 service UserService {
@@ -107,6 +108,35 @@ message VerifySessionError {
 message VerifySessionResponse {
   oneof outcome {
     VerifySessionOk ok = 1;
+    VerifySessionError error = 2;
+  }
+}
+
+message CompanyMember {
+  string user_id = 1;
+  // 未設定の時は空文字。
+  string name = 2;
+  string email = 3;
+  Role role = 4;
+}
+
+message ListCurrentCompanyMembersRequest {
+  string session_token = 1;
+}
+
+message ListCurrentCompanyMembersOk {
+  // 一覧を引いた事業所の ID。VerifySession の User.default_company_id と同じ事業所を指す。
+  // 空の時は事業所未選択か、user 行を読んだ後に現在の事業所から除名されたかで、members も空。
+  // VerifySession の default_company_id と違う時は一覧を使わない (2 回の呼び出しの間に事業所が切り替わった)。
+  // auth-client の guard の listMembers はこの比較を行い、違えば失敗を返す。
+  optional string company_id = 1;
+  // company_id の事業所のメンバー全員 (呼んだ本人を含む)。加入の古い順で、加入日時が同じ人は membership の ID 順。
+  repeated CompanyMember members = 2;
+}
+
+message ListCurrentCompanyMembersResponse {
+  oneof outcome {
+    ListCurrentCompanyMembersOk ok = 1;
     VerifySessionError error = 2;
   }
 }

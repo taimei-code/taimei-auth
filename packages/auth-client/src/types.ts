@@ -25,3 +25,15 @@ export type SessionData = {
 };
 
 export type VerifyResult = { ok: true; data: SessionData } | { ok: false; reason: Result };
+
+export type Member = {
+  userId: string;
+  name: string;
+  email: string;
+  /** SDK が知らない role の時は undefined で、consumer は権限なしとして扱う (`SessionData.role` と同じ)。 */
+  role?: Role;
+};
+
+export type ListMembersResult =
+  | { ok: true; data: { companyId?: string; members: readonly Member[] } }
+  | { ok: false; reason: Result };

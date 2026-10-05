@@ -51,8 +51,11 @@ describe("公開している経路からはメールアドレスを変更でき�
       }),
     ));
 
-  test("service key で呼べる AuthService の RPC は verifySession だけ (足す時は email を書き換えないか確かめ直す)", () => {
-    expect(Object.keys(AuthService.method).sort()).toEqual(["verifySession"]);
+  test("service key で呼べる AuthService の RPC は verifySession と listCurrentCompanyMembers だけ (足す時は email を書き換えないか確かめ直す)", () => {
+    expect(Object.keys(AuthService.method).sort()).toEqual([
+      "listCurrentCompanyMembers",
+      "verifySession",
+    ]);
   });
 
   test("service key で呼べる UserService の RPC は findUserByEmail だけ (足す時は email を書き換えないか確かめ直す)", () => {

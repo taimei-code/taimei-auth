@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.2.0 — 2026-10-05
+
+consumer が現在の事業所のメンバー一覧を取れるよう、session token を受ける RPC を足す。consumer は事業所の ID を渡さず、auth ホストがセッションの user の現在の事業所で一覧を決める。追加だけで、wire 互換は保つ (`buf breaking` 通過)。
+
+### Features
+
+- guard に `listMembers()` を追加した。戻り値は `ListMembersResult` (`{ ok: true; data: { companyId?, members } } | { ok: false; reason }`) である。どの事業所の一覧か、空の時の意味、順序の約束は proto の `ListCurrentCompanyMembersOk` のコメントにある
+- `listMembers()` は `getSession()` と一覧の RPC を順に呼ぶ。`getSession()` が失敗すればその結果を返し、一覧の RPC は呼ばない。一覧の事業所が `SessionData.companyId` と違えば `{ ok: false, reason: UNSPECIFIED }` を返す。2 回の呼び出しの間に利用者が事業所を切り替えると、別の事業所の一覧が返りうるためである
+- `Member` (`userId`・`name`・`email`・`role`) と `ListMembersResult` 型を export した
+- proto に `AuthService.ListCurrentCompanyMembers` と、`CompanyMember`・`ListCurrentCompanyMembersRequest`・`ListCurrentCompanyMembersOk`・`ListCurrentCompanyMembersResponse` を追加した
+- SDK が知らない role のメンバーは `role` を `undefined` にして返す。consumer は `SessionData.role` と同じく権限なしとして扱う
+
+### Breaking changes
+
+なし。公開 API の追加だけ (additive)。`SessionData` は変えていない。
+
+### 移行
+
+- auth ホストを先に展開してから 3.2.0 に上げる。`ListCurrentCompanyMembers` を持たない auth ホストに 3.2.0 から呼ぶと、`listMembers()` は `{ ok: false, reason: UNSPECIFIED }` を返す
+
 ## 3.1.0 — 2026-10-04
 
 consumer が現在の事業所での role で操作を分けられるよう、VerifySession の応答に role を足す。追加の RPC は要らず、`getSession()` 1 回で companyId と role がそろう。proto の field 追加だけで、wire 互換は保つ (`buf breaking` 通過)。
