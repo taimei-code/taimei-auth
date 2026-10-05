@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 import type { InvitationRow } from "@/db/repositories/invitation";
-import type { MembershipRow } from "@/db/repositories/membership";
+import type { MemberRow, MembershipRow } from "@/db/repositories/membership";
 import type { UserRow } from "@/db/repositories/user";
 import { UserRepo } from "../../account/ports";
 import type { Session } from "../../auth";
@@ -19,7 +19,14 @@ export const run = <A, E>(p: Effect.Effect<A, E, SentryService>) =>
 export const runOk = <A, E>(p: Effect.Effect<A, E, SentryService>) =>
   Effect.runPromise(Effect.provide(p, SentryLive));
 
-export type Membership = { userId: string; companyId: string; role: string };
+export type Membership = {
+  userId: string;
+  companyId: string;
+  role: string;
+  userName?: string;
+  userEmail?: string;
+  joinedAt?: Date;
+};
 
 export const sessionOf = (userId: string): Session =>
   ({ session: { userId }, user: { id: userId } }) as unknown as Session;
@@ -69,6 +76,21 @@ export const membershipRepoLayer = (rows: Membership[]): Layer.Layer<MembershipR
             | MembershipRow
             | undefined,
         ),
+      findMembersByCompanyId: (companyId) =>
+        Effect.succeed(
+          rows
+            .filter((r) => r.companyId === companyId)
+            .map(
+              (r): MemberRow => ({
+                membershipId: `mbr_${r.userId}`,
+                userId: r.userId,
+                userName: r.userName ?? "",
+                userEmail: r.userEmail ?? `${r.userId}@example.com`,
+                role: r.role as MemberRow["role"],
+                joinedAt: r.joinedAt ?? new Date("2026-01-01"),
+              }),
+            ),
+        ),
     }),
   );
 
@@ -77,6 +99,7 @@ export const membershipRepoFailing = (cause: unknown): Layer.Layer<MembershipRep
     MembershipRepo,
     partial<MembershipRepo["Service"]>({
       findMembership: () => Effect.fail(new DbError({ cause })),
+      findMembersByCompanyId: () => Effect.fail(new DbError({ cause })),
     }),
   );
 
