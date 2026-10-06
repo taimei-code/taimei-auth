@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { auth } from "../auth";
-import { AuthService, UserService } from "../gen/auth/v1/auth_pb";
+import { AuthService, CompanyService, UserService } from "../gen/auth/v1/auth_pb";
 import { createSessionFor } from "../mfa/__tests__/helpers";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
@@ -60,5 +60,9 @@ describe("公開している経路からはメールアドレスを変更でき�
 
   test("service key で呼べる UserService の RPC は findUserByEmail だけ (足す時は email を書き換えないか確かめ直す)", () => {
     expect(Object.keys(UserService.method).sort()).toEqual(["findUserByEmail"]);
+  });
+
+  test("service key で呼べる CompanyService の RPC は checkMemberships だけ (足す時は email を書き換えないか確かめ直す)", () => {
+    expect(Object.keys(CompanyService.method).sort()).toEqual(["checkMemberships"]);
   });
 });

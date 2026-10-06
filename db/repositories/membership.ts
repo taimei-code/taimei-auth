@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { company, membership, type Role, user } from "../schema";
@@ -103,6 +103,19 @@ export async function findMembersByCompanyId(
     .from(membership)
     .innerJoin(user, eq(user.id, membership.userId))
     .where(eq(membership.companyId, companyId));
+}
+
+export async function findMemberUserIds(
+  companyId: string,
+  userIds: readonly string[],
+  txOrDb: DbOrTx = db,
+): Promise<string[]> {
+  if (userIds.length === 0) return [];
+  return txOrDb
+    .select({ userId: membership.userId })
+    .from(membership)
+    .where(and(eq(membership.companyId, companyId), inArray(membership.userId, [...userIds])))
+    .then((rows) => rows.map((r) => r.userId));
 }
 
 export async function findMembership(
