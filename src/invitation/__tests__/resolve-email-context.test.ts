@@ -78,6 +78,28 @@ describe("resolveInvitationEmailContext", () => {
       }),
     ));
 
+  test("AC-018 callbackURL に service_name と redirect_url があっても同じ文脈を返す", () =>
+    run(
+      Effect.gen(function* () {
+        const { invitation } = yield* seedInvite("MEMBER");
+
+        const withoutTarget = yield* resolveInvitationEmailContext(
+          magicLinkUrl(inviteCallback(invitation.token)),
+        );
+        const withTarget = yield* resolveInvitationEmailContext(
+          magicLinkUrl(
+            inviteCallback(invitation.token, {
+              service_name: "taimei",
+              redirect_url: "https://app.taimei-code.com/dashboard",
+            }),
+          ),
+        );
+
+        expect(withoutTarget).not.toBeNull();
+        expect(withTarget).toEqual(withoutTarget);
+      }),
+    ));
+
   test("callbackURL に invitation_token が無ければ null (通常 magic link メール)", () =>
     run(
       Effect.gen(function* () {

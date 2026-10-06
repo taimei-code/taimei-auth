@@ -1,4 +1,5 @@
 import type { Role } from "@core/membership/policy";
+import type { RedirectTarget } from "@core/sign-in-params";
 
 import { getJson, postJson } from "../shared/request-json";
 
@@ -19,7 +20,7 @@ export async function listInvitations(companyId: string): Promise<PendingInvitat
 
 export function createInvitation(
   companyId: string,
-  params: { email: string; role: Role },
+  params: { email: string; role: Role; redirect_target?: RedirectTarget },
 ): Promise<{ reused: boolean }> {
   return postJson<{ reused: boolean }>(`/api/account/companies/${companyId}/invitations`, params);
 }

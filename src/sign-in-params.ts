@@ -12,13 +12,23 @@ export const signInParamsObjectSchema = z.object({
   invitation_token: z.string().min(1).max(256).optional(),
 });
 
+const isRedirectUrlAllowed = (data: { service_name: ServiceName; redirect_url: string }) =>
+  validateRedirectUrl(data.redirect_url, data.service_name);
+const redirectUrlNotAllowedIssue = {
+  path: ["redirect_url"],
+  message: "redirect_url is not in allowlist",
+};
+
 export const signInParamsSchema = signInParamsObjectSchema
-  .refine((data) => validateRedirectUrl(data.redirect_url, data.service_name), {
-    path: ["redirect_url"],
-    message: "redirect_url is not in allowlist",
-  })
+  .refine(isRedirectUrlAllowed, redirectUrlNotAllowedIssue)
   .refine(
     (data) =>
       data.sign_up_url === undefined || validateRedirectUrl(data.sign_up_url, data.service_name),
     { path: ["sign_up_url"], message: "sign_up_url is not in allowlist" },
   );
+
+export const redirectTargetSchema = signInParamsObjectSchema
+  .pick({ service_name: true, redirect_url: true })
+  .refine(isRedirectUrlAllowed, redirectUrlNotAllowedIssue);
+
+export type RedirectTarget = z.infer<typeof redirectTargetSchema>;
