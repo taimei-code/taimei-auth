@@ -90,7 +90,7 @@ _Avoid_: 共通ログイン pattern (両方の pattern を含むため曖昧)
 _Avoid_: product, app
 
 **redirect_url**:
-認証完了後にユーザーが遷移するプロダクト側の URL。`signInParamsSchema` の Zod 検証と、`validateRedirectUrl` の host allowlist 検証の両方を通過する必要がある。
+認証完了後にユーザーが遷移するプロダクト側の URL。`signInParamsSchema` の Zod 検証と、`validateRedirectUrl` の host allowlist 検証の両方を通過する必要がある。**メンバー** の画面 (`/account/members`) も `service_name` と組で受け取り、そこから出した **invitation** のリンクに載せる。招待された人は受諾の後にこの URL へ遷移し、組が無いか検証に通らなければ `/account` に遷移する。招待に載せる URL には query と fragment を付けない。Magic Link の検証が callbackURL を二重に decode するので、付けても受諾後の遷移先には残らない。
 _Avoid_: callbackURL (better-auth API の用語), destination, 戻り先
 
 **sign_up_url**:
@@ -206,6 +206,7 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - **session-aware redirect**: `/` と `/login` の 2 つの entry だけに適用する (server-side)。session があれば `/account` へ 302 し、無ければ通常フローに進む
 - **TAIMEI_SERVICES** ⊃ **service_name** ∈ {`taimei`, `accounts`}
 - **redirect_url** / **sign_up_url**: 必ず `TAIMEI_SERVICES[service_name].allowedHostPattern` の host を満たす必要がある
+- **メンバー** の画面 → **invitation** → 受諾: 受諾後の遷移先は、画面が受けた **redirect_url** で決まる (詳細は **redirect_url** の項)
 - 1 つの **session** は複数回の **共通ログイン画面** 訪問にまたがって有効である (Cookie で識別)
 - **多要素認証 (MFA)** を有効にした user では、一次認証 (**Magic Link** / GitHub OAuth) の成功は **session** ではなく **MFA チャレンジ** を作る。**session** はチャレンジ通過時に初めて確立される
 - **MFA チャレンジ** の通過手段は **TOTP** コードと **リカバリーコード** の 2 つ。どちらも同一チャレンジに対して 1 回だけ有効
