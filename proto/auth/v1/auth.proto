@@ -10,6 +10,10 @@ service UserService {
   rpc FindUserByEmail(FindUserByEmailRequest) returns (FindUserByEmailResponse);
 }
 
+service CompanyService {
+  rpc CheckMemberships(CheckMembershipsRequest) returns (CheckMembershipsResponse);
+}
+
 // VerifySession の失敗理由を表現する enum。
 // SESSION_EXPIRED / USER_LOCKED は現状到達不能、将来
 // session.expires_at による期限切れ判定 / user lock を実装した時点で活性化する。
@@ -148,4 +152,20 @@ message FindUserByEmailRequest {
 
 message FindUserByEmailResponse {
   optional User user = 1;
+}
+
+// CompanyService メッセージ
+message CheckMembershipsRequest {
+  // 1〜64 文字。
+  string company_id = 1;
+  // 1000 件まで。各 1〜64 文字。
+  repeated string user_ids = 2;
+}
+
+// 名前・メールアドレスを返さない。consumer が既に知る id についての答えだけを返す。
+message CheckMembershipsResponse {
+  // company_id の事業所が ACTIVE の時 true。削除済みの事業所と存在しない事業所は false で、member_user_ids は空。
+  bool company_active = 1;
+  // user_ids のうち、company_id の事業所に今所属している人。順序は決めない。
+  repeated string member_user_ids = 2;
 }
