@@ -14,6 +14,7 @@ import { requireInvitationAccept, requireInvite, requireMembership } from "../me
 import { MembershipRepo } from "../membership/ports";
 import { parseZodBody, parseZodBodyWithDetails, roleBodySchema } from "./parse-body";
 import { captureCause } from "../sentry";
+import { redirectTargetSchema } from "../sign-in-params";
 import { runRoute } from "./run-route";
 
 export const accountInvitation = new Hono();
@@ -22,8 +23,9 @@ const createInvitationBody = z
   .object({
     email: z.email().max(320),
     role: roleBodySchema,
+    redirect_target: redirectTargetSchema.optional(),
   })
-  .transform((d) => ({ email: d.email.toLowerCase(), role: d.role }));
+  .transform((d) => ({ ...d, email: d.email.toLowerCase() }));
 
 const acceptInvitationBody = z
   .object({ invitation_token: z.string().min(1).max(256) })
@@ -77,7 +79,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", (c) =>
     c,
     Effect.gen(function* () {
       const companyId = c.req.param("companyId");
-      const { actor, email, role } = yield* requireInvite({
+      const { actor, email, role, redirect_target } = yield* requireInvite({
         headers: c.req.raw.headers,
         companyId,
         parseBody: parseZodBodyWithDetails(c, createInvitationBody),
@@ -85,7 +87,7 @@ accountInvitation.post("/api/account/companies/:companyId/invitations", (c) =>
       const result = yield* createInvitation({ actorUserId: actor.id, companyId, email, role });
       const invitationRow = result.invitation;
 
-      const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token)}`;
+      const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token, redirect_target)}`;
       const authApi = yield* AuthApi;
       const background = yield* Background;
       yield* background.run(

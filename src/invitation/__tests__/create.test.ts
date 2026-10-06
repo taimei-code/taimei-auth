@@ -10,7 +10,9 @@ import {
 import { auditRowsFor, dbTest, drained, expectFailure } from "../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
+import { getAppUrl } from "../../email/client";
 import { tryAuthApi } from "../../errors";
+import { acceptInvitationPath } from "../accept-path";
 import { createInvitation } from "../create";
 import { RateLimited } from "../errors";
 import { testKvStore } from "../../__tests__/test-ttl-store";
@@ -226,23 +228,44 @@ describe("createInvitation (use-case)", () => {
     ));
 });
 
-const postInvitation = (app: Hono, companyId: string, email: string) =>
+const postInvitation = (
+  app: Hono,
+  companyId: string,
+  email: string,
+  extraBody: Record<string, unknown> = {},
+) =>
   drained(
     requestApp(app, `http://localhost/api/account/companies/${companyId}/invitations`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, role: "MEMBER" }),
+      body: JSON.stringify({ email, role: "MEMBER", ...extraBody }),
     }),
   );
 
 const recordMagicLinks = () => {
   const sentTo: string[] = [];
-  const signInMagicLink = ({ email }: { email: string }) =>
+  const callbackURLs: URL[] = [];
+  const signInMagicLink = ({ email, callbackURL }: { email: string; callbackURL: string }) =>
     Effect.sync(() => {
       sentTo.push(email);
+      callbackURLs.push(new URL(callbackURL));
     });
-  return { sentTo, signInMagicLink };
+  return { sentTo, callbackURLs, signInMagicLink };
 };
+
+const REDIRECT_TARGET = {
+  service_name: "taimei",
+  redirect_url: "https://app.taimei-code.com/dashboard",
+} as const;
+
+const seedOwnerCompany = (key: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const owner = yield* db.seedUser(`${key}-owner`);
+    const co = yield* db.seedCompany(key);
+    yield* db.seedMembership(owner.id, co, "OWNER");
+    return { owner, co, email: `${TEST_PREFIX}${key}-invitee@example.com` };
+  });
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
   const captured = recordSentryExceptions();
@@ -325,6 +348,114 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
         const body = (yield* responseJson(res)) as { reused: boolean };
         expect(body.reused).toBe(true);
         expect(magicLinks.sentTo).toEqual([email]);
+      }),
+    ));
+
+  test("AC-011 redirect_target 付きの招待は callbackURL に token と組を載せる", () =>
+    run(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* seedOwnerCompany("rt-with");
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+          { redirect_target: REDIRECT_TARGET },
+        );
+
+        expect(res.status).toBe(200);
+        const [row] = yield* invitationRowsByEmail(co, email);
+        const [callbackURL] = magicLinks.callbackURLs;
+        expect(callbackURL?.searchParams.get("invitation_token")).toBe(row?.token);
+        expect(callbackURL?.searchParams.get("service_name")).toBe(REDIRECT_TARGET.service_name);
+        expect(callbackURL?.searchParams.get("redirect_url")).toBe(REDIRECT_TARGET.redirect_url);
+      }),
+    ));
+
+  test("AC-012 redirect_target なしの招待は従来の callbackURL のまま", () =>
+    run(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* seedOwnerCompany("rt-without");
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+        );
+
+        expect(res.status).toBe(200);
+        const [row] = yield* invitationRowsByEmail(co, email);
+        expect(magicLinks.callbackURLs.map(String)).toEqual([
+          `${getAppUrl()}${acceptInvitationPath(row?.token ?? "")}`,
+        ]);
+        expect(magicLinks.callbackURLs[0]?.searchParams.has("service_name")).toBe(false);
+      }),
+    ));
+
+  test("AC-013 allowlist 外の redirect_target は 400 で、招待もメールも作らない", () =>
+    run(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* seedOwnerCompany("rt-evil");
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+          { redirect_target: { ...REDIRECT_TARGET, redirect_url: "https://evil.example.com/" } },
+        );
+
+        expect(res.status).toBe(400);
+        expect(yield* invitationRowsByEmail(co, email)).toEqual([]);
+        expect(magicLinks.sentTo).toEqual([]);
+      }),
+    ));
+
+  test("AC-014 redirect_target の片方だけは 400 で、メールを送らない", () =>
+    run(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* seedOwnerCompany("rt-half");
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+          { redirect_target: { service_name: "taimei" } },
+        );
+
+        expect(res.status).toBe(400);
+        expect(magicLinks.sentTo).toEqual([]);
+      }),
+    ));
+
+  test("AC-015 既存 PENDING への再送は今回の redirect_target を載せる", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const { owner, co, email } = yield* seedOwnerCompany("rt-reuse");
+        yield* db.seedInvitation({
+          companyId: co,
+          email,
+          role: "MEMBER",
+          invitedByUserId: owner.id,
+        });
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+          { redirect_target: REDIRECT_TARGET },
+        );
+
+        const body = (yield* responseJson(res)) as { reused: boolean };
+        expect(body.reused).toBe(true);
+        const [callbackURL] = magicLinks.callbackURLs;
+        expect(callbackURL?.searchParams.get("service_name")).toBe(REDIRECT_TARGET.service_name);
+        expect(callbackURL?.searchParams.get("redirect_url")).toBe(REDIRECT_TARGET.redirect_url);
       }),
     ));
 });
