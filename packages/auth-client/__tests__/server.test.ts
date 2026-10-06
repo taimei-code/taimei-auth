@@ -44,4 +44,15 @@ describe("createAuthClient", () => {
     expect(client.authService).toBeDefined();
     expect(client.userService).toBeDefined();
   });
+
+  test("companyService.checkMemberships が生える", () => {
+    const transport = {
+      unary: async () => ({}),
+      stream: async () => ({}),
+    } as unknown as Parameters<typeof createAuthClient>[0]["transport"];
+
+    const client = createAuthClient({ transport });
+
+    expect(typeof client.companyService.checkMemberships).toBe("function");
+  });
 });

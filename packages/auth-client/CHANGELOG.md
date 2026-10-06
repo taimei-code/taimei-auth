@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.3.0 — 2026-10-06
+
+consumer が、自分の DB にある事業所と人がまだ taimei-auth で有効かを照合できるよう、service key で呼ぶ RPC を足す。抜けた人と削除された事業所のデータを consumer が消すために使う。追加だけで、wire 互換は保つ。
+
+### Features
+
+- `createAuthClient` の戻り値に `companyService` を追加した。`companyService.checkMemberships({ companyId, userIds })` は `{ companyActive, memberUserIds }` を返す。値の約束 (ACTIVE の判定、渡した人のうち所属する人だけを返すこと、入力の上限) は proto の `CheckMembershipsRequest`・`CheckMembershipsResponse` のコメントにある
+- proto に `CompanyService.CheckMemberships` と、`CheckMembershipsRequest`・`CheckMembershipsResponse` を追加した。名前とメールアドレスは返さない
+
+### Breaking changes
+
+なし。公開 API の追加だけ (additive)。
+
+### 移行
+
+- auth ホストを先に展開してから 3.3.0 の `checkMemberships` を呼ぶ。`CompanyService` を持たない auth ホストに呼ぶと、Connect の `Unimplemented` か `NotFound` で失敗する。失敗を「事業所が無い」と扱わない
+
 ## 3.2.0 — 2026-10-05
 
 consumer が現在の事業所のメンバー一覧を取れるよう、session token を受ける RPC を足す。consumer は事業所の ID を渡さず、auth ホストがセッションの user の現在の事業所で一覧を決める。追加だけで、wire 互換は保つ (`buf breaking` 通過)。
