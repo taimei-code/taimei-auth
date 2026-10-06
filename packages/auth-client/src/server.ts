@@ -1,5 +1,5 @@
 import { createClient, type Interceptor, type Transport } from "@connectrpc/connect";
-import { AuthService, UserService } from "./gen/auth/v1/auth_pb";
+import { AuthService, CompanyService, UserService } from "./gen/auth/v1/auth_pb";
 
 type ClientOptions = {
   transport: Transport;
@@ -8,7 +8,8 @@ type ClientOptions = {
 export function createAuthClient(options: ClientOptions) {
   const authService = createClient(AuthService, options.transport);
   const userService = createClient(UserService, options.transport);
-  return { authService, userService };
+  const companyService = createClient(CompanyService, options.transport);
+  return { authService, userService, companyService };
 }
 
 export function createServiceKeyInterceptor(serviceKey: string): Interceptor {

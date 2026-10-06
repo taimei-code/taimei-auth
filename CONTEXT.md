@@ -29,7 +29,7 @@ _Avoid_: status (より広義), state (将来 INVITING など別の軸の状態�
 _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 
 **メンバー (member)**:
-ある **事業所** の **membership** を持つ user を、その事業所の文脈で呼ぶ UI 上の呼称。「メンバーを事業所から削除」は、その membership 行を delete することを意味し、user 本体は残る。動詞句で範囲を明示することで「user 本体の削除」との誤読を防ぐ。auth-client の guard は **現在の事業所** のメンバー一覧を consumer に渡す。consumer への約束は proto の `ListCurrentCompanyMembersOk` のコメントを正本とする。
+ある **事業所** の **membership** を持つ user を、その事業所の文脈で呼ぶ UI 上の呼称。「メンバーを事業所から削除」は、その membership 行を delete することを意味し、user 本体は残る。動詞句で範囲を明示することで「user 本体の削除」との誤読を防ぐ。auth-client の guard は **現在の事業所** のメンバー一覧を consumer に渡す。consumer への約束は proto の `ListCurrentCompanyMembersOk` のコメントを正本とする。consumer は service key で `CompanyService.CheckMemberships` を呼び、自分の知る user id のうち今も **事業所** のメンバーである人と、事業所が ACTIVE かを照合できる。約束は proto の `CheckMembershipsResponse` のコメントを正本とする。
 _Avoid_: ユーザー (より広義で、global な user を指す時に使う), メンバーシップ (関係の方を指す時は **membership**)
 
 **role**:
