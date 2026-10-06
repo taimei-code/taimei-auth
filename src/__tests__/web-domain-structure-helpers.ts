@@ -47,6 +47,7 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "auth/auth-client.ts",
       "invitation/invitation-api.ts",
       "invitation/PendingInvitations.tsx",
+      "invitation/redirect-target.ts",
     ]),
   ],
   [

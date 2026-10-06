@@ -42,6 +42,26 @@ describe("invitation API", () => {
     );
   });
 
+  test("AC-017 redirect_target は渡した時だけ body に載る", async () => {
+    const fetchInitSentBy = async (params: Parameters<typeof createInvitation>[1]) => {
+      const fetchSpy = stubFetch(Response.json({ reused: false }));
+      await createInvitation("company-1", params);
+      return fetchSpy.mock.calls.at(-1)?.[1] as unknown;
+    };
+    const input = { email: "invitee@example.com", role: "MEMBER" as const };
+    const redirect_target = {
+      service_name: "taimei" as const,
+      redirect_url: "https://app.taimei-code.com/dashboard",
+    };
+
+    expect(await fetchInitSentBy({ ...input, redirect_target: undefined })).toEqual(
+      postInit(input),
+    );
+    expect(await fetchInitSentBy({ ...input, redirect_target })).toEqual(
+      postInit({ ...input, redirect_target }),
+    );
+  });
+
   test("revoke は既存 URL を body なしで呼ぶ", async () => {
     const fetchSpy = stubFetch(Response.json({ ok: true }));
 

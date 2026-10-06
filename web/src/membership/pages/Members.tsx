@@ -1,5 +1,6 @@
 import { type FormEvent, useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 import { isAtLeast, type Role } from "@core/membership/policy";
 import { roleLabelJa } from "@core/membership/role-label";
@@ -7,6 +8,7 @@ import { roleLabelJa } from "@core/membership/role-label";
 import { useCurrentCompany } from "../../account/current-company";
 import { authClient } from "../../auth/auth-client";
 import { PendingInvitations } from "../../invitation/PendingInvitations";
+import { parseRedirectTarget } from "../../invitation/redirect-target";
 import {
   createInvitation,
   listInvitations,
@@ -25,6 +27,7 @@ import { listMembers, removeMember, updateMemberRole, type Member } from "../mem
 
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCurrentCompany();
+  const [searchParams] = useSearchParams();
   const selfUserId = authClient.useSession().data?.user.id ?? null;
   const companyId = currentMembership?.company_id ?? null;
   const canManage = currentMembership !== null && isAtLeast(currentMembership.role, "ADMIN");
@@ -71,7 +74,11 @@ export const Members = () => {
     e.preventDefault();
     if (!companyId) return;
     setSubmitting(true);
-    createInvitation(companyId, { email: inviteEmail.trim(), role: effectiveInviteRole })
+    createInvitation(companyId, {
+      email: inviteEmail.trim(),
+      role: effectiveInviteRole,
+      redirect_target: parseRedirectTarget(searchParams),
+    })
       .then((res) => {
         setInviteEmail("");
         return notifyAfterRefresh(refresh, {

@@ -7,6 +7,7 @@ import { FullScreenLoader } from "../../shared/FullScreenLoader";
 import { describeRequestJsonError } from "../../shared/request-json";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../shared/ui/card";
 import { acceptInvitation } from "../invitation-api";
+import { redirectUrlAfterAccept } from "../redirect-target";
 
 type AcceptRequestStatus = "processing" | "error";
 
@@ -16,6 +17,7 @@ export const SignUpAcceptInvitation = () => {
   const [errorMessage, setErrorMessage] = useState<string>("");
 
   const invitationToken = searchParams.get("invitation_token");
+  const redirectUrl = redirectUrlAfterAccept(searchParams);
 
   useEffect(() => {
     if (!invitationToken) {
@@ -35,7 +37,7 @@ export const SignUpAcceptInvitation = () => {
       })
       .then((result) => {
         if (!result) return; // 未認証のため既に redirect している
-        window.location.replace("/account");
+        window.location.replace(redirectUrl);
       })
       .catch((err) => {
         setStatus("error");
@@ -48,7 +50,7 @@ export const SignUpAcceptInvitation = () => {
           }),
         );
       });
-  }, [invitationToken]);
+  }, [invitationToken, redirectUrl]);
 
   if (status === "processing") {
     return <FullScreenLoader />;

@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 import { signInParamsSchema } from "@core/sign-in-params";
 import { RequestJsonError } from "../../shared/request-json";
 import {
   discardStaleSession,
   isStaleSessionError,
   redirectAfterAuthChange,
+  redirectToSignIn,
 } from "../auth-redirect";
 
 const originalWindow = globalThis.window;
@@ -104,5 +105,32 @@ describe("discardStaleSession", () => {
     });
 
     expect(replaced).toHaveLength(1);
+  });
+});
+
+describe("redirectToSignIn", () => {
+  test("AC-041 受諾画面の search はログイン後の redirect_url にそのまま残る", () => {
+    const origin = "http://auth.taimei-code.local:3100";
+    const acceptSearch = new URLSearchParams({
+      invitation_token: "tok",
+      service_name: "taimei",
+      redirect_url: "https://app.taimei-code.com/dashboard",
+    });
+    const replace = mock((_url: string) => {});
+    globalThis.window = {
+      location: {
+        origin,
+        pathname: "/auth/signup/accept-invitation",
+        search: `?${acceptSearch}`,
+        replace,
+      },
+    } as unknown as typeof globalThis.window;
+
+    redirectToSignIn();
+
+    const signInUrl = new URL(replace.mock.calls[0]?.[0] ?? "", origin);
+    const returnTo = new URL(signInUrl.searchParams.get("redirect_url") ?? "");
+    expect(returnTo.pathname).toBe("/auth/signup/accept-invitation");
+    expect(Object.fromEntries(returnTo.searchParams)).toEqual(Object.fromEntries(acceptSearch));
   });
 });

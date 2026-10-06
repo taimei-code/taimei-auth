@@ -5,7 +5,7 @@ import { expect, type Page } from "@playwright/test";
 
 // import.meta.url は playwright の CJS transpile と衝突するため cwd (repo root) 起点で解決する
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
-const BASE_URL = "http://localhost:3110";
+export const BASE_URL = "http://localhost:3110";
 
 // name は fixtures.ts の consumableFixtures の key と揃える (import すると pg の Pool が spec プロセスに入り runner が hang する)
 export const reseedFixture = (
