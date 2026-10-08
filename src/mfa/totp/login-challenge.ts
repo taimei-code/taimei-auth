@@ -59,7 +59,6 @@ export const openLoginChallenge = Effect.fnUntraced(function* (challenge: LoginC
   } satisfies LoginChallengeCookie;
 });
 
-// 未認証の応答に userId 等は出さない。
 export const readLoginChallengeState = Effect.fnUntraced(function* (headers: Headers) {
   return { pending: (yield* peekLoginChallenge(headers)) !== null };
 });

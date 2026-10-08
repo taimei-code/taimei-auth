@@ -22,7 +22,6 @@ export const requireInvitationAccept = Effect.fnUntraced(function* (opts: {
   if (!invitation) return yield* new NotFound();
   if (invitation.email.toLowerCase() !== actor.email.toLowerCase())
     return yield* new EmailMismatch();
-  // 既所属の判定は isAcceptableAt より先 (期限切れでも既所属なら reused を返す契約)。
   const existingMembership = yield* MembershipRepo.use((memberships) =>
     memberships.findMembership(actor.id, invitation.companyId),
   );
