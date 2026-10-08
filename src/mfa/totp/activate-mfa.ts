@@ -11,7 +11,7 @@ import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { matchTotpCode } from "./totp-engine";
 
 // revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
-export const activate = Effect.fn("mfa.activate")(function* (input: {
+export const activate = Effect.fnUntraced(function* (input: {
   actor: MfaTotpActor;
   headers: Headers;
   enrollmentId: string;

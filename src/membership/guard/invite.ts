@@ -5,7 +5,7 @@ import { type ParseBody, requireMembership } from "./core";
 import { Forbidden } from "./errors";
 
 // parse は 403 の判定より後 (先だと SPA が forbidden より先に zod のエラーを出す)。
-export const requireInvite = Effect.fn("membership.requireInvite")(function* <
+export const requireInvite = Effect.fnUntraced(function* <
   Body extends { email: string; role: Role },
 >(opts: { headers: Headers; companyId: string; parseBody: ParseBody<Body> }) {
   const { actor, role } = yield* requireMembership(opts.headers, opts.companyId, "ADMIN");

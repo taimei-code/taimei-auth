@@ -74,9 +74,7 @@ const reportKillSwitchPeriodically = Effect.gen(function* () {
   );
 });
 
-const openChallengeCookie = Effect.fn("auth.openMfaChallengeCookie")(function* (
-  input: ChallengeInput,
-) {
+const openChallengeCookie = Effect.fnUntraced(function* (input: ChallengeInput) {
   if (input.route._tag === "Unmapped")
     return yield* new UnmappedPrimaryAuthRoute({ route: input.route });
   return yield* openLoginChallenge({
@@ -86,9 +84,7 @@ const openChallengeCookie = Effect.fn("auth.openMfaChallengeCookie")(function* (
   });
 });
 
-export const enforceChallenge = Effect.fn("auth.enforceMfaChallenge")(function* (
-  input: ChallengeInput,
-) {
+export const enforceChallenge = Effect.fnUntraced(function* (input: ChallengeInput) {
   if (!input.challengeEnabled) {
     yield* reportKillSwitchPeriodically;
     return PASS;

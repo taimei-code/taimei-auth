@@ -13,9 +13,7 @@ type AttemptBudget = {
   component: string;
 };
 
-export const spendAttemptBudgetFailClosed = Effect.fn("attemptBudget.spendFailClosed")(function* (
-  input: AttemptBudget,
-) {
+export const spendAttemptBudgetFailClosed = Effect.fnUntraced(function* (input: AttemptBudget) {
   const ttlStore = yield* TtlStore;
   const counted = yield* ttlStore.incrementRateWindow(input.key, input.windowSeconds).pipe(
     Effect.filterOrFail(
@@ -31,7 +29,7 @@ export const spendAttemptBudgetFailClosed = Effect.fn("attemptBudget.spendFailCl
   return { attemptsLeft: input.maxAttempts - counted.count };
 });
 
-export const spendAttemptBudgetFailOpen = Effect.fn("attemptBudget.spendFailOpen")(
+export const spendAttemptBudgetFailOpen = Effect.fnUntraced(
   function* (input: AttemptBudget) {
     yield* spendAttemptBudgetFailClosed(input);
   },

@@ -5,7 +5,7 @@ import { Transaction } from "../transaction";
 import { NotFoundOrNotPending } from "./errors";
 import { InvitationRepo } from "./ports";
 
-export const revokeInvitation = Effect.fn("invitation.revoke")(function* (params: {
+export const revokeInvitation = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   companyId: string;
   invitationId: string;
@@ -16,7 +16,7 @@ export const revokeInvitation = Effect.fn("invitation.revoke")(function* (params
   const tx = yield* Transaction;
 
   yield* tx.run(
-    Effect.fn("invitation.revoke.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       const row = yield* invitations.markInvitationRevoked(invitationId, companyId, t);
       if (!row) return yield* new NotFoundOrNotPending();
       yield* audit.recordInvitationRevoked(

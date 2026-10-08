@@ -11,10 +11,7 @@ import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { generateRecoveryCodes } from "./recovery-codes";
 import { buildTotpUri, generateTotpSecret } from "./totp-engine";
 
-const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
-  actor: MfaTotpActor,
-  row: MfaTotpRow,
-) {
+const replayPendingEnrollment = Effect.fnUntraced(function* (actor: MfaTotpActor, row: MfaTotpRow) {
   if (isMfaEnabled(row)) return yield* new AlreadyEnabled();
 
   const ring = yield* MfaKeyring.use((k) => k.ring);
@@ -33,7 +30,7 @@ const replayPendingEnrollment = Effect.fn("mfa.enroll.replay")(function* (
   } satisfies TotpEnrollmentMaterial;
 });
 
-export const enroll = Effect.fn("mfa.enroll")(function* (input: { actor: MfaTotpActor }) {
+export const enroll = Effect.fnUntraced(function* (input: { actor: MfaTotpActor }) {
   const mfa = yield* MfaTotpRepo;
   const existing = yield* mfa.findMfaTotp(input.actor.id);
   if (existing) return yield* replayPendingEnrollment(input.actor, existing);
@@ -55,7 +52,7 @@ export const enroll = Effect.fn("mfa.enroll")(function* (input: { actor: MfaTotp
   );
 
   const won = yield* tx.run(
-    Effect.fn("mfa.enroll.apply")(function* (t) {
+    Effect.fnUntraced(function* (t) {
       const inserted = yield* mfa.insertMfaTotpEnrollment(
         {
           userId: input.actor.id,

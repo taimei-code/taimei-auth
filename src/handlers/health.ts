@@ -4,7 +4,7 @@ import { type Context, Hono } from "hono";
 import { probeHealth } from "../health/probe";
 import { runRoute } from "./run-route";
 
-export const healthProgram = Effect.fn("handlers.health")(function* (c: Context) {
+export const healthProgram = Effect.fnUntraced(function* (c: Context) {
   const report = yield* probeHealth();
   const version = process.env.CF_VERSION_ID ?? null;
   return c.json({ ...report, version }, report.status === "ok" ? 200 : 503);

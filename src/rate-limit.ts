@@ -36,7 +36,7 @@ const tooManyRequests = (retryAfterSec: number) =>
     headers: { ...JSON_HEADERS, "Retry-After": String(retryAfterSec) },
   });
 
-export const rateLimitProgram = Effect.fn("rateLimit.check")(
+export const rateLimitProgram = Effect.fnUntraced(
   function* (input: RateLimitInput) {
     yield* spendAttemptBudgetFailOpen({
       key: input.key,

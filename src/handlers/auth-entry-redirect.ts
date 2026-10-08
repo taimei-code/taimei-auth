@@ -18,7 +18,7 @@ export const authEntryRedirect = (c: Context, next: Next) => {
 };
 
 // 認可ではなく利便のための redirect なので、一時的な障害では 5xx を返さず通す。
-export const authEntryRedirectProgram = Effect.fn("handlers.authEntryRedirect")(
+export const authEntryRedirectProgram = Effect.fnUntraced(
   function* (c: Context) {
     const headers = c.req.raw.headers;
     const session = yield* AuthApi.use((authApi) => authApi.getSession(headers));

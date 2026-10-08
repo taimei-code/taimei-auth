@@ -1,6 +1,6 @@
 # src/ サーバーサイド実装規則
 
-層境界は [`ADR-0012`](../docs/adr/0012-layered-architecture.md) が、Effect 様式は [`ADR-0017`](../docs/adr/0017-effect-v4-full-adoption.md) が定義元である。
+層境界は [`ADR-0012`](../docs/adr/0012-layered-architecture.md) が、Effect の採用範囲は [`ADR-0017`](../docs/adr/0017-effect-v4-full-adoption.md) が、Effect の書き方は `node_modules/effect/AGENTS.md` が定義元である。
 
 ## 配置
 
@@ -16,7 +16,8 @@
 
 ## Effect様式
 
-- Guard と Use-case は `Effect.fn` で書き、依存は ports の service を `yield*` して取る。combinator は `Effect.fn` の第 2 引数以降に渡し、戻り値に `.pipe` を付けない。method を 1 つだけ呼ぶ時は `Service.use((s) => s.method())` を使う。failure class の instance はそのまま Effect なので、`Effect.fail(new X())` とは書かない。
+- Effect の書き方は root の [`CLAUDE.md`](../CLAUDE.md#effect) の通り `node_modules/effect/AGENTS.md` に従う。以下は配置と依存の規則だけを定める。
+- Guard と Use-case は、依存を ports の service から `yield*` で取る。
 - 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側が直接 import する。
 - Repository 以外の port は、Layer で差し替えた時に何かを隠せる場合だけ置く。既存の service (`TtlStore` / `EmailSender` など) を使う関数は use-case から直接呼び、テストはその service の Layer を差し替えて、起きた結果 (計数、送信) を観測する。
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置く。

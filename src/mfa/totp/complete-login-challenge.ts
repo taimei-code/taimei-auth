@@ -12,7 +12,7 @@ import {
 } from "./login-challenge";
 import { consumeMatchedCode, matchOwnedCode } from "./verify-code";
 
-export const completeLoginChallenge = Effect.fn("mfa.completeLoginChallenge")(function* (
+export const completeLoginChallenge = Effect.fnUntraced(function* (
   headers: Headers,
   input: { code: string; kind: MfaCodeKind },
 ) {

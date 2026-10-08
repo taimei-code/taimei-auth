@@ -12,7 +12,7 @@ import { MfaTotpRepo } from "./ports";
 import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { consumeMatchedCode, matchOwnedCode } from "./verify-code";
 
-export const disable = Effect.fn("mfa.disable")(function* (input: {
+export const disable = Effect.fnUntraced(function* (input: {
   actor: MfaTotpActor;
   headers: Headers;
   code: string;
@@ -30,7 +30,7 @@ export const disable = Effect.fn("mfa.disable")(function* (input: {
 
   const tx = yield* Transaction;
   yield* tx.run(
-    Effect.fn("mfa.disable.apply")(function* (t) {
+    Effect.fnUntraced(function* (t) {
       yield* mfa.deleteMfaTotp(input.actor.id, t);
       yield* mfa.deleteRecoveryCodesByUserId(input.actor.id, t);
     }),

@@ -4,7 +4,7 @@ import { AuditLog } from "../audit/ports";
 import { Transaction } from "../transaction";
 import { applyTransfer } from "./apply-change";
 
-export const transferOwnership = Effect.fn("membership.transferOwnership")(function* (params: {
+export const transferOwnership = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   toUserId: string;
   companyId: string;
@@ -14,7 +14,7 @@ export const transferOwnership = Effect.fn("membership.transferOwnership")(funct
   const tx = yield* Transaction;
 
   yield* tx.run(
-    Effect.fn("membership.transferOwnership.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       yield* applyTransfer(t, { actorUserId, toUserId, companyId });
       yield* audit.recordOwnershipTransferred(
         {

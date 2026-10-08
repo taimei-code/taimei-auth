@@ -3,7 +3,7 @@ import { canAttemptRemoval, canRemoveTarget } from "../policy";
 import { requireMembership, requireTargetMembership } from "./core";
 import { Forbidden } from "./errors";
 
-export const requireRemoval = Effect.fn("membership.requireRemoval")(function* (opts: {
+export const requireRemoval = Effect.fnUntraced(function* (opts: {
   headers: Headers;
   companyId: string;
   targetUserId: string;

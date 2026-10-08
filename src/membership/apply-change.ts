@@ -12,7 +12,7 @@ type Write = (
   tx: DbTx,
 ) => Effect.Effect<MembershipRow | undefined, DbError>;
 
-const keepingAnOwner = Effect.fn("membership.keepingAnOwner")(function* (
+const keepingAnOwner = Effect.fnUntraced(function* (
   tx: DbTx,
   companyId: string,
   ...writes: readonly [Write, ...Write[]]

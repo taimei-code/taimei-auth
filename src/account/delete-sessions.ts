@@ -4,7 +4,7 @@ import { captureCause } from "../sentry";
 
 type AccountDeletionFlow = "account-delete" | "company-delete" | "member-remove" | "sweep";
 
-export const deleteSessionsOf = Effect.fn("account.deleteSessionsOf")(function* (
+export const deleteSessionsOf = Effect.fnUntraced(function* (
   userIds: readonly string[],
   flow: AccountDeletionFlow,
 ) {

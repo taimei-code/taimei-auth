@@ -9,7 +9,7 @@ import { matchTotpCode } from "./totp-engine";
 type MatchedOwnedCode = { kind: "totp"; timestep: number } | { kind: "recovery_code"; id: string };
 
 // リカバリーコードは一様乱数で attacker が制御する値と相関しないため、等値比較の timing 差は許容する。
-export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (
+export const matchOwnedCode = Effect.fnUntraced(function* (
   userId: string,
   input: { code: string; kind: MfaCodeKind },
 ) {
@@ -35,7 +35,7 @@ export const matchOwnedCode = Effect.fn("mfa.matchOwnedCode")(function* (
 });
 
 // リプレイ・過去の timestep・並行して負けた側は単一 statement の WHERE が拒否する (app 側で読んで判定しない)。
-export const consumeMatchedCode = Effect.fn("mfa.consumeMatchedCode")(function* (
+export const consumeMatchedCode = Effect.fnUntraced(function* (
   userId: string,
   matched: MatchedOwnedCode,
 ) {

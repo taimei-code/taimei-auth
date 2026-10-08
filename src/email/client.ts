@@ -5,7 +5,7 @@ import { EmailError, tryEmail } from "../errors";
 
 let resendInstance: Resend | null = null;
 
-export const renderAndSendEmail = Effect.fn("email.renderAndSend")(function* (params: {
+export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   from: string;
   to: string;
   subject: string;

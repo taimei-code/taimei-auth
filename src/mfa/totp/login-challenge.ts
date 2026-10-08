@@ -25,7 +25,7 @@ type LoginChallenge = { userId: string; redirectUrl: string; method: ChallengeMe
 type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
 // env を直接読むと dev や CI の default fallback で session 側の鍵とずれる。
-const signChallengeId = Effect.fn("mfa.signChallengeId")(function* (challengeId: string) {
+const signChallengeId = Effect.fnUntraced(function* (challengeId: string) {
   const secret = yield* AuthApi.use((authApi) => authApi.secret);
   return yield* Effect.promise(() => makeSignature(challengeId, secret));
 });
@@ -46,9 +46,7 @@ export type LoginChallengeCookie = {
   attributes: ReturnType<typeof challengeCookieAttributes>;
 };
 
-export const openLoginChallenge = Effect.fn("mfa.openLoginChallenge")(function* (
-  challenge: LoginChallenge,
-) {
+export const openLoginChallenge = Effect.fnUntraced(function* (challenge: LoginChallenge) {
   const challengeId = `mfa-lc-${crypto.randomUUID()}`;
   yield* TtlStore.use((r) =>
     r.set(challengeKey(challengeId), JSON.stringify(challenge), CHALLENGE_TTL_SECONDS),
@@ -62,13 +60,11 @@ export const openLoginChallenge = Effect.fn("mfa.openLoginChallenge")(function* 
 });
 
 // 未認証の応答に userId 等は出さない。
-export const readLoginChallengeState = Effect.fn("mfa.readLoginChallengeState")(function* (
-  headers: Headers,
-) {
+export const readLoginChallengeState = Effect.fnUntraced(function* (headers: Headers) {
   return { pending: (yield* peekLoginChallenge(headers)) !== null };
 });
 
-export const peekLoginChallenge = Effect.fn("mfa.peekLoginChallenge")(function* (headers: Headers) {
+export const peekLoginChallenge = Effect.fnUntraced(function* (headers: Headers) {
   const challengeId = yield* resolveChallengeId(headers);
   if (!challengeId) return null;
   const raw = yield* TtlStore.use((r) => r.get(challengeKey(challengeId)));
@@ -76,15 +72,13 @@ export const peekLoginChallenge = Effect.fn("mfa.peekLoginChallenge")(function* 
   return challenge ? ({ ...challenge, challengeId } satisfies OpenedLoginChallenge) : null;
 });
 
-export const consumeLoginChallenge = Effect.fn("mfa.consumeLoginChallenge")(function* (
-  challengeId: string,
-) {
+export const consumeLoginChallenge = Effect.fnUntraced(function* (challengeId: string) {
   const raw = yield* TtlStore.use((r) => r.getAndDelete(challengeKey(challengeId)));
   if (raw === null) return yield* new ChallengeExpired();
   return clearCookieHeaders();
 });
 
-const expireLoginChallenge = Effect.fn("mfa.expireLoginChallenge")(function* (challengeId: string) {
+const expireLoginChallenge = Effect.fnUntraced(function* (challengeId: string) {
   yield* SentryService.use((sentry) =>
     sentry.captureMessage("mfa: login challenge attempt budget exhausted", {
       level: "warning",
@@ -97,7 +91,7 @@ const expireLoginChallenge = Effect.fn("mfa.expireLoginChallenge")(function* (ch
   return yield* new ChallengeExpired();
 });
 
-export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAttempt")(
+export const spendLoginChallengeAttempt = Effect.fnUntraced(
   function* (challengeId: string) {
     const { attemptsLeft } = yield* spendAttemptBudgetFailClosed({
       key: attemptsKey(challengeId),
@@ -105,7 +99,7 @@ export const spendLoginChallengeAttempt = Effect.fn("mfa.spendLoginChallengeAtte
       maxAttempts: MAX_ATTEMPTS,
       component: "mfa-login-challenge",
     });
-    return Effect.fn("mfa.rejectWrongCode")(function* (wrongCode: InvalidCode) {
+    return Effect.fnUntraced(function* (wrongCode: InvalidCode) {
       if (attemptsLeft === 0) return yield* expireLoginChallenge(challengeId);
       return yield* wrongCode;
     });
@@ -141,7 +135,7 @@ function clearCookieHeaders(): Headers {
   return headers;
 }
 
-const resolveChallengeId = Effect.fn("mfa.resolveChallengeId")(function* (headers: Headers) {
+const resolveChallengeId = Effect.fnUntraced(function* (headers: Headers) {
   const raw = parseCookieHeader(headers.get("cookie") ?? "", LOGIN_CHALLENGE_COOKIE)[
     LOGIN_CHALLENGE_COOKIE
   ];

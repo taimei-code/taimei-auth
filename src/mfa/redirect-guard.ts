@@ -28,10 +28,7 @@ function parseUrl(candidate: string): URL | null {
   }
 }
 
-const fallBackAndReport = Effect.fn("mfa.rejectChallengeRedirect")(function* (
-  rejected: string,
-  reason: RejectionReason,
-) {
+const fallBackAndReport = Effect.fnUntraced(function* (rejected: string, reason: RejectionReason) {
   const sentry = yield* SentryService;
   yield* sentry.captureMessage("mfa: challenge redirect rejected", {
     level: "warning",
@@ -41,9 +38,7 @@ const fallBackAndReport = Effect.fn("mfa.rejectChallengeRedirect")(function* (
   return FALLBACK_REDIRECT;
 });
 
-export const validateChallengeRedirect = Effect.fn("mfa.validateChallengeRedirect")(function* (
-  raw: string | undefined,
-) {
+export const validateChallengeRedirect = Effect.fnUntraced(function* (raw: string | undefined) {
   if (!raw) return FALLBACK_REDIRECT;
   if (raw.startsWith("/")) {
     return SAME_ORIGIN_PATH.test(raw)

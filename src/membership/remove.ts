@@ -7,7 +7,7 @@ import { AuditLog } from "../audit/ports";
 import { Transaction } from "../transaction";
 import { applyRemoval } from "./apply-change";
 
-export const removeMember = Effect.fn("membership.removeMember")(function* (params: {
+export const removeMember = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   targetUserId: string;
   companyId: string;
@@ -18,7 +18,7 @@ export const removeMember = Effect.fn("membership.removeMember")(function* (para
   const tx = yield* Transaction;
 
   const result = yield* tx.run(
-    Effect.fn("membership.removeMember.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       yield* applyRemoval(t, { targetUserId, companyId });
       yield* audit.recordMembershipRemoved(
         {

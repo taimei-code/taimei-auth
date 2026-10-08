@@ -14,7 +14,7 @@ type CreateCompanyInput = { name: string; orgCode: OrgCode };
 
 export type CreatedCompany = { company: CompanyRow; membership: MembershipRow };
 
-const createCompanyWithOwner = Effect.fn("company.createCompanyWithOwner")(function* (
+const createCompanyWithOwner = Effect.fnUntraced(function* (
   tx: DbTx,
   userId: string,
   input: CreateCompanyInput,
@@ -41,7 +41,7 @@ const createCompanyWithOwner = Effect.fn("company.createCompanyWithOwner")(funct
   return { company: created, membership } satisfies CreatedCompany;
 });
 
-export const createSignupCompany = Effect.fn("company.createSignupCompany")(function* (
+export const createSignupCompany = Effect.fnUntraced(function* (
   userId: string,
   input: CreateCompanyInput,
 ) {
@@ -49,7 +49,7 @@ export const createSignupCompany = Effect.fn("company.createSignupCompany")(func
   const tx = yield* Transaction;
 
   return yield* tx.run(
-    Effect.fn("company.createSignupCompany.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       yield* memberships.lockMembershipChangesOfUser(t, userId);
       const rows = yield* memberships.findMembershipsByUserId(userId, t);
       if (rows.some((m) => m.companyActivationStatus === "ACTIVE")) {
@@ -60,10 +60,7 @@ export const createSignupCompany = Effect.fn("company.createSignupCompany")(func
   );
 });
 
-export const addCompany = Effect.fn("company.addCompany")(function* (
-  userId: string,
-  input: CreateCompanyInput,
-) {
+export const addCompany = Effect.fnUntraced(function* (userId: string, input: CreateCompanyInput) {
   const tx = yield* Transaction;
   return yield* tx.run((t) => createCompanyWithOwner(t, userId, input));
 });

@@ -15,14 +15,12 @@ export const notifyMfaDisabled = (
 ): Effect.Effect<void, never, EmailSender | Background | SentryService> =>
   notifyInBackground((sender) => sender.sendMfaDisabled(email));
 
-export const notifyMfaDisabledForManagement = Effect.fn("mfa.notifyMfaDisabledForManagement")(
-  function* (email: string) {
-    const sender = yield* EmailSender;
-    return yield* sender
-      .sendMfaDisabled(email)
-      .pipe(Effect.as(true), Effect.catch(captureCauseAs(false, { tags: MFA_NOTIFICATION })));
-  },
-);
+export const notifyMfaDisabledForManagement = Effect.fnUntraced(function* (email: string) {
+  const sender = yield* EmailSender;
+  return yield* sender
+    .sendMfaDisabled(email)
+    .pipe(Effect.as(true), Effect.catch(captureCauseAs(false, { tags: MFA_NOTIFICATION })));
+});
 
 const notifyInBackground = (
   send: (sender: EmailSender["Service"]) => Effect.Effect<void, { readonly cause: unknown }>,

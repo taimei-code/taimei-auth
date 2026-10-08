@@ -11,10 +11,7 @@ import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
 
-export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
-  actorUserId: string,
-  companyId: string,
-) {
+export const deleteCompany = Effect.fnUntraced(function* (actorUserId: string, companyId: string) {
   const companies = yield* CompanyRepo;
   const memberships = yield* MembershipRepo;
   const invitations = yield* InvitationRepo;
@@ -22,7 +19,7 @@ export const deleteCompany = Effect.fn("company.deleteCompany")(function* (
   const tx = yield* Transaction;
 
   const deletedUserIds = yield* tx.run(
-    Effect.fn("company.deleteCompany.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       yield* memberships.lockOwnerMembershipsOfCompany(t, companyId);
       const target = yield* companies.findCompanyById(companyId, t);
       if (!target) return yield* new Forbidden();

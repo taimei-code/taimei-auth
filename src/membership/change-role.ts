@@ -5,7 +5,7 @@ import { AuditLog } from "../audit/ports";
 import { Transaction } from "../transaction";
 import { applyRoleChange } from "./apply-change";
 
-export const changeRole = Effect.fn("membership.changeRole")(function* (params: {
+export const changeRole = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   targetUserId: string;
   companyId: string;
@@ -20,7 +20,7 @@ export const changeRole = Effect.fn("membership.changeRole")(function* (params: 
   const tx = yield* Transaction;
 
   yield* tx.run(
-    Effect.fn("membership.changeRole.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       yield* applyRoleChange(t, { targetUserId, companyId, nextRole });
       yield* audit.recordRoleChanged(
         {

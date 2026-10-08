@@ -25,7 +25,7 @@ class InviterNotOwner extends Data.TaggedError("InviterNotOwner")<{
   readonly reason = "inviter_not_owner_or_missing" as const;
 }
 
-export const acceptInvitation = Effect.fn("invitation.accept")(function* (params: {
+export const acceptInvitation = Effect.fnUntraced(function* (params: {
   actor: { id: string; email: string };
   invitation: InvitationRow;
 }) {
@@ -36,7 +36,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
-  const apply = Effect.fn("invitation.accept.apply")(function* (t: DbTx) {
+  const apply = Effect.fnUntraced(function* (t: DbTx) {
     const accepted = yield* invitations.markInvitationAccepted(invitation.id, t);
     if (!accepted) return yield* new DoubleAccept();
 
@@ -75,7 +75,7 @@ export const acceptInvitation = Effect.fn("invitation.accept")(function* (params
   return { companyId: invitation.companyId };
 });
 
-const recordRejectionAndFail = Effect.fn("invitation.accept.recordRejection")(function* (
+const recordRejectionAndFail = Effect.fnUntraced(function* (
   actorUserId: string,
   invitation: InvitationRow,
   rejected: DoubleAccept | InviterNotOwner,

@@ -21,7 +21,7 @@ const failClosedAsUnauthorized = (failure: { readonly cause: unknown }) =>
   );
 
 // better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返す。
-export const requireActor = Effect.fn("membership.requireActor")(
+export const requireActor = Effect.fnUntraced(
   function* (headers: Headers) {
     const session = yield* AuthApi.use((authApi) => authApi.getSession(headers));
     if (!session?.user?.id) return yield* new Unauthorized();
@@ -36,7 +36,7 @@ export const requireActor = Effect.fn("membership.requireActor")(
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),
 );
 
-export const requireMembershipOf = Effect.fn("membership.requireMembershipOf")(function* (
+export const requireMembershipOf = Effect.fnUntraced(function* (
   actor: Actor,
   companyId: string,
   minRole?: Role,
@@ -47,7 +47,7 @@ export const requireMembershipOf = Effect.fn("membership.requireMembershipOf")(f
   return membership.role;
 });
 
-export const requireMembership = Effect.fn("membership.requireMembership")(function* (
+export const requireMembership = Effect.fnUntraced(function* (
   headers: Headers,
   companyId: string,
   minRole?: Role,
@@ -57,7 +57,7 @@ export const requireMembership = Effect.fn("membership.requireMembership")(funct
   return { actor, role };
 });
 
-export const requireTargetMembership = Effect.fn("membership.requireTargetMembership")(function* (
+export const requireTargetMembership = Effect.fnUntraced(function* (
   userId: string,
   companyId: string,
 ) {
