@@ -19,4 +19,4 @@
 
 ## Effect
 
-Effect のコードを書く前に `node_modules/effect/AGENTS.md` を最後まで読み、書く API に関わるリンク先を辿る (v4 rc の API は学習データの v3 と違う)。そこに無い API は `node_modules/effect/src` を検索する。
+Effect の書き方は `node_modules/effect/AGENTS.md` に従い、各 scope の `CLAUDE.md` には書き方の規則を置かない。コードを書く前に AGENTS.md を最後まで読み、書く API に関わるリンク先を辿る (v4 の API は学習データの v3 と違う)。そこに無い API は `node_modules/effect/src` を検索する。

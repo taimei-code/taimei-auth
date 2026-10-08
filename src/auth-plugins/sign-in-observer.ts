@@ -22,7 +22,7 @@ type SignedIn = {
   headers: Headers | null | undefined;
 };
 
-export const observeSignInProgram = Effect.fn("auth.observeSignIn")(function* (input: SignedIn) {
+export const observeSignInProgram = Effect.fnUntraced(function* (input: SignedIn) {
   const { user } = input;
   const background = yield* Background;
   const email = yield* EmailSender;

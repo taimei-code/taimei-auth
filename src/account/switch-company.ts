@@ -5,7 +5,7 @@ import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { UserRepo } from "./ports";
 
-export const switchCompany = Effect.fn("account.switchCompany")(function* (params: {
+export const switchCompany = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   fromCompanyId: string | null;
   targetCompanyId: string;
@@ -19,7 +19,7 @@ export const switchCompany = Effect.fn("account.switchCompany")(function* (param
   const tx = yield* Transaction;
 
   yield* tx.run(
-    Effect.fn("account.switchCompany.apply")(function* (t) {
+    Effect.fnUntraced(function* (t) {
       const targetMembership = yield* memberships.lockMembershipForShare(
         t,
         actorUserId,

@@ -12,10 +12,9 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    ignore:
-      # effect の RC は 2〜5 日周期で publish され、追従 PR が minimumReleaseAge (7 日) で止まって CI が落ちる。stable 4.0.0 が出たら外す
-      - dependency-name: "effect"
-        versions: ["< 4.0.0"]
+    # bunfig.toml の minimumReleaseAge (7 日) に揃える。7 日未満の版の PR は install で落ちる
+    cooldown:
+      default-days: 7
     groups:
       dev-dependencies:
         dependency-type: "development"

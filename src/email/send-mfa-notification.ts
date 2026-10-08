@@ -13,7 +13,7 @@ import MfaEnabledEmail from "./mfa-enabled";
 
 const SECURITY_PAGE_PATH = "/account/security";
 
-const sendMfaNotification = Effect.fn("email.sendMfaNotification")(function* (params: {
+const sendMfaNotification = Effect.fnUntraced(function* (params: {
   email: string;
   subject: string;
   render: (props: { appName: string; securityUrl: string; supportEmail: string }) => ReactElement;

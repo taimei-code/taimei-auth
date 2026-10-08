@@ -4,7 +4,7 @@ import { canChangeRole } from "../policy";
 import { type ParseBody, requireActor, requireMembershipOf, requireTargetMembership } from "./core";
 import { Forbidden } from "./errors";
 
-export const requireRoleChange = Effect.fn("membership.requireRoleChange")(function* (opts: {
+export const requireRoleChange = Effect.fnUntraced(function* (opts: {
   headers: Headers;
   companyId: string;
   targetUserId: string;

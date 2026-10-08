@@ -12,7 +12,7 @@ export type ForceDisableResult =
   | { ok: true; changed: false }
   | { ok: true; changed: true; notified: boolean };
 
-export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function* (userId: string) {
+export const forceDisableMfa = Effect.fnUntraced(function* (userId: string) {
   const users = yield* UserRepo;
   const mfa = yield* MfaTotpRepo;
   const tx = yield* Transaction;
@@ -22,7 +22,7 @@ export const forceDisableMfa = Effect.fn("management.forceDisableMfa")(function*
   const wasEnabled = isMfaEnabled(yield* mfa.readMfaVerification(userId));
 
   const deleted = yield* tx.run(
-    Effect.fn("management.forceDisableMfa.apply")(function* (t) {
+    Effect.fnUntraced(function* (t) {
       const rows = yield* mfa.deleteMfaTotp(userId, t);
       yield* mfa.deleteRecoveryCodesByUserId(userId, t);
       return rows;

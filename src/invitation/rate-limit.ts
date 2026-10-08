@@ -13,7 +13,7 @@ function hourlyLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOURLY_LIMIT_PER_COMPANY;
 }
 
-export const consumeInvitationQuota = Effect.fn("invitation.consumeQuota")(
+export const consumeInvitationQuota = Effect.fnUntraced(
   function* (companyId: string) {
     const nowMillis = yield* Clock.currentTimeMillis;
     yield* spendAttemptBudgetFailOpen({

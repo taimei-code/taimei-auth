@@ -14,7 +14,7 @@ const checkMembershipsRequest = z.object({
   userIds: z.array(boundedId).max(1000),
 });
 
-export const checkMembershipsProgram = Effect.fn("rpc.checkMemberships")(function* (req: {
+export const checkMembershipsProgram = Effect.fnUntraced(function* (req: {
   companyId: string;
   userIds: readonly string[];
 }) {

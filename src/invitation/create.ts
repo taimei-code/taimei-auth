@@ -11,7 +11,7 @@ import { consumeInvitationQuota } from "./rate-limit";
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
-export const createInvitation = Effect.fn("invitation.create")(function* (params: {
+export const createInvitation = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   companyId: string;
   email: string;
@@ -30,7 +30,7 @@ export const createInvitation = Effect.fn("invitation.create")(function* (params
 
   const nowMillis = yield* Clock.currentTimeMillis;
   const inserted = yield* tx.run(
-    Effect.fn("invitation.create.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       const row = yield* invitations.insertInvitation(
         {
           id: ids.invitationId(),

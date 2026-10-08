@@ -10,7 +10,7 @@ type SweepReport = {
   deletedUserIds: string[];
 };
 
-export const sweepAbandonedSignups = Effect.fn("account.sweepAbandonedSignups")(function* (opts: {
+export const sweepAbandonedSignups = Effect.fnUntraced(function* (opts: {
   olderThanMs: number;
   execute: boolean;
 }) {

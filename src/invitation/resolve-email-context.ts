@@ -8,9 +8,7 @@ import { InvitationRepo } from "./ports";
 
 type InvitationEmailContext = Omit<InvitationEmailParams, "inviteeEmail" | "url">;
 
-export const resolveInvitationEmailContext = Effect.fn("invitation.resolveEmailContext")(function* (
-  magicLinkUrl: string,
-) {
+export const resolveInvitationEmailContext = Effect.fnUntraced(function* (magicLinkUrl: string) {
   const token = extractInvitationToken(magicLinkUrl);
   if (!token) return null;
 

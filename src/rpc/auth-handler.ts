@@ -35,7 +35,7 @@ type SessionCheck =
   | { readonly _tag: "Verified"; readonly user: UserRow; readonly session: Session["session"] }
   | { readonly _tag: "Rejected"; readonly reason: Result };
 
-const verifySessionUser = Effect.fn("rpc.verifySessionUser")(function* (
+const verifySessionUser = Effect.fnUntraced(function* (
   sessionToken: string,
   handler: string,
 ): Effect.fn.Return<SessionCheck, AuthApiError | DbError, AuthApi | UserRepo | SentryService> {
@@ -63,9 +63,7 @@ const verifySessionUser = Effect.fn("rpc.verifySessionUser")(function* (
   return { _tag: "Verified", user, session: result.session };
 });
 
-export const verifySessionProgram = Effect.fn("rpc.verifySession")(function* (req: {
-  sessionToken: string;
-}) {
+export const verifySessionProgram = Effect.fnUntraced(function* (req: { sessionToken: string }) {
   const check = yield* verifySessionUser(req.sessionToken, "verifySession");
   if (check._tag === "Rejected") {
     return verifySessionError(check.reason);
@@ -99,32 +97,32 @@ const listMembersOk = (value: MessageInitShape<typeof ListCurrentCompanyMembersO
     outcome: { case: "ok", value: create(ListCurrentCompanyMembersOkSchema, value) },
   });
 
-export const listCurrentCompanyMembersProgram = Effect.fn("rpc.listCurrentCompanyMembers")(
-  function* (req: { sessionToken: string }) {
-    const check = yield* verifySessionUser(req.sessionToken, "listCurrentCompanyMembers");
-    if (check._tag === "Rejected") {
-      return listMembersError(check.reason);
-    }
+export const listCurrentCompanyMembersProgram = Effect.fnUntraced(function* (req: {
+  sessionToken: string;
+}) {
+  const check = yield* verifySessionUser(req.sessionToken, "listCurrentCompanyMembers");
+  if (check._tag === "Rejected") {
+    return listMembersError(check.reason);
+  }
 
-    const { user } = check;
-    const companyId = user.lastUsedCompanyId;
-    if (!companyId) {
-      return listMembersOk({});
-    }
+  const { user } = check;
+  const companyId = user.lastUsedCompanyId;
+  if (!companyId) {
+    return listMembersOk({});
+  }
 
-    const members = yield* MembershipRepo.use((repo) => repo.findMembersByCompanyId(companyId));
-    const callerStillMember = members.some((m) => m.userId === user.id);
-    if (!callerStillMember) {
-      return listMembersOk({});
-    }
+  const members = yield* MembershipRepo.use((repo) => repo.findMembersByCompanyId(companyId));
+  const callerStillMember = members.some((m) => m.userId === user.id);
+  if (!callerStillMember) {
+    return listMembersOk({});
+  }
 
-    const byJoinedAt = members.toSorted(
-      (a, b) =>
-        a.joinedAt.getTime() - b.joinedAt.getTime() || a.membershipId.localeCompare(b.membershipId),
-    );
-    return listMembersOk({ companyId, members: byJoinedAt.map(toProtoCompanyMember) });
-  },
-);
+  const byJoinedAt = members.toSorted(
+    (a, b) =>
+      a.joinedAt.getTime() - b.joinedAt.getTime() || a.membershipId.localeCompare(b.membershipId),
+  );
+  return listMembersOk({ companyId, members: byJoinedAt.map(toProtoCompanyMember) });
+});
 
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {

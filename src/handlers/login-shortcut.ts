@@ -29,7 +29,7 @@ const buildLoginRedirect = (url: URL): URL => {
   return target;
 };
 
-export const loginShortcutProgram = Effect.fn("handlers.loginShortcut")(function* (c: Context) {
+export const loginShortcutProgram = Effect.fnUntraced(function* (c: Context) {
   const headers = c.req.raw.headers;
   const authenticated = getSessionCookie(headers)
     ? yield* AuthApi.use((authApi) => authApi.getSession(headers)).pipe(

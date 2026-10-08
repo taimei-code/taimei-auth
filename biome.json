@@ -91,8 +91,8 @@
                     "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
                   },
                   {
-                    "group": ["effect/unstable/*", "effect/unstable/**"],
-                    "message": "effect/unstable/* は stable 後も semver 外で minor で breaking し得る。core (effect) のみ使う (docs/adr/0017-effect-v4-full-adoption.md)"
+                    "group": ["effect/*", "effect/**"],
+                    "message": "effect は root から import する。effect/http や effect/sql などの area module は @stability unstable で、minor で breaking し得る (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }
@@ -134,8 +134,8 @@
                     "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
                   },
                   {
-                    "group": ["effect/unstable/*", "effect/unstable/**"],
-                    "message": "effect/unstable/* は stable 後も semver 外で minor で breaking し得る。core (effect) のみ使う (docs/adr/0017-effect-v4-full-adoption.md)"
+                    "group": ["effect/*", "effect/**"],
+                    "message": "effect は root から import する。effect/http や effect/sql などの area module は @stability unstable で、minor で breaking し得る (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }

@@ -19,9 +19,7 @@ export type InvitationEmailParams = {
   roleLabel: string;
 };
 
-export const sendInvitationEmail = Effect.fn("email.sendInvitation")(function* (
-  params: InvitationEmailParams,
-) {
+export const sendInvitationEmail = Effect.fnUntraced(function* (params: InvitationEmailParams) {
   if (isLocalEnvironment()) {
     yield* Effect.sync(() =>
       console.log(`[TEST] Invitation email for ${params.inviteeEmail}: ${params.url}`),

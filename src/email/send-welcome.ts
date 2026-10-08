@@ -4,10 +4,7 @@ import { getAppName, getAppUrl, getWelcomeFromEmail, renderAndSendEmail } from "
 import type { DisplayText } from "./sanitize";
 import WelcomeEmail from "./welcome";
 
-export const sendWelcomeEmail = Effect.fn("email.sendWelcome")(function* (
-  email: string,
-  userName: DisplayText,
-) {
+export const sendWelcomeEmail = Effect.fnUntraced(function* (email: string, userName: DisplayText) {
   if (isLocalEnvironment()) {
     yield* Effect.sync(() => console.log(`[TEST] Welcome email for ${email}`));
     return;

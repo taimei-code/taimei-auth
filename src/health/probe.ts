@@ -12,7 +12,7 @@ const settle = (check: "db" | "ttlStore", probe: Effect.Effect<void, DbError | T
     Effect.catch(captureCauseAs<CheckResult>("error", { tags: { handler: "health", check } })),
   );
 
-export const probeHealth = Effect.fn("health.probeHealth")(function* () {
+export const probeHealth = Effect.fnUntraced(function* () {
   const health = yield* HealthRepo;
   const store = yield* TtlStore;
   const [db, ttlStore] = yield* Effect.all(

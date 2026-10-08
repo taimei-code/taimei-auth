@@ -67,11 +67,11 @@ Stage は層単位で進める。Stage の途中では main に 2 様式が共�
 | 3 MFA | `src/mfa/` の error class 化、ports の Context.Service 化、`WireFailure` 削除 | `MfaFailure` / `WireFailure` ゼロ |
 | 4 seam・runtime primitive | hook / `auth.ts` callback / `Background` / `SentryService` / `Redis` (`src/redis-service.ts`、読み取りだけ retry、timeout 2s) / rate-limit middleware / `EmailSender` (`src/email/*` を Effect 化、timeout 10s、retry なし) / `Effect.all` / entries / CLI | `Promise.all` / `runBackground` (`src/background.ts` 以外) / `Sentry.capture*` の直呼び (`src/sentry.ts` と adapter 以外) ゼロ |
 
-依存: `effect` は `4.0.0-rc.112` に exact pin し、stable (4.0.0) か security advisory まで動かさない。Dependabot は `effect` の `< 4.0.0` (RC) だけを ignore する。RC 追従の PR を出すと毎週 `minimumReleaseAge` に block されて CI が落ちる一方で、stable と security update は出したいためである。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。`effect/unstable/*` は biome で全域 import 禁止とし、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。
+依存: `effect` は exact pin する。Dependabot の npm 更新は `cooldown` 7 日で bunfig の `minimumReleaseAge` に揃える。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。root 以外の `effect/*` は biome で全域 import 禁止とし (`effect/http` などの area module は `@stability unstable`)、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。
 
 ## 実装の機構 (2026-09-10 追記)
 
-Decision の各項が「何を選んだか」を言い、この節は「その形でないと壊れる理由」を module ごとに置く。書き方の規則そのものは `src/CLAUDE.md`「Effect様式」に定義し、ここには再掲しない。
+Decision の各項が「何を選んだか」を言い、この節は「その形でないと壊れる理由」を module ごとに置く。書き方は `node_modules/effect/AGENTS.md` に、配置と依存の規則は `src/CLAUDE.md`「Effect様式」に従い、ここには再掲しない。(2026-10-08 追記) tracer を入れていないので、AGENTS.md の基準に従い Effect を返す関数はすべて `Effect.fnUntraced` にした。代わりに span と `Cause.pretty` の関数名 frame は出ない。tracer を入れる時は、span が要る関数を `Effect.fn("name")` に戻す。
 
 この ADR の「wire」(client が受け取る応答の byte 列と、そこに含まれる failure) は 2026-09 に code 上 `ClientFacingError` 系へ改名した (`src/handlers/wire-error.ts` → `client-facing-error.ts`、`src/mfa/wire-contracts.ts` → `client-facing-contracts.ts`)。対比語と線引きは `CONTEXT.md` の Flagged ambiguities に定義し、本文の「wire」は旧名として読む。
 
@@ -87,7 +87,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 
 ## Stable 移行手順
 
-rc.112 → 4.0.0 を 1 PR で上げ、全テストと typecheck で API 差を検出する。同じ PR で Dependabot の ignore を外す。RC 固有の API 差 (`catchAll` → `Effect.catch`、`Effect.merge` 無し、`Schema.Enums` でなく `Schema.Enum` 等) は stable 化までは実装時に `node_modules/effect/src` で確認する。
+2026-10-08 に rc.112 → 4.0.0 を 1 PR で上げた。API 差によるコードの修正は要らなかった。
 
 ## ADR-0012 を次の点で補う
 
@@ -120,4 +120,4 @@ rc.112 → 4.0.0 を 1 PR で上げ、全テストと typecheck で API 差を�
 - `Redis` の retry 対象 (get) は 2s の timeout が attempt ごとに掛かる (Decision の非同期項の値)。Redis が応答しない時の worst case は約 8.7s (4 attempt + backoff) で、`/api/mfa/challenge` の読み取りがこの経路にあるため Redis 断のあいだ応答が延びる
 - `EmailSender` の 10s timeout は fiber を interrupt するだけで、Resend への HTTP は取り消せない。遅延して届いた送信は「`EmailError` を返したが送られた」になりうるため、呼び出し側は `EmailError` を再送の根拠にしない (retry を置かないのも同じ理由)
 - `Transaction.run` の callback 内の program は別の root fiber で走り、外側の interrupt では止まらず commit まで進む (rollback の契機は Fail / Die のみ)。tx を timeout や並列失敗で interrupt する呼び出し元は現在無い。置く時は `runThroughCallback` に interrupt の転送を足す
-- effect rc.112 は `msgpackr` と platform 別 prebuilt の `@msgpackr-extract/*` (optionalDependencies) を lockfile に持ち込む。ADR-0009 §C の判断: install script は不要 (prebuilt binary で、CI / Dockerfile は `--ignore-scripts`)、到達経路は `effect/unstable/*` (biome で import 禁止) のみで Workers bundle にも入らないため `trustedDependencies` は `[]` のまま。platform 別の optional dep は esbuild と同型で、RC を上げる時に 7 日規則で lockfile から落ちる可能性がある。その時は ADR-0009 §H の手順で全 platform を列挙する
+- effect 4.0.0 は依存を持たないため、`trustedDependencies` は `[]` のままでよい (rc.112 が持ち込んだ `msgpackr` / `@msgpackr-extract/*` は lockfile から消えた)

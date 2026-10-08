@@ -8,7 +8,7 @@ import { CompanyRepo } from "./ports";
 
 type UpdateCompanyInput = { name: string; orgCode: OrgCode };
 
-export const updateCompanyInfo = Effect.fn("company.updateCompanyInfo")(function* (params: {
+export const updateCompanyInfo = Effect.fnUntraced(function* (params: {
   actorUserId: string;
   companyId: string;
   input: UpdateCompanyInput;
@@ -19,7 +19,7 @@ export const updateCompanyInfo = Effect.fn("company.updateCompanyInfo")(function
   const tx = yield* Transaction;
 
   return yield* tx.run(
-    Effect.fn("company.updateCompanyInfo.apply")(function* (t: DbTx) {
+    Effect.fnUntraced(function* (t: DbTx) {
       const before = yield* companies.findCompanyById(companyId, t);
       if (!before || before.activationStatus !== "ACTIVE") return yield* new NotFound();
       const row = yield* companies.updateCompany(companyId, input, t);

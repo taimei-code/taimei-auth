@@ -181,7 +181,7 @@ describe("MFA チャレンジ API", () => {
       }),
     ));
 
-  test("有効なチャレンジの状態取得は pending だけを返す", () =>
+  test("未認証の状態取得は有効なチャレンジでも pending だけを返し、userId を出さない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
