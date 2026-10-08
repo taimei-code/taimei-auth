@@ -147,6 +147,13 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 - リスク評価と利用経路は 3 回目対応から変わらない (`wrangler › miniflare` の dev tool 専用で、本番 bundle には同梱されない)
 - override 経由のため in-place の差し替えは不要で、`package.json` の 1 行変更と `bun install` で済む。`bun install --frozen-lockfile` (CI と同条件) / `bun audit` / typecheck / lint / 全テストが通ることを確認した
 
+### audit gate 対応 8 回目 (2026-10-08, sharp)
+
+`bun audit` のライブ DB に sharp の新規 high advisory が出現し、CI gate を落としたため対応した。feature branch (effect 4.0.0 への更新) の実装差分とは無関係な、依存側の変化である。
+
+- **sharp** `GHSA-wq5f-xc86-pv6w` (HIGH、`<0.35.5`。librsvg から継承した CVE-2026-96889) は、`overrides` の `0.35.4` を `0.35.5` (2026-09-27) へ上げた。差し替わったのは sharp family (`sharp` と `@img/sharp-*` が 0.35.5、`@img/sharp-libvips-*` が 1.3.4。いずれも 2026-09-27) だけで、7 日齢を満たすため `minimumReleaseAgeExcludes` への追加は不要
+- リスク評価と利用経路は 3 回目対応から変わらない (`wrangler › miniflare` の dev tool 専用で、本番 bundle には同梱されない)
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
