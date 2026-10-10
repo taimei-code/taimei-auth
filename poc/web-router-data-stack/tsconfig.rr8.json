@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDirs": [".", "./.react-router/types"] },
+  "include": ["apps/rr8", ".react-router/types/**/*"]
+}

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.react-router/
+build/
+test-results/
+playwright-report/
+*.tsbuildinfo
+bun.lock
