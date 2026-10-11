@@ -188,7 +188,7 @@ _Avoid_: API key (end user 向けの credential と紛らわしい), shared secr
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態の名前)
 
 **SPA の API 契約**:
-共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の MFA が読む型 (`src/mfa/client-facing-contracts.ts`) はこれと別物で、MFA の画面を契約の client に移す時に消す。詳細: ADR-0017「SPA の API 契約」。
+共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の MFA チャレンジが読む型 (`src/mfa/client-facing-contracts.ts`) はこれと別物である。MFA 設定の画面は契約の client に移った。この file に残るのは、チャレンジが読む型と、server も読む 2 つ (失敗の code の一覧 `MFA_WIRE_ERROR_CODES`、コードの種別 `MfaCodeKind`) だけである。詳細: ADR-0017「SPA の API 契約」。
 _Avoid_: API 定義, schema (一般語で、Effect Schema や DB schema と紛らわしい), 契約 (単独では handler の契約や運用の契約と区別できない)
 
 **audit log**:

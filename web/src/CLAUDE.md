@@ -16,7 +16,9 @@
 
 - route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
 - `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
-- URL、request、response、operation に固有の error 変換は所有 domain に置く。`shared/request-json.ts` は domain に依存しない JSON request 処理だけを持ち、同じ status でも意味が異なる文言を `shared` に集約しない。MFA は body の失敗の種類 (`_tag`) を区別する必要があるため、汎用 request へ統合しない。
+- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。他の場所から `fetch` や `SpaApiClient` を使うと `src/__tests__/web-data-access.test.ts` が落とす。例外は better-auth の client のデータと MFA チャレンジ (`mfa/use-mfa-challenge-flow.ts`) で、理由は ADR-0017 の「web への拡大」節にある。
+- 一覧を変える更新は、`*-atom.ts` が一覧の `reactivityKeys` を足した hook (例: `useChangeRole`) として渡し、画面は取り直しの完了を `shared/atom-runtime.ts` の `useWaitForValue` で待つ。事業所状態は `useCurrentCompany()` の `refresh()` で取り直す。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。
+- 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` をすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。特定の `_tag` かどうかで分岐する時は、同じ file の `hasFailureTag` を使う。MFA は `mfa/mfa-atom.ts` の `mfaErrorCodeOfCause` で失敗の code に読み替える。
 
 ## 検証
 

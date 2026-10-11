@@ -32,6 +32,7 @@ Accepted (2026-09-11)。判断主体は maintainer。設計上の論点と採ら
 - 違反行のある環境では migration が失敗し deploy が止まる (fail-closed)。本番は 2026-09-11 に 3 値のみであることを確認済み。test 由来の `"SUPERVISOR" as Role` は seed できなくなり、該当テスト (policy 6 件、accept 1 件、seed 1 件) は削除した
 - 将来 role を増やす時は migration (CHECK の作り直し) が要る。role の追加は権限モデルの変更で policy / UI / ADR を伴うため、migration 1 本の追加コストは相対的に小さい
 - SPA は `getJson<T>` の `as T` で応答を信じるため、CHECK の保証は web には及ばない。web の `role: Role` 宣言は他の field と同じ信頼水準である。web の応答を zod で読む本物の parse は別件とする
+  - (2026-10-11 追記) #264 で web は SPA の API の応答を契約 (ADR-0017「SPA の API 契約」) の Schema で decode するようになり、`getJson` は消えた。`role` は `RoleSchema` の 3 値で decode され、それ以外の値は client で decode の失敗になる
 - 同じ手法が `org_code` / `activation_status` / `invitation.status` の text 列に使える
 - prototype pollution 系のテスト (`"toString"` / `"constructor"`) は、引数が `Role` になり型で表現できなくなるため、`@ts-expect-error` の型レベルのテスト 1 件に置き換えた
 - `recordInvitationAcceptRejected` の `reason` は `string` のまま (db/ が src/ の型を import しない分担のため)。監視 query が `reason = 'unknown_invited_role'` を参照していても、値が来なくなるだけで query は壊れない
