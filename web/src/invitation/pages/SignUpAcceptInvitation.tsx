@@ -1,28 +1,37 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { authClient } from "../../auth/auth-client";
 import { redirectToSignIn } from "../../auth/auth-redirect";
 import { FullScreenLoader } from "../../shared/FullScreenLoader";
-import { describeRequestJsonError } from "../../shared/request-json";
+import { failureMessage } from "../../shared/failure-message";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../shared/ui/card";
-import { acceptInvitation } from "../invitation-api";
+import { acceptInvitationAtom } from "../invitation-atom";
 import { redirectUrlAfterAccept } from "../redirect-target";
 
 type AcceptRequestStatus = "processing" | "error";
+
+const ACCEPT_FAILED = "招待の受諾に失敗しました。";
 
 export const SignUpAcceptInvitation = () => {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState<AcceptRequestStatus>("processing");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const acceptInvitation = useAtomSet(acceptInvitationAtom, { mode: "promiseExit" });
 
   const invitationToken = searchParams.get("invitation_token");
   const redirectUrl = redirectUrlAfterAccept(searchParams);
 
   useEffect(() => {
-    if (!invitationToken) {
+    const fail = (message: string) => {
       setStatus("error");
-      setErrorMessage("招待トークンが見つかりません。");
+      setErrorMessage(message);
+    };
+
+    if (!invitationToken) {
+      fail("招待トークンが見つかりません。");
       return;
     }
 
@@ -31,26 +40,30 @@ export const SignUpAcceptInvitation = () => {
       .then(({ data }) => {
         if (!data?.session) {
           redirectToSignIn();
-          return null;
+          return;
         }
-        return acceptInvitation(invitationToken);
-      })
-      .then((result) => {
-        if (!result) return; // 未認証のため既に redirect している
-        window.location.replace(redirectUrl);
-      })
-      .catch((err) => {
-        setStatus("error");
-        setErrorMessage(
-          describeRequestJsonError(err, {
-            403: "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
-            410: "この招待は期限切れか、既に使用されています。",
-            404: "招待が見つかりません。",
-            fallback: "招待の受諾に失敗しました。",
+        return acceptInvitation({ payload: { invitation_token: invitationToken } }).then(
+          Exit.match({
+            onSuccess: () => window.location.replace(redirectUrl),
+            onFailure: (cause) =>
+              fail(
+                failureMessage(
+                  cause,
+                  {
+                    EmailMismatch:
+                      "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
+                    ExpiredOrUsed: "この招待は期限切れか、既に使用されています。",
+                    NotFound: "招待が見つかりません。",
+                    Unauthorized: ACCEPT_FAILED,
+                  },
+                  ACCEPT_FAILED,
+                ),
+              ),
           }),
         );
-      });
-  }, [invitationToken, redirectUrl]);
+      })
+      .catch(() => fail(ACCEPT_FAILED));
+  }, [invitationToken, redirectUrl, acceptInvitation]);
 
   if (status === "processing") {
     return <FullScreenLoader />;
