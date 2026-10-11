@@ -58,3 +58,16 @@ test("メンバー画面が受けた redirect_url へ、招待された人が受
   await inviteePage.goto(await magicLinkFor(INVITEE_EMAIL));
   await expect(inviteePage).toHaveURL(redirectUrl);
 });
+
+test("招待された人と違う user が受諾すると、宛先違いの文言を出す", async ({ page }) => {
+  await signInWithMagicLink(page, "e2e-signin@example.com");
+  await expect(page).toHaveURL(/\/account/);
+
+  await page.goto(`/auth/signup/accept-invitation?invitation_token=${INVITATION_TOKEN}`);
+
+  await expect(
+    page.getByText(
+      "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
+    ),
+  ).toBeVisible();
+});

@@ -7,9 +7,14 @@ import { expect, type Page } from "@playwright/test";
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
 export const BASE_URL = "http://localhost:3110";
 
+export const SWITCH_EMAIL = "e2e-switch@example.com";
+
+export const companySwitcher = (page: Page) =>
+  page.getByRole("combobox", { name: "事業所を切り替え" });
+
 // name は fixtures.ts の consumableFixtures の key と揃える (import すると pg の Pool が spec プロセスに入り runner が hang する)
 export const reseedFixture = (
-  name: "leave" | "delete" | "delete-multi" | "invitation" | "mfa" | "withdraw",
+  name: "leave" | "delete" | "delete-multi" | "invitation" | "mfa" | "switch" | "withdraw",
 ): void => {
   execFileSync("bun", ["run", join(process.cwd(), "e2e", "seed.ts"), name], { stdio: "inherit" });
 };

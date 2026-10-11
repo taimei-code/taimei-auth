@@ -457,3 +457,86 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
 
   await expect(page.locator("body")).not.toContainText(/invalid[_-]?code|two[_-]?factor/i);
 });
+
+test("無効化が Hono の rate limit の 429 を受けると、回数の上限の文言を出す", async ({ page }) => {
+  await signInWithMagicLink(page, MFA_EMAIL);
+  await enableMfaViaApi(page);
+  let limitedRequests = 0;
+  await page.route("**/api/account/mfa/disable", async (route) => {
+    limitedRequests++;
+    await route.fulfill({ status: 429, json: { error: "Too Many Requests" } });
+  });
+  await page.goto("/account/security");
+
+  await mfaRow(page).getByRole("button", { name: "無効にする" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#mfa-disable-code").fill("123456");
+  await dialog.getByRole("button", { name: "無効にする" }).click();
+
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
+  );
+  expect(limitedRequests).toBe(1);
+});
+
+test("MFA の状態の取得が失敗すると、取得できなかった旨を出す", async ({ page }) => {
+  await signInWithMagicLink(page, MFA_EMAIL);
+  let failedRequests = 0;
+  await page.route("**/api/account/mfa", async (route) => {
+    failedRequests++;
+    await route.fulfill({ status: 500, body: "" });
+  });
+
+  await page.goto("/account/security");
+
+  await expect(page.getByRole("alert")).toHaveText(
+    "多要素認証 (MFA) の設定状態を取得できませんでした。",
+  );
+  expect(failedRequests).toBeGreaterThanOrEqual(1);
+});
+
+test("登録が AlreadyEnabled で失敗すると、有効化ダイアログに再読み込みの案内を出す", async ({
+  page,
+}) => {
+  await signInWithMagicLink(page, MFA_EMAIL);
+  await page.route("**/api/account/mfa/enroll", async (route) => {
+    await route.fulfill({ status: 409, json: { _tag: "AlreadyEnabled" } });
+  });
+  await page.goto("/account/security");
+
+  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByText("多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。"),
+  ).toBeVisible();
+});
+
+test("有効化が EnrollmentChanged で失敗した後に開き直すと、登録をやり直す", async ({ page }) => {
+  await signInWithMagicLink(page, MFA_EMAIL);
+  let enrollRequests = 0;
+  await page.route("**/api/account/mfa/enroll", async (route) => {
+    enrollRequests++;
+    await route.continue();
+  });
+  await page.route("**/api/account/mfa/activate", async (route) => {
+    await route.fulfill({ status: 409, json: { _tag: "EnrollmentChanged" } });
+  });
+  await page.goto("/account/security");
+
+  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "次へ" }).click();
+  await dialog.locator("#mfa-enroll-code").fill("123456");
+  await dialog.getByRole("button", { name: "有効にする" }).click();
+  await expect(dialog.getByRole("alert")).toHaveText(
+    "登録情報が更新されました。もう一度登録を開始してください。",
+  );
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "次へ" })).toBeVisible();
+  expect(enrollRequests).toBe(2);
+});
