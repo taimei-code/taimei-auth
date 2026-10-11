@@ -1,3 +1,5 @@
+import { Data, Effect } from "effect";
+
 export class RequestJsonError extends Error {
   constructor(
     public readonly status: number,
@@ -7,6 +9,19 @@ export class RequestJsonError extends Error {
     this.name = "RequestJsonError";
   }
 }
+
+class RequestNetworkError extends Data.TaggedError("RequestNetworkError")<{
+  readonly cause: unknown;
+}> {}
+
+export const fromRequestJson = <T>(
+  run: () => Promise<T>,
+): Effect.Effect<T, RequestJsonError | RequestNetworkError> =>
+  Effect.tryPromise({
+    try: run,
+    catch: (cause) =>
+      cause instanceof RequestJsonError ? cause : new RequestNetworkError({ cause }),
+  });
 
 export function describeRequestJsonError(
   error: unknown,
