@@ -1,20 +1,21 @@
-import { useState } from "react";
+import { Exit } from "effect";
+import { type ReactNode, useState } from "react";
 import { Check, Loader2, Plus } from "lucide-react";
 
 import { orgCodeLabelJa } from "@core/company/org-code";
 import { roleLabelJa } from "@core/membership/role-label";
 
 import {
-  setCurrentCompany,
   useCurrentCompany,
+  useSwitchCompany,
   type Membership,
 } from "../../account/current-company";
-import { authClient } from "../../auth/auth-client";
+import { useSelfUserId } from "../../auth/auth-client";
 import { redirectAfterAuthChange } from "../../auth/auth-redirect";
 import { TransferOwnershipModal } from "../../membership/TransferOwnershipModal";
-import { removeMember } from "../../membership/membership-api";
+import { useRemoveMember } from "../../membership/membership-atom";
+import { hasFailureTag } from "../../shared/failure-message";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
-import { RequestJsonError } from "../../shared/request-json";
 import { Button } from "../../shared/ui/button";
 import { Separator } from "../../shared/ui/separator";
 import { AddCompanyDialog } from "../AddCompanyDialog";
@@ -23,15 +24,14 @@ export const Companies = () => {
   const { memberships, currentCompanyId, refresh } = useCurrentCompany();
   const [busyCompanyId, setBusyCompanyId] = useState<string | null>(null);
 
-  const selfUserId = authClient.useSession().data?.user.id ?? null;
+  const selfUserId = useSelfUserId();
+  const { switchCompany, switchPending } = useSwitchCompany();
+  const removeMember = useRemoveMember();
 
   const handleSwitch = (companyId: string) => {
     if (busyCompanyId) return;
     setBusyCompanyId(companyId);
-    setCurrentCompany(companyId)
-      .then(() => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }))
-      .catch(() => notifyError("事業所を切り替えられませんでした。"))
-      .finally(() => setBusyCompanyId(null));
+    switchCompany(companyId).finally(() => setBusyCompanyId(null));
   };
 
   const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
@@ -42,29 +42,36 @@ export const Companies = () => {
     setSoleOwnerCompanyId(null);
     let redirecting = false;
     removeMember(m.company_id, selfUserId)
-      .then(({ accountDeleted }) => {
-        if (accountDeleted) {
-          // 遷移完了まで busy を保つ (解除すると再クリックの 401 が表示される)
-          redirecting = true;
-          redirectAfterAuthChange("deleteAccount");
-          return;
-        }
-        return notifyAfterRefresh(refresh, {
-          done: `「${m.company_name}」から抜けました。`,
-          staleShort: "事業所から抜けました",
-        });
-      })
-      .catch((err) => {
-        if (err instanceof RequestJsonError && err.status === 409) {
-          setSoleOwnerCompanyId(m.company_id);
-        } else {
-          notifyError("事業所から抜けられませんでした。");
-        }
-      })
+      .then(
+        Exit.match({
+          onSuccess: ({ account_deleted }) => {
+            if (account_deleted) {
+              // 遷移完了まで busy を保つ (解除すると再クリックの 401 が表示される)
+              redirecting = true;
+              redirectAfterAuthChange("deleteAccount");
+              return;
+            }
+            return notifyAfterRefresh(refresh, {
+              done: `「${m.company_name}」から抜けました。`,
+              staleShort: "事業所から抜けました",
+            });
+          },
+          onFailure: (cause) => {
+            if (hasFailureTag(cause, "LastOwner")) {
+              setSoleOwnerCompanyId(m.company_id);
+            } else {
+              notifyError("事業所から抜けられませんでした。");
+            }
+          },
+        }),
+      )
       .finally(() => {
         if (!redirecting) setBusyCompanyId(null);
       });
   };
+
+  const switchDisabled = busyCompanyId !== null || switchPending;
+  const leaveDisabled = busyCompanyId !== null || selfUserId === null;
 
   return (
     <div>
@@ -86,69 +93,45 @@ export const Companies = () => {
       <Separator className="my-6" />
 
       <div className="space-y-2">
-        {memberships.map((m) => {
-          const isCurrent = m.company_id === currentCompanyId;
-          return (
-            <div
-              key={m.company_id}
-              className="flex items-center justify-between rounded-md border border-border px-4 py-3 text-sm"
-            >
-              <div>
-                <p className="flex items-center gap-2 font-medium text-foreground">
-                  {m.company_name}
-                  {isCurrent && (
-                    <span className="inline-flex items-center gap-1 text-xs text-primary">
-                      <Check className="size-3" aria-hidden="true" />
-                      選択中
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {roleLabelJa(m.role)} ・ {orgCodeLabelJa(m.company_org_code)}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {!isCurrent && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSwitch(m.company_id)}
-                    disabled={busyCompanyId !== null}
-                  >
-                    {busyCompanyId === m.company_id ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : null}
-                    切替
+        {memberships.map((m) => (
+          <CompanyRow
+            key={m.company_id}
+            membership={m}
+            isCurrent={m.company_id === currentCompanyId}
+          >
+            {m.company_id !== currentCompanyId && (
+              <SwitchCompanyButton
+                switching={busyCompanyId === m.company_id}
+                busy={switchDisabled}
+                onSwitch={() => handleSwitch(m.company_id)}
+              />
+            )}
+            {soleOwnerCompanyId === m.company_id ? (
+              <TransferOwnershipModal
+                companyId={m.company_id}
+                companyName={m.company_name}
+                onTransferred={() => {
+                  setSoleOwnerCompanyId(null);
+                  return refresh();
+                }}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    オーナーを委譲
                   </Button>
-                )}
-                {soleOwnerCompanyId === m.company_id ? (
-                  <TransferOwnershipModal
-                    companyId={m.company_id}
-                    companyName={m.company_name}
-                    onTransferred={() => {
-                      setSoleOwnerCompanyId(null);
-                      return refresh();
-                    }}
-                    trigger={
-                      <Button variant="outline" size="sm">
-                        オーナーを委譲
-                      </Button>
-                    }
-                  />
-                ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleLeave(m)}
-                    disabled={busyCompanyId !== null || !selfUserId}
-                  >
-                    抜ける
-                  </Button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                }
+              />
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleLeave(m)}
+                disabled={leaveDisabled}
+              >
+                抜ける
+              </Button>
+            )}
+          </CompanyRow>
+        ))}
       </div>
 
       {soleOwnerCompanyId && (
@@ -159,3 +142,44 @@ export const Companies = () => {
     </div>
   );
 };
+
+type CompanyRowProps = {
+  membership: Membership;
+  isCurrent: boolean;
+  children: ReactNode;
+};
+
+const CompanyRow = ({ membership, isCurrent, children }: CompanyRowProps) => (
+  <div className="flex items-center justify-between rounded-md border border-border px-4 py-3 text-sm">
+    <div>
+      <p className="flex items-center gap-2 font-medium text-foreground">
+        {membership.company_name}
+        {isCurrent && (
+          <span className="inline-flex items-center gap-1 text-xs text-primary">
+            <Check className="size-3" aria-hidden="true" />
+            選択中
+          </span>
+        )}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        {roleLabelJa(membership.role)} ・ {orgCodeLabelJa(membership.company_org_code)}
+      </p>
+    </div>
+    <div className="flex items-center gap-2">{children}</div>
+  </div>
+);
+
+const SwitchCompanyButton = ({
+  switching,
+  busy,
+  onSwitch,
+}: {
+  switching: boolean;
+  busy: boolean;
+  onSwitch: () => void;
+}) => (
+  <Button variant="outline" size="sm" onClick={onSwitch} disabled={busy}>
+    {switching ? <Loader2 className="size-4 animate-spin" /> : null}
+    切替
+  </Button>
+);

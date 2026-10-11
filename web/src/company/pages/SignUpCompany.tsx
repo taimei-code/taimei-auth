@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
+import type { OrgCode } from "@core/company/org-code";
 import { signInParamsSchema } from "@core/sign-in-params";
 
-import { listMyMemberships } from "../../account/current-company";
+import { companyStateAtom } from "../../account/account-atom";
 import { authClient } from "../../auth/auth-client";
 import {
   discardStaleSession,
@@ -12,8 +15,9 @@ import {
   redirectToSignIn,
   signInLandingUrl,
 } from "../../auth/auth-redirect";
+import { useWaitForValue } from "../../shared/atom-runtime";
+import { hasFailureTag } from "../../shared/failure-message";
 import { FullScreenLoader } from "../../shared/FullScreenLoader";
-import { RequestJsonError } from "../../shared/request-json";
 import { Button } from "../../shared/ui/button";
 import {
   Card,
@@ -26,28 +30,12 @@ import {
 import { Input } from "../../shared/ui/input";
 import { Label } from "../../shared/ui/label";
 import { OrgCodeField } from "../OrgCodeField";
-import { createCompany, type OrgCode } from "../company-api";
+import { createCompanyAtom } from "../company-atom";
 
-type GuardStatus = "loading" | "needs-input" | "already-has-company";
+const useCompanySignupGuard = (redirectUrl: string): boolean => {
+  const readCompanyState = useWaitForValue(companyStateAtom);
+  const [needsInput, setNeedsInput] = useState(false);
 
-// server の guard はこのパスを除外し SessionGuard も /auth/* を覆わないため、guard をここに置く
-export const SignUpCompany = () => {
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
-  const [status, setStatus] = useState<GuardStatus>("loading");
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const parseResult = useMemo(
-    () => signInParamsSchema.safeParse(Object.fromEntries(searchParams)),
-    [searchParams],
-  );
-
-  const redirectUrl = parseResult.success ? parseResult.data.redirect_url : "/account";
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: redirectUrl は searchParams から得るため、再 mount しない限り変わらない
   useEffect(() => {
     authClient
       .getSession()
@@ -56,47 +44,69 @@ export const SignUpCompany = () => {
           redirectToSignIn();
           return null;
         }
-        return listMyMemberships();
+        return readCompanyState().then((state) => state.memberships);
       })
       .then((memberships) => {
         if (memberships === null) return;
         if (memberships.length > 0) {
-          setStatus("already-has-company");
           window.location.replace(redirectUrl);
           return;
         }
-        setStatus("needs-input");
+        setNeedsInput(true);
       })
       .catch((e) => {
         if (isStaleSessionError(e)) {
           discardStaleSession(() => authClient.signOut());
           return;
         }
-        console.error("listMyMemberships failed", e);
-        setStatus("needs-input");
+        setNeedsInput(true);
       });
-  }, []);
+  }, [redirectUrl, readCompanyState]);
+
+  return needsInput;
+};
+
+// server の guard はこのパスを除外し SessionGuard も /auth/* を覆わないため、guard をここに置く
+export const SignUpCompany = () => {
+  const [searchParams] = useSearchParams();
+  const parsed = signInParamsSchema.safeParse(Object.fromEntries(searchParams));
+  const redirectUrl = parsed.success ? parsed.data.redirect_url : "/account";
+  const needsInput = useCompanySignupGuard(redirectUrl);
+
+  if (!needsInput) {
+    return <FullScreenLoader />;
+  }
+
+  return <SignUpCompanyForm redirectUrl={redirectUrl} />;
+};
+
+const SignUpCompanyForm = ({ redirectUrl }: { redirectUrl: string }) => {
+  const navigate = useNavigate();
+  const createCompany = useAtomSet(createCompanyAtom, { mode: "promiseExit" });
+  const [name, setName] = useState("");
+  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setErrorMessage(null);
-    createCompany({ name: name.trim(), org_code: orgCode })
-      .then(() => window.location.replace(redirectUrl))
-      .catch((err) => {
-        // 409 は別 tab で作成済み
-        if (err instanceof RequestJsonError && err.status === 409) {
-          window.location.replace(redirectUrl);
-          return;
-        }
-        setErrorMessage(err instanceof RequestJsonError ? err.message : "事業所登録に失敗しました");
-        setSubmitting(false);
-      });
+    createCompany({ payload: { name: name.trim(), org_code: orgCode } }).then(
+      Exit.match({
+        onSuccess: () => window.location.replace(redirectUrl),
+        onFailure: (cause) => {
+          const createdInAnotherTab = hasFailureTag(cause, "AlreadyExists");
+          if (createdInAnotherTab) {
+            window.location.replace(redirectUrl);
+            return;
+          }
+          setErrorMessage("事業所登録に失敗しました");
+          setSubmitting(false);
+        },
+      }),
+    );
   };
-
-  if (status === "loading" || status === "already-has-company") {
-    return <FullScreenLoader />;
-  }
 
   return (
     <div className="relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">

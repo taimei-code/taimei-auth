@@ -1,5 +1,9 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
+
+import type { OrgCode } from "@core/company/org-code";
 
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
@@ -15,7 +19,7 @@ import {
   DialogTrigger,
 } from "../shared/ui/dialog";
 import { OrgCodeField } from "./OrgCodeField";
-import { addCompany, type OrgCode } from "./company-api";
+import { addCompanyAtom } from "./company-atom";
 
 type Props = {
   onCreated: () => Promise<unknown>;
@@ -28,6 +32,7 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
   const [orgCode, setOrgCode] = useState<OrgCode>("CORPORATE");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const addCompany = useAtomSet(addCompanyAtom, { mode: "promiseExit" });
 
   const reset = () => {
     setName("");
@@ -46,16 +51,20 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     const trimmedName = name.trim();
     setSubmitting(true);
     setErrorMessage(null);
-    addCompany({ name: trimmedName, org_code: orgCode })
-      .then(() => {
-        reset();
-        setOpen(false);
-        return notifyAfterRefresh(onCreated, {
-          done: `「${trimmedName}」を作成し、現在の事業所に切り替えました。`,
-          staleShort: "事業所を作成しました",
-        });
-      })
-      .catch(() => setErrorMessage("事業所の作成に失敗しました。"))
+    addCompany({ payload: { name: trimmedName, org_code: orgCode } })
+      .then(
+        Exit.match({
+          onSuccess: () => {
+            reset();
+            setOpen(false);
+            return notifyAfterRefresh(onCreated, {
+              done: `「${trimmedName}」を作成し、現在の事業所に切り替えました。`,
+              staleShort: "事業所を作成しました",
+            });
+          },
+          onFailure: () => setErrorMessage("事業所の作成に失敗しました。"),
+        }),
+      )
       .finally(() => setSubmitting(false));
   };
 
