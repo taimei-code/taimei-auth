@@ -1,6 +1,11 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Copy, Loader2, ShieldCheck } from "lucide-react";
 
+import type { MfaEnrollment } from "@core/mfa/mfa-contract";
+
+import { useRefreshAndWait } from "../shared/atom-runtime";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -14,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../shared/ui/dialog";
-import { activateMfa, enrollMfa, mfaErrorCodeOf, type MfaEnrollment } from "./mfa-api";
+import { activateMfaAtom, enrollMfaAtom, mfaErrorCodeOfCause, mfaStatusAtom } from "./mfa-atom";
 import { describeMfaChallengeError, useMfaCodeEntry } from "./use-mfa-code-entry";
 
 const CODE_INPUT_ID = "mfa-enroll-code";
@@ -23,8 +28,13 @@ type EnrollState =
   | { step: "starting" }
   | { step: "scan"; enrollment: MfaEnrollment }
   | { step: "verify"; enrollment: MfaEnrollment }
-  | { step: "recoveryCodes"; recoveryCodes: string[] }
+  | { step: "recoveryCodes"; recoveryCodes: readonly string[] }
   | { step: "failed"; message: string };
+
+const failedStep = (cause: Parameters<typeof mfaErrorCodeOfCause>[0]): EnrollState => ({
+  step: "failed",
+  message: describeMfaChallengeError(mfaErrorCodeOfCause(cause)),
+});
 
 // URI が想定外の形でも QR 側は出せるよう null を返す
 const readTotpSecret = (totpUri: string): string | null =>
@@ -114,38 +124,89 @@ const TotpQrCode = ({ totpUri }: { totpUri: string }) => {
   );
 };
 
+const ScanStep = ({ totpUri, onNext }: { totpUri: string; onNext: () => void }) => {
+  const totpSecret = readTotpSecret(totpUri);
+  return (
+    <div className="space-y-4">
+      <TotpQrCode totpUri={totpUri} />
+      <div className="space-y-2">
+        <p className="text-sm text-muted-foreground">
+          認証アプリで QR コードを読み取ってください。読み取れない場合は、次の secret
+          を手入力します。
+        </p>
+        <p className="break-all rounded-md bg-muted px-3 py-2 font-mono text-sm" translate="no">
+          {totpSecret ?? "—"}
+        </p>
+        {totpSecret !== null && <CopyButton value={totpSecret} label="secret をコピー" />}
+      </div>
+      <DialogFooter>
+        <Button onClick={onNext}>次へ</Button>
+      </DialogFooter>
+    </div>
+  );
+};
+
+const RecoveryCodesStep = ({
+  recoveryCodes,
+  onClose,
+}: {
+  recoveryCodes: readonly string[];
+  onClose: () => void;
+}) => (
+  <div className="space-y-4">
+    <p className="text-sm text-destructive">
+      このダイアログを閉じると再表示できません。認証アプリを使えなくなった時の唯一の
+      ログイン手段なので、必ず控えてから閉じてください。
+    </p>
+    <ul className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3" translate="no">
+      {recoveryCodes.map((code) => (
+        <li key={code} className="font-mono text-sm">
+          {code}
+        </li>
+      ))}
+    </ul>
+    <CopyButton value={recoveryCodes.join("\n")} label="リカバリーコードをコピー" />
+    <DialogFooter>
+      <Button onClick={onClose}>控えたので閉じる</Button>
+    </DialogFooter>
+  </div>
+);
+
 type Props = {
-  onEnabled: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
-export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
+export const MfaEnrollDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
   // 登録途中の再 enroll に server が同じ内容を返す (ADR-0013) ことを利用した表示用 cache
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
+  const refreshStatus = useRefreshAndWait(mfaStatusAtom);
+  const enrollMfa = useAtomSet(enrollMfaAtom, { mode: "promiseExit" });
+  const activateMfa = useAtomSet(activateMfaAtom, { mode: "promiseExit" });
 
   const entry = useMfaCodeEntry({
     inputId: CODE_INPUT_ID,
     submit: ({ code }) => {
-      if (state.step !== "verify") return Promise.resolve();
-      const { recoveryCodes } = state.enrollment;
-      return activateMfa({ code, enrollmentId: state.enrollment.enrollmentId })
-        .then(() => {
-          setResumableEnrollment(null);
-          setState({ step: "recoveryCodes", recoveryCodes });
-        })
-        .catch((error: unknown) => {
-          // cache を残すと開き直しても古い登録を再表示して 409 を繰り返す
-          if (mfaErrorCodeOf(error) === "enrollment_changed") {
+      if (state.step !== "verify") return Promise.resolve(null);
+      const { enrollment } = state;
+      // reactivityKeys を付けると有効化の直後に状態が変わり、MfaSettingsItem がこのダイアログを外す
+      return activateMfa({ payload: { code, enrollment_id: enrollment.enrollment_id } }).then(
+        Exit.match({
+          onSuccess: () => {
             setResumableEnrollment(null);
-          }
-          throw error;
-        });
+            setState({ step: "recoveryCodes", recoveryCodes: enrollment.recovery_codes });
+            return null;
+          },
+          onFailure: (cause) => {
+            const errorCode = mfaErrorCodeOfCause(cause);
+            if (errorCode === "enrollment_changed") setResumableEnrollment(null);
+            return errorCode;
+          },
+        }),
+      );
     },
   });
-
-  const totpSecret = state.step === "scan" ? readTotpSecret(state.enrollment.totpUri) : null;
 
   const handleOpenChange = (next: boolean) => {
     if (state.step === "starting" && open) return; // enroll の応答待ちに閉じると途中の登録が残る
@@ -159,23 +220,21 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
         return;
       }
       setState({ step: "starting" });
-      enrollMfa()
-        .then((enrollment) => {
-          setResumableEnrollment(enrollment);
-          setState({ step: "scan", enrollment });
-        })
-        .catch((error: unknown) =>
-          setState({
-            step: "failed",
-            message: describeMfaChallengeError(mfaErrorCodeOf(error)),
-          }),
-        );
+      void enrollMfa({}).then(
+        Exit.match({
+          onSuccess: (enrollment) => {
+            setResumableEnrollment(enrollment);
+            setState({ step: "scan", enrollment });
+          },
+          onFailure: (cause) => setState(failedStep(cause)),
+        }),
+      );
       return;
     }
 
     setOpen(false);
     if (state.step === "recoveryCodes") {
-      void notifyAfterRefresh(onEnabled, {
+      void notifyAfterRefresh(refreshStatus, {
         done: "多要素認証 (MFA) を有効にしました。",
         staleShort: "多要素認証 (MFA) を有効にしました",
       });
@@ -207,27 +266,10 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
         )}
 
         {state.step === "scan" && (
-          <div className="space-y-4">
-            <TotpQrCode totpUri={state.enrollment.totpUri} />
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                認証アプリで QR コードを読み取ってください。読み取れない場合は、次の secret
-                を手入力します。
-              </p>
-              <p
-                className="break-all rounded-md bg-muted px-3 py-2 font-mono text-sm"
-                translate="no"
-              >
-                {totpSecret ?? "—"}
-              </p>
-              {totpSecret !== null && <CopyButton value={totpSecret} label="secret をコピー" />}
-            </div>
-            <DialogFooter>
-              <Button onClick={() => setState({ step: "verify", enrollment: state.enrollment })}>
-                次へ
-              </Button>
-            </DialogFooter>
-          </div>
+          <ScanStep
+            totpUri={state.enrollment.totp_uri}
+            onNext={() => setState({ step: "verify", enrollment: state.enrollment })}
+          />
         )}
 
         {state.step === "verify" && (
@@ -266,23 +308,10 @@ export const MfaEnrollDialog = ({ onEnabled, trigger }: Props) => {
         )}
 
         {state.step === "recoveryCodes" && (
-          <div className="space-y-4">
-            <p className="text-sm text-destructive">
-              このダイアログを閉じると再表示できません。認証アプリを使えなくなった時の唯一の
-              ログイン手段なので、必ず控えてから閉じてください。
-            </p>
-            <ul className="grid grid-cols-2 gap-2 rounded-md bg-muted p-3" translate="no">
-              {state.recoveryCodes.map((code) => (
-                <li key={code} className="font-mono text-sm">
-                  {code}
-                </li>
-              ))}
-            </ul>
-            <CopyButton value={state.recoveryCodes.join("\n")} label="リカバリーコードをコピー" />
-            <DialogFooter>
-              <Button onClick={() => handleOpenChange(false)}>控えたので閉じる</Button>
-            </DialogFooter>
-          </div>
+          <RecoveryCodesStep
+            recoveryCodes={state.recoveryCodes}
+            onClose={() => handleOpenChange(false)}
+          />
         )}
       </DialogContent>
     </Dialog>

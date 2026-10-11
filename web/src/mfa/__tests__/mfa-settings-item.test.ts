@@ -4,14 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { MfaSettingsItem } from "../MfaSettingsItem";
 
-const refresh = async () => undefined;
-
 describe("MfaSettingsItem", () => {
   test("enabled は badge、残数、警告、disable を既存順で表示する", () => {
     const html = renderToStaticMarkup(
       createElement(MfaSettingsItem, {
-        status: { enabled: true, recoveryCodesRemaining: 3 },
-        refresh,
+        status: { enabled: true, recovery_codes_remaining: 3 },
       }),
     );
 
@@ -26,8 +23,7 @@ describe("MfaSettingsItem", () => {
   test("enabled=false は enroll を表示する", () => {
     const html = renderToStaticMarkup(
       createElement(MfaSettingsItem, {
-        status: { enabled: false, recoveryCodesRemaining: 0 },
-        refresh,
+        status: { enabled: false, recovery_codes_remaining: 0 },
       }),
     );
 

@@ -1,13 +1,9 @@
 import {
   MFA_WIRE_ERROR_CODES,
-  type MfaActivateRequest,
   type MfaChallengeStateResponse,
   type MfaChallengeVerifyRequest,
   type MfaChallengeVerifyResponse,
   type MfaCodeKind,
-  type MfaDisableRequest,
-  type MfaEnrollResponse,
-  type MfaStatusResponse,
   type MfaClientFacingErrorCode,
 } from "@core/mfa/client-facing-contracts";
 
@@ -15,18 +11,6 @@ import type { Unauthorized } from "@core/membership/guard/errors";
 import type { MfaError } from "@core/mfa/error-mapping";
 
 export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
-
-export type MfaStatus = {
-  enabled: boolean;
-  recoveryCodesRemaining: number;
-};
-
-// recoveryCodes を本人に渡せるのはこの応答だけ (有効化後は残数しか取れない)。画面より先へ持ち出さない
-export type MfaEnrollment = {
-  enrollmentId: string;
-  totpUri: string;
-  recoveryCodes: string[];
-};
 
 export type MfaChallengeState = MfaChallengeStateResponse;
 
@@ -112,49 +96,6 @@ const requireRecord = (body: unknown): Record<string, unknown> => {
   return record;
 };
 
-const isStringArray = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item) => typeof item === "string");
-
-// satisfies は契約に必須 field が増えた時に型エラーで知らせる
-const readMfaStatus = (body: unknown): MfaStatus => {
-  const record = requireRecord(body);
-  if (typeof record.enabled !== "boolean" || typeof record.recovery_codes_remaining !== "number")
-    throw new MfaApiError("unknown");
-  const checked = {
-    enabled: record.enabled,
-    recovery_codes_remaining: record.recovery_codes_remaining,
-  } satisfies MfaStatusResponse;
-  return {
-    enabled: checked.enabled,
-    recoveryCodesRemaining: checked.recovery_codes_remaining,
-  };
-};
-
-// 空の totp_uri は QR も secret も無い scan 画面に、空の recovery_codes は復旧手段の無い有効化になる
-const readMfaEnrollment = (body: unknown): MfaEnrollment => {
-  const record = requireRecord(body);
-  if (
-    typeof record.enrollment_id !== "string" ||
-    record.enrollment_id === "" ||
-    typeof record.totp_uri !== "string" ||
-    record.totp_uri === "" ||
-    !isStringArray(record.recovery_codes) ||
-    record.recovery_codes.length === 0
-  ) {
-    throw new MfaApiError("unknown");
-  }
-  const checked = {
-    enrollment_id: record.enrollment_id,
-    totp_uri: record.totp_uri,
-    recovery_codes: record.recovery_codes,
-  } satisfies MfaEnrollResponse;
-  return {
-    enrollmentId: checked.enrollment_id,
-    totpUri: checked.totp_uri,
-    recoveryCodes: checked.recovery_codes,
-  };
-};
-
 const readMfaChallengeState = (body: unknown): MfaChallengeState => {
   const record = requireRecord(body);
   if (typeof record.pending !== "boolean") throw new MfaApiError("unknown");
@@ -170,24 +111,6 @@ const readMfaChallengePassed = (body: unknown): MfaChallengePassed => {
   const checked = { redirect_url: record.redirect_url } satisfies MfaChallengeVerifyResponse;
   return { redirectUrl: checked.redirect_url };
 };
-
-export const getMfaStatus = (): Promise<MfaStatus> =>
-  requestJson("/api/account/mfa").then(readMfaStatus);
-
-export const enrollMfa = (): Promise<MfaEnrollment> =>
-  postJson("/api/account/mfa/enroll").then(readMfaEnrollment);
-
-export const activateMfa = (input: { code: string; enrollmentId: string }): Promise<void> =>
-  postJson("/api/account/mfa/activate", {
-    code: input.code,
-    enrollment_id: input.enrollmentId,
-  } satisfies MfaActivateRequest).then(() => undefined);
-
-export const disableMfa = (input: { code: string; kind: MfaCodeKind }): Promise<void> =>
-  postJson("/api/account/mfa/disable", {
-    code: input.code,
-    kind: input.kind,
-  } satisfies MfaDisableRequest).then(() => undefined);
 
 export const getMfaChallenge = (signal?: AbortSignal): Promise<MfaChallengeState> =>
   requestJson("/api/mfa/challenge", { signal }).then(readMfaChallengeState);

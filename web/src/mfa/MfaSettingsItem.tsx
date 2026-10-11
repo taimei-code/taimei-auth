@@ -1,8 +1,9 @@
+import type { MfaStatus } from "@core/mfa/mfa-contract";
+
 import { Badge } from "../shared/ui/badge";
 import { Button } from "../shared/ui/button";
 import { MfaDisableDialog } from "./MfaDisableDialog";
 import { MfaEnrollDialog } from "./MfaEnrollDialog";
-import type { MfaStatus } from "./mfa-api";
 
 // 再発行の導線が無い (復旧は運用スクリプト経由) ため使い切る前に警告する
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
@@ -12,13 +13,7 @@ const describeRecoveryCodeShortage = (remaining: number): string =>
     ? "リカバリーコードを使い切りました。認証アプリを使えなくなるとログインできなくなります (再発行の導線はありません)。"
     : "リカバリーコードの残りが少なくなっています。使い切ると、認証アプリを失った時にログインできなくなります (再発行の導線はありません)。";
 
-export const MfaSettingsItem = ({
-  status,
-  refresh,
-}: {
-  status: MfaStatus;
-  refresh: () => Promise<unknown>;
-}) => (
+export const MfaSettingsItem = ({ status }: { status: MfaStatus }) => (
   <li className="flex items-start justify-between gap-4 py-5">
     <div>
       <p className="font-medium">多要素認証 (MFA)</p>
@@ -28,11 +23,11 @@ export const MfaSettingsItem = ({
       {status.enabled && (
         <>
           <p className="mt-2 text-sm text-muted-foreground">
-            リカバリーコードの残り: {status.recoveryCodesRemaining} 個
+            リカバリーコードの残り: {status.recovery_codes_remaining} 個
           </p>
-          {status.recoveryCodesRemaining <= LOW_RECOVERY_CODE_THRESHOLD && (
+          {status.recovery_codes_remaining <= LOW_RECOVERY_CODE_THRESHOLD && (
             <p className="mt-1 text-sm text-destructive">
-              {describeRecoveryCodeShortage(status.recoveryCodesRemaining)}
+              {describeRecoveryCodeShortage(status.recovery_codes_remaining)}
             </p>
           )}
         </>
@@ -44,7 +39,6 @@ export const MfaSettingsItem = ({
       </Badge>
       {status.enabled ? (
         <MfaDisableDialog
-          onDisabled={refresh}
           trigger={
             <Button variant="outline" size="sm">
               無効にする
@@ -52,7 +46,7 @@ export const MfaSettingsItem = ({
           }
         />
       ) : (
-        <MfaEnrollDialog onEnabled={refresh} trigger={<Button size="sm">有効にする</Button>} />
+        <MfaEnrollDialog trigger={<Button size="sm">有効にする</Button>} />
       )}
     </div>
   </li>

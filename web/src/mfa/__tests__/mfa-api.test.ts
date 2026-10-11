@@ -1,14 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { postInit, restoreFetch, stubFetch } from "../../shared/__tests__/fetch-stub";
-import {
-  activateMfa,
-  disableMfa,
-  enrollMfa,
-  getMfaChallenge,
-  getMfaStatus,
-  mfaErrorCodeOf,
-  verifyMfaChallenge,
-} from "../mfa-api";
+import { restoreFetch, stubFetch } from "../../shared/__tests__/fetch-stub";
+import { getMfaChallenge, mfaErrorCodeOf, verifyMfaChallenge } from "../mfa-api";
 
 afterEach(restoreFetch);
 
@@ -19,31 +11,6 @@ const codeOfRejection = (promise: Promise<unknown>): Promise<string> =>
   }, mfaErrorCodeOf);
 
 describe("応答 → view 変換", () => {
-  test("AC-006 getMfaStatus は snake 応答 を camel view へ変換する", async () => {
-    stubFetch(Response.json({ enabled: true, recovery_codes_remaining: 7 }));
-
-    expect(await getMfaStatus()).toEqual({
-      enabled: true,
-      recoveryCodesRemaining: 7,
-    });
-  });
-
-  test("AC-007 enrollMfa は登録内容を camel view へ変換する", async () => {
-    stubFetch(
-      Response.json({
-        enrollment_id: "enr-1",
-        totp_uri: "otpauth://totp/x?secret=abc",
-        recovery_codes: ["aaaaa-bbbbb", "ccccc-ddddd"],
-      }),
-    );
-
-    expect(await enrollMfa()).toEqual({
-      enrollmentId: "enr-1",
-      totpUri: "otpauth://totp/x?secret=abc",
-      recoveryCodes: ["aaaaa-bbbbb", "ccccc-ddddd"],
-    });
-  });
-
   test("AC-021 getMfaChallenge は view 形を返す", async () => {
     stubFetch(Response.json({ pending: true }));
 
@@ -59,20 +26,10 @@ describe("応答 → view 変換", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  test("AC-010 旧 server が返していた field を含む未知の追加 field は無視して同じ view 値を返す", async () => {
-    stubFetch(
-      Response.json({
-        enabled: false,
-        in_effect: false,
-        recovery_codes_remaining: 0,
-        added_later: "x",
-      }),
-    );
+  test("AC-010 未知の追加 field は無視して同じ view 値を返す", async () => {
+    stubFetch(Response.json({ pending: true, added_later: "x" }));
 
-    expect(await getMfaStatus()).toEqual({
-      enabled: false,
-      recoveryCodesRemaining: 0,
-    });
+    expect(await getMfaChallenge()).toEqual({ pending: true });
   });
 
   test("getMfaChallenge は caller の AbortSignal を fetch へ渡す", async () => {
@@ -91,33 +48,6 @@ describe("応答 → view 変換", () => {
 
 describe("positive check — 形の崩れた 2xx を unknown へ縮退", () => {
   test.each([
-    ["status: enabled 欠け", () => getMfaStatus(), { recovery_codes_remaining: 1 }],
-    ["status: 型違い", () => getMfaStatus(), { enabled: "yes", recovery_codes_remaining: 1 }],
-    [
-      "enroll: recovery_codes 欠け",
-      () => enrollMfa(),
-      { enrollment_id: "enr-1", totp_uri: "otpauth://x" },
-    ],
-    [
-      "enroll: recovery_codes に非 string 混入",
-      () => enrollMfa(),
-      { enrollment_id: "enr-1", totp_uri: "otpauth://x", recovery_codes: ["aaaaa", 42] },
-    ],
-    [
-      "enroll: enrollment_id が空文字",
-      () => enrollMfa(),
-      { enrollment_id: "", totp_uri: "otpauth://x", recovery_codes: ["aaaaa"] },
-    ],
-    [
-      "enroll: totp_uri が空文字",
-      () => enrollMfa(),
-      { enrollment_id: "enr-1", totp_uri: "", recovery_codes: ["aaaaa"] },
-    ],
-    [
-      "enroll: recovery_codes が空配列",
-      () => enrollMfa(),
-      { enrollment_id: "enr-1", totp_uri: "otpauth://x", recovery_codes: [] },
-    ],
     ["challenge: pending 非 boolean", () => getMfaChallenge(), { pending: "true" }],
     ["verify: redirect_url 欠け", () => verifyMfaChallenge({ code: "1", kind: "totp" }), {}],
     [
@@ -129,51 +59,6 @@ describe("positive check — 形の崩れた 2xx を unknown へ縮退", () => {
     stubFetch(Response.json(body));
 
     expect(await codeOfRejection(call())).toBe("unknown");
-  });
-
-  test("AC-008 status: 空 body も unknown へ縮退する", async () => {
-    stubFetch(new Response(null, { status: 200 }));
-
-    expect(await codeOfRejection(getMfaStatus())).toBe("unknown");
-  });
-});
-
-describe("request 方向 — camel view → snake 応答", () => {
-  test("AC-012 activateMfa は enrollment_id で送信する", async () => {
-    const fetchSpy = stubFetch(Response.json({ ok: true }));
-
-    await activateMfa({ code: "123456", enrollmentId: "enr-1" });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/account/mfa/activate",
-      postInit({ code: "123456", enrollment_id: "enr-1" }),
-    );
-  });
-
-  test("disableMfa は code / kind をそのまま送信する", async () => {
-    const fetchSpy = stubFetch(Response.json({ ok: true }));
-
-    await disableMfa({ code: "aaaaa-bbbbb", kind: "recovery_code" });
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/account/mfa/disable",
-      postInit({ code: "aaaaa-bbbbb", kind: "recovery_code" }),
-    );
-  });
-});
-
-describe("AC-022 void endpoint は 2xx body によらず resolve する", () => {
-  test.each([
-    ["activateMfa 空 body", () => activateMfa({ code: "1", enrollmentId: "e" }), null],
-    ["activateMfa ok body", () => activateMfa({ code: "1", enrollmentId: "e" }), { ok: true }],
-    ["disableMfa 空 body", () => disableMfa({ code: "1", kind: "totp" }), null],
-    ["disableMfa ok body", () => disableMfa({ code: "1", kind: "totp" }), { ok: true }],
-  ] as const)("%s", async (_name, call, body) => {
-    stubFetch(body === null ? new Response(null, { status: 200 }) : Response.json(body));
-
-    await expect(call()).resolves.toBeUndefined();
   });
 });
 
@@ -201,14 +86,14 @@ describe("AC-011 error code 解決 (公開関数越し)", () => {
           : Response.json(body, { status }),
     );
 
-    expect(await codeOfRejection(disableMfa({ code: "1", kind: "totp" }))).toBe(expected);
+    expect(await codeOfRejection(verifyMfaChallenge({ code: "1", kind: "totp" }))).toBe(expected);
   });
 });
 
 test("失敗の message は汎用文言のみでエラーコードを露出しない", async () => {
   stubFetch(Response.json({ _tag: "Locked" }, { status: 429 }));
 
-  const error = await disableMfa({ code: "1", kind: "totp" }).then(
+  const error = await verifyMfaChallenge({ code: "1", kind: "totp" }).then(
     () => undefined,
     (rejected: unknown) => rejected,
   );
