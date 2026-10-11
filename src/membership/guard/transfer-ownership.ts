@@ -1,17 +1,15 @@
 import { Effect } from "effect";
-import { type ParseBody, requireActor, requireMembershipOf, requireTargetMembership } from "./core";
+import { type Actor, requireMembershipOf, requireTargetMembership } from "./core";
 import { AlreadyOwner, InvalidArgument } from "./errors";
 
 export const requireTransferOwnership = Effect.fnUntraced(function* (opts: {
-  headers: Headers;
+  actor: Actor;
   companyId: string;
-  parseBody: ParseBody<{ toUserId: string }>;
+  toUserId: string;
 }) {
-  const actor = yield* requireActor(opts.headers);
-  const parsed = yield* opts.parseBody;
-  if (parsed.toUserId === actor.id) return yield* new InvalidArgument({});
-  yield* requireMembershipOf(actor, opts.companyId, "OWNER");
-  const target = yield* requireTargetMembership(parsed.toUserId, opts.companyId);
+  if (opts.toUserId === opts.actor.id) return yield* new InvalidArgument({});
+  yield* requireMembershipOf(opts.actor, opts.companyId, "OWNER");
+  const target = yield* requireTargetMembership(opts.toUserId, opts.companyId);
   if (target.role === "OWNER") return yield* new AlreadyOwner();
-  return { actor, toUserId: parsed.toUserId };
+  return { actor: opts.actor, toUserId: opts.toUserId };
 });

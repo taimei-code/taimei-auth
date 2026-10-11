@@ -11,6 +11,9 @@ import {
   type MfaClientFacingErrorCode,
 } from "@core/mfa/client-facing-contracts";
 
+import type { Unauthorized } from "@core/membership/guard/errors";
+import type { MfaError } from "@core/mfa/error-mapping";
+
 export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
 
 export type MfaStatus = {
@@ -57,16 +60,33 @@ export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
 const asRecord = (body: unknown): Record<string, unknown> | null =>
   typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
 
-function readClientFacingError(body: unknown): string | undefined {
-  const error = asRecord(body)?.error;
-  return typeof error === "string" ? error : undefined;
+const CODE_BY_TAG: { [E in MfaError | Unauthorized as E["_tag"]]: E["error"] } = {
+  InvalidCode: "invalid_code",
+  Locked: "locked",
+  ChallengeExpired: "challenge_expired",
+  AlreadyEnabled: "already_enabled",
+  EnrollmentChanged: "enrollment_changed",
+  NotEnabled: "not_enabled",
+  MfaNotFound: "not_found",
+  Unauthorized: "unauthorized",
+};
+
+const isKnownTag = (tag: unknown): tag is keyof typeof CODE_BY_TAG =>
+  typeof tag === "string" && Object.hasOwn(CODE_BY_TAG, tag);
+
+// 入力の decode 失敗は body の無い 400 で返る
+function readClientFacingError(status: number, body: unknown): string | undefined {
+  const tag = asRecord(body)?._tag;
+  if (isKnownTag(tag)) return CODE_BY_TAG[tag];
+  return status === 400 && body === undefined ? "invalid_argument" : undefined;
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
   // credentials を外すとローテート後の session の Set-Cookie を受け取れず、操作直後にログアウトする
   const res = await fetch(url, { credentials: "include", ...init });
   const body: unknown = await res.json().catch(() => undefined);
-  if (!res.ok) throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(body)));
+  if (!res.ok)
+    throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(res.status, body)));
   return body;
 }
 

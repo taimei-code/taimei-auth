@@ -219,7 +219,7 @@ test("AC-006 verify が直接 challenge_expired を返したら入力を閉じ�
       await route.fulfill({ json: { pending: true } });
       return;
     }
-    await route.fulfill({ status: 401, json: { error: "challenge_expired" } });
+    await route.fulfill({ status: 401, json: { _tag: "ChallengeExpired" } });
   });
 
   await page.goto("/auth/mfa");
@@ -318,7 +318,7 @@ test("AC-013/024 verify 中は操作を止め、同期二重 submit でも POST 
     }
     postCalls++;
     await verifyPending;
-    await route.fulfill({ status: 400, json: { error: "invalid_code" } });
+    await route.fulfill({ status: 400, json: { _tag: "InvalidCode" } });
   });
 
   await page.goto("/auth/mfa");

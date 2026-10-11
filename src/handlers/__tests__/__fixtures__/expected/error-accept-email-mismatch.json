@@ -2,6 +2,6 @@
   "status": 403,
   "contentType": "application/json",
   "body": {
-    "error": "email_mismatch"
+    "_tag": "EmailMismatch"
   }
 }

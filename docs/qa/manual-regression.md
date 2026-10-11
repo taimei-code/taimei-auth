@@ -118,10 +118,10 @@
 ## QA-MR-11: Effect runtime と ALS の共存 (remote workerd、ADR-0017)
 
 - **契機**: `effect` の version 変更、ADR-0017 の Stage 完了 PR (runtime / adapter / ports / Guard / Use-case を Effect 様式へ切り替える PR)、および本番デプロイ後
-- **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd と実 binding で動くことと、guard の failure が client への応答の形に変換されることは、`deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` を 20 回連続で呼ぶことと、未認証の `GET /api/account/memberships` が 401 `{"error":"unauthorized"}` を返すこと)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime の機構は `/health` と同じで、残るリスクは adapter が Sentry に送る 500 と `wrangler rollback` で受ける)
+- **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd と実 binding で動くことと、guard の failure が client への応答の形に変換されることは、`deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` を 20 回連続で呼ぶことと、未認証の `GET /api/account/memberships` が 401 `{"_tag":"Unauthorized"}` を返すこと)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime の機構は `/health` と同じで、残るリスクは adapter と SPA の API の ErrorReporter が Sentry に送る 500 と `wrangler rollback` で受ける)
 - **手順**:
-  1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"error":"unauthorized"}` が出ていることを確認する
+  1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"_tag":"Unauthorized"}` が出ていることを確認する
   2. デプロイ後、本番にブラウザでログインして `/account` を開き、現在の事業所と所属一覧が表示されることを確認する (guard の actor 解決 → ports → RoutingPool が Effect runtime 上で動くことの観測)
   3. `/account/members` で自分以外の member の役割を 1 段変えて戻す (use-case の tx が request の ALS pool で commit することの観測。変更は元に戻す)
-  4. Sentry に `handler: runRoute` / `runMiddleware` / `runRpc` tag の新規 event が出ていないことを確認する
+  4. Sentry に `handler: spaApi` / `runRoute` / `runMiddleware` / `runRpc` tag の新規 event が出ていないことを確認する
 - **期待結果**: 1 が緑、2〜3 が期待どおり、4 に新規 event が無い (用語は ADR-0017 の Decision)

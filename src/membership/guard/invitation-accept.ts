@@ -3,7 +3,7 @@ import type { InvitationRow } from "@/db/repositories/invitation";
 import { isAcceptableAt } from "../../invitation/policy";
 import { InvitationRepo } from "../../invitation/ports";
 import { MembershipRepo } from "../ports";
-import { type Actor, type ParseBody, requireActor } from "./core";
+import type { Actor } from "./core";
 import { EmailMismatch, ExpiredOrUsed, NotFound } from "./errors";
 
 type InvitationAcceptGrant =
@@ -11,13 +11,12 @@ type InvitationAcceptGrant =
   | { mode: "reused"; companyId: string };
 
 export const requireInvitationAccept = Effect.fnUntraced(function* (opts: {
-  headers: Headers;
-  parseBody: ParseBody<{ token: string }>;
+  actor: Actor;
+  token: string;
 }) {
-  const actor = yield* requireActor(opts.headers);
-  const parsed = yield* opts.parseBody;
+  const { actor } = opts;
   const invitation = yield* InvitationRepo.use((invitations) =>
-    invitations.findInvitationByToken(parsed.token),
+    invitations.findInvitationByToken(opts.token),
   );
   if (!invitation) return yield* new NotFound();
   if (invitation.email.toLowerCase() !== actor.email.toLowerCase())

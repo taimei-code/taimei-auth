@@ -1,7 +1,5 @@
 {
   "status": 400,
-  "contentType": "application/json",
-  "body": {
-    "error": "invalid_argument"
-  }
+  "contentType": null,
+  "body": null
 }

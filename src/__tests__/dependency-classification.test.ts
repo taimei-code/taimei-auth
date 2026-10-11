@@ -52,7 +52,7 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
 };
 
 describe("依存分類 (biome ban ↔ package.json) の config invariant", () => {
-  test("QA-I-01: web 専用 ban は 2 copy あり group 集合が一致する", () => {
+  test("QA-I-01: web 専用 ban の全 copy で group 集合が一致する", () => {
     expect(webOnlyBanViolations(readBiomeConfig())).toEqual([]);
   });
 
@@ -76,7 +76,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     );
   });
 
-  test("QA-M-06: @connectrpc/connect-node は依存から不在かつ 2 copy で ban 済み", () => {
+  test("QA-M-06: @connectrpc/connect-node は依存から不在かつ全 copy で ban 済み", () => {
     const config = readBiomeConfig();
     const pkg = readPackageJson();
 

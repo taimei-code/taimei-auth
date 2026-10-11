@@ -1,4 +1,4 @@
-export { type ParseBody, requireActor, requireMembership, requireMembershipOf } from "./core";
+export { type Actor, requireActor, requireMembershipOf } from "./core";
 export { requireInvitationAccept } from "./invitation-accept";
 export { requireInvite } from "./invite";
 export { requireRemoval } from "./removal";

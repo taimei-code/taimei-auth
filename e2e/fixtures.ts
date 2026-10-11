@@ -130,6 +130,34 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   await seed.setLastUsedCompany(userId, currentCompanyId);
 }
 
+const SWITCH_USER = "switch";
+const SWITCH_COMPANY_A = "switch-a";
+const SWITCH_COMPANY_B = "switch-b";
+
+async function ensureSwitchFixture(): Promise<void> {
+  assertLocalDatabase();
+  await removeFixtureRows({
+    userSuffixes: [SWITCH_USER, "switch-a-mate", "switch-b-mate"],
+    companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B],
+  });
+  const userId = await seedUser(SWITCH_USER, "E2E Switch");
+  const companyA = await seedCompany(SWITCH_COMPANY_A);
+  const companyB = await seedCompany(SWITCH_COMPANY_B);
+  await seedMembership(userId, companyA, "OWNER");
+  await seedMembership(userId, companyB, "OWNER");
+  await seedMembership(
+    await seedUser("switch-a-mate", "E2E SwitchAMate", companyA),
+    companyA,
+    "MEMBER",
+  );
+  await seedMembership(
+    await seedUser("switch-b-mate", "E2E SwitchBMate", companyB),
+    companyB,
+    "MEMBER",
+  );
+  await seed.setLastUsedCompany(userId, companyA);
+}
+
 const MFA_FIXTURE: FixtureSpec = {
   company: "mfa",
   members: [{ suffix: "mfa", name: "E2E Mfa", role: "OWNER" }],
@@ -173,6 +201,7 @@ export const consumableFixtures = new Map<string, () => Promise<void>>([
   ["delete-multi", ensureDeleteMultiFixture],
   ["invitation", ensureInvitationFixture],
   ["mfa", () => ensureFixture(MFA_FIXTURE)],
+  ["switch", ensureSwitchFixture],
 ]);
 
 // e2e- prefix は spec 実行中に作られる e2e-newbie-* にも一致するため、spec からは呼ばない
@@ -192,5 +221,6 @@ export async function resetAllFixtures(): Promise<void> {
   await ensureFixture(WITHDRAW_FIXTURE);
   await ensureDeleteMultiFixture();
   await ensureFixture(MFA_FIXTURE);
+  await ensureSwitchFixture();
   await ensureInvitationFixture();
 }

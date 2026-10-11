@@ -4,16 +4,11 @@ import { UserRepo } from "../../account/ports";
 import { AuthApi } from "../../auth-service";
 import { captureCause } from "../../sentry";
 import { isAtLeast } from "../policy";
+import type { Actor } from "../../account/actor-contract";
 import { MembershipRepo } from "../ports";
-import { Forbidden, type InvalidArgument, NotFound, Unauthorized } from "./errors";
+import { Forbidden, NotFound, Unauthorized } from "./errors";
 
-export type Actor = {
-  id: string;
-  email: string;
-  lastUsedCompanyId: string | null;
-};
-
-export type ParseBody<T> = Effect.Effect<T, InvalidArgument>;
+export type { Actor } from "../../account/actor-contract";
 
 const failClosedAsUnauthorized = (failure: { readonly cause: unknown }) =>
   captureCause({ tags: { component: "membership-guard" } })(failure).pipe(
@@ -45,16 +40,6 @@ export const requireMembershipOf = Effect.fnUntraced(function* (
   if (!membership) return yield* new Forbidden();
   if (minRole && !isAtLeast(membership.role, minRole)) return yield* new Forbidden();
   return membership.role;
-});
-
-export const requireMembership = Effect.fnUntraced(function* (
-  headers: Headers,
-  companyId: string,
-  minRole?: Role,
-) {
-  const actor = yield* requireActor(headers);
-  const role = yield* requireMembershipOf(actor, companyId, minRole);
-  return { actor, role };
 });
 
 export const requireTargetMembership = Effect.fnUntraced(function* (

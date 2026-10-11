@@ -1,16 +1,12 @@
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
+import { Option } from "effect";
+import { AsyncResult } from "effect/reactivity";
+import { createContext, use, useCallback, useMemo, type ReactNode } from "react";
 
 import type { Role } from "@core/membership/policy";
 
-import { RequestJsonError, getJson, postJson } from "../shared/request-json";
+import { atomRuntime, refreshAndWait } from "../shared/atom-runtime";
+import { RequestJsonError, fromRequestJson, getJson, postJson } from "../shared/request-json";
 
 export type Membership = {
   id: string;
@@ -48,45 +44,35 @@ type CurrentCompanyContextValue = {
 
 const CurrentCompanyContext = createContext<CurrentCompanyContextValue | null>(null);
 
+const companyStateAtom = atomRuntime.atom(fromRequestJson(getCompanyState));
+
 export const CurrentCompanyProvider = ({ children }: { children: ReactNode }) => {
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [unauthorized, setUnauthorized] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const registry = use(RegistryContext);
+  const result = useAtomValue(companyStateAtom);
 
-  const refresh = useCallback(async () => {
-    const state = await getCompanyState();
-    setMemberships(state.memberships);
-    setCurrentCompanyId(state.current_company_id);
-  }, []);
-
-  useEffect(() => {
-    refresh()
-      .catch((error) => {
-        if (error instanceof RequestJsonError && error.status === 401) {
-          setUnauthorized(true);
-          return;
-        }
-        console.error("failed to load company state", error);
-        setLoadFailed(true);
-      })
-      .finally(() => setLoading(false));
-  }, [refresh]);
+  const refresh = useCallback(
+    () => refreshAndWait(registry, companyStateAtom).then(() => undefined),
+    [registry],
+  );
 
   const value = useMemo<CurrentCompanyContextValue>(() => {
-    const currentMembership =
-      memberships.find((membership) => membership.company_id === currentCompanyId) ?? null;
+    const state = Option.getOrNull(AsyncResult.value(result));
+    const failed = state === null && AsyncResult.isFailure(result);
+    const failure = failed ? Option.getOrNull(AsyncResult.error(result)) : null;
+    const unauthorized = failure instanceof RequestJsonError && failure.status === 401;
+    const memberships = state?.memberships ?? [];
+    const currentCompanyId = state?.current_company_id ?? null;
     return {
-      loading,
+      loading: AsyncResult.isInitial(result),
       unauthorized,
-      loadFailed,
+      loadFailed: failed && !unauthorized,
       memberships,
       currentCompanyId,
-      currentMembership,
+      currentMembership:
+        memberships.find((membership) => membership.company_id === currentCompanyId) ?? null,
       refresh,
     };
-  }, [loading, unauthorized, loadFailed, memberships, currentCompanyId, refresh]);
+  }, [result, refresh]);
 
   return <CurrentCompanyContext value={value}>{children}</CurrentCompanyContext>;
 };

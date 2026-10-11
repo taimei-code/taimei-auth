@@ -2,6 +2,6 @@
   "status": 400,
   "contentType": "application/json",
   "body": {
-    "error": "invalid_argument"
+    "_tag": "InvalidArgument"
   }
 }
