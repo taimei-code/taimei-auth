@@ -4,14 +4,9 @@ import { Authenticated } from "../account/actor-contract";
 import { Ok } from "../membership/membership-contract";
 import type {
   MatchesClientFacingShape,
-  MfaActivateRequest,
   MfaChallengeStateResponse,
   MfaChallengeVerifyRequest,
   MfaChallengeVerifyResponse,
-  MfaDisableRequest,
-  MfaEnrollResponse,
-  MfaOkResponse,
-  MfaStatusResponse,
 } from "./client-facing-contracts";
 import {
   AlreadyEnabled,
@@ -30,11 +25,15 @@ const MfaStatus = Schema.Struct({
   enabled: Schema.Boolean,
   recovery_codes_remaining: Schema.Number,
 });
-const MfaEnrollment = Schema.Struct({
-  totp_uri: Schema.String,
-  recovery_codes: Schema.mutable(Schema.Array(Schema.String)),
-  enrollment_id: Schema.String,
+export type MfaStatus = typeof MfaStatus.Type;
+
+export const MfaEnrollment = Schema.Struct({
+  totp_uri: Schema.String.check(Schema.isMinLength(1)),
+  recovery_codes: Schema.mutable(Schema.Array(Schema.String)).check(Schema.isMinLength(1)),
+  enrollment_id: Schema.String.check(Schema.isMinLength(1)),
 });
+export type MfaEnrollment = typeof MfaEnrollment.Type;
+
 const ActivateRequest = Schema.Struct({
   code: Code,
   enrollment_id: Schema.String.check(Schema.isMinLength(1)),
@@ -43,14 +42,6 @@ const CodeWithKind = Schema.Struct({ code: Code, kind: CodeKind });
 const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
 const ChallengePassed = Schema.Struct({ redirect_url: Schema.String });
 
-const _statusMatchesWire: MatchesClientFacingShape<
-  typeof MfaStatus.Type,
-  Readonly<MfaStatusResponse>
-> = true;
-const _enrollMatchesWire: MatchesClientFacingShape<
-  typeof MfaEnrollment.Type,
-  Readonly<MfaEnrollResponse>
-> = true;
 const _stateMatchesWire: MatchesClientFacingShape<
   typeof ChallengeState.Type,
   Readonly<MfaChallengeStateResponse>
@@ -58,15 +49,6 @@ const _stateMatchesWire: MatchesClientFacingShape<
 const _passedMatchesWire: MatchesClientFacingShape<
   typeof ChallengePassed.Type,
   Readonly<MfaChallengeVerifyResponse>
-> = true;
-const _okMatchesWire: MatchesClientFacingShape<typeof Ok.Type, Readonly<MfaOkResponse>> = true;
-const _activateRequestMatchesWire: MatchesClientFacingShape<
-  typeof ActivateRequest.Type,
-  Readonly<MfaActivateRequest>
-> = true;
-const _disableRequestMatchesWire: MatchesClientFacingShape<
-  typeof CodeWithKind.Type,
-  Readonly<MfaDisableRequest>
 > = true;
 const _verifyRequestMatchesWire: MatchesClientFacingShape<
   typeof CodeWithKind.Type,

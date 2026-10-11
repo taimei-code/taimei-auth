@@ -4,10 +4,7 @@ import type { Actor } from "../../../membership/guard/core";
 import type {
   MfaChallengeStateResponse,
   MfaChallengeVerifyResponse,
-  MfaEnrollResponse,
   MfaErrorResponse,
-  MfaOkResponse,
-  MfaStatusResponse,
   MfaClientFacingErrorCode,
 } from "../../client-facing-contracts";
 import type { MfaTotpActor } from "../contracts";
@@ -16,24 +13,10 @@ type Facade = typeof import("../index");
 
 const _actorCompat: (actor: Actor) => MfaTotpActor = (actor) => actor;
 
-type EnrollOk = Effect.Success<ReturnType<Facade["enroll"]>>;
-const _enrollWire = (r: EnrollOk): MfaEnrollResponse => ({
-  totp_uri: r.totpUri,
-  recovery_codes: r.recoveryCodes,
-  enrollment_id: r.enrollmentId,
-});
-
-type StatusResult = Effect.Success<ReturnType<Facade["readOwnedMfaStatus"]>>;
-const _statusWire = (r: StatusResult): MfaStatusResponse => ({
-  enabled: r.enabled,
-  recovery_codes_remaining: r.recoveryCodesRemaining,
-});
-
 type ActivateOk = Effect.Success<ReturnType<Facade["activate"]>>;
 type DisableOk = Effect.Success<ReturnType<Facade["disable"]>>;
 const _activateForward = (r: ActivateOk): Headers => r.sessionChanges;
 const _disableForward = (r: DisableOk): Headers => r.sessionChanges;
-const _okBody: MfaOkResponse = { ok: true };
 
 type ActivateFailure = Extract<
   Effect.Error<ReturnType<Facade["activate"]>>,

@@ -19,6 +19,8 @@ const CompanyState = Schema.Struct({
   ),
 });
 
+export type CompanyState = typeof CompanyState.Type;
+
 const AvatarUploadTokenRequest = Schema.Struct({
   type: Schema.Literal("blob.generate-client-token"),
   payload: Schema.Struct({

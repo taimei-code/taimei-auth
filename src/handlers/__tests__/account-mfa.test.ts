@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { buildAppWith, requestApp, responseJson } from "./helpers";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Schema } from "effect";
 import { Hono } from "hono";
 import {
   countMfaTotpRows,
@@ -14,7 +14,7 @@ import {
 } from "../../mfa/__tests__/helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
-import type { MfaEnrollResponse } from "../../mfa/client-facing-contracts";
+import { MfaEnrollment } from "../../mfa/mfa-contract";
 import { createRateLimitMiddleware, mfaAttemptKey } from "../../rate-limit";
 import { getClientContext } from "../../request-context";
 import { dbTest } from "../../__tests__/live-runner";
@@ -285,7 +285,7 @@ describe("account MFA API", () => {
         const session = yield* createSessionFor(user.id);
         const app = appForwardingCookies();
         const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
-        const enrollment = (yield* responseJson(enrolled)) as MfaEnrollResponse;
+        const enrollment = Schema.decodeUnknownSync(MfaEnrollment)(yield* responseJson(enrolled));
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
           code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),
@@ -327,7 +327,7 @@ describe("account MFA API", () => {
           },
         });
         const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
-        const enrollment = (yield* responseJson(enrolled)) as MfaEnrollResponse;
+        const enrollment = Schema.decodeUnknownSync(MfaEnrollment)(yield* responseJson(enrolled));
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
           code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),

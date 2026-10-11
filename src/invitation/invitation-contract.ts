@@ -17,6 +17,8 @@ const PendingInvitation = Schema.Struct({
   created_at: Schema.String,
 });
 
+export type PendingInvitation = typeof PendingInvitation.Type;
+
 const RedirectTarget = Schema.Struct({
   service_name: Schema.Literals(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]),
   redirect_url: Schema.String.check(Schema.isBetweenLength(1, 2048)),
