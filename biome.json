@@ -17,8 +17,7 @@
       "!packages/auth-client/dist",
       "!packages/auth-client/src/gen",
       "!bun.lock",
-      "!web/src/index.css",
-      "!poc/spa-api-contract/probes"
+      "!web/src/index.css"
     ]
   },
   "formatter": {
@@ -148,7 +147,7 @@
       }
     },
     {
-      "includes": ["src/**/*-api.ts", "!src/handlers/**", "!src/**/__tests__/**"],
+      "includes": ["src/**/*-contract.ts", "!src/**/__tests__/**"],
       "linter": {
         "rules": {
           "style": {
@@ -186,7 +185,7 @@
                   },
                   {
                     "group": ["effect/*", "effect/**", "!effect/http-api"],
-                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-api.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }
@@ -230,7 +229,7 @@
                   },
                   {
                     "group": ["effect/*", "effect/**", "!effect/http-api", "!effect/http"],
-                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-api.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }

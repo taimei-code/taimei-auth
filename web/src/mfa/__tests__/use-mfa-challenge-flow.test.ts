@@ -89,7 +89,7 @@ describe("mfaChallengePort.verify", () => {
 
   test("challenge_expired は状態取得を呼ばず expired にする", async () => {
     fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: "challenge_expired" }, 401),
+      jsonResponse({ _tag: "ChallengeExpired" }, 401),
     );
 
     expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
@@ -100,18 +100,18 @@ describe("mfaChallengePort.verify", () => {
   });
 
   test.each([
-    [400, "invalid_code"],
-    [429, "locked"],
-    [429, "rate_limited"],
-    [409, "already_enabled"],
-    [409, "enrollment_changed"],
-    [409, "not_enabled"],
-    [400, "invalid_argument"],
-    [401, "unauthorized"],
-    [404, "not_found"],
-  ] as const)("%i %s は状態取得を呼ばず同じ code の rejected にする", async (status, errorCode) => {
+    [400, "invalid_code", { _tag: "InvalidCode" }],
+    [429, "locked", { _tag: "Locked" }],
+    [429, "rate_limited", {}],
+    [409, "already_enabled", { _tag: "AlreadyEnabled" }],
+    [409, "enrollment_changed", { _tag: "EnrollmentChanged" }],
+    [409, "not_enabled", { _tag: "NotEnabled" }],
+    [400, "invalid_argument", null],
+    [401, "unauthorized", { _tag: "Unauthorized" }],
+    [404, "not_found", { _tag: "MfaNotFound" }],
+  ] as const)("%i %s は状態取得を呼ばず同じ code の rejected にする", async (status, errorCode, body) => {
     fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ error: errorCode }, status),
+      body === null ? new Response(null, { status }) : jsonResponse(body, status),
     );
 
     expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({

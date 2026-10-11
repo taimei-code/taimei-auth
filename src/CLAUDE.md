@@ -6,7 +6,7 @@
 
 変更理由を所有する業務ドメインを決め、次に層を決め、両方に合う既存の場所へ置く。所有 domain、層、依存方向、テストの配置を説明できた時点で配置を完了とする。
 
-- **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`ClientFacingError` から HTTP / Connect へ) に変換するのは adapter だけが行う。policy 述語、repository への直接 write、transaction は持たない。
+- **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。SPA が呼ぶ API は契約 (`src/<domain>/*-contract.ts`) を `src/handlers/*-http-api.ts` で実装し、`mountSpaApi` で載せる。それ以外の Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`ClientFacingError` から HTTP / Connect へ) に変換するのは adapter だけが行う。policy 述語、repository への直接 write、transaction は持たない。
 - **Guard** (`membership/guard/`、`membership/policy.ts`): Hono に依存しない、操作単位の認可。公開 API は `Effect<A, GuardError, R>`。
 - **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。失敗は各 domain の failure class (`errors.ts`、mfa は `error-mapping.ts`) で表す。
 - **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が定義元。

@@ -1,10 +1,11 @@
 import { AsyncResult, Atom } from "effect/reactivity";
 
-import type { Member, PendingInvitation } from "@core/membership/members-api";
-import { AccountApiClient } from "../shared/account-api-client";
+import type { PendingInvitation } from "@core/invitation/invitation-contract";
+import type { Member } from "@core/membership/membership-contract";
+import { SpaApiClient } from "../shared/spa-api-client";
 
 export const membersKey = (companyId: string) => `members:${companyId}`;
-export const invitationsKey = (companyId: string) => `invitations:${companyId}`;
+const invitationsKey = (companyId: string) => `invitations:${companyId}`;
 
 const noMembers = Atom.make(AsyncResult.success({ members: [] as readonly Member[] }));
 const noInvitations = Atom.make(
@@ -15,7 +16,7 @@ const noInvitations = Atom.make(
 export const membersOf = (companyId: string | null) =>
   companyId === null
     ? noMembers
-    : AccountApiClient.query("members", "list", {
+    : SpaApiClient.query("membership", "list", {
         params: { companyId },
         reactivityKeys: [membersKey(companyId)],
       });
@@ -24,10 +25,10 @@ export const membersOf = (companyId: string | null) =>
 export const pendingInvitationsOf = (companyId: string | null) =>
   companyId === null
     ? noInvitations
-    : AccountApiClient.query("members", "pendingInvitations", {
+    : SpaApiClient.query("invitation", "pending", {
         params: { companyId },
         reactivityKeys: [invitationsKey(companyId)],
       });
 
-export const changeRoleAtom = AccountApiClient.mutation("members", "changeRole");
-export const removeMemberAtom = AccountApiClient.mutation("members", "remove");
+export const changeRoleAtom = SpaApiClient.mutation("membership", "changeRole");
+export const removeMemberAtom = SpaApiClient.mutation("membership", "remove");

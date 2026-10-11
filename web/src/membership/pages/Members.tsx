@@ -5,7 +5,7 @@ import { type FormEvent, use, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
-import type { Member } from "@core/membership/members-api";
+import type { Member } from "@core/membership/membership-contract";
 import { isAtLeast, type Role } from "@core/membership/policy";
 import { roleLabelJa } from "@core/membership/role-label";
 

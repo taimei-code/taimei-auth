@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { provideAuthApi, requestApp, responseJson } from "./helpers";
+import { requestApp, responseJson } from "./helpers";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import {
@@ -19,7 +19,8 @@ import { createRateLimitMiddleware, mfaAttemptKey } from "../../rate-limit";
 import { getClientContext } from "../../request-context";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { accountMfa } from "../account-mfa";
+import { mountAccountRoutes } from "../../app";
+import { runtimeServices } from "../spa-http-api";
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
@@ -40,15 +41,22 @@ const buildApp = (): Hono => {
       windowSec: 60,
     }),
   );
-  app.route("/", accountMfa);
+  mountAccountRoutes(app);
   return app;
 };
 
-const postJson = (app: Hono, path: string, headers: Headers, body: unknown) =>
+const postJson = (app: Hono, path: string, headers: Headers, body?: unknown) =>
   requestApp(app, path, {
     method: "POST",
     headers: { ...Object.fromEntries(headers), "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+const expectEmptyBadRequest = (res: Response) =>
+  Effect.gen(function* () {
+    expect(res.status).toBe(400);
+    expect(res.headers.get("content-type")).toBeNull();
+    expect(yield* Effect.promise(() => res.text())).toBe("");
   });
 
 describe("account MFA API", () => {
@@ -100,7 +108,7 @@ describe("account MFA API", () => {
         expect(attempts.slice(0, DISABLE_ATTEMPT_LIMIT).map((attempt) => attempt.status)).toEqual(
           Array(DISABLE_ATTEMPT_LIMIT).fill(400) as number[],
         );
-        expect(attempts.at(-1)).toEqual({ status: 429, body: { error: "locked" } });
+        expect(attempts.at(-1)).toEqual({ status: 429, body: { _tag: "Locked" } });
 
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).not.toBeNull();
@@ -133,10 +141,7 @@ describe("account MFA API", () => {
         const user = yield* db.seedUser("m03");
         const session = yield* createSessionFor(user.id);
 
-        const res = yield* requestApp(buildApp(), "/api/account/mfa/enroll", {
-          method: "POST",
-          headers: Object.fromEntries(session.headers),
-        });
+        const res = yield* postJson(buildApp(), "/api/account/mfa/enroll", session.headers);
 
         expect(res.status).toBe(200);
         const body = (yield* responseJson(res)) as {
@@ -175,10 +180,7 @@ describe("account MFA API", () => {
         const user = yield* db.seedUser("m25");
         const session = yield* createSessionFor(user.id);
         const app = buildApp();
-        const enrolled = yield* requestApp(app, "/api/account/mfa/enroll", {
-          method: "POST",
-          headers: Object.fromEntries(session.headers),
-        });
+        const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
         expect(enrolled.status).toBe(200);
 
         const res = yield* requestApp(app, "/api/account/mfa", { headers: session.headers });
@@ -191,20 +193,18 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-01 有効ユーザーの enroll → 409 already_enabled", () =>
+  test("QA-E-01 有効ユーザーの enroll → 409 AlreadyEnabled", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e01");
         const enabled = yield* enableMfaFor(user);
 
-        const res = yield* requestApp(buildApp(), "/api/account/mfa/enroll", {
-          method: "POST",
-          headers: Object.fromEntries(enabled.session.headers),
-        });
+        const res = yield* postJson(buildApp(), "/api/account/mfa/enroll", enabled.session.headers);
 
         expect(res.status).toBe(409);
-        expect(yield* responseJson(res)).toEqual({ error: "already_enabled" });
+        expect(res.headers.get("content-type")).toBe("application/json");
+        expect(yield* responseJson(res)).toEqual({ _tag: "AlreadyEnabled" });
         expect(res.headers.get("retry-after")).toBeNull();
       }),
     ));
@@ -224,12 +224,12 @@ describe("account MFA API", () => {
         );
 
         expect(res.status).toBe(409);
-        expect(yield* responseJson(res)).toEqual({ error: "already_enabled" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "AlreadyEnabled" });
         expect(res.headers.getSetCookie()).toEqual([]);
       }),
     ));
 
-  test("QA-M-06 未登録ユーザーの activate → 404 not_found", () =>
+  test("QA-M-06 未登録ユーザーの activate → 404 MfaNotFound", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -242,21 +242,18 @@ describe("account MFA API", () => {
         });
 
         expect(res.status).toBe(404);
-        expect(yield* responseJson(res)).toEqual({ error: "not_found" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "MfaNotFound" });
       }),
     ));
 
-  test("QA-E-02 activate の識別子不一致 → 409 enrollment_changed (行は未 verified のまま)", () =>
+  test("QA-E-02 activate の識別子不一致 → 409 EnrollmentChanged (行は未 verified のまま)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e02-changed");
         const session = yield* createSessionFor(user.id);
         const app = buildApp();
-        const enrolled = yield* requestApp(app, "/api/account/mfa/enroll", {
-          method: "POST",
-          headers: Object.fromEntries(session.headers),
-        });
+        const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
         expect(enrolled.status).toBe(200);
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
@@ -265,12 +262,12 @@ describe("account MFA API", () => {
         });
 
         expect(res.status).toBe(409);
-        expect(yield* responseJson(res)).toEqual({ error: "enrollment_changed" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "EnrollmentChanged" });
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
       }),
     ));
 
-  test("activate の revoke を better-auth が拒否 → 401 unauthorized (行は未 verified のまま)", () =>
+  test("activate の revoke を better-auth が拒否 → 401 Unauthorized (行は未 verified のまま)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -278,9 +275,10 @@ describe("account MFA API", () => {
         const session = yield* createSessionFor(user.id);
         const revokes: Headers[] = [];
         const app = new Hono();
-        app.use(
-          "*",
-          provideAuthApi(
+        mountAccountRoutes(
+          app,
+          Layer.merge(
+            runtimeServices(),
             Layer.succeed(
               AuthApi,
               AuthApi.of({
@@ -293,11 +291,7 @@ describe("account MFA API", () => {
             ),
           ),
         );
-        app.route("/", accountMfa);
-        const enrolled = yield* requestApp(app, "/api/account/mfa/enroll", {
-          method: "POST",
-          headers: Object.fromEntries(session.headers),
-        });
+        const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
         const enrollment = (yield* responseJson(enrolled)) as MfaEnrollResponse;
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
@@ -306,7 +300,7 @@ describe("account MFA API", () => {
         });
 
         expect(res.status).toBe(401);
-        expect(yield* responseJson(res)).toEqual({ error: "unauthorized" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "Unauthorized" });
         expect(revokes.length).toBe(1);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
       }),
@@ -324,13 +318,12 @@ describe("account MFA API", () => {
           enrollment_id: 42,
         });
 
-        expect(res.status).toBe(400);
-        expect(yield* responseJson(res)).toEqual({ error: "invalid_argument" });
+        yield* expectEmptyBadRequest(res);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
       }),
     ));
 
-  test("AC-145 enrollment_id の欠落・空文字は 400 invalid_argument (必須化の境界)", () =>
+  test("AC-145 enrollment_id の欠落・空文字は 400 (decode 失敗、body 無し、必須化の境界)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -346,10 +339,8 @@ describe("account MFA API", () => {
           enrollment_id: "",
         });
 
-        expect(missing.status).toBe(400);
-        expect(yield* responseJson(missing)).toEqual({ error: "invalid_argument" });
-        expect(empty.status).toBe(400);
-        expect(yield* responseJson(empty)).toEqual({ error: "invalid_argument" });
+        yield* expectEmptyBadRequest(missing);
+        yield* expectEmptyBadRequest(empty);
       }),
     ));
 });

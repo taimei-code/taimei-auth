@@ -2,6 +2,6 @@
   "status": 409,
   "contentType": "application/json",
   "body": {
-    "error": "last_owner"
+    "_tag": "LastOwner"
   }
 }

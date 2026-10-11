@@ -1,200 +1,73 @@
-import { Cause, Effect, ErrorReporter, Layer } from "effect";
-import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
-import { HttpApi, HttpApiBuilder, HttpApiError } from "effect/http-api";
-import type { Hono } from "hono";
-import { type BoundaryError, isBoundaryError } from "../errors";
-import { InvitationRepo } from "../invitation/ports";
-import { changeRole } from "../membership/change-role";
-import {
-  requireMembership,
-  requireRemoval,
-  requireRoleChange,
-  requireTransferOwnership,
-} from "../membership/guard";
-import { AccountApi, ActorResolver, Authenticated, CurrentActor } from "../membership/members-api";
-import { requireActor } from "../membership/guard/core";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { Effect } from "effect";
+import { HttpServerRequest } from "effect/http";
+import { HttpApiBuilder } from "effect/http-api";
+import { CurrentActor } from "../account/actor-contract";
+import { deleteAccountUnlessLastOwner } from "../account/delete-account";
+import { switchCompany } from "../account/switch-company";
 import { MembershipRepo } from "../membership/ports";
-import { removeMember } from "../membership/remove";
-import { transferOwnership } from "../membership/transfer-ownership";
-import type { AuthApi } from "../auth-service";
-import { type AppServices, getRuntime } from "../runtime";
-import { parseClientFacingError, settleCause } from "./client-facing-error";
+import { SpaApi } from "../spa-contract";
+import { dieOnBoundary } from "./request-http-api";
 
-const headersOf = (request: HttpServerRequest.HttpServerRequest) =>
-  new Headers(request.headers as Record<string, string>);
+const ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-const dieOnBoundary = <A, E, R>(self: Effect.Effect<A, E, R>) =>
-  self.pipe(
-    Effect.catchIf((e: E): e is Extract<E, BoundaryError> => isBoundaryError(e), Effect.die),
-  );
-
-const MembersHandlers = HttpApiBuilder.group(AccountApi, "members", (handlers) =>
+export const AccountHandlers = HttpApiBuilder.group(SpaApi, "account", (handlers) =>
   handlers
-    .handle("list", ({ params, request }) =>
+    .handle("memberships", () =>
       Effect.gen(function* () {
-        yield* requireMembership(headersOf(request), params.companyId);
-        const memberships = yield* MembershipRepo;
-        const members = yield* memberships.findMembersByCompanyId(params.companyId);
+        const actor = yield* CurrentActor;
+        const rows = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(actor.id));
         return {
-          members: members.map((m) => ({
-            membership_id: m.membershipId,
-            user_id: m.userId,
-            user_name: m.userName,
-            user_email: m.userEmail,
-            role: m.role,
-            joined_at: m.joinedAt.toISOString(),
-          })),
+          current_company_id: actor.lastUsedCompanyId,
+          memberships: rows
+            .filter((m) => m.companyActivationStatus === "ACTIVE")
+            .map((row) => ({
+              id: row.id,
+              company_id: row.companyId,
+              company_name: row.companyName,
+              company_org_code: row.companyOrgCode,
+              role: row.role,
+              joined_at: row.joinedAt.toISOString(),
+            })),
         };
       }).pipe(dieOnBoundary),
     )
-    .handle("pendingInvitations", ({ params, request }) =>
+    .handle("switchCompany", ({ payload }) =>
       Effect.gen(function* () {
-        yield* requireMembership(headersOf(request), params.companyId, "ADMIN");
-        const invitationRepo = yield* InvitationRepo;
-        const invitations = yield* invitationRepo.listPendingInvitations(params.companyId);
-        return {
-          invitations: invitations.map((inv) => ({
-            id: inv.id,
-            email: inv.email,
-            role: inv.role,
-            expires_at: inv.expiresAt.toISOString(),
-            created_at: inv.createdAt.toISOString(),
-          })),
-        };
-      }).pipe(dieOnBoundary),
-    )
-    .handle("changeRole", ({ params, payload, request }) =>
-      Effect.gen(function* () {
-        const grant = yield* requireRoleChange({
-          headers: headersOf(request),
-          companyId: params.companyId,
-          targetUserId: params.targetUserId,
-          parseBody: Effect.succeed({ nextRole: payload.role }),
-        });
-        yield* changeRole({
-          actorUserId: grant.actor.id,
-          targetUserId: params.targetUserId,
-          companyId: params.companyId,
-          beforeRole: grant.targetRole,
-          nextRole: grant.nextRole,
-        });
-        return { ok: true as const };
-      }).pipe(dieOnBoundary),
-    )
-    .handle("remove", ({ params, request }) =>
-      Effect.gen(function* () {
-        const { actor, targetRole } = yield* requireRemoval({
-          headers: headersOf(request),
-          companyId: params.companyId,
-          targetUserId: params.targetUserId,
-        });
-        const result = yield* removeMember({
+        const actor = yield* CurrentActor;
+        const result = yield* switchCompany({
           actorUserId: actor.id,
-          targetUserId: params.targetUserId,
-          companyId: params.companyId,
-          targetRole,
+          fromCompanyId: actor.lastUsedCompanyId,
+          targetCompanyId: payload.company_id,
         });
-        return { ok: true as const, account_deleted: result.accountDeleted };
+        return { ok: true as const, company_id: result.companyId };
       }).pipe(dieOnBoundary),
     )
-    .handle("transferOwnership", ({ params, payload, request }) =>
+    .handle("deleteAccount", () =>
       Effect.gen(function* () {
-        const grant = yield* requireTransferOwnership({
-          headers: headersOf(request),
-          companyId: params.companyId,
-          parseBody: Effect.succeed({ toUserId: payload.to_user_id }),
-        });
-        yield* transferOwnership({
-          actorUserId: grant.actor.id,
-          toUserId: grant.toUserId,
-          companyId: params.companyId,
-        });
+        const actor = yield* CurrentActor;
+        yield* deleteAccountUnlessLastOwner(actor.id);
         return { ok: true as const };
       }).pipe(dieOnBoundary),
+    )
+    .handle("avatarUploadToken", ({ payload, request }) =>
+      Effect.gen(function* () {
+        const actor = yield* CurrentActor;
+        const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie);
+        return yield* Effect.promise(() =>
+          handleUpload({
+            body: payload as HandleUploadBody,
+            request: webRequest,
+            onBeforeGenerateToken: async () => ({
+              allowedContentTypes: [...ALLOWED_CONTENT_TYPES],
+              addRandomSuffix: true,
+              maximumSizeInBytes: MAX_SIZE_BYTES,
+              tokenPayload: JSON.stringify({ userId: actor.id }),
+            }),
+            onUploadCompleted: async () => {},
+          }),
+        );
+      }),
     ),
 );
-
-const isClientInputError = (e: unknown) =>
-  HttpApiError.HttpApiSchemaError.is(e) && e.kind !== "Body" && e.kind !== "ResponseHeaders";
-
-const reported = new WeakSet<object>();
-
-const isFresh = (reason: Cause.Reason<unknown>) => {
-  if (reason._tag === "Interrupt") return true;
-  const value = reason._tag === "Fail" ? reason.error : reason.defect;
-  if (typeof value !== "object" || value === null) return true;
-  if (reported.has(value) || isClientInputError(value) || ErrorReporter.isIgnored(value))
-    return false;
-  reported.add(value);
-  return true;
-};
-
-const sentryReporter: ErrorReporter.ErrorReporter = {
-  [ErrorReporter.TypeId]: ErrorReporter.TypeId,
-  report: ({ cause }) => {
-    const fresh = cause.reasons.filter(isFresh);
-    if (fresh.length === 0) return;
-    settleCause(Cause.fromReasons(fresh), parseClientFacingError, {
-      label: "[accountApi]",
-      tags: { handler: "accountApi" },
-    });
-  },
-};
-
-const AuthenticatedLive = Layer.succeed(Authenticated, (httpEffect) =>
-  Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
-    const resolver = yield* ActorResolver;
-    const actor = yield* resolver.resolve(headersOf(request));
-    return yield* Effect.provideService(httpEffect, CurrentActor, actor);
-  }),
-);
-
-export const makeAccountApiHandler = (services: Layer.Layer<AppServices>) => {
-  const actorResolver = Layer.effect(
-    ActorResolver,
-    Effect.gen(function* () {
-      const context = yield* Effect.context<AppServices>();
-      return {
-        resolve: (headers: Headers) => requireActor(headers).pipe(Effect.provideContext(context)),
-      };
-    }),
-  ).pipe(Layer.provide(services));
-  return HttpRouter.toWebHandler(
-    HttpApiBuilder.layer(AccountApi).pipe(
-      Layer.provide(MembersHandlers),
-      Layer.provide(AuthenticatedLive),
-      HttpRouter.provideRequest(services),
-      Layer.provide(actorResolver),
-      Layer.provide(ErrorReporter.layer([sentryReporter])),
-      Layer.provide(HttpServer.layerServices),
-    ),
-    { disableLogger: true },
-  );
-};
-
-const runtimeServices = () => Layer.effectContext(getRuntime().contextEffect);
-
-let production: ReturnType<typeof makeAccountApiHandler> | undefined;
-
-const respond = async (request: Request, authApiLayer: Layer.Layer<AuthApi> | undefined) => {
-  if (authApiLayer === undefined) {
-    production ??= makeAccountApiHandler(runtimeServices());
-    return production.handler(request);
-  }
-  const perTest = makeAccountApiHandler(Layer.merge(runtimeServices(), authApiLayer));
-  try {
-    return await perTest.handler(request);
-  } finally {
-    await perTest.dispose();
-  }
-};
-
-export function mountAccountApi(app: Hono): void {
-  HttpApi.reflect(AccountApi, {
-    onGroup: () => {},
-    onEndpoint: ({ endpoint }) => {
-      app.on(endpoint.method, endpoint.path, (c) => respond(c.req.raw, c.get("authApiLayer")));
-    },
-  });
-}

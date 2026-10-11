@@ -17,8 +17,12 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
-  test("web/src は effect を import しない (共通画面 SPA と @core 共有 module は effect-free)", () => {
-    expect(effectImports("web/src")).toEqual([]);
+  test("web/src の effect の subpath は effect/reactivity と effect/http だけ", () => {
+    const subpaths = grepFiles(String.raw`(from|import)\s*["']effect/`, "web/src", {
+      include: ["*.ts", "*.tsx"],
+      lines: true,
+    });
+    expect(subpaths.filter((line) => !/["']effect\/(reactivity|http)["']/.test(line))).toEqual([]);
   });
 });
 
@@ -74,7 +78,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
       "src/audit/report-failure.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
-      "src/handlers/account-invitation.ts",
+      "src/handlers/invitation-http-api.ts",
       "src/membership/guard/core.ts",
       "src/mfa/disable-attempt-budget.ts",
       "src/mfa/notification-adapter.ts",
@@ -108,6 +112,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     const allowed = new Set([
       "src/handlers/client-facing-error.ts",
       "src/handlers/run-route.ts",
+      "src/handlers/spa-http-api.ts",
       "src/rpc/run-rpc.ts",
       "src/auth.ts",
       "src/app.ts",
@@ -286,6 +291,7 @@ describe("appLayer は構築で失敗しない Layer だけで組む", () => {
       excludeTests: true,
       lines: true,
     });
-    expect(hits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
+    const appLayerHits = hits.filter((line) => !line.startsWith("src/handlers/spa-http-api.ts:"));
+    expect(appLayerHits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
   });
 });

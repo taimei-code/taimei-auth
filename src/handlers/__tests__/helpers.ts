@@ -3,6 +3,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { mountAccountRoutes } from "../../app";
 import { AuthApi } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
+import { runtimeServices } from "../spa-http-api";
 
 export const TEST_PREFIX = "mig-test-";
 
@@ -38,8 +39,7 @@ export const provideAuthApi =
 
 export function buildTestApp(actor: StubActor, overrides?: Partial<AuthApi["Service"]>): Hono {
   const app = new Hono();
-  app.use("*", provideAuthApi(stubAuthApi(actor, overrides)));
-  mountAccountRoutes(app);
+  mountAccountRoutes(app, Layer.merge(runtimeServices(), stubAuthApi(actor, overrides)));
   return app;
 }
 

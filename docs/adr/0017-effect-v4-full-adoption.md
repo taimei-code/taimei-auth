@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04、設計レビュー完了)。判断主体は maintainer。Stage 1〜4 を `feat/effect-v4-stage1` で実装した (Stage 2〜4 は同日、同じ branch)。(2026-10-11 改訂) 共通画面 SPA (`web/`) を対象に加えた (「web への拡大」節)。
+Accepted (2026-09-04、設計レビュー完了)。判断主体は maintainer。Stage 1〜4 を `feat/effect-v4-stage1` で実装した (Stage 2〜4 は同日、同じ branch)。(2026-10-11 改訂) 共通画面 SPA (`web/`) を対象に加えた (「web への拡大」節)。(2026-10-11 再改訂) SPA が呼ぶ API の契約を Effect HttpApi で書く (「SPA の API 契約」節)。
 
 関連: ADR-0009 (supply chain、§C `trustedDependencies`、§H `minimumReleaseAge`)、ADR-0011 (Workers dual-runtime)、ADR-0012 (4 層と membership guard)、`docs/qa/manual-regression.md` の QA-MR-03 / QA-MR-11。
 
@@ -54,7 +54,7 @@ remote の workerd と本番 bundle の起動は local の観測で足りると�
 - 依存注入: deps factory と repository の named import を全廃し、Context.Service を `yield*` する。時刻は `Clock`、ID は `IdGenerator` から取る。テストは test Layer (`Layer.succeed`) で差し替え、`mock.module` と `@effect/vitest` は使わない
 - テストの DB 接触: seed (前提状態の書き込み) / 観測 (事後状態の読み取り) / cleanup の実体は `db/testing/*` (Promise、db/ が所有) に置き、src のテストはそれを `liftAll` で持ち上げた `TestDb` service (`src/__tests__/test-db.ts`) を `yield*` する。理由は 3 つある。db/ は effect を持てない (この ADR の境界表 1 行目)、schema と drizzle は db/ の所有物である (db/CLAUDE.md ルール 1)、テスト本体を 1 つの `Effect.gen` にして production と同じ idiom (Promise module → `liftAll` → `Context.Service`) にするためである。テストは repository と drizzle を直接呼ばない (ゲートは `src/__tests__/effect-boundary.test.ts`)。e2e は Effect の範囲外で、`e2e/fixtures.ts` が同じ module を Promise のまま使う
 - 非同期: `Effect.all` / `Effect.timeout` / `Effect.retry` を使う。timeout は境界 service に既定値を置く (Redis 2s、email 10s)。retry は冪等な境界 (Redis 読み取り系) にだけ `src/redis-service.ts` の policy (`withRedisRetry`) で宣言し、再試行 3 回、backoff の合計 1s 未満とする (attempt ごとの timeout は別。帰結は Consequences)
-- zod は残す: 400 の `details` が zod v4 の message 文字列 (`"Invalid email address"` 等) を wire として含むため、Effect Schema では byte-invariant を保てない。`parseZodBody` が zod の `safeParse` を `Effect<T, InvalidArgument>` に持ち上げる
+- zod は残す: 400 の `details` が zod v4 の message 文字列 (`"Invalid email address"` 等) を wire として含むため、Effect Schema では byte-invariant を保てない。`parseZodBody` が zod の `safeParse` を `Effect<T, InvalidArgument>` に持ち上げる。(2026-10-11 改訂) SPA の API は `details` を返さないことにし、body の検査を契約の Effect Schema に移した (「SPA の API 契約」節)。zod は他の入力 (sign-in の query など) に残る
 - 対象外: `@core` 共有 module (effect-free を維持する。`web-shared-core-runtime-free.test.ts`)、SDK `packages/auth-client` (2.0.0 で effect への依存を外した)、`db/`。`web/` は当初ここに含めていたが、2026-10-11 に対象へ加えた (「web への拡大」節)
 
 Stage は層単位で進める。Stage の途中では main に 2 様式が共存してよい。完了 PR で旧様式ゼロを `src/handlers/__tests__/no-transport-tx.test.ts` (Stage 1) と `src/__tests__/effect-boundary.test.ts` (Stage 2〜4 のゲート) に累積する invariant で固定する。
@@ -67,7 +67,7 @@ Stage は層単位で進める。Stage の途中では main に 2 様式が共�
 | 3 MFA | `src/mfa/` の error class 化、ports の Context.Service 化、`WireFailure` 削除 | `MfaFailure` / `WireFailure` ゼロ |
 | 4 seam・runtime primitive | hook / `auth.ts` callback / `Background` / `SentryService` / `Redis` (`src/redis-service.ts`、読み取りだけ retry、timeout 2s) / rate-limit middleware / `EmailSender` (`src/email/*` を Effect 化、timeout 10s、retry なし) / `Effect.all` / entries / CLI | `Promise.all` / `runBackground` (`src/background.ts` 以外) / `Sentry.capture*` の直呼び (`src/sentry.ts` と adapter 以外) ゼロ |
 
-依存: `effect` は exact pin する。Dependabot の npm 更新は `cooldown` 7 日で bunfig の `minimumReleaseAge` に揃える。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。root 以外の `effect/*` は biome で全域 import 禁止とし (`effect/http` などの area module は `@stability unstable`)、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。(2026-10-11 改訂) `web/src` の禁止は外し、`effect/reactivity` を `web/src` に限って例外にする (「web への拡大」節)。
+依存: `effect` は exact pin する。Dependabot の npm 更新は `cooldown` 7 日で bunfig の `minimumReleaseAge` に揃える。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。root 以外の `effect/*` は biome で全域 import 禁止とし (`effect/http` などの area module は `@stability unstable`)、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。(2026-10-11 改訂) `web/src` の禁止は外し、`effect/reactivity` を `web/src` に限って例外にする (「web への拡大」節)。(2026-10-11 再改訂) `effect/http-api` と `effect/http` も、使う場所を名指しして例外にする (「SPA の API 契約」節)。
 
 ## 実装の機構 (2026-09-10 追記)
 
@@ -80,7 +80,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 - Background (`src/background.ts`): `Effect.forkDetach` は scope に付かない fiber を作る (親の interrupt で止まらない) が context は継承するため、program の requirement (R) はそのまま呼び出し側に課される。detach した fiber の完了 Promise を ALS carrier (`runBackground`) に登録し、`Fiber.await` は失敗しない (Exit を返す)。effect 自身の失敗は渡す前に呼び出し側が catch する (規則は `src/CLAUDE.md`「Effect様式」)
 - hook (`src/auth-plugins/mfa-challenge.ts`。`sign-in-observer.ts` は E channel を `Effect.catch` で受け止めるだけで、以下の 2 つを持たない): 本体は E = never の program で、失敗時の扱いを全て program 内で決める (境界は Decision の境界表 3 行目)。観測自体の失敗 (Sentry backend の throw、つまり defect) で hook を落とさないために `Effect.ignoreCause` を使う (`Effect.ignore` は E channel だけを受け止める)。module-level の最終通知時刻は `Ref.modify` で読みと更新を 1 手にする。hook 側の try/catch は runtime の `runPromise` が defect で reject した時の最後の砦で、Effect の外にしか置けない。kill switch は runtime に依存させない (止めている間は一次認証だけで session が立つ)
 - adapter (`src/handlers/wire-error.ts` の `settleCause` / `captureThrown`): catalog 外の failure を実行時にも形で見るのは `status: undefined` が 200 になる fail-open を防ぐためである (Sentry level と `console.error` は Decision の Sentry 項)。`captureThrown` が観測自体の失敗を受け止めるのは、better-call が `onError` の throw を `auth.handler` の reject にし、better-auth が組んだ 500 応答と Set-Cookie の合流を失わせるためである (元の error は send が先に `console.error` する)
-- `ParseBody` (`src/handlers/parse-body.ts` / `src/membership/guard/core.ts`): Effect 値は `yield*` まで実行されないため、guard が 401 / 403 を先に判定した request では body を読まない。zod を残す理由は Decision の zod 項
+- `ParseBody` (`src/handlers/parse-body.ts` / `src/membership/guard/core.ts`): Effect 値は `yield*` まで実行されないため、guard が 401 / 403 を先に判定した request では body を読まない。zod を残す理由は Decision の zod 項。(2026-10-11) SPA の API が契約に移ったので `ParseBody` は廃止した。認証は middleware が decode より先に行う
 - Redis retry (`src/redis-service.ts`): retry は冪等な呼び出しに限る (対象と値は Decision の非同期項)。INCR 系と `getAndDelete` は再送が二重計上 / 二重消費になり、`/health` の ping は失敗を degraded にまとめるだけで応答時間を伸ばしたくないため、どちらも 1 回 (`attemptOnce`) にする
 - CLI (`management/*.ts`): pg pool が開いたままだと process が終わらないため明示的に `process.exit` する (runtime の共有は Decision の依存項)
 - 非慣用に見えるが直さない形: `src/rpc/run-rpc.ts` の `STATUS_TO_CODE` 外部対応表 (Connect code は Transport 固有の語彙で、class に生やすと failure class 20 個に複製される)、`RollbackSignal` の sentinel throw、`mfa/totp/wiring.ts` の `let cached` (`Effect.cached` は `Layer.effect` を要し、`effect-boundary.test.ts` が `Layer.succeed` に限る)、`parseChallenge` の try/catch (Effect の外の純関数で「どの段階の失敗も null」を 1 箇所に保つ)、hook / `captureThrown` の try/catch (上記)
@@ -95,6 +95,39 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
   - 読み込み中と失敗の扱い忘れ: `AsyncResult.matchWithError` は初期・失敗・defect・成功のすべてを引数に要求し、失敗は型付きで component に届く
 - 移行: page 単位で進め、router は react-router のまま先にデータ層を移す。`useCurrentCompany()` の返り値と `refresh()` の Promise (`notifyAfterRefresh` が前提にする、再取得の完了で resolve し失敗で reject する契約) を保ったまま中身を atom にすれば、移していない画面も同じ状態を読む (#258 で確認)
 - 境界の検査の置き換え: 移行の最初の PR で、`effect-boundary.test.ts` の `web/src` の禁止と `biome.json` の web の `effect` ban を外す。代わりに、component と page から `*-api` と `fetch` を直接使わないことを静的 tripwire で固定する。`@effect/atom-react` は web 専用 devDependency として biome の web 専用 ban に登録する (`dependency-classification.test.ts`)
+
+## SPA の API 契約 (2026-10-11 追記)
+
+共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*` の 22 本) は、Effect HttpApi の契約で定義する。
+
+- 置き場:
+  - 契約は `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つの API にまとめる。web は `@core` から同じ契約を読む。
+  - 実装は `src/handlers/*-http-api.ts` に置き、`mountSpaApi` が契約から Hono に載せる。
+  - CORS、CSRF、rate limit、`X-Service-Key`、静的配信、better-auth、Connect は Hono が受け持つ。SPA 以外の route (`/auth/*` の redirect、canary、health、login shortcut) は `runRoute` のまま残す。
+- 理由: 契約から client も handler の型も作るので、次の誤りが型エラーになる。draft PR #260 で他の方式 (hono/client、@hono/zod-openapi、oRPC、Hono の撤去) と比べ、この方式だけが全部を型で止め、Hono の CSRF を手書きせずに済んだ。
+  - URL の打ち間違い
+  - param・body の型違い
+  - 応答の形の食い違い
+  - 宣言していない失敗を返すこと
+  - client が宣言にない失敗を扱うこと
+  - handler の書き漏れ
+- 依存:
+  - Decision の依存項の「root 以外の `effect/*` は禁止」の例外を、次の 2 つに限る。それ以外の subpath は禁止のまま。
+    - `effect/http-api`: 契約 (`HttpApiBuilder` は除く)、`src/handlers/*-http-api.ts`、`web/src`
+    - `effect/http`: `src/handlers/*-http-api.ts` と `web/src`
+  - `@core` の依存クロージャに `effect` と `effect/http-api` を許す。
+  - unstable な module なので minor でも壊れ得るが、`effect` は exact pin しており、壊れるのは上げた時の typecheck とテストで分かる。
+- wire:
+  - 宣言した失敗は今と同じ status で、body は `{"_tag": ...}` になる。
+  - body と path param の decode 失敗は、body の無い 400 になる (`details` は返さない)。
+- 判定順:
+  - 認証 (401) は契約の `Authenticated` middleware が行い、`CurrentActor` を渡す。
+  - その後に契約の decode (400) と guard (403、404) が続く。
+  - guard は session を引かず、actor を受け取る。
+- 費用 (prototype の実測、ローカル):
+  - worker の gzip は +16%
+  - 起動時の JS は 32.7ms → 40.7ms
+  - web の JS の gzip は +65 kB (Atom の分を含む)
 
 ## Stable 移行手順
 
@@ -112,7 +145,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 - 各層の公開 API を Promise<Result> のまま Effect を内側に閉じる形 (prototype #166 の形) を全段で貫く: 層をまたぐ typed error の合成が起きず、Effect のコストだけ払う。変換点が 1 箇所にならない
 - deps factory と default runtime の維持 (Layer / Context を使わない): 「DI を Effect に寄せる」方針と両立しない
 - failure を Result object のまま E channel に入れる: catalog と wire の変換層が分散したまま残る
-- Effect Schema で body を parse し `details` を再構成する: 理由は Decision の「zod は残す」項。Schema 化は `details` の wire を変える判断とセットの別件とする
+- Effect Schema で body を parse し `details` を再構成する: 理由は Decision の「zod は残す」項。Schema 化は `details` の wire を変える判断とセットの別件とする。(2026-10-11) SPA の API はこの別件として、`details` を返さない形で Schema に移した
 - `@effect/platform-bun` の `BunRuntime.runMain`: CLI 3 本のために RC package を 2 つ抱える理由が無い
 - RC を追従する: ADR-0009 §H の bypass を RC ごとに積み、audit trail が汚れる
 - drizzle を廃止して Effect の SQL 層に置換する: better-auth の drizzleAdapter の要求で不成立
