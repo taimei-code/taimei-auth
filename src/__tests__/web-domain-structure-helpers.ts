@@ -29,7 +29,7 @@ const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
 const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
   ["invitation", new Set(["auth/auth-client.ts", "auth/auth-redirect.ts"])],
-  ["mfa", new Set(["auth/auth-redirect.ts"])],
+  ["mfa", new Set(["auth/AuthPageCard.tsx", "auth/auth-redirect.ts"])],
   [
     "account",
     new Set([
@@ -63,6 +63,8 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   [
     "app",
     new Set([
+      "account/account-atom.ts",
+      "account/account-entry.ts",
       "account/current-company.tsx",
       "account/pages/Connections.tsx",
       "account/pages/Profile.tsx",
@@ -70,16 +72,23 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "account/pages/Sessions.tsx",
       "auth/AuthLayout.tsx",
       "auth/SignOutButton.tsx",
+      "auth/auth-client.ts",
+      "auth/auth-error-reason.ts",
       "auth/auth-redirect.ts",
       "auth/pages/Error.tsx",
       "auth/pages/SignIn.tsx",
       "auth/pages/SignUp.tsx",
       "company/CompanySwitcher.tsx",
+      "company/company-signup-entry.ts",
       "company/pages/Companies.tsx",
       "company/pages/CompanySettings.tsx",
       "company/pages/SignUpCompany.tsx",
+      "invitation/accept-invitation.ts",
       "invitation/pages/SignUpAcceptInvitation.tsx",
+      "invitation/redirect-target.ts",
       "membership/pages/Members.tsx",
+      "mfa/MfaChallengeView.tsx",
+      "mfa/mfa-atom.ts",
       "mfa/pages/MfaChallenge.tsx",
     ]),
   ],

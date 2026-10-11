@@ -46,7 +46,7 @@ _Avoid_: 招待状態 (membership に invitation_status 列を持たせるパタ
 ### 認証画面 (共通画面 SPA)
 
 **共通ログイン画面**:
-複数のプロダクトが共有して使う、認証の起点となる Web UI (`/auth/`)。**共通画面 SPA** が React Router で出すサブ画面の 1 つである。
+複数のプロダクトが共有して使う、認証の起点となる Web UI (`/auth/`)。**共通画面 SPA** が出すサブ画面の 1 つである。
 _Avoid_: ログイン画面, SignIn 画面, `/auth/`
 
 **共通サインアップ画面**:
@@ -54,7 +54,7 @@ _Avoid_: ログイン画面, SignIn 画面, `/auth/`
 _Avoid_: SignUp 画面, 新規登録画面, サインアップ
 
 **アカウント管理画面**:
-ログイン後のプロフィール、セキュリティ、セッション、連携アカウントを管理する画面 (`/account/*`)。**共通画面 SPA** が React Router で出す 3 つ目のサブ画面群である。
+ログイン後のプロフィール、セキュリティ、セッション、連携アカウントを管理する画面 (`/account/*`)。**共通画面 SPA** が出す 3 つ目のサブ画面群である。
 _Avoid_: マイページ, account ページ
 
 **auth ホスト**:
@@ -62,7 +62,7 @@ _Avoid_: マイページ, account ページ
 _Avoid_: Layer A (順序ラベルで内容を示さない), バックエンド, server (より広義), Hono server (実装名なので抽象を表せない)
 
 **共通画面 SPA**:
-`web/` 配下の Vite + React による CSR app。**auth ホスト** が `/auth/*` `/account/*` で配信する単一の build で、React Router で **共通ログイン画面** / **共通サインアップ画面** / **アカウント管理画面** の 3 系統に分岐する。詳細: ADR-0002。
+`web/` 配下の Vite + React による CSR app。**auth ホスト** が `/auth/*` `/account/*` で配信する単一の build で、router で **共通ログイン画面** / **共通サインアップ画面** / **アカウント管理画面** の 3 系統に分岐する。詳細: ADR-0002。
 _Avoid_: Layer B (順序ラベルで内容を示さない), フロント, クライアント, Web UI (より広義)
 
 **canary token**:
@@ -188,7 +188,7 @@ _Avoid_: API key (end user 向けの credential と紛らわしい), shared secr
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態の名前)
 
 **SPA の API 契約**:
-共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の MFA チャレンジが読む型 (`src/mfa/client-facing-contracts.ts`) はこれと別物である。MFA 設定の画面は契約の client に移った。この file に残るのは、チャレンジが読む型と、server も読む 2 つ (失敗の code の一覧 `MFA_WIRE_ERROR_CODES`、コードの種別 `MfaCodeKind`) だけである。詳細: ADR-0017「SPA の API 契約」。
+共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の画面は MFA チャレンジも含めて契約の client で呼ぶ。`src/mfa/client-facing-contracts.ts` に残るのは、server と web が読む型 (失敗の code `MfaClientFacingErrorCode`、コードの種別 `MfaCodeKind`、型の一致検査 `MatchesClientFacingShape`) だけである。詳細: ADR-0017「SPA の API 契約」。
 _Avoid_: API 定義, schema (一般語で、Effect Schema や DB schema と紛らわしい), 契約 (単独では handler の契約や運用の契約と区別できない)
 
 **audit log**:

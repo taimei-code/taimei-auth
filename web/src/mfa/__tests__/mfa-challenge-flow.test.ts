@@ -1,30 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { initialMfaChallengeFlowState, reduceMfaChallengeFlow } from "../mfa-challenge-flow";
+import { mfaChallengeFlowStateOf, reduceMfaChallengeFlow } from "../mfa-challenge-flow";
 
 describe("reduceMfaChallengeFlow", () => {
   test("AC-001 present の初期観測は error のない ready へ進む", () => {
-    const state = reduceMfaChallengeFlow(initialMfaChallengeFlowState, {
-      type: "observation_resolved",
-      observation: { kind: "present" },
-    });
+    const state = mfaChallengeFlowStateOf({ kind: "present" });
 
     expect(state).toEqual({ phase: "ready", errorCode: null });
   });
 
   test("AC-002 absent の初期観測は expired へ進む", () => {
-    const state = reduceMfaChallengeFlow(initialMfaChallengeFlowState, {
-      type: "observation_resolved",
-      observation: { kind: "absent" },
-    });
+    const state = mfaChallengeFlowStateOf({ kind: "absent" });
 
     expect(state).toEqual({ phase: "expired" });
   });
 
   test("AC-003 unavailable の初期観測は入力可能な ready へ縮退する", () => {
-    const state = reduceMfaChallengeFlow(initialMfaChallengeFlowState, {
-      type: "observation_resolved",
-      observation: { kind: "unavailable" },
-    });
+    const state = mfaChallengeFlowStateOf({ kind: "unavailable" });
 
     expect(state).toEqual({ phase: "ready", errorCode: null });
   });

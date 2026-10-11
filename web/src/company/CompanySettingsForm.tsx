@@ -1,7 +1,7 @@
 import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import type { OrgCode } from "@core/company/org-code";
@@ -117,7 +117,7 @@ const DeleteCompanySection = ({
             redirectAfterAuthChange("deleteAccount");
             return;
           }
-          navigate("/account/companies");
+          void navigate({ to: "/account/companies" });
           return notifyAfterRefresh(refresh, {
             done: `「${companyName}」を削除しました。`,
             staleShort: "事業所を削除しました",

@@ -1,34 +1,29 @@
-import { useMemo, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, type FormEvent } from "react";
 
-import { TAIMEI_SERVICES, type ServiceName } from "@core/services";
-import { signInParamsSchema } from "@core/sign-in-params";
+import { TAIMEI_SERVICES } from "@core/services";
+import type { SignInParams } from "@core/sign-in-params";
 import { authClient } from "./auth-client";
 import { invitationAcceptCallbackUrl } from "./sign-params";
 
 type SignSubmitting = "magic-link" | "github" | null;
 
-export function useSignPage(options: { preferSignUpUrl?: boolean; githubErrorFallback: string }) {
-  const [searchParams] = useSearchParams();
+export function useSignPage(
+  params: SignInParams,
+  options: { preferSignUpUrl?: boolean; githubErrorFallback: string },
+) {
   const [email, setEmail] = useState("");
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [submitting, setSubmitting] = useState<SignSubmitting>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const parseResult = useMemo(
-    () => signInParamsSchema.safeParse(Object.fromEntries(searchParams)),
-    [searchParams],
-  );
-
-  const invitationToken = parseResult.success ? parseResult.data.invitation_token : undefined;
+  const invitationToken = params.invitation_token;
   const isInvitation = invitationToken !== undefined;
-  const callbackUrl = !parseResult.success
-    ? null
-    : invitationToken !== undefined
+  const callbackUrl =
+    invitationToken !== undefined
       ? invitationAcceptCallbackUrl(invitationToken)
       : options.preferSignUpUrl
-        ? (parseResult.data.sign_up_url ?? parseResult.data.redirect_url)
-        : parseResult.data.redirect_url;
+        ? (params.sign_up_url ?? params.redirect_url)
+        : params.redirect_url;
 
   const handleMagicLink = async (e: FormEvent, extra: { name?: string } = {}) => {
     e.preventDefault();
@@ -37,7 +32,7 @@ export function useSignPage(options: { preferSignUpUrl?: boolean; githubErrorFal
     const { error } = await authClient.signIn.magicLink({
       email,
       ...extra,
-      callbackURL: callbackUrl ?? "",
+      callbackURL: callbackUrl,
     });
     setSubmitting(null);
     if (error) {
@@ -52,7 +47,7 @@ export function useSignPage(options: { preferSignUpUrl?: boolean; githubErrorFal
     setErrorMessage(null);
     const { error } = await authClient.signIn.social({
       provider: "github",
-      callbackURL: callbackUrl ?? "",
+      callbackURL: callbackUrl,
     });
     if (error) {
       setSubmitting(null);
@@ -61,10 +56,7 @@ export function useSignPage(options: { preferSignUpUrl?: boolean; githubErrorFal
   };
 
   return {
-    paramsValid: parseResult.success,
-    serviceDisplayName: parseResult.success
-      ? TAIMEI_SERVICES[parseResult.data.service_name as ServiceName].name
-      : "",
+    serviceDisplayName: TAIMEI_SERVICES[params.service_name].name,
     isInvitation,
     email,
     setEmail,

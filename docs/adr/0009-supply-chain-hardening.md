@@ -9,6 +9,7 @@
 このリポジトリの診断結果 (2026-05-16 時点) は次のとおりである。
 
 - `@tanstack/*` は `better-auth` の optionalPeer に名前があるだけで、node_modules には存在しない
+  - 2026-10-11 に共通画面 SPA の router として `@tanstack/react-router` 1.170.41 を直接依存に加えた (ADR-0002)。依存の `@tanstack/router-core` 1.171.34 と `@tanstack/history` 1.162.4 も含め、公開日は 2026-09 で、悪性 version が publish された 2026-05-11 より後である
 - IoC (`~/Library/LaunchAgents/com.user.gh-token-monitor.plist`、`~/.config/systemd/user/gh-token-monitor.service`、`tanstack_runner.js` / `router_runtime.js` / `setup.mjs`) は **すべて陰性**
 - `pull_request_target` / `actions/cache` / public npm への publish 経路は **いずれも未使用** (診断時点)。その後、CI の docker job が buildx の `type=gha` (GitHub Actions cache backend) で image layer を cache するようになったため、cache 経路だけは現在「未使用」ではない (詳細: ADR-0014)
   - この差分は **認識したうえで受容** する。gha cache への書き込みは同一 workflow run の `GITHUB_TOKEN` に閉じており、GitHub の cache isolation により、PR (fork でも branch でも) からの cache write は base branch の cache を汚染できない。あわせて docker job 自体の `permissions` を `contents: read` に絞った
@@ -154,6 +155,10 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 - **sharp** `GHSA-wq5f-xc86-pv6w` (HIGH、`<0.35.5`。librsvg から継承した CVE-2026-96889) は、`overrides` の `0.35.4` を `0.35.5` (2026-09-27) へ上げた。差し替わったのは sharp family (`sharp` と `@img/sharp-*` が 0.35.5、`@img/sharp-libvips-*` が 1.3.4。いずれも 2026-09-27) だけで、7 日齢を満たすため `minimumReleaseAgeExcludes` への追加は不要
 - リスク評価と利用経路は 3 回目対応から変わらない (`wrangler › miniflare` の dev tool 専用で、本番 bundle には同梱されない)
 
+### `GHSA-qwww-vcr4-c8h2` の ignore の撤去 (2026-10-11)
+
+共通画面 SPA の router を TanStack Router に替え、`react-router-dom` を依存から外した (ADR-0002)。「audit gate 対応 3 回目」で accept した react-router の advisory は対象の package が無くなったので、CI の audit step から `--ignore=GHSA-qwww-vcr4-c8h2` を外した。
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
@@ -183,7 +188,7 @@ test -f ~/.config/systemd/user/gh-token-monitor.service && echo "DETECTED" || ec
 find . -name "tanstack_runner.js" -o -name "router_runtime.js" -o -name "setup.mjs"
 
 # 4. lockfile 内の compromised パッケージ family
-grep -E "@tanstack/(router|start|devtools|adapter)" bun.lock
+grep -E "@tanstack/(router|start|devtools|adapter)" bun.lock  # 正規の @tanstack/react-router・router-core も一致する。一致した version を postmortem の悪性 version の一覧と照らす
 ```
 
 DETECTED の場合は **token を revoke する前に persistence daemon を削除** すること (revoke が wiper の trigger になる挙動が報告されている)。詳細は [TanStack postmortem](https://tanstack.com/blog/npm-supply-chain-compromise-postmortem) を参照。

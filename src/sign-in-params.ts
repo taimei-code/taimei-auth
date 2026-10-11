@@ -4,8 +4,7 @@ import { validateRedirectUrl } from "./url-allowlist";
 
 const serviceNameSchema = z.enum(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]);
 
-// refine 前の object を export するのは、SPA が転送してよい query キーを shape から導出するため。
-export const signInParamsObjectSchema = z.object({
+const signInParamsObjectSchema = z.object({
   service_name: serviceNameSchema,
   redirect_url: z.string().min(1).max(2048),
   sign_up_url: z.string().min(1).max(2048).optional(),
@@ -26,6 +25,8 @@ export const signInParamsSchema = signInParamsObjectSchema
       data.sign_up_url === undefined || validateRedirectUrl(data.sign_up_url, data.service_name),
     { path: ["sign_up_url"], message: "sign_up_url is not in allowlist" },
   );
+
+export type SignInParams = z.infer<typeof signInParamsSchema>;
 
 export const redirectTargetSchema = signInParamsObjectSchema
   .pick({ service_name: true, redirect_url: true })

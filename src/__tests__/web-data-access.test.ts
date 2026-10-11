@@ -4,11 +4,6 @@ import { posix } from "node:path";
 import { grepFiles } from "./grep-files";
 import { readActualWebSources } from "./web-domain-structure-helpers";
 
-const UNMIGRATED: ReadonlySet<string> = new Set([
-  // router を差し替える時に loader へ移すまで残す (理由は ADR-0017「web への拡大」節)
-  "mfa/use-mfa-challenge-flow.ts",
-]);
-
 const transpilers = {
   ts: new Bun.Transpiler({ loader: "ts" }),
   tsx: new Bun.Transpiler({ loader: "tsx" }),
@@ -28,38 +23,34 @@ const runtimeImports = (path: string, source: string): string[] =>
 const mayUseHttpClient = (path: string) =>
   path.endsWith("-atom.ts") || path === "shared/spa-api-client.ts";
 
+const usesEffectHook = (source: string) => /\buse(Layout)?Effect\b/.test(source);
+
 const violationsOf = (path: string, source: string): string[] => {
   const imports = runtimeImports(path, source);
   return [
-    ...(/\bfetch\(/.test(source) && !path.endsWith("-api.ts") ? ["fetch"] : []),
-    ...(imports.some((target) => target.endsWith("-api")) ? ["*-api"] : []),
+    ...(/\bfetch\(/.test(source) ? ["fetch"] : []),
     ...(imports.some((target) => target.endsWith("shared/spa-api-client")) &&
     !path.endsWith("-atom.ts")
       ? ["SpaApiClient"]
       : []),
     ...(imports.includes("effect/http") && !mayUseHttpClient(path) ? ["effect/http"] : []),
+    ...(path.includes("/pages/") && usesEffectHook(source) ? ["useEffect"] : []),
   ];
 };
 
 function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string[] {
   const results: string[] = [];
-  const violating = new Set<string>();
   for (const [fullPath, source] of Object.entries(sources)) {
     const path = fullPath.replace(/^web\/src\//, "");
     if (path.includes("__tests__/") || !/\.tsx?$/.test(path)) continue;
     const violations = violationsOf(path, source);
-    if (violations.length === 0) continue;
-    violating.add(path);
-    if (!UNMIGRATED.has(path)) results.push(`${path}: ${violations.join(", ")}`);
-  }
-  for (const path of UNMIGRATED) {
-    if (!violating.has(path)) results.push(`${path}: 許可リストにあるが違反していない`);
+    if (violations.length > 0) results.push(`${path}: ${violations.join(", ")}`);
   }
   return results.sort();
 }
 
 describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だけ (ADR-0017)", () => {
-  test("fetch は *-api.ts、*-api は許可リスト、SpaApiClient と effect/http は *-atom.ts だけが使う", () => {
+  test("fetch は書かず、SpaApiClient と effect/http は *-atom.ts だけが使い、pages/ は useEffect を使わない", () => {
     expect(analyzeWebDataAccess(readActualWebSources())).toEqual([]);
   });
 
@@ -87,6 +78,30 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
     expect(callers.sort()).toEqual([
       "web/src/mfa/mfa-atom.ts",
       "web/src/shared/failure-message.ts",
+    ]);
+  });
+
+  test("名前が -api.ts で終わる file でも fetch を書くと落ちる", () => {
+    expect(
+      analyzeWebDataAccess({ "web/src/mfa/mfa-api.ts": 'export const f = () => fetch("/x");' }),
+    ).toEqual(["mfa/mfa-api.ts: fetch"]);
+  });
+
+  test("route entry (pages/) が useEffect を import すると落ちる (遷移起点の処理は route の beforeLoad / loader)", () => {
+    expect(
+      analyzeWebDataAccess({
+        "web/src/company/pages/X.tsx":
+          'import { useEffect } from "react";\nexport const X = () => null;',
+      }),
+    ).toEqual(["company/pages/X.tsx: useEffect"]);
+  });
+
+  test.each([
+    ["namespace の React.useEffect", 'import * as React from "react";\nReact.useEffect(() => {});'],
+    ["useLayoutEffect", 'import { useLayoutEffect } from "react";\nuseLayoutEffect(() => {});'],
+  ])("route entry (pages/) の %s も落ちる", (_name, source) => {
+    expect(analyzeWebDataAccess({ "web/src/company/pages/X.tsx": source })).toEqual([
+      "company/pages/X.tsx: useEffect",
     ]);
   });
 });

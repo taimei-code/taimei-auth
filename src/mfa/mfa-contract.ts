@@ -2,12 +2,6 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { Ok } from "../membership/membership-contract";
-import type {
-  MatchesClientFacingShape,
-  MfaChallengeStateResponse,
-  MfaChallengeVerifyRequest,
-  MfaChallengeVerifyResponse,
-} from "./client-facing-contracts";
 import {
   AlreadyEnabled,
   ChallengeExpired,
@@ -39,21 +33,10 @@ const ActivateRequest = Schema.Struct({
   enrollment_id: Schema.String.check(Schema.isMinLength(1)),
 });
 const CodeWithKind = Schema.Struct({ code: Code, kind: CodeKind });
-const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
-const ChallengePassed = Schema.Struct({ redirect_url: Schema.String });
-
-const _stateMatchesWire: MatchesClientFacingShape<
-  typeof ChallengeState.Type,
-  Readonly<MfaChallengeStateResponse>
-> = true;
-const _passedMatchesWire: MatchesClientFacingShape<
-  typeof ChallengePassed.Type,
-  Readonly<MfaChallengeVerifyResponse>
-> = true;
-const _verifyRequestMatchesWire: MatchesClientFacingShape<
-  typeof CodeWithKind.Type,
-  Readonly<MfaChallengeVerifyRequest>
-> = true;
+export const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
+export const ChallengePassed = Schema.Struct({
+  redirect_url: Schema.String.check(Schema.isMinLength(1)),
+});
 
 export class MfaGroup extends HttpApiGroup.make("mfa")
   .add(

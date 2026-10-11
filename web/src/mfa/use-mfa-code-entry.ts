@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from "react";
 
-import type { MfaCodeKind, MfaErrorCode } from "./mfa-api";
+import type { MfaCodeKind, MfaErrorCode } from "./mfa-atom";
 
 const WHITESPACE = /\s+/g;
 // NFKC で ASCII に正規化されないダッシュ類 (メール本文からの貼り付けで混ざる)

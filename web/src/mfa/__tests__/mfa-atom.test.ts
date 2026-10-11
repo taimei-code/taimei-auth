@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Cause } from "effect";
+import { Cause, Exit } from "effect";
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { Unauthorized } from "@core/membership/guard/errors";
 import { EnrollmentChanged, InvalidCode, Locked } from "@core/mfa/error-mapping";
 
-import { mfaErrorCodeOfCause } from "../mfa-atom";
+import { mfaChallengeObservationOf, mfaErrorCodeOfCause } from "../mfa-atom";
 
 const statusError = (status: number) => {
   const request = HttpClientRequest.post("/api/account/mfa/disable");
@@ -31,5 +31,25 @@ describe("mfaErrorCodeOfCause", () => {
     ["Error", Cause.die(new Error("network")), "unknown"],
   ] as const)("%s は %s", (_name, cause, expected) => {
     expect(mfaErrorCodeOfCause(cause)).toBe(expected);
+  });
+});
+
+test("server の契約の decode に落ちた 400 (body 無し) は invalid_argument", () => {
+  expect(mfaErrorCodeOfCause(Cause.die(statusError(400)))).toBe("invalid_argument");
+});
+
+describe("mfaChallengeObservationOf", () => {
+  test("pending: true は present", () => {
+    expect(mfaChallengeObservationOf(Exit.succeed({ pending: true }))).toEqual({ kind: "present" });
+  });
+
+  test("pending: false は absent", () => {
+    expect(mfaChallengeObservationOf(Exit.succeed({ pending: false }))).toEqual({ kind: "absent" });
+  });
+
+  test("取得の失敗は absent と推測せず unavailable", () => {
+    expect(mfaChallengeObservationOf(Exit.die(new Error("network")))).toEqual({
+      kind: "unavailable",
+    });
   });
 });

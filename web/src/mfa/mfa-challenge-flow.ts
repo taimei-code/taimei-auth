@@ -4,7 +4,6 @@ export type MfaChallengeObservation =
   | { kind: "unavailable" };
 
 export type MfaChallengeFlowState<ErrorCode extends string> =
-  | { phase: "observing" }
   | { phase: "ready"; errorCode: ErrorCode | null }
   | { phase: "verifying" }
   | { phase: "expired" }
@@ -16,25 +15,19 @@ export type MfaChallengeVerification<ErrorCode extends string> =
   | { kind: "rejected"; errorCode: ErrorCode };
 
 export type MfaChallengeFlowEvent<ErrorCode extends string> =
-  | {
-      type: "observation_resolved";
-      observation: MfaChallengeObservation;
-    }
   | { type: "verification_started" }
   | { type: "verification_resolved"; verification: MfaChallengeVerification<ErrorCode> }
   | { type: "error_cleared" };
 
-export const initialMfaChallengeFlowState = { phase: "observing" } as const;
+export const mfaChallengeFlowStateOf = <ErrorCode extends string>(
+  observation: MfaChallengeObservation,
+): MfaChallengeFlowState<ErrorCode> =>
+  observation.kind === "absent" ? { phase: "expired" } : { phase: "ready", errorCode: null };
 
 export function reduceMfaChallengeFlow<ErrorCode extends string>(
   state: MfaChallengeFlowState<ErrorCode>,
   event: MfaChallengeFlowEvent<ErrorCode>,
 ): MfaChallengeFlowState<ErrorCode> {
-  if (state.phase === "observing" && event.type === "observation_resolved") {
-    return event.observation.kind === "absent"
-      ? { phase: "expired" }
-      : { phase: "ready", errorCode: null };
-  }
   if (state.phase === "ready" && event.type === "verification_started") {
     return { phase: "verifying" };
   }

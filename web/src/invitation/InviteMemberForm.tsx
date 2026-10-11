@@ -1,7 +1,6 @@
 import { Exit } from "effect";
 import { type FormEvent, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
 
 import type { Role } from "@core/membership/policy";
 import { roleLabelJa } from "@core/membership/role-label";
@@ -14,17 +13,17 @@ import { Input } from "../shared/ui/input";
 import { Label } from "../shared/ui/label";
 import { NativeSelect } from "../shared/ui/native-select";
 import { pendingInvitationsOf, useCreateInvitation } from "./invitation-atom";
-import { parseRedirectTarget } from "./redirect-target";
+import { parseRedirectTarget, type RedirectTargetSearch } from "./redirect-target";
 
 const INVITE_FAILED = "招待の送信に失敗しました。";
 
 type Props = {
   companyId: string;
   assignableRoles: readonly Role[];
+  redirectSearch: RedirectTargetSearch;
 };
 
-export const InviteMemberForm = ({ companyId, assignableRoles }: Props) => {
-  const [searchParams] = useSearchParams();
+export const InviteMemberForm = ({ companyId, assignableRoles, redirectSearch }: Props) => {
   const waitForInvitations = useWaitForValue(pendingInvitationsOf(companyId));
   const createInvitation = useCreateInvitation();
   const [inviteEmail, setInviteEmail] = useState("");
@@ -38,7 +37,7 @@ export const InviteMemberForm = ({ companyId, assignableRoles }: Props) => {
     createInvitation(companyId, {
       email: inviteEmail.trim(),
       role: effectiveInviteRole,
-      redirect_target: parseRedirectTarget(searchParams),
+      redirect_target: parseRedirectTarget(redirectSearch),
     })
       .then(
         Exit.match({

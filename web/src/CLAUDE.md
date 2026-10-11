@@ -16,9 +16,16 @@
 
 - route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
 - `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
-- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。他の場所から `fetch` や `SpaApiClient` を使うと `src/__tests__/web-data-access.test.ts` が落とす。例外は better-auth の client のデータと MFA チャレンジ (`mfa/use-mfa-challenge-flow.ts`) で、理由は ADR-0017 の「web への拡大」節にある。
+- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。他の場所から `fetch` や `SpaApiClient` を使うと `src/__tests__/web-data-access.test.ts` が落とす。例外は better-auth の client のデータで、理由は ADR-0017 の「web への拡大」節にある。
 - 一覧を変える更新は、`*-atom.ts` が一覧の `reactivityKeys` を足した hook (例: `useChangeRole`) として渡し、画面は取り直しの完了を `shared/atom-runtime.ts` の `useWaitForValue` で待つ。事業所状態は `useCurrentCompany()` の `refresh()` で取り直す。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。
 - 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` をすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。特定の `_tag` かどうかで分岐する時は、同じ file の `hasFailureTag` を使う。MFA は `mfa/mfa-atom.ts` の `mfaErrorCodeOfCause` で失敗の code に読み替える。
+
+## 遷移
+
+- route は `app/router.tsx` に置く。page は route の値を `getRouteApi(<route id>)` の `useSearch` / `useLoaderData` で読む。
+- search は route の `validateSearch` で parse し、page で `URLSearchParams` を読まない (biome の `noRestrictedGlobals` が落とす)。検査に失敗した時に既定の値を使う search は、`validateSearch` の中で既定の値にする。
+- 遷移を起点とする処理 (画面を開く前の確認、招待の受諾の POST、状態の取得) は route の `beforeLoad` / `loader` に置き、`pages/` で `useEffect` を使わない (`web-data-access.test.ts` が落とす)。判定は domain の関数が直和で返し、`router.tsx` が `redirect` に写す (例: `company/company-signup-entry.ts`)。
+- 遷移は `Link` / `navigate` / `redirect` で書き、path と search を型で検査させる。`/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は `reloadDocument` にする (理由は ADR-0002 の router の節)。
 
 ## 検証
 
