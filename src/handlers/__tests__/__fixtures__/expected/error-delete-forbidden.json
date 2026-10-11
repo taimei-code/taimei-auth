@@ -2,6 +2,6 @@
   "status": 403,
   "contentType": "application/json",
   "body": {
-    "error": "forbidden"
+    "_tag": "Forbidden"
   }
 }

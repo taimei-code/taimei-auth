@@ -347,8 +347,28 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("error catalog (QA-E-02: 全 route の error 文字列 × status)", () => {
-    test("QA-E-01 ADMIN が role=OWNER 招待 → 403 forbidden (#104 route レベル regression)", () =>
+  describe("招待の作成の入力の正規化", () => {
+    test("POST /api/account/companies/:companyId/invitations は email を小文字にして作る", () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const owner = yield* db.seedUser("inv-lower-owner");
+          const co = yield* db.seedCompany("inv-lower");
+          yield* db.seedMembership(owner.id, co, "OWNER");
+          const actual = yield* invoke(
+            buildTestApp(owner),
+            "POST",
+            `/api/account/companies/${co}/invitations`,
+            { email: `${TEST_PREFIX}Mixed-Case@Example.com`, role: "MEMBER" },
+          );
+          const created = actual.body as { invitation: { email: string } };
+          expect(created.invitation.email).toBe(`${TEST_PREFIX}mixed-case@example.com`);
+        }),
+      ));
+  });
+
+  describe("error catalog (QA-E-02: 全 route の error tag × status)", () => {
+    test("QA-E-01 ADMIN が role=OWNER 招待 → 403 Forbidden (#104 route レベル regression)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -366,7 +386,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("MEMBER が invitations 発行 → 403 forbidden (requireMembership minRole=ADMIN)", () =>
+    test("MEMBER が invitations 発行 → 403 Forbidden (requireMembershipOf minRole=ADMIN)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -384,7 +404,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-E-03 POST /api/account/companies with empty name → 400 invalid_argument + details", () =>
+    test("QA-E-03 POST /api/account/companies with empty name → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -394,11 +414,11 @@ describe("account routes migration snapshot", () => {
             name: "",
             org_code: "CORPORATE",
           });
-          assertMatchesFixture(actual, "error-signup-invalid-details");
+          assertMatchesFixture(actual, "error-signup-invalid");
         }),
       ));
 
-    test("QA-E-03 POST /api/account/companies/add with empty name → 400 invalid_argument + details", () =>
+    test("QA-E-03 POST /api/account/companies/add with empty name → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -408,11 +428,11 @@ describe("account routes migration snapshot", () => {
             name: "",
             org_code: "CORPORATE",
           });
-          assertMatchesFixture(actual, "error-add-invalid-details");
+          assertMatchesFixture(actual, "error-add-invalid");
         }),
       ));
 
-    test("QA-E-03 POST invitations with invalid email → 400 invalid_argument + details", () =>
+    test("QA-E-03 POST invitations with invalid email → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -424,11 +444,11 @@ describe("account routes migration snapshot", () => {
             email: "not-an-email",
             role: "MEMBER",
           });
-          assertMatchesFixture(actual, "error-invitations-invalid-details");
+          assertMatchesFixture(actual, "error-invitations-invalid");
         }),
       ));
 
-    test("POST update company 未知 companyId → 403 forbidden (要 OWNER)", () =>
+    test("POST update company 未知 companyId → 403 Forbidden (要 OWNER)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -442,7 +462,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST update company (invalid body) → 400 invalid_argument (no details)", () =>
+    test("POST update company (invalid body) → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -457,7 +477,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST role change unknown target → 404 not_found", () =>
+    test("POST role change unknown target → 404 NotFound", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -475,7 +495,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST role change invalid body → 400 invalid_argument", () =>
+    test("POST role change invalid body → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -495,7 +515,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST role change ADMIN → OWNER by ADMIN → 403 forbidden", () =>
+    test("POST role change ADMIN → OWNER by ADMIN → 403 Forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -517,7 +537,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST role change 唯一の OWNER 降格 → 409 last_owner", () =>
+    test("POST role change 唯一の OWNER 降格 → 409 LastOwner", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -535,7 +555,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST transfer-ownership unknown target → 404 not_found", () =>
+    test("POST transfer-ownership unknown target → 404 NotFound", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -555,7 +575,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST transfer-ownership self → 400 invalid_argument", () =>
+    test("POST transfer-ownership self → 400 InvalidArgument", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -575,7 +595,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST transfer-ownership target already OWNER → 400 already_owner", () =>
+    test("POST transfer-ownership target already OWNER → 400 AlreadyOwner", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -597,7 +617,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST transfer-ownership by non-owner → 403 forbidden", () =>
+    test("POST transfer-ownership by non-owner → 403 Forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -619,7 +639,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST remove member unknown target → 404 not_found", () =>
+    test("POST remove member unknown target → 404 NotFound", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -636,7 +656,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST remove OWNER by non-owner → 403 forbidden (canRemoveTarget)", () =>
+    test("POST remove OWNER by non-owner → 403 Forbidden (canRemoveTarget)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -655,7 +675,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST remove 唯一の OWNER 自己退会 → 409 last_owner", () =>
+    test("POST remove 唯一の OWNER 自己退会 → 409 LastOwner", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -672,7 +692,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST accept-invitation invalid body → 400 invalid_argument", () =>
+    test("POST accept-invitation invalid body → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -683,7 +703,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST accept-invitation unknown token → 404 not_found", () =>
+    test("POST accept-invitation unknown token → 404 NotFound", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -696,7 +716,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST accept-invitation email mismatch → 403 email_mismatch", () =>
+    test("POST accept-invitation email mismatch → 403 EmailMismatch", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -718,7 +738,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST accept-invitation expired → 410 expired_or_used", () =>
+    test("POST accept-invitation expired → 410 ExpiredOrUsed", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -741,7 +761,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST revoke unknown invitation → 404 not_found_or_not_pending", () =>
+    test("POST revoke unknown invitation → 404 NotFoundOrNotPending", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -761,7 +781,7 @@ describe("account routes migration snapshot", () => {
     test.each([
       "MEMBER",
       "ADMIN",
-    ] as const)("POST /api/account/companies/:companyId/delete %s → 403 forbidden、無変更", (role) =>
+    ] as const)("POST /api/account/companies/:companyId/delete %s → 403 Forbidden、無変更", (role) =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -781,7 +801,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST /api/account/companies/:companyId/delete 非メンバー × {unknown, DELETED, ACTIVE} → 同一の 403 forbidden", () =>
+    test("POST /api/account/companies/:companyId/delete 非メンバー × {unknown, DELETED, ACTIVE} → 同一の 403 Forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -804,7 +824,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST /api/account/companies/:companyId/delete OWNER → 200、同じ actor の再送は 403 forbidden", () =>
+    test("POST /api/account/companies/:companyId/delete OWNER → 200、同じ actor の再送は 403 Forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -822,7 +842,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST /api/account/current-company invalid body → 400 invalid_argument", () =>
+    test("POST /api/account/current-company invalid body → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -833,7 +853,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("POST /api/account/current-company unknown target → 403 forbidden", () =>
+    test("POST /api/account/current-company unknown target → 403 Forbidden", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -848,7 +868,7 @@ describe("account routes migration snapshot", () => {
   });
 
   describe("QA-D-01 401 が 400/403/404 に優先 (順序保証)", () => {
-    test("cookie 無しで invalid body 付き invite → 401 unauthorized (400 に落ちない)", () =>
+    test("cookie 無しで invalid body 付き invite → 401 Unauthorized (400 に落ちない)", () =>
       run(
         Effect.gen(function* () {
           const app = buildTestApp(null);
@@ -857,11 +877,11 @@ describe("account routes migration snapshot", () => {
             role: "OWNER",
           });
           expect(actual.status).toBe(401);
-          expect(actual.body).toEqual({ error: "unauthorized" });
+          expect(actual.body).toEqual({ _tag: "Unauthorized" });
         }),
       ));
 
-    test("cookie 無しで unknown companyId 付き role change → 401 unauthorized (403/404 に落ちない)", () =>
+    test("cookie 無しで unknown companyId 付き role change → 401 Unauthorized (403/404 に落ちない)", () =>
       run(
         Effect.gen(function* () {
           const app = buildTestApp(null);
@@ -872,11 +892,11 @@ describe("account routes migration snapshot", () => {
             { role: "ADMIN" },
           );
           expect(actual.status).toBe(401);
-          expect(actual.body).toEqual({ error: "unauthorized" });
+          expect(actual.body).toEqual({ _tag: "Unauthorized" });
         }),
       ));
 
-    test("cookie 無しで delete → unknown / ACTIVE の両方が同一の 401 unauthorized", () =>
+    test("cookie 無しで delete → unknown / ACTIVE の両方が同一の 401 Unauthorized", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -885,14 +905,14 @@ describe("account routes migration snapshot", () => {
           const unknown = yield* invoke(app, "POST", "/api/account/companies/cmp_missing/delete");
           const onActive = yield* invoke(app, "POST", `/api/account/companies/${active}/delete`);
           expect(unknown.status).toBe(401);
-          expect(unknown.body).toEqual({ error: "unauthorized" });
+          expect(unknown.body).toEqual({ _tag: "Unauthorized" });
           expect(onActive).toEqual(unknown);
         }),
       ));
   });
 
   describe("QA-D-02 getSession が同期 throw (期限切れ cookie の DI 差替相当) でも fail-closed 401", () => {
-    test("所属のある actor でも getSession が同期 throw すれば 401 unauthorized", () =>
+    test("所属のある actor でも getSession が同期 throw すれば 401 Unauthorized", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -907,7 +927,7 @@ describe("account routes migration snapshot", () => {
           });
           const actual = yield* invoke(app, "GET", "/api/account/memberships");
           expect(actual.status).toBe(401);
-          expect(actual.body).toEqual({ error: "unauthorized" });
+          expect(actual.body).toEqual({ _tag: "Unauthorized" });
         }),
       ));
   });
@@ -925,7 +945,7 @@ describe("account routes migration snapshot", () => {
             app,
             `http://localhost/api/account/companies/${co}/members`,
           );
-          expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+          expect(res.headers.get("content-type")).toBe("application/json");
         }),
       ));
 
@@ -935,7 +955,7 @@ describe("account routes migration snapshot", () => {
           const app = buildTestApp(null);
           const res = yield* requestApp(app, "http://localhost/api/account/memberships");
           expect(res.status).toBe(401);
-          expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+          expect(res.headers.get("content-type")).toBe("application/json");
         }),
       ));
   });

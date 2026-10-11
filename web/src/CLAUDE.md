@@ -16,7 +16,7 @@
 
 - route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
 - `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
-- URL、request、response、operation に固有の error 変換は所有 domain に置く。`shared/request-json.ts` は domain に依存しない JSON request 処理だけを持ち、同じ status でも意味が異なる文言を `shared` に集約しない。MFA は body の error code を区別する必要があるため、汎用 request へ統合しない。
+- URL、request、response、operation に固有の error 変換は所有 domain に置く。`shared/request-json.ts` は domain に依存しない JSON request 処理だけを持ち、同じ status でも意味が異なる文言を `shared` に集約しない。MFA は body の失敗の種類 (`_tag`) を区別する必要があるため、汎用 request へ統合しない。
 
 ## 検証
 

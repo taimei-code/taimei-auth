@@ -179,20 +179,26 @@ describe("AC-022 void endpoint は 2xx body によらず resolve する", () => 
 
 describe("AC-011 error code 解決 (公開関数越し)", () => {
   test.each([
-    ["既知 error code はそのまま", 400, { error: "invalid_code" }, "invalid_code"],
-    ["429 + locked は locked", 429, { error: "locked" }, "locked"],
-    ["既知 code の無い 429 は rate_limited", 429, {}, "rate_limited"],
-    ["未知 code は unknown", 500, { error: "boom" }, "unknown"],
+    ["既知 tag は対応する code", 400, { _tag: "InvalidCode" }, "invalid_code"],
+    ["429 + Locked は locked", 429, { _tag: "Locked" }, "locked"],
+    ["既知 tag の無い 429 は rate_limited", 429, {}, "rate_limited"],
+    ["未知 tag は unknown", 500, { _tag: "Boom" }, "unknown"],
     ["proxy 文言の 429 は rate_limited", 429, { error: "Too Many Requests" }, "rate_limited"],
-    ["prototype メンバー名は unknown", 400, { error: "toString" }, "unknown"],
-    ["409 already_enabled", 409, { error: "already_enabled" }, "already_enabled"],
+    ["prototype メンバー名は unknown", 400, { _tag: "toString" }, "unknown"],
+    ["409 AlreadyEnabled", 409, { _tag: "AlreadyEnabled" }, "already_enabled"],
+    ["MfaNotFound は not_found", 404, { _tag: "MfaNotFound" }, "not_found"],
+    ["Unauthorized は unauthorized", 401, { _tag: "Unauthorized" }, "unauthorized"],
+    ["body の無い 400 (入力の decode 失敗) は invalid_argument", 400, null, "invalid_argument"],
     ["非 JSON body は unknown", 503, undefined, "unknown"],
-    ["401 challenge_expired", 401, { error: "challenge_expired" }, "challenge_expired"],
+    ["前段の proxy が返す非 JSON の 400 は unknown", 400, undefined, "unknown"],
+    ["401 ChallengeExpired", 401, { _tag: "ChallengeExpired" }, "challenge_expired"],
   ])("%s", async (_name, status, body, expected) => {
     stubFetch(
       body === undefined
         ? new Response("upstream error", { status })
-        : Response.json(body, { status }),
+        : body === null
+          ? new Response(null, { status })
+          : Response.json(body, { status }),
     );
 
     expect(await codeOfRejection(disableMfa({ code: "1", kind: "totp" }))).toBe(expected);
@@ -200,7 +206,7 @@ describe("AC-011 error code 解決 (公開関数越し)", () => {
 });
 
 test("失敗の message は汎用文言のみでエラーコードを露出しない", async () => {
-  stubFetch(Response.json({ error: "locked" }, { status: 429 }));
+  stubFetch(Response.json({ _tag: "Locked" }, { status: 429 }));
 
   const error = await disableMfa({ code: "1", kind: "totp" }).then(
     () => undefined,

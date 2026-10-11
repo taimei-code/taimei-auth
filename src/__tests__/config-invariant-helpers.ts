@@ -4,17 +4,16 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-// biome.json の 2 copy と byte 単位で一致させる (message は selector なので、ずれると invariant が無効になる)。
 export const WEB_ONLY_DEP_MESSAGE =
   "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
 const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
 
-// biome の override は merge されず置き換わるため、ban は src 系にマッチする 2 つの override へ意図的に重複コピーしてある。
-export const EXPECTED_WEB_ONLY_COPY_COUNT = 2;
-export const EXPECTED_CONNECT_NODE_COPY_COUNT = 2;
+// biome の override は merge されず置き換わるため、ban は src 系にマッチする全 override へ意図的に重複コピーしてある。
+export const EXPECTED_WEB_ONLY_COPY_COUNT = 4;
+export const EXPECTED_CONNECT_NODE_COPY_COUNT = 4;
 
 // override[0] が覆う 3 scope に 1 つずつ。後置 override の後勝ち置換で ban が消える経路を scope ごとに検出する。
-export const REPRESENTATIVE_SERVER_FILE = "src/handlers/account-company.ts";
+export const REPRESENTATIVE_SERVER_FILE = "src/handlers/run-route.ts";
 export const REPRESENTATIVE_DB_FILE = "db/schema.ts";
 export const REPRESENTATIVE_MANAGEMENT_FILE = "management/disable-user-mfa.ts";
 const REPRESENTATIVE_BANNED_SCOPE_FILES = [
@@ -115,7 +114,7 @@ export function webOnlyBanViolations(config: BiomeConfig): string[] {
 
   if (sorted.length !== EXPECTED_WEB_ONLY_COPY_COUNT) {
     violations.push(
-      `web 専用 ban の copy 数が ${sorted.length} 個 (期待 ${EXPECTED_WEB_ONLY_COPY_COUNT} 個)。message 文言を変えたなら biome.json の 2 copy と本 test の WEB_ONLY_DEP_MESSAGE を同時に直す (期待 message: ${WEB_ONLY_DEP_MESSAGE})`,
+      `web 専用 ban の copy 数が ${sorted.length} 個 (期待 ${EXPECTED_WEB_ONLY_COPY_COUNT} 個)。message 文言を変えたなら biome.json の全 copy と本 test の WEB_ONLY_DEP_MESSAGE を同時に直す (期待 message: ${WEB_ONLY_DEP_MESSAGE})`,
     );
   }
   for (const [index, group] of sorted.entries()) {

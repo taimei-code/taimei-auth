@@ -2,6 +2,6 @@
   "status": 404,
   "contentType": "application/json",
   "body": {
-    "error": "not_found_or_not_pending"
+    "_tag": "NotFoundOrNotPending"
   }
 }

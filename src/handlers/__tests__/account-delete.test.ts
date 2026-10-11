@@ -34,7 +34,7 @@ describe("POST /api/account/delete", () => {
       }),
     ));
 
-  test("ACTIVE な事業所の唯一の OWNER は 409 last_owner で、user は残る", () =>
+  test("ACTIVE な事業所の唯一の OWNER は 409 LastOwner で、user は残る", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -45,7 +45,7 @@ describe("POST /api/account/delete", () => {
         const res = yield* deleteAccount(buildTestApp(owner), JSON_HEADERS);
 
         expect(res.status).toBe(409);
-        expect(yield* responseJson(res)).toEqual({ error: "last_owner" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "LastOwner" });
         expect(yield* db.readUser(owner.id)).toBeDefined();
       }),
     ));
@@ -95,7 +95,7 @@ describe("POST /api/account/delete", () => {
 
         const after = yield* memberships();
         expect(after.status).toBe(401);
-        expect(yield* responseJson(after)).toEqual({ error: "unauthorized" });
+        expect(yield* responseJson(after)).toEqual({ _tag: "Unauthorized" });
       }),
     ));
 });

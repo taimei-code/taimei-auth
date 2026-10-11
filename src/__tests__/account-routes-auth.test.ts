@@ -51,10 +51,11 @@ const MFA_ROUTE_PREFIX = "/api/account/mfa";
 
 describe("account routes は cookie 無しの JSON request で全て 401 (Content-Type の無い POST は csrf() が先に 403 にする)", () => {
   for (const { method, path } of routes) {
-    test(`${method} ${path} → 401 unauthorized`, async () => {
+    test(`${method} ${path} → 401 Unauthorized`, async () => {
       const res = await app.request(`http://localhost${path}`, { method, headers: JSON_HEADERS });
       expect(res.status).toBe(401);
-      expect(await res.json<unknown>()).toEqual({ error: "unauthorized" });
+      expect(res.headers.get("content-type")).toBe("application/json");
+      expect(await res.json<unknown>()).toEqual({ _tag: "Unauthorized" });
     });
   }
 });
