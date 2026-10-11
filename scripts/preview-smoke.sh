@@ -71,10 +71,10 @@ echo "/health: $ok / $health_rounds returned 200"
 result=$(probe GET /api/account/memberships)
 status="${result%%|*}"
 body="${result##*|}"
-if [ "$status" = "401" ] && [ "$body" = '{"error":"unauthorized"}' ]; then
+if [ "$status" = "401" ] && [ "$body" = '{"_tag":"Unauthorized"}' ]; then
   echo "/api/account/memberships (no cookie): 401 $body"
 else
-  fail "/api/account/memberships (no cookie) -> $result (expected 401 {\"error\":\"unauthorized\"})"
+  fail "/api/account/memberships (no cookie) -> $result (expected 401 {\"_tag\":\"Unauthorized\"})"
 fi
 
 result=$(probe GET /auth/)
