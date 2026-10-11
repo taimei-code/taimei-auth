@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 # TLS を復号する proxy 用のローカル CA (Dockerfile が COPY する)
 certs/*.pem
+*.cpuprofile
+bundle-meta.json

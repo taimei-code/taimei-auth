@@ -17,7 +17,8 @@
       "!packages/auth-client/dist",
       "!packages/auth-client/src/gen",
       "!bun.lock",
-      "!web/src/index.css"
+      "!web/src/index.css",
+      "!poc/spa-api-contract/probes"
     ]
   },
   "formatter": {
@@ -147,6 +148,98 @@
       }
     },
     {
+      "includes": ["src/**/*-api.ts", "!src/handlers/**", "!src/**/__tests__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "effect/http-api": {
+                    "importNames": ["HttpApiBuilder", "HttpApiTest"],
+                    "message": "契約の module は web と共有するため、server の実装 (HttpApiBuilder) を import しない。実装は src/handlers/*-http-api.ts に置く"
+                  }
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@effect/atom-react",
+                      "@radix-ui/*",
+                      "class-variance-authority",
+                      "clsx",
+                      "lucide-react",
+                      "qrcode",
+                      "react-router-dom",
+                      "sonner",
+                      "tailwind-merge",
+                      "tailwindcss-animate"
+                    ],
+                    "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+                  },
+                  {
+                    "group": ["@connectrpc/connect-node"],
+                    "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+                  },
+                  {
+                    "group": ["effect/*", "effect/**", "!effect/http-api"],
+                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-api.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/handlers/*-http-api.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                },
+                "patterns": [
+                  {
+                    "group": [
+                      "@effect/atom-react",
+                      "@radix-ui/*",
+                      "class-variance-authority",
+                      "clsx",
+                      "lucide-react",
+                      "qrcode",
+                      "react-router-dom",
+                      "sonner",
+                      "tailwind-merge",
+                      "tailwindcss-animate"
+                    ],
+                    "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+                  },
+                  {
+                    "group": ["@connectrpc/connect-node"],
+                    "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+                  },
+                  {
+                    "group": ["effect/*", "effect/**", "!effect/http-api", "!effect/http"],
+                    "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-api.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["e2e/**", "!e2e/fixtures.ts"],
       "linter": {
         "rules": {
@@ -175,9 +268,14 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)",
-                  "effect": "web (共通画面 SPA) と @core 共有 module は effect-free を維持する (docs/adr/0017-effect-v4-full-adoption.md / src/__tests__/web-shared-core-runtime-free.test.ts)"
-                }
+                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                },
+                "patterns": [
+                  {
+                    "group": ["effect/*", "effect/**", "!effect/reactivity", "!effect/http"],
+                    "message": "web で使える effect の subpath は effect/reactivity (atom) と effect/http (FetchHttpClient) だけ (docs/adr/0017-effect-v4-full-adoption.md)"
+                  }
+                ]
               }
             }
           }

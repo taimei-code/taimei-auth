@@ -8,10 +8,8 @@ import { getAppUrl } from "../email/client";
 import { acceptInvitation } from "../invitation/accept";
 import { acceptInvitationPath } from "../invitation/accept-path";
 import { createInvitation } from "../invitation/create";
-import { InvitationRepo } from "../invitation/ports";
 import { revokeInvitation } from "../invitation/revoke";
 import { requireInvitationAccept, requireInvite, requireMembership } from "../membership/guard";
-import { MembershipRepo } from "../membership/ports";
 import { parseZodBody, parseZodBodyWithDetails, roleBodySchema } from "./parse-body";
 import { captureCause } from "../sentry";
 import { redirectTargetSchema } from "../sign-in-params";
@@ -30,49 +28,6 @@ const createInvitationBody = z
 const acceptInvitationBody = z
   .object({ invitation_token: z.string().min(1).max(256) })
   .transform((d) => ({ token: d.invitation_token }));
-
-accountInvitation.get("/api/account/companies/:companyId/members", (c) =>
-  runRoute(
-    c,
-    Effect.gen(function* () {
-      const companyId = c.req.param("companyId");
-      yield* requireMembership(c.req.raw.headers, companyId);
-      const memberships = yield* MembershipRepo;
-      const members = yield* memberships.findMembersByCompanyId(companyId);
-      return c.json({
-        members: members.map((m) => ({
-          membership_id: m.membershipId,
-          user_id: m.userId,
-          user_name: m.userName,
-          user_email: m.userEmail,
-          role: m.role,
-          joined_at: m.joinedAt.toISOString(),
-        })),
-      });
-    }),
-  ),
-);
-
-accountInvitation.get("/api/account/companies/:companyId/invitations", (c) =>
-  runRoute(
-    c,
-    Effect.gen(function* () {
-      const companyId = c.req.param("companyId");
-      yield* requireMembership(c.req.raw.headers, companyId, "ADMIN");
-      const invitationRepo = yield* InvitationRepo;
-      const invitations = yield* invitationRepo.listPendingInvitations(companyId);
-      return c.json({
-        invitations: invitations.map((inv) => ({
-          id: inv.id,
-          email: inv.email,
-          role: inv.role,
-          expires_at: inv.expiresAt.toISOString(),
-          created_at: inv.createdAt.toISOString(),
-        })),
-      });
-    }),
-  ),
-);
 
 accountInvitation.post("/api/account/companies/:companyId/invitations", (c) =>
   runRoute(
