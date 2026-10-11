@@ -74,6 +74,7 @@
                 "patterns": [
                   {
                     "group": [
+                      "@effect/atom-react",
                       "@radix-ui/*",
                       "class-variance-authority",
                       "clsx",
@@ -117,6 +118,7 @@
                 "patterns": [
                   {
                     "group": [
+                      "@effect/atom-react",
                       "@radix-ui/*",
                       "class-variance-authority",
                       "clsx",

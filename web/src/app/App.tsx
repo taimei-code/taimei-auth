@@ -1,3 +1,4 @@
+import { RegistryProvider } from "@effect/atom-react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { CurrentCompanyProvider } from "../account/current-company";
@@ -20,36 +21,38 @@ import { SessionGuard } from "./SessionGuard";
 
 export const App = () => {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/auth" element={<AuthLayout />}>
-          <Route index element={<SignIn />} />
-          <Route path="signup" element={<SignUp />} />
-          <Route path="signup/company" element={<SignUpCompany />} />
-          <Route path="signup/accept-invitation" element={<SignUpAcceptInvitation />} />
-          <Route path="mfa" element={<MfaChallenge />} />
-          <Route path="error" element={<ErrorPage />} />
-        </Route>
+    <RegistryProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/auth" element={<AuthLayout />}>
+            <Route index element={<SignIn />} />
+            <Route path="signup" element={<SignUp />} />
+            <Route path="signup/company" element={<SignUpCompany />} />
+            <Route path="signup/accept-invitation" element={<SignUpAcceptInvitation />} />
+            <Route path="mfa" element={<MfaChallenge />} />
+            <Route path="error" element={<ErrorPage />} />
+          </Route>
 
-        <Route
-          path="/account"
-          element={
-            <CurrentCompanyProvider>
-              <SessionGuard>
-                <AccountLayout />
-              </SessionGuard>
-            </CurrentCompanyProvider>
-          }
-        >
-          <Route index element={<Profile />} />
-          <Route path="companies" element={<Companies />} />
-          <Route path="company-settings" element={<CompanySettings />} />
-          <Route path="members" element={<Members />} />
-          <Route path="security" element={<Security />} />
-          <Route path="sessions" element={<Sessions />} />
-          <Route path="connections" element={<Connections />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          <Route
+            path="/account"
+            element={
+              <CurrentCompanyProvider>
+                <SessionGuard>
+                  <AccountLayout />
+                </SessionGuard>
+              </CurrentCompanyProvider>
+            }
+          >
+            <Route index element={<Profile />} />
+            <Route path="companies" element={<Companies />} />
+            <Route path="company-settings" element={<CompanySettings />} />
+            <Route path="members" element={<Members />} />
+            <Route path="security" element={<Security />} />
+            <Route path="sessions" element={<Sessions />} />
+            <Route path="connections" element={<Connections />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </RegistryProvider>
   );
 };

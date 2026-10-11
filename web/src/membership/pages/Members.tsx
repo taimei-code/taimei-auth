@@ -1,4 +1,7 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { RegistryContext, useAtomValue } from "@effect/atom-react";
+import { Option } from "effect";
+import { AsyncResult } from "effect/reactivity";
+import { type FormEvent, use, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -9,13 +12,10 @@ import { useCurrentCompany } from "../../account/current-company";
 import { authClient } from "../../auth/auth-client";
 import { PendingInvitations } from "../../invitation/PendingInvitations";
 import { parseRedirectTarget } from "../../invitation/redirect-target";
-import {
-  createInvitation,
-  listInvitations,
-  type PendingInvitation,
-} from "../../invitation/invitation-api";
+import { createInvitation } from "../../invitation/invitation-api";
 import { ConfirmDestructiveDialog } from "../../shared/ConfirmDestructiveDialog";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
+import { refreshAndWait } from "../../shared/atom-runtime";
 import { describeRequestJsonError } from "../../shared/request-json";
 import { Button } from "../../shared/ui/button";
 import { Input } from "../../shared/ui/input";
@@ -23,7 +23,8 @@ import { Label } from "../../shared/ui/label";
 import { NativeSelect } from "../../shared/ui/native-select";
 import { Separator } from "../../shared/ui/separator";
 import { memberLabel } from "../member-label";
-import { listMembers, removeMember, updateMemberRole, type Member } from "../membership-api";
+import { removeMember, updateMemberRole, type Member } from "../membership-api";
+import { membersOf, pendingInvitationsOf } from "../members-atom";
 
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCurrentCompany();
@@ -37,38 +38,23 @@ export const Members = () => {
     : ["MEMBER", "ADMIN"];
   const roleFromSelect = (value: string) => assignableRoles.find((role) => role === value);
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
   const effectiveInviteRole = assignableRoles.includes(inviteRole) ? inviteRole : "MEMBER";
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // 招待一覧は ADMIN 未満だと 403
-  const refresh = useCallback(() => {
-    if (!companyId) return Promise.resolve();
-    return Promise.all([
-      listMembers(companyId).then(setMembers),
-      (canManage ? listInvitations(companyId) : Promise.resolve([])).then(setInvitations),
-    ]);
-  }, [companyId, canManage]);
+  const registry = use(RegistryContext);
+  const membersAtom = membersOf(companyId);
+  const invitationsAtom = pendingInvitationsOf(canManage ? companyId : null);
+  const membersResult = useAtomValue(membersAtom);
+  const invitationsResult = useAtomValue(invitationsAtom);
+  const members = Option.getOrElse(AsyncResult.value(membersResult), (): Member[] => []);
+  const invitations = Option.getOrElse(AsyncResult.value(invitationsResult), () => []);
+  const loading = AsyncResult.isInitial(membersResult) || AsyncResult.isInitial(invitationsResult);
 
-  useEffect(() => {
-    if (!companyId) {
-      if (!companyLoading) setLoading(false);
-      return;
-    }
-    setLoading(true);
-    // 先に空にしないと、取得失敗時に前の事業所の行が残り、その行への操作が誤った POST になる
-    setMembers([]);
-    setInvitations([]);
-    refresh()
-      .catch((e) => console.error("failed to load members", e))
-      .finally(() => setLoading(false));
-  }, [companyId, companyLoading, refresh]);
+  const refresh = () =>
+    Promise.all([refreshAndWait(registry, membersAtom), refreshAndWait(registry, invitationsAtom)]);
 
   const handleInvite = (e: FormEvent) => {
     e.preventDefault();
