@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-09-04、設計レビュー完了)。判断主体は maintainer。Stage 1〜4 を `feat/effect-v4-stage1` で実装した (Stage 2〜4 は同日、同じ branch)。
+Accepted (2026-09-04、設計レビュー完了)。判断主体は maintainer。Stage 1〜4 を `feat/effect-v4-stage1` で実装した (Stage 2〜4 は同日、同じ branch)。(2026-10-11 改訂) 共通画面 SPA (`web/`) を対象に加えた (「web への拡大」節)。
 
 関連: ADR-0009 (supply chain、§C `trustedDependencies`、§H `minimumReleaseAge`)、ADR-0011 (Workers dual-runtime)、ADR-0012 (4 層と membership guard)、`docs/qa/manual-regression.md` の QA-MR-03 / QA-MR-11。
 
@@ -55,7 +55,7 @@ remote の workerd と本番 bundle の起動は local の観測で足りると�
 - テストの DB 接触: seed (前提状態の書き込み) / 観測 (事後状態の読み取り) / cleanup の実体は `db/testing/*` (Promise、db/ が所有) に置き、src のテストはそれを `liftAll` で持ち上げた `TestDb` service (`src/__tests__/test-db.ts`) を `yield*` する。理由は 3 つある。db/ は effect を持てない (この ADR の境界表 1 行目)、schema と drizzle は db/ の所有物である (db/CLAUDE.md ルール 1)、テスト本体を 1 つの `Effect.gen` にして production と同じ idiom (Promise module → `liftAll` → `Context.Service`) にするためである。テストは repository と drizzle を直接呼ばない (ゲートは `src/__tests__/effect-boundary.test.ts`)。e2e は Effect の範囲外で、`e2e/fixtures.ts` が同じ module を Promise のまま使う
 - 非同期: `Effect.all` / `Effect.timeout` / `Effect.retry` を使う。timeout は境界 service に既定値を置く (Redis 2s、email 10s)。retry は冪等な境界 (Redis 読み取り系) にだけ `src/redis-service.ts` の policy (`withRedisRetry`) で宣言し、再試行 3 回、backoff の合計 1s 未満とする (attempt ごとの timeout は別。帰結は Consequences)
 - zod は残す: 400 の `details` が zod v4 の message 文字列 (`"Invalid email address"` 等) を wire として含むため、Effect Schema では byte-invariant を保てない。`parseZodBody` が zod の `safeParse` を `Effect<T, InvalidArgument>` に持ち上げる
-- 対象外: `web/` と `@core` 共有 module (effect-free を維持する。`web-shared-core-runtime-free.test.ts`)、SDK `packages/auth-client` (2.0.0 で effect への依存を外した)、`db/`
+- 対象外: `@core` 共有 module (effect-free を維持する。`web-shared-core-runtime-free.test.ts`)、SDK `packages/auth-client` (2.0.0 で effect への依存を外した)、`db/`。`web/` は当初ここに含めていたが、2026-10-11 に対象へ加えた (「web への拡大」節)
 
 Stage は層単位で進める。Stage の途中では main に 2 様式が共存してよい。完了 PR で旧様式ゼロを `src/handlers/__tests__/no-transport-tx.test.ts` (Stage 1) と `src/__tests__/effect-boundary.test.ts` (Stage 2〜4 のゲート) に累積する invariant で固定する。
 
@@ -67,7 +67,7 @@ Stage は層単位で進める。Stage の途中では main に 2 様式が共�
 | 3 MFA | `src/mfa/` の error class 化、ports の Context.Service 化、`WireFailure` 削除 | `MfaFailure` / `WireFailure` ゼロ |
 | 4 seam・runtime primitive | hook / `auth.ts` callback / `Background` / `SentryService` / `Redis` (`src/redis-service.ts`、読み取りだけ retry、timeout 2s) / rate-limit middleware / `EmailSender` (`src/email/*` を Effect 化、timeout 10s、retry なし) / `Effect.all` / entries / CLI | `Promise.all` / `runBackground` (`src/background.ts` 以外) / `Sentry.capture*` の直呼び (`src/sentry.ts` と adapter 以外) ゼロ |
 
-依存: `effect` は exact pin する。Dependabot の npm 更新は `cooldown` 7 日で bunfig の `minimumReleaseAge` に揃える。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。root 以外の `effect/*` は biome で全域 import 禁止とし (`effect/http` などの area module は `@stability unstable`)、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。
+依存: `effect` は exact pin する。Dependabot の npm 更新は `cooldown` 7 日で bunfig の `minimumReleaseAge` に揃える。security advisory は ADR-0009 §H の手順に従う。`@effect/platform-bun` / `@effect/vitest` / `@effect/opentelemetry` は追加しない (RC package を増やさず、`management/` CLI は `getRuntime().runPromise` で走らせる)。root 以外の `effect/*` は biome で全域 import 禁止とし (`effect/http` などの area module は `@stability unstable`)、`db/` と `web/src` からの `effect` import は `src/__tests__/effect-boundary.test.ts` と biome で禁止する。(2026-10-11 改訂) `web/src` の禁止は外し、`effect/reactivity` を `web/src` に限って例外にする (「web への拡大」節)。
 
 ## 実装の機構 (2026-09-10 追記)
 
@@ -84,6 +84,17 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 - Redis retry (`src/redis-service.ts`): retry は冪等な呼び出しに限る (対象と値は Decision の非同期項)。INCR 系と `getAndDelete` は再送が二重計上 / 二重消費になり、`/health` の ping は失敗を degraded にまとめるだけで応答時間を伸ばしたくないため、どちらも 1 回 (`attemptOnce`) にする
 - CLI (`management/*.ts`): pg pool が開いたままだと process が終わらないため明示的に `process.exit` する (runtime の共有は Decision の依存項)
 - 非慣用に見えるが直さない形: `src/rpc/run-rpc.ts` の `STATUS_TO_CODE` 外部対応表 (Connect code は Transport 固有の語彙で、class に生やすと failure class 20 個に複製される)、`RollbackSignal` の sentinel throw、`mfa/totp/wiring.ts` の `let cached` (`Effect.cached` は `Layer.effect` を要し、`effect-boundary.test.ts` が `Layer.succeed` に限る)、`parseChallenge` の try/catch (Effect の外の純関数で「どの段階の失敗も null」を 1 箇所に保つ)、hook / `captureThrown` の try/catch (上記)
+
+## web への拡大 (2026-10-11 追記)
+
+共通画面 SPA (`web/src`) も Effect の対象にする。
+
+- 範囲: `web/src` は root の `effect` を使ってよい。サーバーから取得するデータは `effect/reactivity` の Atom と `@effect/atom-react` で持ち、component と page は atom を読む。`effect/reactivity` は Decision の依存項の「root 以外の `effect/*` は禁止」の例外で、`web/src` に限る。`@core` 共有 module は今回は変えない
+- 理由: 当初 `web/` を対象外にした理由は記録されていない (採用時の範囲は server の構造化で、effect は RC だった)。web だけ別の書き方を残すと、同じ repository の中で取得・失敗・副作用の書き方が 2 通りになり、誰が書いても同じ形になるという、この ADR が全面採用を選んだ理由と矛盾する。Atom は次の誤りを書けない形にする
+  - 取得の入力と結果のずれ: `Atom.family` は key を関数の引数そのものにする。useEffect の取得では、事業所を切り替えた直後に前の事業所の遅れた応答が表示される不具合があった。draft PR #258 で、Atom への移行後はこれが起きないことを e2e (`e2e/members-company-switch.e2e.ts`) で確認した
+  - 読み込み中と失敗の扱い忘れ: `AsyncResult.matchWithError` は初期・失敗・defect・成功のすべてを引数に要求し、失敗は型付きで component に届く
+- 移行: page 単位で進め、router は react-router のまま先にデータ層を移す。`useCurrentCompany()` の返り値と `refresh()` の Promise (`notifyAfterRefresh` が前提にする、再取得の完了で resolve し失敗で reject する契約) を保ったまま中身を atom にすれば、移していない画面も同じ状態を読む (#258 で確認)
+- 境界の検査の置き換え: 移行の最初の PR で、`effect-boundary.test.ts` の `web/src` の禁止と `biome.json` の web の `effect` ban を外す。代わりに、component と page から `*-api` と `fetch` を直接使わないことを静的 tripwire で固定する。`@effect/atom-react` は web 専用 devDependency として biome の web 専用 ban に登録する (`dependency-classification.test.ts`)
 
 ## Stable 移行手順
 
@@ -120,4 +131,6 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 - `Redis` の retry 対象 (get) は 2s の timeout が attempt ごとに掛かる (Decision の非同期項の値)。Redis が応答しない時の worst case は約 8.7s (4 attempt + backoff) で、`/api/mfa/challenge` の読み取りがこの経路にあるため Redis 断のあいだ応答が延びる
 - `EmailSender` の 10s timeout は fiber を interrupt するだけで、Resend への HTTP は取り消せない。遅延して届いた送信は「`EmailError` を返したが送られた」になりうるため、呼び出し側は `EmailError` を再送の根拠にしない (retry を置かないのも同じ理由)
 - `Transaction.run` の callback 内の program は別の root fiber で走り、外側の interrupt では止まらず commit まで進む (rollback の契機は Fail / Die のみ)。tx を timeout や並列失敗で interrupt する呼び出し元は現在無い。置く時は `runThroughCallback` に interrupt の転送を足す
+- (2026-10-11 追記) `effect/reactivity` は全 API が `@stability unstable` で、minor で破壊的に変わり得る。effect の exact pin と 1 PR での更新 (Stable 移行手順) は変えず、壊れた箇所は型エラーとして一覧になる前提で受け入れる
+- (2026-10-11 追記) 共通画面 SPA の JS 合計 (gzip) は main 比 +26.4 kB (+15.7%、Atom 込み)。root の `effect` だけなら +8〜15 kB だった。route ごとに分割していないので、ログイン画面の初回読み込みも同じだけ増える
 - effect 4.0.0 は依存を持たないため、`trustedDependencies` は `[]` のままでよい (rc.112 が持ち込んだ `msgpackr` / `@msgpackr-extract/*` は lockfile から消えた)
