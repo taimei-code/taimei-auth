@@ -8,10 +8,3 @@ export const stubFetch = (response: Response) =>
 export const restoreFetch = (): void => {
   globalThis.fetch = originalFetch;
 };
-
-export const postInit = (body?: unknown) => ({
-  method: "POST",
-  credentials: "include",
-  headers: { "Content-Type": "application/json" },
-  body: body === undefined ? undefined : JSON.stringify(body),
-});

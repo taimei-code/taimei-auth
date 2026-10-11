@@ -30,10 +30,6 @@
       "exports": ["OrgCode"]
     },
     {
-      "file": "web/src/company/company-api.ts",
-      "exports": ["OrgCode"]
-    },
-    {
       "file": "db/repositories/invitation.ts",
       "exports": ["Role"]
     },
