@@ -11,6 +11,9 @@ import {
   type MfaClientFacingErrorCode,
 } from "@core/mfa/client-facing-contracts";
 
+import type { Unauthorized } from "@core/membership/guard/errors";
+import type { MfaError } from "@core/mfa/error-mapping";
+
 export type { MfaCodeKind } from "@core/mfa/client-facing-contracts";
 
 export type MfaStatus = {
@@ -57,17 +60,43 @@ export const mfaErrorCodeOf = (error: unknown): MfaErrorCode =>
 const asRecord = (body: unknown): Record<string, unknown> | null =>
   typeof body === "object" && body !== null ? (body as Record<string, unknown>) : null;
 
-function readClientFacingError(body: unknown): string | undefined {
-  const error = asRecord(body)?.error;
-  return typeof error === "string" ? error : undefined;
+const CODE_BY_TAG: { [E in MfaError | Unauthorized as E["_tag"]]: E["error"] } = {
+  InvalidCode: "invalid_code",
+  Locked: "locked",
+  ChallengeExpired: "challenge_expired",
+  AlreadyEnabled: "already_enabled",
+  EnrollmentChanged: "enrollment_changed",
+  NotEnabled: "not_enabled",
+  MfaNotFound: "not_found",
+  Unauthorized: "unauthorized",
+};
+
+const isKnownTag = (tag: unknown): tag is keyof typeof CODE_BY_TAG =>
+  typeof tag === "string" && Object.hasOwn(CODE_BY_TAG, tag);
+
+const isServerDecodeFailure = (status: number, text: string) => status === 400 && text === "";
+
+const parseJsonOrUndefined = (text: string): unknown => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+};
+
+function readClientFacingError(status: number, text: string): string | undefined {
+  const tag = asRecord(parseJsonOrUndefined(text))?._tag;
+  if (isKnownTag(tag)) return CODE_BY_TAG[tag];
+  return isServerDecodeFailure(status, text) ? "invalid_argument" : undefined;
 }
 
 async function requestJson(url: string, init?: RequestInit): Promise<unknown> {
   // credentials を外すとローテート後の session の Set-Cookie を受け取れず、操作直後にログアウトする
   const res = await fetch(url, { credentials: "include", ...init });
-  const body: unknown = await res.json().catch(() => undefined);
-  if (!res.ok) throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(body)));
-  return body;
+  const text = await res.text();
+  if (!res.ok)
+    throw new MfaApiError(resolveMfaErrorCode(res.status, readClientFacingError(res.status, text)));
+  return parseJsonOrUndefined(text);
 }
 
 const postJson = (url: string, body?: unknown): Promise<unknown> =>
