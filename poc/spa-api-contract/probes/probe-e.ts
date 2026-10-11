@@ -15,6 +15,8 @@ const changeRole = createRoute({
   responses: { 200: json(z.object({ ok: z.literal(true) }), "ok"), 409: json(z.object({ error: z.literal("last_owner") }), "last owner") },
 });
 const app = new OpenAPIHono().openapi(changeRole, (c) => c.json({ ok: true as const }, 200));
+// @ts-expect-error K6 宣言した route を app.openapi() に渡さない (handler の書き漏れ)
+export const removeMember = createRoute({ method: "post", path: "/api/account/companies/{companyId}/members/{targetUserId}/remove", request: { params: z.object({ companyId: z.string(), targetUserId: z.string() }) }, responses: { 200: json(z.object({ ok: z.literal(true) }), "ok") } });
 const client = hc<typeof app>("/");
 const role = client.api.account.companies[":companyId"].members[":targetUserId"].role;
 
@@ -35,7 +37,7 @@ export async function probes() {
   if (res.status === 418) return;
   // @ts-expect-error E2 client が Effect を返す
   const e2: Effect.Effect<unknown, unknown> = role.$post({ param: { companyId: "x", targetUserId: "u" }, json: { role: "ADMIN" } });
-  // @ts-expect-error K6 handler の無い endpoint を呼ぶ
+  // @ts-expect-error K1b handler の無い endpoint を呼ぶ
   await client.api.account.nonexistent.$get();
   return [e2, Effect];
 }

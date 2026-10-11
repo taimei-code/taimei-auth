@@ -26,7 +26,7 @@ export async function probes() {
   if (res.status === 418) return n;
   // @ts-expect-error E2 client が Effect を返す
   const e2: Effect.Effect<unknown, unknown> = members.$get({ param: { companyId: "x" } });
-  // @ts-expect-error K6 handler の無い endpoint を呼ぶ
+  // @ts-expect-error K1b handler の無い endpoint を呼ぶ (B は宣言と実装が同じ行為なので K6 は該当なし)
   await client.api.account.nonexistent.$get();
   return [e2, Effect];
 }
