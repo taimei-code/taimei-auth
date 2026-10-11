@@ -76,11 +76,11 @@
                     "group": [
                       "@effect/atom-react",
                       "@radix-ui/*",
+                      "@tanstack/react-router",
                       "class-variance-authority",
                       "clsx",
                       "lucide-react",
                       "qrcode",
-                      "react-router-dom",
                       "sonner",
                       "tailwind-merge",
                       "tailwindcss-animate"
@@ -120,11 +120,11 @@
                     "group": [
                       "@effect/atom-react",
                       "@radix-ui/*",
+                      "@tanstack/react-router",
                       "class-variance-authority",
                       "clsx",
                       "lucide-react",
                       "qrcode",
-                      "react-router-dom",
                       "sonner",
                       "tailwind-merge",
                       "tailwindcss-animate"
@@ -168,11 +168,11 @@
                     "group": [
                       "@effect/atom-react",
                       "@radix-ui/*",
+                      "@tanstack/react-router",
                       "class-variance-authority",
                       "clsx",
                       "lucide-react",
                       "qrcode",
-                      "react-router-dom",
                       "sonner",
                       "tailwind-merge",
                       "tailwindcss-animate"
@@ -212,11 +212,11 @@
                     "group": [
                       "@effect/atom-react",
                       "@radix-ui/*",
+                      "@tanstack/react-router",
                       "class-variance-authority",
                       "clsx",
                       "lucide-react",
                       "qrcode",
-                      "react-router-dom",
                       "sonner",
                       "tailwind-merge",
                       "tailwindcss-animate"
@@ -275,6 +275,23 @@
                     "message": "web で使える effect の subpath は effect/reactivity と effect/http だけ (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["web/src/**", "!web/src/**/__tests__/**", "!web/src/app/search-params.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "URLSearchParams": "search は route の validateSearch で parse する (web/src/CLAUDE.md)"
+                }
               }
             }
           }
