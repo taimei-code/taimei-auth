@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { Effect } from "effect";
+import { Atom, AtomRegistry } from "effect/reactivity";
+
 import { signInParamsSchema } from "@core/sign-in-params";
-import { RequestJsonError } from "../../shared/request-json";
+import { Forbidden, Unauthorized } from "@core/membership/guard/errors";
 import {
   discardStaleSession,
   isStaleSessionError,
   redirectAfterAuthChange,
   redirectToSignIn,
 } from "../auth-redirect";
+import { waitForValue } from "../../shared/atom-runtime";
 
 const originalWindow = globalThis.window;
 
@@ -52,15 +56,19 @@ describe("redirectAfterAuthChange", () => {
 });
 
 describe("isStaleSessionError", () => {
-  test("account API の 401 は stale session (session cookie は有効なのに server guard が拒否) と判定する", () => {
-    expect(
-      isStaleSessionError(new RequestJsonError(401, "GET /api/account/memberships failed: 401")),
-    ).toBe(true);
+  test("account API の Unauthorized は stale session (session cookie は有効なのに server guard が拒否) と判定する", () => {
+    expect(isStaleSessionError(new Unauthorized())).toBe(true);
   });
 
-  test("401 以外の RequestJsonError や一般 Error は stale session ではない", () => {
-    expect(isStaleSessionError(new RequestJsonError(403, "forbidden"))).toBe(false);
-    expect(isStaleSessionError(new RequestJsonError(500, "boom"))).toBe(false);
+  test("registry から読んだ atom が Unauthorized で失敗した時の reject の値も stale session と判定する", async () => {
+    const rejected = Atom.make(Effect.fail(new Unauthorized()));
+    const error = await waitForValue(AtomRegistry.make(), rejected).catch((e: unknown) => e);
+
+    expect(isStaleSessionError(error)).toBe(true);
+  });
+
+  test("Unauthorized 以外の失敗や一般 Error は stale session ではない", () => {
+    expect(isStaleSessionError(new Forbidden())).toBe(false);
     expect(isStaleSessionError(new Error("network"))).toBe(false);
   });
 });
