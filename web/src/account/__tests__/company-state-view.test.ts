@@ -42,23 +42,11 @@ const toCompanyStateView = (result: AsyncResult.AsyncResult<CompanyState, Unauth
 };
 
 describe("useCurrentCompany (事業所状態の atom から導く)", () => {
-  test("前回の成功値が無い状態で Unauthorized なら unauthorized だけが立つ", () => {
-    const view = toCompanyStateView(AsyncResult.failure(Cause.fail(new Unauthorized())));
-
-    expect(view).toMatchObject({ loading: false, unauthorized: true, loadFailed: false });
-  });
-
   test("初回の取得が終わる前は loading", () => {
     expect(toCompanyStateView(AsyncResult.initial(true))).toMatchObject({ loading: true });
   });
 
-  test("前回の成功値が無い状態で Unauthorized 以外 (defect) なら loadFailed だけが立つ", () => {
-    const view = toCompanyStateView(AsyncResult.failure(Cause.die(new Error("network"))));
-
-    expect(view).toMatchObject({ loading: false, unauthorized: false, loadFailed: true });
-  });
-
-  test("前回の成功値がある取り直しの失敗では、前の状態を保ち失敗を立てない", () => {
+  test("前回の成功値がある取り直しの失敗では、前の状態を保つ", () => {
     const view = toCompanyStateView(
       AsyncResult.failure(Cause.fail(new Unauthorized()), {
         previousSuccess: Option.some(AsyncResult.success(state)),
@@ -66,8 +54,6 @@ describe("useCurrentCompany (事業所状態の atom から導く)", () => {
     );
 
     expect(view).toMatchObject({
-      unauthorized: false,
-      loadFailed: false,
       memberships: state.memberships,
       currentCompanyId: "company-1",
     });

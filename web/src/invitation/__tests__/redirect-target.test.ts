@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { redirectUrlAfterAccept, parseRedirectTarget } from "../redirect-target";
+import {
+  acceptInvitationSearchSchema,
+  parseRedirectTarget,
+  redirectUrlAfterAccept,
+} from "../redirect-target";
 
 const REDIRECT_URL = "https://app.taimei-code.com/dashboard";
 const search = (params: Record<string, string>) =>
-  new URLSearchParams({ invitation_token: "tok", ...params });
+  acceptInvitationSearchSchema.parse({ invitation_token: "tok", ...params });
 
 const valid = search({ service_name: "taimei", redirect_url: REDIRECT_URL });
 const invalidCases = [

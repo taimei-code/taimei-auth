@@ -6,8 +6,7 @@ import { createContext, use, useCallback, useMemo, type ReactNode } from "react"
 import type { CompanyState } from "@core/account/account-contract";
 import type { Unauthorized } from "@core/membership/guard/errors";
 
-import { failedBeforeAnyValue, useRefreshAndWait } from "../shared/atom-runtime";
-import { hasFailureTag } from "../shared/failure-message";
+import { useRefreshAndWait } from "../shared/atom-runtime";
 import { notifyAfterRefresh, notifyError } from "../shared/notify";
 import { companyStateAtom, switchCompanyAtom } from "./account-atom";
 
@@ -15,8 +14,6 @@ export type Membership = CompanyState["memberships"][number];
 
 type CompanyStateView = {
   loading: boolean;
-  unauthorized: boolean;
-  loadFailed: boolean;
   memberships: readonly Membership[];
   currentCompanyId: string | null;
   currentMembership: Membership | null;
@@ -30,22 +27,12 @@ const CurrentCompanyContext = createContext<CurrentCompanyContextValue | null>(n
 
 const EMPTY_COMPANY_STATE: CompanyState = { current_company_id: null, memberships: [] };
 
-const loadFailureOf = (
-  result: AsyncResult.AsyncResult<CompanyState, Unauthorized>,
-): "unauthorized" | "loadFailed" | null => {
-  if (!failedBeforeAnyValue(result)) return null;
-  return hasFailureTag(result.cause, "Unauthorized") ? "unauthorized" : "loadFailed";
-};
-
 const toCompanyStateView = (
   result: AsyncResult.AsyncResult<CompanyState, Unauthorized>,
 ): CompanyStateView => {
   const state = AsyncResult.getOrElse(result, () => EMPTY_COMPANY_STATE);
-  const loadFailure = loadFailureOf(result);
   return {
     loading: AsyncResult.isInitial(result),
-    unauthorized: loadFailure === "unauthorized",
-    loadFailed: loadFailure === "loadFailed",
     memberships: state.memberships,
     currentCompanyId: state.current_company_id,
     currentMembership:

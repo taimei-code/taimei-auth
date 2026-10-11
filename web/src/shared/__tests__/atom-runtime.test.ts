@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit, Layer, Option } from "effect";
 import { AsyncResult, Atom, AtomRegistry, Reactivity } from "effect/reactivity";
 
-import { failedBeforeAnyValue, refreshAndWait, waitForValue } from "../atom-runtime";
+import {
+  failedBeforeAnyValue,
+  readResult,
+  refreshAndWait,
+  runMutation,
+  waitForValue,
+} from "../atom-runtime";
 
 describe("refreshAndWait (notifyAfterRefresh に渡す refresh の契約)", () => {
   test("mount 済みの atom を取得し直し、新しい値で resolve する", async () => {
@@ -74,5 +80,28 @@ describe("failedBeforeAnyValue", () => {
       ),
     ).toBe(false);
     expect(failedBeforeAnyValue(AsyncResult.initial())).toBe(false);
+  });
+});
+
+describe("runMutation (loader から更新を 1 回実行する)", () => {
+  test("引数を渡して実行し、結果を Exit で返す", async () => {
+    const runtime = Atom.runtime(Layer.empty);
+    const double = runtime.fn((n: number) => Effect.succeed(n * 2));
+
+    const exit = await runMutation(AtomRegistry.make(), double, 21);
+
+    expect(exit).toEqual(Exit.succeed(42));
+  });
+});
+
+describe("readResult (route の beforeLoad / loader で atom を読む)", () => {
+  test("遷移の取り消しで abort されたら、取得を待たずに中断の Exit を返す", async () => {
+    const never = Atom.make(Effect.never);
+    const controller = new AbortController();
+
+    const pending = readResult(AtomRegistry.make(), never, controller.signal);
+    controller.abort();
+
+    expect(Exit.hasInterrupts(await pending)).toBe(true);
   });
 });

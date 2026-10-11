@@ -1,41 +1,36 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useEffect, useReducer, useRef } from "react";
+
 import {
-  initialMfaChallengeFlowState,
+  mfaChallengeFlowStateOf,
   reduceMfaChallengeFlow,
   type MfaChallengeFlowState,
   type MfaChallengeObservation,
   type MfaChallengeVerification,
 } from "./mfa-challenge-flow";
-import { getMfaChallenge, mfaErrorCodeOf, verifyMfaChallenge, type MfaErrorCode } from "./mfa-api";
+import {
+  mfaErrorCodeOfCause,
+  verifyMfaChallengeAtom,
+  type MfaCodeKind,
+  type MfaErrorCode,
+} from "./mfa-atom";
 import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
 
-type MfaChallengeCodeInput = Parameters<typeof verifyMfaChallenge>[0];
+type VerifyExit = Exit.Exit<{ readonly redirect_url: string }, { readonly error: MfaErrorCode }>;
 
-export const mfaChallengePort = {
-  readChallengeState: async (signal: AbortSignal): Promise<MfaChallengeObservation> => {
-    try {
-      const { pending } = await getMfaChallenge(signal);
-      return pending ? { kind: "present" } : { kind: "absent" };
-    } catch (error) {
-      if (signal.aborted) throw error;
-      // 通信失敗も崩れた 2xx も absent とは推測せず、入力を許す
-      return { kind: "unavailable" };
-    }
-  },
-  verify: async (input: MfaChallengeCodeInput): Promise<MfaChallengeVerification<MfaErrorCode>> => {
-    try {
-      const { redirectUrl } = await verifyMfaChallenge(input);
-      return { kind: "passed", redirectUrl };
-    } catch (error) {
-      const errorCode = mfaErrorCodeOf(error);
+export const verificationOf = (exit: VerifyExit): MfaChallengeVerification<MfaErrorCode> =>
+  Exit.match(exit, {
+    onSuccess: ({ redirect_url }) => ({ kind: "passed", redirectUrl: redirect_url }),
+    onFailure: (cause) => {
+      const errorCode = mfaErrorCodeOfCause(cause);
       return errorCode === "challenge_expired"
         ? { kind: "expired" }
         : { kind: "rejected", errorCode };
-    }
-  },
-};
+    },
+  });
 
-type MfaChallengeViewKind = "observing" | "redirecting" | "expired" | "entry";
+type MfaChallengeViewKind = "redirecting" | "expired" | "entry";
 
 export type MfaChallengeFlow = {
   view: MfaChallengeViewKind;
@@ -45,69 +40,24 @@ export type MfaChallengeFlow = {
 const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
   state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
-export function useMfaChallengeFlow(): MfaChallengeFlow {
+export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaChallengeFlow {
   const [state, dispatch] = useReducer(
     reduceMfaChallengeFlow<MfaErrorCode>,
-    initialMfaChallengeFlowState,
+    observation,
+    mfaChallengeFlowStateOf<MfaErrorCode>,
   );
-  const readController = useRef<AbortController | null>(null);
+  const verify = useAtomSet(verifyMfaChallengeAtom, { mode: "promiseExit" });
   const verificationInFlight = useRef(false);
 
-  useEffect(() => {
-    const controller = new AbortController();
-    readController.current = controller;
-
-    void mfaChallengePort
-      .readChallengeState(controller.signal)
-      .then((observation) => {
-        if (!controller.signal.aborted) {
-          dispatch({ type: "observation_resolved", observation });
-        }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          dispatch({
-            type: "observation_resolved",
-            observation: { kind: "unavailable" },
-          });
-        }
-      });
-
-    return () => {
-      controller.abort();
-      readController.current = null;
-    };
-  }, []);
-
-  const submit = (input: MfaChallengeCodeInput) => {
-    const controller = readController.current;
-    if (
-      state.phase !== "ready" ||
-      verificationInFlight.current ||
-      !controller ||
-      controller.signal.aborted
-    ) {
-      return;
-    }
+  const submit = (input: { code: string; kind: MfaCodeKind }) => {
+    if (state.phase !== "ready" || verificationInFlight.current) return;
 
     verificationInFlight.current = true;
     dispatch({ type: "verification_started" });
-    void mfaChallengePort
-      .verify(input)
-      .then((verification) => {
-        if (!controller.signal.aborted) {
-          dispatch({ type: "verification_resolved", verification });
-        }
-      })
-      // "unknown" 固定。終端の challenge_expired を ready に入れると有効な入力欄と並ぶ
-      .catch(() => {
-        if (!controller.signal.aborted) {
-          dispatch({
-            type: "verification_resolved",
-            verification: { kind: "rejected", errorCode: "unknown" },
-          });
-        }
-      })
+    void verify({ payload: input })
+      .then((exit) =>
+        dispatch({ type: "verification_resolved", verification: verificationOf(exit) }),
+      )
       .finally(() => {
         verificationInFlight.current = false;
       });
@@ -122,6 +72,7 @@ export function useMfaChallengeFlow(): MfaChallengeFlow {
     onKindChange: () => dispatch({ type: "error_cleared" }),
   });
 
+  // 画面を離れた後の遅い成功で遷移しないよう、遷移は描画中の state からだけ起こす
   const redirectUrl = state.phase === "redirecting" ? state.redirectUrl : null;
   useEffect(() => {
     if (redirectUrl !== null) {

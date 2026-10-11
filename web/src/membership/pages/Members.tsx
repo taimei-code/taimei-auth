@@ -1,3 +1,4 @@
+import { getRouteApi } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
 import { canInviteRole, isAtLeast, type Role } from "@core/membership/policy";
@@ -10,8 +11,11 @@ import { MemberList } from "../MemberList";
 
 const ROLES_IN_SELECT_ORDER: readonly Role[] = ["MEMBER", "ADMIN", "OWNER"];
 
+const route = getRouteApi("/account/members");
+
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCurrentCompany();
+  const search = route.useSearch();
 
   if (companyLoading) {
     return (
@@ -49,7 +53,11 @@ export const Members = () => {
       {canManage && (
         <>
           <Separator className="my-8" />
-          <InviteMemberForm companyId={companyId} assignableRoles={assignableRoles} />
+          <InviteMemberForm
+            companyId={companyId}
+            assignableRoles={assignableRoles}
+            redirectSearch={search}
+          />
           <PendingInvitations companyId={companyId} />
         </>
       )}

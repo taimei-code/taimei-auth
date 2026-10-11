@@ -1,150 +1,31 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { mfaChallengePort } from "../use-mfa-challenge-flow";
+import { describe, expect, test } from "bun:test";
+import { Exit } from "effect";
 
-let fetchSpy: ReturnType<typeof spyOn> | undefined;
+import { ChallengeExpired, InvalidCode } from "@core/mfa/error-mapping";
 
-afterEach(() => {
-  fetchSpy?.mockRestore();
-  fetchSpy = undefined;
-});
+import { verificationOf } from "../use-mfa-challenge-flow";
 
-const jsonResponse = (body: unknown, status = 200): Response =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-
-describe("mfaChallengePort.readChallengeState", () => {
-  test("AC-001/018 pending true を present に変換し AbortSignal を fetch へ渡す", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ pending: true }));
-    const signal = new AbortController().signal;
-
-    const result = await mfaChallengePort.readChallengeState(signal);
-
-    expect(result).toEqual({ kind: "present" });
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/mfa/challenge");
-    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({ credentials: "include", signal });
-  });
-
-  test("AC-002 pending false を absent に変換する", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ pending: false }));
-
-    expect(await mfaChallengePort.readChallengeState(new AbortController().signal)).toEqual({
-      kind: "absent",
+describe("verificationOf", () => {
+  test("AC-005 verify の成功は redirect_url を redirectUrl にした passed", () => {
+    expect(verificationOf(Exit.succeed({ redirect_url: "/account/security" }))).toEqual({
+      kind: "passed",
+      redirectUrl: "/account/security",
     });
   });
 
-  test("AC-003 GET の通信失敗を unavailable に変換する", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network unavailable"));
-
-    expect(await mfaChallengePort.readChallengeState(new AbortController().signal)).toEqual({
-      kind: "unavailable",
-    });
+  test("ChallengeExpired は入力を閉じる expired", () => {
+    expect(verificationOf(Exit.fail(new ChallengeExpired()))).toEqual({ kind: "expired" });
   });
 
-  test("AC-004/017 Abort だけは unavailable に丸めず呼出側へ返す", async () => {
-    const aborted = new DOMException("The operation was aborted", "AbortError");
-    const controller = new AbortController();
-    controller.abort();
-    fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(aborted);
-
-    await expect(mfaChallengePort.readChallengeState(controller.signal)).rejects.toBe(aborted);
-  });
-
-  test("GET の非 2xx 応答も unavailable に縮退する", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}, 503));
-
-    expect(await mfaChallengePort.readChallengeState(new AbortController().signal)).toEqual({
-      kind: "unavailable",
-    });
-  });
-
-  test("pending を持たない 2xx を absent と推測しない (ADR-0013 §9)", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}));
-
-    expect(await mfaChallengePort.readChallengeState(new AbortController().signal)).toEqual({
-      kind: "unavailable",
-    });
-  });
-});
-
-describe("mfaChallengePort.verify", () => {
-  test("AC-005 verify success をcamelCaseのpassedへ変換する", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ redirect_url: "/account/security" }),
-    );
-    const input = { code: "123456", kind: "totp" } as const;
-
-    const result = await mfaChallengePort.verify(input);
-
-    expect(result).toEqual({ kind: "passed", redirectUrl: "/account/security" });
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/mfa/challenge/verify");
-    expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
-      method: "POST",
-      credentials: "include",
-      body: JSON.stringify(input),
-    });
-  });
-
-  test("challenge_expired は状態取得を呼ばず expired にする", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      jsonResponse({ _tag: "ChallengeExpired" }, 401),
-    );
-
-    expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
-      kind: "expired",
-    });
-    expect(fetchSpy.mock.calls).toHaveLength(1);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/mfa/challenge/verify");
-  });
-
-  test.each([
-    [400, "invalid_code", { _tag: "InvalidCode" }],
-    [429, "locked", { _tag: "Locked" }],
-    [429, "rate_limited", {}],
-    [409, "already_enabled", { _tag: "AlreadyEnabled" }],
-    [409, "enrollment_changed", { _tag: "EnrollmentChanged" }],
-    [409, "not_enabled", { _tag: "NotEnabled" }],
-    [400, "invalid_argument", null],
-    [401, "unauthorized", { _tag: "Unauthorized" }],
-    [404, "not_found", { _tag: "MfaNotFound" }],
-  ] as const)("%i %s は状態取得を呼ばず同じ code の rejected にする", async (status, errorCode, body) => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
-      body === null ? new Response(null, { status }) : jsonResponse(body, status),
-    );
-
-    expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
+  test("宣言した他の失敗は同じ code の rejected", () => {
+    expect(verificationOf(Exit.fail(new InvalidCode()))).toEqual({
       kind: "rejected",
-      errorCode,
-    });
-    expect(fetchSpy.mock.calls).toHaveLength(1);
-    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/mfa/challenge/verify");
-  });
-
-  test("未知の error code は expired にせず unknown の rejected にする", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ error: "boom" }, 500));
-
-    expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
-      kind: "rejected",
-      errorCode: "unknown",
-    });
-    expect(fetchSpy.mock.calls).toHaveLength(1);
-  });
-
-  test("redirect_url を持たない 2xx は passed にせず unknown へ倒す", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({}));
-
-    expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
-      kind: "rejected",
-      errorCode: "unknown",
+      errorCode: "invalid_code",
     });
   });
 
-  test("AC-012 verify の未知throwをunknownへ縮退する", async () => {
-    fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("network unavailable"));
-
-    expect(await mfaChallengePort.verify({ code: "123456", kind: "totp" })).toEqual({
+  test("AC-012 通信や応答の decode の失敗 (defect) は unknown の rejected", () => {
+    expect(verificationOf(Exit.die(new TypeError("network unavailable")))).toEqual({
       kind: "rejected",
       errorCode: "unknown",
     });

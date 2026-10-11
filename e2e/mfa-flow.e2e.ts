@@ -384,6 +384,54 @@ test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷�
   await expect(challengeCodeInput(page)).toHaveCount(0);
 });
 
+const mockChallenge = (page: Page, verify: { status: number; json: unknown }) =>
+  page.route("**/api/mfa/challenge**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({ json: { pending: true } });
+      return;
+    }
+    await route.fulfill(verify);
+  });
+
+const submitChallengeCode = async (page: Page) => {
+  await challengeCodeInput(page).fill("123456");
+  await page.getByRole("button", { name: "ログインを続ける" }).click();
+};
+
+test("verify が空の redirect_url を返したら、遷移せずに既定の失敗の文言を出す", async ({
+  page,
+}) => {
+  await mockChallenge(page, { status: 200, json: { redirect_url: "" } });
+  await page.goto("/auth/mfa");
+
+  await submitChallengeCode(page);
+
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
+    "処理に失敗しました。しばらく待ってからもう一度お試しください。",
+  );
+  expect(new URL(page.url()).pathname).toBe("/auth/mfa");
+});
+
+test("verify が Hono の rate limit の 429 を受けると、回数の上限の文言を出す", async ({ page }) => {
+  await mockChallenge(page, { status: 429, json: { error: "Too Many Requests" } });
+  await page.goto("/auth/mfa");
+
+  await submitChallengeCode(page);
+
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
+    "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
+  );
+});
+
+test("「ログインをやり直す」は末尾スラッシュ無しのログイン画面を指す", async ({ page }) => {
+  await mockChallenge(page, { status: 400, json: { _tag: "InvalidCode" } });
+  await page.goto("/auth/mfa");
+
+  const href = await page.getByRole("link", { name: "ログインをやり直す" }).getAttribute("href");
+
+  expect(href).toMatch(/^\/auth\?service_name=accounts&redirect_url=/);
+});
+
 test("AC-033 空の code は verify を呼ばない", async ({ page }) => {
   let postCalls = 0;
   await page.route("**/api/mfa/challenge**", async (route) => {

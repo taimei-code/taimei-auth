@@ -1,16 +1,7 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
-import { Effect } from "effect";
-import { Atom, AtomRegistry } from "effect/reactivity";
+import { afterEach, describe, expect, test } from "bun:test";
 
 import { signInParamsSchema } from "@core/sign-in-params";
-import { Forbidden, Unauthorized } from "@core/membership/guard/errors";
-import {
-  discardStaleSession,
-  isStaleSessionError,
-  redirectAfterAuthChange,
-  redirectToSignIn,
-} from "../auth-redirect";
-import { waitForValue } from "../../shared/atom-runtime";
+import { discardStaleSession, redirectAfterAuthChange, searchReturningTo } from "../auth-redirect";
 
 const originalWindow = globalThis.window;
 
@@ -25,7 +16,7 @@ const stubWindow = (origin: string) => {
 };
 
 describe("redirectAfterAuthChange", () => {
-  test("signOut は '/' へ full reload 遷移する (SessionGuard の再評価を強制)", () => {
+  test("signOut は '/' へ full reload 遷移する (registry の事業所状態を捨てる)", () => {
     const stub = stubWindow("http://auth.taimei-code.local:3100");
 
     redirectAfterAuthChange("signOut");
@@ -52,24 +43,6 @@ describe("redirectAfterAuthChange", () => {
     const url = new URL(stub.location.href, "http://auth.taimei-code.local:3100");
     const parsed = signInParamsSchema.safeParse(Object.fromEntries(url.searchParams));
     expect(parsed.success).toBe(true);
-  });
-});
-
-describe("isStaleSessionError", () => {
-  test("account API の Unauthorized は stale session (session cookie は有効なのに server guard が拒否) と判定する", () => {
-    expect(isStaleSessionError(new Unauthorized())).toBe(true);
-  });
-
-  test("registry から読んだ atom が Unauthorized で失敗した時の reject の値も stale session と判定する", async () => {
-    const rejected = Atom.make(Effect.fail(new Unauthorized()));
-    const error = await waitForValue(AtomRegistry.make(), rejected).catch((e: unknown) => e);
-
-    expect(isStaleSessionError(error)).toBe(true);
-  });
-
-  test("Unauthorized 以外の失敗や一般 Error は stale session ではない", () => {
-    expect(isStaleSessionError(new Forbidden())).toBe(false);
-    expect(isStaleSessionError(new Error("network"))).toBe(false);
   });
 });
 
@@ -116,29 +89,21 @@ describe("discardStaleSession", () => {
   });
 });
 
-describe("redirectToSignIn", () => {
+describe("searchReturningTo", () => {
   test("AC-041 受諾画面の search はログイン後の redirect_url にそのまま残る", () => {
     const origin = "http://auth.taimei-code.local:3100";
-    const acceptSearch = new URLSearchParams({
+    stubWindow(origin);
+    const href =
+      "/auth/signup/accept-invitation?invitation_token=tok&service_name=taimei&redirect_url=https%3A%2F%2Fapp.taimei-code.com%2Fdashboard";
+
+    const returnTo = new URL(searchReturningTo(href).redirect_url);
+
+    expect(returnTo.origin).toBe(origin);
+    expect(returnTo.pathname).toBe("/auth/signup/accept-invitation");
+    expect(Object.fromEntries(returnTo.searchParams)).toEqual({
       invitation_token: "tok",
       service_name: "taimei",
       redirect_url: "https://app.taimei-code.com/dashboard",
     });
-    const replace = mock((_url: string) => {});
-    globalThis.window = {
-      location: {
-        origin,
-        pathname: "/auth/signup/accept-invitation",
-        search: `?${acceptSearch}`,
-        replace,
-      },
-    } as unknown as typeof globalThis.window;
-
-    redirectToSignIn();
-
-    const signInUrl = new URL(replace.mock.calls[0]?.[0] ?? "", origin);
-    const returnTo = new URL(signInUrl.searchParams.get("redirect_url") ?? "");
-    expect(returnTo.pathname).toBe("/auth/signup/accept-invitation");
-    expect(Object.fromEntries(returnTo.searchParams)).toEqual(Object.fromEntries(acceptSearch));
   });
 });

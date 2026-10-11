@@ -1,9 +1,9 @@
-import { useSearchParams } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "../../shared/ui/alert";
+import type { AuthErrorReason } from "../auth-error-reason";
 
-const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
+const ERROR_MESSAGES: Record<AuthErrorReason, { title: string; description: string }> = {
   invalid_redirect_url: {
     title: "不正なリダイレクト URL",
     description:
@@ -17,16 +17,15 @@ const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
     title: "ログインに失敗しました",
     description: "ログイン処理中にエラーが発生しました。再度お試しください。",
   },
-  default: {
-    title: "エラーが発生しました",
-    description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
-  },
 };
 
-export const ErrorPage = () => {
-  const [searchParams] = useSearchParams();
-  const reason = searchParams.get("reason") ?? "default";
-  const message = ERROR_MESSAGES[reason] ?? ERROR_MESSAGES.default;
+const DEFAULT_MESSAGE = {
+  title: "エラーが発生しました",
+  description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
+};
+
+export const ErrorPage = ({ reason }: { reason?: AuthErrorReason }) => {
+  const message = reason === undefined ? DEFAULT_MESSAGE : ERROR_MESSAGES[reason];
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">

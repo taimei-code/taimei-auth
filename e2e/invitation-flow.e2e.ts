@@ -13,6 +13,12 @@ const INVITEE_EMAIL = "e2e-invitee@example.com";
 const INVITATION_TOKEN = "e2e-invitation-token";
 
 test("SignIn 画面からの magic link でも招待を受諾でき /account に到達する", async ({ page }) => {
+  let acceptPosts = 0;
+  page.on("request", (request) => {
+    if (request.method() === "POST" && request.url().endsWith("/api/account/accept-invitation")) {
+      acceptPosts++;
+    }
+  });
   await page.goto(authEntryUrl({ invitationToken: INVITATION_TOKEN }));
 
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
@@ -26,6 +32,7 @@ test("SignIn 画面からの magic link でも招待を受諾でき /account に
 
   await expect(page).toHaveURL(/\/account/);
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
+  expect(acceptPosts).toBe(1);
 
   await page.goto("/account/members");
   const list = page.getByRole("region", { name: "メンバー一覧" });
