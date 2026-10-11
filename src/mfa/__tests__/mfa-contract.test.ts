@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Schema } from "effect";
 
-import { MfaEnrollment } from "../mfa-contract";
+import { ChallengePassed, MfaEnrollment } from "../mfa-contract";
 
 const decodes = Schema.is(MfaEnrollment);
 
@@ -22,5 +22,17 @@ describe("MFA の登録の応答", () => {
 
   test("どれも空でなければ decode できる", () => {
     expect(decodes(valid)).toBe(true);
+  });
+});
+
+describe("MFA チャレンジの通過の応答", () => {
+  const passes = Schema.is(ChallengePassed);
+
+  test("redirect_url が空なら decode に失敗する (空の遷移先は今の URL に戻る)", () => {
+    expect(passes({ redirect_url: "" })).toBe(false);
+  });
+
+  test("redirect_url が空でなければ decode できる", () => {
+    expect(passes({ redirect_url: "/account" })).toBe(true);
   });
 });
