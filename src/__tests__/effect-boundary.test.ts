@@ -17,8 +17,12 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
-  test("web/src は effect を import しない", () => {
-    expect(effectImports("web/src")).toEqual([]);
+  test("web/src の effect の subpath は effect/reactivity と effect/http だけ", () => {
+    const subpaths = grepFiles(String.raw`(from|import)\s*["']effect/`, "web/src", {
+      include: ["*.ts", "*.tsx"],
+      lines: true,
+    });
+    expect(subpaths.filter((line) => !/["']effect\/(reactivity|http)["']/.test(line))).toEqual([]);
   });
 });
 
