@@ -1,4 +1,4 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { handleUpload } from "@vercel/blob/client";
 import { Effect } from "effect";
 import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
@@ -55,9 +55,16 @@ export const AccountHandlers = HttpApiBuilder.group(SpaApi, "account", (handlers
       Effect.gen(function* () {
         const actor = yield* CurrentActor;
         const webRequest = yield* HttpServerRequest.toWeb(request).pipe(Effect.orDie);
-        return yield* Effect.promise(() =>
+        const result = yield* Effect.promise(() =>
           handleUpload({
-            body: payload as HandleUploadBody,
+            body: {
+              type: payload.type,
+              payload: {
+                pathname: payload.payload.pathname,
+                clientPayload: payload.payload.clientPayload ?? null,
+                multipart: payload.payload.multipart ?? false,
+              },
+            },
             request: webRequest,
             onBeforeGenerateToken: async () => ({
               allowedContentTypes: [...ALLOWED_CONTENT_TYPES],
@@ -68,6 +75,8 @@ export const AccountHandlers = HttpApiBuilder.group(SpaApi, "account", (handlers
             onUploadCompleted: async () => {},
           }),
         );
+        if (result.type !== "blob.generate-client-token") return yield* Effect.die(result);
+        return { type: result.type, clientToken: result.clientToken };
       }),
     ),
 );

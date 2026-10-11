@@ -21,6 +21,15 @@ const CompanyState = Schema.Struct({
   ),
 });
 
+const AvatarUploadTokenRequest = Schema.Struct({
+  type: Schema.Literal("blob.generate-client-token"),
+  payload: Schema.Struct({
+    pathname: Schema.String,
+    clientPayload: Schema.optional(Schema.NullOr(Schema.String)),
+    multipart: Schema.optional(Schema.Boolean),
+  }),
+});
+
 export class AccountGroup extends HttpApiGroup.make("account")
   .add(
     HttpApiEndpoint.get("memberships", "/api/account/memberships", { success: CompanyState }),
@@ -34,8 +43,11 @@ export class AccountGroup extends HttpApiGroup.make("account")
       error: [LastOwner, NotFound],
     }),
     HttpApiEndpoint.post("avatarUploadToken", "/api/account/avatar/upload-token", {
-      payload: Schema.Unknown,
-      success: Schema.Unknown,
+      payload: AvatarUploadTokenRequest,
+      success: Schema.Struct({
+        type: Schema.Literal("blob.generate-client-token"),
+        clientToken: Schema.String,
+      }),
     }),
   )
   .middleware(Authenticated) {}

@@ -92,7 +92,7 @@ describe("Hono に載せた SPA の HttpApi", () => {
     expect([res.status, await res.text()]).toEqual([400, ""]);
   });
 
-  test("avatar の upload token: Vercel Blob の protocol の body を受け、client token を返す", async () => {
+  test("avatar の upload token: Vercel Blob の client が送る body (clientPayload・multipart 省略) を受け、client token を返す", async () => {
     const previous = process.env.BLOB_READ_WRITE_TOKEN;
     process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_teststore_secret";
     try {
@@ -103,7 +103,7 @@ describe("Hono に載せた SPA の HttpApi", () => {
           headers: { ...JSON_POST.headers, ...SESSION_COOKIE_HEADER },
           body: JSON.stringify({
             type: "blob.generate-client-token",
-            payload: { pathname: "avatar.png", clientPayload: null, multipart: false },
+            payload: { pathname: "avatar.png" },
           }),
         }),
       );
