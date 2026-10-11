@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from "react";
 
-import { mfaErrorCodeOf, type MfaCodeKind, type MfaErrorCode } from "./mfa-api";
+import type { MfaCodeKind, MfaErrorCode } from "./mfa-api";
 
 const WHITESPACE = /\s+/g;
 // NFKC で ASCII に正規化されないダッシュ類 (メール本文からの貼り付けで混ざる)
@@ -128,7 +128,7 @@ export function useMfaCodeInput(options: {
 
 export function useMfaCodeEntry(options: {
   inputId: string;
-  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<unknown>;
+  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<MfaErrorCode | null>;
 }): MfaCodeInput {
   const [submitting, setSubmitting] = useState(false);
   const [errorCode, setErrorCode] = useState<MfaErrorCode | null>(null);
@@ -147,7 +147,7 @@ export function useMfaCodeEntry(options: {
       setErrorCode(null);
       void options
         .submit(value)
-        .catch((error: unknown) => setErrorCode(mfaErrorCodeOf(error)))
+        .then(setErrorCode)
         .finally(() => {
           submitInFlight.current = false;
           setSubmitting(false);

@@ -1,6 +1,9 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useState, type ReactNode } from "react";
 import { Loader2, ShieldOff } from "lucide-react";
 
+import { useRefreshAndWait } from "../shared/atom-runtime";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -15,30 +18,36 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../shared/ui/dialog";
-import { disableMfa } from "./mfa-api";
+import { disableMfaAtom, mfaErrorCodeOfCause, mfaStatusAtom } from "./mfa-atom";
 import { useMfaCodeEntry } from "./use-mfa-code-entry";
 
 const CODE_INPUT_ID = "mfa-disable-code";
 
 type Props = {
-  onDisabled: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
 // ConfirmDestructiveDialog は失敗しても閉じる契約なので使わない (打ち間違いで入力をやり直させる)
-export const MfaDisableDialog = ({ onDisabled, trigger }: Props) => {
+export const MfaDisableDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
+  const refreshStatus = useRefreshAndWait(mfaStatusAtom);
+  const disableMfa = useAtomSet(disableMfaAtom, { mode: "promiseExit" });
 
   const entry = useMfaCodeEntry({
     inputId: CODE_INPUT_ID,
     submit: (input) =>
-      disableMfa(input).then(() => {
-        setOpen(false);
-        return notifyAfterRefresh(onDisabled, {
-          done: "多要素認証 (MFA) を無効にしました。",
-          staleShort: "多要素認証 (MFA) を無効にしました",
-        });
-      }),
+      disableMfa({ payload: input }).then(
+        Exit.match({
+          onSuccess: () => {
+            setOpen(false);
+            return notifyAfterRefresh(refreshStatus, {
+              done: "多要素認証 (MFA) を無効にしました。",
+              staleShort: "多要素認証 (MFA) を無効にしました",
+            }).then(() => null);
+          },
+          onFailure: mfaErrorCodeOfCause,
+        }),
+      ),
   });
 
   const handleOpenChange = (next: boolean) => {

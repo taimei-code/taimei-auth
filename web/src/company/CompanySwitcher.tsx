@@ -1,16 +1,14 @@
-import { useState } from "react";
 import { Building2, Loader2 } from "lucide-react";
 
 import { orgCodeLabelJa } from "@core/company/org-code";
 import { roleLabelJa } from "@core/membership/role-label";
 
-import { setCurrentCompany, useCurrentCompany } from "../account/current-company";
-import { notifyAfterRefresh, notifyError } from "../shared/notify";
+import { useCurrentCompany, useSwitchCompany } from "../account/current-company";
 import { NativeSelect } from "../shared/ui/native-select";
 
 export const CompanySwitcher = () => {
-  const { memberships, currentMembership, refresh } = useCurrentCompany();
-  const [switching, setSwitching] = useState(false);
+  const { memberships, currentMembership } = useCurrentCompany();
+  const { switchCompany, switchPending } = useSwitchCompany();
 
   if (!currentMembership) return null;
 
@@ -28,15 +26,11 @@ export const CompanySwitcher = () => {
             aria-label="事業所を切り替え"
             title={currentMembership.company_name}
             value={currentMembership.company_id}
-            disabled={switching}
+            disabled={switchPending}
             onChange={(e) => {
               const next = e.target.value;
               if (next === currentMembership.company_id) return;
-              setSwitching(true);
-              setCurrentCompany(next)
-                .then(() => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }))
-                .catch(() => notifyError("事業所を切り替えられませんでした。"))
-                .finally(() => setSwitching(false));
+              void switchCompany(next);
             }}
             className="h-8 py-1 pl-2 font-medium"
           >
@@ -46,7 +40,7 @@ export const CompanySwitcher = () => {
               </option>
             ))}
           </NativeSelect>
-          {switching && (
+          {switchPending && (
             <Loader2 aria-hidden className="size-4 animate-spin text-muted-foreground" />
           )}
         </div>

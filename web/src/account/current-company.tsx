@@ -1,92 +1,68 @@
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Exit } from "effect";
+import { AsyncResult } from "effect/reactivity";
+import { createContext, use, useCallback, useMemo, type ReactNode } from "react";
 
-import type { Role } from "@core/membership/policy";
+import type { CompanyState } from "@core/account/account-contract";
+import type { Unauthorized } from "@core/membership/guard/errors";
 
-import { RequestJsonError, getJson, postJson } from "../shared/request-json";
+import { failedBeforeAnyValue, useRefreshAndWait } from "../shared/atom-runtime";
+import { hasFailureTag } from "../shared/failure-message";
+import { notifyAfterRefresh, notifyError } from "../shared/notify";
+import { companyStateAtom, switchCompanyAtom } from "./account-atom";
 
-export type Membership = {
-  id: string;
-  company_id: string;
-  company_name: string;
-  company_org_code: string;
-  role: Role;
-  joined_at: string;
-};
+export type Membership = CompanyState["memberships"][number];
 
-export type CompanyState = {
-  current_company_id: string | null;
-  memberships: Membership[];
-};
-
-export const getCompanyState = (): Promise<CompanyState> =>
-  getJson<CompanyState>("/api/account/memberships");
-
-export const listMyMemberships = (): Promise<Membership[]> =>
-  getCompanyState().then((state) => state.memberships);
-
-export const setCurrentCompany = async (companyId: string): Promise<void> => {
-  await postJson<{ ok: true }>("/api/account/current-company", { company_id: companyId });
-};
-
-type CurrentCompanyContextValue = {
+type CompanyStateView = {
   loading: boolean;
   unauthorized: boolean;
   loadFailed: boolean;
-  memberships: Membership[];
+  memberships: readonly Membership[];
   currentCompanyId: string | null;
   currentMembership: Membership | null;
+};
+
+type CurrentCompanyContextValue = CompanyStateView & {
   refresh: () => Promise<void>;
 };
 
 const CurrentCompanyContext = createContext<CurrentCompanyContextValue | null>(null);
 
+const EMPTY_COMPANY_STATE: CompanyState = { current_company_id: null, memberships: [] };
+
+const loadFailureOf = (
+  result: AsyncResult.AsyncResult<CompanyState, Unauthorized>,
+): "unauthorized" | "loadFailed" | null => {
+  if (!failedBeforeAnyValue(result)) return null;
+  return hasFailureTag(result.cause, "Unauthorized") ? "unauthorized" : "loadFailed";
+};
+
+const toCompanyStateView = (
+  result: AsyncResult.AsyncResult<CompanyState, Unauthorized>,
+): CompanyStateView => {
+  const state = AsyncResult.getOrElse(result, () => EMPTY_COMPANY_STATE);
+  const loadFailure = loadFailureOf(result);
+  return {
+    loading: AsyncResult.isInitial(result),
+    unauthorized: loadFailure === "unauthorized",
+    loadFailed: loadFailure === "loadFailed",
+    memberships: state.memberships,
+    currentCompanyId: state.current_company_id,
+    currentMembership:
+      state.memberships.find((membership) => membership.company_id === state.current_company_id) ??
+      null,
+  };
+};
+
 export const CurrentCompanyProvider = ({ children }: { children: ReactNode }) => {
-  const [memberships, setMemberships] = useState<Membership[]>([]);
-  const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [unauthorized, setUnauthorized] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const result = useAtomValue(companyStateAtom);
+  const refreshCompanyState = useRefreshAndWait(companyStateAtom);
+  const refresh = useCallback(
+    () => refreshCompanyState().then(() => undefined),
+    [refreshCompanyState],
+  );
 
-  const refresh = useCallback(async () => {
-    const state = await getCompanyState();
-    setMemberships(state.memberships);
-    setCurrentCompanyId(state.current_company_id);
-  }, []);
-
-  useEffect(() => {
-    refresh()
-      .catch((error) => {
-        if (error instanceof RequestJsonError && error.status === 401) {
-          setUnauthorized(true);
-          return;
-        }
-        console.error("failed to load company state", error);
-        setLoadFailed(true);
-      })
-      .finally(() => setLoading(false));
-  }, [refresh]);
-
-  const value = useMemo<CurrentCompanyContextValue>(() => {
-    const currentMembership =
-      memberships.find((membership) => membership.company_id === currentCompanyId) ?? null;
-    return {
-      loading,
-      unauthorized,
-      loadFailed,
-      memberships,
-      currentCompanyId,
-      currentMembership,
-      refresh,
-    };
-  }, [loading, unauthorized, loadFailed, memberships, currentCompanyId, refresh]);
+  const value = useMemo(() => ({ ...toCompanyStateView(result), refresh }), [result, refresh]);
 
   return <CurrentCompanyContext value={value}>{children}</CurrentCompanyContext>;
 };
@@ -97,4 +73,21 @@ export const useCurrentCompany = (): CurrentCompanyContextValue => {
     throw new Error("useCurrentCompany must be used within CurrentCompanyProvider");
   }
   return context;
+};
+
+// 切替の atom は画面の間で 1 つなので、実行中に別の画面から呼ぶと前の呼び出しが中断される
+export const useSwitchCompany = () => {
+  const { refresh } = useCurrentCompany();
+  const requestSwitch = useAtomSet(switchCompanyAtom, { mode: "promiseExit" });
+  const switchPending = AsyncResult.isWaiting(useAtomValue(switchCompanyAtom));
+  const switchCompany = (companyId: string): Promise<void> =>
+    switchPending
+      ? Promise.resolve()
+      : requestSwitch({ payload: { company_id: companyId } }).then(
+          Exit.match({
+            onSuccess: () => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }),
+            onFailure: () => notifyError("事業所を切り替えられませんでした。"),
+          }),
+        );
+  return { switchCompany, switchPending };
 };

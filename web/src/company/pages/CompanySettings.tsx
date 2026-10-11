@@ -1,37 +1,11 @@
-import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { useCurrentCompany } from "../../account/current-company";
-import { redirectAfterAuthChange } from "../../auth/auth-redirect";
-import { ConfirmDestructiveDialog } from "../../shared/ConfirmDestructiveDialog";
-import { notifyAfterRefresh, notifyError } from "../../shared/notify";
-import { describeRequestJsonError } from "../../shared/request-json";
-import { Button } from "../../shared/ui/button";
-import { Input } from "../../shared/ui/input";
-import { Label } from "../../shared/ui/label";
 import { Separator } from "../../shared/ui/separator";
-import { OrgCodeField } from "../OrgCodeField";
-import { deleteCompany, updateCompany, type OrgCode } from "../company-api";
+import { CompanySettingsForm } from "../CompanySettingsForm";
 
 export const CompanySettings = () => {
   const { currentMembership, memberships, loading, refresh } = useCurrentCompany();
-  const isOwner = currentMembership?.role === "OWNER";
-  const isLastCompany = memberships.length <= 1;
-
-  const [name, setName] = useState("");
-  const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
-  const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
-
-  const currentCompanyId = currentMembership?.company_id ?? null;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: company を切り替えた時だけ prefill する意図
-  useEffect(() => {
-    if (currentMembership) {
-      setName(currentMembership.company_name);
-      setOrgCode(currentMembership.company_org_code === "CORPORATE" ? "CORPORATE" : "PERSONAL");
-    }
-  }, [currentCompanyId]);
 
   if (loading) {
     return (
@@ -41,57 +15,11 @@ export const CompanySettings = () => {
     );
   }
 
-  if (!currentMembership || !isOwner) {
+  if (currentMembership?.role !== "OWNER") {
     return (
       <p className="text-sm text-muted-foreground">事業所設定の編集はオーナーのみ可能です。</p>
     );
   }
-
-  const companyId = currentMembership.company_id;
-  const companyName = currentMembership.company_name;
-
-  const handleSave = (e: FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    updateCompany(companyId, { name: name.trim(), org_code: orgCode })
-      .then(() =>
-        notifyAfterRefresh(refresh, {
-          done: "事業所情報を更新しました。",
-          staleShort: "事業所情報を更新しました",
-        }),
-      )
-      .catch((err) => {
-        notifyError(
-          describeRequestJsonError(err, {
-            403: "編集する権限がありません。",
-            fallback: "更新に失敗しました。",
-          }),
-        );
-      })
-      .finally(() => setSubmitting(false));
-  };
-
-  const handleDelete = () =>
-    deleteCompany(companyId)
-      .then(({ accountDeleted }) => {
-        if (accountDeleted) {
-          redirectAfterAuthChange("deleteAccount");
-          return;
-        }
-        navigate("/account/companies");
-        return notifyAfterRefresh(refresh, {
-          done: `「${companyName}」を削除しました。`,
-          staleShort: "事業所を削除しました",
-        });
-      })
-      .catch((err) => {
-        notifyError(
-          describeRequestJsonError(err, {
-            403: "この事業所を削除する権限がないか、既に削除されています。",
-            fallback: "事業所の削除に失敗しました。",
-          }),
-        );
-      });
 
   return (
     <div>
@@ -101,55 +29,12 @@ export const CompanySettings = () => {
       </div>
       <Separator className="my-6" />
 
-      <form onSubmit={handleSave} className="max-w-md space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="company-name">事業所名</Label>
-          <Input
-            id="company-name"
-            type="text"
-            required
-            value={name}
-            maxLength={100}
-            onChange={(e) => setName(e.target.value)}
-            disabled={submitting}
-          />
-        </div>
-        <OrgCodeField value={orgCode} onChange={setOrgCode} disabled={submitting} name="org_code" />
-        <Button type="submit" disabled={submitting || name.trim() === ""}>
-          {submitting ? <Loader2 className="animate-spin" /> : null}
-          保存
-        </Button>
-      </form>
-
-      <Separator className="my-10" />
-
-      <section className="rounded-md border border-destructive/40">
-        <header className="border-b border-destructive/40 bg-destructive/10 px-6 py-4">
-          <h2 className="font-semibold text-destructive">事業所を削除</h2>
-        </header>
-        <div className="flex items-center justify-between gap-4 p-6">
-          <p className="text-sm text-muted-foreground">
-            削除すると、この事業所はメンバーの一覧から外れます。
-          </p>
-          <ConfirmDestructiveDialog
-            trigger={
-              <Button variant="destructive" disabled={submitting}>
-                削除する
-              </Button>
-            }
-            title="事業所削除の確認"
-            description={`「${companyName}」を削除します。この操作は元に戻せません。`}
-            confirmLabel="削除する"
-            onConfirm={handleDelete}
-          >
-            {isLastCompany && (
-              <p className="text-sm font-medium text-destructive">
-                これは最後の所属事業所です。削除するとアカウントも閉じられ、ログアウトされます。
-              </p>
-            )}
-          </ConfirmDestructiveDialog>
-        </div>
-      </section>
+      <CompanySettingsForm
+        key={currentMembership.company_id}
+        membership={currentMembership}
+        isLastCompany={memberships.length <= 1}
+        refresh={refresh}
+      />
     </div>
   );
 };

@@ -24,6 +24,8 @@ const Member = Schema.Struct({
   joined_at: Schema.String,
 });
 
+export type Member = typeof Member.Type;
+
 const target = { ...CompanyParams, targetUserId: Schema.String };
 
 export class MembershipGroup extends HttpApiGroup.make("membership")

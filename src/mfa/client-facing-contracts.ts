@@ -16,19 +16,6 @@ export const MFA_WIRE_ERROR_CODES = [
 
 export type MfaClientFacingErrorCode = (typeof MFA_WIRE_ERROR_CODES)[number];
 
-export type MfaStatusResponse = {
-  enabled: boolean;
-  recovery_codes_remaining: number;
-};
-
-export type MfaEnrollResponse = {
-  totp_uri: string;
-  recovery_codes: string[];
-  enrollment_id: string;
-};
-
-export type MfaOkResponse = { ok: true };
-
 export type MfaChallengeStateResponse = { pending: boolean };
 
 export type MfaChallengeVerifyResponse = { redirect_url: string };
@@ -41,9 +28,5 @@ export type MatchesClientFacingShape<A, B> = [A, keyof A] extends [B, keyof B]
     ? true
     : never
   : never;
-
-export type MfaActivateRequest = { code: string; enrollment_id: string };
-
-export type MfaDisableRequest = { code: string; kind: MfaCodeKind };
 
 export type MfaChallengeVerifyRequest = { code: string; kind: MfaCodeKind };

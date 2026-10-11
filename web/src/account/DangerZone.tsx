@@ -1,25 +1,36 @@
+import { useAtomSet } from "@effect/atom-react";
+import { Exit } from "effect";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
 import { authClient } from "../auth/auth-client";
 import { discardStaleSession } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
-import { describeRequestJsonError, postJson } from "../shared/request-json";
+import { failureMessage } from "../shared/failure-message";
 import { Button } from "../shared/ui/button";
+import { deleteAccountAtom } from "./account-atom";
+
+const DELETE_FAILED = "退会処理に失敗しました";
 
 export const DangerZone = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const requestDeletion = useAtomSet(deleteAccountAtom, { mode: "promiseExit" });
+
   const deleteAccount = async () => {
     setErrorMessage(null);
-    try {
-      await postJson("/api/account/delete");
-    } catch (error) {
+    const exit = await requestDeletion({});
+    if (Exit.isFailure(exit)) {
       setErrorMessage(
-        describeRequestJsonError(error, {
-          409: "所有者として残っている事業所があります。先に委譲または削除してください。",
-          fallback: "退会処理に失敗しました",
-        }),
+        failureMessage(
+          exit.cause,
+          {
+            LastOwner: "所有者として残っている事業所があります。先に委譲または削除してください。",
+            NotFound: DELETE_FAILED,
+            Unauthorized: DELETE_FAILED,
+          },
+          DELETE_FAILED,
+        ),
       );
       return;
     }
