@@ -3,6 +3,8 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { mountAccountRoutes } from "../../app";
 import { AuthApi } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
+import type { AppServices } from "../../runtime";
+import { runtimeServices } from "../spa-http-api";
 
 export const TEST_PREFIX = "mig-test-";
 
@@ -36,12 +38,14 @@ export const provideAuthApi =
     return next();
   };
 
-export function buildTestApp(actor: StubActor, overrides?: Partial<AuthApi["Service"]>): Hono {
+export function buildAppWith<A extends AppServices>(overrides: Layer.Layer<A>): Hono {
   const app = new Hono();
-  app.use("*", provideAuthApi(stubAuthApi(actor, overrides)));
-  mountAccountRoutes(app);
+  mountAccountRoutes(app, Layer.merge(runtimeServices(), overrides));
   return app;
 }
+
+export const buildTestApp = (actor: StubActor, overrides?: Partial<AuthApi["Service"]>): Hono =>
+  buildAppWith(stubAuthApi(actor, overrides));
 
 export const requestApp = (app: Hono, url: string, init?: RequestInit) =>
   Effect.promise(() => Promise.resolve(app.request(url, init)));

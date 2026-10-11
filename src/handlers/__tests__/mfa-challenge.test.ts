@@ -14,7 +14,7 @@ import {
 import { challengeKey } from "../../mfa/totp/login-challenge";
 import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { mfaChallenge } from "../mfa-challenge";
+import { mountAccountRoutes } from "../../app";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-h-challenge-";
@@ -22,7 +22,7 @@ const run = runTest(P);
 
 const buildApp = (): Hono => {
   const app = new Hono();
-  app.route("/", mfaChallenge);
+  mountAccountRoutes(app);
   return app;
 };
 
@@ -64,8 +64,8 @@ describe("MFA チャレンジ API", () => {
 
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({ redirect_url: "/account/security" });
-        const setCookies = res.headers.getSetCookie();
-        expect(setCookies.length).toBeGreaterThan(0);
+        const setCookieNames = res.headers.getSetCookie().map((c) => c.split("=")[0]);
+        expect(setCookieNames.sort()).toEqual(["better-auth.session_token", "mfa_login_challenge"]);
       }),
     ));
 
@@ -79,7 +79,8 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(res.status).toBe(401);
-        expect(yield* responseJson(res)).toEqual({ error: "challenge_expired" });
+        expect(res.headers.get("content-type")).toBe("application/json");
+        expect(yield* responseJson(res)).toEqual({ _tag: "ChallengeExpired" });
         expect(res.headers.getSetCookie()).toEqual([]);
       }),
     ));
@@ -110,7 +111,7 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(verifyRes.status).toBe(401);
-        expect(yield* responseJson(verifyRes)).toEqual({ error: "challenge_expired" });
+        expect(yield* responseJson(verifyRes)).toEqual({ _tag: "ChallengeExpired" });
         expect(verifyRes.headers.getSetCookie()).toEqual([]);
         expect(yield* responseJson(statusRes)).toEqual({ pending: false });
       }),
@@ -135,7 +136,7 @@ describe("MFA チャレンジ API", () => {
         });
 
         expect(res.status).toBe(401);
-        expect(yield* responseJson(res)).toEqual({ error: "challenge_expired" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "ChallengeExpired" });
         expect(res.headers.getSetCookie()).toEqual([]);
       }),
     ));

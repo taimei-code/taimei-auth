@@ -27,7 +27,7 @@ describe("削除済み user の session actor", () => {
         const res = yield* postCompany(buildTestApp(ghost));
 
         expect(res.status).toBe(401);
-        expect(yield* responseJson(res)).toEqual({ error: "unauthorized" });
+        expect(yield* responseJson(res)).toEqual({ _tag: "Unauthorized" });
       }),
     ));
 

@@ -17,7 +17,7 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
-  test("web/src は effect を import しない (共通画面 SPA と @core 共有 module は effect-free)", () => {
+  test("web/src は effect を import しない", () => {
     expect(effectImports("web/src")).toEqual([]);
   });
 });
@@ -74,7 +74,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
       "src/audit/report-failure.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
-      "src/handlers/account-invitation.ts",
+      "src/handlers/invitation-http-api.ts",
       "src/membership/guard/core.ts",
       "src/mfa/disable-attempt-budget.ts",
       "src/mfa/notification-adapter.ts",
@@ -108,6 +108,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     const allowed = new Set([
       "src/handlers/client-facing-error.ts",
       "src/handlers/run-route.ts",
+      "src/handlers/spa-http-api.ts",
       "src/rpc/run-rpc.ts",
       "src/auth.ts",
       "src/app.ts",
@@ -281,11 +282,17 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
 
 // ManagedRuntime.make は初回 run で Layer を構築するため、失敗し得る Layer (Layer.effect / scoped / unwrap) は本番の初回 request で落ちる。
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
-  test("src の Layer constructor は Layer.succeed / Layer.mergeAll だけ", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) だけ (Layer.provide は合成だけなので数えない)", () => {
     const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
       excludeTests: true,
       lines: true,
     });
-    expect(hits.filter((line) => !/Layer\.(succeed|mergeAll)\(/.test(line))).toEqual([]);
+    const readsContextOnly =
+      /^src\/handlers\/spa-http-api\.ts:(const AuthenticatedLive = Layer\.effect\(|\s*Layer\.effectContext\(getRuntime\(\)\.contextEffect\))/;
+    expect(
+      hits.filter(
+        (line) => !/Layer\.(succeed|mergeAll|provide)\(/.test(line) && !readsContextOnly.test(line),
+      ),
+    ).toEqual([]);
   });
 });

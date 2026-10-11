@@ -1,18 +1,13 @@
-import { Effect } from "effect";
+import { Effect, type Layer } from "effect";
 import { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
 import { loginShortcut } from "./handlers/login-shortcut";
-import { accountAvatar } from "./handlers/avatar-upload";
-import { accountCompany } from "./handlers/account-company";
-import { accountInvitation } from "./handlers/account-invitation";
-import { accountMembership } from "./handlers/account-membership";
-import { accountMfa } from "./handlers/account-mfa";
 import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
-import { mfaChallenge } from "./handlers/mfa-challenge";
+import { mountSpaApi } from "./handlers/spa-http-api";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { CONTINUE, runMiddleware } from "./handlers/run-route";
 import {
@@ -24,19 +19,16 @@ import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-l
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins, isLocalEnvironment } from "./env";
+import type { AppServices } from "./runtime";
 
 export type AppOptions = {
   // catch-all を含むので、共有 route を登録し終えてから呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
-export function mountAccountRoutes(app: Hono): void {
+export function mountAccountRoutes(app: Hono, services?: Layer.Layer<AppServices>): void {
   app.use("/api/account/*", csrf());
-  app.route("/", accountAvatar);
-  app.route("/", accountCompany);
-  app.route("/", accountInvitation);
-  app.route("/", accountMembership);
-  app.route("/", accountMfa);
+  mountSpaApi(app, services);
 }
 
 const LOCAL_RELAXED_LIMIT = 1000;
@@ -104,7 +96,6 @@ export function buildApp(options: AppOptions): Hono {
       windowSec: 60,
     }),
   );
-  app.route("/", mfaChallenge);
 
   app.use(
     "/api/auth/sign-in/magic-link",

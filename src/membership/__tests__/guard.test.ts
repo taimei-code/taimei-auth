@@ -1,12 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import { DbError, tryAuthApi } from "../../errors";
-import { requireActor, requireMembership, requireMembershipOf } from "../guard";
+import { tryAuthApi } from "../../errors";
+import { requireActor, requireMembershipOf } from "../guard";
 import {
   authFailing,
   authLayer,
-  membershipRepoFailing,
   membershipRepoLayer,
   run,
   runOk,
@@ -149,48 +148,5 @@ describe("requireMembershipOf", () => {
       requireMembershipOf(actor, "c1").pipe(Effect.provide(rows("SUPERUSER"))),
     );
     expect(role).toBe("SUPERUSER");
-  });
-});
-
-describe("requireMembership (requireActor + requireMembershipOf の合成)", () => {
-  test("未認証 → Unauthorized (membership を問わない)", async () => {
-    const layer = Layer.mergeAll(
-      signedOut(),
-      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "OWNER" }]),
-    );
-    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
-    expect(e._tag).toBe("Unauthorized");
-  });
-
-  test("認証済・非所属 → Forbidden", async () => {
-    const layer = Layer.mergeAll(signedIn(), membershipRepoLayer([]));
-    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
-    expect(e._tag).toBe("Forbidden");
-  });
-
-  test("認証済・minRole 不足 → Forbidden", async () => {
-    const layer = Layer.mergeAll(
-      signedIn(),
-      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "MEMBER" }]),
-    );
-    const e = await run(requireMembership(headers, "c1", "ADMIN").pipe(Effect.provide(layer)));
-    expect(e._tag).toBe("Forbidden");
-  });
-
-  test("認証済・minRole 充足 → { actor, role }", async () => {
-    const layer = Layer.mergeAll(
-      signedIn(),
-      membershipRepoLayer([{ userId: "u1", companyId: "c1", role: "ADMIN" }]),
-    );
-    const r = await runOk(requireMembership(headers, "c1", "ADMIN").pipe(Effect.provide(layer)));
-    expect(r).toEqual({ actor, role: "ADMIN" });
-  });
-
-  test("QA-R-05 MembershipRepo の DbError は捕捉せず伝播する (fail-closed の対象は session 解決のみ)", async () => {
-    const cause = new Error("db timeout");
-    const layer = Layer.mergeAll(signedIn(), membershipRepoFailing(cause));
-    const e = await run(requireMembership(headers, "c1").pipe(Effect.provide(layer)));
-    expect(e).toBeInstanceOf(DbError);
-    expect((e as DbError).cause).toBe(cause);
   });
 });

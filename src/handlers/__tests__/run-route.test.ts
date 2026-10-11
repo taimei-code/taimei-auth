@@ -207,7 +207,7 @@ describe("authApiLayer", () => {
     const app = new Hono();
     mountAccountRoutes(app);
     const res = await app.request("/api/account/memberships");
-    expect([res.status, await res.text()]).toEqual([401, '{"error":"unauthorized"}']);
+    expect([res.status, await res.text()]).toEqual([401, '{"_tag":"Unauthorized"}']);
   });
 
   test("設定した app は、その Layer の AuthApi で session を読む", async () => {
