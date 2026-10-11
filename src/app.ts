@@ -10,6 +10,7 @@ import { accountCompany } from "./handlers/account-company";
 import { accountInvitation } from "./handlers/account-invitation";
 import { accountMembership } from "./handlers/account-membership";
 import { accountMfa } from "./handlers/account-mfa";
+import { mountAccountApi } from "./handlers/account-http-api";
 import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
 import { mfaChallenge } from "./handlers/mfa-challenge";
@@ -32,6 +33,7 @@ export type AppOptions = {
 
 export function mountAccountRoutes(app: Hono): void {
   app.use("/api/account/*", csrf());
+  mountAccountApi(app);
   app.route("/", accountAvatar);
   app.route("/", accountCompany);
   app.route("/", accountInvitation);

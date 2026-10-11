@@ -7,7 +7,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
 // 増やす時は browser で動くこと、secrets や I/O を持たないことを確認する。
-const BROWSER_SAFE_PACKAGES = new Set(["zod"]);
+const BROWSER_SAFE_PACKAGES = new Set(["zod", "effect", "effect/http-api"]);
 
 function walk(dir: string): string[] {
   const files: string[] = [];

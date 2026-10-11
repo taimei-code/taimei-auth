@@ -10,7 +10,7 @@ import { revokeInvitation, type PendingInvitation } from "./invitation-api";
 
 type Props = {
   companyId: string;
-  invitations: PendingInvitation[];
+  invitations: readonly PendingInvitation[];
   onChanged: () => Promise<unknown>;
 };
 

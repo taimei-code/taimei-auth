@@ -1,7 +1,11 @@
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { RegistryContext, useAtomSet, useAtomValue } from "@effect/atom-react";
+import { Cause, Effect, Exit, Option } from "effect";
+import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
+import { type FormEvent, use, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
+import type { Member } from "@core/membership/members-api";
 import { isAtLeast, type Role } from "@core/membership/policy";
 import { roleLabelJa } from "@core/membership/role-label";
 
@@ -9,13 +13,10 @@ import { useCurrentCompany } from "../../account/current-company";
 import { authClient } from "../../auth/auth-client";
 import { PendingInvitations } from "../../invitation/PendingInvitations";
 import { parseRedirectTarget } from "../../invitation/redirect-target";
-import {
-  createInvitation,
-  listInvitations,
-  type PendingInvitation,
-} from "../../invitation/invitation-api";
+import { createInvitation } from "../../invitation/invitation-api";
 import { ConfirmDestructiveDialog } from "../../shared/ConfirmDestructiveDialog";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
+import { refreshAndWait } from "../../shared/atom-runtime";
 import { describeRequestJsonError } from "../../shared/request-json";
 import { Button } from "../../shared/ui/button";
 import { Input } from "../../shared/ui/input";
@@ -23,7 +24,18 @@ import { Label } from "../../shared/ui/label";
 import { NativeSelect } from "../../shared/ui/native-select";
 import { Separator } from "../../shared/ui/separator";
 import { memberLabel } from "../member-label";
-import { listMembers, removeMember, updateMemberRole, type Member } from "../membership-api";
+import {
+  changeRoleAtom,
+  membersKey,
+  membersOf,
+  pendingInvitationsOf,
+  removeMemberAtom,
+} from "../members-atom";
+
+const settled = <A, E>(
+  registry: AtomRegistry.AtomRegistry,
+  atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>,
+) => Effect.runPromise(AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }));
 
 export const Members = () => {
   const { currentMembership, loading: companyLoading } = useCurrentCompany();
@@ -37,38 +49,31 @@ export const Members = () => {
     : ["MEMBER", "ADMIN"];
   const roleFromSelect = (value: string) => assignableRoles.find((role) => role === value);
 
-  const [members, setMembers] = useState<Member[]>([]);
-  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<Role>("MEMBER");
   const effectiveInviteRole = assignableRoles.includes(inviteRole) ? inviteRole : "MEMBER";
   const [submitting, setSubmitting] = useState(false);
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  // 招待一覧は ADMIN 未満だと 403
-  const refresh = useCallback(() => {
-    if (!companyId) return Promise.resolve();
-    return Promise.all([
-      listMembers(companyId).then(setMembers),
-      (canManage ? listInvitations(companyId) : Promise.resolve([])).then(setInvitations),
-    ]);
-  }, [companyId, canManage]);
+  const registry = use(RegistryContext);
+  const membersAtom = membersOf(companyId);
+  const invitationsAtom = pendingInvitationsOf(canManage ? companyId : null);
+  const membersResult = useAtomValue(membersAtom);
+  const invitationsResult = useAtomValue(invitationsAtom);
+  const members = Option.match(AsyncResult.value(membersResult), {
+    onNone: (): readonly Member[] => [],
+    onSome: (r) => r.members,
+  });
+  const invitations = Option.match(AsyncResult.value(invitationsResult), {
+    onNone: () => [],
+    onSome: (r) => r.invitations,
+  });
+  const changeRole = useAtomSet(changeRoleAtom, { mode: "promiseExit" });
+  const removeMember = useAtomSet(removeMemberAtom, { mode: "promiseExit" });
+  const loading = AsyncResult.isInitial(membersResult) || AsyncResult.isInitial(invitationsResult);
 
-  useEffect(() => {
-    if (!companyId) {
-      if (!companyLoading) setLoading(false);
-      return;
-    }
-    setLoading(true);
-    // 先に空にしないと、取得失敗時に前の事業所の行が残り、その行への操作が誤った POST になる
-    setMembers([]);
-    setInvitations([]);
-    refresh()
-      .catch((e) => console.error("failed to load members", e))
-      .finally(() => setLoading(false));
-  }, [companyId, companyLoading, refresh]);
+  const refresh = () =>
+    Promise.all([refreshAndWait(registry, membersAtom), refreshAndWait(registry, invitationsAtom)]);
 
   const handleInvite = (e: FormEvent) => {
     e.preventDefault();
@@ -102,47 +107,59 @@ export const Members = () => {
     if (!companyId || busyUserId) return;
     const targetLabel = memberLabel(target);
     setBusyUserId(target.user_id);
-    updateMemberRole(companyId, target.user_id, role)
-      .then(() =>
-        notifyAfterRefresh(refresh, {
-          done: `${targetLabel} の役割を${roleLabelJa(role)}に変更しました。`,
-          staleShort: "役割を変更しました",
-        }),
+    changeRole({
+      params: { companyId, targetUserId: target.user_id },
+      payload: { role },
+      reactivityKeys: [membersKey(companyId)],
+    })
+      .then((exit) =>
+        Exit.isSuccess(exit)
+          ? notifyAfterRefresh(() => settled(registry, membersAtom), {
+              done: `${targetLabel} の役割を${roleLabelJa(role)}に変更しました。`,
+              staleShort: "役割を変更しました",
+            })
+          : notifyError(
+              Option.match(Cause.findErrorOption(exit.cause), {
+                onNone: () => "役割の変更に失敗しました。",
+                onSome: (e) =>
+                  e._tag === "LastOwner"
+                    ? "最後のオーナーを降格することはできません。"
+                    : e._tag === "Forbidden"
+                      ? "この役割変更を行う権限がありません。"
+                      : "役割の変更に失敗しました。",
+              }),
+            ),
       )
-      .catch((err) => {
-        notifyError(
-          describeRequestJsonError(err, {
-            409: "最後のオーナーを降格することはできません。",
-            403: "この役割変更を行う権限がありません。",
-            fallback: "役割の変更に失敗しました。",
-          }),
-        );
-      })
       .finally(() => setBusyUserId(null));
   };
 
   const handleRemove = (targetUserId: string): Promise<void> => {
     if (!companyId || busyUserId) return Promise.resolve();
     setBusyUserId(targetUserId);
-    return removeMember(companyId, targetUserId)
-      .then(({ accountDeleted }) =>
-        notifyAfterRefresh(refresh, {
-          done: accountDeleted
-            ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
-            : "メンバーを削除しました。",
-          staleShort: accountDeleted
-            ? "メンバーとアカウントを削除しました"
-            : "メンバーを削除しました",
-        }),
+    return removeMember({
+      params: { companyId, targetUserId },
+      reactivityKeys: [membersKey(companyId)],
+    })
+      .then((exit) =>
+        Exit.isSuccess(exit)
+          ? notifyAfterRefresh(() => settled(registry, membersAtom), {
+              done: exit.value.account_deleted
+                ? "メンバーを削除しました。他に所属が無いためアカウントも削除されました。"
+                : "メンバーを削除しました。",
+              staleShort: exit.value.account_deleted
+                ? "メンバーとアカウントを削除しました"
+                : "メンバーを削除しました",
+            })
+          : notifyError(
+              Option.match(Cause.findErrorOption(exit.cause), {
+                onNone: () => "メンバーの削除に失敗しました。",
+                onSome: (e) =>
+                  e._tag === "LastOwner"
+                    ? "最後のオーナーは削除できません。"
+                    : "メンバーの削除に失敗しました。",
+              }),
+            ),
       )
-      .catch((err) => {
-        notifyError(
-          describeRequestJsonError(err, {
-            409: "最後のオーナーは削除できません。",
-            fallback: "メンバーの削除に失敗しました。",
-          }),
-        );
-      })
       .finally(() => setBusyUserId(null));
   };
 
