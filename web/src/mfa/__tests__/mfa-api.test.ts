@@ -205,7 +205,7 @@ describe("AC-011 error code 解決 (公開関数越し)", () => {
 });
 
 test("失敗の message は汎用文言のみでエラーコードを露出しない", async () => {
-  stubFetch(Response.json({ error: "locked" }, { status: 429 }));
+  stubFetch(Response.json({ _tag: "Locked" }, { status: 429 }));
 
   const error = await disableMfa({ code: "1", kind: "totp" }).then(
     () => undefined,
