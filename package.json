@@ -93,7 +93,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "7.0.2",
     "vite": "^8.0.16",
-    "wrangler": "^4.100.0"
+    "wrangler": "^4.147.0"
   },
   "overrides": {
     "defu": "^6.1.7",
