@@ -17,9 +17,9 @@ const Code = Schema.String.check(Schema.isBetweenLength(1, 64));
 const CodeKind = Schema.Literals(["totp", "recovery_code"]);
 export type MfaCodeKind = typeof CodeKind.Type;
 
-const MfaStatus = Schema.Struct({
+export const MfaStatus = Schema.Struct({
   enabled: Schema.Boolean,
-  recovery_codes_remaining: Schema.Number,
+  recovery_codes_remaining: Schema.Finite,
 });
 export type MfaStatus = typeof MfaStatus.Type;
 

@@ -165,8 +165,9 @@ describe("退会と OWNER の race (不安定な失敗を検知するため 5 �
           const owners = [yield* db.seedUser(`race-${i}-1`), yield* db.seedUser(`race-${i}-2`)];
           for (const o of owners) yield* db.seedMembership(o.id, co, "OWNER");
 
-          const results = yield* Effect.all(
-            owners.map((o) => Effect.exit(deleteAccountUnlessLastOwner(o.id))),
+          const results = yield* Effect.forEach(
+            owners,
+            (o) => Effect.exit(deleteAccountUnlessLastOwner(o.id)),
             { concurrency: "unbounded" },
           ).pipe(Effect.provide(slowUserDelete));
 

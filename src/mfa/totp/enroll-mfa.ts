@@ -21,8 +21,9 @@ const replayPendingEnrollment = Effect.fnUntraced(function* (
 
   const secret = yield* Effect.promise(() => decryptValue(ring, secretCipher(row), actor.id));
   const stored = yield* MfaTotpRepo.use((mfa) => mfa.listUnusedRecoveryCodes(actor.id));
-  const recoveryCodes = yield* Effect.all(
-    stored.map((code) => Effect.promise(() => decryptText(ring, codeCipher(code), actor.id))),
+  const recoveryCodes = yield* Effect.forEach(
+    stored,
+    (code) => Effect.promise(() => decryptText(ring, codeCipher(code), actor.id)),
     { concurrency: "unbounded" },
   );
 
@@ -47,10 +48,9 @@ export const enroll = Effect.fnUntraced(function* (input: { actor: Pick<Actor, "
   const enrollmentId = ids.enrollmentId();
   const encryptedSecret = yield* Effect.promise(() => encryptValue(ring, secret, input.actor.id));
   const encoder = new TextEncoder();
-  const encryptedCodes = yield* Effect.all(
-    recoveryCodes.map((code) =>
-      Effect.promise(() => encryptValue(ring, encoder.encode(code), input.actor.id)),
-    ),
+  const encryptedCodes = yield* Effect.forEach(
+    recoveryCodes,
+    (code) => Effect.promise(() => encryptValue(ring, encoder.encode(code), input.actor.id)),
     { concurrency: "unbounded" },
   );
 

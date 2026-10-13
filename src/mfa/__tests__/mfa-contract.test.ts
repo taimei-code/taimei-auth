@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Schema } from "effect";
 
-import { ChallengePassed, MfaEnrollment } from "../mfa-contract";
+import { ChallengePassed, MfaEnrollment, MfaStatus } from "../mfa-contract";
 
 const decodes = Schema.is(MfaEnrollment);
 
@@ -34,5 +34,13 @@ describe("MFA チャレンジの通過の応答", () => {
 
   test("redirect_url が空でなければ decode できる", () => {
     expect(passes({ redirect_url: "/account" })).toBe(true);
+  });
+});
+
+describe("MFA の状態の応答", () => {
+  test("残りの recovery code の数が有限でなければ decode に失敗する", () => {
+    expect(
+      Schema.is(MfaStatus)({ enabled: true, recovery_codes_remaining: Number.POSITIVE_INFINITY }),
+    ).toBe(false);
   });
 });

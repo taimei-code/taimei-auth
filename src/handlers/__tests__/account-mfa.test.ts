@@ -272,7 +272,9 @@ describe("account MFA API", () => {
         const session = yield* createSessionFor(user.id);
         const app = appForwardingCookies();
         const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
-        const enrollment = Schema.decodeUnknownSync(MfaEnrollment)(yield* responseJson(enrolled));
+        const enrollment = yield* Schema.decodeUnknownEffect(MfaEnrollment)(
+          yield* responseJson(enrolled),
+        );
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
           code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),
@@ -314,7 +316,9 @@ describe("account MFA API", () => {
           },
         });
         const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
-        const enrollment = Schema.decodeUnknownSync(MfaEnrollment)(yield* responseJson(enrolled));
+        const enrollment = yield* Schema.decodeUnknownEffect(MfaEnrollment)(
+          yield* responseJson(enrolled),
+        );
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
           code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),

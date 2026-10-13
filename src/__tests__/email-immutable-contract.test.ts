@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { auth } from "../auth";
+import { tryAuthApi } from "../errors";
 import { AuthService, CompanyService, UserService } from "../gen/auth/v1/auth_pb";
 import { createSessionFor } from "../mfa/__tests__/helpers";
 import { dbTest } from "./live-runner";
@@ -10,8 +11,7 @@ const P = "email-immutable-";
 const { run, cleanup } = dbTest(P);
 const newEmail = `${P}new@example.com`;
 
-const rejection = (call: () => Promise<unknown>) =>
-  Effect.tryPromise({ try: call, catch: (e) => e }).pipe(Effect.flip);
+const rejection = (call: () => Promise<unknown>) => tryAuthApi(call).pipe(Effect.flip);
 
 const emailInDb = (userId: string) =>
   TestDb.use((db) => db.readUser(userId)).pipe(Effect.map((u) => u?.email));
@@ -31,7 +31,7 @@ describe("公開している経路からはメールアドレスを変更でき�
           auth.api.updateUser({ headers, body: { email: newEmail } }),
         );
 
-        expect(rejected).toMatchObject({ body: { code: "EMAIL_CAN_NOT_BE_UPDATED" } });
+        expect(rejected.cause).toMatchObject({ body: { code: "EMAIL_CAN_NOT_BE_UPDATED" } });
         expect(yield* emailInDb(user.id)).toBe(user.email);
       }),
     ));
@@ -46,7 +46,7 @@ describe("公開している経路からはメールアドレスを変更でき�
           auth.api.changeEmail({ headers, body: { newEmail } }),
         );
 
-        expect(rejected).toMatchObject({ body: { code: "CHANGE_EMAIL_DISABLED" } });
+        expect(rejected.cause).toMatchObject({ body: { code: "CHANGE_EMAIL_DISABLED" } });
         expect(yield* emailInDb(user.id)).toBe(user.email);
       }),
     ));

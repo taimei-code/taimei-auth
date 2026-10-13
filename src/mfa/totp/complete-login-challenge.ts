@@ -22,8 +22,10 @@ export const completeLoginChallenge = Effect.fnUntraced(function* (
 
   // コードの消費はチャレンジの消費より後。逆順だと並行して負けた側が再生成できないリカバリーコードを使い切る。
   const matched = yield* matchOwnedCode(challenge.userId, input).pipe(
-    Effect.catchTag("NotEnabled", () => new ChallengeExpired()),
-    Effect.catchTag("InvalidCode", rejectWrongCode),
+    Effect.catchTags({
+      NotEnabled: () => new ChallengeExpired(),
+      InvalidCode: rejectWrongCode,
+    }),
   );
   const clearCookie = yield* consumeLoginChallenge(challenge.challengeId);
   yield* consumeMatchedCode(challenge.userId, matched);

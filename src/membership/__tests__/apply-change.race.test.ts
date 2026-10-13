@@ -48,10 +48,9 @@ describe("OWNER race", () => {
                 targetRole: "OWNER",
               }),
             );
-          const results = yield* Effect.all(
-            owners.map((o) => leave(o.id)),
-            { concurrency: "unbounded" },
-          ).pipe(Effect.provide(slowDelete));
+          const results = yield* Effect.forEach(owners, (o) => leave(o.id), {
+            concurrency: "unbounded",
+          }).pipe(Effect.provide(slowDelete));
 
           const failed = results.filter(Exit.isFailure);
           expect(failed.length).toBe(1);
