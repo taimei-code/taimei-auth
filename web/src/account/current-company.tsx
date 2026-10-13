@@ -1,14 +1,14 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Exit } from "effect";
 import { AsyncResult } from "effect/reactivity";
-import { createContext, use, useCallback, useMemo, type ReactNode } from "react";
+import { createContext, use, useMemo, type ReactNode } from "react";
 
 import type { CompanyState } from "@core/account/account-contract";
 import type { Unauthorized } from "@core/membership/guard/errors";
 
-import { useRefreshAndWait } from "../shared/atom-runtime";
+import { useWaitForValue } from "../shared/atom-runtime";
 import { notifyAfterRefresh, notifyError } from "../shared/notify";
-import { companyStateAtom, switchCompanyAtom } from "./account-atom";
+import { companyStateAtom, useSwitchCompanyRequest } from "./account-atom";
 
 export type Membership = CompanyState["memberships"][number];
 
@@ -19,11 +19,7 @@ type CompanyStateView = {
   currentMembership: Membership | null;
 };
 
-type CurrentCompanyContextValue = CompanyStateView & {
-  refresh: () => Promise<void>;
-};
-
-const CurrentCompanyContext = createContext<CurrentCompanyContextValue | null>(null);
+const CurrentCompanyContext = createContext<CompanyStateView | null>(null);
 
 const EMPTY_COMPANY_STATE: CompanyState = { current_company_id: null, memberships: [] };
 
@@ -43,18 +39,12 @@ const toCompanyStateView = (
 
 export const CurrentCompanyProvider = ({ children }: { children: ReactNode }) => {
   const result = useAtomValue(companyStateAtom);
-  const refreshCompanyState = useRefreshAndWait(companyStateAtom);
-  const refresh = useCallback(
-    () => refreshCompanyState().then(() => undefined),
-    [refreshCompanyState],
-  );
-
-  const value = useMemo(() => ({ ...toCompanyStateView(result), refresh }), [result, refresh]);
+  const value = useMemo(() => toCompanyStateView(result), [result]);
 
   return <CurrentCompanyContext value={value}>{children}</CurrentCompanyContext>;
 };
 
-export const useCurrentCompany = (): CurrentCompanyContextValue => {
+export const useCurrentCompany = (): CompanyStateView => {
   const context = use(CurrentCompanyContext);
   if (!context) {
     throw new Error("useCurrentCompany must be used within CurrentCompanyProvider");
@@ -62,19 +52,18 @@ export const useCurrentCompany = (): CurrentCompanyContextValue => {
   return context;
 };
 
-// 切替の atom は画面の間で 1 つなので、実行中に別の画面から呼ぶと前の呼び出しが中断される
 export const useSwitchCompany = () => {
-  const { refresh } = useCurrentCompany();
-  const requestSwitch = useAtomSet(switchCompanyAtom, { mode: "promiseExit" });
-  const switchPending = AsyncResult.isWaiting(useAtomValue(switchCompanyAtom));
+  const { request, pending } = useSwitchCompanyRequest();
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
   const switchCompany = (companyId: string): Promise<void> =>
-    switchPending
+    pending
       ? Promise.resolve()
-      : requestSwitch({ payload: { company_id: companyId } }).then(
+      : request(companyId).then(
           Exit.match({
-            onSuccess: () => notifyAfterRefresh(refresh, { staleShort: "事業所を切り替えました" }),
+            onSuccess: () =>
+              notifyAfterRefresh(waitForCompanyState, { staleShort: "事業所を切り替えました" }),
             onFailure: () => notifyError("事業所を切り替えられませんでした。"),
           }),
         );
-  return { switchCompany, switchPending };
+  return { switchCompany, switchPending: pending };
 };

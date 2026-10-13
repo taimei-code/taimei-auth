@@ -1,10 +1,11 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { useState, type FormEvent, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 
 import type { OrgCode } from "@core/company/org-code";
 
+import { companyStateAtom } from "../account/account-atom";
+import { useWaitForValue } from "../shared/atom-runtime";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -19,20 +20,20 @@ import {
   DialogTrigger,
 } from "../shared/ui/dialog";
 import { OrgCodeField } from "./OrgCodeField";
-import { addCompanyAtom } from "./company-atom";
+import { useAddCompany } from "./company-atom";
 
 type Props = {
-  onCreated: () => Promise<unknown>;
   trigger: ReactNode;
 };
 
-export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
+export const AddCompanyDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("CORPORATE");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const addCompany = useAtomSet(addCompanyAtom, { mode: "promiseExit" });
+  const addCompany = useAddCompany();
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
 
   const reset = () => {
     setName("");
@@ -51,13 +52,13 @@ export const AddCompanyDialog = ({ onCreated, trigger }: Props) => {
     const trimmedName = name.trim();
     setSubmitting(true);
     setErrorMessage(null);
-    addCompany({ payload: { name: trimmedName, org_code: orgCode } })
+    addCompany({ name: trimmedName, org_code: orgCode })
       .then(
         Exit.match({
           onSuccess: () => {
             reset();
             setOpen(false);
-            return notifyAfterRefresh(onCreated, {
+            return notifyAfterRefresh(waitForCompanyState, {
               done: `「${trimmedName}」を作成し、現在の事業所に切り替えました。`,
               staleShort: "事業所を作成しました",
             });

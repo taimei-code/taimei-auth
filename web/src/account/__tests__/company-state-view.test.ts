@@ -26,7 +26,7 @@ const state: CompanyState = {
 };
 
 const Probe = () => {
-  const { refresh: _refresh, ...view } = useCurrentCompany();
+  const view = useCurrentCompany();
   return createElement("pre", null, JSON.stringify(view));
 };
 

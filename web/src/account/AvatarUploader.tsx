@@ -6,6 +6,7 @@ import { authClient } from "../auth/auth-client";
 import { Avatar, AvatarFallback, AvatarImage } from "../shared/ui/avatar";
 import { Input } from "../shared/ui/input";
 import { Label } from "../shared/ui/label";
+import { AVATAR_UPLOAD_TOKEN_PATH } from "./account-atom";
 
 type Props = {
   initialImageUrl: string;
@@ -24,7 +25,7 @@ export const AvatarUploader = ({ initialImageUrl, fallbackName }: Props) => {
     setErrorMessage(null);
     upload(file.name, file, {
       access: "public",
-      handleUploadUrl: "/api/account/avatar/upload-token",
+      handleUploadUrl: AVATAR_UPLOAD_TOKEN_PATH,
     })
       .then((blob) => {
         setImageUrl(blob.url);

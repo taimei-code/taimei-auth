@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
@@ -8,18 +7,18 @@ import { discardStaleSession } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
 import { failureMessage } from "../shared/failure-message";
 import { Button } from "../shared/ui/button";
-import { deleteAccountAtom } from "./account-atom";
+import { useDeleteAccount } from "./account-atom";
 
 const DELETE_FAILED = "退会処理に失敗しました";
 
 export const DangerZone = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const requestDeletion = useAtomSet(deleteAccountAtom, { mode: "promiseExit" });
+  const requestDeletion = useDeleteAccount();
 
   const deleteAccount = async () => {
     setErrorMessage(null);
-    const exit = await requestDeletion({});
+    const exit = await requestDeletion();
     if (Exit.isFailure(exit)) {
       setErrorMessage(
         failureMessage(

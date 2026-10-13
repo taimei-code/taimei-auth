@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
@@ -21,14 +20,14 @@ import {
 import { Input } from "../../shared/ui/input";
 import { Label } from "../../shared/ui/label";
 import { OrgCodeField } from "../OrgCodeField";
-import { createCompanyAtom } from "../company-atom";
+import { useCreateCompany } from "../company-atom";
 
 const route = getRouteApi("/auth/signup/company");
 
 export const SignUpCompany = () => {
   const redirectUrl = route.useSearch().redirect_url;
   const navigate = useNavigate();
-  const createCompany = useAtomSet(createCompanyAtom, { mode: "promiseExit" });
+  const createCompany = useCreateCompany();
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
   const [submitting, setSubmitting] = useState(false);
@@ -38,7 +37,7 @@ export const SignUpCompany = () => {
     e.preventDefault();
     setSubmitting(true);
     setErrorMessage(null);
-    createCompany({ payload: { name: name.trim(), org_code: orgCode } }).then(
+    createCompany({ name: name.trim(), org_code: orgCode }).then(
       Exit.match({
         onSuccess: () => window.location.replace(redirectUrl),
         onFailure: (cause) => {

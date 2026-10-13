@@ -1,4 +1,4 @@
-import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useAtomValue } from "@effect/atom-react";
 import { Exit } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
@@ -7,7 +7,8 @@ import { Loader2 } from "lucide-react";
 import type { Member } from "@core/membership/membership-contract";
 
 import { useSelfUserId } from "../auth/auth-client";
-import { failedBeforeAnyValue } from "../shared/atom-runtime";
+import { companyStateAtom } from "../account/account-atom";
+import { failedBeforeAnyValue, useWaitForValue } from "../shared/atom-runtime";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import {
@@ -19,12 +20,12 @@ import {
   DialogTrigger,
 } from "../shared/ui/dialog";
 import { memberLabel } from "./member-label";
-import { membersOf, transferOwnershipAtom } from "./membership-atom";
+import { membersOf, useTransferOwnership } from "./membership-atom";
 
 type Props = {
   companyId: string;
   companyName: string;
-  onTransferred: () => Promise<unknown>;
+  onTransferred: () => void;
   trigger: React.ReactNode;
 };
 
@@ -35,6 +36,7 @@ export const TransferOwnershipModal = ({
   trigger,
 }: Props) => {
   const [open, setOpen] = useState(false);
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -50,7 +52,8 @@ export const TransferOwnershipModal = ({
           companyId={companyId}
           onTransferred={(to) => {
             setOpen(false);
-            return notifyAfterRefresh(onTransferred, {
+            onTransferred();
+            return notifyAfterRefresh(waitForCompanyState, {
               done: `${memberLabel(to)} にオーナーを委譲しました。`,
               staleShort: "オーナーを委譲しました",
             });
@@ -96,7 +99,7 @@ const TransferPicker = ({
   candidates,
   onTransferred,
 }: TransferCandidatesProps & { candidates: readonly Member[] }) => {
-  const transferOwnership = useAtomSet(transferOwnershipAtom, { mode: "promiseExit" });
+  const transferOwnership = useTransferOwnership();
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
   const [transferFailed, setTransferFailed] = useState(false);
 
@@ -104,7 +107,7 @@ const TransferPicker = ({
     if (busyUserId) return;
     setBusyUserId(to.user_id);
     setTransferFailed(false);
-    transferOwnership({ params: { companyId }, payload: { to_user_id: to.user_id } })
+    transferOwnership(companyId, to.user_id)
       .then(
         Exit.match({
           onSuccess: () => onTransferred(to),
