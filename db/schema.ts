@@ -11,7 +11,7 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 import { inArray, relations } from "drizzle-orm";
-import { ROLES, type OrgCode, type Role } from "./enums";
+import { ORG_CODES, ROLES, type OrgCode, type Role } from "./enums";
 
 export type { OrgCode, Role } from "./enums";
 
@@ -19,18 +19,25 @@ export type ActivationStatus = "ACTIVE" | "DELETED";
 
 export type InvitationStatus = "PENDING" | "ACCEPTED" | "REVOKED";
 
-export const company = pgTable("company", {
-  id: text("id").primaryKey().notNull(),
-  name: text("name").notNull(),
-  orgCode: text("org_code").$type<OrgCode>().notNull(),
-  activationStatus: text("activation_status").$type<ActivationStatus>().notNull().default("ACTIVE"),
-  deletedAt: timestamp("deleted_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const company = pgTable(
+  "company",
+  {
+    id: text("id").primaryKey().notNull(),
+    name: text("name").notNull(),
+    orgCode: text("org_code").$type<OrgCode>().notNull(),
+    activationStatus: text("activation_status")
+      .$type<ActivationStatus>()
+      .notNull()
+      .default("ACTIVE"),
+    deletedAt: timestamp("deleted_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [check("company_org_code_check", inArray(table.orgCode, ORG_CODES).inlineParams())],
+);
 
 export const user = pgTable(
   "user",

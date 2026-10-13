@@ -1,0 +1,1 @@
+ALTER TABLE "company" ADD CONSTRAINT "company_org_code_check" CHECK ("company"."org_code" in ('PERSONAL', 'CORPORATE'));

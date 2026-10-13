@@ -34,5 +34,6 @@ Accepted (2026-09-11)。判断主体は maintainer。設計上の論点と採ら
 - SPA は `getJson<T>` の `as T` で応答を信じるため、CHECK の保証は web には及ばない。web の `role: Role` 宣言は他の field と同じ信頼水準である。web の応答を zod で読む本物の parse は別件とする
   - (2026-10-11 追記) #264 で web は SPA の API の応答を契約 (ADR-0017「SPA の API 契約」) の Schema で decode するようになり、`getJson` は消えた。`role` は `RoleSchema` の 3 値で decode され、それ以外の値は client で decode の失敗になる
 - 同じ手法が `org_code` / `activation_status` / `invitation.status` の text 列に使える
+  - (2026-10-13 追記) `company.org_code` にも同じ CHECK を置いた (migration `0013`)。SPA の契約が `company_org_code` を `ORG_CODES` の値だけで encode するので、DB に他の値が 1 行あると、その事業所の member 全員の一覧が 500 になるためである。本番の値は確認していないので、違反行があれば migration で deploy が止まる
 - prototype pollution 系のテスト (`"toString"` / `"constructor"`) は、引数が `Role` になり型で表現できなくなるため、`@ts-expect-error` の型レベルのテスト 1 件に置き換えた
 - `recordInvitationAcceptRejected` の `reason` は `string` のまま (db/ が src/ の型を import しない分担のため)。監視 query が `reason = 'unknown_invited_role'` を参照していても、値が来なくなるだけで query は壊れない
