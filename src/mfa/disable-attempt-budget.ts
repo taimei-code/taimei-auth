@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { TtlStore } from "../ttl-store-service";
 import { captureCause } from "../sentry";
 import { spendAttemptBudgetFailClosed } from "../attempt-budget";
-import { Locked } from "./error-mapping";
+import { Locked } from "./errors";
 
 // セッション有りの経路で 6 桁コードの総当たりを止める唯一の防御。
 

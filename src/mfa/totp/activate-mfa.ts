@@ -1,18 +1,18 @@
 import { Clock, Effect } from "effect";
-import { appendAuditLogBestEffort } from "../../audit/report-failure";
+import { appendAuditBestEffort } from "../../audit/append";
 import { getClientContext } from "../../request-context";
-import { AlreadyEnabled, EnrollmentChanged, InvalidCode, MfaNotFound } from "../error-mapping";
+import { AlreadyEnabled, EnrollmentChanged, InvalidCode, MfaNotFound } from "../errors";
 import { notifyMfaEnabled } from "../notification-adapter";
 import { isMfaEnabled } from "../policy";
-import type { MfaTotpActor, TotpSessionChanges } from "./contracts";
 import { decryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { matchTotpCode } from "./totp-engine";
+import type { Actor } from "../../account/actor-contract";
 
 // revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
 export const activate = Effect.fnUntraced(function* (input: {
-  actor: MfaTotpActor;
+  actor: Pick<Actor, "id" | "email">;
   headers: Headers;
   enrollmentId: string;
   code: string;
@@ -36,11 +36,11 @@ export const activate = Effect.fnUntraced(function* (input: {
   }
 
   const { ip, userAgent } = getClientContext(input.headers);
-  yield* appendAuditLogBestEffort({
+  yield* appendAuditBestEffort({
     eventType: "mfa_enabled",
     userId: input.actor.id,
     payload: { ip, userAgent },
   });
   yield* notifyMfaEnabled(input.actor.email);
-  return { sessionChanges } satisfies TotpSessionChanges;
+  return { sessionChanges };
 });

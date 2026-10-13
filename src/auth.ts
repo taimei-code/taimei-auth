@@ -4,8 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
-import { mfaChallenge } from "./auth-plugins/mfa-challenge";
-import { signInObserver } from "./auth-plugins/sign-in-observer";
+import { primaryAuth } from "./auth-plugins/primary-auth";
 import { getAppName } from "./email/client";
 import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
@@ -85,8 +84,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         // Hono middleware (rate-limit.ts) と独立した二重の防御。local はテストを速くするため緩める。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
-      mfaChallenge(runtime),
-      signInObserver(runtime),
+      primaryAuth(runtime),
     ],
 
     session: {

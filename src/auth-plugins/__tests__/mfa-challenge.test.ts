@@ -21,12 +21,14 @@ import {
   readLoginChallengeState,
 } from "../../mfa/totp/login-challenge";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
+import { withWaitUntil } from "../../background";
 import { type AppRuntime, getRuntime } from "../../runtime";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
-import { partial, runTest, withSpy } from "../../__tests__/live-runner";
+import { auditRowsFor, partial, runTest, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS, mfaChallenge } from "../mfa-challenge";
+import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS } from "../mfa-challenge";
+import { primaryAuth } from "../primary-auth";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
 import { testKvStore, testTtlStore } from "../../__tests__/test-ttl-store";
 
@@ -122,8 +124,8 @@ const runOAuthCallbackHook = (
         },
       };
 
-      const afterHook = mfaChallenge(runtime).hooks?.after?.[0];
-      if (!afterHook) throw new Error("mfa-challenge plugin has no after hook");
+      const afterHook = primaryAuth(runtime).hooks?.after?.[0];
+      if (!afterHook) throw new Error("primary-auth plugin has no after hook");
       expect(afterHook.matcher(ctx as never)).toBe(true);
 
       const thrown = await Promise.resolve(afterHook.handler(ctx as never)).then(
@@ -171,6 +173,7 @@ describe("チャレンジ強制プラグイン", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
+        expect((yield* auditRowsFor(user.id, "sign_in")).length).toBe(0);
       }),
     ));
 
@@ -336,6 +339,75 @@ describe("チャレンジ強制プラグイン", () => {
       ),
     ));
 
+  test("チャレンジの判定で runtime が使えなくても、kill switch off なら sign_in の記帳を試みる", () =>
+    run(
+      withKillSwitchOff(
+        Effect.gen(function* () {
+          const user = yield* (yield* TestDb).seedUser("down-once");
+          const live = getRuntime();
+          const background: Promise<unknown>[] = [];
+          let calls = 0;
+          const failsOnce = partial<AppRuntime>({
+            runPromise: ((effect: Parameters<AppRuntime["runPromise"]>[0]) =>
+              calls++ === 0
+                ? Promise.reject(new Error("runtime down"))
+                : withWaitUntil(
+                    (promise) => background.push(promise),
+                    () => live.runPromise(effect),
+                  )) as AppRuntime["runPromise"],
+          });
+          yield* withSpy(
+            () => spyOn(console, "error").mockImplementation(() => {}),
+            () =>
+              runOAuthCallbackHook(
+                { session: { token: "token-down-once" }, user: { id: user.id } },
+                failsOnce,
+              ),
+          );
+          yield* Effect.promise(() => Promise.all(background));
+          expect((yield* auditRowsFor(user.id, "sign_in")).length).toBe(1);
+        }),
+      ),
+    ));
+
+  test("MFA の登録状態を読めない時は、session を確立せずチャレンジの画面へ移し、sign_in を記帳しない", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* (yield* TestDb).seedUser("unreadable-mfa");
+        const enabled = yield* enableMfaFor(user);
+        const live = getRuntime();
+        const background: Promise<unknown>[] = [];
+        const unreadableMfa = Layer.effect(
+          MfaTotpRepo,
+          Effect.map(MfaTotpRepo, (repo) =>
+            MfaTotpRepo.of({
+              ...repo,
+              readMfaVerification: () =>
+                Effect.fail(new DbError({ cause: new Error("mfa_totp unavailable") })),
+            }),
+          ),
+        );
+        const runtime = partial<AppRuntime>({
+          runPromise: ((effect: Parameters<AppRuntime["runPromise"]>[0]) =>
+            withWaitUntil(
+              (promise) => background.push(promise),
+              () => live.runPromise(Effect.provide(effect, unreadableMfa)),
+            )) as AppRuntime["runPromise"],
+        });
+
+        const outcome = yield* runOAuthCallbackHook(
+          { session: { token: enabled.session.token }, user: { id: user.id } },
+          runtime,
+        );
+        yield* Effect.promise(() => Promise.all(background));
+
+        expect(outcome.redirectStatus).toBe(302);
+        expect(new URL(outcome.redirectedTo as string).pathname).toBe(CHALLENGE_PAGE_PATH);
+        expect(outcome.newSessionUpdates).toEqual([null]);
+        expect((yield* auditRowsFor(user.id, "sign_in")).length).toBe(0);
+      }),
+    ));
+
   test("QA-R-02 連携がチャレンジ誘発しない (実 OAuth は QA-MR-02)", () =>
     run(
       Effect.gen(function* () {
@@ -359,6 +431,27 @@ describe("チャレンジ強制プラグイン", () => {
         expect(signingIn.newSessionUpdates).toEqual([null]);
         expect(yield* countLiveSessions([enabled.session.token])).toBe(0);
       }),
+    ));
+
+  // kill switch の通知時刻の Ref を進めるので、QA-D-11 より後に置く。
+  test("kill switch で止めている時は、MFA の有効な user も session が確立し、sign_in を 1 行記帳する", () =>
+    run(
+      withKillSwitchOff(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const user = yield* db.seedUser("kill-switch-sign-in");
+          yield* enableMfaFor(user);
+
+          const login = yield* loginWithMagicLink({
+            email: user.email,
+            callbackURL: CONSUMER_CALLBACK,
+          });
+
+          expect(login.location?.href).toBe(CONSUMER_CALLBACK);
+          expect(yield* issuedSessionCookieCount(login.response.headers)).toBe(1);
+          expect((yield* auditRowsFor(user.id, "sign_in")).length).toBe(1);
+        }),
+      ),
     ));
 });
 

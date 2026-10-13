@@ -7,7 +7,6 @@ import { AuthApi } from "../../auth-service";
 import { TtlStore } from "../../ttl-store-service";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
-import type { MfaTotpActor } from "../totp/contracts";
 import {
   attemptsKey,
   challengeKey,
@@ -16,6 +15,7 @@ import {
 } from "../totp/login-challenge";
 import { observing } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import type { Actor } from "../../account/actor-contract";
 
 // 状態を DB へ直接書くと暗号化 secret とコードの対応が伴わず後続の検証が偽陽性になるため、生成は production と同じ経路を通す。
 
@@ -98,7 +98,7 @@ export function setCookieValue(setCookie: string): string {
   return pair.slice(pair.indexOf("=") + 1);
 }
 
-export function actorOf(user: { id: string; email: string }): MfaTotpActor {
+export function actorOf(user: { id: string; email: string }): Pick<Actor, "id" | "email"> {
   return { id: user.id, email: user.email };
 }
 
@@ -140,7 +140,7 @@ export const countRecoveryCodeRows = (userId: string) =>
   TestDb.use((db) => db.readRecoveryCodes(userId)).pipe(Effect.map((rows) => rows.length));
 
 type EnabledMfaUser = {
-  actor: MfaTotpActor;
+  actor: Pick<Actor, "id" | "email">;
   secret: string;
   recoveryCodes: string[];
   enrollmentId: string;

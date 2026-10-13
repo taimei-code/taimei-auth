@@ -3,15 +3,18 @@ import type { MfaTotpRow } from "@/db/repositories/mfa-totp";
 import { getAppName } from "../../email/client";
 import { IdGenerator } from "../../id-generator";
 import { Transaction } from "../../transaction";
-import { AlreadyEnabled, ChallengeExpired } from "../error-mapping";
+import { AlreadyEnabled, ChallengeExpired } from "../errors";
 import { isMfaEnabled } from "../policy";
-import type { MfaTotpActor, TotpEnrollmentMaterial } from "./contracts";
 import { codeCipher, decryptText, decryptValue, encryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { generateRecoveryCodes } from "./recovery-codes";
 import { buildTotpUri, generateTotpSecret } from "./totp-engine";
+import type { Actor } from "../../account/actor-contract";
 
-const replayPendingEnrollment = Effect.fnUntraced(function* (actor: MfaTotpActor, row: MfaTotpRow) {
+const replayPendingEnrollment = Effect.fnUntraced(function* (
+  actor: Pick<Actor, "id" | "email">,
+  row: MfaTotpRow,
+) {
   if (isMfaEnabled(row)) return yield* new AlreadyEnabled();
 
   const ring = yield* MfaKeyring.use((k) => k.ring);
@@ -27,10 +30,10 @@ const replayPendingEnrollment = Effect.fnUntraced(function* (actor: MfaTotpActor
     enrollmentId: row.enrollmentId,
     totpUri: buildTotpUri({ issuer: getAppName(), accountLabel: actor.email, secret }),
     recoveryCodes,
-  } satisfies TotpEnrollmentMaterial;
+  };
 });
 
-export const enroll = Effect.fnUntraced(function* (input: { actor: MfaTotpActor }) {
+export const enroll = Effect.fnUntraced(function* (input: { actor: Pick<Actor, "id" | "email"> }) {
   const mfa = yield* MfaTotpRepo;
   const existing = yield* mfa.findMfaTotp(input.actor.id);
   if (existing) return yield* replayPendingEnrollment(input.actor, existing);
@@ -82,7 +85,7 @@ export const enroll = Effect.fnUntraced(function* (input: { actor: MfaTotpActor 
       enrollmentId,
       totpUri: buildTotpUri({ issuer: getAppName(), accountLabel: input.actor.email, secret }),
       recoveryCodes,
-    } satisfies TotpEnrollmentMaterial;
+    };
   }
 
   // 並行して負けた側は勝者の内容を返す。行が消えていれば最初からやり直させる。

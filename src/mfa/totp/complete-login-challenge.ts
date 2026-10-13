@@ -1,10 +1,9 @@
 import { Effect } from "effect";
-import { appendAuditLogBestEffort } from "../../audit/report-failure";
+import { appendAuditBestEffort, signInEntry } from "../../audit/append";
 import { AuthApi } from "../../auth-service";
-import { getClientContext } from "../../request-context";
-import { ChallengeExpired } from "../error-mapping";
+import { ChallengeExpired } from "../errors";
 import { validateChallengeRedirect } from "../redirect-guard";
-import type { MfaCodeKind } from "../client-facing-contracts";
+import type { MfaCodeKind } from "../mfa-contract";
 import {
   consumeLoginChallenge,
   peekLoginChallenge,
@@ -32,12 +31,7 @@ export const completeLoginChallenge = Effect.fnUntraced(function* (
   // 失敗を握ると session の無い成功応答になる。
   const sessionHeaders = yield* AuthApi.use((authApi) => authApi.issueSession(challenge.userId));
 
-  const { ip, userAgent } = getClientContext(headers);
-  yield* appendAuditLogBestEffort({
-    eventType: "sign_in",
-    userId: challenge.userId,
-    payload: { method: challenge.method, ip, userAgent },
-  });
+  yield* appendAuditBestEffort(signInEntry(challenge.userId, challenge.method, headers));
 
   // set だと前段の Set-Cookie が消える。
   for (const cookie of clearCookie.getSetCookie()) sessionHeaders.append("set-cookie", cookie);

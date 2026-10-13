@@ -9,7 +9,8 @@ import {
   findMfaTotpRow,
 } from "../../src/mfa/__tests__/helpers";
 import { enroll } from "../../src/mfa/totp";
-import { forceDisableMfa, toDisableUserMfaReport } from "../disable-user-mfa";
+import { forceDisableMfa } from "../../src/mfa/totp/disable-mfa";
+import { toDisableUserMfaReport } from "../disable-user-mfa";
 
 describe("toDisableUserMfaReport", () => {
   test("changed success is stdout with notified", () => {

@@ -7,7 +7,7 @@ import { isLocalEnvironment } from "../../env";
 import { TtlStore } from "../../ttl-store-service";
 import { captureCause, SentryService } from "../../sentry";
 import { spendAttemptBudgetFailClosed } from "../../attempt-budget";
-import { ChallengeExpired, type InvalidCode, Locked } from "../error-mapping";
+import { ChallengeExpired, type InvalidCode, Locked } from "../errors";
 
 const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
 

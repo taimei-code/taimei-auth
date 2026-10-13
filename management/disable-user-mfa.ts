@@ -1,44 +1,5 @@
-import { Effect } from "effect";
-import { UserRepo } from "../src/account/ports";
-import { appendAuditLogBestEffort } from "../src/audit/report-failure";
-import { notifyMfaDisabledForManagement } from "../src/mfa/notification-adapter";
-import { isMfaEnabled } from "../src/mfa/policy";
-import { MfaTotpRepo } from "../src/mfa/totp/ports";
 import { bootInMemory } from "../src/boot";
-import { Transaction } from "../src/transaction";
-
-export type ForceDisableResult =
-  | { ok: false; error: "not_found" }
-  | { ok: true; changed: false }
-  | { ok: true; changed: true; notified: boolean };
-
-export const forceDisableMfa = Effect.fnUntraced(function* (userId: string) {
-  const users = yield* UserRepo;
-  const mfa = yield* MfaTotpRepo;
-  const tx = yield* Transaction;
-
-  const user = yield* users.findUserById(userId);
-  if (!user) return { ok: false, error: "not_found" } satisfies ForceDisableResult;
-  const wasEnabled = isMfaEnabled(yield* mfa.readMfaVerification(userId));
-
-  const deleted = yield* tx.run(
-    Effect.fnUntraced(function* (t) {
-      const rows = yield* mfa.deleteMfaTotp(userId, t);
-      yield* mfa.deleteRecoveryCodesByUserId(userId, t);
-      return rows;
-    }),
-  );
-  if (deleted === 0 || !wasEnabled)
-    return { ok: true, changed: false } satisfies ForceDisableResult;
-
-  yield* appendAuditLogBestEffort({
-    eventType: "mfa_disabled",
-    userId,
-    payload: { ip: null, userAgent: "management/disable-user-mfa" },
-  });
-  const notified = yield* notifyMfaDisabledForManagement(user.email);
-  return { ok: true, changed: true, notified } satisfies ForceDisableResult;
-});
+import { type ForceDisableResult, forceDisableMfa } from "../src/mfa/totp/disable-mfa";
 
 type DisableUserMfaReport = {
   stream: "stdout" | "stderr";
