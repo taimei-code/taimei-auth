@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  acceptInvitationSearchSchema,
-  parseRedirectTarget,
-  redirectUrlAfterAccept,
-} from "../redirect-target";
+import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
+
+import { parseRedirectTarget, redirectUrlAfterAccept } from "../redirect-target";
 
 const REDIRECT_URL = "https://app.taimei-code.com/dashboard";
 const search = (params: Record<string, string>) =>

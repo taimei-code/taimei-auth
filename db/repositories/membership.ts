@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { company, membership, type Role, user } from "../schema";
+import { company, membership, type OrgCode, type Role, user } from "../schema";
 import type { DbOrTx, DbTx } from "../transaction";
 
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
@@ -33,7 +33,7 @@ export type InviterSeen =
 
 export type MembershipWithCompany = MembershipRow & {
   companyName: string;
-  companyOrgCode: string;
+  companyOrgCode: OrgCode;
   companyActivationStatus: string;
 };
 

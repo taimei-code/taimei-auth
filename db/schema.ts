@@ -11,11 +11,9 @@ import {
   check,
 } from "drizzle-orm/pg-core";
 import { inArray, relations } from "drizzle-orm";
+import { ROLES, type OrgCode, type Role } from "./enums";
 
-export const ROLES = ["OWNER", "ADMIN", "MEMBER"] as const;
-export type Role = (typeof ROLES)[number];
-
-export type OrgCode = "PERSONAL" | "CORPORATE";
+export type { OrgCode, Role } from "./enums";
 
 export type ActivationStatus = "ACTIVE" | "DELETED";
 

@@ -3,8 +3,9 @@ import { Exit } from "effect";
 
 import { ExpiredOrUsed } from "@core/membership/guard/errors";
 
+import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
+
 import { acceptInvitationOutcome } from "../accept-invitation";
-import { acceptInvitationSearchSchema } from "../redirect-target";
 
 const searchWith = (params: Record<string, string>) => acceptInvitationSearchSchema.parse(params);
 const accepted = Exit.succeed({ ok: true as const, company_id: "company-1" });

@@ -8,6 +8,11 @@ import {
 import type { AtomRegistry } from "effect/reactivity";
 import type { ReactNode } from "react";
 
+import {
+  ACCEPT_INVITATION_ROUTE,
+  acceptInvitationSearchSchema,
+  redirectTargetSearchSchema,
+} from "@core/invitation/accept-path";
 import { signInParamsSchema } from "@core/sign-in-params";
 
 import { companyStateAtom } from "../account/account-atom";
@@ -34,10 +39,6 @@ import { CompanySettings } from "../company/pages/CompanySettings";
 import { SignUpCompany } from "../company/pages/SignUpCompany";
 import { acceptInvitation } from "../invitation/accept-invitation";
 import { SignUpAcceptInvitation } from "../invitation/pages/SignUpAcceptInvitation";
-import {
-  acceptInvitationSearchSchema,
-  redirectTargetSearchSchema,
-} from "../invitation/redirect-target";
 import { Members } from "../membership/pages/Members";
 import { mfaChallengeObservationOf, mfaChallengeStateAtom } from "../mfa/mfa-atom";
 import { MfaChallengeLoading } from "../mfa/MfaChallengeView";
@@ -118,7 +119,7 @@ const companySignupRoute = createRoute({
 
 const acceptInvitationRoute = createRoute({
   getParentRoute: () => authRoute,
-  path: "/signup/accept-invitation",
+  path: ACCEPT_INVITATION_ROUTE,
   validateSearch: acceptInvitationSearchSchema,
   loaderDeps: ({ search }) => acceptInvitationSearchSchema.parse(search),
   loader: async ({ context, deps, location }) => {

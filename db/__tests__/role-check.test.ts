@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { db } from "../client";
-import { ROLES } from "../schema";
+import { ROLES } from "../enums";
 import { readInvitation, readMembership } from "../testing/read";
 import { createSeed } from "../testing/seed";
 

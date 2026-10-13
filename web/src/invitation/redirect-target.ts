@@ -1,17 +1,10 @@
-import { z } from "zod";
+import type { z } from "zod";
 
+import {
+  type acceptInvitationSearchSchema,
+  type redirectTargetSearchSchema,
+} from "@core/invitation/accept-path";
 import { type RedirectTarget, redirectTargetSchema } from "@core/sign-in-params";
-
-const optionalString = z.string().optional().catch(undefined);
-
-export const redirectTargetSearchSchema = z.object({
-  service_name: optionalString,
-  redirect_url: optionalString,
-});
-
-export const acceptInvitationSearchSchema = redirectTargetSearchSchema.extend({
-  invitation_token: optionalString,
-});
 
 export type RedirectTargetSearch = z.output<typeof redirectTargetSearchSchema>;
 

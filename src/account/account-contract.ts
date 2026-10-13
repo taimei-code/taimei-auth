@@ -2,7 +2,9 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { LastOwner } from "../membership/errors";
 import { Forbidden, NotFound } from "../membership/guard/errors";
-import { Id, Ok, RoleSchema } from "../membership/membership-contract";
+import { OrgCodeSchema } from "../company/company-contract";
+import { RoleSchema } from "../membership/membership-contract";
+import { Id, Ok } from "../spa-contract-schemas";
 import { Authenticated } from "./actor-contract";
 
 const CompanyState = Schema.Struct({
@@ -12,7 +14,7 @@ const CompanyState = Schema.Struct({
       id: Schema.String,
       company_id: Schema.String,
       company_name: Schema.String,
-      company_org_code: Schema.String,
+      company_org_code: OrgCodeSchema,
       role: RoleSchema,
       joined_at: Schema.String,
     }),

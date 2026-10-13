@@ -14,7 +14,7 @@ import { getAppUrl } from "../../email/client";
 import { tryAuthApi } from "../../errors";
 import { acceptInvitationPath } from "../accept-path";
 import { createInvitation } from "../create";
-import { RateLimited } from "../errors";
+import { RateLimited } from "../../membership/guard/errors";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const { run, cleanup } = dbTest(TEST_PREFIX);
@@ -133,7 +133,7 @@ describe("createInvitation (use-case)", () => {
         const e = yield* Effect.flip(
           createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
         );
-        expectFailure(e, RateLimited, "rate_limited", 429);
+        expectFailure(e, RateLimited);
         expect((yield* invitationRowsByEmail(co, email)).length).toBe(0);
         expect((yield* auditRowsFor(owner.id, "invitation_sent")).length).toBe(0);
       }),
@@ -370,6 +370,27 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
         expect(callbackURL?.searchParams.get("invitation_token")).toBe(row?.token);
         expect(callbackURL?.searchParams.get("service_name")).toBe(REDIRECT_TARGET.service_name);
         expect(callbackURL?.searchParams.get("redirect_url")).toBe(REDIRECT_TARGET.redirect_url);
+      }),
+    ));
+
+  test("redirect_target に余分な key を足しても、callbackURL の token は招待の token のままで、余分な key は載らない", () =>
+    run(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* seedOwnerCompany("rt-extra");
+        const magicLinks = recordMagicLinks();
+
+        const res = yield* postInvitation(
+          buildTestApp(owner, { signInMagicLink: magicLinks.signInMagicLink }),
+          co,
+          email,
+          { redirect_target: { ...REDIRECT_TARGET, invitation_token: "forged", extra: "x" } },
+        );
+
+        expect(res.status).toBe(200);
+        const [row] = yield* invitationRowsByEmail(co, email);
+        const [callbackURL] = magicLinks.callbackURLs;
+        expect(callbackURL?.searchParams.getAll("invitation_token")).toEqual([row?.token]);
+        expect(callbackURL?.searchParams.has("extra")).toBe(false);
       }),
     ));
 

@@ -2,12 +2,18 @@ import { Schema, SchemaTransformation } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { z } from "zod";
 import { Authenticated } from "../account/actor-contract";
-import { EmailMismatch, ExpiredOrUsed, Forbidden, NotFound } from "../membership/guard/errors";
-import { CompanyParams, Ok, RoleSchema } from "../membership/membership-contract";
-import { TAIMEI_SERVICES, type ServiceName } from "../services";
-import type { RedirectTarget as SignInRedirectTarget } from "../sign-in-params";
-import { validateRedirectUrl } from "../url-allowlist";
-import { NotFoundOrNotPending, RateLimited } from "./errors";
+import {
+  EmailMismatch,
+  ExpiredOrUsed,
+  Forbidden,
+  NotFound,
+  RateLimited,
+} from "../membership/guard/errors";
+import { RoleSchema } from "../membership/membership-contract";
+import { CompanyParams, Ok } from "../spa-contract-schemas";
+import { SERVICE_NAMES } from "../services";
+import { redirectTargetSchema } from "../sign-in-params";
+import { NotFoundOrNotPending } from "./errors";
 
 const PendingInvitation = Schema.Struct({
   id: Schema.String,
@@ -19,20 +25,14 @@ const PendingInvitation = Schema.Struct({
 
 export type PendingInvitation = typeof PendingInvitation.Type;
 
-const RedirectTarget = Schema.Struct({
-  service_name: Schema.Literals(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]),
-  redirect_url: Schema.String.check(Schema.isBetweenLength(1, 2048)),
+const AllowedRedirectTarget = Schema.Struct({
+  service_name: Schema.Literals(SERVICE_NAMES),
+  redirect_url: Schema.String,
 }).check(
-  Schema.makeFilter((t) => validateRedirectUrl(t.redirect_url, t.service_name), {
+  Schema.makeFilter((target) => redirectTargetSchema.safeParse(target).success, {
     expected: "redirect_url in allowlist",
   }),
 );
-const _redirectTargetMatchesSignInParams: [
-  typeof RedirectTarget.Type,
-  SignInRedirectTarget,
-] extends [SignInRedirectTarget, typeof RedirectTarget.Type]
-  ? true
-  : never = true;
 
 export class InvitationGroup extends HttpApiGroup.make("invitation")
   .add(
@@ -48,7 +48,7 @@ export class InvitationGroup extends HttpApiGroup.make("invitation")
           Schema.decode(SchemaTransformation.toLowerCase()),
         ),
         role: RoleSchema,
-        redirect_target: Schema.optional(RedirectTarget),
+        redirect_target: Schema.optional(AllowedRedirectTarget),
       }),
       success: Schema.Struct({
         invitation: Schema.Struct({

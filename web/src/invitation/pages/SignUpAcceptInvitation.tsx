@@ -1,8 +1,10 @@
 import { getRouteApi } from "@tanstack/react-router";
 
+import { ACCEPT_INVITATION_PATH } from "@core/invitation/accept-path";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../../shared/ui/card";
 
-const route = getRouteApi("/auth/signup/accept-invitation");
+const route = getRouteApi(ACCEPT_INVITATION_PATH);
 
 export const SignUpAcceptInvitation = () => {
   const { message } = route.useLoaderData();
