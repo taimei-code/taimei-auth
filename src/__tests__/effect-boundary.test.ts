@@ -62,12 +62,8 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ).toEqual([]);
   });
 
-  test("AuditLog.appendAuditLog の直呼びと swallowAuditFailure の pipe は src/audit/report-failure.ts (+ invitation accept の record* 経由) だけ", () => {
-    expect(
-      srcFiles("\\.appendAuditLog\\(").filter((f) => f !== "src/audit/report-failure.ts"),
-    ).toEqual([]);
-    const allowed = new Set(["src/audit/report-failure.ts", "src/invitation/accept.ts"]);
-    expect(srcFiles("swallowAuditFailure\\(").filter((f) => !allowed.has(f))).toEqual([]);
+  test("audit log の書き込み (appendAuditLog / appendAuditLogs) を呼ぶのは src/audit/append.ts の 2 つの入口だけ", () => {
+    expect(srcFiles("\\.appendAuditLogs?\\(")).toEqual(["src/audit/append.ts"]);
   });
 
   test("silent な fold (orElseSucceed / Effect.ignore / logError だけの catch) は production src に無く、captureCause の直呼びは fail-closed / void 経路だけ (値に倒す経路は captureCauseAs)", () => {
@@ -75,7 +71,7 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     expect(srcFiles("Effect\\.logError\\(")).toEqual(["src/email/client.ts"]);
     expect(srcFiles("captureCause\\(").sort()).toEqual([
       "src/account/delete-sessions.ts",
-      "src/audit/report-failure.ts",
+      "src/audit/append.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
       "src/handlers/invitation-http-api.ts",
@@ -286,13 +282,13 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
 
 // ManagedRuntime.make は初回 run で Layer を構築するため、失敗し得る Layer (Layer.effect / scoped / unwrap) は本番の初回 request で落ちる。
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
-  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) だけ (Layer.provide は合成だけなので数えない)", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない)", () => {
     const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
       excludeTests: true,
       lines: true,
     });
     const readsContextOnly =
-      /^src\/handlers\/spa-http-api\.ts:(const AuthenticatedLive = Layer\.effect\(|\s*Layer\.effectContext\(getRuntime\(\)\.contextEffect\))/;
+      /^src\/handlers\/spa-http-api\.ts:(const AuthenticatedLive = Layer\.effect\(|\s*Layer\.effectContext\(getRuntime\(\)\.contextEffect\))|^src\/handlers\/attempt-budget-http-api\.ts:\s*Layer\.effect\(/;
     expect(
       hits.filter(
         (line) => !/Layer\.(succeed|mergeAll|provide)\(/.test(line) && !readsContextOnly.test(line),

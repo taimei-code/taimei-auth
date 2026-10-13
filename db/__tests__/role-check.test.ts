@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { db } from "../client";
-import { ROLES } from "../schema";
+import { ORG_CODES, ROLES } from "../enums";
 import { readInvitation, readMembership } from "../testing/read";
 import { createSeed } from "../testing/seed";
 
@@ -85,5 +85,25 @@ describe("role CHECK constraint (ADR-0018)", () => {
       "membership_role_check",
     );
     expect((await readMembership(u.id, co))?.role).toBe("OWNER");
+  });
+});
+
+describe("company.org_code の CHECK 制約", () => {
+  beforeAll(seed.cleanup);
+  afterAll(seed.cleanup);
+
+  test("ORG_CODES の全値で company を作れる", async () => {
+    for (const orgCode of ORG_CODES) {
+      const co = await seed.seedCompany(`org-${orgCode}`, orgCode);
+      expect(co).toBeString();
+    }
+  });
+
+  test("既存の company を 'GOVERNMENT' へ UPDATE すると company_org_code_check で reject", async () => {
+    const co = await seed.seedCompany("org-bad");
+    await expectCheckViolation(
+      () => db.execute(sql`UPDATE company SET org_code = 'GOVERNMENT' WHERE id = ${co}`),
+      "company_org_code_check",
+    );
   });
 });

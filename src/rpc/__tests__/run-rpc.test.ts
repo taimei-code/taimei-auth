@@ -3,8 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { Effect } from "effect";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
-import { Forbidden, NotFound } from "../../membership/guard/errors";
-import { RateLimited } from "../../invitation/errors";
+import { InvalidArgument, NotFound } from "../../membership/guard/errors";
 import { runRpc, statusToCode } from "../run-rpc";
 
 const captured = recordSentryExceptions();
@@ -38,16 +37,11 @@ describe("runRpc", () => {
     expect(await runRpc(Effect.succeed({ success: true }))).toEqual({ success: true });
   });
 
-  test("guard failure は status → Code と error code を message に", async () => {
-    const e = await rejectsWith(runRpc(Effect.fail(new NotFound())));
-    expect([e.code, e.rawMessage]).toEqual([Code.NotFound, "not_found"]);
-    const f = await rejectsWith(runRpc(Effect.fail(new Forbidden())));
-    expect(f.code).toBe(Code.PermissionDenied);
-  });
-
-  test("domain failure も同じ表で写像される", async () => {
-    const e = await rejectsWith(runRpc(Effect.fail(new RateLimited())));
-    expect(e.code).toBe(Code.ResourceExhausted);
+  test("宣言した失敗は status を Code に、_tag を message にする", async () => {
+    const e = await rejectsWith(runRpc(Effect.fail(new InvalidArgument({}))));
+    expect([e.code, e.rawMessage]).toEqual([Code.InvalidArgument, "InvalidArgument"]);
+    const f = await rejectsWith(runRpc(Effect.fail(new NotFound())));
+    expect([f.code, f.rawMessage]).toEqual([Code.NotFound, "NotFound"]);
   });
 
   test("boundary error は Sentry(cause) + Code.Unknown で元 message を保つ (旧 ConnectRPC adapter と同契約)", async () => {

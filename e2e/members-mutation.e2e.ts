@@ -43,6 +43,28 @@ test("招待を作ると招待中に出て、取り消すと消える", async ({
   await expect(pending.getByText(inviteeEmail)).toHaveCount(0);
 });
 
+test("招待の送信が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({
+  page,
+}) => {
+  await signInWithMagicLink(page, SWITCH_EMAIL);
+  await page.goto("/account/members");
+  await page.route(/\/api\/account\/companies\/[^/]+\/invitations$/, async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({ status: 429, json: { _tag: "RateLimited" } });
+  });
+
+  await page.getByLabel("メールアドレス").fill("e2e-switch-invitee@example.com");
+  await page.getByRole("button", { name: "招待する" }).click();
+
+  await expect(
+    page.getByText("招待の送信回数が上限に達しました。時間をおいて再試行してください。"),
+  ).toBeVisible();
+  await expect(page.getByText("招待を送信しました。")).toHaveCount(0);
+});
+
 test("メンバー一覧と招待中の一覧の取得が失敗すると、見出しを残して取得できなかった旨を出す", async ({
   page,
 }) => {

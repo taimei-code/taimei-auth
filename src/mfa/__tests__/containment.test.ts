@@ -37,22 +37,22 @@ function importOccurrences(root: string, targetPattern: string): string[] {
 }
 
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
-  test("QA-R-01 auth-plugins が import してよい mfa モジュールは 4 つに限る", () => {
+  test("auth-plugins が import してよい mfa モジュールは 4 つに限る", () => {
     // positive control。
     expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
     expect(importOccurrences("src/auth-plugins", "[^'\"]*mfa/")).toEqual([
-      `src/auth-plugins/mfa-challenge.ts:from "../mfa/kill-switch"`,
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/redirect-guard"`,
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/totp/challenge-required"`,
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/totp/login-challenge"`,
       `src/auth-plugins/primary-auth-routes.ts:from "../mfa/totp/login-challenge"`,
+      `src/auth-plugins/primary-auth.ts:from "../mfa/kill-switch"`,
     ]);
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src/auth-plugins")).toEqual([]);
   });
 
-  test("AC-022 kill switch の env を読むのは mfa-challenge の after-hook だけ (program は引数で受ける)", () => {
+  test("kill switch の env を読むのは一次認証の after-hook だけ (program は引数で受ける)", () => {
     expect(filesWithCodeLiteral("MFA_CHALLENGE_ENABLED")).toEqual([
-      "src/auth-plugins/mfa-challenge.ts",
+      "src/auth-plugins/primary-auth.ts",
     ]);
   });
 });
@@ -111,15 +111,10 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
-  test("QA-E-03 management/ の import 面は全列挙で固定する", () => {
+  test("management/ の import 面は全列挙で固定する", () => {
     expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
-      `management/disable-user-mfa.ts:from "../src/account/ports"`,
-      `management/disable-user-mfa.ts:from "../src/audit/report-failure"`,
       `management/disable-user-mfa.ts:from "../src/boot"`,
-      `management/disable-user-mfa.ts:from "../src/mfa/notification-adapter"`,
-      `management/disable-user-mfa.ts:from "../src/mfa/policy"`,
-      `management/disable-user-mfa.ts:from "../src/mfa/totp/ports"`,
-      `management/disable-user-mfa.ts:from "../src/transaction"`,
+      `management/disable-user-mfa.ts:from "../src/mfa/totp/disable-mfa"`,
       `management/sweep-abandoned-signups.ts:from "../src/account/sweep-abandoned-signups"`,
       `management/sweep-abandoned-signups.ts:from "../src/boot"`,
     ]);

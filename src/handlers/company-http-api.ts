@@ -1,21 +1,13 @@
 import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
-import type { OrgCode } from "@/db/repositories/company";
 import { CurrentActor } from "../account/actor-contract";
-import type { OrgCodeSchema } from "../company/company-contract";
+import type { OrgCode } from "../company/org-code";
 import { addCompany, createSignupCompany, type CreatedCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
 import { updateCompanyInfo } from "../company/update";
 import { requireMembershipOf } from "../membership/guard";
 import { SpaApi } from "../spa-contract";
 import { dieOnBoundary } from "./request-http-api";
-
-const _orgCodeSchemaIsExhaustive: [OrgCode, typeof OrgCodeSchema.Type] extends [
-  typeof OrgCodeSchema.Type,
-  OrgCode,
-]
-  ? true
-  : never = true;
 
 const serializeCompany = (company: CreatedCompany["company"]) => ({
   id: company.id,

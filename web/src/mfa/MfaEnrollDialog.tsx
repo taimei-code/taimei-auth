@@ -1,5 +1,4 @@
-import { useAtomSet } from "@effect/atom-react";
-import { Exit } from "effect";
+import { type Cause, Exit } from "effect";
 import { useEffect, useState, type ReactNode } from "react";
 import { Check, Copy, Loader2, ShieldCheck } from "lucide-react";
 
@@ -19,8 +18,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../shared/ui/dialog";
-import { activateMfaAtom, enrollMfaAtom, mfaErrorCodeOfCause, mfaStatusAtom } from "./mfa-atom";
-import { describeMfaChallengeError, useMfaCodeEntry } from "./use-mfa-code-entry";
+import {
+  type MfaFailure,
+  mfaFailureMessage,
+  mfaStatusAtom,
+  useActivateMfa,
+  useEnrollMfa,
+} from "./mfa-atom";
+import { hasFailureTag } from "../shared/failure-message";
+import { useMfaCodeEntry } from "./use-mfa-code-entry";
 
 const CODE_INPUT_ID = "mfa-enroll-code";
 
@@ -31,9 +37,9 @@ type EnrollState =
   | { step: "recoveryCodes"; recoveryCodes: readonly string[] }
   | { step: "failed"; message: string };
 
-const failedStep = (cause: Parameters<typeof mfaErrorCodeOfCause>[0]): EnrollState => ({
+const failedStep = (cause: Cause.Cause<MfaFailure>): EnrollState => ({
   step: "failed",
-  message: describeMfaChallengeError(mfaErrorCodeOfCause(cause)),
+  message: mfaFailureMessage(cause),
 });
 
 // URI が想定外の形でも QR 側は出せるよう null を返す
@@ -182,16 +188,15 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
   // 登録途中の再 enroll に server が同じ内容を返す (ADR-0013) ことを利用した表示用 cache
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
   const refreshStatus = useRefreshAndWait(mfaStatusAtom);
-  const enrollMfa = useAtomSet(enrollMfaAtom, { mode: "promiseExit" });
-  const activateMfa = useAtomSet(activateMfaAtom, { mode: "promiseExit" });
+  const enrollMfa = useEnrollMfa();
+  const activateMfa = useActivateMfa();
 
   const entry = useMfaCodeEntry({
     inputId: CODE_INPUT_ID,
     submit: ({ code }) => {
       if (state.step !== "verify") return Promise.resolve(null);
       const { enrollment } = state;
-      // reactivityKeys を付けると有効化の直後に状態が変わり、MfaSettingsItem がこのダイアログを外す
-      return activateMfa({ payload: { code, enrollment_id: enrollment.enrollment_id } }).then(
+      return activateMfa({ code, enrollment_id: enrollment.enrollment_id }).then(
         Exit.match({
           onSuccess: () => {
             setResumableEnrollment(null);
@@ -199,9 +204,8 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
             return null;
           },
           onFailure: (cause) => {
-            const errorCode = mfaErrorCodeOfCause(cause);
-            if (errorCode === "enrollment_changed") setResumableEnrollment(null);
-            return errorCode;
+            if (hasFailureTag(cause, "EnrollmentChanged")) setResumableEnrollment(null);
+            return mfaFailureMessage(cause);
           },
         }),
       );
@@ -220,7 +224,7 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
         return;
       }
       setState({ step: "starting" });
-      void enrollMfa({}).then(
+      void enrollMfa().then(
         Exit.match({
           onSuccess: (enrollment) => {
             setResumableEnrollment(enrollment);

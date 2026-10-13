@@ -15,32 +15,19 @@ import {
 import { AuthApi, SessionRejected } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
 import { MfaEnrollment } from "../../mfa/mfa-contract";
-import { createRateLimitMiddleware, mfaAttemptKey } from "../../rate-limit";
-import { getClientContext } from "../../request-context";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { mountAccountRoutes } from "../../app";
+import { mountSpaApi } from "../spa-http-api";
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
-
-// src/app.ts の production 値と同じ (local は 1000 に緩和される)。
-const MFA_ATTEMPT_LIMIT = 10;
 
 // src/mfa/disable-attempt-budget.ts の MAX_ATTEMPTS と同じ。
 const DISABLE_ATTEMPT_LIMIT = 5;
 
 const buildApp = (): Hono => {
   const app = new Hono();
-  app.use(
-    "/api/account/mfa/disable",
-    createRateLimitMiddleware({
-      keyFn: (c) => mfaAttemptKey(c.req.raw.headers, getClientContext(c.req.raw.headers).ip),
-      limit: MFA_ATTEMPT_LIMIT,
-      windowSec: 60,
-    }),
-  );
-  mountAccountRoutes(app);
+  mountSpaApi(app);
   return app;
 };
 

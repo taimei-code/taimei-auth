@@ -14,8 +14,6 @@
   "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
   "ignoreDependencies": ["@bufbuild/protoc-gen-es"],
   "usedClassMembers": [
-    "error",
-    "status",
     {
       "extends": "DurableObject",
       "members": ["*"]

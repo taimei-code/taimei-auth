@@ -147,6 +147,34 @@ describe("deleteCompany", () => {
       }),
     ));
 
+  test("招待 2 件と member 3 人の事業所を削除すると、invitation_revoked が 2 行、membership_removed が 3 行記帳される", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("counts-owner");
+        const target = yield* seedCompany("counts-target");
+        yield* join(ownerId, target, "OWNER");
+        yield* join(ownerId, yield* seedCompany("counts-other"), "OWNER");
+        yield* join(yield* seedUser("counts-admin"), target, "ADMIN");
+        yield* join(yield* seedUser("counts-member"), target, "MEMBER");
+        for (const invitee of ["counts-invitee-1", "counts-invitee-2"]) {
+          yield* db.seedInvitation({
+            companyId: target,
+            email: db.ids.email(invitee),
+            role: "MEMBER",
+            invitedByUserId: ownerId,
+          });
+        }
+
+        yield* deleteCompany(ownerId, target);
+
+        expect([
+          yield* auditCount(ownerId, "invitation_revoked"),
+          yield* auditCount(ownerId, "membership_removed"),
+        ]).toEqual([2, 3]);
+      }),
+    ));
+
   test("guard 通過後に降格された actor (MEMBER) は lock 後の再確認で forbidden、無変更", () =>
     run(
       Effect.gen(function* () {
@@ -159,7 +187,7 @@ describe("deleteCompany", () => {
 
         const e = yield* Effect.flip(deleteCompany(memberId, companyId));
 
-        expectFailure(e, Forbidden, "forbidden", 403);
+        expectFailure(e, Forbidden);
         expect((yield* db.readCompany(companyId))?.activationStatus).toBe("ACTIVE");
         expect(yield* membershipCount(companyId)).toBe(2);
       }),
@@ -170,7 +198,7 @@ describe("deleteCompany", () => {
       Effect.gen(function* () {
         const ownerId = yield* seedUser("nf");
         const e = yield* Effect.flip(deleteCompany(ownerId, "cmp_does_not_exist"));
-        expectFailure(e, Forbidden, "forbidden", 403);
+        expectFailure(e, Forbidden);
       }),
     ));
 
@@ -247,6 +275,33 @@ describe("deleteCompany の TTL store の session 削除", () => {
       }),
     ));
 
+  test("他に所属の無い member の session だけが消え、他にも所属のある member の session は残る", () =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser("ttl-mixed-owner");
+        const orphanId = yield* seedUser("ttl-mixed-orphan");
+        const stayerId = yield* seedUser("ttl-mixed-stayer");
+        const companyId = yield* seedCompany("ttl-mixed");
+        const other = yield* seedCompany("ttl-mixed-other");
+        yield* join(ownerId, companyId, "OWNER");
+        yield* join(ownerId, other, "OWNER");
+        yield* join(orphanId, companyId, "MEMBER");
+        yield* join(stayerId, companyId, "MEMBER");
+        yield* join(stayerId, other, "MEMBER");
+        const sessions = [
+          { userId: orphanId, token: (yield* createSessionFor(orphanId)).token },
+          { userId: stayerId, token: (yield* createSessionFor(stayerId)).token },
+        ];
+
+        yield* deleteCompany(ownerId, companyId);
+
+        expect(yield* storedSessionsOf(sessions)).toEqual([
+          { session: false, index: false },
+          { session: true, index: true },
+        ]);
+      }),
+    ));
+
   test("TTL store が失敗しても削除は成功し、user 行が消えた後に呼ばれ、Sentry に 2 件記録される", () =>
     run(
       Effect.gen(function* () {
@@ -278,8 +333,11 @@ describe("deleteCompany の TTL store の session 削除", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const { ownerId, memberId, companyId, sessions } = yield* seedTwoOrphans("ttl-rollback");
-        const failingAudit = auditLogWith(() => ({
-          recordCompanyDeleted: () => new DbError({ cause: "audit down" }),
+        const failingAudit = auditLogWith((live) => ({
+          appendAuditLogs: (entries, tx) =>
+            entries.some((entry) => entry.eventType === "company_deleted")
+              ? Effect.fail(new DbError({ cause: "audit down" }))
+              : live.appendAuditLogs(entries, tx),
         }));
 
         const exit = yield* Effect.exit(

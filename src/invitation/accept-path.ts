@@ -1,8 +1,25 @@
+import { z } from "zod";
 import type { RedirectTarget } from "../sign-in-params";
 
-// SPA と同じ形。片側だけ変えると相手が失敗を出さずに動かなくなる。
+const optionalString = z.string().optional().catch(undefined);
+
+export const redirectTargetSearchSchema = z.object({
+  service_name: optionalString,
+  redirect_url: optionalString,
+});
+
+export const acceptInvitationSearchSchema = redirectTargetSearchSchema.extend({
+  invitation_token: optionalString,
+});
+
+export const ACCEPT_INVITATION_ROUTE = "/signup/accept-invitation";
+export const ACCEPT_INVITATION_PATH = `/auth${ACCEPT_INVITATION_ROUTE}` as const;
+
 export const acceptInvitationPath = (invitationToken: string, target?: RedirectTarget): string => {
   // better-auth の magic-link verify は callbackURL を二重に decode するので、redirect_url の query と fragment は保たれない。
-  const params = new URLSearchParams({ invitation_token: invitationToken, ...target });
-  return `/auth/signup/accept-invitation?${params}`;
+  const search = {
+    invitation_token: invitationToken,
+    ...target,
+  } satisfies z.input<typeof acceptInvitationSearchSchema>;
+  return `${ACCEPT_INVITATION_PATH}?${new URLSearchParams(search)}`;
 };

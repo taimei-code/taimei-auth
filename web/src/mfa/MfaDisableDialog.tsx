@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { useState, type ReactNode } from "react";
 import { Loader2, ShieldOff } from "lucide-react";
@@ -18,7 +17,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "../shared/ui/dialog";
-import { disableMfaAtom, mfaErrorCodeOfCause, mfaStatusAtom } from "./mfa-atom";
+import { mfaFailureMessage, mfaStatusAtom, useDisableMfa } from "./mfa-atom";
 import { useMfaCodeEntry } from "./use-mfa-code-entry";
 
 const CODE_INPUT_ID = "mfa-disable-code";
@@ -31,12 +30,12 @@ type Props = {
 export const MfaDisableDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const refreshStatus = useRefreshAndWait(mfaStatusAtom);
-  const disableMfa = useAtomSet(disableMfaAtom, { mode: "promiseExit" });
+  const disableMfa = useDisableMfa();
 
   const entry = useMfaCodeEntry({
     inputId: CODE_INPUT_ID,
     submit: (input) =>
-      disableMfa({ payload: input }).then(
+      disableMfa(input).then(
         Exit.match({
           onSuccess: () => {
             setOpen(false);
@@ -45,7 +44,7 @@ export const MfaDisableDialog = ({ trigger }: Props) => {
               staleShort: "多要素認証 (MFA) を無効にしました",
             }).then(() => null);
           },
-          onFailure: mfaErrorCodeOfCause,
+          onFailure: mfaFailureMessage,
         }),
       ),
   });

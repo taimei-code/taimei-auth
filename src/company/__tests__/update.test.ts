@@ -60,7 +60,7 @@ describe("updateCompanyInfo", () => {
             input: { name: `${P}renamed`, orgCode: "CORPORATE" },
           }),
         );
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
 
         const after = yield* db.readCompany(co);
         expect(after?.name).toBe(`${P}co-d06`);
@@ -84,7 +84,7 @@ describe("updateCompanyInfo", () => {
             input: { name: `${P}renamed`, orgCode: "CORPORATE" },
           }),
         );
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
         expect((yield* auditRowsFor(owner.id, "company_updated")).length).toBe(0);
       }),
     ));

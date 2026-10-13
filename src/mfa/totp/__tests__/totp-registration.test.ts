@@ -19,7 +19,7 @@ import {
   mfaMailRecorderLayer,
   revokeRecordingLayer,
 } from "../../__tests__/test-layers";
-import type { MfaCodeKind } from "../../client-facing-contracts";
+import type { MfaCodeKind } from "../../mfa-contract";
 import { disableAttemptsKey } from "../../disable-attempt-budget";
 import {
   AlreadyEnabled,
@@ -28,10 +28,11 @@ import {
   Locked,
   MfaNotFound,
   NotEnabled,
-} from "../../error-mapping";
+} from "../../errors";
 import { activate } from "../activate-mfa";
 import { disable } from "../disable-mfa";
 import { enroll } from "../enroll-mfa";
+import { MfaTotpRepo } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { consumeMatchedCode, matchOwnedCode } from "../verify-code";
 import { testKvStore } from "../../../__tests__/test-ttl-store";
@@ -113,11 +114,11 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         const notFound = yield* Effect.flip(
           ops.run(activate({ actor, headers, enrollmentId: "no-enrollment", code: "123456" })),
         );
-        expectFailure(notFound, MfaNotFound, "not_found", 404);
+        expectFailure(notFound, MfaNotFound);
         const notEnabled = yield* Effect.flip(
           ops.run(disable({ actor, headers, code: "123456", kind: "totp" })),
         );
-        expectFailure(notEnabled, NotEnabled, "not_enabled", 409);
+        expectFailure(notEnabled, NotEnabled);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
       }),
     ));
@@ -134,7 +135,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         const notEnabled = yield* Effect.flip(
           ops.run(disable({ actor, headers, code: "123456", kind: "totp" })),
         );
-        expectFailure(notEnabled, NotEnabled, "not_enabled", 409);
+        expectFailure(notEnabled, NotEnabled);
         expect(disableAttemptCount(user.id)).toBeNull();
       }),
     ));
@@ -165,7 +166,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             activate({ actor, headers, enrollmentId: "stale-id", code: yield* totpCode(secret) }),
           ),
         );
-        expectFailure(mismatch, EnrollmentChanged, "enrollment_changed", 409);
+        expectFailure(mismatch, EnrollmentChanged);
 
         const wrong = yield* Effect.flip(
           ops.run(
@@ -177,7 +178,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             }),
           ),
         );
-        expectFailure(wrong, InvalidCode, "invalid_code", 400);
+        expectFailure(wrong, InvalidCode);
         expect(ops.revokes.length).toBe(0);
         expect(ops.mailed).toEqual([]);
 
@@ -201,12 +202,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect((yield* auditRowsFor(user.id, "mfa_enabled")).length).toBe(1);
         expect(sentryAuditFailureEvents()).toEqual([]);
 
-        expectFailure(
-          yield* Effect.flip(ops.run(enroll({ actor }))),
-          AlreadyEnabled,
-          "already_enabled",
-          409,
-        );
+        expectFailure(yield* Effect.flip(ops.run(enroll({ actor }))), AlreadyEnabled);
         expectFailure(
           yield* Effect.flip(
             ops.run(
@@ -219,8 +215,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             ),
           ),
           AlreadyEnabled,
-          "already_enabled",
-          409,
         );
 
         const code = yield* totpCode(secret);
@@ -232,8 +226,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expectFailure(
           yield* Effect.flip(ops.run(verifyAndConsumeOwnedCode(user.id, { code, kind: "totp" }))),
           InvalidCode,
-          "invalid_code",
-          400,
         );
 
         const disabled = yield* ops.run(
@@ -279,7 +271,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           failure: rejected,
         } = yield* activateWhenRevokeReturns(new SessionRejected(), "activate-rejected");
 
-        expectFailure(rejected, Unauthorized, "unauthorized", 401);
+        expectFailure(rejected, Unauthorized);
         expect(ops.revokes.length).toBe(1);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
         expect((yield* auditRowsFor(user.id, "mfa_enabled")).length).toBe(0);
@@ -304,7 +296,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
           ),
         );
 
-        expectFailure(rejected, Unauthorized, "unauthorized", 401);
+        expectFailure(rejected, Unauthorized);
         expect(ops.revokes.length).toBe(1);
         expect(yield* ops.run(readOwnedMfaStatus(actor))).toEqual({
           enabled: true,
@@ -358,8 +350,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             ops.run(verifyAndConsumeOwnedCode(user.id, { code: first, kind: "recovery_code" })),
           ),
           InvalidCode,
-          "invalid_code",
-          400,
         );
         expect(yield* ops.run(readOwnedMfaStatus(actor))).toMatchObject({
           recoveryCodesRemaining: 9,
@@ -381,8 +371,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             ),
           ),
           InvalidCode,
-          "invalid_code",
-          400,
         );
       }),
     ));
@@ -396,7 +384,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         const wrong = yield* Effect.flip(
           ops.run(disable({ actor, headers, code: yield* wrongTotpCode(secret), kind: "totp" })),
         );
-        expectFailure(wrong, InvalidCode, "invalid_code", 400);
+        expectFailure(wrong, InvalidCode);
         expect(disableAttemptCount(user.id)).toBe("1");
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
         expect(ops.mailed).toEqual([`enabled:${user.email}`]);
@@ -424,8 +412,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
           ),
           Locked,
-          "locked",
-          429,
         );
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
       }),
@@ -443,8 +429,6 @@ describe("MFA 登録遷移 (自前 totp)", () => {
             ops.run(disable({ actor, headers, code: yield* totpCode(secret), kind: "totp" })),
           ),
           Locked,
-          "locked",
-          429,
         );
         expect(yield* countMfaTotpRows(user.id)).toBe(1);
       }),
@@ -479,6 +463,26 @@ describe("MFA 登録遷移 (自前 totp)", () => {
         expect(disabled.sessionChanges).toBeInstanceOf(Headers);
         expect(sentryAuditFailureEvents()).toEqual(["mfa_enabled", "mfa_disabled"]);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
+      }),
+    ));
+
+  test("コードの照合の後に別の経路が登録を消すと、本人の無効化は InvalidCode で止まり、mfa_disabled も通知も出さない", () =>
+    run(
+      Effect.gen(function* () {
+        const { user, actor, secret } = yield* seedUserWithMfaEnabled(buildOps(), "disable-raced");
+        const mfa = yield* MfaTotpRepo;
+        const ops = buildOps({
+          revoke: mfa.deleteMfaTotp(user.id).pipe(Effect.as(new Headers()), Effect.orDie),
+        });
+
+        expectFailure(
+          yield* Effect.flip(
+            ops.run(disable({ actor, headers, code: yield* totpCode(secret, 1), kind: "totp" })),
+          ),
+          InvalidCode,
+        );
+        expect((yield* auditRowsFor(user.id, "mfa_disabled")).length).toBe(0);
+        expect(ops.mailed).toEqual([]);
       }),
     ));
 

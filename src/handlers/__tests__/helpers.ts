@@ -1,6 +1,6 @@
 import { Effect, Layer } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
-import { mountAccountRoutes } from "../../app";
+import { mountSpaApi } from "../spa-http-api";
 import { AuthApi } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
 import type { AppServices } from "../../runtime";
@@ -40,7 +40,7 @@ export const provideAuthApi =
 
 export function buildAppWith<A extends AppServices>(overrides: Layer.Layer<A>): Hono {
   const app = new Hono();
-  mountAccountRoutes(app, Layer.merge(runtimeServices(), overrides));
+  mountSpaApi(app, Layer.merge(runtimeServices(), overrides));
   return app;
 }
 

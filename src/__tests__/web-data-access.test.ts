@@ -25,17 +25,40 @@ const mayUseHttpClient = (path: string) =>
 
 const usesEffectHook = (source: string) => /\buse(Layout)?Effect\b/.test(source);
 
+const mayRunMutation = (path: string) =>
+  path.endsWith("-atom.ts") || path === "shared/atom-runtime.ts";
+
+type Rule = {
+  readonly name: string;
+  readonly violates: (path: string, source: string, imports: readonly string[]) => boolean;
+};
+
+const RULES: readonly Rule[] = [
+  { name: "fetch", violates: (_path, source) => /\bfetch\(/.test(source) },
+  {
+    name: "SpaApiClient",
+    violates: (path, _source, imports) =>
+      imports.some((target) => target.endsWith("shared/spa-api-client")) &&
+      !path.endsWith("-atom.ts"),
+  },
+  {
+    name: "effect/http",
+    violates: (path, _source, imports) =>
+      imports.includes("effect/http") && !mayUseHttpClient(path),
+  },
+  {
+    name: "useEffect",
+    violates: (path, source) => path.includes("/pages/") && usesEffectHook(source),
+  },
+  {
+    name: "promiseExit",
+    violates: (path, source) => /\bpromiseExit\b/.test(source) && !mayRunMutation(path),
+  },
+];
+
 const violationsOf = (path: string, source: string): string[] => {
   const imports = runtimeImports(path, source);
-  return [
-    ...(/\bfetch\(/.test(source) ? ["fetch"] : []),
-    ...(imports.some((target) => target.endsWith("shared/spa-api-client")) &&
-    !path.endsWith("-atom.ts")
-      ? ["SpaApiClient"]
-      : []),
-    ...(imports.includes("effect/http") && !mayUseHttpClient(path) ? ["effect/http"] : []),
-    ...(path.includes("/pages/") && usesEffectHook(source) ? ["useEffect"] : []),
-  ];
+  return RULES.filter((rule) => rule.violates(path, source, imports)).map((rule) => rule.name);
 };
 
 function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string[] {
@@ -70,15 +93,21 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
     expect(readers).toEqual(["web/src/shared/atom-runtime.ts"]);
   });
 
-  test("失敗の _tag の判定は shared/failure-message.ts と MFA の読み替えに集める", () => {
+  test("失敗の _tag の判定は shared/failure-message.ts に集める", () => {
     const callers = grepFiles(String.raw`Cause\.findErrorOption`, "web/src", {
       include: ["*.ts", "*.tsx"],
       excludeTests: true,
     });
-    expect(callers.sort()).toEqual([
-      "web/src/mfa/mfa-atom.ts",
-      "web/src/shared/failure-message.ts",
-    ]);
+    expect(callers).toEqual(["web/src/shared/failure-message.ts"]);
+  });
+
+  test("更新の実行 (useAtomSet の promiseExit) は *-atom.ts の hook だけが書く", () => {
+    expect(
+      analyzeWebDataAccess({
+        "web/src/company/AddCompanyDialog.tsx":
+          'const add = useAtomSet(addCompanyAtom, { mode: "promiseExit" });',
+      }),
+    ).toEqual(["company/AddCompanyDialog.tsx: promiseExit"]);
   });
 
   test("名前が -api.ts で終わる file でも fetch を書くと落ちる", () => {

@@ -14,8 +14,4 @@ describe("orgCodeLabelJa", () => {
 
     expect(orgCodeLabelJa(code)).toBe("法人");
   });
-
-  test("未知値は既存契約どおり法人へ倒す", () => {
-    expect(orgCodeLabelJa("UNKNOWN")).toBe("法人");
-  });
 });

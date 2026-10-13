@@ -1,7 +1,7 @@
 import { Clock, Effect } from "effect";
-import { InvalidCode, NotEnabled } from "../error-mapping";
+import { InvalidCode, NotEnabled } from "../errors";
 import { isMfaEnabled } from "../policy";
-import type { MfaCodeKind } from "../client-facing-contracts";
+import type { MfaCodeKind } from "../mfa-contract";
 import { codeCipher, decryptText, decryptValue, secretCipher } from "./cipher";
 import { MfaKeyring, MfaTotpRepo } from "./ports";
 import { matchTotpCode } from "./totp-engine";

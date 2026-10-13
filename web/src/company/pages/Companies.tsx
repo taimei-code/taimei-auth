@@ -5,6 +5,7 @@ import { Check, Loader2, Plus } from "lucide-react";
 import { orgCodeLabelJa } from "@core/company/org-code";
 import { roleLabelJa } from "@core/membership/role-label";
 
+import { companyStateAtom } from "../../account/account-atom";
 import {
   useCurrentCompany,
   useSwitchCompany,
@@ -14,6 +15,7 @@ import { useSelfUserId } from "../../auth/auth-client";
 import { redirectAfterAuthChange } from "../../auth/auth-redirect";
 import { TransferOwnershipModal } from "../../membership/TransferOwnershipModal";
 import { useRemoveMember } from "../../membership/membership-atom";
+import { useWaitForValue } from "../../shared/atom-runtime";
 import { hasFailureTag } from "../../shared/failure-message";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
 import { Button } from "../../shared/ui/button";
@@ -21,7 +23,8 @@ import { Separator } from "../../shared/ui/separator";
 import { AddCompanyDialog } from "../AddCompanyDialog";
 
 export const Companies = () => {
-  const { memberships, currentCompanyId, refresh } = useCurrentCompany();
+  const { memberships, currentCompanyId } = useCurrentCompany();
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
   const [busyCompanyId, setBusyCompanyId] = useState<string | null>(null);
 
   const selfUserId = useSelfUserId();
@@ -51,7 +54,7 @@ export const Companies = () => {
               redirectAfterAuthChange("deleteAccount");
               return;
             }
-            return notifyAfterRefresh(refresh, {
+            return notifyAfterRefresh(waitForCompanyState, {
               done: `「${m.company_name}」から抜けました。`,
               staleShort: "事業所から抜けました",
             });
@@ -81,7 +84,6 @@ export const Companies = () => {
           <p className="mt-1 text-sm text-muted-foreground">所属する事業所の一覧と切り替え</p>
         </div>
         <AddCompanyDialog
-          onCreated={refresh}
           trigger={
             <Button size="sm" className="shrink-0">
               <Plus className="size-4" aria-hidden="true" />
@@ -110,10 +112,7 @@ export const Companies = () => {
               <TransferOwnershipModal
                 companyId={m.company_id}
                 companyName={m.company_name}
-                onTransferred={() => {
-                  setSoleOwnerCompanyId(null);
-                  return refresh();
-                }}
+                onTransferred={() => setSoleOwnerCompanyId(null)}
                 trigger={
                   <Button variant="outline" size="sm">
                     オーナーを委譲

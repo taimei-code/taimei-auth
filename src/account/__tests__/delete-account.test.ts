@@ -72,7 +72,7 @@ describe("deleteAccountUnlessLastOwner", () => {
 
         const error = yield* Effect.flip(deleteAccountUnlessLastOwner(owner.id));
 
-        expectFailure(error, LastOwner, "last_owner", 409);
+        expectFailure(error, LastOwner);
         expect(yield* db.readUser(owner.id)).toBeDefined();
         expect(yield* db.readMemberships(owner.id)).toEqual(before);
         expect((yield* auditRowsFor(owner.id, "account_delete")).length).toBe(0);
@@ -135,7 +135,7 @@ describe("deleteAccountUnlessLastOwner", () => {
 
         const error = yield* Effect.flip(deleteAccountUnlessLastOwner(absent));
 
-        expectFailure(error, NotFound, "not_found", 404);
+        expectFailure(error, NotFound);
         expect((yield* auditRowsFor(absent, "account_delete")).length).toBe(0);
       }),
     ));
@@ -172,7 +172,7 @@ describe("退会と OWNER の race (不安定な失敗を検知するため 5 �
 
           const failed = results.filter(Exit.isFailure);
           expect(failed.length).toBe(1);
-          expectFailure(yield* Effect.flip(failed[0] ?? Exit.void), LastOwner, "last_owner", 409);
+          expectFailure(yield* Effect.flip(failed[0] ?? Exit.void), LastOwner);
           const remaining = yield* db.readMembershipsOfCompany(co);
           expect(remaining.map((m) => m.role)).toEqual(["OWNER"]);
         }),
@@ -218,8 +218,10 @@ describe("退会と OWNER 委譲の race", () => {
         }).pipe(
           Effect.provide(
             auditLogWith((live) => ({
-              recordOwnershipTransferred: (...args) =>
-                holdBeforeCommit(written, release)(live.recordOwnershipTransferred(...args)),
+              appendAuditLogs: (entries, tx) =>
+                entries.some((entry) => entry.eventType === "ownership_transferred")
+                  ? holdBeforeCommit(written, release)(live.appendAuditLogs(entries, tx))
+                  : live.appendAuditLogs(entries, tx),
             })),
           ),
         );
@@ -241,7 +243,7 @@ describe("退会と OWNER 委譲の race", () => {
           concurrency: "unbounded",
         });
 
-        expectFailure(yield* Effect.flip(deleted), LastOwner, "last_owner", 409);
+        expectFailure(yield* Effect.flip(deleted), LastOwner);
         expect((yield* db.readMembership(to.id, co))?.role).toBe("OWNER");
       }),
     ));
@@ -263,8 +265,10 @@ describe("退会と事業所追加の race", () => {
         const adding = addCompany(user.id, { name: `${P}add-race-co`, orgCode: "PERSONAL" }).pipe(
           Effect.provide(
             auditLogWith((live) => ({
-              recordCompanyCreated: (...args) =>
-                holdBeforeCommit(written, release)(live.recordCompanyCreated(...args)),
+              appendAuditLogs: (entries, tx) =>
+                entries.some((entry) => entry.eventType === "company_created")
+                  ? holdBeforeCommit(written, release)(live.appendAuditLogs(entries, tx))
+                  : live.appendAuditLogs(entries, tx),
             })),
           ),
         );
@@ -286,7 +290,7 @@ describe("退会と事業所追加の race", () => {
           concurrency: "unbounded",
         });
 
-        expectFailure(yield* Effect.flip(deleted), LastOwner, "last_owner", 409);
+        expectFailure(yield* Effect.flip(deleted), LastOwner);
         expect(yield* ownerIdsOf(added.company.id)).toEqual([user.id]);
       }),
     ));

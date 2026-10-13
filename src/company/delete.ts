@@ -1,8 +1,7 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
-import { deleteSessionsOf } from "../account/delete-sessions";
 import { deleteAccountIfOrphaned } from "../account/orphan";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx, invitationRevokedEntry, membershipRemovedEntry } from "../audit/append";
 import { InvitationRepo } from "../invitation/ports";
 import { applyCompanyRemoval } from "../membership/apply-change";
 import { Forbidden } from "../membership/guard/errors";
@@ -15,7 +14,6 @@ export const deleteCompany = Effect.fnUntraced(function* (actorUserId: string, c
   const companies = yield* CompanyRepo;
   const memberships = yield* MembershipRepo;
   const invitations = yield* InvitationRepo;
-  const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
   const deletedUserIds = yield* tx.run(
@@ -30,39 +28,42 @@ export const deleteCompany = Effect.fnUntraced(function* (actorUserId: string, c
         return yield* new Forbidden();
 
       const revokedInvitations = yield* invitations.revokePendingInvitationsOfCompany(companyId, t);
-      yield* audit.recordInvitationsRevoked(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          invitation_ids: revokedInvitations.map((inv) => inv.id),
-        },
+      yield* appendAuditInTx(
         t,
+        ...revokedInvitations.map((inv) =>
+          invitationRevokedEntry(actorUserId, { invitationId: inv.id, companyId }),
+        ),
       );
 
       const removed = yield* applyCompanyRemoval(t, companyId);
-      yield* audit.recordMembershipsRemoved(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          removed: removed.map((m) => ({ user_id: m.userId, role_at_removal: m.role })),
-        },
+      yield* appendAuditInTx(
         t,
+        ...removed.map((m) =>
+          membershipRemovedEntry(actorUserId, { companyId, userId: m.userId, role: m.role }),
+        ),
       );
 
       const deletedOrphanIds = yield* Effect.filter(
         [...new Set(removed.map((m) => m.userId))].sort(),
-        (userId) => deleteAccountIfOrphaned(userId, t),
+        (userId) =>
+          deleteAccountIfOrphaned(userId, t, "company-delete").pipe(
+            Effect.map((removal) => removal === "deleted"),
+          ),
       );
 
       yield* companies.softDeleteCompany(companyId, t);
-      yield* audit.recordCompanyDeleted(
-        { actor_user_id: actorUserId, company_id: companyId, name_at_deletion: target.name },
-        t,
-      );
+      yield* appendAuditInTx(t, {
+        eventType: "company_deleted",
+        userId: actorUserId,
+        payload: {
+          company_id: companyId,
+          name_at_deletion: target.name,
+          deleted_by_user_id: actorUserId,
+        },
+      });
 
       return deletedOrphanIds;
     }),
   );
-  yield* deleteSessionsOf(deletedUserIds, "company-delete");
   return { actorDeleted: deletedUserIds.includes(actorUserId) };
 });

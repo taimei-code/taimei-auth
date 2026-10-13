@@ -1,7 +1,7 @@
 import { Clock, Effect } from "effect";
 import type { Role } from "@/db/repositories/invitation";
 import type { DbTx } from "@/db/transaction";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
@@ -19,7 +19,6 @@ export const createInvitation = Effect.fnUntraced(function* (params: {
 }) {
   const { actorUserId, companyId, email, role } = params;
   const invitations = yield* InvitationRepo;
-  const audit = yield* AuditLog;
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
@@ -43,16 +42,17 @@ export const createInvitation = Effect.fnUntraced(function* (params: {
         },
         t,
       );
-      yield* audit.recordInvitationSent(
-        {
-          actor_user_id: actorUserId,
+      yield* appendAuditInTx(t, {
+        eventType: "invitation_sent",
+        userId: actorUserId,
+        payload: {
           invitation_id: row.id,
           company_id: companyId,
           invited_email: email,
           role,
+          invited_by_user_id: actorUserId,
         },
-        t,
-      );
+      });
       return row;
     }),
   );

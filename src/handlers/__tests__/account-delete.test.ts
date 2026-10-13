@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { Hono } from "hono";
 import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { mountAccountRoutes } from "../../app";
+import { mountSpaApi } from "../spa-http-api";
 import { createSessionFor } from "../../mfa/__tests__/helpers";
 import { JSON_HEADERS } from "../client-facing-error";
 import { buildTestApp, requestApp, responseJson } from "./helpers";
@@ -83,7 +83,7 @@ describe("POST /api/account/delete", () => {
         const actor = yield* db.seedUser("stale-cookie");
         const { headers: session } = yield* createSessionFor(actor.id);
         const app = new Hono();
-        mountAccountRoutes(app);
+        mountSpaApi(app);
         const memberships = () => requestApp(app, "/api/account/memberships", { headers: session });
         expect((yield* memberships()).status).toBe(200);
 

@@ -24,22 +24,18 @@ describe("deleteSessionsOf", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("1 人の TTL store の失敗は経路と userId を付けて Sentry に記録し、残りの user の session は消して成功する", () =>
+  test("TTL store の失敗は経路と userId を付けて Sentry に記録し、成功として返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const failing = yield* db.seedUser("failing");
-        const other = yield* db.seedUser("other");
         const failingSession = yield* createSessionFor(failing.id);
-        const otherSession = yield* createSessionFor(other.id);
-        expect(yield* sessionUserIdOf(otherSession.headers)).toBe(other.id);
         sentry.length = 0;
 
-        yield* deleteSessionsOf([failing.id, other.id], "company-delete").pipe(
+        yield* deleteSessionsOf(failing.id, "company-delete").pipe(
           Effect.provide(failingFor(failing.id)),
         );
 
-        expect(yield* sessionUserIdOf(otherSession.headers)).toBeUndefined();
         expect(yield* sessionUserIdOf(failingSession.headers)).toBe(failing.id);
         expect(sentry.map(([error, context]) => [error, context?.tags, context?.extra])).toEqual([
           [

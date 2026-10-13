@@ -1,6 +1,5 @@
-import { Effect, type Layer } from "effect";
+import { Effect } from "effect";
 import { Hono } from "hono";
-import { csrf } from "hono/csrf";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
@@ -9,29 +8,18 @@ import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
 import { mountSpaApi } from "./handlers/spa-http-api";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
-import { CONTINUE, runMiddleware } from "./handlers/run-route";
-import {
-  captureThrown,
-  internalErrorResponse,
-  clientFacingErrorResponse,
-} from "./handlers/client-facing-error";
-import { createRateLimitMiddleware, magicLinkKey, mfaAttemptKey } from "./rate-limit";
+import { CONTINUE, runMiddleware, runRoute } from "./handlers/run-route";
+import { captureThrown, internalErrorResponse } from "./handlers/client-facing-error";
+import { NotFound } from "./membership/guard/errors";
+import { createRateLimitMiddleware, limitForEnvironment, magicLinkKey } from "./rate-limit";
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
-import { getTrustedOrigins, isLocalEnvironment } from "./env";
-import type { AppServices } from "./runtime";
+import { getTrustedOrigins } from "./env";
 
 export type AppOptions = {
   // catch-all を含むので、共有 route を登録し終えてから呼ぶ。
   mountStatic: (app: Hono) => void;
 };
-
-export function mountAccountRoutes(app: Hono, services?: Layer.Layer<AppServices>): void {
-  app.use("/api/account/*", csrf());
-  mountSpaApi(app, services);
-}
-
-const LOCAL_RELAXED_LIMIT = 1000;
 
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
@@ -55,53 +43,26 @@ export function buildApp(options: AppOptions): Hono {
     ),
   );
 
-  app.all(
-    "/rpc/*",
-    async (c) =>
-      (await handleRpc(c.req.raw)) ??
-      clientFacingErrorResponse({ error: "Not Found", status: 404 }),
-  );
+  app.all("/rpc/*", async (c) => (await handleRpc(c.req.raw)) ?? runRoute(c, new NotFound()));
 
   app.route("/", loginShortcut);
-
-  const isLocal = isLocalEnvironment();
 
   // 認証なしで Sentry に直送するため、連打で quota が尽きないよう IP 単位で抑える。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
       keyFn: (c) => `rate-limit:canary:ip:${getClientContext(c.req.raw.headers).ip}`,
-      limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
+      limit: limitForEnvironment(10),
       windowSec: 60,
     }),
   );
   app.route("/", canaryToken);
 
-  // plugin の試行制限はチャレンジ単位とアカウント単位だけなので、別アカウント総当たりを IP 単位で防ぐ。
-  app.use(
-    "/api/mfa/challenge/verify",
-    createRateLimitMiddleware({
-      keyFn: (c) => `rate-limit:mfa-challenge:ip:${getClientContext(c.req.raw.headers).ip}`,
-      limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
-      windowSec: 60,
-    }),
-  );
-
-  app.use(
-    "/api/mfa/challenge",
-    createRateLimitMiddleware({
-      keyFn: (c) => `rate-limit:mfa-challenge-status:ip:${getClientContext(c.req.raw.headers).ip}`,
-      // 30 は表示 1 回 + verify 上限 10 回を NAT 同居の数人分と見た値。
-      limit: isLocal ? LOCAL_RELAXED_LIMIT : 30,
-      windowSec: 60,
-    }),
-  );
-
   app.use(
     "/api/auth/sign-in/magic-link",
     createRateLimitMiddleware({
       keyFn: (c) => magicLinkKey("ip", getClientContext(c.req.raw.headers).ip),
-      limit: isLocal ? LOCAL_RELAXED_LIMIT : 5,
+      limit: limitForEnvironment(5),
       windowSec: 60,
     }),
     createRateLimitMiddleware({
@@ -113,7 +74,7 @@ export function buildApp(options: AppOptions): Hono {
         const email = typeof body?.email === "string" ? body.email : "unknown";
         return magicLinkKey("email", email);
       },
-      limit: isLocal ? LOCAL_RELAXED_LIMIT : 3,
+      limit: limitForEnvironment(3),
       windowSec: 60,
     }),
   );
@@ -135,17 +96,7 @@ export function buildApp(options: AppOptions): Hono {
     });
   });
 
-  // wildcard にすると前置パス自身にも一致し、状態参照まで 429 になる (実測)。
-  const mfaAttemptRateLimit = createRateLimitMiddleware({
-    keyFn: (c) => mfaAttemptKey(c.req.raw.headers, getClientContext(c.req.raw.headers).ip),
-    limit: isLocal ? LOCAL_RELAXED_LIMIT : 10,
-    windowSec: 60,
-  });
-  app.use("/api/account/mfa/enroll", mfaAttemptRateLimit);
-  app.use("/api/account/mfa/activate", mfaAttemptRateLimit);
-  app.use("/api/account/mfa/disable", mfaAttemptRateLimit);
-
-  mountAccountRoutes(app);
+  mountSpaApi(app);
 
   app.use("/auth/*", authEntryRedirect);
 

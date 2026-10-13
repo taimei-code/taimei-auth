@@ -121,11 +121,8 @@ describe("ListCurrentCompanyMembers の入口", () => {
     ]);
   });
 
-  test("AC-014: service key が無ければ 401", async () => {
+  test("service key が無ければ 401", async () => {
     const res = await post({});
-    expect([res.status, await res.text()]).toEqual([
-      401,
-      '{"error":"Unauthorized: invalid service key"}',
-    ]);
+    expect([res.status, await res.text()]).toEqual([401, '{"_tag":"ServiceKeyRejected"}']);
   });
 });

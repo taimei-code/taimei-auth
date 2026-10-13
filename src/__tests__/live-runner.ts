@@ -25,15 +25,8 @@ export const dbTest = (prefix: string) => {
 export const auditRowsFor = (userId: string, eventType: string) =>
   TestDb.use((db) => db.readAuditRows(userId, eventType));
 
-export const expectFailure = (
-  e: unknown,
-  cls: new () => { error: string; status: number },
-  code: string,
-  status: number,
-): void => {
+export const expectFailure = (e: unknown, cls: new () => { readonly _tag: string }): void => {
   expect(e).toBeInstanceOf(cls);
-  const f = e as { error: string; status: number };
-  expect([f.error, f.status]).toEqual([code, status]);
 };
 
 export const inTx = <A, E, R>(f: (tx: DbTx) => Effect.Effect<A, E, R>) =>

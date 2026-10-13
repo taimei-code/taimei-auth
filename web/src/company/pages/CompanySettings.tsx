@@ -5,7 +5,7 @@ import { Separator } from "../../shared/ui/separator";
 import { CompanySettingsForm } from "../CompanySettingsForm";
 
 export const CompanySettings = () => {
-  const { currentMembership, memberships, loading, refresh } = useCurrentCompany();
+  const { currentMembership, memberships, loading } = useCurrentCompany();
 
   if (loading) {
     return (
@@ -33,7 +33,6 @@ export const CompanySettings = () => {
         key={currentMembership.company_id}
         membership={currentMembership}
         isLastCompany={memberships.length <= 1}
-        refresh={refresh}
       />
     </div>
   );

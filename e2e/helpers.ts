@@ -19,6 +19,14 @@ export const reseedFixture = (
   execFileSync("bun", ["run", join(process.cwd(), "e2e", "seed.ts"), name], { stdio: "inherit" });
 };
 
+export const watchMainFrameNavigations = (page: Page): { count: () => number } => {
+  let count = 0;
+  page.on("framenavigated", (frame) => {
+    if (frame === page.mainFrame()) count++;
+  });
+  return { count: () => count };
+};
+
 export const authEntryUrl = (opts: { invitationToken?: string } = {}): string => {
   const url = new URL("/auth/", BASE_URL);
   url.searchParams.set("service_name", "accounts");

@@ -1,22 +1,12 @@
-import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
-import { deleteSessionCookie } from "better-auth/cookies";
 import { Cause, Clock, Data, Effect, Ref } from "effect";
 import { AuthApi } from "../auth-service";
-import { isMfaChallengeEnabled } from "../mfa/kill-switch";
 import { FALLBACK_REDIRECT } from "../mfa/redirect-guard";
 import { mfaChallengeRequired } from "../mfa/totp/challenge-required";
 import { type LoginChallengeCookie, openLoginChallenge } from "../mfa/totp/login-challenge";
-import type { AppRuntime } from "../runtime";
 import { captureCause, SentryService } from "../sentry";
-import {
-  isPrimaryAuthRoute,
-  parsePrimaryAuthRoute,
-  type PrimaryAuthRoute,
-  type UnmappedRoute,
-} from "./primary-auth-routes";
+import type { PrimaryAuthRoute, UnmappedRoute } from "./primary-auth-routes";
 
-const MFA_CHALLENGE_PAGE = "/auth/mfa";
+export const MFA_CHALLENGE_PAGE = "/auth/mfa";
 const SENTRY_TAGS = { component: "mfa-challenge" } as const;
 
 // 1 回きりだと warm isolate で二度と報告されない。6 時間はオンコール交代を 1 回またぐ間隔。
@@ -33,12 +23,12 @@ type ChallengeInput = {
   challengeEnabled: boolean;
 };
 
-type ChallengeDecision =
+export type ChallengeDecision =
   | { readonly _tag: "Pass" }
   | { readonly _tag: "Challenge"; readonly cookie: LoginChallengeCookie | null };
 
-const PASS: ChallengeDecision = { _tag: "Pass" };
-const challengeWith = (cookie: LoginChallengeCookie | null): ChallengeDecision => ({
+export const PASS: ChallengeDecision = { _tag: "Pass" };
+export const challengeWith = (cookie: LoginChallengeCookie | null): ChallengeDecision => ({
   _tag: "Challenge",
   cookie,
 });
@@ -101,46 +91,4 @@ export const enforceChallenge = Effect.fnUntraced(function* (input: ChallengeInp
     Effect.catchCause(reportFailure),
   );
   return challengeWith(cookie);
-});
-
-const enforceChallengeAfterPrimaryAuth = (runtime: AppRuntime) =>
-  createAuthMiddleware(async (ctx) => {
-    const issued = ctx.context.newSession;
-    if (!issued) return;
-    const challengeEnabled = isMfaChallengeEnabled(process.env.MFA_CHALLENGE_ENABLED);
-
-    let decision: ChallengeDecision;
-    try {
-      decision = await runtime.runPromise(
-        enforceChallenge({
-          userId: issued.user.id,
-          sessionToken: issued.session.token,
-          route: parsePrimaryAuthRoute(ctx.path, ctx.params),
-          location: ctx.context.responseHeaders?.get("location"),
-          challengeEnabled,
-        }),
-      );
-    } catch (error) {
-      console.error("[mfa-challenge] runtime unavailable", error);
-      if (!challengeEnabled) return;
-      decision = challengeWith(null);
-    }
-    if (decision._tag === "Pass") return;
-    deleteSessionCookie(ctx, true);
-    ctx.context.setNewSession(null);
-    if (decision.cookie)
-      ctx.setCookie(decision.cookie.name, decision.cookie.value, decision.cookie.attributes);
-    throw ctx.redirect(new URL(MFA_CHALLENGE_PAGE, ctx.context.baseURL).toString());
-  });
-
-export const mfaChallenge = (runtime: AppRuntime): BetterAuthPlugin => ({
-  id: "mfa-challenge",
-  hooks: {
-    after: [
-      {
-        matcher: (ctx) => isPrimaryAuthRoute(ctx.path),
-        handler: enforceChallengeAfterPrimaryAuth(runtime),
-      },
-    ],
-  },
 });

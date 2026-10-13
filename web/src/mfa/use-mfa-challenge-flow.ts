@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { useEffect, useReducer, useRef } from "react";
 
@@ -9,25 +8,24 @@ import {
   type MfaChallengeObservation,
   type MfaChallengeVerification,
 } from "./mfa-challenge-flow";
+import { hasFailureTag } from "../shared/failure-message";
 import {
-  mfaErrorCodeOfCause,
-  verifyMfaChallengeAtom,
+  mfaFailureMessage,
+  useVerifyMfaChallenge,
   type MfaCodeKind,
-  type MfaErrorCode,
+  type MfaFailure,
 } from "./mfa-atom";
 import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
 
-type VerifyExit = Exit.Exit<{ readonly redirect_url: string }, { readonly error: MfaErrorCode }>;
+type VerifyExit = Exit.Exit<{ readonly redirect_url: string }, MfaFailure>;
 
-export const verificationOf = (exit: VerifyExit): MfaChallengeVerification<MfaErrorCode> =>
+export const verificationOf = (exit: VerifyExit): MfaChallengeVerification =>
   Exit.match(exit, {
     onSuccess: ({ redirect_url }) => ({ kind: "passed", redirectUrl: redirect_url }),
-    onFailure: (cause) => {
-      const errorCode = mfaErrorCodeOfCause(cause);
-      return errorCode === "challenge_expired"
+    onFailure: (cause) =>
+      hasFailureTag(cause, "ChallengeExpired")
         ? { kind: "expired" }
-        : { kind: "rejected", errorCode };
-    },
+        : { kind: "rejected", errorMessage: mfaFailureMessage(cause) },
   });
 
 type MfaChallengeViewKind = "redirecting" | "expired" | "entry";
@@ -37,16 +35,16 @@ export type MfaChallengeFlow = {
   entry: MfaCodeInput;
 };
 
-const viewOf = (state: MfaChallengeFlowState<MfaErrorCode>): MfaChallengeViewKind =>
+const viewOf = (state: MfaChallengeFlowState): MfaChallengeViewKind =>
   state.phase === "ready" || state.phase === "verifying" ? "entry" : state.phase;
 
 export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaChallengeFlow {
   const [state, dispatch] = useReducer(
-    reduceMfaChallengeFlow<MfaErrorCode>,
+    reduceMfaChallengeFlow,
     observation,
-    mfaChallengeFlowStateOf<MfaErrorCode>,
+    mfaChallengeFlowStateOf,
   );
-  const verify = useAtomSet(verifyMfaChallengeAtom, { mode: "promiseExit" });
+  const verify = useVerifyMfaChallenge();
   const verificationInFlight = useRef(false);
 
   const submit = (input: { code: string; kind: MfaCodeKind }) => {
@@ -54,7 +52,7 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
 
     verificationInFlight.current = true;
     dispatch({ type: "verification_started" });
-    void verify({ payload: input })
+    void verify(input)
       .then((exit) =>
         dispatch({ type: "verification_resolved", verification: verificationOf(exit) }),
       )
@@ -67,7 +65,7 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
     inputId: "mfa-challenge-code",
     submitting: state.phase === "verifying",
     // expired では直前の失敗文言を出さない (打ち直せば通るように読める)
-    errorCode: state.phase === "ready" ? state.errorCode : null,
+    errorMessage: state.phase === "ready" ? state.errorMessage : null,
     submit,
     onKindChange: () => dispatch({ type: "error_cleared" }),
   });

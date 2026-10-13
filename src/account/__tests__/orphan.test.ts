@@ -31,22 +31,22 @@ describe("deleteAccountIfOrphaned", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("active membership 0 件なら account を削除し session 消滅 + audit を残す (true)", () =>
+  test("active membership 0 件なら account を削除し session 消滅 + audit を残す (deleted)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const userId = yield* seedUser("orphan");
 
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
+        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"));
 
-        expect(deleted).toBe(true);
+        expect(deleted).toBe("deleted");
         expect(yield* db.readUser(userId)).toBeUndefined();
         expect((yield* db.readSessions(userId)).length).toBe(0); // user の cascade で物理削除される
         expect(yield* countAccountDeleteAudit(userId)).toBe(1);
       }),
     ));
 
-  test("active membership が残るなら削除しない (false)、account 維持", () =>
+  test("active membership が残るなら削除しない (kept)、account 維持", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -54,15 +54,15 @@ describe("deleteAccountIfOrphaned", () => {
         const companyId = yield* db.seedCompany("kept");
         yield* db.seedMembership(userId, companyId, "OWNER");
 
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
+        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"));
 
-        expect(deleted).toBe(false);
+        expect(deleted).toBe("kept");
         expect(yield* db.readUser(userId)).toBeDefined();
         expect(yield* countAccountDeleteAudit(userId)).toBe(0);
       }),
     ));
 
-  test("DELETED company の残存 membership だけなら orphan 扱いで削除 (true)", () =>
+  test("DELETED company の残存 membership だけなら orphan 扱いで削除 (deleted)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -71,9 +71,9 @@ describe("deleteAccountIfOrphaned", () => {
         yield* db.seedMembership(userId, companyId, "OWNER");
         yield* db.markCompanyDeleted(companyId);
 
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
+        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"));
 
-        expect(deleted).toBe(true);
+        expect(deleted).toBe("deleted");
         expect(yield* db.readUser(userId)).toBeUndefined();
       }),
     ));
@@ -83,14 +83,14 @@ describe("deleteAccountIfOrphaned", () => {
       Effect.gen(function* () {
         const userId = `${P}u-absent`;
 
-        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx));
+        const deleted = yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"));
 
-        expect(deleted).toBe(false);
+        expect(deleted).toBe("kept");
         expect(yield* countAccountDeleteAudit(userId)).toBe(0);
       }),
     ));
 
-  test("削除する user と残す user のどちらでも、tx の中では TTL store の session に触れない", () =>
+  test("tx の中では TTL store の session に触れず、commit の後に削除した user の session だけを消す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -99,14 +99,26 @@ describe("deleteAccountIfOrphaned", () => {
         yield* db.seedMembership(keptId, yield* db.seedCompany("store-kept"), "OWNER");
         const orphanSession = yield* createSessionFor(orphanId);
         const keptSession = yield* createSessionFor(keptId);
+        const both = { session: true, index: true };
 
-        const deleted = yield* inTx((tx) =>
-          Effect.all([deleteAccountIfOrphaned(orphanId, tx), deleteAccountIfOrphaned(keptId, tx)]),
+        const { deleted, insideTx } = yield* inTx((tx) =>
+          Effect.all([
+            deleteAccountIfOrphaned(orphanId, tx, "sweep"),
+            deleteAccountIfOrphaned(keptId, tx, "sweep"),
+          ]).pipe(
+            Effect.flatMap((deleted) =>
+              storedSessionOf(orphanId, orphanSession.token).pipe(
+                Effect.map((insideTx) => ({ deleted, insideTx })),
+              ),
+            ),
+          ),
         );
 
-        expect(deleted).toEqual([true, false]);
-        const both = { session: true, index: true };
-        expect(yield* storedSessionOf(orphanId, orphanSession.token)).toEqual(both);
+        expect([deleted, insideTx]).toEqual([["deleted", "kept"], both]);
+        expect(yield* storedSessionOf(orphanId, orphanSession.token)).toEqual({
+          session: false,
+          index: false,
+        });
         expect(yield* storedSessionOf(keptId, keptSession.token)).toEqual(both);
       }),
     ));
@@ -119,8 +131,10 @@ const addCompanyPausedBeforeCommit = (userId: string, name: string) =>
     const adding = addCompany(userId, { name: `${P}${name}`, orgCode: "PERSONAL" }).pipe(
       Effect.provide(
         auditLogWith((live) => ({
-          recordCompanyCreated: (...args) =>
-            holdBeforeCommit(written, release)(live.recordCompanyCreated(...args)),
+          appendAuditLogs: (entries, tx) =>
+            entries.some((entry) => entry.eventType === "company_created")
+              ? holdBeforeCommit(written, release)(live.appendAuditLogs(entries, tx))
+              : live.appendAuditLogs(entries, tx),
         })),
       ),
     );
@@ -179,7 +193,7 @@ describe("orphan の判定と事業所追加の競合", () => {
           "sweep-race-y",
         );
         const orphanCheck = Deferred.await(written).pipe(
-          Effect.andThen(inTx((tx) => deleteAccountIfOrphaned(userId, tx))),
+          Effect.andThen(inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"))),
         );
 
         const [added, deleted] = yield* Effect.all(
@@ -189,7 +203,7 @@ describe("orphan の判定と事業所追加の競合", () => {
           },
         );
 
-        expect(deleted).toBe(false);
+        expect(deleted).toBe("kept");
         expect(yield* db.readUser(userId)).toBeDefined();
         expect((yield* db.readMembership(userId, added.company.id))?.role).toBe("OWNER");
       }),
@@ -200,7 +214,7 @@ describe("orphan の判定と事業所追加の競合", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const userId = yield* seedUser("gone");
-        expect(yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx))).toBe(true);
+        expect(yield* inTx((tx) => deleteAccountIfOrphaned(userId, tx, "sweep"))).toBe("deleted");
 
         const exit = yield* Effect.exit(
           addCompany(userId, { name: `${P}gone-co`, orgCode: "PERSONAL" }),

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { OrgCode } from "@/db/repositories/company";
 import type { DbTx } from "@/db/transaction";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx } from "../audit/append";
 import { NotFound } from "../membership/guard/errors";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
@@ -15,7 +15,6 @@ export const updateCompanyInfo = Effect.fnUntraced(function* (params: {
 }) {
   const { actorUserId, companyId, input } = params;
   const companies = yield* CompanyRepo;
-  const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
   return yield* tx.run(
@@ -24,15 +23,15 @@ export const updateCompanyInfo = Effect.fnUntraced(function* (params: {
       if (!before || before.activationStatus !== "ACTIVE") return yield* new NotFound();
       const row = yield* companies.updateCompany(companyId, input, t);
       if (!row) return yield* new NotFound();
-      yield* audit.recordCompanyUpdated(
-        {
-          actor_user_id: actorUserId,
+      yield* appendAuditInTx(t, {
+        eventType: "company_updated",
+        userId: actorUserId,
+        payload: {
           company_id: companyId,
-          before: { name: before.name, org_code: before.orgCode as OrgCode },
+          before: { name: before.name, org_code: before.orgCode },
           after: { name: input.name, org_code: input.orgCode },
         },
-        t,
-      );
+      });
       return { company: row };
     }),
   );

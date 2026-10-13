@@ -152,7 +152,7 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (永続
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コードの識別子としてだけ使う), 救済スクリプト (実装形態の名前)
 
 **試行枠**:
-window 内の試行回数の上限。**auth ホスト** が **TTL store** の計数で守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコード検証 (ログインチャレンジと無効化)。fail-open にするのは HTTP 経路別の IP / session 軸 (**Magic Link**、canary token、**MFA チャレンジ** の API、MFA 状態変更) と **事業所** 単位の招待。code 上の「rate limit」(HTTP 429 を返す middleware) と「quota」(招待) は同じ概念の別名で、設計語彙では **試行枠** に統一する。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
+window 内の試行回数の上限。**auth ホスト** が **TTL store** の計数で守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコード検証 (ログインチャレンジと無効化)。fail-open にするのは HTTP 経路別の IP / session 軸 (**Magic Link**、canary token、**MFA チャレンジ** の API、MFA 状態変更) と **事業所** 単位の招待。code 上の「rate limit」(HTTP 429 を返す middleware。SPA の API では契約の middleware が `RateLimited` を返す) と「quota」(招待) は同じ概念の別名で、設計語彙では **試行枠** に統一する。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
 _Avoid_: rate limit / quota / attempt budget (code の識別子に残る別名。設計語彙では使わない), throttling (より広義)
 
 **fail-closed / fail-open**:
@@ -176,7 +176,7 @@ _Avoid_: session token (署名を除いた **TTL store** の key の方), sessio
 _Avoid_: logout (英語との混在を避ける), session 終了 (より広義)
 
 **session revoke**:
-user 自身の意思とは独立に、**session** を **TTL store** から消して無効化する操作。**sign-out** (ユーザーの自発) と対比される。契機は **多要素認証 (MFA)** の有効化・無効化 (操作した session 以外) と、アカウントの削除 (退会と orphan の削除。手順: ADR-0010)。消えた session を VerifySession は `RESULT_SESSION_NOT_FOUND` として返す。Postgres の `session.revoked_at` 列と proto の `RESULT_REVOKED` は残っているが、書く処理も返す処理も無い。
+user 自身の意思とは独立に、**session** を **TTL store** から消して無効化する操作。**sign-out** (ユーザーの自発) と対比される。契機は **多要素認証 (MFA)** の有効化・無効化 (操作した session 以外) と、アカウントの削除 (退会と orphan の削除。手順: ADR-0010)。アカウントの削除では、user を消す処理が commit の後に session を消す。消えた session を VerifySession は `RESULT_SESSION_NOT_FOUND` として返す。Postgres の `session.revoked_at` 列と proto の `RESULT_REVOKED` は残っているが、書く処理も返す処理も無い。
 _Avoid_: invalidate (より広義), terminate, kill
 
 **Service Key**:
@@ -188,7 +188,7 @@ _Avoid_: API key (end user 向けの credential と紛らわしい), shared secr
 _Avoid_: RBAC (一般語で実体を指さない), authorization (より広義), 認可ミドルウェア (実装形態の名前)
 
 **SPA の API 契約**:
-共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の画面は MFA チャレンジも含めて契約の client で呼ぶ。`src/mfa/client-facing-contracts.ts` に残るのは、server と web が読む型 (失敗の code `MfaClientFacingErrorCode`、コードの種別 `MfaCodeKind`、型の一致検査 `MatchesClientFacingShape`) だけである。詳細: ADR-0017「SPA の API 契約」。
+共通画面 SPA が呼ぶ JSON API (`/api/account/*` と `/api/mfa/challenge*`) の endpoint、path、param、body、成功の応答、失敗を宣言した Effect HttpApi の定義。domain ごとに `src/<domain>/*-contract.ts` に置き、`src/spa-contract.ts` で 1 つにまとめる。server の実装 (`src/handlers/*-http-api.ts`) と web は、同じ定義を読む。web の画面は MFA チャレンジも含めて契約の client で呼び、失敗の文言を `_tag` で選ぶ。失敗の status は失敗の class の `httpApiStatus` の 1 か所にだけ書く。CSRF の検査と、MFA の 3 つの **試行枠** は、契約の endpoint に付いて動く。詳細: ADR-0017「SPA の API 契約」。
 _Avoid_: API 定義, schema (一般語で、Effect Schema や DB schema と紛らわしい), 契約 (単独では handler の契約や運用の契約と区別できない)
 
 **audit log**:
@@ -200,7 +200,7 @@ _Avoid_: event log (より広義), activity log
 _Avoid_: log entry, audit record
 
 **best-effort 記帳**:
-記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立条件にすると audit 保存の障害がそのまま user の操作の失敗になるので、失敗は Sentry に集約し、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと rollback する「tx 内記帳」と対になる。sign-in、MFA の有効化と無効化、`invitation_accept_rejected` がこちらに当たる。
+記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立条件にすると audit 保存の障害がそのまま user の操作の失敗になるので、失敗は Sentry に集約し、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと rollback する「tx 内記帳」と対になる。sign-in、MFA の有効化と無効化、`invitation_accept_rejected` がこちらに当たる。code の入口は、best-effort 記帳が `appendAuditBestEffort`、tx 内記帳が `appendAuditInTx` である。
 _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
 
 ## Relationships
@@ -234,7 +234,7 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - 「after-signin」「after-signup」は **proxy 側 path** (例: taimei の `/auth/after-signin` Controller) を指す別の概念である。taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うので混同しない
 - 「twoFactor」「backupCodes」「`2fa-*`」は、twoFactor プラグインの撤去により、テーブル名、列名、API 名、cookie 内の識別子としてはもう存在しない。設計語彙と自前の識別子では **多要素認証 (MFA)** / **リカバリーコード** を使う。残る借用はテスト内の語彙検査だけである
 - 「Auth」は better-auth の instance (`auth`、ESM live binding) と、それを包む Effect service の両方に読めた。解決済み: service は `AuthApi` に一本化し、instance を `Auth` と呼ばない。Effect 導入で増えた実装語彙 (Transport adapter / boundary error / ports・wiring / `WireFailure`) はドメイン語ではないためこの glossary には置かず、定義元は ADR-0017 とする
-- 「wire」(client が受け取る応答の byte 列) は日本語話者に意味が取りづらく、定義もどこにも無かった。解決済み: 2026-09 に code の識別子を `ClientFacingError` / `ClientFacingErrorShape` / `clientFacingErrorResponse` / `parseClientFacingError` / `MfaClientFacingErrorCode` (`src/handlers/client-facing-error.ts` / `src/mfa/client-facing-contracts.ts`) へ改名した。client-facing とは中身を client に開示する失敗 (`status` と、adapter を通る route では `error` code、**SPA の API 契約** の route では `_tag` を応答にする) を指し、対比は internal (BoundaryError / defect。Sentry に送り、500 の固定文を返す) である。線引きは 4xx / 5xx ではなく開示の有無で決まる (`ServiceKeyMisconfigured` は 503 だが client-facing)。ADR-0017 の「wire」は旧名として読む
+- 「wire」(client が受け取る応答の byte 列) は日本語話者に意味が取りづらく、定義もどこにも無かった。解決済み: 2026-09 に code の識別子を client-facing の語へ改名した (今は `clientFacingErrorResponse` / `parseClientFacingError`、`src/handlers/client-facing-error.ts`)。client-facing とは中身を client に開示する失敗 (失敗の class の `httpApiStatus` を status に、`_tag` を body にする。2026-10-12 から adapter を通る route も同じ形) を指し、対比は internal (BoundaryError / defect。Sentry に送り、500 の固定文を返す) である。線引きは 4xx / 5xx ではなく開示の有無で決まる (`ServiceKeyMisconfigured` は 503 だが client-facing)。ADR-0017 の「wire」は旧名として読む
 - 「actor」は **membership guard** の「session からの actor 解決」の主体を指す。MFA 実装の `MfaActor` 型はその 3 フィールドだけを取り出した実装型であり、別のドメイン概念ではない。解決済み: 旧 `RegistrationPrincipal` を廃し、主体の語彙を actor に一本化した
 - 「rate limit」「quota」「attempt budget」が code 上で並存し、どれも同じ「window 内の試行上限」を指していた。解決済み: 設計語彙は **試行枠** に統一し、code の識別子は別名として据え置いた
 - 「Redis」は 2026-09 まで **TTL store** の実装名 (Upstash / node-redis) で、glossary でも保存先を指す語として使っていた。解決済み: 実装を Durable Objects / in-memory に替えた (ADR-0019) 際に **TTL store** を canonical 化した。code の識別子も `ttl-store.ts` / `TtlStore` service / `TtlStoreError` へ改名済みである (`/health` の check key は `ttlStore`)

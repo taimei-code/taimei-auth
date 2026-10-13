@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type { Context, Next } from "hono";
 
 import { AuthApi } from "../auth-service";
+import { acceptInvitationPath } from "../invitation/accept-path";
 import { MembershipRepo } from "../membership/ports";
 import { captureCauseAs } from "../sentry";
 import { signInParamsSchema } from "../sign-in-params";
@@ -30,9 +31,7 @@ export const authEntryRedirectProgram = Effect.fnUntraced(
     if (!params.success) return CONTINUE;
 
     if (params.data.invitation_token) {
-      const inviteUrl = new URL("/auth/signup/accept-invitation", c.req.url);
-      inviteUrl.searchParams.set("invitation_token", params.data.invitation_token);
-      return respondWith(c.redirect(inviteUrl.pathname + inviteUrl.search));
+      return respondWith(c.redirect(acceptInvitationPath(params.data.invitation_token)));
     }
 
     const memberships = yield* MembershipRepo.use((repo) =>

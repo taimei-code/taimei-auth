@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx } from "../audit/append";
 import { Forbidden } from "../membership/guard/errors";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
@@ -15,7 +15,6 @@ export const switchCompany = Effect.fnUntraced(function* (params: {
 
   const memberships = yield* MembershipRepo;
   const users = yield* UserRepo;
-  const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
   yield* tx.run(
@@ -27,14 +26,11 @@ export const switchCompany = Effect.fnUntraced(function* (params: {
       );
       if (!targetMembership) return yield* new Forbidden();
       yield* users.updateUserLastUsedCompany(actorUserId, targetCompanyId, t);
-      yield* audit.recordCompanySwitched(
-        {
-          actor_user_id: actorUserId,
-          from_company_id: fromCompanyId,
-          to_company_id: targetCompanyId,
-        },
-        t,
-      );
+      yield* appendAuditInTx(t, {
+        eventType: "company_switched",
+        userId: actorUserId,
+        payload: { from_company_id: fromCompanyId, to_company_id: targetCompanyId },
+      });
     }),
   );
 

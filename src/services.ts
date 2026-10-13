@@ -1,6 +1,7 @@
 import { isLocalEnvironment } from "./env";
 
-export type ServiceName = "taimei" | "accounts";
+export const SERVICE_NAMES = ["taimei", "accounts"] as const;
+export type ServiceName = (typeof SERVICE_NAMES)[number];
 
 export interface TaimeiServiceConfig {
   readonly name: string;

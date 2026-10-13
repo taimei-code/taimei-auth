@@ -102,7 +102,7 @@ session cookie がクリアされた状態で再ログインへ誘導し `Sentry
 better-auth は `options.hooks.after` を全プラグインの after-hook より先に実行する
 (`node_modules/better-auth/dist/api/dispatch.mjs` の `getHooks` で実測して確認した)。そのため
 `src/auth.ts` の `hooks.after` に置いていた welcome メール送信と `sign_in` audit event の発火を、
-自前プラグイン `src/auth-plugins/sign-in-observer.ts` へ移し、**mfa-challenge の後に登録する**。
+自前プラグイン `src/auth-plugins/sign-in-observer.ts` へ移し、mfa-challenge の後に登録した。(2026-10-12 改訂) 2 つのプラグインを `src/auth-plugins/primary-auth.ts` の 1 つの after hook にまとめ、チャレンジの判定の後に観測する。
 
 登録順が後であることにより、チャレンジ介入で `newSession` が null になった状態を observer がそのまま
 観測してスキップする (チャレンジ未通過の時点では `sign_in` を記録しない)。順序そのものが正しさの前提に

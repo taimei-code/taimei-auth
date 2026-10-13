@@ -3,17 +3,10 @@ import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { LastOwner } from "./errors";
 import { AlreadyOwner, Forbidden, InvalidArgument, NotFound } from "./guard/errors";
-import type { Role } from "./policy";
+import { ROLES } from "../../db/enums";
+import { AccountDeleted, CompanyParams, Id, Ok } from "../spa-contract-schemas";
 
-export const RoleSchema = Schema.Literals(["OWNER", "ADMIN", "MEMBER"]);
-const _roleSchemaIsExhaustive: [Exclude<Role, typeof RoleSchema.Type>] extends [never]
-  ? true
-  : never = true;
-
-export const Id = Schema.String.check(Schema.isBetweenLength(1, 64));
-export const Ok = Schema.Struct({ ok: Schema.Literal(true) });
-export const AccountDeleted = Schema.Struct({ ...Ok.fields, account_deleted: Schema.Boolean });
-export const CompanyParams = { companyId: Schema.String };
+export const RoleSchema = Schema.Literals(ROLES);
 
 const Member = Schema.Struct({
   membership_id: Schema.String,

@@ -17,11 +17,12 @@ RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=shared bun instal
 COPY packages ./packages
 RUN cd packages/auth-client && bun run build
 
-# src を COPY するのは web/vite.config.ts の "@core" alias が ../src を指すため
+# src を COPY するのは web/vite.config.ts の "@core" alias が ../src を指すため。db/enums.ts は src の契約が読む
 FROM deps AS web-build
 ARG APP_ENV=production
 COPY web ./web
 COPY src ./src
+COPY db/enums.ts ./db/enums.ts
 COPY tsconfig.json ./
 RUN bun run build:web
 

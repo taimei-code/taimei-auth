@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { TAIMEI_SERVICES, type ServiceName } from "./services";
+import { SERVICE_NAMES, type ServiceName } from "./services";
 import { validateRedirectUrl } from "./url-allowlist";
 
-const serviceNameSchema = z.enum(Object.keys(TAIMEI_SERVICES) as [ServiceName, ...ServiceName[]]);
+const serviceNameSchema = z.enum(SERVICE_NAMES);
 
 const signInParamsObjectSchema = z.object({
   service_name: serviceNameSchema,

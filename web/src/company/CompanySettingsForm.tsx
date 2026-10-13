@@ -1,4 +1,3 @@
-import { useAtomSet } from "@effect/atom-react";
 import { Exit } from "effect";
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
@@ -6,9 +5,11 @@ import { Loader2 } from "lucide-react";
 
 import type { OrgCode } from "@core/company/org-code";
 
+import { companyStateAtom } from "../account/account-atom";
 import type { Membership } from "../account/current-company";
 import { redirectAfterAuthChange } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
+import { useWaitForValue } from "../shared/atom-runtime";
 import { failureMessage } from "../shared/failure-message";
 import { notifyAfterRefresh, notifyError } from "../shared/notify";
 import { Button } from "../shared/ui/button";
@@ -16,7 +17,7 @@ import { Input } from "../shared/ui/input";
 import { Label } from "../shared/ui/label";
 import { Separator } from "../shared/ui/separator";
 import { OrgCodeField } from "./OrgCodeField";
-import { deleteCompanyAtom, updateCompanyAtom } from "./company-atom";
+import { useDeleteCompany, useUpdateCompany } from "./company-atom";
 
 const UPDATE_FAILED = "更新に失敗しました。";
 const DELETE_FAILED = "事業所の削除に失敗しました。";
@@ -24,26 +25,24 @@ const DELETE_FAILED = "事業所の削除に失敗しました。";
 type Props = {
   membership: Membership;
   isLastCompany: boolean;
-  refresh: () => Promise<void>;
 };
 
-export const CompanySettingsForm = ({ membership, isLastCompany, refresh }: Props) => {
+export const CompanySettingsForm = ({ membership, isLastCompany }: Props) => {
   const companyId = membership.company_id;
   const [name, setName] = useState(membership.company_name);
-  const [orgCode, setOrgCode] = useState<OrgCode>(
-    membership.company_org_code === "CORPORATE" ? "CORPORATE" : "PERSONAL",
-  );
+  const [orgCode, setOrgCode] = useState<OrgCode>(membership.company_org_code);
   const [submitting, setSubmitting] = useState(false);
-  const updateCompany = useAtomSet(updateCompanyAtom, { mode: "promiseExit" });
+  const updateCompany = useUpdateCompany();
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
 
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    updateCompany({ params: { companyId }, payload: { name: name.trim(), org_code: orgCode } })
+    updateCompany(companyId, { name: name.trim(), org_code: orgCode })
       .then(
         Exit.match({
           onSuccess: () =>
-            notifyAfterRefresh(refresh, {
+            notifyAfterRefresh(waitForCompanyState, {
               done: "事業所情報を更新しました。",
               staleShort: "事業所情報を更新しました",
             }),
@@ -91,7 +90,6 @@ export const CompanySettingsForm = ({ membership, isLastCompany, refresh }: Prop
       <DeleteCompanySection
         membership={membership}
         isLastCompany={isLastCompany}
-        refresh={refresh}
         disabled={submitting}
       />
     </>
@@ -101,16 +99,16 @@ export const CompanySettingsForm = ({ membership, isLastCompany, refresh }: Prop
 const DeleteCompanySection = ({
   membership,
   isLastCompany,
-  refresh,
   disabled,
 }: Props & { disabled: boolean }) => {
   const companyId = membership.company_id;
   const companyName = membership.company_name;
   const navigate = useNavigate();
-  const deleteCompany = useAtomSet(deleteCompanyAtom, { mode: "promiseExit" });
+  const deleteCompany = useDeleteCompany();
+  const waitForCompanyState = useWaitForValue(companyStateAtom);
 
   const handleDelete = () =>
-    deleteCompany({ params: { companyId } }).then(
+    deleteCompany(companyId).then(
       Exit.match({
         onSuccess: ({ account_deleted }) => {
           if (account_deleted) {
@@ -118,7 +116,7 @@ const DeleteCompanySection = ({
             return;
           }
           void navigate({ to: "/account/companies" });
-          return notifyAfterRefresh(refresh, {
+          return notifyAfterRefresh(waitForCompanyState, {
             done: `「${companyName}」を削除しました。`,
             staleShort: "事業所を削除しました",
           });

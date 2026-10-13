@@ -1,45 +1,28 @@
-import { Cause, Predicate } from "effect";
+import { Cause, Predicate, Schema } from "effect";
 import { type BoundaryError, isBoundaryError } from "../errors";
+import type { InvalidArgument, NotFound } from "../membership/guard/errors";
 import { type CaptureContext, Sentry } from "../sentry";
-import type { CompanyError } from "../company/errors";
-import type { InvitationError } from "../invitation/errors";
-import type { MembershipError } from "../membership/errors";
-import type { GuardError } from "../membership/guard/errors";
-import type { MfaError } from "../mfa/error-mapping";
-import type { MfaClientFacingErrorCode } from "../mfa/client-facing-contracts";
-import type { ServiceKeyError } from "../service-key";
+import type { ServiceKeyMisconfigured, ServiceKeyRejected } from "../service-key";
 
-export type DomainError = MembershipError | CompanyError | InvitationError;
+export type RouteError =
+  | BoundaryError
+  | InvalidArgument
+  | NotFound
+  | ServiceKeyRejected
+  | ServiceKeyMisconfigured;
 
-export type ClientFacingError = GuardError | DomainError | MfaError | ServiceKeyError;
-
-export type ClientFacingErrorShape = {
-  readonly error: string;
+export type ClientFacing = {
+  readonly failure: object;
+  readonly tag: string;
   readonly status: number;
-  readonly details?: unknown;
+  readonly body: unknown;
 };
-
-type GuardCodesOnMfaRoutes = "unauthorized" | "invalid_argument";
-const _guardCodesReachMfaWire: [GuardCodesOnMfaRoutes] extends [GuardError["error"]]
-  ? [GuardCodesOnMfaRoutes] extends [MfaClientFacingErrorCode]
-    ? true
-    : never
-  : never = true;
-
-export type RouteError = ClientFacingError | BoundaryError;
-
-const _routeFailuresAreClientFacing: [Exclude<RouteError, BoundaryError>] extends [
-  ClientFacingErrorShape,
-]
-  ? true
-  : never = true;
 
 // charset 無しで固定し、Hono の c.json と byte 単位で一致させる。
 export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
-export function clientFacingErrorResponse(failure: ClientFacingErrorShape): Response {
-  const body = JSON.stringify({ error: failure.error, details: failure.details });
-  return new Response(body, { status: failure.status, headers: JSON_HEADERS });
+export function clientFacingErrorResponse({ status, body }: ClientFacing): Response {
+  return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
 }
 
 const TEXT_HEADERS = { "content-type": "text/plain; charset=UTF-8" } as const;
@@ -48,11 +31,20 @@ export function internalErrorResponse(): Response {
   return new Response("Internal Server Error", { status: 500, headers: TEXT_HEADERS });
 }
 
-// catalog でなく形で判定し、catalog 漏れの failure を 500 に倒さない。
-export const parseClientFacingError = (e: unknown): ClientFacingErrorShape | undefined =>
-  Predicate.isObject(e) && Predicate.isString(e.error) && Predicate.isNumber(e.status)
-    ? (e as ClientFacingErrorShape)
-    : undefined;
+// catalog でなく class の宣言で判定し、catalog 漏れの failure を 500 に倒さない。
+export const parseClientFacingError = (e: unknown): ClientFacing | undefined => {
+  if (!Predicate.isObject(e) || !Predicate.isString(e._tag)) return undefined;
+  const schema: unknown = e.constructor;
+  if (!Schema.isSchema(schema)) return undefined;
+  const status = schema.ast.annotations?.httpApiStatus;
+  if (!Predicate.isNumber(status)) return undefined;
+  return {
+    failure: e,
+    tag: e._tag,
+    status,
+    body: Schema.encodeUnknownSync(schema as Schema.Codec<unknown>)(e),
+  };
+};
 
 type Report = Pick<CaptureContext, "tags" | "extra"> & { label: string };
 

@@ -11,16 +11,16 @@ type RegisteredPlugin = {
   };
 };
 
-function mfaChallengePlugin(): RegisteredPlugin {
+function primaryAuthPlugin(): RegisteredPlugin {
   const plugins = (auth.options.plugins ?? []) as unknown as RegisteredPlugin[];
-  const plugin = plugins.find((p) => p.id === "mfa-challenge");
-  if (!plugin) throw new Error("mfa-challenge plugin is not registered");
+  const plugin = plugins.find((p) => p.id === "primary-auth");
+  if (!plugin) throw new Error("primary-auth plugin is not registered");
   return plugin;
 }
 
 const challengeMatcher = (): RouteMatcher => {
-  const matcher = mfaChallengePlugin().hooks?.after?.[0]?.matcher;
-  if (!matcher) throw new Error("mfa-challenge after-hook matcher is not registered");
+  const matcher = primaryAuthPlugin().hooks?.after?.[0]?.matcher;
+  if (!matcher) throw new Error("primary-auth after-hook matcher is not registered");
   return matcher;
 };
 
@@ -91,5 +91,10 @@ describe("MFA チャレンジ介入点の allowlist", () => {
       path.startsWith("/two-factor/"),
     );
     expect(twoFactorRoutes).toEqual([]);
+  });
+
+  test("一次認証の後の判定と観測は 1 つの plugin の 1 つの hook にあり、plugin の登録順に頼らない", () => {
+    const plugins = (auth.options.plugins ?? []) as unknown as RegisteredPlugin[];
+    expect(plugins.map((plugin) => plugin.id)).toEqual(["magic-link", "primary-auth"]);
   });
 });

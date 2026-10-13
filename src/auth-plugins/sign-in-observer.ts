@@ -1,18 +1,10 @@
-import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
 import { Clock, Effect } from "effect";
-import { appendAuditLogBestEffort } from "../audit/report-failure";
+import { appendAuditBestEffort, signInEntry } from "../audit/append";
 import { Background } from "../background";
 import { EmailSender } from "../email/ports";
 import { toDisplayText } from "../email/sanitize";
-import { getClientContext } from "../request-context";
 import { captureCause } from "../sentry";
-import type { AppRuntime } from "../runtime";
-import {
-  isPrimaryAuthRoute,
-  parsePrimaryAuthRoute,
-  type PrimaryAuthRoute,
-} from "./primary-auth-routes";
+import type { PrimaryAuthRoute } from "./primary-auth-routes";
 
 const NEW_USER_THRESHOLD_MS = 10000;
 
@@ -38,39 +30,7 @@ export const observeSignInProgram = Effect.fnUntraced(function* (input: SignedIn
 
   if (input.route._tag === "Unmapped") return;
 
-  // 型付き property に spread や関数の戻りを渡すと excess-property check が効かず、余分な項目が混入する。
-  const { ip, userAgent } = getClientContext(input.headers);
   yield* background.run(
-    appendAuditLogBestEffort({
-      eventType: "sign_in",
-      userId: user.id,
-      payload: { method: input.route.method, ip, userAgent },
-    }),
+    appendAuditBestEffort(signInEntry(user.id, input.route.method, input.headers)),
   );
-});
-
-const observeSignIn = (runtime: AppRuntime) =>
-  createAuthMiddleware(async (ctx) => {
-    // mfa-challenge の後に登録される前提で、null にされた newSession は skip する。
-    const establishedSession = ctx.context.newSession;
-    if (!establishedSession) return;
-    await runtime.runPromise(
-      observeSignInProgram({
-        user: establishedSession.user,
-        route: parsePrimaryAuthRoute(ctx.path, ctx.params),
-        headers: ctx.headers,
-      }),
-    );
-  });
-
-export const signInObserver = (runtime: AppRuntime): BetterAuthPlugin => ({
-  id: "sign-in-observer",
-  hooks: {
-    after: [
-      {
-        matcher: (ctx) => isPrimaryAuthRoute(ctx.path),
-        handler: observeSignIn(runtime),
-      },
-    ],
-  },
 });

@@ -49,6 +49,14 @@ describe("createSignupCompany", () => {
         const userRow = yield* db.readUser(userId);
         expect(userRow?.lastUsedCompanyId).toBe(result.company.id);
         expect(yield* countCompanyCreatedAudit(userId, result.company.id)).toBe(1);
+        expect((yield* auditRowsFor(userId, "company_created")).map((r) => r.payload)).toEqual([
+          {
+            company_id: result.company.id,
+            name: result.company.name,
+            org_code: "CORPORATE",
+            created_by_user_id: userId,
+          },
+        ]);
       }),
     ));
 
@@ -65,7 +73,7 @@ describe("createSignupCompany", () => {
         const e = yield* Effect.flip(
           createSignupCompany(userId, { name: db.ids.companyName("second"), orgCode: "PERSONAL" }),
         );
-        expectFailure(e, AlreadyExists, "already_exists", 409);
+        expectFailure(e, AlreadyExists);
 
         const memberships = yield* db.readMemberships(userId);
         expect(memberships.length).toBe(1);

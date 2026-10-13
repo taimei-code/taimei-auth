@@ -5,7 +5,7 @@ import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "../../__tests__/test-layers";
 import { spendDisableAttempt } from "../disable-attempt-budget";
-import { Locked } from "../error-mapping";
+import { Locked } from "../errors";
 
 describe("spendDisableAttempt", () => {
   const captured = recordSentryExceptions();

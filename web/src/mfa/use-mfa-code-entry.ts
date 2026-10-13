@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from "react";
 
-import type { MfaCodeKind, MfaErrorCode } from "./mfa-atom";
+import type { MfaCodeKind } from "./mfa-atom";
 
 const WHITESPACE = /\s+/g;
 // NFKC で ASCII に正規化されないダッシュ類 (メール本文からの貼り付けで混ざる)
@@ -16,29 +16,6 @@ const HYPHEN_LIKE = /[-‐-―−ー]/g;
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
   const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
   return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
-}
-
-const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
-
-const MESSAGE_BY_ERROR_CODE: Record<MfaErrorCode, string> = {
-  invalid_code: "入力されたコードが正しくありません。",
-  challenge_expired: "ログインの有効期限が切れました。お手数ですが、もう一度ログインしてください。",
-  locked:
-    "試行回数が上限に達したか、確認を一時的に受け付けられません。15 分ほど経ってからやり直してください。",
-  rate_limited: "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
-  already_enabled: "多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。",
-  enrollment_changed: "登録情報が更新されました。もう一度登録を開始してください。",
-  not_enabled: "多要素認証 (MFA) は有効になっていません。ページを再読み込みしてください。",
-  invalid_argument: "コードの形式が正しくありません。",
-  unauthorized: "ログイン状態が確認できませんでした。もう一度ログインしてください。",
-  not_found: GENERIC_MESSAGE,
-  unknown: GENERIC_MESSAGE,
-};
-
-export function describeMfaChallengeError(code: string): string {
-  return Object.hasOwn(MESSAGE_BY_ERROR_CODE, code)
-    ? MESSAGE_BY_ERROR_CODE[code as MfaErrorCode]
-    : GENERIC_MESSAGE;
 }
 
 export type MfaCodeInput = {
@@ -60,7 +37,7 @@ export type MfaCodeInput = {
 export function useMfaCodeInput(options: {
   inputId: string;
   submitting: boolean;
-  errorCode: MfaErrorCode | null;
+  errorMessage: string | null;
   submit: (input: { code: string; kind: MfaCodeKind }) => void;
   onKindChange?: () => void;
 }): MfaCodeInput {
@@ -99,7 +76,7 @@ export function useMfaCodeInput(options: {
       : "有効化時に控えたリカバリーコードを 1 つ入力してください (1 つにつき 1 回だけ使えます)。",
     hintId,
     errorId,
-    errorMessage: options.errorCode === null ? null : describeMfaChallengeError(options.errorCode),
+    errorMessage: options.errorMessage,
     submitting: options.submitting,
     canSubmit: !options.submitting && normalizedCode !== "",
     inputProps: {
@@ -118,8 +95,8 @@ export function useMfaCodeInput(options: {
       maxLength: 32,
       placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
       "aria-label": isTotp ? "確認コード" : "リカバリーコード",
-      "aria-invalid": options.errorCode !== null,
-      "aria-describedby": options.errorCode === null ? hintId : `${hintId} ${errorId}`,
+      "aria-invalid": options.errorMessage !== null,
+      "aria-describedby": options.errorMessage === null ? hintId : `${hintId} ${errorId}`,
     },
     handleSubmit,
     reset,
@@ -128,26 +105,26 @@ export function useMfaCodeInput(options: {
 
 export function useMfaCodeEntry(options: {
   inputId: string;
-  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<MfaErrorCode | null>;
+  submit: (input: { code: string; kind: MfaCodeKind }) => Promise<string | null>;
 }): MfaCodeInput {
   const [submitting, setSubmitting] = useState(false);
-  const [errorCode, setErrorCode] = useState<MfaErrorCode | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // submitting state は同期に反映されないため、同じ task 内の二重 submit は ref でしか防げない
   const submitInFlight = useRef(false);
 
   const input = useMfaCodeInput({
     inputId: options.inputId,
     submitting,
-    errorCode,
-    onKindChange: () => setErrorCode(null),
+    errorMessage,
+    onKindChange: () => setErrorMessage(null),
     submit: (value) => {
       if (submitInFlight.current) return;
       submitInFlight.current = true;
       setSubmitting(true);
-      setErrorCode(null);
+      setErrorMessage(null);
       void options
         .submit(value)
-        .then(setErrorCode)
+        .then(setErrorMessage)
         .finally(() => {
           submitInFlight.current = false;
           setSubmitting(false);
@@ -159,7 +136,7 @@ export function useMfaCodeEntry(options: {
     ...input,
     reset: () => {
       input.reset();
-      setErrorCode(null);
+      setErrorMessage(null);
       setSubmitting(false);
     },
   };

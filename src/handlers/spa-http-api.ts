@@ -2,6 +2,7 @@ import { Cause, Context, Effect, ErrorReporter, Layer } from "effect";
 import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
 import { HttpApi, HttpApiBuilder, HttpApiError } from "effect/http-api";
 import type { Hono } from "hono";
+import { csrf } from "hono/csrf";
 import { Authenticated, CurrentActor } from "../account/actor-contract";
 import { UserRepo } from "../account/ports";
 import { AuthApi } from "../auth-service";
@@ -10,6 +11,7 @@ import { type AppServices, getRuntime } from "../runtime";
 import { SentryService } from "../sentry";
 import { SpaApi } from "../spa-contract";
 import { AccountHandlers } from "./account-http-api";
+import { AttemptBudgetsLive } from "./attempt-budget-http-api";
 import { parseClientFacingError, settleCause } from "./client-facing-error";
 import { CompanyHandlers } from "./company-http-api";
 import { InvitationHandlers } from "./invitation-http-api";
@@ -73,7 +75,7 @@ const makeSpaApiHandler = (services: Layer.Layer<AppServices>) =>
         MfaHandlers,
         MfaChallengeHandlers,
       ]),
-      Layer.provide(AuthenticatedLive),
+      Layer.provide([AuthenticatedLive, AttemptBudgetsLive]),
       HttpRouter.provideRequest(services),
       Layer.provide(services),
       Layer.provide(ErrorReporter.layer([sentryReporter])),
@@ -85,16 +87,26 @@ const makeSpaApiHandler = (services: Layer.Layer<AppServices>) =>
 export const runtimeServices = (): Layer.Layer<AppServices> =>
   Layer.effectContext(getRuntime().contextEffect);
 
+export const spaEndpoints = () => {
+  const endpoints: { method: string; path: string; middleware: ReadonlySet<{ key: string }> }[] =
+    [];
+  HttpApi.reflect(SpaApi, {
+    onGroup: () => {},
+    onEndpoint: ({ endpoint, middleware }) => {
+      endpoints.push({ method: endpoint.method, path: endpoint.path, middleware });
+    },
+  });
+  return endpoints;
+};
+
 export function mountSpaApi(app: Hono, services?: Layer.Layer<AppServices>): void {
   let spaHandler: ReturnType<typeof makeSpaApiHandler> | undefined;
   const respond = (request: Request) => {
     spaHandler ??= makeSpaApiHandler(services ?? runtimeServices());
     return spaHandler.handler(request);
   };
-  HttpApi.reflect(SpaApi, {
-    onGroup: () => {},
-    onEndpoint: ({ endpoint }) => {
-      app.on(endpoint.method, endpoint.path, (c) => respond(c.req.raw));
-    },
-  });
+  const csrfProtection = csrf();
+  for (const { method, path } of spaEndpoints()) {
+    app.on(method, path, csrfProtection, (c) => respond(c.req.raw));
+  }
 }

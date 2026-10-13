@@ -55,7 +55,7 @@ describe("OWNER race", () => {
 
           const failed = results.filter(Exit.isFailure);
           expect(failed.length).toBe(1);
-          expectFailure(yield* Effect.flip(failed[0] ?? Exit.void), LastOwner, "last_owner", 409);
+          expectFailure(yield* Effect.flip(failed[0] ?? Exit.void), LastOwner);
 
           const remaining = yield* db.readMembershipsOfCompany(co);
           expect(remaining.map((r) => r.role)).toEqual(["OWNER"]);
@@ -125,7 +125,7 @@ describe("除名と current 事業所の切替の競合", () => {
 
         expect(removed).toEqual({ accountDeleted: false });
         expect(Exit.isFailure(switched)).toBe(true);
-        expectFailure(yield* Effect.flip(switched), Forbidden, "forbidden", 403);
+        expectFailure(yield* Effect.flip(switched), Forbidden);
         expect((yield* db.readUser(member.id))?.lastUsedCompanyId).toBe(other);
       }),
     ));

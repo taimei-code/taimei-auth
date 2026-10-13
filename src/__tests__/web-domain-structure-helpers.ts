@@ -43,6 +43,7 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   [
     "membership",
     new Set([
+      "account/account-atom.ts",
       "account/current-company.tsx",
       "auth/auth-client.ts",
       "invitation/InviteMemberForm.tsx",

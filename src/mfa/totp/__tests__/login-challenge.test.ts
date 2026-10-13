@@ -21,7 +21,7 @@ import {
   totpCode,
   wrongTotpCode,
 } from "../../__tests__/helpers";
-import { ChallengeExpired, InvalidCode, Locked } from "../../error-mapping";
+import { ChallengeExpired, InvalidCode, Locked } from "../../errors";
 import { completeLoginChallenge } from "../complete-login-challenge";
 import {
   attemptsKey as attemptsKeyOf,
@@ -161,7 +161,7 @@ describe("ログインチャレンジ", () => {
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",
         });
-        expectFailure(replayed, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(replayed, ChallengeExpired);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
       }),
     ));
@@ -219,7 +219,7 @@ describe("ログインチャレンジ", () => {
             code: yield* wrongTotpCode(enabled.secret),
             kind: "totp",
           });
-          expectFailure(rejected, InvalidCode, "invalid_code", 400);
+          expectFailure(rejected, InvalidCode);
           expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
         }
         expect(exhaustedWarnings()).toHaveLength(0);
@@ -228,7 +228,7 @@ describe("ログインチャレンジ", () => {
           code: yield* wrongTotpCode(enabled.secret),
           kind: "totp",
         });
-        expectFailure(lastAttempt, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(lastAttempt, ChallengeExpired);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
         expect(exhaustedWarnings()).toHaveLength(1);
 
@@ -236,14 +236,14 @@ describe("ログインチャレンジ", () => {
           code: yield* wrongTotpCode(enabled.secret),
           kind: "totp",
         });
-        expectFailure(sixth, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(sixth, ChallengeExpired);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
 
         const after = yield* verifyFails(challenge.headers, {
           code: yield* totpCode(enabled.secret),
           kind: "totp",
         });
-        expectFailure(after, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(after, ChallengeExpired);
         expect(yield* auditRowsFor(user.id, "sign_in")).toEqual([]);
       }),
     ));
@@ -289,7 +289,7 @@ describe("ログインチャレンジ", () => {
           kind: "totp",
         });
 
-        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(rejected, ChallengeExpired);
         expect(yield* auditRowsFor(user.id, "sign_in")).toEqual([]);
       }),
     ));
@@ -312,7 +312,7 @@ describe("ログインチャレンジ", () => {
           kind: "totp",
         });
 
-        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(rejected, ChallengeExpired);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: false });
       }),
     ));
@@ -342,7 +342,7 @@ describe("ログインチャレンジ", () => {
           }),
         );
 
-        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(rejected, ChallengeExpired);
         expect(
           sentry.exceptions.filter((e) => e.context?.tags?.component === "mfa-login-challenge"),
         ).toHaveLength(1);
@@ -370,7 +370,7 @@ describe("ログインチャレンジ", () => {
           kind: "totp",
         });
 
-        expectFailure(rejected, Locked, "locked", 429);
+        expectFailure(rejected, Locked);
         expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
       }),
     ));
@@ -399,7 +399,7 @@ describe("ログインチャレンジ", () => {
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",
         });
-        expectFailure(rejected, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(rejected, ChallengeExpired);
       }),
     ));
 
@@ -455,7 +455,7 @@ describe("ログインチャレンジ", () => {
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",
         });
-        expectFailure(after, ChallengeExpired, "challenge_expired", 401);
+        expectFailure(after, ChallengeExpired);
       }),
     ));
 });

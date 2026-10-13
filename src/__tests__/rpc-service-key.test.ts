@@ -22,38 +22,38 @@ afterEach(() => {
 
 describe("/rpc/* の service key middleware (応答 byte 不変、Sentry 0 件)", () => {
   test.each([
-    ["AC-012", { "X-Service-Key": "wrong" }],
-    ["AC-013", {}],
-  ])("%s: 不一致 / 未提示 → 401 JSON", async (_, headers) => {
+    ["不一致", { "X-Service-Key": "wrong" }],
+    ["未提示", {}],
+  ])("不一致 / 未提示 (%s) → 401 JSON", async (_, headers) => {
     process.env.AUTH_SERVICE_KEY = "k";
     const res = await request(headers);
     expect(res.status).toBe(401);
-    expect(await res.text()).toBe('{"error":"Unauthorized: invalid service key"}');
+    expect(await res.text()).toBe('{"_tag":"ServiceKeyRejected"}');
     expect(res.headers.get("content-type")).toBe("application/json");
   });
 
-  test("AC-014: 未設定 + production → 503 JSON", async () => {
+  test("未設定 + production → 503 JSON", async () => {
     process.env.APP_ENV = "production";
     const res = await request({ "X-Service-Key": "any" });
     expect(res.status).toBe(503);
-    expect(await res.text()).toBe('{"error":"Service Key not configured (production)"}');
+    expect(await res.text()).toBe('{"_tag":"ServiceKeyMisconfigured"}');
     expect(res.headers.get("content-type")).toBe("application/json");
   });
 
-  test("AC-015: 一致 → next() が呼ばれ rpc router の 404", async () => {
+  test("一致 → next() が呼ばれ rpc router の 404", async () => {
     process.env.AUTH_SERVICE_KEY = "k";
     const res = await request({ "X-Service-Key": "k" });
     expect(res.status).toBe(404);
-    expect(await res.text()).toBe('{"error":"Not Found"}');
+    expect(await res.text()).toBe('{"_tag":"NotFound"}');
   });
 
-  test("AC-016: 未設定 + development → 未提示でも 404 (通す)", async () => {
+  test("未設定 + development → 未提示でも 404 (通す)", async () => {
     process.env.APP_ENV = "development";
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
       const res = await request();
       expect(res.status).toBe(404);
-      expect(await res.text()).toBe('{"error":"Not Found"}');
+      expect(await res.text()).toBe('{"_tag":"NotFound"}');
     } finally {
       warn.mockRestore();
     }

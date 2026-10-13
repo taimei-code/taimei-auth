@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { CompanyRow, OrgCode } from "@/db/repositories/company";
 import type { MembershipRow } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { applyJoin } from "../membership/apply-change";
 import { MembershipRepo } from "../membership/ports";
@@ -20,7 +20,6 @@ const createCompanyWithOwner = Effect.fnUntraced(function* (
   input: CreateCompanyInput,
 ) {
   const companies = yield* CompanyRepo;
-  const audit = yield* AuditLog;
   const ids = yield* IdGenerator;
 
   const companyId = ids.companyId();
@@ -34,10 +33,16 @@ const createCompanyWithOwner = Effect.fnUntraced(function* (
     companyId,
     role: "OWNER",
   });
-  yield* audit.recordCompanyCreated(
-    { actor_user_id: userId, company_id: companyId, name: input.name, org_code: input.orgCode },
-    tx,
-  );
+  yield* appendAuditInTx(tx, {
+    eventType: "company_created",
+    userId,
+    payload: {
+      company_id: companyId,
+      name: input.name,
+      org_code: input.orgCode,
+      created_by_user_id: userId,
+    },
+  });
   return { company: created, membership } satisfies CreatedCompany;
 });
 

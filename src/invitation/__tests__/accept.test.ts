@@ -3,6 +3,8 @@ import { Effect, Exit } from "effect";
 import { ExpiredOrUsed } from "../../membership/guard/errors";
 import { auditRowsFor, dbTest, expectFailure, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import { auditLogWith } from "../../__tests__/test-layers";
+import { DbError } from "../../errors";
 import { acceptInvitation } from "../accept";
 
 const P = "acc-test-";
@@ -62,7 +64,11 @@ describe("acceptInvitation", () => {
         );
 
         expect((yield* db.readMembership(invitee.id, co))?.role).toBe("OWNER");
-        expect(yield* auditCountByType(invitee.id, "invitation_accepted")).toBe(1);
+        expect(
+          (yield* auditRowsFor(invitee.id, "invitation_accepted")).map((r) => r.payload),
+        ).toEqual([
+          { invitation_id: inv.id, company_id: co, accepted_by_user_id: invitee.id, role: "OWNER" },
+        ]);
         expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(0);
         expect((yield* db.readUser(invitee.id))?.lastUsedCompanyId).toBe(co);
       }),
@@ -128,7 +134,7 @@ describe("acceptInvitation", () => {
             return { e, warnCalls: warn.mock.calls.map((c) => Array.from(c)) };
           }),
         );
-        expectFailure(e, ExpiredOrUsed, "expired_or_used", 410);
+        expectFailure(e, ExpiredOrUsed);
 
         expect((yield* reloadInvitation(inv.token)).status).toBe("PENDING");
         expect(yield* db.readMembership(invitee.id, co)).toBeUndefined();
@@ -150,6 +156,46 @@ describe("acceptInvitation", () => {
         const call = warnCalls.at(-1);
         expect(call?.[0]).toBe("invitation_accept_rejected");
         expect(String(call?.[1] ?? "")).toContain(`"invitation_id":"${inv.id}"`);
+      }),
+    ));
+
+  test("拒否の audit の書き込みが失敗しても、応答は ExpiredOrUsed のままで、invitation_accept_rejected の warn の行が出る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const inviter = yield* db.seedUser("rej-audit-inviter");
+        const otherOwner = yield* db.seedUser("rej-audit-other-owner");
+        const co = yield* db.seedCompany("rej-audit");
+        yield* db.seedMembership(inviter.id, co, "OWNER");
+        yield* db.seedMembership(otherOwner.id, co, "OWNER");
+        const invitee = yield* db.seedUser("rej-audit-invitee");
+        const inv = yield* db.seedInvitation({
+          companyId: co,
+          email: invitee.email,
+          role: "OWNER",
+          invitedByUserId: inviter.id,
+        });
+        yield* db.setMembershipRole(inviter.id, co, "ADMIN");
+        const invitationRow = yield* reloadInvitation(inv.token);
+        const failingAudit = auditLogWith(() => ({
+          appendAuditLog: () => Effect.fail(new DbError({ cause: "audit store down" })),
+        }));
+
+        const { e, warnCalls } = yield* withWarnSpy((warn) =>
+          Effect.gen(function* () {
+            const e = yield* Effect.flip(
+              acceptInvitation({
+                actor: { id: invitee.id, email: invitee.email },
+                invitation: invitationRow,
+              }).pipe(Effect.provide(failingAudit)),
+            );
+            return { e, warnCalls: warn.mock.calls.map((c) => Array.from(c)) };
+          }),
+        );
+
+        expectFailure(e, ExpiredOrUsed);
+        expect(warnCalls.map((call) => call[0])).toContain("invitation_accept_rejected");
+        expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(0);
       }),
     ));
 

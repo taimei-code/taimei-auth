@@ -43,13 +43,9 @@ describe("TTL store の session 削除は commit 後の deleteSessionsOf だけ�
     ]);
   });
 
-  test("deleteAccountIfOrphaned を呼ぶ production file は全て deleteSessionsOf も呼ぶ", () => {
-    const orphanCallers = grepFiles("deleteAccountIfOrphaned\\(", "src", { excludeTests: true })
-      .filter((file) => file !== "src/account/orphan.ts")
-      .sort();
-    expect(orphanCallers.length).toBeGreaterThanOrEqual(3);
-    expect(grepFiles("deleteSessionsOf\\(", "src", { excludeTests: true })).toEqual(
-      expect.arrayContaining(orphanCallers),
-    );
+  test("TTL store の session を消す deleteSessionsOf を呼ぶのは deleteAccount だけ (commit 後の後始末として登録する)", () => {
+    expect(grepFiles("deleteSessionsOf\\(", "src", { excludeTests: true })).toEqual([
+      "src/account/delete-account.ts",
+    ]);
   });
 });

@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { isLocalEnvironment } from "./env";
 
 export function getValidServiceKeys(): string[] {
@@ -8,17 +8,19 @@ export function getValidServiceKeys(): string[] {
   return [active, previous].filter((key): key is string => !!key);
 }
 
-export class ServiceKeyRejected extends Data.TaggedError("ServiceKeyRejected") {
-  readonly error = "Unauthorized: invalid service key" as const;
-  readonly status = 401 as const;
-}
+export class ServiceKeyRejected extends Schema.TaggedError<ServiceKeyRejected>()(
+  "ServiceKeyRejected",
+  {},
+  { httpApiStatus: 401 },
+) {}
 
-export class ServiceKeyMisconfigured extends Data.TaggedError("ServiceKeyMisconfigured") {
-  readonly error = "Service Key not configured (production)" as const;
-  readonly status = 503 as const;
-}
+export class ServiceKeyMisconfigured extends Schema.TaggedError<ServiceKeyMisconfigured>()(
+  "ServiceKeyMisconfigured",
+  {},
+  { httpApiStatus: 503 },
+) {}
 
-export type ServiceKeyError = ServiceKeyRejected | ServiceKeyMisconfigured;
+type ServiceKeyError = ServiceKeyRejected | ServiceKeyMisconfigured;
 
 const sha256 = (value: string) => new Uint8Array(createHash("sha256").update(value).digest());
 

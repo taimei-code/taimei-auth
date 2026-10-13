@@ -122,7 +122,7 @@ describe("transferOwnership", () => {
 
         const e = yield* transferToNobody(actor.id, co);
 
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
         expect((yield* db.readMembership(actor.id, co))?.role).toBe("OWNER");
         expect((yield* db.readMembership(other.id, co))?.role).toBe("OWNER");
         expect((yield* auditRowsFor(actor.id, "ownership_transferred")).length).toBe(0);
@@ -139,7 +139,7 @@ describe("transferOwnership", () => {
 
         const e = yield* transferToNobody(actor.id, co);
 
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
         expect((yield* db.readMembership(actor.id, co))?.role).toBe("OWNER");
       }),
     ));
