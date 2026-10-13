@@ -29,6 +29,7 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",
   "@bufbuild/protoc-gen-es": "build-tool: buf generate の plugin (生成物のみ ship する)",
+  "@effect/tsgo": "build-tool: Effect の診断入りの tsc (bun run typecheck)",
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",

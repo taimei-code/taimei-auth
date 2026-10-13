@@ -29,6 +29,7 @@ GitHub OAuth、Resend、Vercel Blob の設定は省略できる。
 - スキーマ: `db/schema.ts` を編集し、host で `bun run db:generate` を実行して、生成された `drizzle/*.sql` を commit する。次回の compose 起動時に `auth-migrate` が適用する
 - Proto: `proto/` を編集し、host で `bun run generate` を実行して、`src/gen/` と `packages/auth-client/src/gen/` を両方 commit する。CI の Buf breaking check に引っかかる変更には SDK の major bump が要る
 - codegen は host の bun で実行する ([ADR-0014](./docs/adr/0014-docker-runner-dev-stage-separation.md))
+- 型検査: `bun run typecheck` は `@effect/tsgo` に同梱の Effect の診断入りの `tsc` で検査する。`@effect/tsgo` は対応する `typescript` の版を狭く決めていて、合わない版では `UnsupportedTargetPackageVersionError` で止まる。`typescript` は `node_modules/@effect/tsgo/README.md` の Supported Package Versions に載る版へ、`@effect/tsgo` と一緒に上げる
 
 ## 運用
 

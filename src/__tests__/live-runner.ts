@@ -15,7 +15,7 @@ const testAppLayer = appLayer(testTtlStore);
 export const runTest =
   (prefix: string) =>
   <A, E>(program: Effect.Effect<A, E, TestServices>): Promise<A> =>
-    Effect.runPromise(Effect.provide(Effect.provide(program, testDbLayer(prefix)), testAppLayer));
+    Effect.runPromise(Effect.provide(program, Layer.merge(testDbLayer(prefix), testAppLayer)));
 
 export const dbTest = (prefix: string) => {
   const run = runTest(prefix);

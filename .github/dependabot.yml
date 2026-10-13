@@ -16,6 +16,11 @@ updates:
     cooldown:
       default-days: 7
     groups:
+      # @effect/tsgo は対応する typescript の版を狭く決めているので、一緒に上げる
+      typescript:
+        patterns:
+          - "typescript"
+          - "@effect/tsgo"
       dev-dependencies:
         dependency-type: "development"
       react-email:

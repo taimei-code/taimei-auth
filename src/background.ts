@@ -15,6 +15,9 @@ export function runBackground(promise: Promise<unknown>): void {
   if (waitUntil) waitUntil(promise);
 }
 
+const awaitInBackground = (fiber: Fiber.Fiber<unknown, unknown>) =>
+  runBackground(Effect.runPromise(Fiber.await(fiber)));
+
 export class Background extends Context.Service<
   Background,
   {
@@ -28,7 +31,7 @@ export const BackgroundLive = Layer.succeed(
     run: (effect) =>
       Effect.gen(function* () {
         const fiber = yield* Effect.forkDetach(effect);
-        runBackground(Effect.runPromise(Fiber.await(fiber)));
+        awaitInBackground(fiber);
       }),
   }),
 );

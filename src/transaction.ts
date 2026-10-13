@@ -1,7 +1,7 @@
 import { Context, Effect, Exit, Layer } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { runInTransaction } from "@/db/transaction";
-import { DbError } from "./errors";
+import { DbError, tryDb } from "./errors";
 
 // drizzle は callback が throw した時にしか rollback しない。
 class RollbackSignal<E> extends Error {
@@ -23,15 +23,10 @@ const runThroughCallback = <A, E, R>(
       if (Exit.isFailure(exit)) throw new RollbackSignal(exit as Exit.Exit<never, E>);
       return exit;
     };
-    const exit = yield* Effect.tryPromise({
-      try: () => open(inside),
-      catch: (cause): unknown => cause,
-    }).pipe(
-      Effect.catch(
-        (cause): Effect.Effect<Exit.Exit<A, E>, DbError> =>
-          cause instanceof RollbackSignal
-            ? Effect.succeed((cause as RollbackSignal<E>).exit as Exit.Exit<A, E>)
-            : Effect.fail(new DbError({ cause })),
+    const exit = yield* tryDb(() => open(inside)).pipe(
+      Effect.catchIf(
+        (failure) => failure.cause instanceof RollbackSignal,
+        (failure) => Effect.succeed((failure.cause as RollbackSignal<E>).exit as Exit.Exit<A, E>),
       ),
     );
     return yield* exit;

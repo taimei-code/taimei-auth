@@ -120,8 +120,9 @@ export const totpCode = (secret: string, stepOffset = 0): Effect.Effect<string> 
 // 固定の誤コードは窓 5 本ぶんの確率で偶然一致する。
 export const wrongTotpCode = (secret: string): Effect.Effect<string> =>
   Effect.gen(function* () {
-    const rejected = yield* Effect.all(
-      [-2, -1, 0, 1, 2].map((offset) => totpCode(secret, offset)),
+    const rejected = yield* Effect.forEach(
+      [-2, -1, 0, 1, 2],
+      (offset) => totpCode(secret, offset),
       { concurrency: "unbounded" },
     );
     for (let candidate = 0; candidate < 1000; candidate++) {
