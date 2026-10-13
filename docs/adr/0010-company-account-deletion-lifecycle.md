@@ -40,7 +40,7 @@ deleteAccountIfOrphaned(userId, tx):
   (account / membership は schema の cascade で連動して削除される)
 ```
 
-行を取る前に数えると、同時の事業所追加・招待受諾が作った membership を見落とす。TTL store の session は、user の削除を commit した後に消す (「session 失効の cookieCache が stale になる窓を受容する」)。
+行を取る前に数えると、同時の事業所追加・招待受諾が作った membership を見落とす。TTL store の session は、user の削除を commit した後に消す (「session 失効の cookieCache が stale になる窓を受容する」)。(2026-10-12 追記) session の削除は user を消す `deleteAccount` が `Transaction.run` の commit 後の後始末 (`afterCommit`) に登録し、呼び手は後始末を書かない。
 
 適用点:
 - **事業所削除 (D1)**: OWNER の認可、audit、全 membership の物理削除、各元メンバーへの `deleteAccountIfOrphaned`、company の soft delete の順に行う。

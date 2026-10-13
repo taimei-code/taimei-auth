@@ -17,8 +17,8 @@
 - route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
 - `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
 - サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。他の場所から `fetch` や `SpaApiClient` を使うと `src/__tests__/web-data-access.test.ts` が落とす。例外は better-auth の client のデータで、理由は ADR-0017 の「web への拡大」節にある。
-- 一覧を変える更新は、`*-atom.ts` が一覧の `reactivityKeys` を足した hook (例: `useChangeRole`) として渡し、画面は取り直しの完了を `shared/atom-runtime.ts` の `useWaitForValue` で待つ。事業所状態は `useCurrentCompany()` の `refresh()` で取り直す。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。
-- 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` をすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。特定の `_tag` かどうかで分岐する時は、同じ file の `hasFailureTag` を使う。MFA は `mfa/mfa-atom.ts` の `mfaErrorCodeOfCause` で失敗の code に読み替える。
+- 更新は `*-atom.ts` が hook (例: `useChangeRole`) として渡し、mutation の atom は export しない (route の loader が `runMutation` で使う atom だけを export する)。一覧や事業所状態を変える更新は、hook が `reactivityKeys` を足し、画面は取り直しの完了を `shared/atom-runtime.ts` の `useWaitForValue` で待つ。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。
+- 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` をすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。特定の `_tag` かどうかで分岐する時は、同じ file の `hasFailureTag` を使う。MFA の画面は同じ失敗に同じ文言を出すので、`mfa/mfa-atom.ts` の 1 つの表を共有する。
 
 ## 遷移
 

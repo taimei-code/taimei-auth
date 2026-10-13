@@ -41,7 +41,7 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
   消費を revoke の後に置くので、revoke が拒否されても、送ったリカバリーコードは使用済みにならない
 - リカバリーコードは secret と同じ鍵 ring で可逆暗号にする (登録済み未有効の間に再表示する契約と hash 保管は
   両立しない)。書式は `xxxxx-xxxxx` を 10 個
-- sign_in audit はチャレンジ通過の手続が記録する (一次認証の観測は sign-in-observer に残る)
+- sign_in audit はチャレンジ通過の手続が記録する (一次認証の観測は `primary-auth` の after hook に残る)
 - wire contract の変更は 3 点: `temporarily_unavailable` の削除 (発生源が消滅した)、
   `MfaActivateRequest.enrollment_id` の必須化、`MfaStatusResponse.in_effect` の削除 (2026-09-23 追記)。他の endpoint の
   形は変えない。`in_effect` は ADR-0013 の「中断した無効化」を SPA へ伝える field だった。状態の実体を行だけにする
