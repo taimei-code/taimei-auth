@@ -17,7 +17,7 @@ API のレベルでは新規か既存かを分岐させず、SignIn と SignUp �
 1. **`name` 入力欄**: SignUp 画面にだけ置き、Magic Link API に渡す。既存ユーザーが SignUp 経路から来ても name は無視され、既存の値が保たれる
 2. **`callbackURL` の優先順位**: SignUp 画面では `sign_up_url ?? redirect_url` の順、SignIn 画面では `redirect_url` のみ
 
-両画面は相互リンクで行き来できる (CONTEXT.md の **共通ログイン画面** と **共通サインアップ画面**)。`service_name` / `redirect_url` / `sign_up_url` は、route の search の schema で宣言した key だけを引き継ぐ (`web/src/auth/sign-params.ts` の `declaredSignInParams`)。
+両画面は相互リンクで行き来できる (GLOSSARY.md の **共通ログイン画面** と **共通サインアップ画面**)。`service_name` / `redirect_url` / `sign_up_url` は、route の search の schema で宣言した key だけを引き継ぐ (`web/src/auth/sign-params.ts` の `declaredSignInParams`)。
 
 ## Why
 

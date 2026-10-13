@@ -2,7 +2,7 @@
 
 ## Context
 
-**共通画面 SPA** (CONTEXT.md) は Vite + React の SPA で、`web/dist` に build する。ルーティング上は **共通ログイン画面** が `/auth/` 配下、**アカウント管理画面** が `/account/` 配下にある。両者を別の SPA に分けず、1 つの build を 2 つのパスで配信し、route だけを SPA の router で分岐させたい。
+**共通画面 SPA** (GLOSSARY.md) は Vite + React の SPA で、`web/dist` に build する。ルーティング上は **共通ログイン画面** が `/auth/` 配下、**アカウント管理画面** が `/account/` 配下にある。両者を別の SPA に分けず、1 つの build を 2 つのパスで配信し、route だけを SPA の router で分岐させたい。
 
 ## Decision
 
@@ -32,7 +32,7 @@
 
 - 1 つの build で済むので、bundle や chunk hash の重複を避けられる
 - **auth ホスト** の serveStatic の配置を 1 箇所に集約できる
-- `/account` を「**共通画面 SPA** 内のサブ画面」として、CONTEXT.md の **session-aware redirect** と **`/login` ショートカット** に整合させやすい
+- `/account` を「**共通画面 SPA** 内のサブ画面」として、GLOSSARY.md の **session-aware redirect** と **`/login` ショートカット** に整合させやすい
 
 ## Consequences
 

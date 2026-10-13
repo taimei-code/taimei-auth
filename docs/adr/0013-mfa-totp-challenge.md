@@ -174,7 +174,7 @@ Magic Link 再送など) も本件では実装しない。
 
 ### 7. MFA 登録状態の 5 状態マトリクス (2026-08-11 追記)
 
-**MFA 登録状態** (用語定義: CONTEXT.md) は `user.twoFactorEnabled` フラグと `two_factor` 行の組から
+**MFA 登録状態** (用語定義: GLOSSARY.md) は `user.twoFactorEnabled` フラグと `two_factor` 行の組から
 一意に決まる。解釈と操作単位の前提条件判定は `src/mfa/registration/state.ts` の関数群へ
 集約し、旧 `src/mfa/enrollment-state.ts` は削除した。union は
 module 内部に閉じる (評決の組み立てが消費者側に散ると、後から増えた消費者が気付かれないまま別の評決を
@@ -339,7 +339,7 @@ secret 暗号化、リカバリーコードの単回消費、session cache 更�
 
 (2026-08-29 追記) 失敗の変換方針 (結果不明を rethrow して guard を残置するか、既知の失敗へ全て変換するか)
 の選択を、gateway の関数名の選択から構造へ昇格した。`runTransition` は guard 取得の証憑
-(**MFA 登録遷移 guard hold**。brand 付き `GuardHold`、用語定義: CONTEXT.md) から遷移内専用の
+(**MFA 登録遷移 guard hold**。brand 付き `GuardHold`、用語定義: GLOSSARY.md) から遷移内専用の
 窓口 `GuardedMfaGateway` を作って work へ配り、書き込み系は rethrow、読み取り
 (`readPendingTotpEnrollment`) は全て変換という選定を束縛 (registration/wiring.ts の `guardedGateway`) に
 内部固定する。operations は gateway module を import できず (封じ込めの静的テストで固定)、guard 外で全て変換する入口は
@@ -440,4 +440,4 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
 - ADR-0011 (Workers 移行): secondaryStorage 構成でチャレンジ状態が Redis で完結する前提
 - ADR-0012 (レイヤードアーキテクチャ): プラグイン殻を `src/auth-plugins/` (Frameworks & Drivers)、
   判定と業務手続を `src/mfa/` に置く層規律
-- 用語定義: [`CONTEXT.md`](../../CONTEXT.md) の「多要素認証 (MFA)」「TOTP」「MFA チャレンジ」「リカバリーコード」「MFA 登録遷移 guard hold」
+- 用語定義: [`GLOSSARY.md`](../../GLOSSARY.md) の「多要素認証 (MFA)」「TOTP」「MFA チャレンジ」「リカバリーコード」「MFA 登録遷移 guard hold」
