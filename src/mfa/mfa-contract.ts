@@ -1,7 +1,8 @@
 import { Schema } from "effect";
-import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
+import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
-import { Ok } from "../membership/membership-contract";
+import { RateLimited } from "../membership/guard/errors";
+import { Ok } from "../spa-contract-schemas";
 import {
   AlreadyEnabled,
   ChallengeExpired,
@@ -10,10 +11,11 @@ import {
   Locked,
   MfaNotFound,
   NotEnabled,
-} from "./error-mapping";
+} from "./errors";
 
 const Code = Schema.String.check(Schema.isBetweenLength(1, 64));
 const CodeKind = Schema.Literals(["totp", "recovery_code"]);
+export type MfaCodeKind = typeof CodeKind.Type;
 
 const MfaStatus = Schema.Struct({
   enabled: Schema.Boolean,
@@ -33,10 +35,25 @@ const ActivateRequest = Schema.Struct({
   enrollment_id: Schema.String.check(Schema.isMinLength(1)),
 });
 const CodeWithKind = Schema.Struct({ code: Code, kind: CodeKind });
-export const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
+const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
 export const ChallengePassed = Schema.Struct({
   redirect_url: Schema.String.check(Schema.isMinLength(1)),
 });
+
+export class ChallengeVerifyBudget extends HttpApiMiddleware.Service<ChallengeVerifyBudget>()(
+  "taimei/ChallengeVerifyBudget",
+  { error: RateLimited },
+) {}
+
+export class ChallengeStateBudget extends HttpApiMiddleware.Service<ChallengeStateBudget>()(
+  "taimei/ChallengeStateBudget",
+  { error: RateLimited },
+) {}
+
+export class MfaChangeBudget extends HttpApiMiddleware.Service<MfaChangeBudget>()(
+  "taimei/MfaChangeBudget",
+  { error: RateLimited },
+) {}
 
 export class MfaGroup extends HttpApiGroup.make("mfa")
   .add(
@@ -44,25 +61,27 @@ export class MfaGroup extends HttpApiGroup.make("mfa")
     HttpApiEndpoint.post("enroll", "/api/account/mfa/enroll", {
       success: MfaEnrollment,
       error: [AlreadyEnabled, ChallengeExpired],
-    }),
+    }).middleware(MfaChangeBudget),
     HttpApiEndpoint.post("activate", "/api/account/mfa/activate", {
       payload: ActivateRequest,
       success: Ok,
       error: [InvalidCode, Locked, EnrollmentChanged, AlreadyEnabled, MfaNotFound],
-    }),
+    }).middleware(MfaChangeBudget),
     HttpApiEndpoint.post("disable", "/api/account/mfa/disable", {
       payload: CodeWithKind,
       success: Ok,
       error: [InvalidCode, Locked, NotEnabled],
-    }),
+    }).middleware(MfaChangeBudget),
   )
   .middleware(Authenticated) {}
 
 export class MfaChallengeGroup extends HttpApiGroup.make("mfaChallenge").add(
-  HttpApiEndpoint.get("state", "/api/mfa/challenge", { success: ChallengeState }),
+  HttpApiEndpoint.get("state", "/api/mfa/challenge", { success: ChallengeState }).middleware(
+    ChallengeStateBudget,
+  ),
   HttpApiEndpoint.post("verify", "/api/mfa/challenge/verify", {
     payload: CodeWithKind,
     success: ChallengePassed,
     error: [InvalidCode, Locked, ChallengeExpired],
-  }),
+  }).middleware(ChallengeVerifyBudget),
 ) {}

@@ -14,7 +14,7 @@ import {
 import { challengeKey } from "../../mfa/totp/login-challenge";
 import { runTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { mountAccountRoutes } from "../../app";
+import { mountSpaApi } from "../spa-http-api";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-h-challenge-";
@@ -22,7 +22,7 @@ const run = runTest(P);
 
 const buildApp = (): Hono => {
   const app = new Hono();
-  mountAccountRoutes(app);
+  mountSpaApi(app);
   return app;
 };
 
@@ -69,12 +69,12 @@ describe("MFA チャレンジ API", () => {
       }),
     ));
 
-  test("QA-E-04 cookie 無し → 401", () =>
+  test("同一 origin の cookie 無しの verify は csrf を通り、401 ChallengeExpired", () =>
     run(
       Effect.gen(function* () {
         const res = yield* requestApp(buildApp(), "/api/mfa/challenge/verify", {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "sec-fetch-site": "same-origin" },
           body: JSON.stringify({ code: "123456", kind: "totp" }),
         });
 

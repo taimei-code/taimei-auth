@@ -1,13 +1,8 @@
 import { beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { partial } from "../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import * as companyErrors from "../../company/errors";
-import * as invitationErrors from "../../invitation/errors";
-import * as membershipErrors from "../../membership/errors";
-import * as guardErrors from "../../membership/guard/errors";
-import * as mfaErrors from "../../mfa/error-mapping";
 import { AuthApiError } from "../../errors";
 import { membershipRepoFailing, signedIn } from "../../membership/__tests__/test-layers";
 import { MembershipRepo } from "../../membership/ports";
@@ -80,11 +75,17 @@ describe("Hono に載せた SPA の HttpApi", () => {
     ]);
   });
 
-  test("宣言した失敗 (所属の無い人の一覧の 403) は Sentry に送らない", async () => {
+  test("宣言した失敗 (所属の無い人の一覧の 403) は Sentry に送らず、宣言の無い失敗は 1 件送る", async () => {
     const res = await signedInApp().request("/api/account/companies/co_none/members", {
       headers: SESSION_COOKIE_HEADER,
     });
     expect([res.status, captured.length]).toEqual([403, 0]);
+
+    const undeclared = await signedInApp(membershipRepoFailing(dbCause)).request(
+      "/api/account/companies/co_1/members",
+      { headers: SESSION_COOKIE_HEADER },
+    );
+    expect([undeclared.status, captured.length]).toEqual([500, 1]);
   });
 
   test("順序: 認証済みで所属の無い人の不正な body の招待は、guard の 403 より先に decode の 400", async () => {
@@ -189,20 +190,5 @@ describe("Hono に載せた SPA の HttpApi", () => {
     setTimeout(() => abort.abort(), 20);
     await pending;
     expect(captured.length).toBe(0);
-  });
-  test("失敗の class の httpApiStatus (SPA の API) は status (adapter と Connect) と同じ", () => {
-    const statuses = [guardErrors, membershipErrors, companyErrors, invitationErrors, mfaErrors]
-      .flatMap((module) => Object.values(module))
-      .filter(Schema.isSchema)
-      .map((schema) => {
-        const failure = new (schema as unknown as new (fields: object) => { status: number })({});
-        return {
-          schema,
-          httpApiStatus: schema.ast.annotations?.httpApiStatus,
-          status: failure.status,
-        };
-      });
-    const mismatches = statuses.filter((s) => s.httpApiStatus !== s.status);
-    expect([statuses.length > 0, mismatches]).toEqual([true, []]);
   });
 });

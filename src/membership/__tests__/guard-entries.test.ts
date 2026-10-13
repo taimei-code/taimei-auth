@@ -45,7 +45,7 @@ describe("requireRoleChange (403 → 404 → 403)", () => {
         Effect.provide(members(["u1", "c1", "ADMIN"])),
       ),
     );
-    expect([e._tag, e.status]).toEqual(["NotFound", 404]);
+    expect(e._tag).toBe("NotFound");
   });
 
   test("ADMIN が OWNER に触れる変更 → 403 (canChangeRole)", async () => {
@@ -148,7 +148,7 @@ describe("requireTransferOwnership (400 self → 403 → 404 → 400 already_own
         Effect.provide(members(["u1", "c1", "OWNER"])),
       ),
     );
-    expect([e._tag, e.status]).toEqual(["InvalidArgument", 400]);
+    expect(e._tag).toBe("InvalidArgument");
   });
 
   test("非 OWNER の self 委譲 → 403 に先立って 400 invalid_argument", async () => {
@@ -157,7 +157,7 @@ describe("requireTransferOwnership (400 self → 403 → 404 → 400 already_own
         Effect.provide(members(["u1", "c1", "MEMBER"])),
       ),
     );
-    expect([e._tag, e.status]).toEqual(["InvalidArgument", 400]);
+    expect(e._tag).toBe("InvalidArgument");
   });
 
   test("非 OWNER → 403", async () => {
@@ -184,7 +184,7 @@ describe("requireTransferOwnership (400 self → 403 → 404 → 400 already_own
         Effect.provide(members(["u1", "c1", "OWNER"], ["t", "c1", "OWNER"])),
       ),
     );
-    expect([e._tag, e.error, e.status]).toEqual(["AlreadyOwner", "already_owner", 400]);
+    expect(e._tag).toBe("AlreadyOwner");
   });
 
   test("OWNER が MEMBER へ委譲 → ok { actor, toUserId }", async () => {
@@ -229,7 +229,7 @@ describe("requireInvitationAccept (404 (token) → 403 (email) → reused → 41
       invitationRepoLayer([invitationOf({ email: "other@example.com" })]),
     );
     const e = await run(accept("tok", actorOf("u1", "U1@example.com")).pipe(Effect.provide(layer)));
-    expect([e._tag, e.error, e.status]).toEqual(["EmailMismatch", "email_mismatch", 403]);
+    expect(e._tag).toBe("EmailMismatch");
   });
 
   test("email が大文字小文字だけ違う → 一致とみなし先へ進む", async () => {
@@ -254,7 +254,7 @@ describe("requireInvitationAccept (404 (token) → 403 (email) → reused → 41
     const expired = invitationOf({ expiresAt: new Date(Date.now() - 60_000) });
     const layer = Layer.mergeAll(members(), invitationRepoLayer([expired]));
     const e = await run(accept("tok").pipe(Effect.provide(layer)));
-    expect([e._tag, e.status]).toEqual(["ExpiredOrUsed", 410]);
+    expect(e._tag).toBe("ExpiredOrUsed");
   });
 
   test("valid + 未所属 → proceed", async () => {

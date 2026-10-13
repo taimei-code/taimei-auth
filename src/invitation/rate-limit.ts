@@ -1,6 +1,6 @@
 import { Clock, Effect } from "effect";
 import { spendAttemptBudgetFailOpen } from "../attempt-budget";
-import { RateLimited } from "./errors";
+import { RateLimited } from "../membership/guard/errors";
 
 const DEFAULT_HOURLY_LIMIT_PER_COMPANY = 50;
 

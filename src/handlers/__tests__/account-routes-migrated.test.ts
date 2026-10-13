@@ -8,6 +8,7 @@ import { dbTest } from "../../__tests__/live-runner";
 import { tryAuthApi } from "../../errors";
 import { JSON_HEADERS } from "../client-facing-error";
 import { TestDb } from "../../__tests__/test-db";
+import { testKvStore } from "../../__tests__/test-ttl-store";
 import {
   buildTestApp,
   normalizeResponse,
@@ -368,6 +369,25 @@ describe("account routes migration snapshot", () => {
   });
 
   describe("error catalog (QA-E-02: 全 route の error tag × status)", () => {
+    test("招待の作成が事業所の招待の試行枠を超えると、429 で body は RateLimited", () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const owner = yield* db.seedUser("inv-quota-owner");
+          const co = yield* db.seedCompany("inv-quota");
+          yield* db.seedMembership(owner.id, co, "OWNER");
+          const hour = new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length);
+          testKvStore.set(`invitation_rate:${co}:${hour}`, "50", 3600);
+          const actual = yield* invoke(
+            buildTestApp(owner),
+            "POST",
+            `/api/account/companies/${co}/invitations`,
+            { email: `${TEST_PREFIX}quota-invitee@example.com`, role: "MEMBER" },
+          );
+          expect([actual.status, actual.body]).toEqual([429, { _tag: "RateLimited" }]);
+        }),
+      ));
+
     test("QA-E-01 ADMIN が role=OWNER 招待 → 403 Forbidden (#104 route レベル regression)", () =>
       run(
         Effect.gen(function* () {

@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
+import { buildApp as buildServerApp } from "../app";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
-import { createRateLimitMiddleware, rateLimitProgram } from "../rate-limit";
+import { createRateLimitMiddleware, magicLinkKey, rateLimitProgram } from "../rate-limit";
 import type { TtlStore } from "../ttl-store-service";
 import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
@@ -87,5 +88,33 @@ describe("rate-limit middleware", () => {
     expect((await appA.request("http://localhost/")).status).toBe(200);
     expect((await appA.request("http://localhost/")).status).toBe(429);
     expect((await appB.request("http://localhost/")).status).toBe(200);
+  });
+});
+
+describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () => {
+  const ENV = { APP_ENV: "production", AUTH_TRUSTED_PROXY_HOPS: "1" };
+  const previous = Object.keys(ENV).map((key) => [key, process.env[key]] as const);
+  beforeAll(() => {
+    Object.assign(process.env, ENV);
+  });
+  afterAll(() => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  test("同じ IP で 5 回数えた後の 6 回目は、メールを送る前に 429 で Retry-After は 60", async () => {
+    const ip = `2001:db8::${crypto.randomUUID().slice(0, 4)}`;
+    testKvStore.set(magicLinkKey("ip", ip), "5", 60);
+    const res = await buildServerApp({ mountStatic: () => {} }).request(
+      "/api/auth/sign-in/magic-link",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": ip },
+        body: JSON.stringify({ email: "rate-limit@example.com" }),
+      },
+    );
+    expect([res.status, res.headers.get("retry-after")]).toEqual([429, "60"]);
   });
 });

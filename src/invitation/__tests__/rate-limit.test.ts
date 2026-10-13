@@ -5,7 +5,7 @@ import { failingTtlStoreLayer } from "../../__tests__/test-layers";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import type { TtlStore } from "../../ttl-store-service";
 import { SentryLive, type SentryService } from "../../sentry";
-import { RateLimited } from "../errors";
+import { RateLimited } from "../../membership/guard/errors";
 import { consumeInvitationQuota } from "../rate-limit";
 import { testKvStore, testTtlStoreLayer } from "../../__tests__/test-ttl-store";
 
@@ -57,6 +57,6 @@ describe("consumeInvitationQuota (in-memory TTL store)", () => {
   test("AC-027 50 hit 済みの bucket への 51 hit 目は拒否する", async () => {
     testKvStore.set(bucketKey(), "50", 3600);
     const e = await run(Effect.flip(consumeInvitationQuota(COMPANY)));
-    expectFailure(e, RateLimited, "rate_limited", 429);
+    expectFailure(e, RateLimited);
   });
 });

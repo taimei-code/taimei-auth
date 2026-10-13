@@ -2,11 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { Effect, type Layer } from "effect";
 import { Hono } from "hono";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
-import { mountAccountRoutes } from "../../app";
+import { mountSpaApi } from "../spa-http-api";
 import { AuthApi } from "../../auth-service";
 import { runBackground, withWaitUntil } from "../../background";
 import { DbError } from "../../errors";
-import { Forbidden } from "../../membership/guard/errors";
+import { NotFound } from "../../membership/guard/errors";
 import { CONTINUE, respondWith, runMiddleware, runRoute } from "../run-route";
 import { provideAuthApi, stubAuthApi } from "./helpers";
 
@@ -19,7 +19,7 @@ const okResponse = new Response("ok");
 function buildApp() {
   const app = new Hono();
   app.get("/ok", (c) => runRoute(c, Effect.succeed(okResponse)));
-  app.get("/forbidden", (c) => runRoute(c, Effect.fail(new Forbidden())));
+  app.get("/not-found", (c) => runRoute(c, Effect.fail(new NotFound())));
   app.get("/db", (c) => runRoute(c, Effect.fail(new DbError({ cause: dbCause }))));
   app.get("/die", (c) => runRoute(c, Effect.die(boom)));
   app.get("/throw", (c) =>
@@ -41,10 +41,10 @@ describe("runRoute", () => {
   });
 
   test("failure は応答 (status / content-type / body)", async () => {
-    const res = await buildApp().request("/forbidden");
-    expect(res.status).toBe(403);
+    const res = await buildApp().request("/not-found");
+    expect(res.status).toBe(404);
     expect(res.headers.get("content-type")).toBe("application/json");
-    expect(await res.text()).toBe('{"error":"forbidden"}');
+    expect(await res.text()).toBe('{"_tag":"NotFound"}');
   });
 
   test("boundary error は 500 と Sentry(cause の identity)", async () => {
@@ -90,7 +90,7 @@ describe("runRoute", () => {
     app.get("/both", (c) =>
       runRoute(
         c,
-        Effect.fail(new Forbidden()).pipe(
+        Effect.fail(new NotFound()).pipe(
           Effect.ensuring(
             Effect.sync(() => {
               throw boom;
@@ -100,13 +100,13 @@ describe("runRoute", () => {
       ),
     );
     const res = await app.request("/both");
-    expect([res.status, await res.text()]).toEqual([403, '{"error":"forbidden"}']);
+    expect([res.status, await res.text()]).toEqual([404, '{"_tag":"NotFound"}']);
     expect(captured.map(([e]) => e)).toEqual([boom]);
   });
 
   test("catalog 外の形の failure は fail-open (200) にせず 500 + Sentry", async () => {
     captured.length = 0;
-    const rogue = { _tag: "Rogue" } as unknown as Forbidden;
+    const rogue = { _tag: "Rogue" } as unknown as NotFound;
     const app = new Hono();
     app.get("/rogue", (c) => runRoute(c, Effect.fail(rogue)));
     const bad = await app.request("/rogue");
@@ -121,12 +121,12 @@ describe("runRoute", () => {
         c,
         Effect.sync(() => {
           c.header("Cache-Control", "private, no-store");
-        }).pipe(Effect.flatMap(() => Effect.fail(new Forbidden()))),
+        }).pipe(Effect.flatMap(() => Effect.fail(new NotFound()))),
       ),
     );
     const res = await app.request("/staged");
     expect([res.status, res.headers.get("cache-control"), res.headers.get("content-type")]).toEqual(
-      [403, "private, no-store", "application/json"],
+      [404, "private, no-store", "application/json"],
     );
   });
 
@@ -181,10 +181,10 @@ describe("runMiddleware", () => {
 
   test("failure は runRoute と同じ応答", async () => {
     const app = new Hono();
-    app.use("*", (c, next) => runMiddleware(c, next, Effect.fail(new Forbidden())));
+    app.use("*", (c, next) => runMiddleware(c, next, Effect.fail(new NotFound())));
     app.get("/x", (c) => c.text("handled"));
     const res = await app.request("/x");
-    expect([res.status, await res.text()]).toEqual([403, '{"error":"forbidden"}']);
+    expect([res.status, await res.text()]).toEqual([404, '{"_tag":"NotFound"}']);
   });
 });
 
@@ -205,7 +205,7 @@ describe("authApiLayer", () => {
 
   test("設定しない app は live の AuthApi を使い、cookie 無しの account route は 401", async () => {
     const app = new Hono();
-    mountAccountRoutes(app);
+    mountSpaApi(app);
     const res = await app.request("/api/account/memberships");
     expect([res.status, await res.text()]).toEqual([401, '{"_tag":"Unauthorized"}']);
   });

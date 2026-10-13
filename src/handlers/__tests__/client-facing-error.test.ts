@@ -8,74 +8,128 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { Cause } from "effect";
+import { Cause, Schema } from "effect";
+import * as companyErrors from "../../company/errors";
+import * as invitationErrors from "../../invitation/errors";
+import * as membershipErrors from "../../membership/errors";
+import * as guardErrors from "../../membership/guard/errors";
+import * as mfaErrors from "../../mfa/errors";
+import * as serviceKey from "../../service-key";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { consoleSentryBackend, setSentryBackend } from "../../sentry";
-import { InvalidCode, Locked, MfaNotFound } from "../../mfa/error-mapping";
+import { InvalidCode, Locked, MfaNotFound } from "../../mfa/errors";
 import { AlreadyExists } from "../../company/errors";
-import { NotFoundOrNotPending, RateLimited } from "../../invitation/errors";
+import { NotFoundOrNotPending } from "../../invitation/errors";
 import { LastOwner } from "../../membership/errors";
 import {
   ExpiredOrUsed,
   Forbidden,
   InvalidArgument,
   NotFound,
+  RateLimited,
   Unauthorized,
 } from "../../membership/guard/errors";
+import { ServiceKeyMisconfigured, ServiceKeyRejected } from "../../service-key";
 import {
   captureThrown,
   internalErrorResponse,
   parseClientFacingError,
   settleCause,
-  type ClientFacingError,
   clientFacingErrorResponse,
 } from "../client-facing-error";
 
+const responseOf = (failure: unknown) => {
+  const clientFacing = parseClientFacingError(failure);
+  if (!clientFacing) throw new Error("not client-facing");
+  return clientFacingErrorResponse(clientFacing);
+};
+
 describe("clientFacingErrorResponse", () => {
-  test("failure を { error } JSON にし、content-type は charset 無しの application/json", async () => {
-    const res = clientFacingErrorResponse(new Forbidden());
+  test("失敗の class の encode を JSON にし、content-type は charset 無しの application/json", async () => {
+    const res = responseOf(new Forbidden());
     expect(res.status).toBe(403);
     expect(res.headers.get("content-type")).toBe("application/json");
-    expect(await res.text()).toBe('{"error":"forbidden"}');
+    expect(await res.text()).toBe('{"_tag":"Forbidden"}');
   });
 
   test("details 無しの InvalidArgument は details key を持たない", async () => {
-    const body = await clientFacingErrorResponse(new InvalidArgument({})).json();
+    const body = await responseOf(new InvalidArgument({})).json();
     expect("details" in (body as object)).toBe(false);
   });
 
-  test("details 有りの InvalidArgument は同じ object を details に持つ", async () => {
+  test("details 有りの InvalidArgument は同じ値を details に持つ", async () => {
     const details = { formErrors: [], fieldErrors: { email: ["x"] } };
-    const body = await clientFacingErrorResponse(new InvalidArgument({ details })).json();
-    expect(body).toEqual({ error: "invalid_argument", details });
+    const body = await responseOf(new InvalidArgument({ details })).json();
+    expect(body).toEqual({ _tag: "InvalidArgument", details });
   });
 });
 
 describe("parseClientFacingError", () => {
-  test("client-facing 形の failure は同じ参照をそのまま返す", () => {
-    const failure = new Forbidden();
-    expect(parseClientFacingError(failure)).toBe(failure);
+  test("httpApiStatus を持つ失敗の class は、annotation の status とその instance を返す", () => {
+    const forbidden = new Forbidden();
+    const parsed = parseClientFacingError(forbidden);
+    expect(parsed?.status).toBe(403);
+    expect(parsed?.failure).toBe(forbidden);
   });
 
-  test("catalog 外でも client-facing 形なら通し、details は検査しない", () => {
-    const details = { fieldErrors: { email: ["x"] } };
-    expect(
-      parseClientFacingError({ error: "invalid_argument", status: 400, details })?.details,
-    ).toBe(details);
+  test("error と status の field を持つだけの値は client-facing ではない", () => {
+    expect(parseClientFacingError({ error: "x", status: 400 })).toBeUndefined();
   });
 
-  test("error と status が揃わない値は undefined", () => {
+  test("境界の失敗は client-facing ではない", () => {
+    expect(parseClientFacingError(new DbError({ cause: "x" }))).toBeUndefined();
+  });
+
+  test("Schema の class でない値は undefined", () => {
     const notClientFacing: unknown[] = [
-      { error: "x" },
-      { status: 400 },
-      { error: 1, status: 400 },
-      { error: "x", status: "400" },
+      { _tag: "Forbidden" },
       null,
       undefined,
       "x",
+      new Error("x"),
     ];
     expect(notClientFacing.filter((e) => parseClientFacingError(e) !== undefined)).toEqual([]);
+  });
+});
+
+describe("失敗の宣言", () => {
+  test("失敗の module が export する Schema の class は、どれも次の httpApiStatus を持つ", () => {
+    const classes = [
+      guardErrors,
+      membershipErrors,
+      companyErrors,
+      invitationErrors,
+      mfaErrors,
+      serviceKey,
+    ]
+      .flatMap((module) => Object.values(module))
+      .filter(Schema.isSchema);
+    const statusByTag = Object.fromEntries(
+      classes.map((cls) => [cls.ast.annotations?.identifier, cls.ast.annotations?.httpApiStatus]),
+    );
+    expect(statusByTag).toStrictEqual({
+      AlreadyOwner: 400,
+      EmailMismatch: 403,
+      ExpiredOrUsed: 410,
+      Forbidden: 403,
+      InvalidArgument: 400,
+      NotFound: 404,
+      RateLimited: 429,
+      Unauthorized: 401,
+      LastOwner: 409,
+      AlreadyExists: 409,
+      NotFoundOrNotPending: 404,
+      AlreadyEnabled: 409,
+      ChallengeExpired: 401,
+      EnrollmentChanged: 409,
+      InvalidCode: 400,
+      Locked: 429,
+      MfaNotFound: 404,
+      NotEnabled: 409,
+      ServiceKeyMisconfigured: 503,
+      ServiceKeyRejected: 401,
+    });
   });
 });
 
@@ -86,23 +140,25 @@ describe("internalErrorResponse", () => {
   });
 });
 
-describe("failure class の 応答への直列化 (旧 REASON_TO_ERROR / 旧 respond.ts と同一の組)", () => {
-  const table: Array<[ClientFacingError, number, string]> = [
-    [new Unauthorized(), 401, '{"error":"unauthorized"}'],
-    [new Forbidden(), 403, '{"error":"forbidden"}'],
-    [new NotFound(), 404, '{"error":"not_found"}'],
-    [new LastOwner(), 409, '{"error":"last_owner"}'],
-    [new AlreadyExists(), 409, '{"error":"already_exists"}'],
-    [new NotFoundOrNotPending(), 404, '{"error":"not_found_or_not_pending"}'],
-    [new RateLimited(), 429, '{"error":"rate_limited"}'],
-    [new ExpiredOrUsed(), 410, '{"error":"expired_or_used"}'],
-    [new InvalidCode(), 400, '{"error":"invalid_code"}'],
-    [new Locked(), 429, '{"error":"locked"}'],
-    [new MfaNotFound(), 404, '{"error":"not_found"}'],
+describe("失敗の class の応答への直列化", () => {
+  const table: Array<[unknown, number, string]> = [
+    [new Unauthorized(), 401, '{"_tag":"Unauthorized"}'],
+    [new Forbidden(), 403, '{"_tag":"Forbidden"}'],
+    [new NotFound(), 404, '{"_tag":"NotFound"}'],
+    [new LastOwner(), 409, '{"_tag":"LastOwner"}'],
+    [new AlreadyExists(), 409, '{"_tag":"AlreadyExists"}'],
+    [new NotFoundOrNotPending(), 404, '{"_tag":"NotFoundOrNotPending"}'],
+    [new RateLimited(), 429, '{"_tag":"RateLimited"}'],
+    [new ExpiredOrUsed(), 410, '{"_tag":"ExpiredOrUsed"}'],
+    [new InvalidCode(), 400, '{"_tag":"InvalidCode"}'],
+    [new Locked(), 429, '{"_tag":"Locked"}'],
+    [new MfaNotFound(), 404, '{"_tag":"MfaNotFound"}'],
+    [new ServiceKeyRejected(), 401, '{"_tag":"ServiceKeyRejected"}'],
+    [new ServiceKeyMisconfigured(), 503, '{"_tag":"ServiceKeyMisconfigured"}'],
   ];
   for (const [failure, status, body] of table) {
-    test(`${failure._tag} → ${status} ${body}`, async () => {
-      const res = clientFacingErrorResponse(failure);
+    test(`${body} → ${status}`, async () => {
+      const res = responseOf(failure);
       expect([res.status, await res.text()]).toEqual([status, body]);
     });
   }
@@ -126,7 +182,7 @@ describe("settleCause", () => {
       parseClientFacingError,
       report,
     );
-    expect(settled.failure).toBe(forbidden);
+    expect(settled.failure?.tag).toBe("Forbidden");
     expect(settled.reported).toEqual([cause]);
     expect(captured).toEqual([[cause, { tags: report.tags, level: "warning" }]]);
   });
@@ -146,7 +202,7 @@ describe("settleCause", () => {
       parseClientFacingError,
       report,
     );
-    expect(settled.failure).toBe(first);
+    expect(settled.failure?.tag).toBe("Forbidden");
     expect(settled.reported).toEqual([]);
   });
 

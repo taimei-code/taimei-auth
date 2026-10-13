@@ -22,7 +22,7 @@ const headers = new Headers();
 describe("requireActor", () => {
   test("session 無し → Unauthorized (401)", async () => {
     const e = await run(requireActor(headers).pipe(Effect.provide(signedOut())));
-    expect([e._tag, e.status]).toEqual(["Unauthorized", 401]);
+    expect(e._tag).toBe("Unauthorized");
   });
 
   test("session + user 行 → Actor (id / email / lastUsedCompanyId)", async () => {
@@ -99,7 +99,7 @@ describe("requireMembershipOf", () => {
     const e = await run(
       requireMembershipOf(actor, "c1").pipe(Effect.provide(membershipRepoLayer([]))),
     );
-    expect([e._tag, e.status]).toEqual(["Forbidden", 403]);
+    expect(e._tag).toBe("Forbidden");
   });
 
   test("所属あり minRole 省略 → role (MEMBER でも通る)", async () => {

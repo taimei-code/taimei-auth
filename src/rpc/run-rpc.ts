@@ -33,7 +33,7 @@ function causeToConnectError(cause: Cause.Cause<RouteError>): ConnectError {
     label: "[runRpc]",
     tags: { handler: "runRpc" },
   });
-  if (failure) return new ConnectError(failure.error, statusToCode(failure.status));
+  if (failure) return new ConnectError(failure.tag, statusToCode(failure.status));
   // consumer は message を表示に使うため、"internal error" に置き換えない。
   return ConnectError.from(reported[0]);
 }

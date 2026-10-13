@@ -4,6 +4,12 @@ import type { Context, MiddlewareHandler } from "hono";
 import { spendAttemptBudgetFailOpen } from "./attempt-budget";
 import { CONTINUE, respondWith, runMiddleware } from "./handlers/run-route";
 import { JSON_HEADERS } from "./handlers/client-facing-error";
+import { isLocalEnvironment } from "./env";
+
+const LOCAL_RELAXED_LIMIT = 1000;
+
+export const limitForEnvironment = (limit: number): number =>
+  isLocalEnvironment() ? LOCAL_RELAXED_LIMIT : limit;
 
 export type RateLimitOptions = {
   keyFn: (c: Context) => string | Promise<string>;

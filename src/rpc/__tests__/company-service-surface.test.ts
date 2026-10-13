@@ -54,11 +54,12 @@ describe("CompanyService.CheckMemberships は service key で呼び、入力の�
         const atLimit = yield* checkMemberships({ companyId: co, userIds: ids(1000) });
         const overLimit = yield* checkMemberships({ companyId: co, userIds: ids(1001) });
 
-        expect([atLimit.status, overLimit.status, overLimit.body.code]).toEqual([
-          200,
-          400,
-          "invalid_argument",
-        ]);
+        expect([
+          atLimit.status,
+          overLimit.status,
+          overLimit.body.code,
+          overLimit.body.message,
+        ]).toEqual([200, 400, "invalid_argument", "InvalidArgument"]);
       }),
     ));
 
