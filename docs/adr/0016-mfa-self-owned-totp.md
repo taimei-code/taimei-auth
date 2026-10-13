@@ -26,7 +26,7 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
   `MFA_TOTP_ENCRYPTION_KEYS`) を使う。better-auth はログイン (Magic Link / GitHub OAuth)、session、user
   管理に残す併用構成とする
 - 状態の実体は `mfa_totp` 行のみとする (行なしは未登録、`verified_at` が NULL は登録済み未有効、非 NULL は
-  有効の 3 状態。用語の定義は CONTEXT.md「MFA 登録状態」)。flag 列は持たず、「中断した有効化 / 無効化」は構造的に存在しない
+  有効の 3 状態。用語の定義は GLOSSARY.md「MFA 登録状態」)。flag 列は持たず、「中断した有効化 / 無効化」は構造的に存在しない
 - 並行制御は遷移 guard でなく操作文が担う。enroll は PK + ON CONFLICT、activate は識別子照合と
   verified 化と timestep (TOTP の 30 秒刻みの counter) 消費を条件に付けた単文 UPDATE、コード消費は単調比較または `used_at IS NULL` の単文で行う。
   勝者はちょうど 1 つになる

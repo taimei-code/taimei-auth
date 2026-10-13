@@ -2,7 +2,7 @@
 
 ## Context
 
-フィッシングサイトが **共通画面 SPA** (CONTEXT.md) のログイン画面やサインアップ画面を、DOM scraping、form の自動送信、favicon の prefetch によってクローンする経路を早期に検出したい。通常のユーザーが触れない罠 (canary) を仕込んでおけば、それにアクセスがあった時点でサイト複製の試行を疑える。
+フィッシングサイトが **共通画面 SPA** (GLOSSARY.md) のログイン画面やサインアップ画面を、DOM scraping、form の自動送信、favicon の prefetch によってクローンする経路を早期に検出したい。通常のユーザーが触れない罠 (canary) を仕込んでおけば、それにアクセスがあった時点でサイト複製の試行を疑える。
 
 ## Decision
 

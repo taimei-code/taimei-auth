@@ -73,7 +73,7 @@ Stage は層単位で進める。Stage の途中では main に 2 様式が共�
 
 Decision の各項が「何を選んだか」を言い、この節は「その形でないと壊れる理由」を module ごとに置く。書き方は `node_modules/effect/AGENTS.md` に、配置と依存の規則は `src/CLAUDE.md`「Effect様式」に従い、ここには再掲しない。(2026-10-08 追記) tracer を入れていないので、AGENTS.md の基準に従い Effect を返す関数はすべて `Effect.fnUntraced` にした。代わりに span と `Cause.pretty` の関数名 frame は出ない。tracer を入れる時は、span が要る関数を `Effect.fn("name")` に戻す。
 
-この ADR の「wire」(client が受け取る応答の byte 列と、そこに含まれる failure) は 2026-09 に code 上 `ClientFacingError` 系へ改名した (`src/handlers/wire-error.ts` → `client-facing-error.ts`、`src/mfa/wire-contracts.ts` → `client-facing-contracts.ts`)。対比語と線引きは `CONTEXT.md` の Flagged ambiguities に定義し、本文の「wire」は旧名として読む。
+この ADR の「wire」(client が受け取る応答の byte 列と、そこに含まれる failure) は 2026-09 に code 上 `ClientFacingError` 系へ改名した (`src/handlers/wire-error.ts` → `client-facing-error.ts`、`src/mfa/wire-contracts.ts` → `client-facing-contracts.ts`)。対比語と線引きは `GLOSSARY.md` の Flagged ambiguities に定義し、本文の「wire」は旧名として読む。
 
 - 境界 producer (`src/errors.ts`): `Effect.tryPromise` は thunk の同期 throw も E に含めるため、旧 guard の「`Promise.resolve().then()` で包む」という fail-open 回避は要らない。`liftAll` は型では Promise を返す関数だけを変換し、実行時は全関数を包む (戻り値は実行前に判定できず、型に無い key には到達できない)。`Effect.timeout` の `TimeoutError` は各境界の error (`RedisError` / `EmailError`) にまとめ、呼び出し側は境界 1 種だけを catch する
 - Transaction (`src/transaction.ts`): drizzle は callback が throw した時だけ rollback するため、program の Exit が失敗なら `RollbackSignal` を throw して rollback を起こし、callback の外で元の Exit に復元する。それ以外の throw (drizzle / pg) は `DbError` にする (別の root fiber になる帰結は Consequences)

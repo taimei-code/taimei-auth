@@ -19,7 +19,7 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 `User` / `Session` / `Account` / `Verification` への query は `db/repositories/<entity>.ts` の関数に局所化し、handler から `db.select()` や `db.insert()` を呼ばない。
 自前の MFA テーブル (`mfa_totp` / `mfa_recovery_code`) は better-auth が複製しないため、`db/repositories/mfa-totp.ts` 経由で直接 write するのが正しい (ADR-0016)。
 
-`Session` / `User` の削除と更新は repository を作らず、`auth.api.signOut` や `auth.api.updateUser` などの better-auth API で行う。session の実体は TTL store だけにあって DB に行が無く、user は各 active session の TTL store payload と cookieCache (最大 5 分) に複製されているため、SQL を直接操作してもこれらには届かないからである (CONTEXT.md の session)。
+`Session` / `User` の削除と更新は repository を作らず、`auth.api.signOut` や `auth.api.updateUser` などの better-auth API で行う。session の実体は TTL store だけにあって DB に行が無く、user は各 active session の TTL store payload と cookieCache (最大 5 分) に複製されているため、SQL を直接操作してもこれらには届かないからである (GLOSSARY.md の session)。
 
 ## drizzle-kit が管理できない SQL は `drizzle/manual/` に置く
 

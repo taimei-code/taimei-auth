@@ -4,7 +4,7 @@
 
 Accepted (2026-09-11)。判断主体は maintainer。設計上の論点と採らなかった案はこの ADR の Alternatives と Consequences に集約する。
 
-関連: ADR-0012 (OWNER 招待再検証と `invitation_accept_rejected`)、CONTEXT.md の **role** / **fail-closed / fail-open**。
+関連: ADR-0012 (OWNER 招待再検証と `invitation_accept_rejected`)、GLOSSARY.md の **role** / **fail-closed / fail-open**。
 
 ## Context
 
@@ -18,7 +18,7 @@ Accepted (2026-09-11)。判断主体は maintainer。設計上の論点と採ら
 
 - `membership.role` / `invitation.role` に `CHECK (role in ('OWNER', 'ADMIN', 'MEMBER'))` を置く (migration `0012`)。role の値域は DB 制約で定義し、`$type<Role>()` はその事実の型表現になる。`db/schema.ts` の `ROLES` const から `Role` を派生し、CHECK は `inArray(table.role, ROLES).inlineParams()` で `ROLES` から導出し、DB テスト (`db/__tests__/role-check.test.ts`) が全値の受理と外れ値の拒否を固定する
 - app 側の未知 role 防御を全て撤去し、policy / repository / audit payload / SPA の wire 型を `Role` に狭める。`RejectReason` から `unknown_invited_role` を外す。`requiresOwnerProtection` は `=== "OWNER"` に inline する
-- CONTEXT.md の **fail-closed / fail-open** から「role が未知」を外し、**role** に不変条件を書く
+- GLOSSARY.md の **fail-closed / fail-open** から「role が未知」を外し、**role** に不変条件を書く
 
 ## Alternatives
 

@@ -8,7 +8,7 @@ content-length の再送 (`proxy-helpers.ts`) は不要になり削除した。
 
 ## Context
 
-**auth ホスト** (CONTEXT.md) は Bun runtime 上の Hono server を主体とし、`/rpc/*` だけを ConnectRPC で扱う。`@connectrpc/connect-node` の `connectNodeAdapter` は Node.js の `http.Server` を前提に書かれており、Bun 標準の Web API (`Request` / `Response` ベース) とは直接つなげない。それでも Hono と ConnectRPC を 1 つのポートで共存させたい。
+**auth ホスト** (GLOSSARY.md) は Bun runtime 上の Hono server を主体とし、`/rpc/*` だけを ConnectRPC で扱う。`@connectrpc/connect-node` の `connectNodeAdapter` は Node.js の `http.Server` を前提に書かれており、Bun 標準の Web API (`Request` / `Response` ベース) とは直接つなげない。それでも Hono と ConnectRPC を 1 つのポートで共存させたい。
 
 ## Decision
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-**共通ログイン画面** (`/auth/`) は `?service_name=...&redirect_url=...&sign_up_url=...` を受け取り、認証完了後に `redirect_url` へ 302 する。**sign 流** (CONTEXT.md 参照) ではプロダクト側で URL を組み立てるため、taimei-auth は受信側で allowlist 検証を行う責任を持つ。検証が緩いと典型的なオープンリダイレクトになり、認証情報の窃取に直結する。
+**共通ログイン画面** (`/auth/`) は `?service_name=...&redirect_url=...&sign_up_url=...` を受け取り、認証完了後に `redirect_url` へ 302 する。**sign 流** (GLOSSARY.md 参照) ではプロダクト側で URL を組み立てるため、taimei-auth は受信側で allowlist 検証を行う責任を持つ。検証が緩いと典型的なオープンリダイレクトになり、認証情報の窃取に直結する。
 
 freee-accounts の `lib/freee/url_validator.rb` は host の suffix matching だが、taimei-auth は最初から完全一致の regex で実装する。
 
