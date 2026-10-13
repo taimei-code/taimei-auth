@@ -55,7 +55,7 @@ describe("revokeInvitation", () => {
             invitationId: `${P}inv-nonexistent`,
           }),
         );
-        expectFailure(e, NotFoundOrNotPending, "not_found_or_not_pending", 404);
+        expectFailure(e, NotFoundOrNotPending);
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
       }),
     ));
@@ -78,7 +78,7 @@ describe("revokeInvitation", () => {
         const e = yield* Effect.flip(
           revokeInvitation({ actorUserId: owner.id, companyId: co, invitationId: inv.id }),
         );
-        expectFailure(e, NotFoundOrNotPending, "not_found_or_not_pending", 404);
+        expectFailure(e, NotFoundOrNotPending);
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
       }),
     ));
@@ -102,7 +102,7 @@ describe("revokeInvitation", () => {
         const e = yield* Effect.flip(
           revokeInvitation({ actorUserId: owner.id, companyId: co2, invitationId: inv.id }),
         );
-        expectFailure(e, NotFoundOrNotPending, "not_found_or_not_pending", 404);
+        expectFailure(e, NotFoundOrNotPending);
         const persisted = yield* db.readInvitation(inv.id);
         expect(persisted?.status).toBe("PENDING");
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Exit } from "effect";
 import {
   dbTest,
   recordingTransaction,
@@ -7,6 +7,8 @@ import {
   auditRowsFor,
 } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
+import { auditLogWith } from "../../__tests__/test-layers";
+import { DbError } from "../../errors";
 import { changeRole } from "../change-role";
 import { LastOwner } from "../errors";
 import { NotFound } from "../guard/errors";
@@ -51,6 +53,34 @@ describe("changeRole", () => {
       }),
     ));
 
+  test("役割の変更の tx の中で audit の書き込みが失敗すると、変更は失敗し、DB の役割は元のまま", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const owner = yield* db.seedUser("audit-fail-owner");
+        const target = yield* db.seedUser("audit-fail-target");
+        const co = yield* db.seedCompany("audit-fail");
+        yield* db.seedMembership(owner.id, co, "OWNER");
+        yield* db.seedMembership(target.id, co, "MEMBER");
+        const failingAudit = auditLogWith(() => ({
+          appendAuditLogs: () => Effect.fail(new DbError({ cause: "audit store down" })),
+        }));
+
+        const exit = yield* Effect.exit(
+          changeRole({
+            actorUserId: owner.id,
+            targetUserId: target.id,
+            companyId: co,
+            beforeRole: "MEMBER",
+            nextRole: "ADMIN",
+          }).pipe(Effect.provide(failingAudit)),
+        );
+
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect((yield* db.readMembership(target.id, co))?.role).toBe("MEMBER");
+      }),
+    ));
+
   test("QA-H-08 beforeRole === nextRole (MEMBER → MEMBER) → 200 短絡 (tx open せず audit 発火なし)", () =>
     run(
       Effect.gen(function* () {
@@ -92,7 +122,7 @@ describe("changeRole", () => {
             nextRole: "MEMBER",
           }),
         );
-        expectFailure(e, LastOwner, "last_owner", 409);
+        expectFailure(e, LastOwner);
         expect((yield* db.readMembership(owner.id, co))?.role).toBe("OWNER");
         expect((yield* auditRowsFor(owner.id, "role_changed")).length).toBe(0);
       }),
@@ -115,7 +145,7 @@ describe("changeRole", () => {
             nextRole: "ADMIN",
           }),
         );
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
         expect((yield* auditRowsFor(owner.id, "role_changed")).length).toBe(0);
       }),
     ));

@@ -2,8 +2,7 @@ import { Data, Effect } from "effect";
 import type { InvitationRow } from "@/db/repositories/invitation";
 import type { InviterSeen } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
-import { AuditLog } from "../audit/ports";
-import { swallowAuditFailure } from "../audit/report-failure";
+import { appendAuditBestEffort, appendAuditInTx } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { applyJoin } from "../membership/apply-change";
 import { verifyInviter } from "../membership/policy";
@@ -32,7 +31,6 @@ export const acceptInvitation = Effect.fnUntraced(function* (params: {
   const { actor, invitation } = params;
   const invitations = yield* InvitationRepo;
   const memberships = yield* MembershipRepo;
-  const audit = yield* AuditLog;
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
@@ -53,15 +51,16 @@ export const acceptInvitation = Effect.fnUntraced(function* (params: {
       companyId: invitation.companyId,
       role: invitation.role,
     });
-    yield* audit.recordInvitationAccepted(
-      {
-        actor_user_id: actor.id,
+    yield* appendAuditInTx(t, {
+      eventType: "invitation_accepted",
+      userId: actor.id,
+      payload: {
         invitation_id: invitation.id,
         company_id: invitation.companyId,
+        accepted_by_user_id: actor.id,
         role: invitation.role,
       },
-      t,
-    );
+    });
   });
 
   yield* tx
@@ -80,9 +79,7 @@ const recordRejectionAndFail = Effect.fnUntraced(function* (
   invitation: InvitationRow,
   rejected: DoubleAccept | InviterNotOwner,
 ) {
-  const audit = yield* AuditLog;
   const payload = {
-    actor_user_id: actorUserId,
     invitation_id: invitation.id,
     company_id: invitation.companyId,
     invited_by_user_id: invitation.invitedByUserId,
@@ -91,9 +88,13 @@ const recordRejectionAndFail = Effect.fnUntraced(function* (
     reason: rejected.reason,
   };
   // warn は DB 書き込みの前 (DB 不通でも痕跡を残す)。この行の形式は運用の log filter が前提にしている。
-  yield* Effect.sync(() => console.warn(ACCEPT_REJECTED_LOG, JSON.stringify(payload)));
-  yield* audit
-    .recordInvitationAcceptRejected(payload)
-    .pipe(swallowAuditFailure(ACCEPT_REJECTED_LOG));
+  yield* Effect.sync(() =>
+    console.warn(ACCEPT_REJECTED_LOG, JSON.stringify({ actor_user_id: actorUserId, ...payload })),
+  );
+  yield* appendAuditBestEffort({
+    eventType: ACCEPT_REJECTED_LOG,
+    userId: actorUserId,
+    payload,
+  });
   return yield* new ExpiredOrUsed();
 });

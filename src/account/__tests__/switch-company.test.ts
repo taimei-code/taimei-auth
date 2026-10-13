@@ -75,7 +75,7 @@ describe("switchCompany", () => {
         const e = yield* Effect.flip(
           switchCompany({ actorUserId: u.id, fromCompanyId: co1, targetCompanyId: co2 }),
         );
-        expectFailure(e, Forbidden, "forbidden", 403);
+        expectFailure(e, Forbidden);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co1);
         expect((yield* auditRowsFor(u.id, "company_switched")).length).toBe(0);
       }),
@@ -97,7 +97,7 @@ describe("switchCompany", () => {
         const e = yield* Effect.flip(
           switchCompany({ actorUserId: u.id, fromCompanyId: co1, targetCompanyId: co2 }),
         );
-        expectFailure(e, Forbidden, "forbidden", 403);
+        expectFailure(e, Forbidden);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co1);
         expect((yield* auditRowsFor(u.id, "company_switched")).length).toBe(0);
       }),

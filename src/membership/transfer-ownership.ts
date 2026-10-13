@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
-import { AuditLog } from "../audit/ports";
+import { appendAuditInTx } from "../audit/append";
 import { Transaction } from "../transaction";
 import { applyTransfer } from "./apply-change";
 
@@ -10,21 +10,16 @@ export const transferOwnership = Effect.fnUntraced(function* (params: {
   companyId: string;
 }) {
   const { actorUserId, toUserId, companyId } = params;
-  const audit = yield* AuditLog;
   const tx = yield* Transaction;
 
   yield* tx.run(
     Effect.fnUntraced(function* (t: DbTx) {
       yield* applyTransfer(t, { actorUserId, toUserId, companyId });
-      yield* audit.recordOwnershipTransferred(
-        {
-          actor_user_id: actorUserId,
-          company_id: companyId,
-          from_user_id: actorUserId,
-          to_user_id: toUserId,
-        },
-        t,
-      );
+      yield* appendAuditInTx(t, {
+        eventType: "ownership_transferred",
+        userId: actorUserId,
+        payload: { company_id: companyId, from_user_id: actorUserId, to_user_id: toUserId },
+      });
     }),
   );
 });
