@@ -1,13 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { MfaCodeKind, MfaErrorCode } from "../mfa-atom";
-import {
-  describeMfaChallengeError,
-  normalizeMfaCode,
-  useMfaCodeInput,
-  type MfaCodeInput,
-} from "../use-mfa-code-entry";
+import { MFA_FAILURE_MESSAGES, type MfaCodeKind } from "../mfa-atom";
+import { normalizeMfaCode, useMfaCodeInput, type MfaCodeInput } from "../use-mfa-code-entry";
 
 type NormalizeCase = { name: string; raw: string; kind: MfaCodeKind; normalized: string };
 
@@ -63,20 +58,6 @@ const NORMALIZE_CASES: NormalizeCase[] = [
   },
 ];
 
-const ALL_ERROR_CODES: MfaErrorCode[] = [
-  "invalid_code",
-  "challenge_expired",
-  "locked",
-  "rate_limited",
-  "already_enabled",
-  "enrollment_changed",
-  "not_enabled",
-  "invalid_argument",
-  "unauthorized",
-  "not_found",
-  "unknown",
-];
-
 const AVOID_TERMS = [
   "2FA",
   "二要素認証",
@@ -117,73 +98,55 @@ describe("normalizeMfaCode", () => {
   });
 });
 
-describe("describeMfaChallengeError", () => {
-  test.each(ALL_ERROR_CODES)("QA-E-11 %s の文言にエラーコードを露出しない", (code: string) => {
-    const message = describeMfaChallengeError(code);
+describe("MFA_FAILURE_MESSAGES", () => {
+  const entries = Object.entries(MFA_FAILURE_MESSAGES);
 
+  test.each(entries)("%s の文言に失敗の名前を露出しない", (tag, message) => {
     expect(message.length).toBeGreaterThan(0);
-    expect(message).not.toContain(code);
+    expect(message).not.toContain(tag);
     expect(message).not.toContain("_");
     expect(message).not.toMatch(/[A-Z]{4,}/);
   });
 
-  test.each(ALL_ERROR_CODES)("QA-E-11 %s の文言が canonical 用語に従う", (code: string) => {
-    const message = describeMfaChallengeError(code);
-
+  test.each(entries)("%s の文言が canonical 用語に従う", (tag, message) => {
     for (const avoided of AVOID_TERMS) {
-      expect({ code, avoided, contained: message.includes(avoided) }).toEqual({
-        code,
+      expect({ tag, avoided, contained: message.includes(avoided) }).toEqual({
+        tag,
         avoided,
         contained: false,
       });
     }
   });
 
-  test("QA-E-11 多要素認証に言及する文言は canonical 表記を使う", () => {
-    expect(describeMfaChallengeError("already_enabled")).toContain("多要素認証 (MFA)");
+  test("多要素認証に言及する文言は canonical 表記を使う", () => {
+    expect(MFA_FAILURE_MESSAGES.AlreadyEnabled).toContain("多要素認証 (MFA)");
   });
 
-  test("QA-E-11 invalid_code は再試行を促さない (チャレンジ破棄済みの場合があるため)", () => {
-    const message = describeMfaChallengeError("invalid_code");
-
-    expect(message).toBe("入力されたコードが正しくありません。");
-    expect(message).not.toContain("もう一度");
+  test("InvalidCode は再試行を促さない (チャレンジ破棄済みの場合があるため)", () => {
+    expect(MFA_FAILURE_MESSAGES.InvalidCode).toBe("入力されたコードが正しくありません。");
+    expect(MFA_FAILURE_MESSAGES.InvalidCode).not.toContain("もう一度");
   });
 
-  test("QA-E-11 未知コードと prototype メンバー名は既定文言へ縮退する", () => {
-    const generic = describeMfaChallengeError("unknown");
-
-    expect(describeMfaChallengeError("SOMETHING_NEW")).toBe(generic);
-    expect(describeMfaChallengeError("toString")).toBe(generic);
-    expect(describeMfaChallengeError("constructor")).toBe(generic);
+  test("Locked は試行枠の使い切りと計数できない時の両方で返るので、どちらの場合にも合う文言にする", () => {
+    expect(MFA_FAILURE_MESSAGES.Locked).toContain("上限");
+    expect(MFA_FAILURE_MESSAGES.Locked).toContain("一時的");
+    expect(MFA_FAILURE_MESSAGES.Locked).toContain("15 分");
   });
 
-  test("locked は試行枠の使い切りと計数できない時の両方で返るので、どちらの場合にも合う文言にする", () => {
-    const locked = describeMfaChallengeError("locked");
-
-    expect(locked).toContain("上限");
-    expect(locked).toContain("一時的");
-    expect(locked).toContain("15 分");
-  });
-
-  test("QA-E-11 ロックアウトと rate limit は待ち時間の違う別文言になる", () => {
-    const locked = describeMfaChallengeError("locked");
-    const rateLimited = describeMfaChallengeError("rate_limited");
-
-    expect(locked).not.toBe(rateLimited);
-    expect(locked).toContain("15 分");
-    expect(rateLimited).not.toContain("15 分");
+  test("ロックアウトと試行枠は待ち時間の違う別文言になる", () => {
+    expect(MFA_FAILURE_MESSAGES.Locked).not.toBe(MFA_FAILURE_MESSAGES.RateLimited);
+    expect(MFA_FAILURE_MESSAGES.RateLimited).not.toContain("15 分");
   });
 });
 
 describe("useMfaCodeInput", () => {
-  test("AC-024 controlled submitting と error を入力属性へ反映する", () => {
+  test("controlled submitting と error を入力属性へ反映する", () => {
     let observed: MfaCodeInput | undefined;
     const Probe = () => {
       observed = useMfaCodeInput({
         inputId: "mfa-probe",
         submitting: true,
-        errorCode: "invalid_code",
+        errorMessage: "入力されたコードが正しくありません。",
         submit: () => undefined,
       });
       return null;

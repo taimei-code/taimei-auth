@@ -2,10 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Exit } from "effect";
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-import { Unauthorized } from "@core/membership/guard/errors";
-import { EnrollmentChanged, InvalidCode, Locked } from "@core/mfa/error-mapping";
+import { RateLimited, Unauthorized } from "@core/membership/guard/errors";
+import { InvalidCode, Locked } from "@core/mfa/errors";
 
-import { mfaChallengeObservationOf, mfaErrorCodeOfCause } from "../mfa-atom";
+import { mfaChallengeObservationOf, mfaFailureMessage } from "../mfa-atom";
+
+const GENERIC = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
 const statusError = (status: number) => {
   const request = HttpClientRequest.post("/api/account/mfa/disable");
@@ -17,25 +19,32 @@ const statusError = (status: number) => {
   });
 };
 
-describe("mfaErrorCodeOfCause", () => {
-  test("429 の境界: 宣言した Locked は locked、tag の無い 429 (Hono の rate limit) は rate_limited", () => {
-    expect(mfaErrorCodeOfCause(Cause.fail(new Locked()))).toBe("locked");
-    expect(mfaErrorCodeOfCause(Cause.die(statusError(429)))).toBe("rate_limited");
+describe("mfaFailureMessage", () => {
+  test("InvalidCode は入力の誤りを伝える", () => {
+    expect(mfaFailureMessage(Cause.fail(new InvalidCode()))).toBe(
+      "入力されたコードが正しくありません。",
+    );
+  });
+
+  test("試行枠の RateLimited は回数の上限を伝え、ロックアウト (Locked) とは別の文言", () => {
+    const rateLimited = mfaFailureMessage(Cause.fail(new RateLimited()));
+    expect(rateLimited).toBe(
+      "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
+    );
+    expect(mfaFailureMessage(Cause.fail(new Locked()))).not.toBe(rateLimited);
+  });
+
+  test("Unauthorized は再ログインを促す", () => {
+    expect(mfaFailureMessage(Cause.fail(new Unauthorized()))).toContain("ログイン");
   });
 
   test.each([
-    ["InvalidCode", Cause.fail(new InvalidCode()), "invalid_code"],
-    ["EnrollmentChanged", Cause.fail(new EnrollmentChanged()), "enrollment_changed"],
-    ["Unauthorized", Cause.fail(new Unauthorized()), "unauthorized"],
-    ["500 の HttpClientError", Cause.die(statusError(500)), "unknown"],
-    ["Error", Cause.die(new Error("network")), "unknown"],
-  ] as const)("%s は %s", (_name, cause, expected) => {
-    expect(mfaErrorCodeOfCause(cause)).toBe(expected);
+    ["契約の decode に落ちた 400 (body 無し)", Cause.die(statusError(400))],
+    ["500 の HttpClientError", Cause.die(statusError(500))],
+    ["通信の失敗", Cause.die(new Error("network"))],
+  ] as const)("%s は既定の文言", (_name, cause) => {
+    expect(mfaFailureMessage(cause)).toBe(GENERIC);
   });
-});
-
-test("server の契約の decode に落ちた 400 (body 無し) は invalid_argument", () => {
-  expect(mfaErrorCodeOfCause(Cause.die(statusError(400)))).toBe("invalid_argument");
 });
 
 describe("mfaChallengeObservationOf", () => {

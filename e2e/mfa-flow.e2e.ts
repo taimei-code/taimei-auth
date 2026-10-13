@@ -1,7 +1,7 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { expect, test, type Page } from "@playwright/test";
-import { reseedFixture, signInWithMagicLink } from "./helpers";
+import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
 const MFA_EMAIL = "e2e-mfa@example.com";
 
@@ -127,6 +127,8 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await page.goto("/account/security");
+  await expect(mfaRow(page).getByRole("button", { name: "有効にする" })).toBeVisible();
+  const navigations = watchMainFrameNavigations(page);
   await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
 
   const dialog = page.getByRole("dialog");
@@ -149,6 +151,8 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
   await expect(
     mfaRow(page).getByText(`リカバリーコードの残り: ${shownRecoveryCodes} 個`),
   ).toBeVisible();
+  await expect(mfaRow(page).getByText("有効", { exact: true })).toBeVisible();
+  expect(navigations.count()).toBe(0);
 });
 
 test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
@@ -384,7 +388,7 @@ test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷�
   await expect(challengeCodeInput(page)).toHaveCount(0);
 });
 
-const mockChallenge = (page: Page, verify: { status: number; json: unknown }) =>
+const mockChallenge = (page: Page, verify: { status: number; json?: unknown }) =>
   page.route("**/api/mfa/challenge**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: { pending: true } });
@@ -412,8 +416,19 @@ test("verify が空の redirect_url を返したら、遷移せずに既定の�
   expect(new URL(page.url()).pathname).toBe("/auth/mfa");
 });
 
-test("verify が Hono の rate limit の 429 を受けると、回数の上限の文言を出す", async ({ page }) => {
-  await mockChallenge(page, { status: 429, json: { error: "Too Many Requests" } });
+test("verify が本文の無い 400 を返したら、既定の失敗の文言を出す", async ({ page }) => {
+  await mockChallenge(page, { status: 400 });
+  await page.goto("/auth/mfa");
+
+  await submitChallengeCode(page);
+
+  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
+    "処理に失敗しました。しばらく待ってからもう一度お試しください。",
+  );
+});
+
+test("verify が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({ page }) => {
+  await mockChallenge(page, { status: 429, json: { _tag: "RateLimited" } });
   await page.goto("/auth/mfa");
 
   await submitChallengeCode(page);
@@ -506,13 +521,13 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
   await expect(page.locator("body")).not.toContainText(/invalid[_-]?code|two[_-]?factor/i);
 });
 
-test("無効化が Hono の rate limit の 429 を受けると、回数の上限の文言を出す", async ({ page }) => {
+test("無効化が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await enableMfaViaApi(page);
   let limitedRequests = 0;
   await page.route("**/api/account/mfa/disable", async (route) => {
     limitedRequests++;
-    await route.fulfill({ status: 429, json: { error: "Too Many Requests" } });
+    await route.fulfill({ status: 429, json: { _tag: "RateLimited" } });
   });
   await page.goto("/account/security");
 
