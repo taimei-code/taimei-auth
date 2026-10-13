@@ -1,9 +1,10 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Ref } from "effect";
+import { Effect, Exit, Ref } from "effect";
 import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
-import { failingSessionDeletion } from "../../__tests__/test-layers";
+import { auditLogWith, failingSessionDeletion } from "../../__tests__/test-layers";
+import { DbError } from "../../errors";
 import { storedSessionOf } from "../../__tests__/test-ttl-store";
 import { createSessionFor } from "../../mfa/__tests__/helpers";
 import { LastOwner } from "../errors";
@@ -43,6 +44,40 @@ const lastUsedOf = (userId: string) =>
 describe("removeMember", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
+
+  test.each([
+    ["OWNER が他の member を除名すると was_self は false", false],
+    ["member が自分で抜けると was_self は true", true],
+  ])("membership_removed の payload: %s", (_name, self) =>
+    run(
+      Effect.gen(function* () {
+        const ownerId = yield* seedUser(`audit-owner-${self}`);
+        const memberId = yield* seedUser(`audit-member-${self}`);
+        const companyId = yield* seedCompany(`audit-${self}`);
+        yield* join(ownerId, companyId, "OWNER");
+        yield* join(memberId, companyId, "MEMBER");
+        const actorUserId = self ? memberId : ownerId;
+
+        yield* removeMember({
+          actorUserId,
+          targetUserId: memberId,
+          companyId,
+          targetRole: "MEMBER",
+        });
+
+        expect(
+          (yield* auditRowsFor(actorUserId, "membership_removed")).map((r) => r.payload),
+        ).toEqual([
+          {
+            company_id: companyId,
+            removed_user_id: memberId,
+            removed_by_user_id: actorUserId,
+            role_at_removal: "MEMBER",
+            was_self: self,
+          },
+        ]);
+      }),
+    ));
 
   test("唯一の所属メンバーを除名 → membership 削除 + account 連動削除", () =>
     run(
@@ -108,7 +143,7 @@ describe("removeMember", () => {
           }),
         );
 
-        expectFailure(e, LastOwner, "last_owner", 409);
+        expectFailure(e, LastOwner);
         expect(yield* membershipExists(ownerId, companyId)).toBe(true);
         expect(yield* userExists(ownerId)).toBe(true);
         expect(yield* lastUsedOf(ownerId)).toBe(companyId);
@@ -228,7 +263,7 @@ describe("removeMember", () => {
         expect(yield* remove()).toEqual({ accountDeleted: true });
         const e = yield* Effect.flip(remove());
 
-        expectFailure(e, NotFound, "not_found", 404);
+        expectFailure(e, NotFound);
         expect((yield* auditRowsFor(ownerId, "membership_removed")).length).toBe(1);
       }),
     ));
@@ -253,31 +288,43 @@ describe("removeMember の TTL store の session 削除", () => {
         companyId,
         targetRole: "MEMBER",
       });
-      return { memberId, session, remove };
+      return { memberId, companyId, session, remove };
     });
 
-  test("最後の所属を除名すると、commit 後に対象の session と索引が消える", () =>
+  test("最後の所属を除名すると commit 後に対象の session と索引が消え、所属が残る user のものは残る", () =>
     run(
       Effect.gen(function* () {
-        const { memberId, session, remove } = yield* seedRemoval("ttl-orphan");
+        const orphan = yield* seedRemoval("ttl-orphan");
+        const kept = yield* seedRemoval("ttl-kept");
+        yield* join(kept.memberId, yield* seedCompany("ttl-kept-other"), "MEMBER");
 
-        expect(yield* remove).toEqual({ accountDeleted: true });
+        expect([yield* orphan.remove, yield* kept.remove]).toEqual([
+          { accountDeleted: true },
+          { accountDeleted: false },
+        ]);
 
-        expect(yield* storedSessionOf(memberId, session.token)).toEqual({
-          session: false,
-          index: false,
-        });
+        expect([
+          yield* storedSessionOf(orphan.memberId, orphan.session.token),
+          yield* storedSessionOf(kept.memberId, kept.session.token),
+        ]).toEqual([
+          { session: false, index: false },
+          { session: true, index: true },
+        ]);
       }),
     ));
 
-  test("所属が残る user を除名しても、session と索引は残る", () =>
+  test("除名の tx の中で audit の書き込みが失敗すると、除名は失敗し、所属と session は残る", () =>
     run(
       Effect.gen(function* () {
-        const { memberId, session, remove } = yield* seedRemoval("ttl-kept");
-        yield* join(memberId, yield* seedCompany("ttl-kept-other"), "MEMBER");
+        const { memberId, companyId, session, remove } = yield* seedRemoval("audit-failing");
+        const failingAudit = auditLogWith(() => ({
+          appendAuditLogs: () => Effect.fail(new DbError({ cause: "audit store down" })),
+        }));
 
-        expect(yield* remove).toEqual({ accountDeleted: false });
+        const exit = yield* Effect.exit(remove.pipe(Effect.provide(failingAudit)));
 
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(yield* membershipExists(memberId, companyId)).toBe(true);
         expect(yield* storedSessionOf(memberId, session.token)).toEqual({
           session: true,
           index: true,

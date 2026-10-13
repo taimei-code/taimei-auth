@@ -2,21 +2,12 @@ import { Effect } from "effect";
 import { AuthApi } from "../auth-service";
 import { captureCause } from "../sentry";
 
-type AccountDeletionFlow = "account-delete" | "company-delete" | "member-remove" | "sweep";
+export type AccountDeletionFlow = "account-delete" | "company-delete" | "member-remove" | "sweep";
 
-export const deleteSessionsOf = Effect.fnUntraced(function* (
-  userIds: readonly string[],
-  flow: AccountDeletionFlow,
-) {
-  yield* Effect.forEach(
-    userIds,
-    (userId) =>
-      AuthApi.use((authApi) => authApi.deleteUserSessions(userId)).pipe(
-        Effect.catchTag(
-          "AuthApiError",
-          captureCause({ tags: { component: "deleteAccount", flow }, extra: { userId } }),
-        ),
-      ),
-    { discard: true },
+export const deleteSessionsOf = (userId: string, flow: AccountDeletionFlow) =>
+  AuthApi.use((authApi) => authApi.deleteUserSessions(userId)).pipe(
+    Effect.catchTag(
+      "AuthApiError",
+      captureCause({ tags: { component: "deleteAccount", flow }, extra: { userId } }),
+    ),
   );
-});

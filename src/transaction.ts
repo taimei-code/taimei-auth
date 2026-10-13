@@ -37,16 +37,42 @@ const runThroughCallback = <A, E, R>(
     return yield* exit;
   });
 
+class AfterCommit extends Context.Service<
+  AfterCommit,
+  { register(effect: Effect.Effect<void>): Effect.Effect<void> }
+>()("taimei/AfterCommit") {}
+
+export const afterCommit = <R>(effect: Effect.Effect<void, never, R>) =>
+  Effect.gen(function* () {
+    const context = yield* Effect.context<R>();
+    yield* AfterCommit.use((hooks) => hooks.register(Effect.provideContext(effect, context)));
+  });
+
 export class Transaction extends Context.Service<
   Transaction,
   {
-    run<A, E, R>(f: (tx: DbTx) => Effect.Effect<A, E, R>): Effect.Effect<A, E | DbError, R>;
+    run<A, E, R>(
+      f: (tx: DbTx) => Effect.Effect<A, E, R>,
+    ): Effect.Effect<A, E | DbError, Exclude<R, AfterCommit>>;
   }
 >()("taimei/Transaction") {}
 
+const runCommittingHooks = <A, E, R>(
+  f: (tx: DbTx) => Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | DbError, Exclude<R, AfterCommit>> =>
+  Effect.gen(function* () {
+    const committed: Effect.Effect<void>[] = [];
+    const hooks = AfterCommit.of({
+      register: (effect) => Effect.sync(() => void committed.push(effect)),
+    });
+    const result = yield* runThroughCallback<A, E, Exclude<R, AfterCommit>>((run) =>
+      runInTransaction((tx) => run(Effect.provideService(f(tx), AfterCommit, hooks))),
+    );
+    yield* Effect.all(committed, { discard: true });
+    return result;
+  });
+
 export const TransactionLive = Layer.succeed(
   Transaction,
-  Transaction.of({
-    run: (f) => runThroughCallback((run) => runInTransaction((tx) => run(f(tx)))),
-  }),
+  Transaction.of({ run: runCommittingHooks }),
 );

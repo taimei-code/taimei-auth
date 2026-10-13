@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Cause, Data, Effect, Exit } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { MembershipRepo } from "../membership/ports";
-import { Transaction } from "../transaction";
+import { afterCommit, Transaction } from "../transaction";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
@@ -91,6 +91,50 @@ describe("Transaction.run", () => {
           ),
         );
         expect(e).toBeInstanceOf(Greeting);
+      }),
+    ));
+
+  test("commit が成功すると、tx の中で登録した effect を commit の後に登録順で実行する", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const u = yield* db.seedUser("after-commit");
+        const co = yield* db.seedCompany("after-commit");
+        const seen: string[] = [];
+        const record = (label: string) =>
+          db.readMembership(u.id, co).pipe(
+            Effect.orDie,
+            Effect.map((row) => seen.push(`${label}:${row ? "committed" : "absent"}`)),
+            Effect.asVoid,
+          );
+        yield* Transaction.use((tx) =>
+          tx.run((t) =>
+            insertIn(t, u.id, co, "after-commit").pipe(
+              Effect.tap(() => afterCommit(record("first"))),
+              Effect.tap(() => afterCommit(record("second"))),
+            ),
+          ),
+        );
+        expect(seen).toEqual(["first:committed", "second:committed"]);
+      }),
+    ));
+
+  test("rollback した tx で登録した effect は実行しない", () =>
+    run(
+      Effect.gen(function* () {
+        let ran = 0;
+        const exit = yield* Effect.exit(
+          Transaction.use((tx) =>
+            tx.run(() =>
+              afterCommit(Effect.sync(() => void ran++)).pipe(
+                Effect.andThen(new Rejected({ why: "rollback" })),
+              ),
+            ),
+          ),
+        );
+        expect([Exit.isFailure(exit), ran]).toEqual([true, 0]);
+        yield* Transaction.use((tx) => tx.run(() => afterCommit(Effect.sync(() => void ran++))));
+        expect(ran).toBe(1);
       }),
     ));
 });
