@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
-import type { TtlStore } from "../../ttl-store-service";
+import { TtlStore } from "../../ttl-store-service";
+import { TtlStoreError } from "../../errors";
+import { partial } from "../../__tests__/live-runner";
 import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "../../__tests__/test-layers";
-import { spendDisableAttempt } from "../disable-attempt-budget";
+import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
 import { Locked } from "../errors";
 
 describe("spendDisableAttempt", () => {
@@ -37,5 +39,28 @@ describe("spendDisableAttempt", () => {
         ),
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe("resetDisableAttempts", () => {
+  const ttlStoreFailingDelete = Layer.succeed(
+    TtlStore,
+    partial<TtlStore["Service"]>({
+      delete: () => Effect.fail(new TtlStoreError({ cause: new Error("test: delete failed") })),
+    }),
+  );
+  const captured = recordSentryExceptions();
+
+  test("消し損ねは失敗にせず Sentry に残す (counter は TTL で消え、次の枠が狭いままになるだけ)", async () => {
+    const before = captured.length;
+    await expect(
+      Effect.runPromise(
+        Effect.provide(
+          resetDisableAttempts("user-1"),
+          Layer.mergeAll(ttlStoreFailingDelete, SentryLive),
+        ),
+      ),
+    ).resolves.toBeUndefined();
+    expect(captured.length).toBe(before + 1);
   });
 });

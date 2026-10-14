@@ -81,7 +81,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("QA-E-05 tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden", () =>
+  test("QA-E-05 tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden (tx の外に事前確認が無いので、tx 開始前の除名で同じ経路を通す)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

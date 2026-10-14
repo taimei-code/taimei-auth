@@ -29,9 +29,12 @@ export const activate = Effect.fnUntraced(function* (input: {
 
   const sessionChanges = yield* revokeOtherSessionsOrUnauthorized(input.headers);
 
-  if (!(yield* mfa.activateMfaTotp(input.actor.id, row.enrollmentId, timestep))) {
-    return yield* new AlreadyEnabled();
-  }
+  const wonConcurrentActivation = yield* mfa.activateMfaTotp(
+    input.actor.id,
+    row.enrollmentId,
+    timestep,
+  );
+  if (!wonConcurrentActivation) return yield* new AlreadyEnabled();
 
   const { ip, userAgent } = getClientContext(input.headers);
   yield* appendAuditBestEffort({
