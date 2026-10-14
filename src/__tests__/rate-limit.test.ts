@@ -3,7 +3,13 @@ import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { buildApp as buildServerApp } from "../app";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
-import { createRateLimitMiddleware, magicLinkKey, rateLimitProgram } from "../rate-limit";
+import {
+  createRateLimitMiddleware,
+  magicLinkKey,
+  mfaAttemptKey,
+  rateLimitProgram,
+} from "../rate-limit";
+import { toRateWindowResult } from "../ttl-store";
 import type { TtlStore } from "../ttl-store-service";
 import { type SentryService, SentryLive } from "../sentry";
 import { recordSentryExceptions } from "./sentry-recorder";
@@ -117,4 +123,23 @@ describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () =
     );
     expect([res.status, res.headers.get("retry-after")]).toEqual([429, "60"]);
   });
+});
+
+describe("MFA の試行枠の key", () => {
+  test("session 軸の key は IP を変えても同じ枠で、cookie の値を key 名に含めない (key 名を認証情報にしない)", async () => {
+    const headers = new Headers({ cookie: "better-auth.session_token=tok.sig" });
+    const fromOneIp = await mfaAttemptKey(headers, "203.0.113.1");
+    const fromAnotherIp = await mfaAttemptKey(headers, "198.51.100.2");
+    expect(fromOneIp).toBe(fromAnotherIp);
+    expect(fromOneIp).toStartWith("rate-limit:mfa-attempt:session:");
+    expect(fromOneIp).not.toContain("tok");
+  });
+});
+
+test.each([
+  0,
+  -1,
+  Number.NaN,
+])("TTL store の計数 %p は throw する (0 を返すと fail-open 側の試行枠が storage 障害を「通す」扱いにする)", (count) => {
+  expect(() => toRateWindowResult(count)).toThrow();
 });

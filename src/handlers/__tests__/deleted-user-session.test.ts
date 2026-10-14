@@ -5,7 +5,6 @@ import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { buildTestApp, requestApp, responseJson } from "./helpers";
 
-// better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返し続ける。
 const P = "dus-test-";
 const { run, cleanup } = dbTest(P);
 
@@ -16,7 +15,7 @@ const postCompany = (app: Hono) =>
     body: JSON.stringify({ name: `${P}co-first`, org_code: "PERSONAL" }),
   });
 
-describe("削除済み user の session actor", () => {
+describe("削除済み user の session actor (better-auth の cookieCache は user 行の削除後も最大 5 分 session を返す)", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 

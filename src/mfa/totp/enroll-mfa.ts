@@ -88,7 +88,6 @@ export const enroll = Effect.fnUntraced(function* (input: { actor: Pick<Actor, "
     };
   }
 
-  // 並行して負けた側は勝者の内容を返す。行が消えていれば最初からやり直させる。
   const winner = yield* mfa.findMfaTotp(input.actor.id);
   if (!winner) return yield* new ChallengeExpired();
   return yield* replayPendingEnrollment(input.actor, winner);

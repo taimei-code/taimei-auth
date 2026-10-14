@@ -2,7 +2,6 @@ import { Github, Loader2 } from "lucide-react";
 
 import { Button } from "../shared/ui/button";
 
-// 招待経由で GitHub を隠すのは、invitation の厳密な email 一致が Magic Link の経路を前提にしているため
 export const SocialSignInSection = ({
   isInvitation,
   disabled,

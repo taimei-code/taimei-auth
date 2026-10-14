@@ -8,6 +8,7 @@ import {
   renderAndSendEmail,
 } from "./client";
 import InvitationEmail from "./invitation";
+import { invitationLogPrefix } from "./local-delivery-log";
 import type { DisplayText } from "./sanitize";
 
 export type InvitationEmailParams = {
@@ -22,7 +23,7 @@ export type InvitationEmailParams = {
 export const sendInvitationEmail = Effect.fnUntraced(function* (params: InvitationEmailParams) {
   if (isLocalEnvironment()) {
     yield* Effect.sync(() =>
-      console.log(`[TEST] Invitation email for ${params.inviteeEmail}: ${params.url}`),
+      console.log(`${invitationLogPrefix(params.inviteeEmail)}${params.url}`),
     );
     return;
   }

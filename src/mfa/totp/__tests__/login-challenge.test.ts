@@ -196,6 +196,36 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
+  test("チャレンジの消費で並行送信に負けた側は、再生成できないリカバリーコードを使わない (コードの消費はチャレンジの消費より後)", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("recovery-race-loser");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "magic_link",
+        });
+        const ttlStore = yield* TtlStore;
+
+        const rejected = yield* verifyFails(challenge.headers, {
+          code: enabled.recoveryCodes[0],
+          kind: "recovery_code",
+        }).pipe(
+          Effect.provideService(TtlStore, {
+            ...ttlStore,
+            getAndDelete: () => Effect.succeed(null),
+          }),
+        );
+
+        expectFailure(rejected, ChallengeExpired);
+        expect(yield* readOwnedMfaStatus(enabled.actor)).toMatchObject({
+          recoveryCodesRemaining: 10,
+        });
+      }),
+    ));
+
   test("AC-138/139 試行枠: 4 回目まで 400 + pending true、最後の 5 回目の誤コードで破棄して challenge_expired", () =>
     run(
       Effect.gen(function* () {
@@ -360,7 +390,6 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        // INCR できない値で実際に失敗させる。
         yield* Effect.sync(() =>
           testKvStore.set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60),
         );

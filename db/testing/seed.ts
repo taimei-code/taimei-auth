@@ -1,7 +1,11 @@
 import { and, eq, like, or } from "drizzle-orm";
 import { db } from "../client";
 import { generateCompanyId } from "../repositories/company";
-import { generateInvitationId, generateInvitationToken } from "../repositories/invitation";
+import {
+  generateInvitationId,
+  generateInvitationToken,
+  invitationStatusColumns,
+} from "../repositories/invitation";
 import { generateMembershipId } from "../repositories/membership";
 import {
   auditLog,
@@ -14,7 +18,6 @@ import {
   user,
 } from "../schema";
 
-// seed、cleanup、e2e fixture で共有する。片方だけ変えると cleanup の対象が 0 件になる。
 export const ids = (prefix: string) => ({
   userId: (suffix: string): string => `${prefix}u-${suffix}`,
   email: (suffix: string): string => `${prefix}${suffix}@example.com`,
@@ -98,7 +101,6 @@ export function createSeed(prefix: string) {
     const invitationId = generateInvitationId();
     const token = opts.token ?? generateInvitationToken();
     const now = new Date();
-    const status = opts.status ?? "PENDING";
     await db.insert(invitation).values({
       id: invitationId,
       companyId: opts.companyId,
@@ -106,11 +108,8 @@ export function createSeed(prefix: string) {
       role: opts.role,
       token,
       expiresAt: opts.expiresAt ?? new Date(now.getTime() + DAY_MS),
-      status,
       invitedByUserId: opts.invitedByUserId,
-      acceptedAt: status === "ACCEPTED" ? now : null,
-      revokedAt: status === "REVOKED" ? now : null,
-      usedAt: status === "PENDING" ? null : now,
+      ...invitationStatusColumns(opts.status ?? "PENDING", now),
     });
     return { id: invitationId, token };
   };

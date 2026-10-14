@@ -18,7 +18,6 @@ import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
-// mock.module はプロセス全体に作用して後続のファイルに漏れるため使わない。
 const mockSignOut = mock();
 
 beforeEach(() => {
@@ -199,7 +198,7 @@ describe("verifySession outcome", () => {
     expect(res.outcome.value.session?.sessionKind).toBe("user");
   });
 
-  test("cached revision undefined → outcome.case === 'ok' (skips revision check)", async () => {
+  test("revision 導入前の session (cached revision が undefined) は照合せず ok を返す (一斉ログアウトの loop にしない)", async () => {
     const res = await run(
       Layer.mergeAll(
         authLayer(() => sessionOf({ id: "u1" })),

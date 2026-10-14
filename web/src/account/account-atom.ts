@@ -13,7 +13,6 @@ export const companyStateAtom = SpaApiClient.query("account", "memberships", {
 const switchCompanyAtom = SpaApiClient.mutation("account", "switchCompany");
 const deleteAccountAtom = SpaApiClient.mutation("account", "deleteAccount");
 
-// 切替の atom は画面の間で 1 つなので、実行中に別の画面から呼ぶと前の呼び出しが中断される
 export const useSwitchCompanyRequest = () => {
   const switchCompany = useAtomSet(switchCompanyAtom, { mode: "promiseExit" });
   const pending = AsyncResult.isWaiting(useAtomValue(switchCompanyAtom));

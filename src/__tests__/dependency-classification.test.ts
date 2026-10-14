@@ -24,7 +24,6 @@ import {
   webOnlyGroups,
 } from "./config-invariant-helpers";
 
-// 許可基準は「server コードから import され得る runtime module か」(「ship される server コードが import しない」だと全 devDependencies が該当する)。
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",
@@ -94,7 +93,6 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
 
   test("QA-E-02: 片方の override だけに追記すると group 集合の不一致で落ちる", () => {
     const config = readBiomeConfig();
-    // readBiomeConfig は呼ぶたびに parse し直すので、patched への破壊的変更は config に影響しない。
     const patched = readBiomeConfig();
     const firstGroup = webOnlyGroups(patched)[0] as string[];
     firstGroup.push("react-day-picker");

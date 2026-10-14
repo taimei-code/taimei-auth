@@ -41,7 +41,7 @@ describe("deleteAccountIfOrphaned", () => {
 
         expect(deleted).toBe("deleted");
         expect(yield* db.readUser(userId)).toBeUndefined();
-        expect((yield* db.readSessions(userId)).length).toBe(0); // user の cascade で物理削除される
+        expect((yield* db.readSessions(userId)).length).toBe(0);
         expect(yield* countAccountDeleteAudit(userId)).toBe(1);
       }),
     ));

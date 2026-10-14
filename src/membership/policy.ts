@@ -1,4 +1,3 @@
-// 相対 import ("@/" は web 側の alias として解決される)。
 import type { InviterSeen, Role } from "../../db/repositories/membership";
 
 export type { Role } from "../../db/repositories/membership";

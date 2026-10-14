@@ -127,7 +127,7 @@ describe("addCompany", () => {
         expect(added.membership.role).toBe("OWNER");
 
         const userRow = yield* db.readUser(userId);
-        expect(userRow?.lastUsedCompanyId).toBe(added.company.id); // 新しい事業所へ切り替わる
+        expect(userRow?.lastUsedCompanyId).toBe(added.company.id);
         expect(yield* countCompanyCreatedAudit(userId, added.company.id)).toBe(1);
 
         const memberships = yield* db.readMemberships(userId);
@@ -157,7 +157,7 @@ describe("addCompany", () => {
         expect(memberships.length).toBe(2);
 
         const userRow = yield* db.readUser(userId);
-        expect(userRow?.lastUsedCompanyId).toBe(two.company.id); // 最後に作った方が current になる
+        expect(userRow?.lastUsedCompanyId).toBe(two.company.id);
       }),
     ));
 });

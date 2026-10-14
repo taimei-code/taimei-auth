@@ -41,7 +41,6 @@ export const loginShortcutProgram = Effect.fnUntraced(function* (c: Context) {
       )
     : false;
 
-  // Location が Cookie で変わるため、共有 cache を禁止して session の漏洩を防ぐ。
   c.header("Cache-Control", "private, no-store");
   c.header("Vary", "Cookie");
 

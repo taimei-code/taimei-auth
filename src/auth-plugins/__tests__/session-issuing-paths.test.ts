@@ -30,7 +30,6 @@ const registeredRoutePaths = (): string[] =>
     .filter((path): path is string => typeof path === "string")
     .sort();
 
-// better-auth 1.6.23 (twoFactor 無し) の全 route。version を上げて増減したら、一次認証のセッション発行経路かどうかを分類し直す。
 const EXPECTED_ROUTE_CATALOG = [
   "/account-info",
   "/callback/:id",

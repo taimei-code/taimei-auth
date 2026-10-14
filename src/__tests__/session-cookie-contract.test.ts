@@ -16,11 +16,9 @@ import {
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 
-// テスト環境は local 判定で Secure と Domain が付かないため、同一性の証明は Max-Age、Path、HttpOnly、SameSite に限る。
 const { run, cleanup } = dbTest("cookie-contract-");
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
-// hono の serialize が扱う CookieOptions の key。better-auth がこれ以外を足すと AuthApi.issueSession の cookie だけが欠けるので T3 で先に落とす。
 const HANDLED_ATTRIBUTE_KEYS = [
   "domain",
   "expires",
@@ -35,7 +33,6 @@ const HANDLED_ATTRIBUTE_KEYS = [
 ];
 const isSubsetOfHandledKeys = (attributes: object) =>
   Object.keys(attributes).every((key) => HANDLED_ATTRIBUTE_KEYS.includes(key));
-// module 評価時に $context を待たない (reject 時の handler が無く、ファイル全体が unhandled で落ちる)。
 const sessionCookieAttributes = () =>
   auth.$context.then((context) => context.createAuthCookie("session_token").attributes);
 
@@ -49,7 +46,6 @@ const expectEncodedSignedValue = (value: string) => {
   expect(decodeURIComponent(value)).toMatch(SIGNED_COOKIE_VALUE);
 };
 
-// Max-Age は 2 発行者で 1 秒ずれることがあるので key だけにする。
 const attributeSet = (setCookie: string) =>
   new Set(
     setCookie

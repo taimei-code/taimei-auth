@@ -16,7 +16,6 @@ export const ACCEPT_INVITATION_ROUTE = "/signup/accept-invitation";
 export const ACCEPT_INVITATION_PATH = `/auth${ACCEPT_INVITATION_ROUTE}` as const;
 
 export const acceptInvitationPath = (invitationToken: string, target?: RedirectTarget): string => {
-  // better-auth の magic-link verify は callbackURL を二重に decode するので、redirect_url の query と fragment は保たれない。
   const search = {
     invitation_token: invitationToken,
     ...target,

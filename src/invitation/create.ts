@@ -7,8 +7,6 @@ import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
 import { consumeInvitationQuota } from "./rate-limit";
 
-// rate-limit を tx 内に入れると並行した重複招待でカウンタ消費が変わり、監視系との対応がずれる。
-
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const createInvitation = Effect.fnUntraced(function* (params: {

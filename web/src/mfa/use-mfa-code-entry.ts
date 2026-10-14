@@ -9,10 +9,9 @@ import {
 import type { MfaCodeKind } from "./mfa-atom";
 
 const WHITESPACE = /\s+/g;
-// NFKC で ASCII に正規化されないダッシュ類 (メール本文からの貼り付けで混ざる)
+const PASTE_TOLERANT_MAX_LENGTH = 32;
 const HYPHEN_LIKE = /[-‐-―−ー]/g;
 
-// リカバリーコードのハイフンは server の完全一致照合の一部なので落とさない
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
   const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
   return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
@@ -87,12 +86,10 @@ export function useMfaCodeInput(options: {
       required: true,
       autoComplete: "one-time-code",
       inputMode: isTotp ? "numeric" : "text",
-      // リカバリーコードは大文字小文字も照合されるため IME の自動整形を切る
       autoCapitalize: "off",
       autoCorrect: "off",
       spellCheck: false,
-      // 全角や区切り入りの貼り付けを途中で切らない上限。桁数は server が判定する
-      maxLength: 32,
+      maxLength: PASTE_TOLERANT_MAX_LENGTH,
       placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
       "aria-label": isTotp ? "確認コード" : "リカバリーコード",
       "aria-invalid": options.errorMessage !== null,
@@ -109,7 +106,6 @@ export function useMfaCodeEntry(options: {
 }): MfaCodeInput {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // submitting state は同期に反映されないため、同じ task 内の二重 submit は ref でしか防げない
   const submitInFlight = useRef(false);
 
   const input = useMfaCodeInput({

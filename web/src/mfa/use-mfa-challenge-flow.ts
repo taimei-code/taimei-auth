@@ -64,13 +64,11 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
   const entry = useMfaCodeInput({
     inputId: "mfa-challenge-code",
     submitting: state.phase === "verifying",
-    // expired では直前の失敗文言を出さない (打ち直せば通るように読める)
     errorMessage: state.phase === "ready" ? state.errorMessage : null,
     submit,
     onKindChange: () => dispatch({ type: "error_cleared" }),
   });
 
-  // 画面を離れた後の遅い成功で遷移しないよう、遷移は描画中の state からだけ起こす
   const redirectUrl = state.phase === "redirecting" ? state.redirectUrl : null;
   useEffect(() => {
     if (redirectUrl !== null) {

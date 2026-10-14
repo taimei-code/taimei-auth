@@ -92,6 +92,25 @@ describe("runMutation (loader から更新を 1 回実行する)", () => {
 
     expect(exit).toEqual(Exit.succeed(42));
   });
+
+  test("実行中の atom をもう一度呼ぶと前の呼び出しは中断され、後の結果で解決する (共有の atom は pending の間は呼ばせない)", async () => {
+    let firstInterrupted = false;
+    const runtime = Atom.runtime(Layer.empty);
+    const slowFirst = runtime.fn((n: number) =>
+      n === 1
+        ? Effect.never.pipe(Effect.onInterrupt(() => Effect.sync(() => (firstInterrupted = true))))
+        : Effect.succeed(n),
+    );
+    const registry = AtomRegistry.make();
+    const unmount = registry.mount(slowFirst);
+
+    const first = runMutation(registry, slowFirst, 1);
+    const second = runMutation(registry, slowFirst, 2);
+
+    expect(await Promise.all([first, second])).toEqual([Exit.succeed(2), Exit.succeed(2)]);
+    expect(firstInterrupted).toBe(true);
+    unmount();
+  });
 });
 
 describe("readResult (route の beforeLoad / loader で atom を読む)", () => {

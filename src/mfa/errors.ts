@@ -8,7 +8,6 @@ export class InvalidCode extends Schema.TaggedError<InvalidCode>()(
 
 export class Locked extends Schema.TaggedError<Locked>()("Locked", {}, { httpApiStatus: 429 }) {}
 
-// cookie 無し・改ざん・期限切れ・消費済みを 1 つに集め、どの段階で失敗したかを漏らさない。
 export class ChallengeExpired extends Schema.TaggedError<ChallengeExpired>()(
   "ChallengeExpired",
   {},

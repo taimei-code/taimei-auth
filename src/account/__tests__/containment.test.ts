@@ -26,7 +26,7 @@ describe("退会の判定は deleteAccountUnlessLastOwner だけが持つ", () =
 
   test("membership の OWNER 行の lock は全て id 順に取る (順序が違うと退会と他の OWNER 変更が deadlock する)", () => {
     const lockLines = grepFiles("FOR UPDATE", "db/repositories/membership.ts", { lines: true });
-    expect(lockLines.length).toBeGreaterThanOrEqual(2);
+    expect(lockLines.length).toBeGreaterThanOrEqual(1);
     expect(lockLines.filter((line) => !line.includes("ORDER BY id FOR UPDATE"))).toEqual([]);
   });
 

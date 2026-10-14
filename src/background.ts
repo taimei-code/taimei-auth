@@ -1,7 +1,6 @@
 import { Context, Effect, Fiber, Layer } from "effect";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// Workers は response 後の未解決 promise を "hung" として cancel するため、ctx.waitUntil に登録する。
 type WaitUntil = (promise: Promise<unknown>) => void;
 
 const waitUntilStore = new AsyncLocalStorage<WaitUntil>();

@@ -41,7 +41,6 @@ test("ADMIN role は OWNER を操作できない (役割 select・削除ボタ�
 
   await expect(memberRoleSelect.getByRole("option", { name: "オーナー" })).toHaveCount(0);
 
-  // toHaveCount(1) を外すと、行が取れていなくても下の toHaveCount(0) が通る
   const list = page.getByRole("region", { name: "メンバー一覧" });
   const ownerRow = list.getByRole("listitem").filter({ hasText: "e2e-signin@example.com" });
   await expect(ownerRow).toHaveCount(1);

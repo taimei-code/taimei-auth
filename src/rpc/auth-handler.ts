@@ -39,7 +39,6 @@ const verifySessionUser = Effect.fnUntraced(function* (
   sessionToken: string,
   handler: string,
 ): Effect.fn.Return<SessionCheck, AuthApiError | DbError, AuthApi | UserRepo | SentryService> {
-  // session cookie だけを送るので、getSession は cookieCache でなく TTL store の payload を返す。
   const headers = new Headers({ cookie: buildSessionCookieHeader(sessionToken) });
   const authApi = yield* AuthApi;
   const result = yield* authApi.getSession(headers);
@@ -53,7 +52,6 @@ const verifySessionUser = Effect.fnUntraced(function* (
     return { _tag: "Rejected", reason: Result.USER_DELETED };
   }
 
-  // revision 導入前の payload は field を持たない。undefined で判定を skip し、一斉ログアウトの loop を防ぐ。
   const cachedRevision: number | undefined = result.user.revision;
   if (cachedRevision !== undefined && user.revision !== cachedRevision) {
     yield* authApi.signOut(headers).pipe(Effect.catch(captureCause({ tags: { handler } })));

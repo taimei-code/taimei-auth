@@ -11,13 +11,12 @@ import {
   readUserIdsByEmails,
 } from "@/db/testing/read";
 import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
+import type { ConsumableFixture } from "./fixture-names";
 
 type Role = SeedInvitationOptions["role"];
 
-// URL.hostname は IPv6 loopback を角括弧付きで返す
 const LOCAL_DB_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]", "auth-postgres"]);
 
-// APP_ENV で判定すると、本番 DATABASE_URL を export したままの手動実行 (APP_ENV 未設定) を通してしまう
 function assertLocalDatabase(): void {
   const url = process.env.DATABASE_URL;
   const hostname = url && URL.canParse(url) ? new URL(url).hostname : null;
@@ -44,7 +43,6 @@ const seedCompany = (suffix: string): Promise<string> => seed.seedCompany(suffix
 const seedMembership = (userId: string, companyId: string, role: Role): Promise<void> =>
   seed.seedMembership(userId, companyId, role).then(() => undefined);
 
-// email (sign-up 経由の user は id がランダム) と固定 id (user 削除後も残る audit_log) の両方で回収する
 async function removeFixtureRows(rows: {
   userSuffixes: string[];
   companySuffixes?: string[];
@@ -53,7 +51,6 @@ async function removeFixtureRows(rows: {
   const userIds = [...new Set([...existing, ...rows.userSuffixes.map(seededUserId)])];
   await deleteAuditByUserIds(userIds);
   await deleteUsersByIds(userIds);
-  // company は membership が restrict のため user の後に消す
   if (rows.companySuffixes !== undefined) {
     await deleteCompaniesByNames(rows.companySuffixes.map(fixtureCompanyName));
   }
@@ -76,7 +73,6 @@ async function ensureFixture(spec: FixtureSpec): Promise<void> {
   }
 }
 
-// 実行中にメンバーが増え (invitation-flow)、招待 fixture が FK で参照するため、件数 assertion・消費・単独の作り直しをしない
 const MAIN_FIXTURE: FixtureSpec = {
   company: "main",
   members: [
@@ -126,20 +122,19 @@ async function ensureDeleteMultiFixture(): Promise<void> {
   const currentCompanyId = await seedCompany(DELETE_MULTI_CURRENT_COMPANY);
   await seedMembership(userId, currentCompanyId, "OWNER");
   await seedMembership(userId, await seedCompany(DELETE_MULTI_OTHER_COMPANY), "OWNER");
-  // seed は src/membership/apply-change.ts を通らないので、current 事業所を明示する
   await seed.setLastUsedCompany(userId, currentCompanyId);
 }
 
 const SWITCH_USER = "switch";
 const SWITCH_COMPANY_A = "switch-a";
 const SWITCH_COMPANY_B = "switch-b";
+const COMPANIES_CREATED_BY_SPECS = ["switch-added", "switch-b-renamed"];
 
 async function ensureSwitchFixture(): Promise<void> {
   assertLocalDatabase();
   await removeFixtureRows({
     userSuffixes: [SWITCH_USER, "switch-a-mate", "switch-b-mate"],
-    // spec が追加・改名した事業所 (company-mutation.e2e.ts) も回収する
-    companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, "switch-added", "switch-b-renamed"],
+    companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, ...COMPANIES_CREATED_BY_SPECS],
   });
   const userId = await seedUser(SWITCH_USER, "E2E Switch");
   const companyA = await seedCompany(SWITCH_COMPANY_A);
@@ -168,7 +163,6 @@ const INVITATION_TOKEN = "e2e-invitation-token";
 
 async function ensureInvitationFixture(): Promise<void> {
   assertLocalDatabase();
-  // 破壊より先に検証し、消すだけ消して abort するのを避ける
   const main = await findTheMainCompany();
   await removeFixtureRows({ userSuffixes: ["invitee"] });
   await deleteInvitationByToken(INVITATION_TOKEN);
@@ -195,26 +189,23 @@ async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserI
   return { companyId: companies[0], invitedByUserId: inviter.id };
 }
 
-export const consumableFixtures = new Map<string, () => Promise<void>>([
-  ["leave", () => ensureFixture(LEAVE_FIXTURE)],
-  ["delete", () => ensureFixture(DELETE_FIXTURE)],
-  ["withdraw", () => ensureFixture(WITHDRAW_FIXTURE)],
-  ["delete-multi", ensureDeleteMultiFixture],
-  ["invitation", ensureInvitationFixture],
-  ["mfa", () => ensureFixture(MFA_FIXTURE)],
-  ["switch", ensureSwitchFixture],
-]);
+export const consumableFixtures: Record<ConsumableFixture, () => Promise<void>> = {
+  leave: () => ensureFixture(LEAVE_FIXTURE),
+  delete: () => ensureFixture(DELETE_FIXTURE),
+  withdraw: () => ensureFixture(WITHDRAW_FIXTURE),
+  "delete-multi": ensureDeleteMultiFixture,
+  invitation: ensureInvitationFixture,
+  mfa: () => ensureFixture(MFA_FIXTURE),
+  switch: ensureSwitchFixture,
+};
 
-// e2e- prefix は spec 実行中に作られる e2e-newbie-* にも一致するため、spec からは呼ばない
 export async function resetAllFixtures(): Promise<void> {
   assertLocalDatabase();
   const staleIds = await readUserIdsByEmailPrefix(E2E_PREFIX);
   await deleteAuditByUserIds(staleIds);
   await deleteUsersByIds(staleIds);
-  // 連動削除で user 行が消えた seed user の audit と company を固定 id の prefix で回収する
   await seed.cleanup();
 
-  // invitation は main を FK で参照するため最後
   await ensureFixture(MAIN_FIXTURE);
   await ensureFixture(LEAVE_FIXTURE);
   await ensureFixture(DANGER_FIXTURE);

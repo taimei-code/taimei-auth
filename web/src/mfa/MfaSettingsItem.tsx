@@ -5,7 +5,6 @@ import { Button } from "../shared/ui/button";
 import { MfaDisableDialog } from "./MfaDisableDialog";
 import { MfaEnrollDialog } from "./MfaEnrollDialog";
 
-// 再発行の導線が無い (復旧は運用スクリプト経由) ため使い切る前に警告する
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
 
 const describeRecoveryCodeShortage = (remaining: number): string =>

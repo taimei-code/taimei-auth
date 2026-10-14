@@ -1,6 +1,12 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { expect, test, type Page } from "@playwright/test";
+import {
+  TOTP_DIGITS,
+  TOTP_PERIOD_SECONDS,
+  TOTP_WINDOW_STEPS,
+} from "../src/mfa/totp/totp-parameters";
+import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
 const MFA_EMAIL = "e2e-mfa@example.com";
@@ -10,10 +16,6 @@ test.describe.configure({ timeout: 90_000 });
 test.beforeEach(() => {
   reseedFixture("mfa");
 });
-
-// src/auth.ts の totpOptions と揃える。src/mfa/__tests__/helpers.ts は db を import するため再利用しない (biome の e2e override)
-const TOTP_PERIOD_SECONDS = 30;
-const TOTP_DIGITS = 6;
 
 const decodeTotpSecret = (encoded: string): string =>
   new TextDecoder().decode(base32.decode(encoded));
@@ -30,15 +32,20 @@ const totpCode = (secret: string, stepOffset = 0): Promise<string> => {
   return otp.hotp(Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset);
 };
 
-// 固定の誤コードは検証窓 (前後 1 step) に偶然一致する
 const wrongTotpCode = async (secret: string): Promise<string> => {
-  const accepted = await Promise.all([-1, 0, 1].map((offset) => totpCode(secret, offset)));
+  const acceptedOffsets = Array.from(
+    { length: TOTP_WINDOW_STEPS * 2 + 1 },
+    (_, i) => i - TOTP_WINDOW_STEPS,
+  );
+  const accepted = await Promise.all(acceptedOffsets.map((offset) => totpCode(secret, offset)));
   for (let candidate = 0; candidate < 1000; candidate++) {
     const code = String(candidate).padStart(TOTP_DIGITS, "0");
     if (!accepted.includes(code)) return code;
   }
   throw new Error("検証窓の外にある誤コードを作れなかった");
 };
+
+const PREVIOUS_STEP_LEAVING_CURRENT_UNUSED = -1;
 
 type EnabledMfa = { secret: string; recoveryCodes: string[] };
 
@@ -54,9 +61,11 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   };
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
-  // 使った timestep は再利用できないため、現在の step を後続の検証に残す
   const activated = await page.request.post("/api/account/mfa/activate", {
-    data: { code: await totpCode(secret, -1), enrollment_id: enrollment.enrollment_id },
+    data: {
+      code: await totpCode(secret, PREVIOUS_STEP_LEAVING_CURRENT_UNUSED),
+      enrollment_id: enrollment.enrollment_id,
+    },
   });
   expect(activated.status()).toBe(200);
 
@@ -71,7 +80,6 @@ const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/auth\/mfa/);
 };
 
-// toast は main の外にあり同じ語を含むため main に絞る
 const mfaRow = (page: Page) =>
   page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
 
@@ -133,7 +141,6 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("img", { name: "認証アプリで読み取る QR コード" })).toBeVisible();
-  // 手入力用 secret の目印は translate="no" だけ
   const secret = decodeTotpSecret((await dialog.locator('p[translate="no"]').innerText()).trim());
   await expect(dialog.getByRole("button", { name: "secret をコピー" })).toBeVisible();
 
@@ -170,7 +177,6 @@ test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secre
 
   const dialog = page.getByRole("dialog");
   const firstSecret = (await dialog.locator('p[translate="no"]').innerText()).trim();
-  // 失敗時は placeholder の "—" が出て、"—" 同士の比較で通ってしまう
   expect(firstSecret.length).toBeGreaterThan(1);
   expect(firstSecret).not.toBe("—");
   await page.keyboard.press("Escape");
@@ -444,7 +450,7 @@ test("「ログインをやり直す」は末尾スラッシュ無しのログ�
 
   const href = await page.getByRole("link", { name: "ログインをやり直す" }).getAttribute("href");
 
-  expect(href).toMatch(/^\/auth\?service_name=accounts&redirect_url=/);
+  expect(href?.startsWith(`${SIGN_IN_LANDING_PATH}&redirect_url=`)).toBe(true);
 });
 
 test("AC-033 空の code は verify を呼ばない", async ({ page }) => {

@@ -1,12 +1,13 @@
 import { Effect } from "effect";
 import { isLocalEnvironment } from "../env";
 import { getAppName, getAppUrl, getWelcomeFromEmail, renderAndSendEmail } from "./client";
+import { WELCOME_EMAIL_LOG } from "./local-delivery-log";
 import type { DisplayText } from "./sanitize";
 import WelcomeEmail from "./welcome";
 
 export const sendWelcomeEmail = Effect.fnUntraced(function* (email: string, userName: DisplayText) {
   if (isLocalEnvironment()) {
-    yield* Effect.sync(() => console.log(`[TEST] Welcome email for ${email}`));
+    yield* Effect.sync(() => console.log(`${WELCOME_EMAIL_LOG} ${email}`));
     return;
   }
 

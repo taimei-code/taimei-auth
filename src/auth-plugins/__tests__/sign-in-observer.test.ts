@@ -11,9 +11,10 @@ import {
   TEST_CLIENT_IP,
   TEST_USER_AGENT,
   totpCode,
-  WELCOME_EMAIL_LOG,
 } from "../../mfa/__tests__/helpers";
+import { WELCOME_EMAIL_LOG } from "../../email/local-delivery-log";
 import { activate, completeLoginChallenge, enroll } from "../../mfa/totp";
+import { NEW_USER_THRESHOLD_MS } from "../sign-in-observer";
 import { runTest, observing, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
@@ -22,8 +23,7 @@ const run = runTest(P);
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
-// sign-in-observer の「初回サインアップ直後」閾値 (10 秒) より確実に古くする。
-const SETTLED_USER_AGE_MS = 60_000;
+const SETTLED_USER_AGE_MS = NEW_USER_THRESHOLD_MS * 6;
 
 const cleanupAll = () =>
   run(

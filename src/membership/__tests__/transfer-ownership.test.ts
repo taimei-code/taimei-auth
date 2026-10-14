@@ -60,10 +60,9 @@ describe("transferOwnership", () => {
       }),
     ));
 
-  test("QA-D-04 並行 transfer (同 companyId, 別 to) → FOR UPDATE 直列化 / OWNER≥1 不変条件維持", () =>
+  test("QA-D-04 並行 transfer (同 companyId, 別 to) → FOR UPDATE 直列化 / OWNER≥1 不変条件維持 (OWNER≤1 は Guard の 403 が担う)", () =>
     run(
       Effect.gen(function* () {
-        // use-case は OWNER≥1 だけを守り OWNER≤1 は Guard の 403 が担うため、failure なしと OWNER≥1 だけを検証する。
         const db = yield* TestDb;
         const owner = yield* db.seedUser("owner-race");
         const a = yield* db.seedUser("target-a");

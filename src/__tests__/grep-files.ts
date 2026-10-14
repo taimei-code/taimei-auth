@@ -11,7 +11,6 @@ export type GrepOptions = {
   readonly lines?: boolean;
 };
 
-// in-process で走査しない (テスト自身が pattern を含み自分に一致する)。shell を挟まない (`$` や backtick が展開されて gate が緩む)。
 export function grepFiles(pattern: string, target: string, opts: GrepOptions = {}): string[] {
   const flags = [
     opts.lines ? "-rE" : "-rEl",
@@ -28,7 +27,6 @@ export function grepFiles(pattern: string, target: string, opts: GrepOptions = {
       .map((line) => line.replace(`${REPO_ROOT}/`, ""))
       .filter((line) => !opts.onlyTests || line.includes("/__tests__/"));
   } catch (error) {
-    // grep は一致なしで exit 1、パス不在や引数不正で exit 2 以上 (0 件と読むと fail-open)。
     if ((error as { status?: number }).status === 1) return [];
     throw error;
   }

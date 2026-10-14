@@ -76,13 +76,13 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
     expect(resolveForwardedClientIp(headers, trust)).toBe("unknown");
   });
 
-  test("X-Forwarded-For 不在なら 1 hop に限り X-Real-IP へ落とす", () => {
+  test("X-Forwarded-For 不在なら X-Real-IP (最も近い proxy が見た peer) へ落とすのは 1 hop の時だけ", () => {
     const headers = new Headers({ "x-real-ip": "203.0.113.9" });
     expect(resolveForwardedClientIp(headers, BEHIND_1)).toBe("203.0.113.9");
     expect(resolveForwardedClientIp(headers, BEHIND_2)).toBe("unknown");
   });
 
-  test("X-Real-IP と食い違う X-Forwarded-For は採らず unknown", () => {
+  test("X-Real-IP と食い違う X-Forwarded-For は client の注入で伸びた疑いがあるので採らず unknown", () => {
     const headers = new Headers({
       "x-forwarded-for": "203.0.113.9, 10.0.0.5",
       "x-real-ip": "203.0.113.9",
@@ -113,6 +113,7 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
     { name: "IP 風の任意文字列", value: "203.0.113.9-forged" },
     { name: "group 過多 IPv6", value: "2001:db8:0:0:0:0:0:0:1" },
     { name: "'::' 2 個の IPv6", value: "2001::db8::1" },
+    { name: "'::' で省略したのに明示 group が 8 個の IPv6", value: "1:2:3:4::5:6:7:8" },
     { name: "SQL 断片", value: "203.0.113.9' OR 1=1--" },
   ];
   test.each(MALFORMED)("IP literal として読めない値は unknown: $name", ({ value }) => {
@@ -130,7 +131,7 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
 });
 
 describe("resolveCloudflareClientIp (Workers: cf-connecting-ip のみ)", () => {
-  test("cf-connecting-ip を採る", () => {
+  test("cf-connecting-ip は Cloudflare が edge で上書きするので信用して採る", () => {
     expect(resolveCloudflareClientIp(new Headers({ "cf-connecting-ip": "203.0.113.9" }))).toBe(
       "203.0.113.9",
     );
@@ -156,7 +157,6 @@ describe("getClientContext (bun test = Bun runtime)", () => {
     delete process.env.AUTH_TRUSTED_PROXY_HOPS;
   });
 
-  // process.env を丸ごと置き換えると Bun.env と食い違う (Bun 1.4 で実測) ため、key 単位で戻す。
   afterEach(() => {
     for (const key of ENV_KEYS) {
       const value = originalEnv[key];

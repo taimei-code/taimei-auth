@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-// allowedHostPattern は module ロード時に APP_ENV で確定するため、APP_ENV=production の子プロセスで検証する (テストプロセス全体を production にすると他のテストが壊れる)。
-
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 
 const CHECK_SCRIPT = `
@@ -16,7 +14,7 @@ const results = {
 console.log(JSON.stringify(results));
 `;
 
-describe("allowlist の production 値 (子プロセスで APP_ENV=production)", () => {
+describe("allowlist の production 値 (allowedHostPattern は module ロード時に確定するので、子プロセスで APP_ENV=production にする)", () => {
   test(".taimei-code.local / localhost が拒否され .taimei-code.com のみ許可される", () => {
     const proc = Bun.spawnSync(["bun", "-e", CHECK_SCRIPT], {
       cwd: REPO_ROOT,

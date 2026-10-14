@@ -32,7 +32,6 @@ export const failedBeforeAnyValue = <A, E>(
 ): result is AsyncResult.Failure<A, E> =>
   AsyncResult.isFailure(result) && Option.isNone(result.previousSuccess);
 
-// useAtomSet の promiseExit と同じ手順を、React の外 (route の loader) で行う
 export const runMutation = <A, E, W>(
   registry: AtomRegistry.AtomRegistry,
   atom: Atom.Writable<AsyncResult.AsyncResult<A, E>, W>,

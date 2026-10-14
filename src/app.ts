@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
@@ -16,8 +16,16 @@ import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
 
+async function readEmailWithoutCloningBody(c: Context): Promise<string> {
+  const body = await c.req
+    .json<Record<string, unknown>>()
+    .catch(() => ({}) as Record<string, unknown>);
+  return typeof body?.email === "string" ? body.email : "unknown";
+}
+
+export const BETTER_AUTH_METHODS = ["GET", "POST"] as const;
+
 export type AppOptions = {
-  // catch-all を含むので、共有 route を登録し終えてから呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
@@ -47,7 +55,6 @@ export function buildApp(options: AppOptions): Hono {
 
   app.route("/", loginShortcut);
 
-  // 認証なしで Sentry に直送するため、連打で quota が尽きないよう IP 単位で抑える。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
@@ -66,21 +73,13 @@ export function buildApp(options: AppOptions): Hono {
       windowSec: 60,
     }),
     createRateLimitMiddleware({
-      keyFn: async (c) => {
-        // workerd は body を clone して二重に読むと hang するため、raw body を Hono の cache に先読みさせる。
-        const body = await c.req
-          .json<Record<string, unknown>>()
-          .catch(() => ({}) as Record<string, unknown>);
-        const email = typeof body?.email === "string" ? body.email : "unknown";
-        return magicLinkKey("email", email);
-      },
+      keyFn: async (c) => magicLinkKey("email", await readEmailWithoutCloningBody(c)),
       limit: limitForEnvironment(3),
       windowSec: 60,
     }),
   );
 
-  // method を広げ忘れると static fallback が 200 の HTML を返し、気付かれない。
-  app.on(["GET", "POST"], "/api/auth/*", async (c) => {
+  app.on([...BETTER_AUTH_METHODS], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();
     const request =
       body === undefined

@@ -8,7 +8,6 @@ export class MfaTotpRepo extends Context.Service<MfaTotpRepo, LiftedModule<typeo
   "taimei/MfaTotpRepo",
 ) {}
 
-// ring を Effect にして import 時に throw させない。
 export class MfaKeyring extends Context.Service<
   MfaKeyring,
   { readonly ring: Effect.Effect<MfaKeyRing> }

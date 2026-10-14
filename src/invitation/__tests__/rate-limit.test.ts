@@ -9,7 +9,6 @@ import { RateLimited } from "../../membership/guard/errors";
 import { consumeInvitationQuota } from "../rate-limit";
 import { testKvStore, testTtlStoreLayer } from "../../__tests__/test-ttl-store";
 
-// env は書き換えず bucket に先に値を入れる (env を変えると同 process の create.test.ts の既定 50 の前提が壊れる)。
 const COMPANY = "invitation-rate-limit-test";
 const bucketKey = () =>
   `invitation_rate:${COMPANY}:${new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length)}`;

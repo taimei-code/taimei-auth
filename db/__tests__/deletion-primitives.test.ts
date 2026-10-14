@@ -21,7 +21,6 @@ import { runInTransaction } from "../transaction";
 
 const P = "delprim-test-";
 
-// membership.company_id は restrict なので company より先に消す。
 async function cleanup() {
   await db.delete(invitation).where(like(invitation.email, `${P}%`));
   await db.delete(membership).where(like(membership.userId, `${P}%`));
@@ -159,7 +158,7 @@ describe("revokePendingInvitationsOfCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("PENDING のみ REVOKED 化し revoked 行を返す。ACCEPTED は不変", async () => {
+  test("PENDING のみ REVOKED 化し revoked 行を返す。ACCEPTED は不変 (削除済みの事業所への受諾で所属を復活させない)", async () => {
     const companyId = await seedCompany("inv-co");
     const inviter = await seedUser("inv-by");
     const mk = (s: string) =>

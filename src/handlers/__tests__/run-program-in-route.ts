@@ -1,7 +1,6 @@
 import { Effect, type Exit, type Layer } from "effect";
 import { type Context, Hono } from "hono";
 
-// Hono は handler の throw を 500 にして握りつぶすため、Exit を取り出してテスト側で throw する。
 export const runProgramInRoute = async <A, E, R>(
   route: string,
   url: string,

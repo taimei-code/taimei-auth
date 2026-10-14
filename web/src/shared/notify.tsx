@@ -4,7 +4,6 @@ type ToasterComponent = ComponentType<ComponentProps<typeof import("sonner").Toa
 
 let toasterUnavailable = false;
 
-// chunk の取得失敗を Suspense へ throw すると error boundary の無い /account ごと unmount される
 const SonnerToaster = lazy<ToasterComponent>(() =>
   import("sonner")
     .then((m) => ({ default: m.Toaster }))
@@ -15,7 +14,6 @@ const SonnerToaster = lazy<ToasterComponent>(() =>
     }),
 );
 
-// sonner の既定値と同じ。render ごとに新しい配列を渡すと keydown listener が再登録される
 const TOASTER_HOTKEY = ["altKey", "KeyT"];
 
 type Deferred = { promise: Promise<void>; resolve: () => void };
@@ -28,7 +26,6 @@ const deferred = (): Deferred => {
 };
 let toasterMounted = deferred();
 
-// 同じ commit で sonner の subscribe (useEffect) が先に走るため、この effect の時点で toast() は届く
 const ToasterMountedSignal = () => {
   useEffect(() => {
     toasterMounted.resolve();
@@ -55,8 +52,8 @@ export const Toaster = () => (
 );
 
 const TOASTER_MOUNT_TIMEOUT_MS = 5_000;
+const ERROR_TOAST_IN_PLACE_OF_ROLE_ALERT = { duration: 10_000, closeButton: true } as const;
 
-// sonner の toast() は publish 時点で subscribe 済みの Toaster にしか届かない
 const withToast = (): Promise<typeof import("sonner")["toast"]> =>
   Promise.all([
     import("sonner"),
@@ -68,7 +65,6 @@ const withToast = (): Promise<typeof import("sonner")["toast"]> =>
     ]),
   ]).then(([m]) => m.toast);
 
-// sonner には toast ごとの role=alert が無いので長い duration と closeButton で代替する。duration は sonner の既定値に依存しない
 export const notifySuccess = (text: string): void => {
   if (toasterUnavailable) {
     console.error(text);
@@ -85,11 +81,10 @@ export const notifyError = (text: string): void => {
     return;
   }
   void withToast()
-    .then((toast) => toast.error(text, { duration: 10_000, closeButton: true }))
+    .then((toast) => toast.error(text, ERROR_TOAST_IN_PLACE_OF_ROLE_ALERT))
     .catch((e) => console.error(text, e));
 };
 
-// staleShort は「〜が、…失敗しました」に繋げる節なので句点を付けない
 export const notifyAfterRefresh = (
   refresh: () => Promise<unknown>,
   text: { done?: string; staleShort: string },

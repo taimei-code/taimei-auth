@@ -42,7 +42,6 @@ const failedStep = (cause: Cause.Cause<MfaFailure>): EnrollState => ({
   message: mfaFailureMessage(cause),
 });
 
-// URI が想定外の形でも QR 側は出せるよう null を返す
 const readTotpSecret = (totpUri: string): string | null =>
   URL.canParse(totpUri) ? new URL(totpUri).searchParams.get("secret") : null;
 
@@ -85,7 +84,6 @@ const CopyButton = ({ value, label }: { value: string; label: string }) => {
   );
 };
 
-// 取得に失敗しても secret の手入力で登録できるため案内文に切り替える
 const TotpQrCode = ({ totpUri }: { totpUri: string }) => {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -185,7 +183,6 @@ type Props = {
 export const MfaEnrollDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<EnrollState>({ step: "starting" });
-  // 登録途中の再 enroll に server が同じ内容を返す (ADR-0013) ことを利用した表示用 cache
   const [resumableEnrollment, setResumableEnrollment] = useState<MfaEnrollment | null>(null);
   const refreshStatus = useRefreshAndWait(mfaStatusAtom);
   const enrollMfa = useEnrollMfa();
@@ -213,7 +210,8 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
   });
 
   const handleOpenChange = (next: boolean) => {
-    if (state.step === "starting" && open) return; // enroll の応答待ちに閉じると途中の登録が残る
+    const waitingForEnrollResponse = state.step === "starting" && open;
+    if (waitingForEnrollResponse) return;
     if (entry.submitting) return;
 
     if (next) {

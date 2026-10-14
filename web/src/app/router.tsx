@@ -48,7 +48,6 @@ import { FullScreenLoader } from "../shared/FullScreenLoader";
 import { AccountLayout } from "./AccountLayout";
 import { parseSearch, stringifySearch } from "./search-params";
 
-// server の auth-entry-redirect を通し、registry に残った事業所状態を捨てる
 const fullReload = { reloadDocument: true, replace: true } as const;
 
 const rootRoute = createRootRouteWithContext<{ registry: AtomRegistry.AtomRegistry }>()({
@@ -215,7 +214,6 @@ export const makeRouter = (registry: AtomRegistry.AtomRegistry) =>
   createRouter({
     routeTree,
     context: { registry },
-    // 既定の never は /auth/ を /auth に替え、server の auth-entry-redirect (/auth/ だけが対象) を通らなくなる
     trailingSlash: "preserve",
     parseSearch,
     stringifySearch,

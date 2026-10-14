@@ -20,7 +20,6 @@ export type RateLimitOptions = {
 export const magicLinkKey = (axis: "ip" | "email", id: string): string =>
   `rate-limit:magic-link:${axis}:${id}`;
 
-// session 軸は IP を変えても同じ枠で数えるため。hash はキー名が有効な認証情報にならないようにするため。
 export async function mfaAttemptKey(headers: Headers, fallbackIp: string): Promise<string> {
   const sessionToken = getSessionCookie(headers);
   if (!sessionToken) return `rate-limit:mfa-attempt:ip:${fallbackIp}`;
@@ -54,7 +53,6 @@ export const rateLimitProgram = Effect.fnUntraced(
   },
   (rateLimitCheck, input) =>
     rateLimitCheck.pipe(
-      // INCR のたびに EXPIRE するため、Retry-After は常に windowSec になる。
       Effect.catchTag("AttemptBudgetExhausted", () =>
         Effect.succeed(respondWith(tooManyRequests(input.windowSec))),
       ),

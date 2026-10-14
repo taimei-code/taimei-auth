@@ -4,12 +4,10 @@ import { captureCause } from "../sentry";
 import { spendAttemptBudgetFailClosed } from "../attempt-budget";
 import { Locked } from "./errors";
 
-// セッション有りの経路で 6 桁コードの総当たりを止める唯一の防御。
-
 export const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
 
 const WINDOW_SECONDS = 15 * 60;
-const MAX_ATTEMPTS = 5;
+export const DISABLE_ATTEMPT_LIMIT = 5;
 const COMPONENT = "mfa-disable-attempt-budget";
 
 export const spendDisableAttempt = Effect.fnUntraced(
@@ -17,14 +15,13 @@ export const spendDisableAttempt = Effect.fnUntraced(
     yield* spendAttemptBudgetFailClosed({
       key: disableAttemptsKey(userId),
       windowSeconds: WINDOW_SECONDS,
-      maxAttempts: MAX_ATTEMPTS,
+      maxAttempts: DISABLE_ATTEMPT_LIMIT,
       component: COMPONENT,
     });
   },
   Effect.catchTag(["AttemptBudgetExhausted", "AttemptBudgetUnavailable"], () => new Locked()),
 );
 
-// 消し損ねは fail-open でよい。counter は TTL で消え、次の枠が狭いままになるだけ。
 export const resetDisableAttempts = Effect.fnUntraced(function* (userId: string) {
   const ttlStore = yield* TtlStore;
   yield* ttlStore

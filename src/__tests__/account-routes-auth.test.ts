@@ -4,7 +4,6 @@ import { Authenticated } from "../account/actor-contract";
 import { JSON_HEADERS } from "../handlers/client-facing-error";
 import { mountSpaApi, spaEndpoints } from "../handlers/spa-http-api";
 
-// getSession は cookie が無ければ null (throw しても guard が fail-closed) なので、DB にも TTL store にも依存しない。
 const app = new Hono();
 mountSpaApi(app);
 

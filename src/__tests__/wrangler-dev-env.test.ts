@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseJsonc, REPO_ROOT, symmetricDifference } from "./config-invariant-helpers";
 
-// wrangler dev は process の環境変数を binding にしない。wrangler.jsonc の vars は OVERRIDE_ALWAYS で空でも上書きしないと本番の値が local に漏れる。
 function overrideAlways(): string[] {
   const script = readFileSync(join(REPO_ROOT, "scripts/wrangler-dev.sh"), "utf8");
   const match = script.match(/OVERRIDE_ALWAYS=\(([^)]*)\)/);
@@ -18,7 +17,7 @@ function wranglerVarKeys(): string[] {
   return Object.keys(config.vars ?? {});
 }
 
-describe("scripts/wrangler-dev.sh の OVERRIDE_ALWAYS", () => {
+describe("scripts/wrangler-dev.sh の OVERRIDE_ALWAYS (wrangler dev は process の環境変数を binding にしないので、vars を空でも上書きしないと本番の値が local に漏れる)", () => {
   test("wrangler.jsonc の vars の key 集合と一致する", () => {
     expect(symmetricDifference(overrideAlways(), wranglerVarKeys())).toEqual([]);
   });

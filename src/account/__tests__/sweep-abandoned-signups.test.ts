@@ -53,7 +53,7 @@ describe("sweepAbandonedSignups", () => {
         expect(report.deletedUserIds).toContain(oldOrphan);
         expect(report.deletedUserIds).not.toContain(recentOrphan);
         expect(report.deletedUserIds).not.toContain(oldWithCompany);
-        expect(yield* userExists(oldOrphan)).toBe(true); // 何も変更していない
+        expect(yield* userExists(oldOrphan)).toBe(true);
       }),
     ));
 

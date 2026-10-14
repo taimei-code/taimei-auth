@@ -28,6 +28,21 @@ describe("email の依存の封じ込め (静的 tripwire)", () => {
     ).toEqual([]);
   });
 
+  test("@react-email/render は workerd の bundle で static import すると render が undefined になるので、動的 import だけで読む", () => {
+    expect(
+      grepFiles('from "@react-email/render"', "src", {
+        excludeTests: true,
+        include: ["*.ts", "*.tsx"],
+      }),
+    ).toEqual([]);
+    expect(
+      grepFiles(String.raw`import\("@react-email/render"\)`, "src", {
+        excludeTests: true,
+        include: ["*.ts", "*.tsx"],
+      }),
+    ).toEqual(["src/email/client.ts"]);
+  });
+
   test("起動時に初期化される prismjs は、推移的な依存としても lockfile に入らない", () => {
     expect(grepFiles('"prismjs@', "bun.lock", { include: ["bun.lock"] })).toEqual([]);
   });

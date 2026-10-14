@@ -18,7 +18,6 @@ export type ClientFacing = {
   readonly body: unknown;
 };
 
-// charset 無しで固定し、Hono の c.json と byte 単位で一致させる。
 export const JSON_HEADERS = { "content-type": "application/json" } as const;
 
 export function clientFacingErrorResponse({ status, body }: ClientFacing): Response {
@@ -31,7 +30,6 @@ export function internalErrorResponse(): Response {
   return new Response("Internal Server Error", { status: 500, headers: TEXT_HEADERS });
 }
 
-// catalog でなく class の宣言で判定し、catalog 漏れの failure を 500 に倒さない。
 export const parseClientFacingError = (e: unknown): ClientFacing | undefined => {
   if (!Predicate.isObject(e) || !Predicate.isString(e._tag)) return undefined;
   const schema: unknown = e.constructor;

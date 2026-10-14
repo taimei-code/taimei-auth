@@ -16,7 +16,6 @@ import { pendingInvitationsOf, useRevokeInvitation } from "./invitation-atom";
 
 const REVOKE_FAILED = "招待の取り消しに失敗しました。";
 
-// toLocaleString("ja-JP") の既定と同じ表示
 const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
   year: "numeric",
   month: "numeric",

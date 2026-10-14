@@ -56,6 +56,10 @@ const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
         else process.env.MFA_CHALLENGE_ENABLED = original;
       }),
   );
+let killSwitchReportEpochs = 0;
+const afterEveryEarlierKillSwitchReport = (): number =>
+  Date.now() + ++killSwitchReportEpochs * 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
+
 const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
   withSpy(
     () => spyOn(Date, "now").mockReturnValue(at),
@@ -64,7 +68,6 @@ const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
 
 const CHALLENGE_PAGE_PATH = "/auth/mfa";
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
-// baseURL 未設定では request の origin が採用されるため、テストの origin と揃える。
 const AUTH_ORIGIN = "http://localhost:3100";
 
 const issuedIds: string[] = [];
@@ -143,7 +146,6 @@ const runOAuthCallbackHook = (
     return outcome;
   });
 
-// 後続の describe も同じ recorder を読むため、restore はファイル全体の最後に行う。
 afterAll(() => sentry.restore());
 
 describe("チャレンジ強制プラグイン", () => {
@@ -203,7 +205,6 @@ describe("チャレンジ強制プラグイン", () => {
         const db = yield* TestDb;
         const user = yield* db.seedUser("e12");
         yield* enableMfaFor(user);
-        // リンク発行と session 書き込みも testTtlStore.set を通るため、失敗の注入はチャレンジの key に限る。
         const link = yield* requestMagicLink({ email: user.email, callbackURL: CONSUMER_CALLBACK });
         const originalSet = testTtlStore.set.bind(testTtlStore);
 
@@ -289,7 +290,7 @@ describe("チャレンジ強制プラグイン", () => {
             );
             expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
 
-            const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
+            const afterInterval = afterEveryEarlierKillSwitchReport();
             yield* withClockAt(
               afterInterval,
               runOAuthCallbackHook({
@@ -433,7 +434,6 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  // kill switch の通知時刻の Ref を進めるので、QA-D-11 より後に置く。
   test("kill switch で止めている時は、MFA の有効な user も session が確立し、sign_in を 1 行記帳する", () =>
     run(
       withKillSwitchOff(
@@ -455,7 +455,6 @@ describe("チャレンジ強制プラグイン", () => {
     ));
 });
 
-// kill switch の最終通知時刻は module-level の Ref で QA-D-11 と共有するため、この describe は QA-D-11 の後に置き、時計は INTERVAL 以上先から始める。
 describe("enforceChallenge (program 単体)", () => {
   beforeEach(() => sentry.reset());
 
@@ -652,8 +651,6 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  // 時計の起点は QA-D-11 が残した値より INTERVAL 以上先に置く。
-
   test("AC-001 kill switch off は Pass、判定も介入も 0 回", () =>
     run(
       Effect.gen(function* () {
@@ -671,7 +668,7 @@ describe("enforceChallenge (program 単体)", () => {
   test("AC-002 Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
     run(
       Effect.gen(function* () {
-        const t0 = Date.now() + 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const t0 = afterEveryEarlierKillSwitchReport();
         const exit = yield* withClockAt(
           t0,
           decide(
@@ -687,8 +684,7 @@ describe("enforceChallenge (program 単体)", () => {
     run(
       Effect.gen(function* () {
         const layer = Layer.mergeAll(mfaEnabled, untouched);
-        // AC-002 が残した値より INTERVAL 以上先に置く。
-        const t0 = Date.now() + 6 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const t0 = afterEveryEarlierKillSwitchReport();
         const at = (offset: number) =>
           withClockAt(t0 + offset, decide(killSwitchOff(), layer)).pipe(
             Effect.map(() => killSwitchWarnings().length),

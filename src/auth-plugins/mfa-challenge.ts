@@ -9,7 +9,6 @@ import type { PrimaryAuthRoute, UnmappedRoute } from "./primary-auth-routes";
 export const MFA_CHALLENGE_PAGE = "/auth/mfa";
 const SENTRY_TAGS = { component: "mfa-challenge" } as const;
 
-// 1 回きりだと warm isolate で二度と報告されない。6 時間はオンコール交代を 1 回またぐ間隔。
 export const KILL_SWITCH_REPORT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 const killSwitchReportedAt = Ref.makeUnsafe(0);
@@ -18,7 +17,6 @@ type ChallengeInput = {
   userId: string;
   sessionToken: string;
   route: PrimaryAuthRoute;
-  // better-auth は redirect 先を responseHeaders に設定してから after-hook を呼ぶ。
   location: string | null | undefined;
   challengeEnabled: boolean;
 };
@@ -36,13 +34,11 @@ export const challengeWith = (cookie: LoginChallengeCookie | null): ChallengeDec
 class UnmappedPrimaryAuthRoute extends Data.TaggedError("UnmappedPrimaryAuthRoute")<{
   readonly route: UnmappedRoute;
 }> {
-  // Sentry には name と message しか送られない (ExtraErrorData 未設定) ため route を message に含める。
   override get message() {
     return `mfa-challenge: unmapped primary auth route ${this.route.path} (id=${this.route.providerId})`;
   }
 }
 
-// log: true だと Info レベルになるため、Error を明示する。
 const bestEffort = Effect.ignoreCause({ log: "Error" });
 
 const reportFailure = (cause: Cause.Cause<unknown>) =>
@@ -79,7 +75,6 @@ export const enforceChallenge = Effect.fnUntraced(function* (input: ChallengeInp
     yield* reportKillSwitchPeriodically;
     return PASS;
   }
-  // 読めない時も fail-closed。素通しにすると after-hook が一次認証ごと 500 にする。
   const required = yield* mfaChallengeRequired(input.userId).pipe(
     Effect.catchCause((cause) => reportFailure(cause).pipe(Effect.as(true))),
   );

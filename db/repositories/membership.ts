@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { company, membership, type OrgCode, type Role, user } from "../schema";
@@ -6,23 +6,24 @@ import type { DbOrTx, DbTx } from "../transaction";
 
 export const generateMembershipId = (): string => `mbr_${nanoid(24)}`;
 
-// user_id 単独の unique 制約は N:M 関係と両立しないため、advisory lock と tx 内の再確認で TOCTOU を防ぐ。
 export async function lockMembershipChangesOfUser(tx: DbTx, userId: string): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
-// 事業所削除と membership を減らす変更を同じ OWNER 行で競合させる。WHERE を片方だけ変えると直列化が外れる。
-export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
+async function lockOwnerMembershipsWhereCompany(tx: DbTx, companyCondition: SQL): Promise<void> {
   await tx.execute(
-    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' ORDER BY id FOR UPDATE`,
+    sql`SELECT id FROM membership WHERE role = 'OWNER' AND ${companyCondition} ORDER BY id FOR UPDATE`,
   );
 }
 
-export async function lockOwnerMembershipsOfUserCompanies(tx: DbTx, userId: string): Promise<void> {
-  await tx.execute(
-    sql`SELECT id FROM membership WHERE role = 'OWNER' AND company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId}) ORDER BY id FOR UPDATE`,
+export const lockOwnerMembershipsOfCompany = (tx: DbTx, companyId: string): Promise<void> =>
+  lockOwnerMembershipsWhereCompany(tx, sql`company_id = ${companyId}`);
+
+export const lockOwnerMembershipsOfUserCompanies = (tx: DbTx, userId: string): Promise<void> =>
+  lockOwnerMembershipsWhereCompany(
+    tx,
+    sql`company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId})`,
   );
-}
 
 export type MembershipRow = typeof membership.$inferSelect;
 export type { Role };
@@ -131,7 +132,6 @@ export async function findMembership(
     .then((rows) => rows.at(0));
 }
 
-// autocommit だと FOR SHARE が statement 終了で解放され TOCTOU が再発するため tx 必須。
 export async function lockMembershipForShare(
   tx: DbTx,
   userId: string,

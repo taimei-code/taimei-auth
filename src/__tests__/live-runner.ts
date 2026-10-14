@@ -11,7 +11,6 @@ type TestServices = AppServices | TestDb;
 
 const testAppLayer = appLayer(testTtlStore);
 
-// service を差し替えるテストは program 側で `Effect.provide(layer)` する (内側の provide が勝つ)。
 export const runTest =
   (prefix: string) =>
   <A, E>(program: Effect.Effect<A, E, TestServices>): Promise<A> =>
@@ -32,7 +31,6 @@ export const expectFailure = (e: unknown, cls: new () => { readonly _tag: string
 export const inTx = <A, E, R>(f: (tx: DbTx) => Effect.Effect<A, E, R>) =>
   Transaction.use((tx) => tx.run(f));
 
-// Background.run は fiber を detach するため、waitUntil の collector で集めて完走を待つ。
 export const drained = <A, E, R>(program: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
   Effect.gen(function* () {
     const context = yield* Effect.context<R>();
@@ -70,7 +68,6 @@ export const observing = <A, E, R>(
     return { value, logs };
   });
 
-// spy の restore は Effect の release で必ず行う (Bun の mockRestore は呼び出し履歴も消す)。
 export const withSpy = <S extends { mockRestore(): void }, A, E, R>(
   install: () => S,
   use: (spy: S) => Effect.Effect<A, E, R>,

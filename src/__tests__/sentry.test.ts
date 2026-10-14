@@ -7,6 +7,7 @@ import {
   SentryService,
   setSentryBackend,
 } from "../sentry";
+import { grepFiles } from "./grep-files";
 import { recordSentryExceptions } from "./sentry-recorder";
 
 describe("captureCauseAs", () => {
@@ -66,4 +67,12 @@ describe("SentryLive", () => {
     expect(Exit.isSuccess(exit)).toBe(true);
     expect(logged.length).toBe(2);
   });
+});
+
+test("Sentry の SDK を import するのは runtime ごとの初期化 file と worker.ts だけ (共通の sentry.ts から import すると Workers の bundle に @sentry/bun が混ざる)", () => {
+  expect(grepFiles('from "@sentry/', "src", { excludeTests: true }).sort()).toEqual([
+    "src/sentry-bun.ts",
+    "src/sentry-cloudflare.ts",
+    "src/worker.ts",
+  ]);
 });

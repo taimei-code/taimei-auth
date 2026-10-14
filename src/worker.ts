@@ -21,6 +21,8 @@ type Env = {
 
 type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
 
+const VITE_BASE = "/auth";
+
 let bootstrappedApp: Hono | null = null;
 
 function copyEnvToProcess(env: Env): void {
@@ -32,7 +34,6 @@ function copyEnvToProcess(env: Env): void {
 
 function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
-  // 後続の初期化が process.env を読むので先頭に置く。
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
   boot(durableObjectBackend(env.KV_STORE));
@@ -41,9 +42,8 @@ function bootstrap(env: Env): Hono {
       app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
-        // Static Assets は / 直下で配信されるので vite の base=/auth/ を取り除く (残すと JS の代わりに index.html が返る)。
-        if (url.pathname.startsWith("/auth/")) {
-          url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
+        if (url.pathname.startsWith(`${VITE_BASE}/`)) {
+          url.pathname = url.pathname.slice(VITE_BASE.length) || "/";
           return requestEnv.ASSETS.fetch(new Request(url, c.req.raw));
         }
         return requestEnv.ASSETS.fetch(c.req.raw);
@@ -56,7 +56,6 @@ function bootstrap(env: Env): Hono {
 const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
-    // 早く閉じると waitUntil 中の DB 書き込みが壊れた接続で hung するため、background の完了後に閉じる。
     const backgroundPromises: Promise<unknown>[] = [];
     return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
       try {
@@ -81,5 +80,4 @@ const sentryOptions = (env: Env) => ({
 
 export default Sentry.withSentry(sentryOptions, handler);
 
-// alarm の例外は request の外で起きるため、DO 側も Sentry に接続する。
 export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);

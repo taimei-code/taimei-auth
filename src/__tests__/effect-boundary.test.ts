@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { type GrepOptions, grepFiles, REPO_ROOT } from "./grep-files";
 
-// biome で db/** 専用の override を足すと web 専用 ban の 2 コピー invariant が崩れるので grep で固定する。
 const EFFECT_IMPORT = String.raw`(from|import|require\(|import\()\s*["']effect(/[^"']*)?["']`;
 
 const effectImports = (dir: string): string[] =>
@@ -13,7 +12,7 @@ const effectImports = (dir: string): string[] =>
 const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { excludeTests: true });
 
 describe("effect の import 境界 (ADR-0017)", () => {
-  test("db/ は effect を import しない (Repository 境界、R1)", () => {
+  test("db/ は effect を import しない (Repository 境界。biome に db 専用の override を足すと web の ban の複製が崩れるので grep で固定する)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
@@ -157,7 +156,6 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
   });
 });
 
-// biome (lineWidth 100) が折り返した複数行 import は `} from` 行から先頭行を辿って型 import を除外する (行 grep だけだと検出されない)。
 type ImportGate = {
   readonly specifier: RegExp;
   readonly oneLine: string;
@@ -232,7 +230,6 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
   test("positive control: 静的 (1 行 / 複数行) と動的 import は検出され、型 import は検出されない", () => {
     const dir = mkdtempSync(join(tmpdir(), "db-import-gate-"));
     try {
-      // このファイル自身が gate に引っかからないよう、動的 import の形は文字列連結で組む。
       const dynamicImport = ["imp", "ort("].join("");
       writeFileSync(join(dir, "static.ts"), 'import { db } from "@/db/client";\n');
       writeFileSync(join(dir, "multi.ts"), 'import {\n  db,\n  schema,\n} from "@/db/client";\n');
@@ -280,9 +277,8 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
   });
 });
 
-// ManagedRuntime.make は初回 run で Layer を構築するため、失敗し得る Layer (Layer.effect / scoped / unwrap) は本番の初回 request で落ちる。
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
-  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない)", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない。ManagedRuntime は初回の run で Layer を構築するので、失敗し得る Layer は本番の初回 request で落ちる)", () => {
     const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
       excludeTests: true,
       lines: true,
