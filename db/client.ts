@@ -32,8 +32,10 @@ function initDb(connectionString: string): void {
   singletonPool = new Pool({ connectionString });
 }
 
+const WORKERS_CONCURRENT_CONNECTION_LIMIT = 5;
+
 export function runWithRequestPool<T>(connectionString: string, fn: (pool: Pool) => T): T {
-  const pool = new Pool({ connectionString, max: 5 });
+  const pool = new Pool({ connectionString, max: WORKERS_CONCURRENT_CONNECTION_LIMIT });
   return requestPoolStore.run(pool, () => fn(pool));
 }
 

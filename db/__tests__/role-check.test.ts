@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 import { db } from "../client";
 import { ORG_CODES, ROLES } from "../enums";
+import * as schema from "../schema";
 import { readInvitation, readMembership } from "../testing/read";
 import { createSeed } from "../testing/seed";
 
@@ -104,5 +106,16 @@ describe("company.org_code の CHECK 制約", () => {
       () => db.execute(sql`UPDATE company SET org_code = 'GOVERNMENT' WHERE id = ${co}`),
       "company_org_code_check",
     );
+  });
+});
+
+describe("CHECK 制約の SQL", () => {
+  test("CHECK 制約は値を placeholder ($1) にせず SQL に埋め込む (placeholder のままだと drizzle-kit の migration で制約が壊れる)", () => {
+    const dialect = new PgDialect();
+    const checks = Object.values(schema)
+      .filter((value) => is(value, PgTable))
+      .flatMap((table) => getTableConfig(table).checks);
+    expect(checks.length).toBeGreaterThan(0);
+    for (const check of checks) expect(dialect.sqlToQuery(check.value).params).toEqual([]);
   });
 });

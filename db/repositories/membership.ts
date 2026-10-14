@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { company, membership, type OrgCode, type Role, user } from "../schema";
@@ -10,17 +10,20 @@ export async function lockMembershipChangesOfUser(tx: DbTx, userId: string): Pro
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
 }
 
-export async function lockOwnerMembershipsOfCompany(tx: DbTx, companyId: string): Promise<void> {
+async function lockOwnerMembershipsWhereCompany(tx: DbTx, companyCondition: SQL): Promise<void> {
   await tx.execute(
-    sql`SELECT id FROM membership WHERE company_id = ${companyId} AND role = 'OWNER' ORDER BY id FOR UPDATE`,
+    sql`SELECT id FROM membership WHERE role = 'OWNER' AND ${companyCondition} ORDER BY id FOR UPDATE`,
   );
 }
 
-export async function lockOwnerMembershipsOfUserCompanies(tx: DbTx, userId: string): Promise<void> {
-  await tx.execute(
-    sql`SELECT id FROM membership WHERE role = 'OWNER' AND company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId}) ORDER BY id FOR UPDATE`,
+export const lockOwnerMembershipsOfCompany = (tx: DbTx, companyId: string): Promise<void> =>
+  lockOwnerMembershipsWhereCompany(tx, sql`company_id = ${companyId}`);
+
+export const lockOwnerMembershipsOfUserCompanies = (tx: DbTx, userId: string): Promise<void> =>
+  lockOwnerMembershipsWhereCompany(
+    tx,
+    sql`company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId})`,
   );
-}
 
 export type MembershipRow = typeof membership.$inferSelect;
 export type { Role };

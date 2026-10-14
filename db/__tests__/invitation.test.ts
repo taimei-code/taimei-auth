@@ -96,6 +96,22 @@ describe("invitation repository", () => {
     expect(none).toBeUndefined();
   });
 
+  test("findActivePendingInvitation は大文字を含む既存行も小文字の email で見つける (大文字の email が残る旧データ)", async () => {
+    const { userId, companyId } = await seedInviter();
+    await insertInvitation({
+      id: generateInvitationId(),
+      companyId,
+      email: "inv-test-Upper@Example.com",
+      role: "MEMBER",
+      token: generateInvitationToken(),
+      expiresAt: new Date(Date.now() + 3600_000),
+      invitedByUserId: userId,
+    });
+    expect(
+      await findActivePendingInvitation(companyId, "inv-test-upper@example.com"),
+    ).toBeDefined();
+  });
+
   test("markInvitationAccepted は PENDING のみ更新 (二重 accept で 2 回目 undefined)", async () => {
     const { userId, companyId } = await seedInviter();
     const id = generateInvitationId();

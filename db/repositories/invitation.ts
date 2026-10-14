@@ -1,12 +1,19 @@
 import { and, eq, gt, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
-import { invitation, type Role } from "../schema";
+import { type InvitationStatus, invitation, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
 
 export const generateInvitationId = (): string => `inv_${nanoid(24)}`;
 
 export const generateInvitationToken = (): string => nanoid(32);
+
+export const invitationStatusColumns = (status: InvitationStatus, now: Date) => ({
+  status,
+  acceptedAt: status === "ACCEPTED" ? now : null,
+  revokedAt: status === "REVOKED" ? now : null,
+  usedAt: status === "PENDING" ? null : now,
+});
 
 export type InvitationRow = typeof invitation.$inferSelect;
 export type { Role };
@@ -101,10 +108,9 @@ export async function markInvitationAccepted(
   id: string,
   txOrDb: DbOrTx = db,
 ): Promise<InvitationRow | undefined> {
-  const now = new Date();
   return txOrDb
     .update(invitation)
-    .set({ status: "ACCEPTED", acceptedAt: now, usedAt: now })
+    .set(invitationStatusColumns("ACCEPTED", new Date()))
     .where(and(eq(invitation.id, id), eq(invitation.status, "PENDING")))
     .returning()
     .then((rows) => rows.at(0));
@@ -115,10 +121,9 @@ export async function markInvitationRevoked(
   companyId: string,
   txOrDb: DbOrTx = db,
 ): Promise<InvitationRow | undefined> {
-  const now = new Date();
   return txOrDb
     .update(invitation)
-    .set({ status: "REVOKED", revokedAt: now, usedAt: now })
+    .set(invitationStatusColumns("REVOKED", new Date()))
     .where(
       and(
         eq(invitation.id, id),
@@ -134,10 +139,9 @@ export async function revokePendingInvitationsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,
 ): Promise<InvitationRow[]> {
-  const now = new Date();
   return txOrDb
     .update(invitation)
-    .set({ status: "REVOKED", revokedAt: now, usedAt: now })
+    .set(invitationStatusColumns("REVOKED", new Date()))
     .where(and(eq(invitation.companyId, companyId), eq(invitation.status, "PENDING")))
     .returning();
 }
