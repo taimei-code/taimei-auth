@@ -24,13 +24,11 @@ export type ChallengeMethod = (typeof CHALLENGE_METHODS)[number];
 type LoginChallenge = { userId: string; redirectUrl: string; method: ChallengeMethod };
 type OpenedLoginChallenge = LoginChallenge & { challengeId: string };
 
-// env を直接読むと dev や CI の default fallback で session 側の鍵とずれる。
 const signChallengeId = Effect.fnUntraced(function* (challengeId: string) {
   const secret = yield* AuthApi.use((authApi) => authApi.secret);
   return yield* Effect.promise(() => makeSignature(challengeId, secret));
 });
 
-// Domain を付けず host-only にし、第二要素の材料を subdomain に配らない。
 const challengeCookieAttributes = (maxAge: number) =>
   ({
     maxAge,

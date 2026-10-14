@@ -52,7 +52,6 @@ export const MfaHandlers = HttpApiBuilder.group(SpaApi, "mfa", (handlers) =>
   }),
 );
 
-// boolean 1 つだけを返す。それ以外は cookie を入手した第三者への手掛かりになる。
 export const MfaChallengeHandlers = HttpApiBuilder.group(SpaApi, "mfaChallenge", (handlers) =>
   handlers.handleAll({
     state: ({ request }) => readLoginChallengeState(headersOf(request)).pipe(dieOnBoundary),

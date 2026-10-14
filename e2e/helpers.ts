@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 
-// import.meta.url は playwright の CJS transpile と衝突するため cwd (repo root) 起点で解決する
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
 export const BASE_URL = "http://localhost:3110";
 
@@ -12,7 +11,6 @@ export const SWITCH_EMAIL = "e2e-switch@example.com";
 export const companySwitcher = (page: Page) =>
   page.getByRole("combobox", { name: "事業所を切り替え" });
 
-// name は fixtures.ts の consumableFixtures の key と揃える (import すると pg の Pool が spec プロセスに入り runner が hang する)
 export const reseedFixture = (
   name: "leave" | "delete" | "delete-multi" | "invitation" | "mfa" | "switch" | "withdraw",
 ): void => {
@@ -37,7 +35,6 @@ export const authEntryUrl = (opts: { invitationToken?: string } = {}): string =>
   return url.toString();
 };
 
-// marker は src/email/send-magic-link.ts と send-invitation.ts の console 出力と揃える
 export const magicLinkFor = async (email: string): Promise<string> => {
   const markers = [`[TEST] Magic Link for ${email}: `, `[TEST] Invitation email for ${email}: `];
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -54,7 +51,6 @@ export const magicLinkFor = async (email: string): Promise<string> => {
   throw new Error(`magic link for ${email} not found in ${SERVER_LOG}`);
 };
 
-// web/src/auth/auth-redirect.ts の signInLandingUrl と揃える
 export const expectSignInLanding = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/auth\?service_name=accounts/);
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();

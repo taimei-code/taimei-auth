@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { buildApp } from "../app";
 
-// deploy.yml の smoke テストが、version override header の反映を /health の version で照合する。
 describe("/health の version", () => {
   const original = process.env.CF_VERSION_ID;
   afterEach(() => {

@@ -1,8 +1,6 @@
 import { generateRandomString } from "better-auth/crypto";
 import * as OTPAuth from "otpauth";
 
-// 変えると既存ユーザーは認証アプリの再登録が要る。
-
 const PERIOD = 30;
 const DIGITS = 6;
 const WINDOW = 1;
@@ -10,7 +8,6 @@ const WINDOW = 1;
 const SECRET_LENGTH = 32;
 const TOTP_CODE = /^[0-9]{6}$/;
 
-// 生のバイト乱数だと base32 と文字列の往復で UTF-8 として壊れる。
 export function generateTotpSecret(): Uint8Array {
   return new TextEncoder().encode(generateRandomString(SECRET_LENGTH, "a-z", "A-Z", "0-9"));
 }

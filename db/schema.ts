@@ -136,7 +136,6 @@ export const mfaTotp = pgTable("mfa_totp", {
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
   enrollmentId: text("enrollment_id").notNull(),
-  // AES-256-GCM (AAD は user_id) の base64。bytea の前例が無いので text にした。
   secretCiphertext: text("secret_ciphertext").notNull(),
   secretIv: text("secret_iv").notNull(),
   keyVersion: integer("key_version").notNull(),
@@ -148,7 +147,6 @@ export const mfaTotp = pgTable("mfa_totp", {
 export const mfaRecoveryCode = pgTable(
   "mfa_recovery_code",
   {
-    // "NN-<uuid>"。先頭 2 桁が挿入順で、id 昇順の読み出しで再表示の順序が固定される。
     id: text("id").primaryKey().notNull(),
     userId: text("user_id")
       .notNull()
@@ -161,7 +159,6 @@ export const mfaRecoveryCode = pgTable(
   (table) => [index("mfa_recovery_code_user_id_idx").on(table.userId)],
 );
 
-// account_delete 後もログを残すため user_id に FK を付けない。
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -177,7 +174,6 @@ export const auditLog = pgTable(
   ],
 );
 
-// 退会時は CASCADE で所属を解除する (責任者不在は OWNER の事前チェックで防ぐ)。
 export const membership = pgTable(
   "membership",
   {
@@ -200,7 +196,6 @@ export const membership = pgTable(
     uniqueIndex("membership_user_company_key").on(table.userId, table.companyId),
     index("membership_company_id_idx").on(table.companyId),
     index("membership_user_id_idx").on(table.userId),
-    // inlineParams を付けないと drizzle-kit が値を $1.. の placeholder として SQL に出力し、CHECK が壊れる。
     check("membership_role_check", inArray(table.role, ROLES).inlineParams()),
   ],
 );
@@ -219,9 +214,7 @@ export const invitation = pgTable(
     status: text("status").$type<InvitationStatus>().notNull().default("PENDING"),
     acceptedAt: timestamp("accepted_at"),
     revokedAt: timestamp("revoked_at"),
-    // COALESCE(accepted_at, revoked_at) の導出値。status と同じ UPDATE で書く。
     usedAt: timestamp("used_at"),
-    // NOT NULL なので SET NULL にはできない。
     invitedByUserId: text("invited_by_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),

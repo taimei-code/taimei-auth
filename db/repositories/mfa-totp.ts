@@ -3,8 +3,6 @@ import { db } from "../client";
 import { mfaRecoveryCode, mfaTotp } from "../schema";
 import type { DbOrTx } from "../transaction";
 
-// 並行時の決着を WHERE 句に任せるため、各関数は条件付きの単一 statement にする。
-
 export type MfaTotpRow = typeof mfaTotp.$inferSelect;
 
 export const generateEnrollmentId = (): string => crypto.randomUUID();

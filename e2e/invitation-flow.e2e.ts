@@ -52,7 +52,6 @@ test("メンバー画面が受けた redirect_url へ、招待された人が受
   await inviteForm.getByLabel("メールアドレス").fill(INVITEE_EMAIL);
   await inviteForm.getByRole("button", { name: "招待する" }).click();
 
-  // 招待メールは応答の後に送られるので、この招待の redirect_url を持つリンクが出るまで待つ
   const redirectUrlInMagicLink = (magicLink: string) => {
     const callbackURL = new URL(magicLink).searchParams.get("callbackURL") ?? "";
     return new URL(callbackURL).searchParams.get("redirect_url");

@@ -21,7 +21,6 @@ import { runInTransaction } from "../transaction";
 
 const P = "delprim-test-";
 
-// membership.company_id は restrict なので company より先に消す。
 async function cleanup() {
   await db.delete(invitation).where(like(invitation.email, `${P}%`));
   await db.delete(membership).where(like(membership.userId, `${P}%`));

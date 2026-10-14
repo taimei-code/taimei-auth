@@ -10,7 +10,6 @@ import { revokeOtherSessionsOrUnauthorized } from "./revoke-other-sessions";
 import { matchTotpCode } from "./totp-engine";
 import type { Actor } from "../../account/actor-contract";
 
-// revoke は確定の UPDATE より先。逆順だと有効化済みなのに他 session が残る時間ができる。
 export const activate = Effect.fnUntraced(function* (input: {
   actor: Pick<Actor, "id" | "email">;
   headers: Headers;
@@ -30,7 +29,6 @@ export const activate = Effect.fnUntraced(function* (input: {
 
   const sessionChanges = yield* revokeOtherSessionsOrUnauthorized(input.headers);
 
-  // false は並行して負けた (勝者が verified 済み)。
   if (!(yield* mfa.activateMfaTotp(input.actor.id, row.enrollmentId, timestep))) {
     return yield* new AlreadyEnabled();
   }

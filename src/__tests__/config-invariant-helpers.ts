@@ -8,11 +8,9 @@ export const WEB_ONLY_DEP_MESSAGE =
   "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
 const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
 
-// biome の override は merge されず置き換わるため、ban は src 系にマッチする全 override へ意図的に重複コピーしてある。
 export const EXPECTED_WEB_ONLY_COPY_COUNT = 4;
 export const EXPECTED_CONNECT_NODE_COPY_COUNT = 4;
 
-// override[0] が覆う 3 scope に 1 つずつ。後置 override の後勝ち置換で ban が消える経路を scope ごとに検出する。
 export const REPRESENTATIVE_SERVER_FILE = "src/handlers/run-route.ts";
 export const REPRESENTATIVE_DB_FILE = "db/schema.ts";
 export const REPRESENTATIVE_MANAGEMENT_FILE = "management/disable-user-mfa.ts";
@@ -68,7 +66,6 @@ export function webOnlyGroupOf(override: BiomeOverride): string[] | null {
   return found?.group ?? null;
 }
 
-// index ではなく message で探す (override[1] は web group が patterns[1] にあり、override[4] の SDK ban は文言が違う)。
 export function webOnlyGroups(config: BiomeConfig): string[][] {
   const groups: string[][] = [];
   for (const override of config.overrides ?? []) {
@@ -78,7 +75,6 @@ export function webOnlyGroups(config: BiomeConfig): string[][] {
   return groups;
 }
 
-// biome 2.4.14 の includes は最後にマッチした pattern が勝つ (実測)。positive/negative の集合分離だと `["!src/auth.ts", "src/**"]` を誤除外する。
 export function overrideMatches(override: BiomeOverride, path: string): boolean {
   let included = false;
   for (const pattern of override.includes ?? []) {
@@ -185,7 +181,6 @@ export function classificationViolations(diff: ClassificationDiff): string[] {
   return violations;
 }
 
-// `--platform=` flag、小文字の as、行末コメント、名前なし FROM を許容する (厳密な正規表現だと最終 stage の検査が空振りで通る)。
 function fromTokens(line: string): string[] | null {
   const match = /^\s*FROM\s+(.+)$/i.exec(line.replace(/#.*$/, ""));
   if (match === null) return null;
@@ -236,7 +231,6 @@ function copyInstructions(stage: string): CopyInstruction[] {
   });
 }
 
-// denylist だと `COPY . .` や新設 source ディレクトリがすり抜けるので allowlist。
 const MANIFEST_SOURCE = /^(package\.json|bun\.lock|packages\/[^/]+\/package\.json)$/;
 
 export function dockerfileViolations(dockerfile: string, workspacePackages: string[]): string[] {
@@ -296,13 +290,10 @@ export function dockerfileViolations(dockerfile: string, workspacePackages: stri
   return violations;
 }
 
-// ADR-0009 §A。大文字 hex と `# v4.2.2 (pinned)` のような補足は供給元が変わらないので許す。
 const PINNED_USES = /^\s*-?\s*uses:\s*\S+@[0-9a-fA-F]{40}\s+#\s*v\S+(\s.*)?$/;
 
-// ローカルの composite action は pin できる SHA が無い。
 const LOCAL_USES = /^\s*-?\s*uses:\s*\.{1,2}\//;
 
-// pin 判定と件数 guard が同じ selector を使う (別々だと「対象 0 行で緑」を guard が検出できない)。
 export function usesLines(workflow: string): string[] {
   return workflow
     .split("\n")

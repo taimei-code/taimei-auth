@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 
-// allowedHostPattern は module ロード時に APP_ENV で確定するため、APP_ENV=production の子プロセスで検証する (テストプロセス全体を production にすると他のテストが壊れる)。
-
 const REPO_ROOT = join(import.meta.dir, "..", "..");
 
 const CHECK_SCRIPT = `

@@ -20,14 +20,12 @@ export const authApiLive = AuthApi.of({
       const ctx = await auth.$context;
       await ctx.internalAdapter.deleteSession(token);
     }),
-  // request でなく headers だけを渡す (request を渡すと originCheck の判定を自分で受ける)。
   revokeOtherSessions: (headers) =>
     tryAuthApi(() =>
       auth.api
         .revokeOtherSessions({ headers, returnHeaders: true })
         .then(({ headers: revoked }) => revoked ?? new Headers()),
     ).pipe(Effect.catchIf(isSessionRejection, () => new SessionRejected())),
-  // better-call の signCookieValue と同形式 (session-cookie-contract.test.ts が固定)。Max-Age 省略は browser-session cookie になり寿命が変わる。
   issueSession: (userId) =>
     Clock.currentTimeMillis.pipe(
       Effect.flatMap((now) =>

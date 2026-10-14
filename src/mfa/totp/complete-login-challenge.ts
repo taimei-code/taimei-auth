@@ -20,7 +20,6 @@ export const completeLoginChallenge = Effect.fnUntraced(function* (
 
   const rejectWrongCode = yield* spendLoginChallengeAttempt(challenge.challengeId);
 
-  // コードの消費はチャレンジの消費より後。逆順だと並行して負けた側が再生成できないリカバリーコードを使い切る。
   const matched = yield* matchOwnedCode(challenge.userId, input).pipe(
     Effect.catchTags({
       NotEnabled: () => new ChallengeExpired(),
@@ -30,15 +29,12 @@ export const completeLoginChallenge = Effect.fnUntraced(function* (
   const clearCookie = yield* consumeLoginChallenge(challenge.challengeId);
   yield* consumeMatchedCode(challenge.userId, matched);
 
-  // 失敗を握ると session の無い成功応答になる。
   const sessionHeaders = yield* AuthApi.use((authApi) => authApi.issueSession(challenge.userId));
 
   yield* appendAuditBestEffort(signInEntry(challenge.userId, challenge.method, headers));
 
-  // set だと前段の Set-Cookie が消える。
   for (const cookie of clearCookie.getSetCookie()) sessionHeaders.append("set-cookie", cookie);
 
-  // 保存時でなく返す直前に検証する。AUTH_TRUSTED_ORIGINS はその間に変わりうる。
   return {
     redirectUrl: yield* validateChallengeRedirect(challenge.redirectUrl),
     forwardedHeaders: sessionHeaders,

@@ -8,7 +8,6 @@ import { proxyTrustFromEnv } from "./request-context";
 initBunSentry();
 bootInMemory();
 
-// 未設定だと /rpc/* の service key 検査が skip されて誰でも呼べる。
 if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
   console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
   process.exit(1);

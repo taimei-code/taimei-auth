@@ -12,7 +12,6 @@ export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   component: ReactElement;
   kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }) {
-  // workerd の bundle では static import の render が undefined になる (lazy な CJS 初期化が走らない)。
   const { render, toPlainText } = yield* tryEmail(() => import("@react-email/render"));
   const html = yield* tryEmail(() => render(params.component));
   const text = yield* tryEmail(async () => toPlainText(html));
@@ -47,7 +46,6 @@ function getResendClient(): Resend {
   return resendInstance;
 }
 
-// module ロード時に固定すると worker の再バインドやテストの差し替えが効かない。
 const envOr = (key: string, fallback: string): string => process.env[key] || fallback;
 
 export const getWelcomeFromEmail = () => envOr("AUTH_FROM_EMAIL_WELCOME", "onboarding@resend.dev");

@@ -12,7 +12,6 @@
 - **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が定義元。
 - domain が肥大化したら、技術分類ではなく操作名で下位ディレクトリを作る。`services/` や `utils/` のような、無関係な実装の寄せ集めを作らない。
 - web から `@core` として参照される module は、browser-safe な依存だけを持つ。
-- コメントは 1 行に収める。2 行要るなら、名前、型、定義元のどれかが足りていない。ファイルの冒頭に層、ADR、domain の道案内を書かない。
 
 ## Effect様式
 

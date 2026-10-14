@@ -122,7 +122,6 @@ describe("acceptInvitation", () => {
         yield* db.setMembershipRole(inviter.id, co, "ADMIN");
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        // warn の検証は withSpy の release 前に済ませる (Bun の mockRestore は呼び出し履歴も消す)。
         const { e, warnCalls } = yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
             const e = yield* Effect.flip(

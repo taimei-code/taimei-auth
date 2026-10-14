@@ -22,7 +22,6 @@ const run = runTest(P);
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
-// sign-in-observer の「初回サインアップ直後」閾値 (10 秒) より確実に古くする。
 const SETTLED_USER_AGE_MS = 60_000;
 
 const cleanupAll = () =>

@@ -49,7 +49,6 @@ export const useEnrollMfa = () => {
   return () => enroll({});
 };
 
-// 有効化で状態を取り直すと MfaSettingsItem がダイアログを外すので、取り直しはダイアログを閉じた時に行う
 export const useActivateMfa = () => {
   const activate = useAtomSet(activateMfaAtom, { mode: "promiseExit" });
   return (payload: { code: string; enrollment_id: string }) => activate({ payload });

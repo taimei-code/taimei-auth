@@ -4,8 +4,6 @@ import { createRateLimitMiddleware } from "../../rate-limit";
 import { consoleSentryBackend, setSentryBackend, type CaptureContext } from "../../sentry";
 import { canaryToken } from "../canary-token";
 
-// Sentry backend は module 全体で共有されるため、後続のテストファイルに spy を漏らさない。
-
 type Captured = { message: string; context?: CaptureContext };
 
 let captured: Captured[] = [];

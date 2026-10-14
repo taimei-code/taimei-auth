@@ -11,7 +11,6 @@ test.beforeEach(() => {
   reseedFixture("mfa");
 });
 
-// src/auth.ts の totpOptions と揃える。src/mfa/__tests__/helpers.ts は db を import するため再利用しない (biome の e2e override)
 const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 
@@ -30,7 +29,6 @@ const totpCode = (secret: string, stepOffset = 0): Promise<string> => {
   return otp.hotp(Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset);
 };
 
-// 固定の誤コードは検証窓 (前後 1 step) に偶然一致する
 const wrongTotpCode = async (secret: string): Promise<string> => {
   const accepted = await Promise.all([-1, 0, 1].map((offset) => totpCode(secret, offset)));
   for (let candidate = 0; candidate < 1000; candidate++) {
@@ -54,7 +52,6 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
   };
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
-  // 使った timestep は再利用できないため、現在の step を後続の検証に残す
   const activated = await page.request.post("/api/account/mfa/activate", {
     data: { code: await totpCode(secret, -1), enrollment_id: enrollment.enrollment_id },
   });
@@ -71,7 +68,6 @@ const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await expect(page).toHaveURL(/\/auth\/mfa/);
 };
 
-// toast は main の外にあり同じ語を含むため main に絞る
 const mfaRow = (page: Page) =>
   page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
 
@@ -133,7 +129,6 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("img", { name: "認証アプリで読み取る QR コード" })).toBeVisible();
-  // 手入力用 secret の目印は translate="no" だけ
   const secret = decodeTotpSecret((await dialog.locator('p[translate="no"]').innerText()).trim());
   await expect(dialog.getByRole("button", { name: "secret をコピー" })).toBeVisible();
 
@@ -170,7 +165,6 @@ test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secre
 
   const dialog = page.getByRole("dialog");
   const firstSecret = (await dialog.locator('p[translate="no"]').innerText()).trim();
-  // 失敗時は placeholder の "—" が出て、"—" 同士の比較で通ってしまう
   expect(firstSecret.length).toBeGreaterThan(1);
   expect(firstSecret).not.toBe("—");
   await page.keyboard.press("Escape");

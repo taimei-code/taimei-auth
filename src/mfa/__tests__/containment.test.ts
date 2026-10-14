@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const SEARCH_ROOTS = "src web/src";
 
-// __tests__ 除外は自分自身への一致を避けるため。コメント内の一致は違反でないので `//` 以降を落とす (`[^:]` は URL の `://` を残す)。
 function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): string[] {
   const command = [
     `cd ${JSON.stringify(REPO_ROOT)} &&`,
@@ -22,7 +21,6 @@ function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): st
     .sort();
 }
 
-// ファイル単位の grep は許可済みファイルに増えた 2 本目の import を見逃す。
 function importOccurrences(root: string, targetPattern: string): string[] {
   const pattern = `(from|import)[ (]['"]${targetPattern}[^'"]*['"]`;
   const command = [
@@ -38,7 +36,6 @@ function importOccurrences(root: string, targetPattern: string): string[] {
 
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
   test("auth-plugins が import してよい mfa モジュールは 4 つに限る", () => {
-    // positive control。
     expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
     expect(importOccurrences("src/auth-plugins", "[^'\"]*mfa/")).toEqual([
       `src/auth-plugins/mfa-challenge.ts:from "../mfa/redirect-guard"`,
@@ -59,7 +56,6 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
 
 describe("MFA totp module boundary", () => {
   test("AC-150f AuthApi.issueSession の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
-    // root にファイルパスを渡すとファイルが無い時に空集合ですり抜ける。auth-wiring.ts と login-challenge.ts の一致が positive control。
     expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa src/auth-wiring.ts")).toEqual([
       "src/auth-wiring.ts",
       "src/mfa/totp/login-challenge.ts",

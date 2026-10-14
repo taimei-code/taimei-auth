@@ -49,7 +49,6 @@ describe("forceDisableMfa (統合)", () => {
       Effect.gen(function* () {
         const db = yield* TestDb;
         const user = yield* db.seedUser("enabled");
-        // 有効化通知の background ログを先に drain し、無効化側の観測に混ぜない。
         yield* observing(enableMfaFor(user));
 
         const { value: first, logs } = yield* observing(forceDisableMfa(user.id));

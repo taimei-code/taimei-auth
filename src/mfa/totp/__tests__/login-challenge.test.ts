@@ -360,7 +360,6 @@ describe("ログインチャレンジ", () => {
           redirectUrl: CONSUMER_CALLBACK,
           method: "magic_link",
         });
-        // INCR できない値で実際に失敗させる。
         yield* Effect.sync(() =>
           testKvStore.set(attemptsKeyOf(challenge.challengeId), "not-a-number", 60),
         );

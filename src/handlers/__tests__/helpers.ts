@@ -12,7 +12,6 @@ export type StubActor = { id: string; email: string } | null;
 
 type Session = NonNullable<Effect.Success<ReturnType<AuthApi["Service"]["getSession"]>>>;
 
-// auth-entry-redirect は getSession の前に getSessionCookie(headers) を通るため、session の分岐を検証するテストはこの header を付ける。
 export const SESSION_COOKIE_HEADER = { cookie: "better-auth.session_token=stub-session" };
 
 export const stubAuthApi = (

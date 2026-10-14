@@ -49,7 +49,6 @@ export const Companies = () => {
         Exit.match({
           onSuccess: ({ account_deleted }) => {
             if (account_deleted) {
-              // 遷移完了まで busy を保つ (解除すると再クリックの 401 が表示される)
               redirecting = true;
               redirectAfterAuthChange("deleteAccount");
               return;

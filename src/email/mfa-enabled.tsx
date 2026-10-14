@@ -17,7 +17,6 @@ type MfaEnabledEmailProps = {
   supportEmail: string;
 };
 
-// TOTP secret とリカバリーコードは本文に書かない (受信箱が第二要素になる)。
 export default function MfaEnabledEmail({
   appName = "taimei",
   securityUrl = "https://auth.taimei-code.com/account/security",

@@ -12,7 +12,6 @@ const insertMembershipRaw = (userId: string, companyId: string, role: string) =>
     sql`INSERT INTO membership (id, user_id, company_id, role) VALUES (${`mbr_raw_${userId}`}, ${userId}, ${companyId}, ${role})`,
   );
 
-// drizzle は driver のエラーを DrizzleQueryError で包むので、制約名は cause 側にしか現れない。
 const expectCheckViolation = async (run: () => PromiseLike<unknown>, constraint: string) => {
   const err = await run().then(
     () => undefined,

@@ -48,7 +48,6 @@ async function lastUsedOf(tx: DbTx, userId: string) {
   return rows.rows[0]?.last_used_company_id;
 }
 
-// SQL は user の全行を対象にするので、他の test の行を変えないように tx ごと rollback する。
 const inRolledBackTx = (body: (tx: DbTx) => Promise<void>) =>
   db
     .transaction(async (tx) => {

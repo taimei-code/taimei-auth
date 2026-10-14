@@ -35,7 +35,6 @@ export async function findInvitationById(
     .then((rows) => rows.at(0));
 }
 
-// migration 前のデータに大文字が残っている可能性があるため、lower() で比較する。
 export async function findActivePendingInvitation(
   companyId: string,
   email: string,
@@ -131,7 +130,6 @@ export async function markInvitationRevoked(
     .then((rows) => rows.at(0));
 }
 
-// soft delete 済み company への受諾で所属が復活するのを防ぐ (受諾側のガードと組)。
 export async function revokePendingInvitationsOfCompany(
   companyId: string,
   txOrDb: DbOrTx = db,

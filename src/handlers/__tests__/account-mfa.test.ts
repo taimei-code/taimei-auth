@@ -22,7 +22,6 @@ import { mountSpaApi } from "../spa-http-api";
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
 
-// src/mfa/disable-attempt-budget.ts の MAX_ATTEMPTS と同じ。
 const DISABLE_ATTEMPT_LIMIT = 5;
 
 const buildApp = (): Hono => {

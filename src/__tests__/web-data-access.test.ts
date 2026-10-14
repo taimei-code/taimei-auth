@@ -9,7 +9,6 @@ const transpilers = {
   tsx: new Bun.Transpiler({ loader: "tsx" }),
 };
 
-// scanImports は import type と type だけの import を返さない
 const runtimeImports = (path: string, source: string): string[] =>
   (path.endsWith(".tsx") ? transpilers.tsx : transpilers.ts)
     .scanImports(source)

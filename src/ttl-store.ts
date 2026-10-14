@@ -5,13 +5,11 @@ export interface TtlStorage {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, ttl?: number): Promise<void>;
   delete(key: string): Promise<void>;
-  // 無いと better-auth が get→delete に fallback し、並行 request が 1 回限りの verification を 2 回消費できる。
   getAndDelete(key: string): Promise<string | null>;
 }
 
 export type RateWindowResult = { count: number };
 
-// 0 を返すと fail-open 側の試行枠で storage 障害が「通す」扱いになるため throw する。
 export function toRateWindowResult(count: number): RateWindowResult {
   if (!Number.isFinite(count) || count < 1) {
     throw new Error(`incrementRateWindow: 応答が契約に外れる (count=${count})`);

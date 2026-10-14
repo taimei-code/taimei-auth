@@ -15,5 +15,4 @@ if (fixtureName === undefined) {
 }
 
 console.log(`[e2e-seed] done${fixtureName === undefined ? "" : ` (${fixtureName})`}`);
-// pg の Pool が開いたままだと process が終了しない
 process.exit(0);

@@ -196,7 +196,6 @@ export async function extractModuleSpecifiers(source: string, fileName: string):
 }
 
 const withExtension = (base: string, sources: ReadonlyMap<string, string>): string | null => {
-  // `${base}/index.ts(x)` は候補にしない (domain の barrel はこの checker が違反にする)。
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`]) {
     if (sources.has(candidate)) return candidate;
   }
@@ -296,7 +295,6 @@ export async function analyzeWebStructure(
 
     for (const specifier of parsed.get(path) ?? []) {
       if (specifier.startsWith("@core/")) {
-        // web/tsconfig の "@core/*" は ["./src/*", "../src/*"] で tsc は web/src を先に見るが、vite は ../src 固定。同名ファイルがあると両者が別 module を見る。
         const shadow = withExtension(`web/src/${specifier.slice("@core/".length)}`, sources);
         if (shadow) {
           violations.push(

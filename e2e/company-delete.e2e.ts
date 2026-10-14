@@ -32,10 +32,8 @@ test("所属が残る事業所削除は一覧へ遷移し、遷移先で成功�
   await dialog.getByRole("button", { name: "削除する" }).click();
 
   await expect(page).toHaveURL(/\/account\/companies/);
-  // toast は context 再取得後に出るため、下の一覧 assertion の同期点を兼ねる (順序を変えない)
   await expect(page.getByText(`「${DELETED_COMPANY}」を削除しました。`)).toBeVisible();
 
-  // toast は main の外にあり事業所名を含むため main に絞る
   const main = page.getByRole("main");
   await expect(main.getByText("e2e-co-delete-multi-other")).toBeVisible();
   await expect(main.getByText(DELETED_COMPANY)).toHaveCount(0);

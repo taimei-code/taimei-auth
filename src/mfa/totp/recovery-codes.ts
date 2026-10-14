@@ -1,4 +1,3 @@
-// 0 1 i l o を除いた 31 文字 (手入力の見間違い対策)。
 const ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 const HALF_LENGTH = 5;
 

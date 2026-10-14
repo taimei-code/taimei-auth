@@ -29,7 +29,6 @@ const AES_GCM = "AES-GCM";
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
 
-// crypto.subtle の BufferSource は Uint8Array<ArrayBuffer> を要求する。
 function asBufferSource(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
   return new Uint8Array(bytes);
 }
@@ -92,7 +91,6 @@ export async function decryptValue(
   return new Uint8Array(plaintext);
 }
 
-// Buffer は Bun と workerd (nodejs_compat) の両方にある。
 function encodeBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }

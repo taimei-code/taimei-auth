@@ -17,15 +17,11 @@ import { observing } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import type { Actor } from "../../account/actor-contract";
 
-// 状態を DB へ直接書くと暗号化 secret とコードの対応が伴わず後続の検証が偽陽性になるため、生成は production と同じ経路を通す。
-
-// .env に無くても bun test が動くための固定ダミー鍵。
 process.env.MFA_TOTP_ENCRYPTION_KEYS ??= "v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
 
-// totp-engine.ts の PERIOD と揃える。
 const TOTP_PERIOD_SECONDS = 30;
 
 const signCookieValue = (value: string): Effect.Effect<string> =>
@@ -34,7 +30,6 @@ const signCookieValue = (value: string): Effect.Effect<string> =>
     return `${value}.${await makeSignature(value, secret)}`;
   });
 
-// 末尾の文字は base64 のパディングビットを含み、変えても復号後のバイト列が同じで署名が通るため先頭を差し替える。
 export function tamperCookieSignature(signed: string): string {
   const separator = signed.lastIndexOf(".");
   const signature = signed.slice(separator + 1);
@@ -54,7 +49,6 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   return headers;
 }
 
-// percent-decode 後の形式。better-call の getSignedCookie の受理条件より狭い (session-cookie-contract.test.ts が固定)。
 export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;
 
 export type TestSession = { token: string; headers: Headers };
@@ -68,7 +62,6 @@ const sessionHeaders = (token: string): Effect.Effect<Headers> =>
     return requestHeaders({ [name]: yield* signCookieValue(token) });
   });
 
-// secondaryStorage 構成では session の実体が TTL store にしか無く、DB へ行を入れても getSession は解決しない。
 export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
   Effect.gen(function* () {
     const session = yield* Effect.promise(async () =>
@@ -102,7 +95,6 @@ export function actorOf(user: { id: string; email: string }): Pick<Actor, "id" |
   return { id: user.id, email: user.email };
 }
 
-// secret は ASCII なので base32 から TextDecoder で往復しても変わらない。
 export function secretFromTotpUri(totpUri: string): string {
   const encoded = new URL(totpUri).searchParams.get("secret");
   if (!encoded) throw new Error(`totp uri has no secret: ${totpUri}`);
@@ -117,7 +109,6 @@ export const totpCode = (secret: string, stepOffset = 0): Effect.Effect<string> 
     return otp.hotp(counter);
   });
 
-// 固定の誤コードは窓 5 本ぶんの確率で偶然一致する。
 export const wrongTotpCode = (secret: string): Effect.Effect<string> =>
   Effect.gen(function* () {
     const rejected = yield* Effect.forEach(
@@ -154,14 +145,12 @@ export const enableMfaFor = (user: { id: string; email: string }) =>
     const actor = actorOf(user);
     const enrolled = yield* enroll({ actor });
     const secret = secretFromTotpUri(enrolled.totpUri);
-    // timestep は一方向にしか消費できないので、前の step で有効化し現在以降を後続に残す。
     yield* activate({
       actor,
       headers: session.headers,
       code: yield* totpCode(secret, -1),
       enrollmentId: enrolled.enrollmentId,
     });
-    // seed の user id は実行ごとに同じで、試行枠が TTL store に 15 分残る。
     yield* resetDisableAttempts(user.id);
     return {
       actor,
@@ -218,7 +207,6 @@ export const cleanupIssuedChallenges = () =>
     ),
   );
 
-// secondaryStorage 構成では session 行が DB に無いので TTL store 上の実体を数える。
 export const countLiveSessions = (tokens: string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
@@ -234,10 +222,8 @@ export const deleteSessionEntities = (tokens: string[]) =>
     yield* Effect.forEach(tokens, (token) => ttlStore.delete(token), { concurrency: "unbounded" });
   });
 
-// baseURL 未設定時、better-auth は request の origin を baseURL に使う。
 const AUTH_ORIGIN = "http://localhost:3100";
 
-// e2e が同じ行からリンクを取り出す。変えるなら送信側と同時に変える。
 const MAGIC_LINK_LOG = "[TEST] Magic Link for";
 export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
 
@@ -275,7 +261,6 @@ export const followMagicLink = (link: string) =>
     }),
   );
 
-// 合成した ctx では after-hook が走らないため実 HTTP 経路を通す。
 export const loginWithMagicLink = (input: { email: string; callbackURL: string }) =>
   requestMagicLink(input).pipe(Effect.flatMap(followMagicLink));
 

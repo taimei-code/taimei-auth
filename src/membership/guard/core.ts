@@ -15,7 +15,6 @@ const failClosedAsUnauthorized = (failure: { readonly cause: unknown }) =>
     Effect.andThen(new Unauthorized()),
   );
 
-// better-auth の cookieCache (最大 5 分) は user 行の削除後も session を返す。
 export const requireActor = Effect.fnUntraced(
   function* (headers: Headers) {
     const session = yield* AuthApi.use((authApi) => authApi.getSession(headers));

@@ -15,17 +15,14 @@ import type { AppRuntime } from "./runtime";
 
 const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
 
-// Workers では env が request ごとに渡されるため、module ロード時でなく initAuth() で構築する。
 function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
-    // TOTP issuer になる。enroll と再表示で同じ値でないと認証アプリのエントリが分かれる。
     appName: getAppName(),
 
     secondaryStorage: ttlStorage,
 
-    // Workers では DB の verification token の消費が hang するため、Bun のローカル実行だけ true にする。
     verification: {
       storeInDatabase: isBunRuntime() && isLocalEnvironment(),
     },
@@ -37,7 +34,6 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
     trustedOrigins: getTrustedOrigins(),
 
-    // better-auth の router は throw を捕捉して 500 にするため、Hono にも adapter にも届かない。
     onAPIError: {
       onError: (error) => {
         if (isAPIError(error) && error.statusCode < 500) return;
@@ -54,7 +50,6 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
     user: {
       additionalFields: {
-        // 加算は drizzle/manual/0001_user_revision_triggers.sql の trigger だけが行う。
         revision: { type: "number", required: true, defaultValue: 0, input: false },
         lastUsedCompanyId: { type: "string", required: false, input: false },
       },
@@ -81,7 +76,6 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
           await runtime.runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: 300,
-        // Hono middleware (rate-limit.ts) と独立した二重の防御。local はテストを速くするため緩める。
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
       primaryAuth(runtime),
@@ -92,7 +86,6 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         enabled: true,
         maxAge: 5 * 60,
       },
-      // password が無いと再認証できず、listSessions が SESSION_NOT_FRESH になるため 0 にする。
       freshAge: 0,
     },
 

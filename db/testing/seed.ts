@@ -14,7 +14,6 @@ import {
   user,
 } from "../schema";
 
-// seed、cleanup、e2e fixture で共有する。片方だけ変えると cleanup の対象が 0 件になる。
 export const ids = (prefix: string) => ({
   userId: (suffix: string): string => `${prefix}u-${suffix}`,
   email: (suffix: string): string => `${prefix}${suffix}@example.com`,

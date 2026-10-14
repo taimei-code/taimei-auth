@@ -87,7 +87,6 @@ const recordRejectionAndFail = Effect.fnUntraced(function* (
     inviter: rejected.inviter,
     reason: rejected.reason,
   };
-  // warn は DB 書き込みの前 (DB 不通でも痕跡を残す)。この行の形式は運用の log filter が前提にしている。
   yield* Effect.sync(() =>
     console.warn(ACCEPT_REJECTED_LOG, JSON.stringify({ actor_user_id: actorUserId, ...payload })),
   );

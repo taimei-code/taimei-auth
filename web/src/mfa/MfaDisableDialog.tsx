@@ -26,7 +26,6 @@ type Props = {
   trigger: ReactNode;
 };
 
-// ConfirmDestructiveDialog は失敗しても閉じる契約なので使わない (打ち間違いで入力をやり直させる)
 export const MfaDisableDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
   const refreshStatus = useRefreshAndWait(mfaStatusAtom);

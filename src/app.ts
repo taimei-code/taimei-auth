@@ -17,7 +17,6 @@ import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
 
 export type AppOptions = {
-  // catch-all を含むので、共有 route を登録し終えてから呼ぶ。
   mountStatic: (app: Hono) => void;
 };
 
@@ -47,7 +46,6 @@ export function buildApp(options: AppOptions): Hono {
 
   app.route("/", loginShortcut);
 
-  // 認証なしで Sentry に直送するため、連打で quota が尽きないよう IP 単位で抑える。
   app.use(
     "/auth/canary-token/*",
     createRateLimitMiddleware({
@@ -67,7 +65,6 @@ export function buildApp(options: AppOptions): Hono {
     }),
     createRateLimitMiddleware({
       keyFn: async (c) => {
-        // workerd は body を clone して二重に読むと hang するため、raw body を Hono の cache に先読みさせる。
         const body = await c.req
           .json<Record<string, unknown>>()
           .catch(() => ({}) as Record<string, unknown>);
@@ -79,7 +76,6 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  // method を広げ忘れると static fallback が 200 の HTML を返し、気付かれない。
   app.on(["GET", "POST"], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();
     const request =

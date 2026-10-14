@@ -3,7 +3,6 @@ import { setSentryBackend, type CaptureContext } from "./sentry";
 
 export function initBunSentry(): void {
   const dsn = process.env.SENTRY_DSN;
-  // DSN 無しで差し替えると未初期化の SDK が例外を捨てるため、console fallback を残す。
   if (!dsn) {
     console.warn("[sentry] SENTRY_DSN is not set, using console fallback");
     return;

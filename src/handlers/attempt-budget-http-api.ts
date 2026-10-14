@@ -39,7 +39,6 @@ const budgetMiddleware = (
     });
   });
 
-// verify は別アカウントの総当たりを IP 単位で防ぐ。状態の 30 は表示 1 回 + verify 上限 10 回を NAT 同居の数人分と見た値。
 export const AttemptBudgetsLive = Layer.mergeAll(
   Layer.effect(
     ChallengeVerifyBudget,

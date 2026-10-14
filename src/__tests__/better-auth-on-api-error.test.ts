@@ -11,7 +11,6 @@ import { auth } from "../auth";
 import { DbError } from "../errors";
 import { recordSentryExceptions } from "./sentry-recorder";
 
-// better-auth の router は hook の throw を自分で 500 にして onAPIError.onError にだけ渡す (dist/api/index.mjs)。production の auth は差し替えられないので memoryAdapter で組む。
 const thrown = new Error("boom");
 
 function buildThrowingAuth(phase: "hook" | "onRequest" | "endpoint-5xx" = "hook") {
@@ -76,7 +75,6 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
     expect(calls).toHaveLength(0);
   });
 
-  // better-call は onRequest を processRequest の try/catch の外で await する (rate limiter の TTL store の throw はこの経路)。
   test("onRequest 段の throw は onError に来ず auth.handler が reject する", async () => {
     const { instance, calls } = buildThrowingAuth("onRequest");
     await expect(
@@ -97,7 +95,6 @@ describe("src/auth.ts の onAPIError.onError", () => {
   const captured = recordSentryExceptions();
   const ctx = {} as AuthContext;
   const onAPIError = (auth.options as BetterAuthOptions).onAPIError;
-  // describe 本体で throw すると、bun は describe ごと落として "0 fail" のままテスト数だけが減る。
   const onError = (error: unknown): unknown => {
     if (!onAPIError?.onError) throw new Error("src/auth.ts に onAPIError.onError が無い");
     return onAPIError.onError(error, ctx);

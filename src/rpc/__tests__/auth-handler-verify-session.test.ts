@@ -18,7 +18,6 @@ import { SentryLive } from "../../sentry";
 import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
-// mock.module はプロセス全体に作用して後続のファイルに漏れるため使わない。
 const mockSignOut = mock();
 
 beforeEach(() => {

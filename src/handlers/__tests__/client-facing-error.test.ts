@@ -262,7 +262,6 @@ describe("captureThrown", () => {
   });
 });
 
-// better-call は onError の throw を auth.handler の reject にするため、Sentry backend の throw をここで受け止める。
 describe("captureThrown は観測自体の失敗を握る", () => {
   const sentryFailure = new Error("sentry down");
   beforeAll(() =>

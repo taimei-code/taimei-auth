@@ -11,7 +11,6 @@ const P = "enum-test-";
 const { run } = dbTest(P);
 const request = (url: string, init?: RequestInit) => requestApp(app, url, init);
 
-// Hono v4 では `/api/auth/**` が入れ子の path に一致しない。`/api/auth/*` を使う (#52)。
 describe("Hono /api/auth/* route registration (regression for #52)", () => {
   test("GET /api/auth/ok returns 200 (Better Auth health endpoint reachable)", () =>
     run(
@@ -46,7 +45,6 @@ describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
   test("APP_ENV=development で 10 連続送信が 429 にならない", () =>
     run(
       Effect.gen(function* () {
-        // APP_ENV は module の top-level で確定するので、ここで stub しても反映されない。
         const statuses: number[] = [];
         for (let i = 0; i < 10; i++) {
           const res = yield* request("http://localhost/api/auth/sign-in/magic-link", {
@@ -64,10 +62,8 @@ describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
 });
 
 describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () => {
-  // 429 で確認しない (local の緩和値では到達しない)。
   const windowCount = (key: string) => Effect.sync(() => Number(testKvStore.get(key) ?? 0));
 
-  // IP literal 以外は unknown として窓を共有する (request-context.ts) ので、下位 2 octet を乱数にする。
   const isolatedClientIp = (): string =>
     `203.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
 

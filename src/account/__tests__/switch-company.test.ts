@@ -91,7 +91,6 @@ describe("switchCompany", () => {
         yield* db.seedMembership(u.id, co1, "OWNER");
         yield* db.seedMembership(u.id, co2, "MEMBER");
 
-        // use-case は tx 外の事前確認を持たないため、tx 開始時点で既に無いケースが race と同じ経路を通る。
         yield* db.removeMembership(u.id, co2);
 
         const e = yield* Effect.flip(
