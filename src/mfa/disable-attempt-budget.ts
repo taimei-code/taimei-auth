@@ -7,7 +7,7 @@ import { Locked } from "./errors";
 export const disableAttemptsKey = (userId: string): string => `mfa:disable-attempts:${userId}`;
 
 const WINDOW_SECONDS = 15 * 60;
-const MAX_ATTEMPTS = 5;
+export const DISABLE_ATTEMPT_LIMIT = 5;
 const COMPONENT = "mfa-disable-attempt-budget";
 
 export const spendDisableAttempt = Effect.fnUntraced(
@@ -15,7 +15,7 @@ export const spendDisableAttempt = Effect.fnUntraced(
     yield* spendAttemptBudgetFailClosed({
       key: disableAttemptsKey(userId),
       windowSeconds: WINDOW_SECONDS,
-      maxAttempts: MAX_ATTEMPTS,
+      maxAttempts: DISABLE_ATTEMPT_LIMIT,
       component: COMPONENT,
     });
   },

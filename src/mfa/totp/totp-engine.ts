@@ -1,12 +1,10 @@
 import { generateRandomString } from "better-auth/crypto";
 import * as OTPAuth from "otpauth";
 
-const PERIOD = 30;
-const DIGITS = 6;
-const WINDOW = 1;
+import { TOTP_DIGITS, TOTP_PERIOD_SECONDS, TOTP_WINDOW_STEPS } from "./totp-parameters";
 
 const SECRET_LENGTH = 32;
-const TOTP_CODE = /^[0-9]{6}$/;
+const TOTP_CODE = new RegExp(`^[0-9]{${TOTP_DIGITS}}$`);
 
 export function generateTotpSecret(): Uint8Array {
   return new TextEncoder().encode(generateRandomString(SECRET_LENGTH, "a-z", "A-Z", "0-9"));
@@ -16,8 +14,8 @@ function asTotp(secret: Uint8Array, input: { issuer?: string; label?: string } =
   return new OTPAuth.TOTP({
     ...input,
     secret: new OTPAuth.Secret({ buffer: new Uint8Array(secret).buffer }),
-    digits: DIGITS,
-    period: PERIOD,
+    digits: TOTP_DIGITS,
+    period: TOTP_PERIOD_SECONDS,
   });
 }
 
@@ -35,7 +33,7 @@ export function matchTotpCode(
   timestamp: number = Date.now(),
 ): number | null {
   if (!TOTP_CODE.test(code)) return null;
-  const delta = asTotp(secret).validate({ token: code, timestamp, window: WINDOW });
+  const delta = asTotp(secret).validate({ token: code, timestamp, window: TOTP_WINDOW_STEPS });
   if (delta === null) return null;
-  return OTPAuth.TOTP.counter({ period: PERIOD, timestamp }) + delta;
+  return OTPAuth.TOTP.counter({ period: TOTP_PERIOD_SECONDS, timestamp }) + delta;
 }

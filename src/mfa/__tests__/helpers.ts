@@ -7,6 +7,8 @@ import { AuthApi } from "../../auth-service";
 import { TtlStore } from "../../ttl-store-service";
 import { resetDisableAttempts } from "../disable-attempt-budget";
 import { activate, enroll } from "../totp";
+import { magicLinkLogPrefix } from "../../email/local-delivery-log";
+import { TOTP_DIGITS, TOTP_PERIOD_SECONDS } from "../totp/totp-parameters";
 import {
   attemptsKey,
   challengeKey,
@@ -17,12 +19,11 @@ import { observing } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import type { Actor } from "../../account/actor-contract";
 
-process.env.MFA_TOTP_ENCRYPTION_KEYS ??= "v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+export const TEST_MFA_TOTP_ENCRYPTION_KEYS = "v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+process.env.MFA_TOTP_ENCRYPTION_KEYS ??= TEST_MFA_TOTP_ENCRYPTION_KEYS;
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
-
-const TOTP_PERIOD_SECONDS = 30;
 
 const signCookieValue = (value: string): Effect.Effect<string> =>
   Effect.promise(async () => {
@@ -103,7 +104,7 @@ export function secretFromTotpUri(totpUri: string): string {
 
 export const totpCode = (secret: string, stepOffset = 0): Effect.Effect<string> =>
   Effect.promise(() => {
-    const otp = createOTP(secret, { period: TOTP_PERIOD_SECONDS, digits: 6 });
+    const otp = createOTP(secret, { period: TOTP_PERIOD_SECONDS, digits: TOTP_DIGITS });
     if (stepOffset === 0) return otp.totp();
     const counter = Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset;
     return otp.hotp(counter);
@@ -139,6 +140,8 @@ type EnabledMfaUser = {
   session: TestSession;
 };
 
+const PREVIOUS_TIMESTEP_LEAVES_CURRENT_FOR_LATER_CHECKS = -1;
+
 export const enableMfaFor = (user: { id: string; email: string }) =>
   Effect.gen(function* () {
     const session = yield* createSessionFor(user.id);
@@ -148,7 +151,7 @@ export const enableMfaFor = (user: { id: string; email: string }) =>
     yield* activate({
       actor,
       headers: session.headers,
-      code: yield* totpCode(secret, -1),
+      code: yield* totpCode(secret, PREVIOUS_TIMESTEP_LEAVES_CURRENT_FOR_LATER_CHECKS),
       enrollmentId: enrolled.enrollmentId,
     });
     yield* resetDisableAttempts(user.id);
@@ -224,9 +227,6 @@ export const deleteSessionEntities = (tokens: string[]) =>
 
 const AUTH_ORIGIN = "http://localhost:3100";
 
-const MAGIC_LINK_LOG = "[TEST] Magic Link for";
-export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
-
 type PrimaryAuthLogin = { response: Response; location: URL | null; logs: string[] };
 
 const handleWithBackgroundTasks = (request: Request) =>
@@ -243,7 +243,7 @@ export const requestMagicLink = (input: { email: string; callbackURL: string }) 
         body: JSON.stringify({ email: input.email, callbackURL: input.callbackURL }),
       }),
     );
-    const emailed = logs.find((line) => line.includes(MAGIC_LINK_LOG));
+    const emailed = logs.find((line) => line.includes(magicLinkLogPrefix(input.email)));
     if (!emailed) return yield* Effect.die(new Error(`no magic link was sent to ${input.email}`));
     return emailed.slice(emailed.indexOf("http"));
   });

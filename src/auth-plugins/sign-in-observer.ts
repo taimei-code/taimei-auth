@@ -6,7 +6,7 @@ import { toDisplayText } from "../email/sanitize";
 import { captureCause } from "../sentry";
 import type { PrimaryAuthRoute } from "./primary-auth-routes";
 
-const NEW_USER_THRESHOLD_MS = 10000;
+export const NEW_USER_THRESHOLD_MS = 10000;
 
 type SignedIn = {
   user: { id: string; email: string; name: string; createdAt: Date | string };

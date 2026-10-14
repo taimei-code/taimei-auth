@@ -2,6 +2,9 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { invitationLogPrefix, magicLinkLogPrefix } from "../src/email/local-delivery-log";
+import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
+import type { ConsumableFixture } from "./fixture-names";
 
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
 export const BASE_URL = "http://localhost:3110";
@@ -11,9 +14,7 @@ export const SWITCH_EMAIL = "e2e-switch@example.com";
 export const companySwitcher = (page: Page) =>
   page.getByRole("combobox", { name: "事業所を切り替え" });
 
-export const reseedFixture = (
-  name: "leave" | "delete" | "delete-multi" | "invitation" | "mfa" | "switch" | "withdraw",
-): void => {
+export const reseedFixture = (name: ConsumableFixture): void => {
   execFileSync("bun", ["run", join(process.cwd(), "e2e", "seed.ts"), name], { stdio: "inherit" });
 };
 
@@ -36,7 +37,7 @@ export const authEntryUrl = (opts: { invitationToken?: string } = {}): string =>
 };
 
 export const magicLinkFor = async (email: string): Promise<string> => {
-  const markers = [`[TEST] Magic Link for ${email}: `, `[TEST] Invitation email for ${email}: `];
+  const markers = [magicLinkLogPrefix(email), invitationLogPrefix(email)];
   for (let attempt = 0; attempt < 50; attempt++) {
     const line = readFileSync(SERVER_LOG, "utf8")
       .split("\n")
@@ -52,7 +53,9 @@ export const magicLinkFor = async (email: string): Promise<string> => {
 };
 
 export const expectSignInLanding = async (page: Page): Promise<void> => {
-  await expect(page).toHaveURL(/\/auth\?service_name=accounts/);
+  await expect(page).toHaveURL((url) =>
+    `${url.pathname}${url.search}`.startsWith(SIGN_IN_LANDING_PATH),
+  );
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
 };
 

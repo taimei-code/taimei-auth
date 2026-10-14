@@ -1,6 +1,12 @@
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { expect, test, type Page } from "@playwright/test";
+import {
+  TOTP_DIGITS,
+  TOTP_PERIOD_SECONDS,
+  TOTP_WINDOW_STEPS,
+} from "../src/mfa/totp/totp-parameters";
+import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
 const MFA_EMAIL = "e2e-mfa@example.com";
@@ -10,9 +16,6 @@ test.describe.configure({ timeout: 90_000 });
 test.beforeEach(() => {
   reseedFixture("mfa");
 });
-
-const TOTP_PERIOD_SECONDS = 30;
-const TOTP_DIGITS = 6;
 
 const decodeTotpSecret = (encoded: string): string =>
   new TextDecoder().decode(base32.decode(encoded));
@@ -30,13 +33,19 @@ const totpCode = (secret: string, stepOffset = 0): Promise<string> => {
 };
 
 const wrongTotpCode = async (secret: string): Promise<string> => {
-  const accepted = await Promise.all([-1, 0, 1].map((offset) => totpCode(secret, offset)));
+  const acceptedOffsets = Array.from(
+    { length: TOTP_WINDOW_STEPS * 2 + 1 },
+    (_, i) => i - TOTP_WINDOW_STEPS,
+  );
+  const accepted = await Promise.all(acceptedOffsets.map((offset) => totpCode(secret, offset)));
   for (let candidate = 0; candidate < 1000; candidate++) {
     const code = String(candidate).padStart(TOTP_DIGITS, "0");
     if (!accepted.includes(code)) return code;
   }
   throw new Error("検証窓の外にある誤コードを作れなかった");
 };
+
+const PREVIOUS_STEP_LEAVING_CURRENT_UNUSED = -1;
 
 type EnabledMfa = { secret: string; recoveryCodes: string[] };
 
@@ -53,7 +62,10 @@ const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
 
   const secret = secretFromTotpUri(enrollment.totp_uri);
   const activated = await page.request.post("/api/account/mfa/activate", {
-    data: { code: await totpCode(secret, -1), enrollment_id: enrollment.enrollment_id },
+    data: {
+      code: await totpCode(secret, PREVIOUS_STEP_LEAVING_CURRENT_UNUSED),
+      enrollment_id: enrollment.enrollment_id,
+    },
   });
   expect(activated.status()).toBe(200);
 
@@ -438,7 +450,7 @@ test("「ログインをやり直す」は末尾スラッシュ無しのログ�
 
   const href = await page.getByRole("link", { name: "ログインをやり直す" }).getAttribute("href");
 
-  expect(href).toMatch(/^\/auth\?service_name=accounts&redirect_url=/);
+  expect(href?.startsWith(`${SIGN_IN_LANDING_PATH}&redirect_url=`)).toBe(true);
 });
 
 test("AC-033 空の code は verify を呼ばない", async ({ page }) => {

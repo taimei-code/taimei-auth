@@ -1,7 +1,9 @@
 export type AuthChange = "signOut" | "deleteAccount";
 
+export const SIGN_IN_LANDING_PATH = "/auth?service_name=accounts";
+
 const signInLandingUrl = () =>
-  `/auth?service_name=accounts&redirect_url=${encodeURIComponent(signInLandingSearch().redirect_url)}`;
+  `${SIGN_IN_LANDING_PATH}&redirect_url=${encodeURIComponent(signInLandingSearch().redirect_url)}`;
 
 export const redirectAfterAuthChange = (change: AuthChange) => {
   window.location.href = change === "signOut" ? "/" : signInLandingUrl();

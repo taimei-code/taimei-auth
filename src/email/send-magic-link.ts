@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 import { isLocalEnvironment } from "../env";
 import { getAppName, getMagicLinkFromEmail, renderAndSendEmail } from "./client";
+import { magicLinkLogPrefix } from "./local-delivery-log";
 import MagicLinkEmail from "./magic-link";
 
 export const sendMagicLinkEmail = Effect.fnUntraced(function* (email: string, url: string) {
   if (isLocalEnvironment()) {
-    yield* Effect.sync(() => console.log(`[TEST] Magic Link for ${email}: ${url}`));
+    yield* Effect.sync(() => console.log(`${magicLinkLogPrefix(email)}${url}`));
     return;
   }
 

@@ -11,6 +11,7 @@ import {
   readUserIdsByEmails,
 } from "@/db/testing/read";
 import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
+import type { ConsumableFixture } from "./fixture-names";
 
 type Role = SeedInvitationOptions["role"];
 
@@ -127,12 +128,13 @@ async function ensureDeleteMultiFixture(): Promise<void> {
 const SWITCH_USER = "switch";
 const SWITCH_COMPANY_A = "switch-a";
 const SWITCH_COMPANY_B = "switch-b";
+const COMPANIES_CREATED_BY_SPECS = ["switch-added", "switch-b-renamed"];
 
 async function ensureSwitchFixture(): Promise<void> {
   assertLocalDatabase();
   await removeFixtureRows({
     userSuffixes: [SWITCH_USER, "switch-a-mate", "switch-b-mate"],
-    companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, "switch-added", "switch-b-renamed"],
+    companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, ...COMPANIES_CREATED_BY_SPECS],
   });
   const userId = await seedUser(SWITCH_USER, "E2E Switch");
   const companyA = await seedCompany(SWITCH_COMPANY_A);
@@ -187,15 +189,15 @@ async function findTheMainCompany(): Promise<{ companyId: string; invitedByUserI
   return { companyId: companies[0], invitedByUserId: inviter.id };
 }
 
-export const consumableFixtures = new Map<string, () => Promise<void>>([
-  ["leave", () => ensureFixture(LEAVE_FIXTURE)],
-  ["delete", () => ensureFixture(DELETE_FIXTURE)],
-  ["withdraw", () => ensureFixture(WITHDRAW_FIXTURE)],
-  ["delete-multi", ensureDeleteMultiFixture],
-  ["invitation", ensureInvitationFixture],
-  ["mfa", () => ensureFixture(MFA_FIXTURE)],
-  ["switch", ensureSwitchFixture],
-]);
+export const consumableFixtures: Record<ConsumableFixture, () => Promise<void>> = {
+  leave: () => ensureFixture(LEAVE_FIXTURE),
+  delete: () => ensureFixture(DELETE_FIXTURE),
+  withdraw: () => ensureFixture(WITHDRAW_FIXTURE),
+  "delete-multi": ensureDeleteMultiFixture,
+  invitation: ensureInvitationFixture,
+  mfa: () => ensureFixture(MFA_FIXTURE),
+  switch: ensureSwitchFixture,
+};
 
 export async function resetAllFixtures(): Promise<void> {
   assertLocalDatabase();

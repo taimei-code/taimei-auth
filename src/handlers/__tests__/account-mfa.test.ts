@@ -14,6 +14,7 @@ import {
 } from "../../mfa/__tests__/helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
 import { authApiLive } from "../../auth-wiring";
+import { DISABLE_ATTEMPT_LIMIT } from "../../mfa/disable-attempt-budget";
 import { MfaEnrollment } from "../../mfa/mfa-contract";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -21,8 +22,6 @@ import { mountSpaApi } from "../spa-http-api";
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
-
-const DISABLE_ATTEMPT_LIMIT = 5;
 
 const buildApp = (): Hono => {
   const app = new Hono();
