@@ -13,7 +13,7 @@ import { runProgramInRoute } from "./run-program-in-route";
 
 const captured = recordSentryExceptions();
 
-describe("authEntryRedirectProgram (fail-open)", () => {
+describe("authEntryRedirectProgram は認可でなく利便のための redirect なので、一時的な障害では 5xx にせず通す", () => {
   test("AuthApi が AuthApiError → CONTINUE (次の handler へ進む) と Sentry warning", async () => {
     const cause = new Error("upstash down");
     const outcome = await runProgramInRoute(

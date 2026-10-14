@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
@@ -15,6 +15,15 @@ import { createRateLimitMiddleware, limitForEnvironment, magicLinkKey } from "./
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
+
+async function readEmailWithoutCloningBody(c: Context): Promise<string> {
+  const body = await c.req
+    .json<Record<string, unknown>>()
+    .catch(() => ({}) as Record<string, unknown>);
+  return typeof body?.email === "string" ? body.email : "unknown";
+}
+
+export const BETTER_AUTH_METHODS = ["GET", "POST"] as const;
 
 export type AppOptions = {
   mountStatic: (app: Hono) => void;
@@ -64,19 +73,13 @@ export function buildApp(options: AppOptions): Hono {
       windowSec: 60,
     }),
     createRateLimitMiddleware({
-      keyFn: async (c) => {
-        const body = await c.req
-          .json<Record<string, unknown>>()
-          .catch(() => ({}) as Record<string, unknown>);
-        const email = typeof body?.email === "string" ? body.email : "unknown";
-        return magicLinkKey("email", email);
-      },
+      keyFn: async (c) => magicLinkKey("email", await readEmailWithoutCloningBody(c)),
       limit: limitForEnvironment(3),
       windowSec: 60,
     }),
   );
 
-  app.on(["GET", "POST"], "/api/auth/*", async (c) => {
+  app.on([...BETTER_AUTH_METHODS], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();
     const request =
       body === undefined

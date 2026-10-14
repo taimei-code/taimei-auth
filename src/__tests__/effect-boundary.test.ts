@@ -12,7 +12,7 @@ const effectImports = (dir: string): string[] =>
 const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { excludeTests: true });
 
 describe("effect の import 境界 (ADR-0017)", () => {
-  test("db/ は effect を import しない (Repository 境界、R1)", () => {
+  test("db/ は effect を import しない (Repository 境界。biome に db 専用の override を足すと web の ban の複製が崩れるので grep で固定する)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
@@ -278,7 +278,7 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
 });
 
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
-  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない)", () => {
+  test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない。ManagedRuntime は初回の run で Layer を構築するので、失敗し得る Layer は本番の初回 request で落ちる)", () => {
     const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
       excludeTests: true,
       lines: true,

@@ -11,7 +11,7 @@ const P = "enum-test-";
 const { run } = dbTest(P);
 const request = (url: string, init?: RequestInit) => requestApp(app, url, init);
 
-describe("Hono /api/auth/* route registration (regression for #52)", () => {
+describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の path に一致しないので /* で登録する、#52)", () => {
   test("GET /api/auth/ok returns 200 (Better Auth health endpoint reachable)", () =>
     run(
       Effect.gen(function* () {

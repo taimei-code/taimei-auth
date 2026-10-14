@@ -56,6 +56,10 @@ const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
         else process.env.MFA_CHALLENGE_ENABLED = original;
       }),
   );
+let killSwitchReportEpochs = 0;
+const afterEveryEarlierKillSwitchReport = (): number =>
+  Date.now() + ++killSwitchReportEpochs * 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
+
 const withClockAt = <A, E, R>(at: number, body: Effect.Effect<A, E, R>) =>
   withSpy(
     () => spyOn(Date, "now").mockReturnValue(at),
@@ -286,7 +290,7 @@ describe("チャレンジ強制プラグイン", () => {
             );
             expect(killSwitchWarnings()[0]?.context?.level).toBe("warning");
 
-            const afterInterval = Date.now() + KILL_SWITCH_REPORT_INTERVAL_MS + 1;
+            const afterInterval = afterEveryEarlierKillSwitchReport();
             yield* withClockAt(
               afterInterval,
               runOAuthCallbackHook({
@@ -664,7 +668,7 @@ describe("enforceChallenge (program 単体)", () => {
   test("AC-002 Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
     run(
       Effect.gen(function* () {
-        const t0 = Date.now() + 3 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const t0 = afterEveryEarlierKillSwitchReport();
         const exit = yield* withClockAt(
           t0,
           decide(
@@ -680,7 +684,7 @@ describe("enforceChallenge (program 単体)", () => {
     run(
       Effect.gen(function* () {
         const layer = Layer.mergeAll(mfaEnabled, untouched);
-        const t0 = Date.now() + 6 * KILL_SWITCH_REPORT_INTERVAL_MS;
+        const t0 = afterEveryEarlierKillSwitchReport();
         const at = (offset: number) =>
           withClockAt(t0 + offset, decide(killSwitchOff(), layer)).pipe(
             Effect.map(() => killSwitchWarnings().length),

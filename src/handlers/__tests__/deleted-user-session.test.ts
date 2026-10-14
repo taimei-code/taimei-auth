@@ -15,7 +15,7 @@ const postCompany = (app: Hono) =>
     body: JSON.stringify({ name: `${P}co-first`, org_code: "PERSONAL" }),
   });
 
-describe("削除済み user の session actor", () => {
+describe("削除済み user の session actor (better-auth の cookieCache は user 行の削除後も最大 5 分 session を返す)", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 

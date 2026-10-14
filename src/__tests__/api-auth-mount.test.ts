@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { buildApp } from "../app";
+import { BETTER_AUTH_METHODS, buildApp } from "../app";
 import { auth } from "../auth";
 import { recordSentryExceptions } from "./sentry-recorder";
 
@@ -58,4 +58,13 @@ describe("/api/auth/* の mount は auth.handler の reject を Sentry に送る
       handler.mockRestore();
     }
   });
+});
+
+test("better-auth の endpoint が使う method はすべて /api/auth/* に mount している (漏れると static fallback が 200 の HTML を返して気付けない)", () => {
+  const endpointMethods = Object.values(
+    auth.api as unknown as Record<string, { options?: { method?: string | string[] } }>,
+  ).flatMap((endpoint) => endpoint?.options?.method ?? []);
+  const mounted: readonly string[] = BETTER_AUTH_METHODS;
+  expect(endpointMethods.length).toBeGreaterThan(0);
+  expect([...new Set(endpointMethods)].filter((method) => !mounted.includes(method))).toEqual([]);
 });

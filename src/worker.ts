@@ -21,6 +21,8 @@ type Env = {
 
 type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
 
+const VITE_BASE = "/auth";
+
 let bootstrappedApp: Hono | null = null;
 
 function copyEnvToProcess(env: Env): void {
@@ -40,8 +42,8 @@ function bootstrap(env: Env): Hono {
       app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
-        if (url.pathname.startsWith("/auth/")) {
-          url.pathname = url.pathname.replace(/^\/auth/, "") || "/";
+        if (url.pathname.startsWith(`${VITE_BASE}/`)) {
+          url.pathname = url.pathname.slice(VITE_BASE.length) || "/";
           return requestEnv.ASSETS.fetch(new Request(url, c.req.raw));
         }
         return requestEnv.ASSETS.fetch(c.req.raw);

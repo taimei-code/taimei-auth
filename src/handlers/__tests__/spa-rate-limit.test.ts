@@ -38,7 +38,7 @@ const sendTimes = async (n: number, send: () => Response | Promise<Response>) =>
   return responses;
 };
 
-describe("MFA チャレンジの verify の試行枠 (IP ごとに 60 秒で 10 回)", () => {
+describe("MFA チャレンジの verify の試行枠 (別アカウントへの総当たりを止めるため IP ごとに 60 秒で 10 回)", () => {
   test("10 回目までは 429 にならない", async () => {
     const app = buildApp({ mountStatic: () => {} });
     const ip = uniqueIp();
@@ -73,7 +73,7 @@ describe("MFA チャレンジの verify の試行枠 (IP ごとに 60 秒で 10 
   });
 });
 
-describe("MFA チャレンジの状態の試行枠 (IP ごとに 60 秒で 30 回)", () => {
+describe("MFA チャレンジの状態の試行枠 (表示 1 回と verify 10 回を NAT の後ろの数人分見込み、IP ごとに 60 秒で 30 回)", () => {
   const stateFrom = (app: Hono, ip: string) =>
     app.request("/api/mfa/challenge", { headers: { "x-forwarded-for": ip } });
 

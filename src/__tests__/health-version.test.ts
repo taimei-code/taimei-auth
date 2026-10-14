@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { buildApp } from "../app";
 
-describe("/health の version", () => {
+describe("/health の version (deploy の smoke が version override の反映をこの値で照合する)", () => {
   const original = process.env.CF_VERSION_ID;
   afterEach(() => {
     if (original === undefined) delete process.env.CF_VERSION_ID;

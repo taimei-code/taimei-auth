@@ -49,7 +49,7 @@ function resolveRelative(fromFile: string, specifier: string): string | null {
 }
 
 describe("web と共有する @core file の依存クロージャは browser-safe に閉じる", () => {
-  test("外部パッケージの runtime import は allowlist のみ (相対 import は推移的に検査)", () => {
+  test("外部パッケージの runtime import は allowlist のみ (相対 import は推移的に検査。allowlist に足すのは browser で動き、secrets と I/O を持たない package だけ)", () => {
     const queue = coreFilesImportedFromWeb();
     expect(queue.length).toBeGreaterThan(0);
 
