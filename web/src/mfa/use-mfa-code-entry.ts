@@ -9,6 +9,7 @@ import {
 import type { MfaCodeKind } from "./mfa-atom";
 
 const WHITESPACE = /\s+/g;
+const PASTE_TOLERANT_MAX_LENGTH = 32;
 const HYPHEN_LIKE = /[-‐-―−ー]/g;
 
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
@@ -88,7 +89,7 @@ export function useMfaCodeInput(options: {
       autoCapitalize: "off",
       autoCorrect: "off",
       spellCheck: false,
-      maxLength: 32,
+      maxLength: PASTE_TOLERANT_MAX_LENGTH,
       placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
       "aria-label": isTotp ? "確認コード" : "リカバリーコード",
       "aria-invalid": options.errorMessage !== null,

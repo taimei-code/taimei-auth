@@ -52,6 +52,7 @@ export const Toaster = () => (
 );
 
 const TOASTER_MOUNT_TIMEOUT_MS = 5_000;
+const ERROR_TOAST_IN_PLACE_OF_ROLE_ALERT = { duration: 10_000, closeButton: true } as const;
 
 const withToast = (): Promise<typeof import("sonner")["toast"]> =>
   Promise.all([
@@ -80,7 +81,7 @@ export const notifyError = (text: string): void => {
     return;
   }
   void withToast()
-    .then((toast) => toast.error(text, { duration: 10_000, closeButton: true }))
+    .then((toast) => toast.error(text, ERROR_TOAST_IN_PLACE_OF_ROLE_ALERT))
     .catch((e) => console.error(text, e));
 };
 

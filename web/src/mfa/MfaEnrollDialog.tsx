@@ -210,7 +210,8 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
   });
 
   const handleOpenChange = (next: boolean) => {
-    if (state.step === "starting" && open) return;
+    const waitingForEnrollResponse = state.step === "starting" && open;
+    if (waitingForEnrollResponse) return;
     if (entry.submitting) return;
 
     if (next) {

@@ -4,7 +4,7 @@ import react from "@vitejs/plugin-react";
 
 const appEnv = process.env.APP_ENV ?? "production";
 
-const buildInfoPlugin = (): Plugin => ({
+const publicBuildInfoPlugin = (): Plugin => ({
   name: "taimei-build-info",
   generateBundle() {
     this.emitFile({
@@ -16,7 +16,7 @@ const buildInfoPlugin = (): Plugin => ({
 });
 
 export default defineConfig({
-  plugins: [react(), buildInfoPlugin()],
+  plugins: [react(), publicBuildInfoPlugin()],
   base: "/auth/",
   root: __dirname,
   define: {

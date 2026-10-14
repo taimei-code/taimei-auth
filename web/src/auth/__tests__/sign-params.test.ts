@@ -8,7 +8,7 @@ describe("invitationAcceptCallbackUrl", () => {
     globalThis.window = originalWindow;
   });
 
-  test("origin 起点の accept-invitation URL に token を encode して載せる", () => {
+  test("origin 起点の accept-invitation URL に token を encode して載せる (redirect_url へ直接戻すと受諾を飛ばして membership が作られない)", () => {
     globalThis.window = {
       location: { origin: "http://auth.taimei-code.local:3100" },
     } as unknown as typeof globalThis.window;
