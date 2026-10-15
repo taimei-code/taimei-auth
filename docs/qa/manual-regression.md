@@ -41,6 +41,7 @@
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する
   3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com <id>` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
+- **確認項目**: `src/worker.ts` で pool を閉じる (`pool.end()`) のは、`waitUntil` に渡した background の処理がすべて終わった後であること。先に閉じると、background の書き込みが閉じた接続で止まる (bun の test は `cloudflare:workers` を読めず、この順序を観測できない)
 - **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 
 ## QA-MR-04: Resend 実メールのレンダリング
@@ -60,6 +61,7 @@
   1. magic link を発行し、クリックせず 5 分以上待つ
   2. 期限切れの link を開く
 - **期待結果**: session は作られず、エラー (EXPIRED_TOKEN 系) 付きで sign-in 画面へ戻される
+- **追加の手順 (本番の TTL store の getAndDelete)**: `wrangler dev` か本番で magic link を発行し、同じ link を 2 つのタブでほぼ同時に開く。確認用の値は DO の input gate が get と delete を 1 つにするので、session ができるのは 1 つのタブだけであること (bun の test は memory の実装しか見ない。`src/__tests__/ttl-store-get-and-delete.test.ts`)
 
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 

@@ -28,4 +28,4 @@ trigger、VIEW、FUNCTION などの手書き SQL を `drizzle/` 直下に置く�
 ## gotcha
 
 - `db/client.ts` の `pg.Pool` を module singleton にしない。workerd は別の request で開いた socket を再利用できず、query がハングする。`db` は単一のまま、中の Pool を `AsyncLocalStorage` で request ごとに差し替える (ADR-0011)。
-- drizzle に渡す Pool の代替 (`RoutingPool`) は `extends Pool` にする。drizzle は `this.client instanceof Pool` で pool かどうかを判定し、満たさないと transaction の BEGIN/COMMIT が別の接続に散る。
+- drizzle に渡す Pool の代替 (`RoutingPool`) は `extends Pool` にする。drizzle は client が pool かどうかを instance (`instanceof Pool`) か class 名 (`Pool` を含むか) で判定し、pool と見なさない client では transaction の BEGIN と COMMIT と中の query が別の接続に散る。`db/__tests__/client.test.ts` が、transaction の中で同時に投げた query が同じ接続で走ることを確かめる。

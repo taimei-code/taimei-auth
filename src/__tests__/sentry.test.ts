@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { Effect, Exit } from "effect";
 import {
   captureCauseAs,
@@ -7,6 +7,8 @@ import {
   SentryService,
   setSentryBackend,
 } from "../sentry";
+import { captureThrown } from "../handlers/client-facing-error";
+import { initBunSentry } from "../sentry-bun";
 import { grepFiles } from "./source-scan";
 import { recordSentry } from "./sentry-recorder";
 
@@ -75,4 +77,48 @@ test("Sentry の SDK を import するのは runtime ごとの初期化 file と
     "src/sentry-cloudflare.ts",
     "src/worker.ts",
   ]);
+});
+
+describe("captureThrown は観測自体の失敗を握る", () => {
+  const sentryFailure = new Error("sentry down");
+  beforeAll(() =>
+    setSentryBackend({
+      captureException: () => {
+        throw sentryFailure;
+      },
+      captureMessage: () => {},
+    }),
+  );
+  afterAll(() => setSentryBackend(consoleSentryBackend));
+
+  test("backend が throw しても captureThrown は throw せず、元の error と観測失敗を console.error に残す", () => {
+    const spy = spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const original = new Error("x");
+      expect(() => captureThrown(original, "better-auth")).not.toThrow();
+      expect(spy).toHaveBeenCalledTimes(2);
+      expect(spy.mock.calls[0]).toEqual(["[better-auth]", original]);
+      expect(spy.mock.calls[1]?.[1]).toBe(sentryFailure);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe("initBunSentry", () => {
+  test("SENTRY_DSN が無いと SDK に差し替えず console の記録を残す (DSN 無しで初期化した SDK は例外を捨てる)", () => {
+    const originalDsn = process.env.SENTRY_DSN;
+    delete process.env.SENTRY_DSN;
+    const warn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      initBunSentry();
+
+      expect(warn.mock.calls.map(([message]) => message)).toContain(
+        "[sentry] SENTRY_DSN is not set, using console fallback",
+      );
+    } finally {
+      warn.mockRestore();
+      if (originalDsn !== undefined) process.env.SENTRY_DSN = originalDsn;
+    }
+  });
 });

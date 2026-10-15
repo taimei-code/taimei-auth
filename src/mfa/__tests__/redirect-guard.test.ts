@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { betterAuth } from "better-auth";
 import { Effect } from "effect";
 import { SentryLive } from "../../sentry";
 import { recordSentry } from "../../__tests__/sentry-recorder";
@@ -88,5 +89,26 @@ describe("validateChallengeRedirect", () => {
       FALLBACK_REDIRECT,
     );
     expect(rejectionReasons()).toEqual(["not_a_same_origin_path", "origin_not_trusted"]);
+  });
+});
+
+describe("相対 path の判定は better-auth の callbackURL の判定と同じ", () => {
+  test("fixture の相対 path のそれぞれで、guard と better-auth の isTrustedOrigin の判定が一致する (better-auth は判定の関数を公開しないので、写した正規表現がずれていないことをここで確かめる)", async () => {
+    const parity = betterAuth({
+      baseURL: "https://auth.taimei-code.com",
+      secret: "redirect-guard-parity-secret-0123456789",
+      trustedOrigins: TRUSTED_ORIGINS.split(","),
+    });
+    const context = await parity.$context;
+    const relativeCases = callbackUrlCases.filter(({ url }) => url.startsWith("/"));
+    expect(relativeCases.length).toBeGreaterThan(5);
+
+    const mismatches = relativeCases.filter(
+      ({ url }) =>
+        (validateChallengeRedirect(url) === url) !==
+        context.isTrustedOrigin(url, { allowRelativePaths: true }),
+    );
+
+    expect(mismatches.map(({ name }) => name)).toEqual([]);
   });
 });

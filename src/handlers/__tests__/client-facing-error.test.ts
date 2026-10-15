@@ -1,13 +1,4 @@
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  spyOn,
-  test,
-} from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Cause, Schema } from "effect";
 import * as companyErrors from "../../company/errors";
 import * as invitationErrors from "../../invitation/errors";
@@ -17,7 +8,6 @@ import * as mfaErrors from "../../mfa/errors";
 import * as serviceKey from "../../service-key";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
-import { consoleSentryBackend, setSentryBackend } from "../../sentry";
 import { InvalidCode, Locked, MfaNotFound } from "../../mfa/errors";
 import { AlreadyExists } from "../../company/errors";
 import { NotFoundOrNotPending } from "../../invitation/errors";
@@ -259,31 +249,5 @@ describe("captureThrown", () => {
 
   test("戻り値は undefined で throw しない", () => {
     expect(captureThrown(new Error("x"), "better-auth")).toBeUndefined();
-  });
-});
-
-describe("captureThrown は観測自体の失敗を握る", () => {
-  const sentryFailure = new Error("sentry down");
-  beforeAll(() =>
-    setSentryBackend({
-      captureException: () => {
-        throw sentryFailure;
-      },
-      captureMessage: () => {},
-    }),
-  );
-  afterAll(() => setSentryBackend(consoleSentryBackend));
-
-  test("backend が throw しても captureThrown は throw せず、元の error と観測失敗を console.error に残す", () => {
-    const spy = spyOn(console, "error").mockImplementation(() => {});
-    try {
-      const original = new Error("x");
-      expect(() => captureThrown(original, "better-auth")).not.toThrow();
-      expect(spy).toHaveBeenCalledTimes(2);
-      expect(spy.mock.calls[0]).toEqual(["[better-auth]", original]);
-      expect(spy.mock.calls[1]?.[1]).toBe(sentryFailure);
-    } finally {
-      spy.mockRestore();
-    }
   });
 });
