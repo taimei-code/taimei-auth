@@ -1,12 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import { Monitor } from "lucide-react";
 
-import { authClient } from "../../auth/auth-client";
 import { AsyncSection } from "../../shared/AsyncSection";
-import { useAsyncLoad } from "../../shared/use-async-load";
 import { Separator } from "../../shared/ui/separator";
-
-type SessionList = Awaited<ReturnType<typeof authClient.listSessions>>["data"];
-type SessionItem = NonNullable<SessionList>[number];
+import { sessionsAtom } from "../account-atom";
 
 const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
   dateStyle: "medium",
@@ -14,14 +11,7 @@ const expiresAtFormatter = new Intl.DateTimeFormat("ja-JP", {
 });
 
 export const Sessions = () => {
-  const {
-    data: sessions,
-    loading,
-    errorMessage,
-  } = useAsyncLoad(
-    () => authClient.listSessions().then(({ data }) => data),
-    "セッションの取得に失敗しました",
-  );
+  const result = useAtomValue(sessionsAtom);
 
   return (
     <div>
@@ -32,29 +22,33 @@ export const Sessions = () => {
       <Separator className="my-6" />
 
       <AsyncSection
-        loading={loading}
-        errorMessage={errorMessage}
-        isEmpty={!sessions || sessions.length === 0}
-        emptyText="アクティブなセッションはありません。"
+        result={result}
+        failedText="セッションの取得に失敗しました"
+        empty={{
+          when: (sessions) => sessions.length === 0,
+          text: "アクティブなセッションはありません。",
+        }}
       >
-        <ul className="divide-y">
-          {sessions?.map((session: SessionItem) => (
-            <li key={session.id} className="flex items-start gap-4 py-4">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                <Monitor className="size-5 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium" translate="no">
-                  {session.userAgent || "Unknown device"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  IP: <span translate="no">{session.ipAddress || "—"}</span> ・ 期限:{" "}
-                  {expiresAtFormatter.format(new Date(session.expiresAt))}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        {(sessions) => (
+          <ul className="divide-y">
+            {sessions.map((session) => (
+              <li key={session.id} className="flex items-start gap-4 py-4">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
+                  <Monitor className="size-5 text-muted-foreground" aria-hidden="true" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium" translate="no">
+                    {session.userAgent || "Unknown device"}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    IP: <span translate="no">{session.ipAddress || "—"}</span> ・ 期限:{" "}
+                    {expiresAtFormatter.format(new Date(session.expiresAt))}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </AsyncSection>
 
       <p className="mt-6 text-xs text-muted-foreground">

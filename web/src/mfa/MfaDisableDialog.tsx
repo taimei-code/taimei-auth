@@ -2,7 +2,7 @@ import { Exit } from "effect";
 import { useState, type ReactNode } from "react";
 import { Loader2, ShieldOff } from "lucide-react";
 
-import { useRefreshAndWait } from "../shared/atom-runtime";
+import { useWaitForValue } from "../shared/atom-runtime";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -28,7 +28,7 @@ type Props = {
 
 export const MfaDisableDialog = ({ trigger }: Props) => {
   const [open, setOpen] = useState(false);
-  const refreshStatus = useRefreshAndWait(mfaStatusAtom);
+  const waitForStatus = useWaitForValue(mfaStatusAtom);
   const disableMfa = useDisableMfa();
 
   const entry = useMfaCodeEntry({
@@ -38,7 +38,7 @@ export const MfaDisableDialog = ({ trigger }: Props) => {
         Exit.match({
           onSuccess: () => {
             setOpen(false);
-            return notifyAfterRefresh(refreshStatus, {
+            return notifyAfterRefresh(waitForStatus, {
               done: "多要素認証 (MFA) を無効にしました。",
               staleShort: "多要素認証 (MFA) を無効にしました",
             }).then(() => null);

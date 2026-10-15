@@ -1,10 +1,7 @@
 import { useAtomValue } from "@effect/atom-react";
-import { AsyncResult } from "effect/reactivity";
-
 import { MfaSettingsItem } from "../../mfa/MfaSettingsItem";
 import { mfaStatusAtom } from "../../mfa/mfa-atom";
 import { AsyncSection } from "../../shared/AsyncSection";
-import { failedBeforeAnyValue } from "../../shared/atom-runtime";
 import { Badge } from "../../shared/ui/badge";
 import { Separator } from "../../shared/ui/separator";
 
@@ -12,7 +9,6 @@ const STATUS_UNAVAILABLE = "多要素認証 (MFA) の設定状態を取得でき
 
 export const Security = () => {
   const result = useAtomValue(mfaStatusAtom);
-  const status = AsyncResult.getOrElse(result, () => null);
 
   return (
     <div>
@@ -22,27 +18,24 @@ export const Security = () => {
       </div>
       <Separator className="my-6" />
 
-      <AsyncSection
-        loading={AsyncResult.isInitial(result)}
-        errorMessage={failedBeforeAnyValue(result) ? STATUS_UNAVAILABLE : null}
-        isEmpty={status === null}
-        emptyText={STATUS_UNAVAILABLE}
-      >
-        <ul className="divide-y">
-          {status && <MfaSettingsItem status={status} />}
+      <AsyncSection result={result} failedText={STATUS_UNAVAILABLE}>
+        {(status) => (
+          <ul className="divide-y">
+            <MfaSettingsItem status={status} />
 
-          <li className="flex items-start justify-between gap-4 py-5">
-            <div>
-              <p className="font-medium">Passkey</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                指紋・顔認証・PIN でログインできます
-              </p>
-            </div>
-            <Badge variant="secondary" className="shrink-0">
-              実装予定
-            </Badge>
-          </li>
-        </ul>
+            <li className="flex items-start justify-between gap-4 py-5">
+              <div>
+                <p className="font-medium">Passkey</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  指紋・顔認証・PIN でログインできます
+                </p>
+              </div>
+              <Badge variant="secondary" className="shrink-0">
+                実装予定
+              </Badge>
+            </li>
+          </ul>
+        )}
       </AsyncSection>
     </div>
   );

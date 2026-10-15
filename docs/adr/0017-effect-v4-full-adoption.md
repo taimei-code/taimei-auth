@@ -95,7 +95,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
   - 読み込み中と失敗の扱い忘れ: `AsyncResult.matchWithError` は初期・失敗・defect・成功のすべてを引数に要求し、失敗は型付きで component に届く
 - 移行: page 単位で進め、router は react-router のまま先にデータ層を移す。`useCurrentCompany()` の返り値と `refresh()` の Promise (`notifyAfterRefresh` が前提にする、再取得の完了で resolve し失敗で reject する契約) を保ったまま中身を atom にすれば、移していない画面も同じ状態を読む (#258 で確認)
 - 境界の検査の置き換え: 移行の最初の PR で、`effect-boundary.test.ts` の `web/src` の禁止と `biome.json` の web の `effect` ban を外す。代わりに、component と page から `*-api` と `fetch` を直接使わないことを静的 tripwire で固定する。`@effect/atom-react` は web 専用 devDependency として biome の web 専用 ban に登録する (`dependency-classification.test.ts`)
-- 今の形で残すもの (2026-10-11 追記、#264): better-auth の client が持つデータ (session の一覧、連携アカウント、`useSession()`) は Atom にせず、better-auth の client のまま読む。契約の外の API で、client が型の付いた値を返すためである。MFA チャレンジの取得は、router を TanStack Router に替えた時 (ADR-0002) に、状態の取得を route の `loader`、verify を契約の client の mutation に移した。古い応答を捨てる役目は、遷移の取り消しで loader を止める router が受け持つ。これで web の API の呼び方は契約の client だけになり、tripwire (`src/__tests__/web-data-access.test.ts`) の許可リストは無くなった
+- better-auth の client のデータ (2026-10-14 改訂): session の一覧と連携アカウントも Atom で読む (`web/src/account/account-atom.ts`)。#264 では、契約の外の API で client が型の付いた値を返すことを理由に client のまま読んだが、client は失敗を throw せず `{ data, error }` で返すため、画面が `data` だけを読むと API の失敗が「一覧が空」の表示になった。Atom は `error` を型付きの失敗 (`AuthClientReadFailed`) にする。`useSession()` は client が自分で更新を配る値なので、client の hook のまま読む。MFA チャレンジの取得は、router を TanStack Router に替えた時 (ADR-0002) に、状態の取得を route の `loader`、verify を契約の client の mutation に移した。古い応答を捨てる役目は、遷移の取り消しで loader を止める router が受け持つ。これで web の API の呼び方は契約の client だけになり、tripwire (`src/__tests__/web-data-access.test.ts`) の許可リストは無くなった
 
 ## SPA の API 契約 (2026-10-11 追記)
 

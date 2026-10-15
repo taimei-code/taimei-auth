@@ -11,7 +11,11 @@ import type { MfaCodeKind } from "@core/mfa/mfa-contract";
 
 export type { MfaCodeKind };
 
-export const mfaStatusAtom = SpaApiClient.query("mfa", "status", {});
+const MFA_STATUS_KEY = "mfa-status";
+
+export const mfaStatusAtom = SpaApiClient.query("mfa", "status", {
+  reactivityKeys: [MFA_STATUS_KEY],
+});
 const enrollMfaAtom = SpaApiClient.mutation("mfa", "enroll");
 const activateMfaAtom = SpaApiClient.mutation("mfa", "activate");
 const disableMfaAtom = SpaApiClient.mutation("mfa", "disable");
@@ -55,7 +59,8 @@ export const useActivateMfa = () => {
 
 export const useDisableMfa = () => {
   const disable = useAtomSet(disableMfaAtom, { mode: "promiseExit" });
-  return (payload: { code: string; kind: MfaCodeKind }) => disable({ payload });
+  return (payload: { code: string; kind: MfaCodeKind }) =>
+    disable({ payload, reactivityKeys: [MFA_STATUS_KEY] });
 };
 
 export const useVerifyMfaChallenge = () => {
