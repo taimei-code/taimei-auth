@@ -51,8 +51,9 @@ describe("公開している経路からはメールアドレスを変更でき�
       }),
     ));
 
-  test("service key で呼べる AuthService の RPC は verifySession と listCurrentCompanyMembers だけ (足す時は email を書き換えないか確かめ直す)", () => {
+  test("service key で呼べる AuthService の RPC は getSession と listCurrentCompanyMembers と verifySession だけ (足す時は email を書き換えないか確かめ直す)", () => {
     expect(Object.keys(AuthService.method).sort()).toEqual([
+      "getSession",
       "listCurrentCompanyMembers",
       "verifySession",
     ]);

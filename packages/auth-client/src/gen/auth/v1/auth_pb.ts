@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file auth/v1/auth.proto.
  */
 export const file_auth_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24iLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSKMAQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbhIoCgxjdXJyZW50X3JvbGUYAyABKA4yDS5hdXRoLnYxLlJvbGVIAIgBAUIPCg1fY3VycmVudF9yb2xlIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIloKDUNvbXBhbnlNZW1iZXISDwoHdXNlcl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEg0KBWVtYWlsGAMgASgJEhsKBHJvbGUYBCABKA4yDS5hdXRoLnYxLlJvbGUiOQogTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc1JlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSJuChtMaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzT2sSFwoKY29tcGFueV9pZBgBIAEoCUgAiAEBEicKB21lbWJlcnMYAiADKAsyFi5hdXRoLnYxLkNvbXBhbnlNZW1iZXJCDQoLX2NvbXBhbnlfaWQikAEKIUxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnNSZXNwb25zZRIyCgJvaxgBIAEoCzIkLmF1dGgudjEuTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc09rSAASLAoFZXJyb3IYAiABKAsyGy5hdXRoLnYxLlZlcmlmeVNlc3Npb25FcnJvckgAQgkKB291dGNvbWUiJwoWRmluZFVzZXJCeUVtYWlsUmVxdWVzdBINCgVlbWFpbBgBIAEoCSJEChdGaW5kVXNlckJ5RW1haWxSZXNwb25zZRIgCgR1c2VyGAEgASgLMg0uYXV0aC52MS5Vc2VySACIAQFCBwoFX3VzZXIiPwoXQ2hlY2tNZW1iZXJzaGlwc1JlcXVlc3QSEgoKY29tcGFueV9pZBgBIAEoCRIQCgh1c2VyX2lkcxgCIAMoCSJLChhDaGVja01lbWJlcnNoaXBzUmVzcG9uc2USFgoOY29tcGFueV9hY3RpdmUYASABKAgSFwoPbWVtYmVyX3VzZXJfaWRzGAIgAygJKswBCgZSZXN1bHQSFgoSUkVTVUxUX1VOU1BFQ0lGSUVEEAASDQoJUkVTVUxUX09LEAESHAoYUkVTVUxUX1NFU1NJT05fTk9UX0ZPVU5EEAISGgoWUkVTVUxUX1NFU1NJT05fRVhQSVJFRBADEhcKE1JFU1VMVF9VU0VSX0RFTEVURUQQBBIWChJSRVNVTFRfVVNFUl9MT0NLRUQQBRISCg5SRVNVTFRfUkVWT0tFRBAGEhwKGFJFU1VMVF9SRVZJU0lPTl9PVVREQVRFRBAHKk0KBFJvbGUSFAoQUk9MRV9VTlNQRUNJRklFRBAAEg4KClJPTEVfT1dORVIQARIOCgpST0xFX0FETUlOEAISDwoLUk9MRV9NRU1CRVIQAzLRAQoLQXV0aFNlcnZpY2USTgoNVmVyaWZ5U2Vzc2lvbhIdLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlcXVlc3QaHi5hdXRoLnYxLlZlcmlmeVNlc3Npb25SZXNwb25zZRJyChlMaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzEikuYXV0aC52MS5MaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzUmVxdWVzdBoqLmF1dGgudjEuTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc1Jlc3BvbnNlMmMKC1VzZXJTZXJ2aWNlElQKD0ZpbmRVc2VyQnlFbWFpbBIfLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVxdWVzdBogLmF1dGgudjEuRmluZFVzZXJCeUVtYWlsUmVzcG9uc2UyaQoOQ29tcGFueVNlcnZpY2USVwoQQ2hlY2tNZW1iZXJzaGlwcxIgLmF1dGgudjEuQ2hlY2tNZW1iZXJzaGlwc1JlcXVlc3QaIS5hdXRoLnYxLkNoZWNrTWVtYmVyc2hpcHNSZXNwb25zZWIGcHJvdG8z");
+  fileDesc("ChJhdXRoL3YxL2F1dGgucHJvdG8SB2F1dGgudjEingIKBFVzZXISCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRINCgVlbWFpbBgDIAEoCRIWCg5lbWFpbF92ZXJpZmllZBgEIAEoCBISCgVpbWFnZRgFIAEoCUgAiAEBEhIKCmNyZWF0ZWRfYXQYBiABKAkSEgoKdXBkYXRlZF9hdBgHIAEoCRIQCghyZXZpc2lvbhgIIAEoBRIfChJkZWZhdWx0X2NvbXBhbnlfaWQYDCABKAlIAYgBAUIICgZfaW1hZ2VCFQoTX2RlZmF1bHRfY29tcGFueV9pZEoECAkQDEoECA0QFVITYWlfY29uc2VudF9zZXR0aW5nc1IRYWN0aXZlX2FpX2NsaWVudHNSCXRlbmFudF9pZFIGbG9jYWxlIrcCCgdTZXNzaW9uEgoKAmlkGAEgASgJEhIKCmV4cGlyZXNfYXQYAyABKAkSFAoMc2Vzc2lvbl9raW5kGAcgASgJEhcKCmNvbXBhbnlfaWQYCCABKAlIAIgBAUINCgtfY29tcGFueV9pZEoECAIQA0oECAQQBUoECAUQBkoECAYQB0oECAkQH1IFdG9rZW5SB3VzZXJfaWRSCmlwX2FkZHJlc3NSCnVzZXJfYWdlbnRSBnNjb3Blc1IKYWN0b3JfdHlwZVIJY2xpZW50X2lkUg1pc3N1ZWRfZm9yX2FpUg9iZWNvbWVfYWRtaW5faWRSEG9yaWdpbmFsX3VzZXJfaWRSEGRlbGVnYXRpb25fc2NvcGVSCWlzc3VlZF9hdFILYXV0aF9tZXRob2RSDXVzZXJfcmV2aXNpb24iLQoUVmVyaWZ5U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSKMAQoPVmVyaWZ5U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbhIoCgxjdXJyZW50X3JvbGUYAyABKA4yDS5hdXRoLnYxLlJvbGVIAIgBAUIPCg1fY3VycmVudF9yb2xlIjUKElZlcmlmeVNlc3Npb25FcnJvchIfCgZyZWFzb24YASABKA4yDy5hdXRoLnYxLlJlc3VsdCJ4ChVWZXJpZnlTZXNzaW9uUmVzcG9uc2USJgoCb2sYASABKAsyGC5hdXRoLnYxLlZlcmlmeVNlc3Npb25Pa0gAEiwKBWVycm9yGAIgASgLMhsuYXV0aC52MS5WZXJpZnlTZXNzaW9uRXJyb3JIAEIJCgdvdXRjb21lIloKDUNvbXBhbnlNZW1iZXISDwoHdXNlcl9pZBgBIAEoCRIMCgRuYW1lGAIgASgJEg0KBWVtYWlsGAMgASgJEhsKBHJvbGUYBCABKA4yDS5hdXRoLnYxLlJvbGUiOQogTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc1JlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSJuChtMaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzT2sSFwoKY29tcGFueV9pZBgBIAEoCUgAiAEBEicKB21lbWJlcnMYAiADKAsyFi5hdXRoLnYxLkNvbXBhbnlNZW1iZXJCDQoLX2NvbXBhbnlfaWQikAEKIUxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnNSZXNwb25zZRIyCgJvaxgBIAEoCzIkLmF1dGgudjEuTGlzdEN1cnJlbnRDb21wYW55TWVtYmVyc09rSAASLAoFZXJyb3IYAiABKAsyGy5hdXRoLnYxLlZlcmlmeVNlc3Npb25FcnJvckgAQgkKB291dGNvbWUiKgoRR2V0U2Vzc2lvblJlcXVlc3QSFQoNc2Vzc2lvbl90b2tlbhgBIAEoCSKyAQoMR2V0U2Vzc2lvbk9rEhsKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXISIQoHc2Vzc2lvbhgCIAEoCzIQLmF1dGgudjEuU2Vzc2lvbhIoCgxjdXJyZW50X3JvbGUYAyABKA4yDS5hdXRoLnYxLlJvbGVIAIgBARInCgdtZW1iZXJzGAQgAygLMhYuYXV0aC52MS5Db21wYW55TWVtYmVyQg8KDV9jdXJyZW50X3JvbGUicgoSR2V0U2Vzc2lvblJlc3BvbnNlEiMKAm9rGAEgASgLMhUuYXV0aC52MS5HZXRTZXNzaW9uT2tIABIsCgVlcnJvchgCIAEoCzIbLmF1dGgudjEuVmVyaWZ5U2Vzc2lvbkVycm9ySABCCQoHb3V0Y29tZSInChZGaW5kVXNlckJ5RW1haWxSZXF1ZXN0Eg0KBWVtYWlsGAEgASgJIkQKF0ZpbmRVc2VyQnlFbWFpbFJlc3BvbnNlEiAKBHVzZXIYASABKAsyDS5hdXRoLnYxLlVzZXJIAIgBAUIHCgVfdXNlciI/ChdDaGVja01lbWJlcnNoaXBzUmVxdWVzdBISCgpjb21wYW55X2lkGAEgASgJEhAKCHVzZXJfaWRzGAIgAygJIksKGENoZWNrTWVtYmVyc2hpcHNSZXNwb25zZRIWCg5jb21wYW55X2FjdGl2ZRgBIAEoCBIXCg9tZW1iZXJfdXNlcl9pZHMYAiADKAkqzAEKBlJlc3VsdBIWChJSRVNVTFRfVU5TUEVDSUZJRUQQABINCglSRVNVTFRfT0sQARIcChhSRVNVTFRfU0VTU0lPTl9OT1RfRk9VTkQQAhIaChZSRVNVTFRfU0VTU0lPTl9FWFBJUkVEEAMSFwoTUkVTVUxUX1VTRVJfREVMRVRFRBAEEhYKElJFU1VMVF9VU0VSX0xPQ0tFRBAFEhIKDlJFU1VMVF9SRVZPS0VEEAYSHAoYUkVTVUxUX1JFVklTSU9OX09VVERBVEVEEAcqTQoEUm9sZRIUChBST0xFX1VOU1BFQ0lGSUVEEAASDgoKUk9MRV9PV05FUhABEg4KClJPTEVfQURNSU4QAhIPCgtST0xFX01FTUJFUhADMpgCCgtBdXRoU2VydmljZRJOCg1WZXJpZnlTZXNzaW9uEh0uYXV0aC52MS5WZXJpZnlTZXNzaW9uUmVxdWVzdBoeLmF1dGgudjEuVmVyaWZ5U2Vzc2lvblJlc3BvbnNlEnIKGUxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnMSKS5hdXRoLnYxLkxpc3RDdXJyZW50Q29tcGFueU1lbWJlcnNSZXF1ZXN0GiouYXV0aC52MS5MaXN0Q3VycmVudENvbXBhbnlNZW1iZXJzUmVzcG9uc2USRQoKR2V0U2Vzc2lvbhIaLmF1dGgudjEuR2V0U2Vzc2lvblJlcXVlc3QaGy5hdXRoLnYxLkdldFNlc3Npb25SZXNwb25zZTJjCgtVc2VyU2VydmljZRJUCg9GaW5kVXNlckJ5RW1haWwSHy5hdXRoLnYxLkZpbmRVc2VyQnlFbWFpbFJlcXVlc3QaIC5hdXRoLnYxLkZpbmRVc2VyQnlFbWFpbFJlc3BvbnNlMmkKDkNvbXBhbnlTZXJ2aWNlElcKEENoZWNrTWVtYmVyc2hpcHMSIC5hdXRoLnYxLkNoZWNrTWVtYmVyc2hpcHNSZXF1ZXN0GiEuYXV0aC52MS5DaGVja01lbWJlcnNoaXBzUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * 共通メッセージ
@@ -55,7 +55,7 @@ export type User = Message<"auth.v1.User"> & {
 
   /**
    * secondaryStorage 経由で cookieCache に乗る revision 値。
-   * VerifySession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
+   * VerifySession・ListCurrentCompanyMembers・GetSession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
    *
    * @generated from field: int32 revision = 8;
    */
@@ -278,7 +278,7 @@ export type ListCurrentCompanyMembersOk = Message<"auth.v1.ListCurrentCompanyMem
    * 一覧を引いた事業所の ID。VerifySession の User.default_company_id と同じ事業所を指す。
    * 空の時は事業所未選択か、user 行を読んだ後に現在の事業所から除名されたかで、members も空。
    * VerifySession の default_company_id と違う時は一覧を使わない (2 回の呼び出しの間に事業所が切り替わった)。
-   * auth-client の guard の listMembers はこの比較を行い、違えば失敗を返す。
+   * auth-client の guard の listMembers は、GetSession を持たない auth ホストに対してだけこの RPC を呼び、この比較を行って、違えば失敗を返す。
    *
    * @generated from field: optional string company_id = 1;
    */
@@ -329,6 +329,93 @@ export const ListCurrentCompanyMembersResponseSchema: GenMessage<ListCurrentComp
   messageDesc(file_auth_v1_auth, 9);
 
 /**
+ * VerifySession と ListCurrentCompanyMembers の結果を 1 回の呼び出しで返す。
+ *
+ * @generated from message auth.v1.GetSessionRequest
+ */
+export type GetSessionRequest = Message<"auth.v1.GetSessionRequest"> & {
+  /**
+   * 値は session cookie の値そのもの (署名を含む)。名前は VerifySessionRequest に揃えた。
+   *
+   * @generated from field: string session_token = 1;
+   */
+  sessionToken: string;
+};
+
+/**
+ * Describes the message auth.v1.GetSessionRequest.
+ * Use `create(GetSessionRequestSchema)` to create a new message.
+ */
+export const GetSessionRequestSchema: GenMessage<GetSessionRequest> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 10);
+
+/**
+ * @generated from message auth.v1.GetSessionOk
+ */
+export type GetSessionOk = Message<"auth.v1.GetSessionOk"> & {
+  /**
+   * @generated from field: auth.v1.User user = 1;
+   */
+  user?: User;
+
+  /**
+   * @generated from field: auth.v1.Session session = 2;
+   */
+  session?: Session;
+
+  /**
+   * 値の約束は VerifySessionOk.current_role と同じ。
+   *
+   * @generated from field: optional auth.v1.Role current_role = 3;
+   */
+  currentRole?: Role;
+
+  /**
+   * User.default_company_id の事業所のメンバー全員 (呼んだ本人を含む)。順序は ListCurrentCompanyMembersOk.members と同じ。
+   * default_company_id が空の時と、user 行を読んだ後に除名された時 (current_role が空) は空。
+   *
+   * @generated from field: repeated auth.v1.CompanyMember members = 4;
+   */
+  members: CompanyMember[];
+};
+
+/**
+ * Describes the message auth.v1.GetSessionOk.
+ * Use `create(GetSessionOkSchema)` to create a new message.
+ */
+export const GetSessionOkSchema: GenMessage<GetSessionOk> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 11);
+
+/**
+ * @generated from message auth.v1.GetSessionResponse
+ */
+export type GetSessionResponse = Message<"auth.v1.GetSessionResponse"> & {
+  /**
+   * @generated from oneof auth.v1.GetSessionResponse.outcome
+   */
+  outcome: {
+    /**
+     * @generated from field: auth.v1.GetSessionOk ok = 1;
+     */
+    value: GetSessionOk;
+    case: "ok";
+  } | {
+    /**
+     * @generated from field: auth.v1.VerifySessionError error = 2;
+     */
+    value: VerifySessionError;
+    case: "error";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message auth.v1.GetSessionResponse.
+ * Use `create(GetSessionResponseSchema)` to create a new message.
+ */
+export const GetSessionResponseSchema: GenMessage<GetSessionResponse> = /*@__PURE__*/
+  messageDesc(file_auth_v1_auth, 12);
+
+/**
  * UserService メッセージ
  *
  * @generated from message auth.v1.FindUserByEmailRequest
@@ -345,7 +432,7 @@ export type FindUserByEmailRequest = Message<"auth.v1.FindUserByEmailRequest"> &
  * Use `create(FindUserByEmailRequestSchema)` to create a new message.
  */
 export const FindUserByEmailRequestSchema: GenMessage<FindUserByEmailRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 10);
+  messageDesc(file_auth_v1_auth, 13);
 
 /**
  * @generated from message auth.v1.FindUserByEmailResponse
@@ -362,7 +449,7 @@ export type FindUserByEmailResponse = Message<"auth.v1.FindUserByEmailResponse">
  * Use `create(FindUserByEmailResponseSchema)` to create a new message.
  */
 export const FindUserByEmailResponseSchema: GenMessage<FindUserByEmailResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 11);
+  messageDesc(file_auth_v1_auth, 14);
 
 /**
  * CompanyService メッセージ
@@ -390,7 +477,7 @@ export type CheckMembershipsRequest = Message<"auth.v1.CheckMembershipsRequest">
  * Use `create(CheckMembershipsRequestSchema)` to create a new message.
  */
 export const CheckMembershipsRequestSchema: GenMessage<CheckMembershipsRequest> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 12);
+  messageDesc(file_auth_v1_auth, 15);
 
 /**
  * 名前・メールアドレスを返さない。consumer が既に知る id についての答えだけを返す。
@@ -418,10 +505,10 @@ export type CheckMembershipsResponse = Message<"auth.v1.CheckMembershipsResponse
  * Use `create(CheckMembershipsResponseSchema)` to create a new message.
  */
 export const CheckMembershipsResponseSchema: GenMessage<CheckMembershipsResponse> = /*@__PURE__*/
-  messageDesc(file_auth_v1_auth, 13);
+  messageDesc(file_auth_v1_auth, 16);
 
 /**
- * VerifySession の失敗理由を表現する enum。
+ * VerifySession・ListCurrentCompanyMembers・GetSession の失敗理由を表現する enum。
  * SESSION_EXPIRED / USER_LOCKED は現状到達不能、将来
  * session.expires_at による期限切れ判定 / user lock を実装した時点で活性化する。
  *
@@ -527,6 +614,14 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof ListCurrentCompanyMembersRequestSchema;
     output: typeof ListCurrentCompanyMembersResponseSchema;
+  },
+  /**
+   * @generated from rpc auth.v1.AuthService.GetSession
+   */
+  getSession: {
+    methodKind: "unary";
+    input: typeof GetSessionRequestSchema;
+    output: typeof GetSessionResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_auth_v1_auth, 0);

@@ -4,6 +4,7 @@ package auth.v1;
 service AuthService {
   rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
   rpc ListCurrentCompanyMembers(ListCurrentCompanyMembersRequest) returns (ListCurrentCompanyMembersResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
 }
 
 service UserService {
@@ -14,7 +15,7 @@ service CompanyService {
   rpc CheckMemberships(CheckMembershipsRequest) returns (CheckMembershipsResponse);
 }
 
-// VerifySession の失敗理由を表現する enum。
+// VerifySession・ListCurrentCompanyMembers・GetSession の失敗理由を表現する enum。
 // SESSION_EXPIRED / USER_LOCKED は現状到達不能、将来
 // session.expires_at による期限切れ判定 / user lock を実装した時点で活性化する。
 enum Result {
@@ -46,7 +47,7 @@ message User {
   string created_at = 6;
   string updated_at = 7;
   // secondaryStorage 経由で cookieCache に乗る revision 値。
-  // VerifySession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
+  // VerifySession・ListCurrentCompanyMembers・GetSession で DB の最新値と比較し、不一致なら REVISION_OUTDATED を返す。
   int32 revision = 8;
 
   // この user の現在の事業所 ID。SDK の companyId はこの値を返す。
@@ -132,7 +133,7 @@ message ListCurrentCompanyMembersOk {
   // 一覧を引いた事業所の ID。VerifySession の User.default_company_id と同じ事業所を指す。
   // 空の時は事業所未選択か、user 行を読んだ後に現在の事業所から除名されたかで、members も空。
   // VerifySession の default_company_id と違う時は一覧を使わない (2 回の呼び出しの間に事業所が切り替わった)。
-  // auth-client の guard の listMembers はこの比較を行い、違えば失敗を返す。
+  // auth-client の guard の listMembers は、GetSession を持たない auth ホストに対してだけこの RPC を呼び、この比較を行って、違えば失敗を返す。
   optional string company_id = 1;
   // company_id の事業所のメンバー全員 (呼んだ本人を含む)。加入の古い順で、加入日時が同じ人は membership の ID 順。
   repeated CompanyMember members = 2;
@@ -141,6 +142,31 @@ message ListCurrentCompanyMembersOk {
 message ListCurrentCompanyMembersResponse {
   oneof outcome {
     ListCurrentCompanyMembersOk ok = 1;
+    VerifySessionError error = 2;
+  }
+}
+
+// VerifySession と ListCurrentCompanyMembers の結果を 1 回の呼び出しで返す。
+message GetSessionRequest {
+  // 値は session cookie の値そのもの (署名を含む)。名前は VerifySessionRequest に揃えた。
+  string session_token = 1;
+}
+
+message GetSessionOk {
+  User user = 1;
+  Session session = 2;
+
+  // 値の約束は VerifySessionOk.current_role と同じ。
+  optional Role current_role = 3;
+
+  // User.default_company_id の事業所のメンバー全員 (呼んだ本人を含む)。順序は ListCurrentCompanyMembersOk.members と同じ。
+  // default_company_id が空の時と、user 行を読んだ後に除名された時 (current_role が空) は空。
+  repeated CompanyMember members = 4;
+}
+
+message GetSessionResponse {
+  oneof outcome {
+    GetSessionOk ok = 1;
     VerifySessionError error = 2;
   }
 }
