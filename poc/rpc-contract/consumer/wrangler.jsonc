@@ -5,6 +5,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "services": [
     { "binding": "AUTH", "service": "taimei-auth" },
-    { "binding": "AUTH_RPC", "service": "taimei-auth", "entrypoint": "AuthRpc" }
+    { "binding": "AUTH_RPC", "service": "taimei-auth", "entrypoint": "AuthRpc" },
+    { "binding": "AUTH_CONSUMER", "service": "taimei-auth", "entrypoint": "ConsumerRpc" },
+    { "binding": "AUTH_READ", "service": "poc-auth-read", "entrypoint": "ReadRpc" }
   ]
 }

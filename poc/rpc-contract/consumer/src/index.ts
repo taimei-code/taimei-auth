@@ -6,6 +6,8 @@ import {
 } from "@taimei-code/auth-client";
 import type { AuthRpc } from "../../../../src/worker";
 import { callC } from "./c-client";
+import { type FlowEnv, flows, seedReadModel } from "./flows";
+import { issue, verify } from "./v5-token";
 
 type Env = {
   AUTH: Fetcher;
@@ -50,6 +52,48 @@ export default {
     const token = url.searchParams.get("token") ?? "";
     const mode = (url.searchParams.get("mode") ?? "a") as keyof typeof callers;
 
+    const cookieHeader = url.searchParams.get("cookie") ?? "";
+    const flowMode = (url.searchParams.get("mode") ?? "v1") as keyof typeof flows;
+    const flowEnv = env as unknown as FlowEnv;
+    if (url.pathname === "/result") {
+      return Response.json(await flows[flowMode](flowEnv, cookieHeader));
+    }
+    if (url.pathname === "/consumer-bad-input") {
+      const loose = flowEnv.AUTH_CONSUMER as unknown as { getSession: (v: unknown) => Promise<unknown> };
+      const results = [];
+      for (const value of [12345, { toString: () => cookieHeader }, "x".repeat(9000)]) {
+        results.push(await loose.getSession(value).then((v) => ({ value: v }), (e: unknown) => ({ error: String(e) })));
+      }
+      return Response.json(results);
+    }
+    if (url.pathname === "/seed") {
+      return Response.json(await seedReadModel(flowEnv, cookieHeader));
+    }
+    if (url.pathname === "/flow-bench") {
+      const n = Number(url.searchParams.get("n") ?? "100");
+      const samples: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const start = performance.now();
+        await flows[flowMode](flowEnv, cookieHeader);
+        samples.push(performance.now() - start);
+      }
+      samples.sort((x, y) => x - y);
+      return Response.json({ mode: flowMode, n, p50: nearestRank(samples, 50), p95: nearestRank(samples, 95) });
+    }
+    if (url.pathname === "/v5-issue") {
+      const claims = JSON.parse(url.searchParams.get("claims") ?? "{}");
+      return Response.json({ token: await issue(claims) });
+    }
+    if (url.pathname === "/v5-verify") {
+      return Response.json(await verify(url.searchParams.get("token") ?? "", Math.floor(Date.now() / 1000)));
+    }
+    if (url.pathname === "/v5-bench") {
+      const n = Number(url.searchParams.get("n") ?? "100");
+      const token = url.searchParams.get("token") ?? "";
+      let last: unknown;
+      for (let i = 0; i < n; i++) last = await verify(token, Math.floor(Date.now() / 1000));
+      return Response.json({ n, last });
+    }
     if (url.pathname === "/guard") {
       const guard = createAuthGuard({ client: clientOf(env, false), getSessionToken: async () => token });
       return Response.json(await guard.getSession());
