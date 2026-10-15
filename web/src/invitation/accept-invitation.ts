@@ -42,7 +42,6 @@ const outcomeOfAccepted = (
           "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
         ExpiredOrUsed: "この招待は期限切れか、既に使用されています。",
         NotFound: "招待が見つかりません。",
-        Unauthorized: ACCEPT_FAILED,
       },
       ACCEPT_FAILED,
     ),

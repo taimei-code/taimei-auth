@@ -26,7 +26,6 @@ export const DangerZone = () => {
           {
             LastOwner: "所有者として残っている事業所があります。先に委譲または削除してください。",
             NotFound: DELETE_FAILED,
-            Unauthorized: DELETE_FAILED,
           },
           DELETE_FAILED,
         ),

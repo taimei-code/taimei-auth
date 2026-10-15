@@ -53,7 +53,6 @@ export const CompanySettingsForm = ({ membership, isLastCompany }: Props) => {
                 {
                   Forbidden: "編集する権限がありません。",
                   NotFound: UPDATE_FAILED,
-                  Unauthorized: UPDATE_FAILED,
                 },
                 UPDATE_FAILED,
               ),
@@ -128,7 +127,6 @@ const DeleteCompanySection = ({
               {
                 Forbidden: "この事業所を削除する権限がないか、既に削除されています。",
                 LastOwner: DELETE_FAILED,
-                Unauthorized: DELETE_FAILED,
               },
               DELETE_FAILED,
             ),

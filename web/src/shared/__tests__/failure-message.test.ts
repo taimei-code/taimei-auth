@@ -6,7 +6,7 @@ import { Unauthorized } from "@core/membership/guard/errors";
 
 import { failureMessage, hasFailureTag } from "../failure-message";
 
-const MESSAGES = { LastOwner: "最後のオーナーです", Unauthorized: "ログインし直してください" };
+const MESSAGES = { LastOwner: "最後のオーナーです" };
 
 describe("failureMessage", () => {
   test("宣言した失敗は、表のその _tag の文言を返す", () => {
@@ -22,12 +22,18 @@ describe("failureMessage", () => {
   });
 
   test("宣言した失敗の _tag を表から欠くと型エラーになる", () => {
+    const cause: Cause.Cause<LastOwner | Unauthorized> = Cause.fail(new LastOwner());
+
+    // @ts-expect-error LastOwner の文言が無い
+    const message = failureMessage(cause, {}, "失敗しました");
+
+    expect(message).toBe("失敗しました");
+  });
+
+  test("Unauthorized は表に書かず、受けた時は既定の文言を返す (SPA の API の client がログイン画面へ移すため)", () => {
     const cause: Cause.Cause<LastOwner | Unauthorized> = Cause.fail(new Unauthorized());
 
-    // @ts-expect-error Unauthorized の文言が無い
-    const message = failureMessage(cause, { LastOwner: "最後のオーナーです" }, "失敗しました");
-
-    expect(message).toBeUndefined();
+    expect(failureMessage(cause, MESSAGES, "失敗しました")).toBe("失敗しました");
   });
 });
 
