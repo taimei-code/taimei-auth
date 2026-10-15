@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Layer } from "effect";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import {
   authFailing,
   membershipRepoLayer,
@@ -11,7 +11,7 @@ import { authEntryRedirectProgram } from "../auth-entry-redirect";
 import { CONTINUE } from "../run-route";
 import { runProgramInRoute } from "./run-program-in-route";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 
 describe("authEntryRedirectProgram は認可でなく利便のための redirect なので、一時的な障害では 5xx にせず通す", () => {
   test("AuthApi が AuthApiError → CONTINUE (次の handler へ進む) と Sentry warning", async () => {

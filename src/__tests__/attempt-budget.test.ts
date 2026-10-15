@@ -8,7 +8,7 @@ import {
 } from "../attempt-budget";
 import type { TtlStore } from "../ttl-store-service";
 import { SentryLive, type SentryService } from "../sentry";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "./test-layers";
 
 type BudgetInput = Parameters<typeof spendAttemptBudgetFailOpen>[0];
@@ -52,7 +52,7 @@ describe.each([
     Result.succeed(undefined),
   ],
 ] as const)("%s", (_, spend, whenUncountable, whenAtLimit) => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
 
   test("計数不能 (TtlStoreError) は fail-closed なら拒否、fail-open なら通し、Sentry に component 付き warning で 1 回記録する", async () => {
     const before = captured.length;

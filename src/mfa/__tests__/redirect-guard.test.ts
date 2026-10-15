@@ -1,27 +1,15 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import {
-  SentryLive,
-  consoleSentryBackend,
-  setSentryBackend,
-  type CaptureContext,
-} from "../../sentry";
+import { SentryLive } from "../../sentry";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { FALLBACK_REDIRECT, validateChallengeRedirect as validateEffect } from "../redirect-guard";
 import maliciousUrlsRaw from "./fixtures/malicious-callback-urls.json";
 
 type CallbackUrlCase = { name: string; url: string; expected: boolean };
 const callbackUrlCases = maliciousUrlsRaw as CallbackUrlCase[];
 
-type Captured = { message: string; context?: CaptureContext };
-
-let captured: Captured[] = [];
-
-const spyBackend = {
-  captureException: () => {},
-  captureMessage: (message: string, context?: CaptureContext) => {
-    captured.push({ message, context });
-  },
-};
+const sentry = recordSentry();
+const captured = sentry.messages;
 
 const validateChallengeRedirect = (raw: string | undefined): string =>
   Effect.runSync(Effect.provide(validateEffect(raw), SentryLive));
@@ -34,13 +22,11 @@ const rejectionReasons = (): (string | undefined)[] => captured.map((c) => c.con
 
 describe("validateChallengeRedirect", () => {
   beforeEach(() => {
-    captured = [];
-    setSentryBackend(spyBackend);
+    sentry.reset();
     process.env.AUTH_TRUSTED_ORIGINS = TRUSTED_ORIGINS;
   });
 
   afterAll(() => {
-    setSentryBackend(consoleSentryBackend);
     if (originalTrustedOrigins === undefined) delete process.env.AUTH_TRUSTED_ORIGINS;
     else process.env.AUTH_TRUSTED_ORIGINS = originalTrustedOrigins;
   });

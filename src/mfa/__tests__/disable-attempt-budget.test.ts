@@ -4,13 +4,13 @@ import { TtlStore } from "../../ttl-store-service";
 import { TtlStoreError } from "../../errors";
 import { partial } from "../../__tests__/live-runner";
 import { SentryLive } from "../../sentry";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { failingTtlStoreLayer, ttlStoreReturning } from "../../__tests__/test-layers";
 import { resetDisableAttempts, spendDisableAttempt } from "../disable-attempt-budget";
 import { Locked } from "../errors";
 
 describe("spendDisableAttempt", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const spend = (ttlStore: Layer.Layer<TtlStore>) =>
     Effect.runPromise(
       Effect.provide(
@@ -49,7 +49,7 @@ describe("resetDisableAttempts", () => {
       delete: () => Effect.fail(new TtlStoreError({ cause: new Error("test: delete failed") })),
     }),
   );
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
 
   test("消し損ねは失敗にせず Sentry に残す (counter は TTL で消え、次の枠が狭いままになるだけ)", async () => {
     const before = captured.length;

@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mountSpaApi } from "../spa-http-api";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { JSON_HEADERS } from "../client-facing-error";
 import { buildTestApp, requestApp, responseJson } from "./helpers";
 

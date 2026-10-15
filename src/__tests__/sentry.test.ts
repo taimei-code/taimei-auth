@@ -8,10 +8,10 @@ import {
   setSentryBackend,
 } from "../sentry";
 import { grepFiles } from "./source-scan";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 describe("captureCauseAs", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const run = <A>(program: Effect.Effect<A, never, SentryService>) =>
     Effect.runPromise(Effect.exit(program).pipe(Effect.provide(SentryLive)));
 

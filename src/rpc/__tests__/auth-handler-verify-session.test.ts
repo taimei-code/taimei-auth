@@ -15,7 +15,7 @@ import {
 } from "../../membership/__tests__/test-layers";
 import { Role as ProtoRole, Result, type VerifySessionResponse } from "../../gen/auth/v1/auth_pb";
 import { SentryLive } from "../../sentry";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { verifySessionProgram } from "../auth-handler";
 
 const mockSignOut = mock();
@@ -145,7 +145,7 @@ describe("verifySession currentRole の前提と失敗", () => {
 });
 
 describe("verifySession outcome", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   test("returns SESSION_NOT_FOUND when getSession returns null", async () => {
     const res = await run(
       Layer.mergeAll(

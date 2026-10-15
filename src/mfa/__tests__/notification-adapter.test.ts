@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { drained, partial } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { type Background, BackgroundLive } from "../../background";
 import { EmailSender } from "../../email/ports";
 import { EmailError } from "../../errors";
@@ -13,7 +13,7 @@ import {
 } from "../notification-adapter";
 
 describe("MFA 通知メールの失敗", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const cause = new Error("resend down");
   const failingSender = Layer.succeed(
     EmailSender,

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { buildApp } from "../app";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 const originalEnv = { ...process.env };
 const app = buildApp({ mountStatic: () => {} });
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 const UNKNOWN_RPC = "http://localhost/rpc/auth.v1.AuthService/Nope";
 
 const request = (headers: Record<string, string> = {}) => app.request(UNKNOWN_RPC, { headers });

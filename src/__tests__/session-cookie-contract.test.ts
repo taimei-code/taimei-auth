@@ -12,7 +12,7 @@ import {
   loginWithMagicLink,
   SIGNED_COOKIE_VALUE,
   setCookieValue,
-} from "../mfa/__tests__/helpers";
+} from "./session-helpers";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 

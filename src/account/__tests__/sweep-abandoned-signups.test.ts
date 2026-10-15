@@ -7,7 +7,7 @@ import { storedSessionOf, storedSessionsOf } from "../../__tests__/test-ttl-stor
 import { DbError } from "../../errors";
 import { MembershipRepo } from "../../membership/ports";
 import { MembershipRepoLive } from "../../membership/wiring";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { UserRepo } from "../ports";
 import { UserRepoLive } from "../wiring";
 import { sweepAbandonedSignups } from "../sweep-abandoned-signups";

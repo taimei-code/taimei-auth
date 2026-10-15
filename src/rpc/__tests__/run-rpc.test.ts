@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { Effect } from "effect";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { InvalidArgument, NotFound } from "../../membership/guard/errors";
 import { runRpc, statusToCode } from "../run-rpc";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 
 const rejectsWith = async (p: Promise<unknown>) => {
   try {

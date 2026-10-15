@@ -7,7 +7,7 @@ import { runProgramInRoute } from "../handlers/__tests__/run-program-in-route";
 import { loginShortcut, loginShortcutProgram } from "../handlers/login-shortcut";
 import { authFailing, authLayer, sessionOf } from "../membership/__tests__/test-layers";
 import { SentryLive } from "../sentry";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 const ORIGIN = "http://auth.taimei-code.com";
 
@@ -82,7 +82,7 @@ describe("loginShortcut (認証済み)", () => {
 });
 
 describe("loginShortcut (fail-open)", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   beforeEach(() => {
     captured.length = 0;
   });

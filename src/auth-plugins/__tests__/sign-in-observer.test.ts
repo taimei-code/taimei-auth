@@ -1,25 +1,27 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import {
-  actorOf,
   cleanupIssuedChallenges,
-  createSessionFor,
   enableMfaFor,
   issueTestChallenge,
-  loginWithMagicLink,
   secretFromTotpUri,
-  TEST_CLIENT_IP,
-  TEST_USER_AGENT,
   totpCode,
 } from "../../mfa/__tests__/helpers";
+import {
+  actorOf,
+  createSessionFor,
+  loginWithMagicLink,
+  TEST_CLIENT_IP,
+  TEST_USER_AGENT,
+} from "../../__tests__/session-helpers";
 import { WELCOME_EMAIL_LOG } from "../../email/local-delivery-log";
 import { activate, completeLoginChallenge, enroll } from "../../mfa/totp";
 import { NEW_USER_THRESHOLD_MS } from "../sign-in-observer";
-import { runTest, observing, auditRowsFor } from "../../__tests__/live-runner";
+import { dbTest, observing, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
 const P = "mfa-observer-";
-const run = runTest(P);
+const { run } = dbTest(P);
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 

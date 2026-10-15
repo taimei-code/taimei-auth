@@ -29,7 +29,7 @@
 ## test
 
 - domain のテストは `<domain>/__tests__/` に、Transport のテストは `handlers/__tests__/` / `rpc/__tests__/` に、複数 domain にまたがる invariant は `src/__tests__/` に置く。
-- DB に接触するテストは `TestDb` service を `yield*` し、`@/db/*` を runtime import しない (型 import は可)。テスト本体は `runTest(prefix)` に渡す 1 つの `Effect.gen` にし、失敗は `Effect.flip` / `Effect.exit` で failure class として観測する。DB への接触は fixture の setup と事後状態の観測に限り、production 境界の例外の根拠にしない。
+- DB に接触するテストは `TestDb` service を `yield*` し、`@/db/*` を runtime import しない (型 import は可)。テスト本体は `src/__tests__/live-runner.ts` の `dbTest(prefix)` が返す `run` に渡す 1 つの `Effect.gen` にし (後片付けは同じく返る `cleanup`)、失敗は `Effect.flip` / `Effect.exit` で failure class として観測する。DB への接触は fixture の setup と事後状態の観測に限り、production 境界の例外の根拠にしない。
 - `@core` の公開面を変えたら `src/__tests__/web-shared-core-runtime-free.test.ts` を実行する。workerd 固有の挙動は local のテストで完了扱いにせず、manual regression か `wrangler dev --remote` で確認する。
 
 ## gotcha

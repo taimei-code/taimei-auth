@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import { partial } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { AuthApiError } from "../../errors";
 import { membershipRepoFailing, signedIn } from "../../membership/__tests__/test-layers";
 import { MembershipRepo } from "../../membership/ports";
@@ -11,7 +11,7 @@ import { JSON_HEADERS } from "../client-facing-error";
 import { mountSpaApi, runtimeServices } from "../spa-http-api";
 import { buildAppWith, buildTestApp, SESSION_COOKIE_HEADER } from "./helpers";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 const boom = new Error("boom");
 const dbCause = new Error("db timeout");
 const authCause = new Error("auth down");

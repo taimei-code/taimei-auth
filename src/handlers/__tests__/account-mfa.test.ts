@@ -1,19 +1,19 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { buildAppWith, requestApp, responseJson } from "./helpers";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import {
   countMfaTotpRows,
   countRecoveryCodeRows,
-  createSessionFor,
   enableMfaFor,
   findMfaTotpRow,
   secretFromTotpUri,
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
-import { authApiLive } from "../../auth-wiring";
+import { authApiWith } from "../../__tests__/test-layers";
 import { DISABLE_ATTEMPT_LIMIT } from "../../mfa/disable-attempt-budget";
 import { MfaEnrollment } from "../../mfa/mfa-contract";
 import { dbTest } from "../../__tests__/live-runner";
@@ -39,7 +39,7 @@ const postJson = (app: Hono, path: string, headers: Headers, body?: unknown) =>
 const FORWARDED_COOKIES = ["a=1; Path=/; HttpOnly", "b=2; Path=/; HttpOnly"];
 
 const appWithAuthApi = (overrides: Partial<AuthApi["Service"]>): Hono =>
-  buildAppWith(Layer.succeed(AuthApi, AuthApi.of({ ...authApiLive, ...overrides })));
+  buildAppWith(authApiWith(() => overrides));
 
 const appForwardingCookies = () =>
   appWithAuthApi({

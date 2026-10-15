@@ -20,7 +20,7 @@ import {
   Result,
 } from "../../gen/auth/v1/auth_pb";
 import { SentryLive } from "../../sentry";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { listCurrentCompanyMembersProgram } from "../auth-handler";
 
 const mockSignOut = mock();
@@ -139,7 +139,7 @@ describe("ListCurrentCompanyMembers の一覧", () => {
 });
 
 describe("ListCurrentCompanyMembers のセッションの判定", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
 
   test("revision 不一致の signOut が失敗しても REVISION_OUTDATED を返し、Sentry にはこの RPC の名前で送る", async () => {
     const cause = new Error("ttl store down");

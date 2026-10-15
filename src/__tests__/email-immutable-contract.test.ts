@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { auth } from "../auth";
 import { tryAuthApi } from "../errors";
 import { AuthService, CompanyService, UserService } from "../gen/auth/v1/auth_pb";
-import { createSessionFor } from "../mfa/__tests__/helpers";
+import { createSessionFor } from "./session-helpers";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 

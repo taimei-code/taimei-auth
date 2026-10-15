@@ -8,7 +8,7 @@ import {
   TEST_PREFIX,
 } from "../../handlers/__tests__/helpers";
 import { auditRowsFor, dbTest, drained, expectFailure } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
 import { getAppUrl } from "../../email/client";
 import { tryAuthApi } from "../../errors";
@@ -268,7 +268,7 @@ const seedOwnerCompany = (key: string) =>
   });
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 

@@ -9,7 +9,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { auth } from "../auth";
 import { DbError } from "../errors";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 const thrown = new Error("boom");
 
@@ -92,7 +92,7 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
 });
 
 describe("src/auth.ts の onAPIError.onError", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const ctx = {} as AuthContext;
   const onAPIError = (auth.options as BetterAuthOptions).onAPIError;
   const onError = (error: unknown): unknown => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { requestApp, responseJson } from "../handlers/__tests__/helpers";
-import { createSessionFor } from "../mfa/__tests__/helpers";
+import { createSessionFor } from "./session-helpers";
 import { Effect } from "effect";
 import { app } from "../index";
 import { dbTest } from "./live-runner";

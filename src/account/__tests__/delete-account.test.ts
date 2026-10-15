@@ -2,8 +2,8 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Deferred, Effect, Exit, Layer, Ref } from "effect";
 import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { createSessionFor, sessionUserIdOf } from "../../mfa/__tests__/helpers";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { createSessionFor, sessionUserIdOf } from "../../__tests__/session-helpers";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import {
   auditLogWith,
   failingSessionDeletion,
@@ -298,7 +298,7 @@ describe("退会と事業所追加の race", () => {
 });
 
 describe("TTL store の session 削除", () => {
-  const sentry = recordSentryExceptions();
+  const { exceptions: sentry } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 

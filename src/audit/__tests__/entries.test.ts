@@ -14,7 +14,8 @@ import { revokeInvitation } from "../../invitation/revoke";
 import { changeRole } from "../../membership/change-role";
 import { removeMember } from "../../membership/remove";
 import { transferOwnership } from "../../membership/transfer-ownership";
-import { enableMfaFor, loginWithMagicLink, totpCode } from "../../mfa/__tests__/helpers";
+import { enableMfaFor, totpCode } from "../../mfa/__tests__/helpers";
+import { loginWithMagicLink } from "../../__tests__/session-helpers";
 import { disable } from "../../mfa/totp";
 import type { AppServices } from "../../runtime";
 

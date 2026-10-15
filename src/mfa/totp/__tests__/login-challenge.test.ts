@@ -1,26 +1,26 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
-import { AuthApi } from "../../../auth-service";
-import { authApiLive } from "../../../auth-wiring";
+import { authApiWith } from "../../../__tests__/test-layers";
 import { AuthApiError, TtlStoreError } from "../../../errors";
 import { TtlStore } from "../../../ttl-store-service";
-import { runTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
+import { dbTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
-  browserCookieHeaders,
   cleanupIssuedChallenges,
   enableMfaFor,
-  installSentryRecorder,
   issueTestChallenge,
+  totpCode,
+  wrongTotpCode,
+} from "../../__tests__/helpers";
+import {
+  browserCookieHeaders,
   requestHeaders,
   tamperCookieSignature,
   TEST_CLIENT_IP,
   TEST_USER_AGENT,
-  totpCode,
-  wrongTotpCode,
-} from "../../__tests__/helpers";
+} from "../../../__tests__/session-helpers";
 import { ChallengeExpired, InvalidCode, Locked } from "../../errors";
 import { completeLoginChallenge } from "../complete-login-challenge";
 import {
@@ -33,10 +33,11 @@ import {
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 import { testKvStore } from "../../../__tests__/test-ttl-store";
+import { recordSentry } from "../../../__tests__/sentry-recorder";
 
 const P = "mfa-lc-";
-const run = runTest(P);
-const sentry = installSentryRecorder();
+const { run } = dbTest(P);
+const sentry = recordSentry();
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
@@ -61,7 +62,7 @@ const sendWrongTotpCodes = (headers: Headers, secret: string, times: number) =>
 
 describe("ログインチャレンジ", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
-  afterAll(() => cleanupAll().then(() => sentry.restore()));
+  afterAll(() => cleanupAll());
 
   test("AC-133 発行: Set-Cookie 属性と pending、改ざん・欠落は false", () =>
     run(
@@ -374,7 +375,9 @@ describe("ログインチャレンジ", () => {
 
         expectFailure(rejected, ChallengeExpired);
         expect(
-          sentry.exceptions.filter((e) => e.context?.tags?.component === "mfa-login-challenge"),
+          sentry.exceptions.filter(
+            ([, context]) => context?.tags?.component === "mfa-login-challenge",
+          ),
         ).toHaveLength(1);
       }),
     ));
@@ -467,10 +470,7 @@ describe("ログインチャレンジ", () => {
         const sessionStoreDown = new AuthApiError({
           cause: new Error("session store unavailable"),
         });
-        const failingAuthApi = Layer.succeed(
-          AuthApi,
-          AuthApi.of({ ...authApiLive, issueSession: () => sessionStoreDown }),
-        );
+        const failingAuthApi = authApiWith(() => ({ issueSession: () => sessionStoreDown }));
 
         const failed = yield* Effect.flip(
           completeLoginChallenge(challenge.headers, {

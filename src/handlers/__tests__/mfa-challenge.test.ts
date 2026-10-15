@@ -6,19 +6,18 @@ import {
   cleanupIssuedChallenges,
   enableMfaFor,
   issueTestChallenge,
-  requestHeaders,
-  tamperCookieSignature,
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
+import { requestHeaders, tamperCookieSignature } from "../../__tests__/session-helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { runTest } from "../../__tests__/live-runner";
+import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mountSpaApi } from "../spa-http-api";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-h-challenge-";
-const run = runTest(P);
+const { run } = dbTest(P);
 
 const buildApp = (): Hono => {
   const app = new Hono();

@@ -15,7 +15,7 @@ import * as membershipErrors from "../../membership/errors";
 import * as guardErrors from "../../membership/guard/errors";
 import * as mfaErrors from "../../mfa/errors";
 import * as serviceKey from "../../service-key";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { consoleSentryBackend, setSentryBackend } from "../../sentry";
 import { InvalidCode, Locked, MfaNotFound } from "../../mfa/errors";
@@ -165,7 +165,7 @@ describe("失敗の class の応答への直列化", () => {
 });
 
 describe("settleCause", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const report = { label: "[t]", tags: { handler: "t" } };
   let spy: ReturnType<typeof spyOn>;
   beforeEach(() => {
@@ -216,7 +216,7 @@ describe("settleCause", () => {
 });
 
 describe("captureThrown", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const tags = { component: "better-auth" };
 
   test("boundary error は cause そのものを warning で送る (grouping を保つ)", () => {

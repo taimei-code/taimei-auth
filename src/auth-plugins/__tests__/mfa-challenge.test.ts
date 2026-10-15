@@ -1,19 +1,16 @@
 import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
 import { auth } from "../../auth";
-import { AuthApi } from "../../auth-service";
 import { AuthApiError, DbError, TtlStoreError } from "../../errors";
+import { cleanupIssuedChallenges, enableMfaFor } from "../../mfa/__tests__/helpers";
 import {
   browserCookieHeaders,
-  cleanupIssuedChallenges,
   countLiveSessions,
-  enableMfaFor,
   followMagicLink,
-  installSentryRecorder,
   issuedSessionCookieCount,
   loginWithMagicLink,
   requestMagicLink,
-} from "../../mfa/__tests__/helpers";
+} from "../../__tests__/session-helpers";
 import {
   attemptsKey,
   challengeKey,
@@ -25,22 +22,24 @@ import { withWaitUntil } from "../../background";
 import { type AppRuntime, getRuntime } from "../../runtime";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
-import { auditRowsFor, partial, runTest, withSpy } from "../../__tests__/live-runner";
+import { auditRowsFor, partial, dbTest, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS } from "../mfa-challenge";
 import { primaryAuth } from "../primary-auth";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
 import { testKvStore, testTtlStore } from "../../__tests__/test-ttl-store";
+import { recordSentry } from "../../__tests__/sentry-recorder";
+import { authApiWith } from "../../__tests__/test-layers";
 
 const P = "mfa-plugin-";
-const run = runTest(P);
-const sentry = installSentryRecorder();
+const { run } = dbTest(P);
+const sentry = recordSentry();
 const killSwitchWarnings = () =>
   sentry.messages.filter((capture) => capture.context?.tags?.component === "mfa-challenge");
 const expectMfaChallengeException = (count: number) => {
   expect(sentry.exceptions.length).toBe(count);
-  for (const capture of sentry.exceptions)
-    expect(capture.context?.tags).toEqual({ component: "mfa-challenge" });
+  for (const [, context] of sentry.exceptions)
+    expect(context?.tags).toEqual({ component: "mfa-challenge" });
 };
 const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
@@ -145,8 +144,6 @@ const runOAuthCallbackHook = (
     yield* trackChallengeFrom(outcome.browserHeaders);
     return outcome;
   });
-
-afterAll(() => sentry.restore());
 
 describe("チャレンジ強制プラグイン", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
@@ -489,17 +486,17 @@ describe("enforceChallenge (program 単体)", () => {
   const ttlStoreUntouched = Layer.succeed(TtlStore, partial<TtlStore["Service"]>({}));
   const untouched = Layer.mergeAll(
     ttlStoreUntouched,
-    Layer.succeed(AuthApi, partial<AuthApi["Service"]>({})),
+    authApiWith(() => ({
+      secret: Effect.die(new Error("test: AuthApi.secret は呼ばれない")),
+      deleteSession: () => Effect.die(new Error("test: AuthApi.deleteSession は呼ばれない")),
+    })),
   );
   const ttlStoreWith = (set: () => Effect.Effect<void, TtlStoreError>) =>
     Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ set }));
-  const authApiWith = (deleteSession: (token: string) => Effect.Effect<void, AuthApiError>) =>
-    Layer.succeed(
-      AuthApi,
-      partial<AuthApi["Service"]>({ secret: Effect.succeed("test-secret"), deleteSession }),
-    );
+  const authApiDeleting = (deleteSession: (token: string) => Effect.Effect<void, AuthApiError>) =>
+    authApiWith(() => ({ secret: Effect.succeed("test-secret"), deleteSession }));
   const authApiRecording = (deleted: string[]) =>
-    authApiWith((token) =>
+    authApiDeleting((token) =>
       Effect.sync(() => {
         deleted.push(token);
       }),
@@ -578,8 +575,8 @@ describe("enforceChallenge (program 単体)", () => {
         expect(exit).toEqual(challengeWithoutCookie);
         expect(deleted).toEqual(["token-unit"]);
         expectMfaChallengeException(1);
-        expect(sentry.exceptions[0]?.context?.level).toBe("warning");
-        expect(sentry.exceptions[0]?.message).toContain(
+        expect(sentry.exceptions[0]?.[1]?.level).toBe("warning");
+        expect(String(sentry.exceptions[0]?.[0])).toContain(
           "unmapped primary auth route /callback/:id (id=gitlab)",
         );
       }),
@@ -625,7 +622,7 @@ describe("enforceChallenge (program 単体)", () => {
           Layer.mergeAll(
             mfaEnabled,
             ttlStoreWith(() => Effect.void),
-            authApiWith(() => new AuthApiError({ cause: new Error("session store down") })),
+            authApiDeleting(() => new AuthApiError({ cause: new Error("session store down") })),
           ),
         );
         expect(exit).toEqual(challengeWithCookie);

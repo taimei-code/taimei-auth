@@ -6,7 +6,6 @@ import {
   countMfaTotpRows,
   countRecoveryCodeRows,
   findMfaTotpRow,
-  installSentryRecorder,
   secretFromTotpUri,
   totpCode,
   wrongTotpCode,
@@ -36,11 +35,12 @@ import { MfaTotpRepo } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { consumeMatchedCode, matchOwnedCode } from "../verify-code";
 import { testKvStore } from "../../../__tests__/test-ttl-store";
+import { recordSentry } from "../../../__tests__/sentry-recorder";
 
 const P = "mfa-totp-reg-";
 const ISSUER = "taimei-test";
 const { run, cleanup } = dbTest(P);
-const sentry = installSentryRecorder();
+const sentry = recordSentry();
 
 function buildOps(overrides?: {
   auditFails?: boolean;
@@ -84,8 +84,8 @@ const headers = new Headers({ "user-agent": "totp-reg-test", "x-forwarded-for": 
 
 const sentryAuditFailureEvents = () =>
   sentry.exceptions
-    .filter((e) => e.context?.tags?.component === "audit-log")
-    .map((e) => e.context?.tags?.event);
+    .filter(([, context]) => context?.tags?.component === "audit-log")
+    .map(([, context]) => context?.tags?.event);
 
 describe("MFA 登録遷移 (自前 totp)", () => {
   const originalAppName = process.env.APP_NAME;
@@ -96,7 +96,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
   afterAll(() => {
     if (originalAppName === undefined) delete process.env.APP_NAME;
     else process.env.APP_NAME = originalAppName;
-    return cleanup().then(() => sentry.restore());
+    return cleanup();
   });
 
   test("AC-102/103/104 未登録: status 全 false・activate 404・disable 409", () =>

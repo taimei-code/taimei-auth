@@ -3,11 +3,11 @@ import { Effect } from "effect";
 import { auditRowsFor, dbTest, observing } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import {
-  actorOf,
   countRecoveryCodeRows,
   enableMfaFor,
   findMfaTotpRow,
 } from "../../src/mfa/__tests__/helpers";
+import { actorOf } from "../../src/__tests__/session-helpers";
 import { enroll } from "../../src/mfa/totp";
 import { forceDisableMfa } from "../../src/mfa/totp/disable-mfa";
 import { toDisableUserMfaReport } from "../disable-user-mfa";

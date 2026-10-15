@@ -1,10 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { BETTER_AUTH_METHODS, buildApp } from "../app";
 import { auth } from "../auth";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 describe("/api/auth/* の mount は auth.handler の reject を Sentry に送る", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const app = buildApp({ mountStatic: () => {} });
 
   test("reject は component=better-auth で error として送り、Hono 既定と同じ 500 text を返す", async () => {
