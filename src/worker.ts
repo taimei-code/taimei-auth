@@ -2,7 +2,11 @@ import type { Hono } from "hono";
 // biome-ignore lint/style/noRestrictedImports: Workers では request ごとに実際の Pool を供給する経路だけを許可する
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
+import { WorkerEntrypoint } from "cloudflare:workers";
 import { KvStore as KvStoreBase } from "./kv-store.do";
+import { verifySessionProgram } from "./rpc/auth-handler";
+import { checkMembershipsProgram } from "./rpc/company-handler";
+import { runRpc, type RpcEffect } from "./rpc/run-rpc";
 import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
@@ -81,3 +85,30 @@ const sentryOptions = (env: Env) => ({
 export default Sentry.withSentry(sentryOptions, handler);
 
 export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);
+
+const runInRequest = <A>(env: Env, ctx: ExecutionCtx, program: () => RpcEffect<A>): Promise<A> => {
+  bootstrap(env);
+  const backgroundPromises: Promise<unknown>[] = [];
+  return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
+    try {
+      return await withWaitUntil(
+        (promise) => {
+          backgroundPromises.push(promise);
+        },
+        () => runRpc(program()),
+      );
+    } finally {
+      ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));
+    }
+  });
+};
+
+export class AuthRpc extends WorkerEntrypoint<Env> {
+  verifySession(sessionToken: string) {
+    return runInRequest(this.env, this.ctx, () => verifySessionProgram({ sessionToken }));
+  }
+
+  checkMemberships(companyId: string, userIds: readonly string[]) {
+    return runInRequest(this.env, this.ctx, () => checkMembershipsProgram({ companyId, userIds }));
+  }
+}

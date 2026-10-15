@@ -1,0 +1,7 @@
+{
+  "name": "poc-rpc-consumer",
+  "private": true,
+  "dependencies": {
+    "@connectrpc/connect-web": "^2.1.1"
+  }
+}

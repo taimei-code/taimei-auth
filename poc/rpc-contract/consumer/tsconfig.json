@@ -1,0 +1,6 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": { "types": ["bun"], "plugins": [] },
+  "include": ["../../../worker-configuration.d.ts", "src/**/*.ts"],
+  "exclude": []
+}

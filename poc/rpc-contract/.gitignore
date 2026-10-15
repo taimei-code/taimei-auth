@@ -1,0 +1,8 @@
+bin/
+*.out
+gen/
+.wrangler/
+dist/
+node_modules/
+.dev.vars
+bun.lock
