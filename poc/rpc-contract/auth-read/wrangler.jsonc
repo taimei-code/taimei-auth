@@ -3,6 +3,15 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_compat"],
-  "durable_objects": { "bindings": [{ "name": "SNAPSHOTS", "class_name": "SessionSnapshot" }] },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SessionSnapshot"] }]
+  "durable_objects": {
+    "bindings": [
+      { "name": "SNAPSHOTS", "class_name": "SessionSnapshot" },
+      { "name": "READ_MODEL", "class_name": "ReadModel" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SessionSnapshot"] },
+    { "tag": "v2", "new_sqlite_classes": ["ReadModel"] }
+  ],
+  "services": [{ "binding": "AUTH_CORE", "service": "taimei-auth", "entrypoint": "ConsumerRpc" }]
 }

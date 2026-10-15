@@ -12,6 +12,7 @@
     "not_found_handling": "single-page-application"
   },
   "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "services": [{ "binding": "AUTH_EDGE", "service": "poc-auth-read", "entrypoint": "EdgeRpc" }],
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
   "hyperdrive": [
     {

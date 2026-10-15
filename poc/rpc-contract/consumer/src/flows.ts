@@ -13,7 +13,19 @@ type ReadRpc = {
   seed(cookieHeader: string, snapshot: typeof GetSessionResult.Encoded): Promise<void>;
 };
 
+type EdgeRpc = {
+  getSession(
+    cookieHeader: unknown,
+    nowOffsetMs?: number,
+  ): Promise<{ source: string; filled?: string; result: typeof GetSessionResult.Encoded }>;
+  invalidateAll(): Promise<number>;
+  setFailInvalidations(value: boolean): Promise<void>;
+  beginFill(cookieHeader: string): Promise<{ startedAtEpoch: number; snapshot: typeof GetSessionResult.Encoded }>;
+  fill(cookieHeader: string, startedAtEpoch: number, snapshot: typeof GetSessionResult.Encoded): Promise<string>;
+};
+
 export type FlowEnv = {
+  AUTH_EDGE: Service<EdgeRpc & Rpc.WorkerEntrypointBranded>;
   AUTH: Fetcher;
   AUTH_CONSUMER: Service<ConsumerRpcContract & Rpc.WorkerEntrypointBranded>;
   AUTH_READ: Service<ReadRpc & Rpc.WorkerEntrypointBranded>;
@@ -28,7 +40,7 @@ export type Normalized =
       email: string;
       companyId: string | null;
       role: string | null;
-      members: { userId: string; email: string; role: string | null }[];
+      members: { userId: string; email: string; role: string | null; name?: string }[];
     };
 
 const memo = <Args extends readonly unknown[], R>(fn: (...args: Args) => R) => {
@@ -98,7 +110,7 @@ const fromGetSession = (raw: unknown): Normalized => {
     email: session.user.email,
     companyId: session.companyId,
     role: session.role,
-    members: session.members.map((m) => ({ userId: m.userId, email: m.email, role: m.role })),
+    members: session.members.map((m) => ({ userId: m.userId, email: m.email, role: m.role, name: m.name })),
   };
 };
 
@@ -106,7 +118,17 @@ const v3 = async (env: FlowEnv, cookieHeader: string) => fromGetSession(await en
 
 const v4 = async (env: FlowEnv, cookieHeader: string) => fromGetSession(await env.AUTH_READ.getSession(cookieHeader));
 
-export const flows = { v1, v2, v3, v4 } as const;
+const v7 = async (env: FlowEnv, cookieHeader: string) => fromGetSession((await env.AUTH_EDGE.getSession(cookieHeader)).result);
+
+const v7miss = async (env: FlowEnv, cookieHeader: string) =>
+  fromGetSession((await env.AUTH_EDGE.getSession(cookieHeader, 6 * 60 * 1000)).result);
+
+export const flows = { v1, v2, v3, v4, v7, v7miss } as const;
+
+export const v7WithSource = async (env: FlowEnv, cookieHeader: string, nowOffsetMs: number) => {
+  const { source, filled, result } = await env.AUTH_EDGE.getSession(cookieHeader, nowOffsetMs);
+  return { source, filled, normalized: fromGetSession(result) };
+};
 
 export const seedReadModel = async (env: FlowEnv, cookieHeader: string) => {
   const snapshot = await env.AUTH_CONSUMER.getSession(cookieHeader);

@@ -6,7 +6,7 @@ import {
 } from "@taimei-code/auth-client";
 import type { AuthRpc } from "../../../../src/worker";
 import { callC } from "./c-client";
-import { type FlowEnv, flows, seedReadModel } from "./flows";
+import { type FlowEnv, flows, seedReadModel, v7WithSource } from "./flows";
 import { issue, verify } from "./v5-token";
 
 type Env = {
@@ -57,6 +57,23 @@ export default {
     const flowEnv = env as unknown as FlowEnv;
     if (url.pathname === "/result") {
       return Response.json(await flows[flowMode](flowEnv, cookieHeader));
+    }
+    if (url.pathname === "/v7") {
+      return Response.json(await v7WithSource(flowEnv, cookieHeader, Number(url.searchParams.get("offset") ?? "0")));
+    }
+    if (url.pathname === "/v7-fail") {
+      await flowEnv.AUTH_EDGE.setFailInvalidations(url.searchParams.get("on") === "1");
+      return Response.json({ failInvalidations: url.searchParams.get("on") === "1" });
+    }
+    if (url.pathname === "/v7-invalidate") {
+      return Response.json({ epoch: await flowEnv.AUTH_EDGE.invalidateAll() });
+    }
+    if (url.pathname === "/v7-begin") {
+      return Response.json(await flowEnv.AUTH_EDGE.beginFill(cookieHeader));
+    }
+    if (url.pathname === "/v7-fill") {
+      const { startedAtEpoch, snapshot } = (await req.json()) as { startedAtEpoch: number; snapshot: never };
+      return Response.json({ fill: await flowEnv.AUTH_EDGE.fill(cookieHeader, startedAtEpoch, snapshot) });
     }
     if (url.pathname === "/consumer-bad-input") {
       const loose = flowEnv.AUTH_CONSUMER as unknown as { getSession: (v: unknown) => Promise<unknown> };
