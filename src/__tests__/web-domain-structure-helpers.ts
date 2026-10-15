@@ -28,13 +28,13 @@ const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
 
 const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
-  ["invitation", new Set(["auth/auth-client.ts", "auth/auth-redirect.ts"])],
-  ["mfa", new Set(["auth/AuthPageCard.tsx", "auth/auth-redirect.ts"])],
+  ["invitation", new Set(["auth/auth-client.ts"])],
+  ["mfa", new Set(["auth/AuthPageCard.tsx"])],
   [
     "account",
     new Set([
       "auth/auth-client.ts",
-      "auth/auth-redirect.ts",
+      "auth/sign-out.ts",
       "auth/provider-label.ts",
       "mfa/mfa-atom.ts",
       "mfa/MfaSettingsItem.tsx",
@@ -56,7 +56,7 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "account/account-atom.ts",
       "account/current-company.tsx",
       "auth/auth-client.ts",
-      "auth/auth-redirect.ts",
+      "auth/sign-out.ts",
       "membership/membership-atom.ts",
       "membership/TransferOwnershipModal.tsx",
     ]),
@@ -75,7 +75,6 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "auth/SignOutButton.tsx",
       "auth/auth-client.ts",
       "auth/auth-error-reason.ts",
-      "auth/auth-redirect.ts",
       "auth/pages/Error.tsx",
       "auth/pages/SignIn.tsx",
       "auth/pages/SignUp.tsx",

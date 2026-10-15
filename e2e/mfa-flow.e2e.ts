@@ -6,7 +6,7 @@ import {
   TOTP_PERIOD_SECONDS,
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
-import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
 const MFA_EMAIL = "e2e-mfa@example.com";
@@ -481,12 +481,14 @@ test("MFA 有効化後のログインはチャレンジ画面を挟み、通過�
 
   await signOutAndReachChallenge(page);
   await expect(page.getByText("ログインを完了するには、追加の確認が必要です")).toBeVisible();
+  const historyLengthOnChallenge = await page.evaluate(() => history.length);
 
   await challengeCodeInput(page).fill(await totpCode(secret));
   await page.getByRole("button", { name: "ログインを続ける" }).click();
 
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
+  expect(await page.evaluate(() => history.length)).toBe(historyLengthOnChallenge);
 });
 
 test("リカバリーコードでもチャレンジを通過でき、使った 1 本だけ残数が減る", async ({ page }) => {

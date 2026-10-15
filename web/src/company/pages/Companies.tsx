@@ -12,10 +12,10 @@ import {
   type Membership,
 } from "../../account/current-company";
 import { useSelfUserId } from "../../auth/auth-client";
-import { redirectAfterAuthChange } from "../../auth/auth-redirect";
 import { TransferOwnershipModal } from "../../membership/TransferOwnershipModal";
 import { useRemoveMember } from "../../membership/membership-atom";
 import { useWaitForValue } from "../../shared/atom-runtime";
+import { leaveSpaAfterAccountDeleted } from "../../shared/leave-spa";
 import { hasFailureTag } from "../../shared/failure-message";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
 import { Button } from "../../shared/ui/button";
@@ -50,7 +50,7 @@ export const Companies = () => {
           onSuccess: ({ account_deleted }) => {
             if (account_deleted) {
               redirecting = true;
-              redirectAfterAuthChange("deleteAccount");
+              leaveSpaAfterAccountDeleted();
               return;
             }
             return notifyAfterRefresh(waitForCompanyState, {

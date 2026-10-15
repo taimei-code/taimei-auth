@@ -24,8 +24,8 @@
 
 - route は `app/router.tsx` に置く。page は route の値を `getRouteApi(<route id>)` の `useSearch` / `useLoaderData` で読む。
 - search は route の `validateSearch` で parse し、page で `URLSearchParams` を読まない (biome の `noRestrictedGlobals` が落とす)。検査に失敗した時に既定の値を使う search は、`validateSearch` の中で既定の値にする。
-- 遷移を起点とする処理 (画面を開く前の確認、招待の受諾の POST、状態の取得) は route の `beforeLoad` / `loader` に置き、`pages/` で `useEffect` を使わない (`web-data-access.test.ts` が落とす)。判定は domain の関数が直和で返し、`router.tsx` が `redirect` に写す (例: `company/company-signup-entry.ts`)。
-- 遷移は `Link` / `navigate` / `redirect` で書き、path と search を型で検査させる。`/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は `reloadDocument` にする (理由は ADR-0002 の router の節)。
+- 遷移を起点とする処理 (画面を開く前の確認、招待の受諾の POST、状態の取得) は route の `beforeLoad` / `loader` に置き、`pages/` で `useEffect` を使わない (`web-data-access.test.ts` が落とす)。判定は domain の関数が `shared/route-entry.ts` の `RouteEntry` を返し、`app/route-redirect.ts` の `redirectFor` だけが `redirect` に写す (例: `company/company-signup-entry.ts`)。
+- 遷移は `Link` / `navigate` / `redirect` で書き、path と search を型で検査させる。`/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は `reloadDocument` にする (理由は ADR-0002 の router の節)。router の外で SPA を離れる遷移 (`window.location`) は `shared/leave-spa.ts` だけが書き、sign-out は `auth/sign-out.ts` の `signOut` だけが better-auth を呼ぶ (`web-data-access.test.ts` が落とす)。
 
 ## 検証
 

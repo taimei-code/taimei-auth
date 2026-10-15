@@ -216,3 +216,16 @@ test("事業所登録の「別のアカウントでログインする」は、�
 
   await expectSignInLanding(page);
 });
+
+test("事業所登録の「別のアカウントでログインする」は、ログアウトに失敗すると失敗の文言を出して事業所登録に留まる", async ({
+  page,
+}) => {
+  await signInWithMagicLink(page, `e2e-newbie-${Date.now()}@example.com`);
+  await expect(page.getByText("事業所を登録してください")).toBeVisible();
+  await page.route(/\/api\/auth\/sign-out$/, (route) => route.fulfill({ status: 500, json: {} }));
+
+  await page.getByRole("button", { name: "別のアカウントでログインする" }).click();
+
+  await expect(page.getByText("ログアウトに失敗しました。")).toBeVisible();
+  await expect(page).toHaveURL(/\/auth\/signup\/company/);
+});

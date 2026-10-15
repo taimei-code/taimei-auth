@@ -2,7 +2,7 @@ import { Loader2, ShieldCheck } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 
 import { AuthPageCard } from "../auth/AuthPageCard";
-import { signInLandingSearch } from "../auth/auth-redirect";
+import { signInLandingSearch } from "../shared/leave-spa";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
 import { Label } from "../shared/ui/label";

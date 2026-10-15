@@ -9,6 +9,7 @@ import {
   type MfaChallengeVerification,
 } from "./mfa-challenge-flow";
 import { hasFailureTag } from "../shared/failure-message";
+import { leaveSpaTo } from "../shared/leave-spa";
 import {
   mfaFailureMessage,
   useVerifyMfaChallenge,
@@ -72,7 +73,7 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
   const redirectUrl = state.phase === "redirecting" ? state.redirectUrl : null;
   useEffect(() => {
     if (redirectUrl !== null) {
-      window.location.assign(redirectUrl);
+      leaveSpaTo(redirectUrl);
     }
   }, [redirectUrl]);
 

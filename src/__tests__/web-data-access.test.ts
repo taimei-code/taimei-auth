@@ -45,6 +45,17 @@ const RULES: readonly Rule[] = [
     name: "promiseExit",
     violates: (path, source) => /\bpromiseExit\b/.test(source) && !mayRunMutation(path),
   },
+  {
+    name: "SPA を離れる遷移",
+    violates: (path, source) =>
+      /\blocation\.(replace|assign)\(|\blocation\.href\s*=(?!=)/.test(source) &&
+      path !== "shared/leave-spa.ts",
+  },
+  {
+    name: "sign-out",
+    violates: (path, source) =>
+      /\bauthClient\.signOut\(/.test(source) && path !== "auth/sign-out.ts",
+  },
 ];
 
 const violationsOf = (path: string, source: string): string[] => {
@@ -64,7 +75,7 @@ function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string
 }
 
 describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だけ (ADR-0017)", () => {
-  test("fetch は書かず、SpaApiClient と effect/http は *-atom.ts だけが使い、pages/ は useEffect を使わない", () => {
+  test("fetch は書かず、SpaApiClient と effect/http は *-atom.ts だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
     expect(analyzeWebDataAccess(readActualWebSources())).toEqual([]);
   });
 
