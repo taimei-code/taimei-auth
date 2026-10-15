@@ -36,7 +36,7 @@ describe("acceptInvitation", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-01 正常 accept — OWNER 招待 (inviter 現役 OWNER) → membership INSERT + accepted audit / reject audit 0 件", () =>
+  test("OWNER のままの招待者による OWNER 招待を受諾すると、membership を作って accepted の audit を残し、reject の audit は残さない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -74,7 +74,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-01 reused (既所属短絡) は entry 層で 200 に短絡するため、accept use-case は呼ばれない (契約テスト)", () =>
+  test("既に所属している user の受諾は入口で 200 を返すので、accept の use-case は呼ばれない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -103,7 +103,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-H-05 / QA-M-02 偽造 OWNER 招待 (inviter が accept 時点で ADMIN) → 410 + reject audit (payload に PII 無し) + warn 先行", () =>
+  test("受諾の時点で招待者が ADMIN に降格した OWNER 招待は 410 を返し、warning の後に PII を含まない reject の audit を残す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -198,7 +198,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-04 招待者 membership 行が不在 (退会) の OWNER 招待 → 410 + reject audit (inviter=Missing)", () =>
+  test("招待者が退会して membership が無い OWNER 招待は 410 を返し、inviter=Missing の reject の audit を残す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -234,7 +234,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-06 招待者が退会済みの MEMBER 招待 → accept 成功 (再検証は OWNER 招待だけ)", () =>
+  test("招待者が退会済みでも MEMBER 招待は受諾できる (招待者を確かめ直すのは OWNER 招待だけ)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -261,7 +261,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-05 already-accepted invitation (PENDING 消失) を再度 accept → 410 + double_accept audit", () =>
+  test("受諾済みの invitation をもう一度受諾すると 410 を返し、double_accept の audit を残す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -301,7 +301,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-07 double-accept 並行 (同 token へ 2 client 同時) → 片方のみ ok、他方 410 + double_accept audit", () =>
+  test("同じ token を 2 つの client が同時に受諾すると、片方だけが成功し、もう片方は 410 で double_accept の audit を残す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -329,7 +329,7 @@ describe("acceptInvitation", () => {
       }),
     ));
 
-  test("QA-M-09 accept vs 降格 の 2-outcome — (a) 降格 commit 先行なら 410 / (b) accept commit 先行なら OWNER 正当 mint。いずれも `降格済み inviter からの OWNER mint` は 0 件", () =>
+  test("受諾と招待者の降格が競合すると、降格が先に commit すれば 410、受諾が先なら正当な OWNER になり、降格済みの招待者から OWNER が生まれることは無い", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

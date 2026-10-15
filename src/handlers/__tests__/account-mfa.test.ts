@@ -58,7 +58,7 @@ describe("account MFA API", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-D-02 他人 userId 送っても本人のみ", () =>
+  test("他人の userId を送っても、本人の MFA の状態だけを扱う", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -83,7 +83,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-09 disable 誤コード連投 → アカウント単位でロックアウト", () =>
+  test("無効化に誤ったコードを続けて送ると、アカウント単位でロックする", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -130,7 +130,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-H-01 enroll の応答は登録情報とopaqueな登録識別子だけを返す", () =>
+  test("enroll の応答は、登録情報と中身を読めない登録識別子だけを返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -152,7 +152,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-04 未登録ユーザーの GET /api/account/mfa も同じキー形 (enabled false)", () =>
+  test("未登録の user の GET /api/account/mfa も同じ key の形で enabled false を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -169,7 +169,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-25 登録済み未有効も enabled false", () =>
+  test("登録済みで未有効の user も enabled false を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -189,7 +189,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-01 有効ユーザーの enroll → 409 AlreadyEnabled", () =>
+  test("MFA が有効な user の enroll は 409 AlreadyEnabled を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -205,7 +205,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-04 有効ユーザーの activate 再実行 → 409 (正しいコードでも副作用なし)", () =>
+  test("MFA が有効な user が activate をもう一度実行すると、正しいコードでも 409 を返し、何も変えない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -225,7 +225,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-06 未登録ユーザーの activate → 404 MfaNotFound", () =>
+  test("未登録の user の activate は 404 MfaNotFound を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -242,7 +242,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-02 activate の識別子不一致 → 409 EnrollmentChanged (行は未 verified のまま)", () =>
+  test("activate の登録識別子が一致しないと 409 EnrollmentChanged を返し、行は未 verified のまま", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -331,7 +331,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-02 activateの不正な登録識別子は400で副作用を起こさない", () =>
+  test("activate の不正な登録識別子は 400 を返し、何も変えない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -348,7 +348,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("AC-145 enrollment_id の欠落・空文字は 400 (decode 失敗、body 無し、必須化の境界)", () =>
+  test("enrollment_id が無いか空文字なら、decode に失敗して本文の無い 400 を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

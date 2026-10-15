@@ -101,7 +101,7 @@ describe("removeMember", () => {
       }),
     ));
 
-  test("QA-D-03 他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", () =>
+  test("他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", () =>
     run(
       Effect.gen(function* () {
         const ownerId = yield* seedUser("multi-owner");

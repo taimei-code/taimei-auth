@@ -46,34 +46,34 @@ describe("verifyServiceKey", () => {
   const rejected = (presented: string | undefined) =>
     Effect.runSync(Effect.flip(verifyServiceKey(presented)));
 
-  test("AC-001: active と一致 → 通す", () => {
+  test("active と一致 → 通す", () => {
     process.env.AUTH_SERVICE_KEY = "active-key";
     expect(Effect.runSync(verifyServiceKey("active-key"))).toBeUndefined();
   });
 
-  test("AC-002: previous と一致 → 通す", () => {
+  test("previous と一致 → 通す", () => {
     process.env.AUTH_SERVICE_KEY = "active-key";
     process.env.AUTH_SERVICE_KEY_PREVIOUS = "previous-key";
     expect(Effect.runSync(verifyServiceKey("previous-key"))).toBeUndefined();
   });
 
-  test("AC-003: previous のみ + production → 通す (503 にしない)", () => {
+  test("previous のみ + production → 通す (503 にしない)", () => {
     process.env.AUTH_SERVICE_KEY_PREVIOUS = "previous-key";
     process.env.APP_ENV = "production";
     expect(Effect.runSync(verifyServiceKey("previous-key"))).toBeUndefined();
   });
 
   test.each([
-    ["AC-004", "wrong-key"],
-    ["AC-005", undefined],
-    ["AC-006", ""],
-  ])("%s: 提示 %j → ServiceKeyRejected (401)", (_, presented) => {
+    ["鍵が違う", "wrong-key"],
+    ["鍵が無い", undefined],
+    ["鍵が空文字", ""],
+  ])("%s (提示 %j) と ServiceKeyRejected (401) を返す", (_, presented) => {
     process.env.AUTH_SERVICE_KEY = "active-key";
     const failure = rejected(presented);
     expect(failure).toBeInstanceOf(ServiceKeyRejected);
   });
 
-  test("AC-007/008: 未設定 + production → ServiceKeyMisconfigured (503)、warn なし (workerd には index.ts の boot guard が無く、request 時のこの判定が唯一の防御)", () => {
+  test("未設定 + production → ServiceKeyMisconfigured (503)、warn なし (workerd には index.ts の boot guard が無く、request 時のこの判定が唯一の防御)", () => {
     process.env.APP_ENV = "production";
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
@@ -86,10 +86,10 @@ describe("verifyServiceKey", () => {
   });
 
   test.each([
-    ["AC-009", "development"],
-    ["AC-010", undefined],
-    ["AC-011", "staging"],
-  ])("%s: 未設定 + APP_ENV=%s → 通す + warn 1 回", (_, appEnv) => {
+    ["development の時", "development"],
+    ["APP_ENV が無い時", undefined],
+    ["staging の時", "staging"],
+  ])("%s は鍵が未設定でも通し、warn を 1 回出す (APP_ENV=%s)", (_, appEnv) => {
     if (appEnv !== undefined) process.env.APP_ENV = appEnv;
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
@@ -105,20 +105,20 @@ describe("verifyServiceKey", () => {
 });
 
 describe("service key の封じ込め (静的 tripwire)", () => {
-  test("AC-023: AUTH_SERVICE_KEY の読み手は service-key.ts と index.ts の boot guard だけ", () => {
+  test("AUTH_SERVICE_KEY の読み手は service-key.ts と index.ts の boot guard だけ", () => {
     expect(
       grepFiles("process\\.env\\.AUTH_SERVICE_KEY", "src", { tests: "exclude" }).sort(),
     ).toEqual(["src/index.ts", "src/service-key.ts"]);
   });
 
-  test("AC-035: 鍵の比較は timingSafeEqual (digest 経由) だけで、includes / === を使わない", () => {
+  test("鍵の比較は timingSafeEqual (digest 経由) だけで、includes / === を使わない", () => {
     expect(grepLines("timingSafeEqual\\(", "src/service-key.ts", {})).toHaveLength(1);
     expect(grepFiles("\\.includes\\(|=== presented|presented ===", "src/service-key.ts")).toEqual(
       [],
     );
   });
 
-  test("AC-024: X-Service-Key header の読み手は app.ts の /rpc/* middleware 1 行だけ", () => {
+  test("X-Service-Key header の読み手は app.ts の /rpc/* middleware 1 行だけ", () => {
     const hits = grepLines('c\\.req\\.header\\("X-Service-Key"\\)', "src", {
       tests: "exclude",
     });
@@ -126,7 +126,7 @@ describe("service key の封じ込め (静的 tripwire)", () => {
     expect(hits[0]).toContain("src/app.ts");
   });
 
-  test("AC-033: 手書きの応答 body (c.json({ error:) は production src に無い", () => {
+  test("手書きの応答 body (c.json({ error:) は production src に無い", () => {
     expect(
       grepLines("c\\.json\\([[:space:]]*\\{[[:space:]]*error", "src", {
         tests: "exclude",

@@ -12,7 +12,7 @@ describe("updateCompanyInfo", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-03 正常 更新 → company 行更新 / company_updated audit に before/after diff", () =>
+  test("正常 更新 → company 行更新 / company_updated audit に before/after diff", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -44,7 +44,7 @@ describe("updateCompanyInfo", () => {
       }),
     ));
 
-  test("QA-D-06 inactive company → not_found Result / update rollback / audit 発火なし", () =>
+  test("inactive company → not_found Result / update rollback / audit 発火なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -69,7 +69,7 @@ describe("updateCompanyInfo", () => {
       }),
     ));
 
-  test("QA-E-11 not_found 経路の rollback → mutation なし + audit 非発火", () =>
+  test("not_found 経路の rollback → mutation なし + audit 非発火", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -89,7 +89,7 @@ describe("updateCompanyInfo", () => {
       }),
     ));
 
-  test("QA-H-12 mutation → audit 発火順 pin (audit.payload.after が UPDATE 完了後の DB state と一致)", () =>
+  test("mutation → audit 発火順 pin (audit.payload.after が UPDATE 完了後の DB state と一致)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

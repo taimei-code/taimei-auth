@@ -48,7 +48,7 @@ describe("createInvitation (use-case)", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-07 新規 email → 新規 invitation 作成 + rate 1 消費 + invitation_sent audit / reused=false", () =>
+  test("新しい email には invitation を作り、試行枠を 1 消費し、invitation_sent の audit を残して reused=false を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -86,7 +86,7 @@ describe("createInvitation (use-case)", () => {
       }),
     ));
 
-  test("QA-M-02 既存 PENDING 再送 → reused=true / rate 消費 0 / audit 発火なし", () =>
+  test("PENDING の invitation がある email への再送は reused=true を返し、試行枠を消費せず audit も残さない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -118,7 +118,7 @@ describe("createInvitation (use-case)", () => {
       }),
     ));
 
-  test("QA-E-02 rate 上限到達 → rate_limited Result / invitation 作成なし / audit 発火なし", () =>
+  test("試行枠の上限に達すると rate_limited を返し、invitation も audit も作らない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -139,7 +139,7 @@ describe("createInvitation (use-case)", () => {
       }),
     ));
 
-  test("QA-M-02 rate 上限中でも既存 PENDING 宛の再送 → reused=true (idempotency > rate 順序)", () =>
+  test("試行枠の上限に達していても、PENDING の invitation がある email への再送は reused=true を返す (再送の判定を試行枠より先に行う)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -167,7 +167,7 @@ describe("createInvitation (use-case)", () => {
       }),
     ));
 
-  test("QA-H-13 idempotency は逐次 (先行 commit 後の後続) — 2 回目は既存を拾い rate 消費なし", () =>
+  test("先の招待が commit した後の 2 回目の招待は、既存の invitation を返して試行枠を消費しない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -203,7 +203,7 @@ describe("createInvitation (use-case)", () => {
       }),
     ));
 
-  test("QA-H-12 mutation → audit の発火順 pin (audit の invitation_id が返却 row と一致)", () =>
+  test("invitation を作った後に audit を残し、audit の invitation_id は返した invitation と一致する", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -295,7 +295,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-038 magic-link の送信失敗は 200 のまま Sentry warning に残る (fail-open)", () =>
+  test("magic-link の送信が失敗しても 200 を返し、Sentry に warning を残す (fail-open)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -351,7 +351,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-011 redirect_target 付きの招待は callbackURL に token と組を載せる", () =>
+  test("redirect_target 付きの招待は、callbackURL に token と redirect_target の組を含める", () =>
     run(
       Effect.gen(function* () {
         const { owner, co, email } = yield* seedOwnerCompany("rt-with");
@@ -394,7 +394,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-012 redirect_target なしの招待は従来の callbackURL のまま", () =>
+  test("redirect_target なしの招待は、従来の callbackURL のまま", () =>
     run(
       Effect.gen(function* () {
         const { owner, co, email } = yield* seedOwnerCompany("rt-without");
@@ -415,7 +415,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-013 allowlist 外の redirect_target は 400 で、招待もメールも作らない", () =>
+  test("allowlist 外の redirect_target は 400 で、招待もメールも作らない", () =>
     run(
       Effect.gen(function* () {
         const { owner, co, email } = yield* seedOwnerCompany("rt-evil");
@@ -434,7 +434,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-014 redirect_target の片方だけは 400 で、メールを送らない", () =>
+  test("redirect_target の片方だけは 400 で、メールを送らない", () =>
     run(
       Effect.gen(function* () {
         const { owner, co, email } = yield* seedOwnerCompany("rt-half");
@@ -452,7 +452,7 @@ describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
       }),
     ));
 
-  test("AC-015 既存 PENDING への再送は今回の redirect_target を載せる", () =>
+  test("PENDING の invitation への再送は、今回の redirect_target をメールに含める", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

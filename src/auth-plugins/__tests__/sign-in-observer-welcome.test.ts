@@ -24,7 +24,7 @@ describe("welcome メールの送信失敗", () => {
     SentryLive,
   );
 
-  test("AC-037 新規 user への welcome 送信失敗は sign_in 観測を落とさず Sentry warning に残る", async () => {
+  test("新規 user への welcome 送信失敗は sign_in 観測を落とさず Sentry warning に残る", async () => {
     const before = captured.length;
     await Effect.runPromise(
       drained(

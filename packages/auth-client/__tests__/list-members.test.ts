@@ -44,7 +44,7 @@ const member = (userId: string, role: ProtoRole) => ({
 });
 
 describe("createAuthGuard.listMembers", () => {
-  test("AC-020: token が無ければ RPC を呼ばずに SESSION_NOT_FOUND", async () => {
+  test("token が無ければ RPC を呼ばずに SESSION_NOT_FOUND を返す", async () => {
     let called = false;
     const guard = guardOf({
       list: async () => {
@@ -58,7 +58,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(called).toBe(false);
   });
 
-  test("AC-021: RPC が throw したら UNSPECIFIED", async () => {
+  test("RPC が throw したら UNSPECIFIED を返す", async () => {
     const guard = guardOf({
       list: async () => {
         throw new Error("connection refused");
@@ -68,7 +68,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(await guard.listMembers()).toEqual({ ok: false, reason: Result.UNSPECIFIED });
   });
 
-  test("AC-022: error の reason をそのまま返す", async () => {
+  test("error の reason をそのまま返す", async () => {
     const guard = guardOf({
       list: async () => ({
         outcome: { case: "error", value: { reason: Result.REVISION_OUTDATED } },
@@ -78,7 +78,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(await guard.listMembers()).toEqual({ ok: false, reason: Result.REVISION_OUTDATED });
   });
 
-  test("AC-023: ok の事業所とメンバーを文字列の role で返す", async () => {
+  test("ok の事業所とメンバーを文字列の role で返す", async () => {
     const guard = guardOf({
       list: ok({
         companyId: "cmp_1",
@@ -103,7 +103,7 @@ describe("createAuthGuard.listMembers", () => {
     });
   });
 
-  test("AC-043: 知らない role の人は role を undefined にし、ほかの人の role はそのまま返す", async () => {
+  test("知らない role の人は role を undefined にし、ほかの人の role はそのまま返す", async () => {
     const guard = guardOf({
       list: ok({
         companyId: "cmp_1",
@@ -120,7 +120,7 @@ describe("createAuthGuard.listMembers", () => {
     ]);
   });
 
-  test("AC-025: 事業所未選択は companyId undefined と空の一覧", async () => {
+  test("事業所が未選択なら companyId は undefined で一覧は空", async () => {
     const guard = guardOf({ list: ok({ members: [] }), verifySession: sessionIn(undefined) });
 
     expect(await guard.listMembers()).toEqual({
@@ -129,7 +129,7 @@ describe("createAuthGuard.listMembers", () => {
     });
   });
 
-  test("AC-044: 一覧の事業所が getSession の companyId と違えば UNSPECIFIED", async () => {
+  test("一覧の事業所が getSession の companyId と違えば UNSPECIFIED を返す", async () => {
     const guard = guardOf({
       list: ok({ companyId: "cmp_2", members: [member("u1", ProtoRole.OWNER)] }),
     });
@@ -137,7 +137,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(await guard.listMembers()).toEqual({ ok: false, reason: Result.UNSPECIFIED });
   });
 
-  test("AC-045: getSession が失敗したら、その reason を返して一覧の RPC を呼ばない", async () => {
+  test("getSession が失敗したら、その reason を返して一覧の RPC を呼ばない", async () => {
     let called = false;
     const guard = guardOf({
       list: async () => {
@@ -153,7 +153,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(called).toBe(false);
   });
 
-  test("AC-026: cache を渡すと 2 回呼んでも RPC は 1 回", async () => {
+  test("cache を渡すと 2 回呼んでも RPC は 1 回", async () => {
     let calls = 0;
     const cacheFirstCall: GuardOptions["cache"] = (fn) => {
       let memo: ReturnType<typeof fn> | undefined;
@@ -176,7 +176,7 @@ describe("createAuthGuard.listMembers", () => {
     expect(calls).toBe(1);
   });
 
-  test("AC-039: outcome が未設定なら UNSPECIFIED", async () => {
+  test("outcome が未設定なら UNSPECIFIED を返す", async () => {
     const guard = guardOf({ list: async () => ({ outcome: { case: undefined } }) });
 
     expect(await guard.listMembers()).toEqual({ ok: false, reason: Result.UNSPECIFIED });

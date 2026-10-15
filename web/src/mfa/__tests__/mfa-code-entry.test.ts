@@ -67,15 +67,11 @@ const AVOID_TERMS = [
 ];
 
 describe("normalizeMfaCode", () => {
-  test.each(NORMALIZE_CASES)("QA-D-08 $name → $normalized", ({
-    raw,
-    kind,
-    normalized,
-  }: NormalizeCase) => {
+  test.each(NORMALIZE_CASES)("$name → $normalized", ({ raw, kind, normalized }: NormalizeCase) => {
     expect(normalizeMfaCode(raw, kind)).toBe(normalized);
   });
 
-  test("QA-M-23 先頭 0 の 6 桁は string のまま保たれる", () => {
+  test("先頭 0 の 6 桁は string のまま保たれる", () => {
     const normalized = normalizeMfaCode("０１２３４５", "totp");
 
     expect(normalized).toBe("012345");
@@ -84,12 +80,12 @@ describe("normalizeMfaCode", () => {
     expect(normalized).toHaveLength(6);
   });
 
-  test("QA-M-23 全角混じりの先頭 0 も桁を落とさない", () => {
+  test("全角混じりの先頭 0 も桁を落とさない", () => {
     expect(normalizeMfaCode("0１2３4５", "totp")).toBe("012345");
     expect(normalizeMfaCode("00 00 00", "totp")).toBe("000000");
   });
 
-  test("QA-D-08 リカバリーコードは正規化してもサーバ比較用の形に往復する", () => {
+  test("リカバリーコードは正規化してもサーバ比較用の形に往復する", () => {
     const issued = "abcde-fghij";
     const pastedFromMail = "　ａｂｃｄｅ − ｆｇｈｉｊ　";
 

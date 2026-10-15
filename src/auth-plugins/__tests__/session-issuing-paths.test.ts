@@ -66,18 +66,18 @@ const EXPECTED_ROUTE_CATALOG = [
 ];
 
 describe("MFA チャレンジ介入点の allowlist", () => {
-  test("QA-M-08 登録 route カタログが pin と一致する (未分類の新 route 0 件)", () => {
+  test("登録 route カタログが pin と一致する (未分類の新 route 0 件)", () => {
     expect(registeredRoutePaths()).toEqual(EXPECTED_ROUTE_CATALOG);
   });
 
-  test("QA-M-08 after-hook が一致するのは一次認証 2 route だけ (対象外 0 件)", () => {
+  test("after-hook が一致するのは一次認証 2 route だけ (対象外 0 件)", () => {
     const matcher = challengeMatcher();
     const matched = registeredRoutePaths().filter((path) => matcher({ path }));
 
     expect(matched.sort()).toEqual([...PRIMARY_AUTH_ROUTES].sort());
   });
 
-  test("QA-M-08 ctx.path は route パターンのため /callback/:id で一致し /callback/github では一致しない", () => {
+  test("ctx.path は route パターンのため /callback/:id で一致し /callback/github では一致しない", () => {
     const matcher = challengeMatcher();
 
     expect(matcher({ path: "/callback/:id" })).toBe(true);
@@ -85,7 +85,7 @@ describe("MFA チャレンジ介入点の allowlist", () => {
     expect(matcher({ path: "/magic-link/verify" })).toBe(true);
   });
 
-  test("QA-M-08 第二要素でセッションを発行する /two-factor/* route が 1 本も存在しない (plugin 撤去の証跡)", () => {
+  test("第二要素でセッションを発行する /two-factor/* route が 1 本も存在しない (plugin 撤去の証跡)", () => {
     const twoFactorRoutes = registeredRoutePaths().filter((path) =>
       path.startsWith("/two-factor/"),
     );

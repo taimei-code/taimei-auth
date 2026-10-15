@@ -52,11 +52,11 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
 };
 
 describe("依存分類 (biome ban ↔ package.json) の config invariant", () => {
-  test("QA-I-01: web 専用 ban の全 copy で group 集合が一致する", () => {
+  test("web 専用 ban の全 copy で group 集合が一致する", () => {
     expect(webOnlyBanViolations(readBiomeConfig())).toEqual([]);
   });
 
-  test("QA-I-02: devDependencies − 許可リスト == web 専用 group (両方向)", () => {
+  test("devDependencies − 許可リスト == web 専用 group (両方向)", () => {
     const config = readBiomeConfig();
     const pkg = readPackageJson();
     const devDeps = Object.keys(pkg.devDependencies ?? {});
@@ -76,7 +76,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     );
   });
 
-  test("QA-M-06: @connectrpc/connect-node は依存から不在かつ全 copy で ban 済み", () => {
+  test("@connectrpc/connect-node は依存から不在かつ全 copy で ban 済み", () => {
     const config = readBiomeConfig();
     const pkg = readPackageJson();
 
@@ -91,7 +91,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     expect(hasConnectNodeBan(effective as BiomeOverride)).toBe(true);
   });
 
-  test("QA-E-02: 片方の override だけに追記すると group 集合の不一致で落ちる", () => {
+  test("片方の override だけに追記すると group 集合の不一致で落ちる", () => {
     const config = readBiomeConfig();
     const patched = readBiomeConfig();
     const firstGroup = webOnlyGroups(patched)[0] as string[];
@@ -105,7 +105,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     expect(original[0]).toEqual(original[1] as string[]);
   });
 
-  test("QA-M-11: web 専用 devDependency を足して ban 未追記だと差分が列挙される", () => {
+  test("web 専用 devDependency を足して ban 未追記だと差分が列挙される", () => {
     const config = readBiomeConfig();
     const pkg = readPackageJson();
     const devDeps = [...Object.keys(pkg.devDependencies ?? {}), "react-day-picker"];
@@ -121,7 +121,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     expect(violations[0]).toContain("ALLOWED_DEV_DEPENDENCIES");
   });
 
-  test("QA-M-15: selector の出現回数 0 / 1 / 3 と後置 override は loud fail する", () => {
+  test("selector の出現回数 0 / 1 / 3 と後置 override は loud fail する", () => {
     const withCopies = (count: number): BiomeConfig => ({
       overrides: Array.from({ length: count }, () => ({
         includes: ["src/**", "db/**", "management/**"],

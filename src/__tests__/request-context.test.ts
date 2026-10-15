@@ -149,7 +149,7 @@ describe("resolveCloudflareClientIp (Workers: cf-connecting-ip のみ)", () => {
   });
 });
 
-describe("getClientContext (bun test = Bun runtime)", () => {
+describe("getClientContext (bun test = Bun runtime。process.env を丸ごと置き換えると Bun.env と食い違うので、env は key ごとに戻す)", () => {
   const ENV_KEYS = ["AUTH_TRUSTED_PROXY_HOPS", "APP_ENV"] as const;
   const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 

@@ -64,7 +64,7 @@ describe("ログインチャレンジ", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
   afterAll(() => cleanupAll());
 
-  test("AC-133 発行: Set-Cookie 属性と pending、改ざん・欠落は false", () =>
+  test("チャレンジを発行すると Set-Cookie の属性がそろい pending は true、cookie の改ざんか欠落なら pending は false", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -109,7 +109,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-134/135/137 TOTP 通過: session 発行・audit・単回消費", () =>
+  test("TOTP で通過すると session を発行して audit を残し、チャレンジは 1 回だけ使える", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -167,7 +167,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-136 リカバリーコード通過: 成功 + 残数減", () =>
+  test("リカバリーコードで通過すると成功し、残数が減る", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -227,7 +227,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-138/139 試行枠: 4 回目まで 400 + pending true、最後の 5 回目の誤コードで破棄して challenge_expired", () =>
+  test("誤コードは 4 回目まで 400 で pending のまま、5 回目でチャレンジを破棄して challenge_expired を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -382,7 +382,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-140 試行計数の TTL store 不能 → 429 locked (fail-closed)", () =>
+  test("試行の回数を TTL store で数えられない時は 429 locked を返す (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -407,7 +407,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-141 チャレンジ発行後の無効化交差 → 401 (not_enabled を漏らさない)", () =>
+  test("チャレンジの発行後に MFA が無効になると 401 を返し、not_enabled を明かさない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -435,7 +435,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-142 信頼外 redirectUrl は /account へ fallback (出口検証)", () =>
+  test("信頼できない redirectUrl は、通過の後に /account へ置き換える", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -456,7 +456,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-158 session 発行失敗はチャレンジ消費後 — 再 verify は 401 (fail-closed)", () =>
+  test("session の発行に失敗してもチャレンジは消費済みで、もう一度 verify すると 401 を返す (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

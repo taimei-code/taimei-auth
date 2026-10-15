@@ -72,7 +72,7 @@ afterAll(async () => {
   await cleanup();
 });
 
-describe("T1 発行 → SDK が読む → RPC 形式で戻す → server が検証", () => {
+describe("発行した session cookie を SDK が読み、RPC の形式で戻すと server が検証できる", () => {
   test("AuthApi.issueSession は session cookie をちょうど 1 本、percent-encoded の署名付き値で発行する", () =>
     run(
       Effect.gen(function* () {
@@ -114,7 +114,7 @@ describe("T1 発行 → SDK が読む → RPC 形式で戻す → server が検�
     ));
 });
 
-describe("T2 2 発行者の値の形と属性同一性", () => {
+describe("2 つの発行経路の session cookie は、値の形と属性が同じ", () => {
   test("better-auth 本体の値も percent-encoded の署名付き値 (AuthApi.issueSession と同じ形)", () =>
     run(
       Effect.gen(function* () {
@@ -157,7 +157,7 @@ describe("T2 2 発行者の値の形と属性同一性", () => {
   });
 });
 
-describe("T3 better-auth の cookie 属性 key は hono serialize が扱う key に収まる", () => {
+describe("better-auth の cookie 属性 key は hono serialize が扱う key に収まる", () => {
   test("createAuthCookie の attributes の key 集合", async () => {
     expect(isSubsetOfHandledKeys(await sessionCookieAttributes())).toBe(true);
   });

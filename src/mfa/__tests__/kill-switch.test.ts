@@ -22,14 +22,11 @@ const KILL_SWITCH_CASES: KillSwitchCase[] = [
 ];
 
 describe("isMfaChallengeEnabled (MFA_CHALLENGE_ENABLED の解釈)", () => {
-  test.each(KILL_SWITCH_CASES)("QA-M-13 $name → enabled:$enabled", ({
-    raw,
-    enabled,
-  }: KillSwitchCase) => {
+  test.each(KILL_SWITCH_CASES)("$name → enabled:$enabled", ({ raw, enabled }: KillSwitchCase) => {
     expect(isMfaChallengeEnabled(raw)).toBe(enabled);
   });
 
-  test("QA-M-13 チャレンジを止められる値は 'false' 完全一致のみ (設定漏れ・綴り違いは on 側へ倒れる)", () => {
+  test("チャレンジを止められる値は 'false' 完全一致のみ (設定漏れ・綴り違いは on 側へ倒れる)", () => {
     const disablingValues = KILL_SWITCH_CASES.filter((c) => !isMfaChallengeEnabled(c.raw)).map(
       (c) => c.raw,
     );

@@ -100,7 +100,7 @@ describe("src/auth.ts の onAPIError.onError", () => {
     return onAPIError.onError(error, ctx);
   };
 
-  test("onAPIError.onError が結線されている", () => {
+  test("onAPIError.onError が結線されている (未結線を describe の本体で throw すると、Bun は describe ごと落として件数が減るだけで fail にしないので、test の中で確かめる)", () => {
     expect(onAPIError?.onError).toBeDefined();
   });
 

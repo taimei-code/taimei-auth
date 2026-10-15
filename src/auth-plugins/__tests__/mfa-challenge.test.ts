@@ -149,7 +149,7 @@ describe("チャレンジ強制プラグイン", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
   afterAll(() => cleanupAll());
 
-  test("QA-H-03 magic link → 302 /auth/mfa", () =>
+  test("magic link → 302 /auth/mfa", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -176,7 +176,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-H-08 MFA 未設定 → callbackURL へ 302", () =>
+  test("MFA 未設定 → callbackURL へ 302", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -196,7 +196,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-E-12 チャレンジ発行失敗 fail-closed", () =>
+  test("チャレンジの発行に失敗すると fail-closed", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -226,7 +226,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-E-13 deleteSession 失敗 fail-closed", () =>
+  test("deleteSession に失敗すると fail-closed", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -259,7 +259,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-D-11 kill switch off → warning は再通知間隔ごとに 1 回", () =>
+  test("kill switch off → warning は再通知間隔ごとに 1 回", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -313,7 +313,7 @@ describe("チャレンジ強制プラグイン", () => {
         ),
     );
 
-  test("AC-019 runtime 不在 + kill switch on → session を落として 302 /auth/mfa、チャレンジ cookie は出ない", () =>
+  test("runtime 不在 + kill switch on → session を落として 302 /auth/mfa、チャレンジ cookie は出ない", () =>
     run(
       Effect.gen(function* () {
         const outcome = yield* runHookWithRuntimeDown();
@@ -326,7 +326,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("AC-020 runtime 不在 + kill switch off → 素通し", () =>
+  test("runtime 不在 + kill switch off → 素通し", () =>
     run(
       withKillSwitchOff(
         Effect.gen(function* () {
@@ -406,7 +406,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-R-02 連携がチャレンジ誘発しない (実 OAuth は QA-MR-02)", () =>
+  test("連携アカウントの追加ではチャレンジを出さない (実 OAuth は QA-MR-02)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -526,7 +526,7 @@ describe("enforceChallenge (program 単体)", () => {
     ? true
     : never = true;
 
-  test("AC-007 介入成功: Challenge { cookie } と deleteSession(token) 1 回", () =>
+  test("介入成功: Challenge { cookie } と deleteSession(token) 1 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -540,7 +540,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-005 MFA 未有効は Pass、介入の副作用は 0 回", () =>
+  test("MFA 未有効は Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -552,7 +552,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-006 Unmapped でも MFA 未有効なら Pass、介入の副作用は 0 回", () =>
+  test("Unmapped でも MFA 未有効なら Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -564,7 +564,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-008 未知 provider は fail-closed: Challenge { null }、deleteSession 1 回、TTL store 0 回、Sentry warning 1 件", () =>
+  test("未知 provider は fail-closed: Challenge { null }、deleteSession 1 回、TTL store 0 回、Sentry warning 1 件", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -582,7 +582,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-009 判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
+  test("判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -596,7 +596,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-010 チャレンジ発行失敗: Challenge { null } でも deleteSession は 1 回", () =>
+  test("チャレンジ発行失敗: Challenge { null } でも deleteSession は 1 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -614,7 +614,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-011 deleteSession 失敗: 発行済みの cookie は失わない", () =>
+  test("deleteSession 失敗: 発行済みの cookie は失わない", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -630,7 +630,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-012 Sentry backend の defect でも介入経路は Challenge で完走する", () =>
+  test("Sentry backend の defect でも介入経路は Challenge で完走する", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -648,7 +648,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-001 kill switch off は Pass、判定も介入も 0 回", () =>
+  test("kill switch off は Pass、判定も介入も 0 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -662,7 +662,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-002 Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
+  test("Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
     run(
       Effect.gen(function* () {
         const t0 = afterEveryEarlierKillSwitchReport();
@@ -677,7 +677,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-003 / AC-004 再通知の境界: 初回で鳴り、INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
+  test("再通知の境界: 初回で鳴り、INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
     run(
       Effect.gen(function* () {
         const layer = Layer.mergeAll(mfaEnabled, untouched);

@@ -11,7 +11,7 @@ const P = "enum-test-";
 const { run } = dbTest(P);
 const request = (url: string, init?: RequestInit) => requestApp(app, url, init);
 
-describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の path に一致しないので /* で登録する、#52)", () => {
+describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の path に一致しないので /* で登録する)", () => {
   test("GET /api/auth/ok returns 200 (Better Auth health endpoint reachable)", () =>
     run(
       Effect.gen(function* () {
@@ -41,7 +41,7 @@ describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の p
     ));
 });
 
-describe("Magic Link rate-limit local 緩和 (regression for #53)", () => {
+describe("local では Magic Link の試行枠を緩める", () => {
   test("APP_ENV=development で 10 連続送信が 429 にならない", () =>
     run(
       Effect.gen(function* () {

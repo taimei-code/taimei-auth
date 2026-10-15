@@ -17,24 +17,24 @@ const invalidCases = [
 ] as const;
 
 describe("redirectUrlAfterAccept", () => {
-  test("AC-004 有効な組なら redirect_url", () => {
+  test("有効な組なら redirect_url", () => {
     expect(redirectUrlAfterAccept(valid)).toBe(REDIRECT_URL);
   });
 
-  test.each(invalidCases)("AC-005〜007 %s なら /account", (_, params) => {
+  test.each(invalidCases)("組が欠けた %s なら /account", (_, params) => {
     expect(redirectUrlAfterAccept(params)).toBe("/account");
   });
 });
 
 describe("parseRedirectTarget", () => {
-  test("AC-035 有効な組を返す", () => {
+  test("有効な組を返す", () => {
     expect(parseRedirectTarget(valid)).toEqual({
       service_name: "taimei",
       redirect_url: REDIRECT_URL,
     });
   });
 
-  test.each(invalidCases)("AC-035 %s なら undefined", (_, params) => {
+  test.each(invalidCases)("組が欠けた %s なら undefined", (_, params) => {
     expect(parseRedirectTarget(params)).toBeUndefined();
   });
 });

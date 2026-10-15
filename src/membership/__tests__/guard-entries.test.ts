@@ -68,7 +68,7 @@ describe("requireRoleChange (403 → 404 → 403)", () => {
 });
 
 describe("requireInvite (403 (ADMIN) → 403 (canInviteRole))", () => {
-  test("QA-E-01 ADMIN + role=OWNER 招待 → 403 (canInviteRole)", async () => {
+  test("ADMIN + role=OWNER 招待 → 403 (canInviteRole)", async () => {
     const e = await run(
       requireInvite({ actor, companyId: "c1", body: { email: "x@x.jp", role: "OWNER" } }).pipe(
         Effect.provide(members(["u1", "c1", "ADMIN"])),
@@ -243,7 +243,7 @@ describe("requireInvitationAccept (404 (token) → 403 (email) → reused → 41
     expect(r).toEqual({ mode: "reused", companyId: "c1" });
   });
 
-  test("既所属短絡 (期限切れ invitation でも既所属なら reused=200) — QA-M-01 の contract", async () => {
+  test("既所属短絡 (期限切れ invitation でも既所属なら reused=200)", async () => {
     const expired = invitationOf({ expiresAt: new Date(Date.now() - 60_000) });
     const layer = Layer.mergeAll(members(["u1", "c1", "MEMBER"]), invitationRepoLayer([expired]));
     const r = await runOk(accept("tok").pipe(Effect.provide(layer)));
@@ -265,7 +265,7 @@ describe("requireInvitationAccept (404 (token) → 403 (email) → reused → 41
   });
 });
 
-describe("QA-R-05 MembershipRepo の DbError は伝播する (fail-closed の対象は session のみ)", () => {
+describe("MembershipRepo の DbError は伝播する (fail-closed の対象は session のみ)", () => {
   test("operation 単位 entry も DbError を捕捉しない", async () => {
     const cause = new Error("db timeout");
     const e = await run(

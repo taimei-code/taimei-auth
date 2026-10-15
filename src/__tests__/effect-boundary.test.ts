@@ -21,7 +21,7 @@ describe("effect の import 境界 (ADR-0017)", () => {
   });
 });
 
-describe("Stage 2 ゲート (Use-case): Repository は ports 経由", () => {
+describe("Use-case は Repository を ports 経由で使う", () => {
   test("db/repositories と db/transaction の runtime import は wiring / id-generator / transaction / auth.ts に限る", () => {
     const allowed = new Set(["src/id-generator.ts", "src/transaction.ts", "src/auth.ts"]);
     const offenders = filesImporting(/^@\/db\/(repositories|transaction)/, "src", {

@@ -5,7 +5,7 @@ import { grepFiles, grepLines, REPO_ROOT } from "../../__tests__/source-scan";
 const HANDLERS_DIR = join(REPO_ROOT, "src/handlers");
 
 describe("Transport 層の禁止事項 (ADR-0012 の regression ガード)", () => {
-  test("QA-H-10 / QA-E-10 handlers/ (テスト除外) に runInTransaction 出現なし", () => {
+  test("handlers/ (テスト除外) に runInTransaction 出現なし", () => {
     expect(grepFiles("runInTransaction", HANDLERS_DIR, { tests: "exclude" })).toEqual([]);
   });
 

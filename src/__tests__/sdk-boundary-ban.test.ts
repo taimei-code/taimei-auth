@@ -14,7 +14,7 @@ const SDK_BANNED_PATHS = [
 ];
 
 describe("SDK 境界 (packages/auth-client) の ban 集合 invariant", () => {
-  test("QA-R-08: SDK 境界 override (packages/auth-client/**) は selector の対象外で ban path 集合が保たれる", () => {
+  test("SDK 境界 override (packages/auth-client/**) は selector の対象外で ban path 集合が保たれる", () => {
     const config = readBiomeConfig();
     const sdkOverride = (config.overrides ?? []).find((override) =>
       (override.includes ?? []).includes("packages/auth-client/**"),

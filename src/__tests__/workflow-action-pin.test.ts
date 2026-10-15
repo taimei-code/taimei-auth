@@ -9,7 +9,7 @@ import {
 } from "./config-invariant-helpers";
 
 describe("GitHub Actions の action pin invariant", () => {
-  test("QA-M-16: workflow の uses は全て 40 桁 SHA + version コメント", () => {
+  test("workflow の uses は全て 40 桁 SHA + version コメント", () => {
     const names = workflowFileNames();
     expect(names.length).toBeGreaterThanOrEqual(3);
 

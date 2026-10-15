@@ -32,19 +32,19 @@ describe("validateChallengeRedirect", () => {
     else process.env.AUTH_TRUSTED_ORIGINS = originalTrustedOrigins;
   });
 
-  test("QA-H-06 trusted origin 絶対 URL は同一文字列でそのまま返る", () => {
+  test("trusted origin の絶対 URL は同じ文字列のまま返す", () => {
     const consumerCallback = "https://app.taimei-code.com/dashboard?tab=1";
     expect(validateChallengeRedirect(consumerCallback)).toBe(consumerCallback);
     expect(captured).toHaveLength(0);
   });
 
-  test("QA-H-07 招待受諾動線が /account に転落しない", () => {
+  test("招待の受諾の path は /account に置き換えずにそのまま返す", () => {
     const invitationCallback = "/auth/signup/company?invitation_token=abcDEF-123";
     expect(validateChallengeRedirect(invitationCallback)).toBe(invitationCallback);
     expect(captured).toHaveLength(0);
   });
 
-  test("QA-E-07 trusted 外 origin は /account へ倒し Sentry に 1 件だけ載せる", () => {
+  test("trusted 外の origin は /account に置き換え、Sentry に 1 件だけ記録する", () => {
     expect(validateChallengeRedirect("https://evil.com/steal")).toBe(FALLBACK_REDIRECT);
     expect(captured).toHaveLength(1);
     expect(captured[0]?.message).toBe("mfa: challenge redirect rejected");
@@ -56,18 +56,21 @@ describe("validateChallengeRedirect", () => {
     expect(captured[0]?.context?.extra).toEqual({ rejected: "https://evil.com/steal" });
   });
 
-  test.each(callbackUrlCases)("QA-E-08 $name", ({ url, expected }: CallbackUrlCase) => {
+  test.each(callbackUrlCases)("callbackURL は正規のものを通し、不正なものを置き換える: $name", ({
+    url,
+    expected,
+  }: CallbackUrlCase) => {
     expect(validateChallengeRedirect(url)).toBe(expected ? url : FALLBACK_REDIRECT);
     expect(captured).toHaveLength(expected ? 0 : 1);
   });
 
-  test("QA-D-05 callbackURL 未指定/空は /account へ倒し Sentry には載せない", () => {
+  test("callbackURL が未指定か空なら /account を返し、Sentry には記録しない", () => {
     expect(validateChallengeRedirect(undefined)).toBe(FALLBACK_REDIRECT);
     expect(validateChallengeRedirect("")).toBe(FALLBACK_REDIRECT);
     expect(captured).toHaveLength(0);
   });
 
-  test("QA-M-12 wildcard trusted origin は出口では展開されず配下 origin も /account へ倒れる", () => {
+  test("wildcard の trusted origin は通過の後の検証では展開せず、配下の origin も /account に置き換える", () => {
     process.env.AUTH_TRUSTED_ORIGINS = "https://*.taimei-code.com";
 
     expect(validateChallengeRedirect("https://app.taimei-code.com/dashboard")).toBe(
@@ -76,14 +79,14 @@ describe("validateChallengeRedirect", () => {
     expect(rejectionReasons()).toEqual(["origin_not_trusted"]);
   });
 
-  test("QA-M-12 wildcard entry を並べても相対 path は入口/出口で一致したまま通る", () => {
+  test("wildcard の entry を並べても、相対 path は入口と通過の後の検証で同じ判定のまま通る", () => {
     process.env.AUTH_TRUSTED_ORIGINS = "https://*.taimei-code.com";
 
     expect(validateChallengeRedirect("/account/security")).toBe("/account/security");
     expect(captured).toHaveLength(0);
   });
 
-  test("QA-M-20 fragment 付きは相対 path も絶対 URL も拒否して /account へ倒す", () => {
+  test("fragment 付きは相対 path も絶対 URL も拒否して /account に置き換える", () => {
     expect(validateChallengeRedirect("/account?next=%2F&x=1#frag")).toBe(FALLBACK_REDIRECT);
     expect(validateChallengeRedirect("https://app.taimei-code.com/dashboard#frag")).toBe(
       FALLBACK_REDIRECT,

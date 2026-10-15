@@ -38,7 +38,7 @@ describe("ログイン hot path の非影響 (静的 tripwire)", () => {
 });
 
 describe("MFA totp module boundary", () => {
-  test("AC-150f AuthApi.issueSession の session cookie 直列化は hono serialize に委ね、手組みしない (session cookie 契約)", () => {
+  test("AuthApi.issueSession の session cookie は hono の serialize で組み、属性を手で書かない (session cookie の契約)", () => {
     expect(filesWithCodeLiteral("hono/utils/cookie", "src/mfa src/auth-wiring.ts")).toEqual([
       "src/auth-wiring.ts",
       "src/mfa/totp/login-challenge.ts",
@@ -48,7 +48,7 @@ describe("MFA totp module boundary", () => {
     ).toEqual([]);
   });
 
-  test("AC-150b db/repositories/mfa-totp の production importer 列挙", () => {
+  test("db/repositories/mfa-totp を import する production code は決まった file だけ", () => {
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src management")).toEqual([
       "src/id-generator.ts",
       "src/mfa/totp/enroll-mfa.ts",
@@ -57,13 +57,13 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
-  test("AC-150d チャレンジ cookie 名リテラルは login-challenge.ts のみ", () => {
+  test("チャレンジの cookie 名の文字列は login-challenge.ts だけが持つ", () => {
     expect(filesWithCodeLiteral("mfa_login_challenge")).toEqual([
       "src/mfa/totp/login-challenge.ts",
     ]);
   });
 
-  test("AC-150e secret 材料を返す findMfaTotp の importer 列挙", () => {
+  test("secret を返す findMfaTotp を使う code は決まった file だけ", () => {
     expect(filesWithCodeLiteral("findMfaTotp", "src db management")).toEqual([
       "db/repositories/mfa-totp.ts",
       "src/mfa/totp/activate-mfa.ts",
@@ -72,13 +72,13 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
-  test("AC-038 verifiedAt を読む production code は policy.ts だけ (db/ は列の所有層で対象外)", () => {
+  test("verifiedAt を読む production code は policy.ts だけ (db/ は列を持つ層なので対象外)", () => {
     expect(filesWithCodeLiteral("verifiedAt", "src web/src management")).toEqual([
       "src/mfa/policy.ts",
     ]);
   });
 
-  test("QA-E-02 façade の runtime export 面 (handler が使ってよい面) を固定", async () => {
+  test("façade が実行時に export する関数 (handler が使ってよいもの) は決まっている", async () => {
     const facade = await import("../totp");
     expect(Object.keys(facade).sort()).toEqual([
       "activate",
@@ -99,7 +99,7 @@ describe("MFA totp module boundary", () => {
     ]);
   });
 
-  test("QA-I-01 db/ は src/ を import しない (分離時に逆流する依存を作らない)", () => {
+  test("db/ は src/ を import しない (identity DB を分離する時に逆向きの依存を作らない)", () => {
     expect(filesWithCodeLiteral(`from ['"](\\.\\./)*\\.\\./src/`, "db")).toEqual([]);
   });
 });

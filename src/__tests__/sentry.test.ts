@@ -17,7 +17,7 @@ describe("captureCauseAs", () => {
   const run = <A>(program: Effect.Effect<A, never, SentryService>) =>
     Effect.runPromise(Effect.exit(program).pipe(Effect.provide(SentryLive)));
 
-  test("AC-001/002/004 cause を warning + tags で記録してから渡した値で成功する", async () => {
+  test("cause を warning + tags で記録してから渡した値で成功する", async () => {
     const cause = new Error("boom");
     const value = { marker: true };
     const before = captured.length;
@@ -30,7 +30,7 @@ describe("captureCauseAs", () => {
     expect(captured.at(-1)?.[1]).toMatchObject({ level: "warning", tags: { t: "1" } });
   });
 
-  test("AC-003/004 context の level は既定の warning を上書きする", async () => {
+  test("context の level は既定の warning を上書きする", async () => {
     const exit = await run(
       captureCauseAs(null, { level: "error", tags: { t: "2" } })({ cause: 1 }),
     );

@@ -10,7 +10,7 @@ import {
   waitForValue,
 } from "../atom-runtime";
 
-describe("refreshAndWait (notifyAfterRefresh に渡す refresh の契約)", () => {
+describe("refreshAndWait (MFA の有効化の後だけが使う。取り直すと有効化済みの表示に替わってリカバリーコードの dialog が外れるので、コードを閉じるまで取り直しを遅らせる)", () => {
   test("mount 済みの atom を取得し直し、新しい値で resolve する", async () => {
     let fetches = 0;
     const counter = Atom.make(Effect.sync(() => ++fetches));

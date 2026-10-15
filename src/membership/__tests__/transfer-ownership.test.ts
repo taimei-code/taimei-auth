@@ -15,7 +15,7 @@ describe("transferOwnership", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-04 正常 委譲 → to は OWNER 昇格 / actor は ADMIN 降格 / ownership_transferred audit", () =>
+  test("正常 委譲 → to は OWNER 昇格 / actor は ADMIN 降格 / ownership_transferred audit", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -39,7 +39,7 @@ describe("transferOwnership", () => {
       }),
     ));
 
-  test("QA-D-04 二段委譲 A→B, 続いて B→C 両者 200 / 全 role 状態が期待通り", () =>
+  test("二段委譲 A→B, 続いて B→C 両者 200 / 全 role 状態が期待通り", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -60,7 +60,7 @@ describe("transferOwnership", () => {
       }),
     ));
 
-  test("QA-D-04 並行 transfer (同 companyId, 別 to) → FOR UPDATE 直列化 / OWNER≥1 不変条件維持 (OWNER≤1 は Guard の 403 が担う)", () =>
+  test("並行 transfer (同 companyId, 別 to) → FOR UPDATE 直列化 / OWNER≥1 不変条件維持 (OWNER≤1 は Guard の 403 が担う)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -91,7 +91,7 @@ describe("transferOwnership", () => {
       }),
     ));
 
-  test("QA-H-12 mutation → audit の発火順 pin (audit payload の to は UPDATE 後の OWNER と一致)", () =>
+  test("mutation → audit の発火順 pin (audit payload の to は UPDATE 後の OWNER と一致)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

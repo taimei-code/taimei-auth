@@ -209,7 +209,7 @@ describe("verifySession outcome", () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  test("AC-017/018 signOut throws → still returns REVISION_OUTDATED and records the cause to Sentry", async () => {
+  test("signOut throws → still returns REVISION_OUTDATED and records the cause to Sentry", async () => {
     const cause = new Error("ttl store down");
     mockSignOut.mockRejectedValue(cause);
     const before = captured.length;

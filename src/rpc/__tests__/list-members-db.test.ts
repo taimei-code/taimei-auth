@@ -47,7 +47,7 @@ describe("ListCurrentCompanyMembers は現在の事業所のメンバーだけ�
     return { c1, c2, both, onlyC1, onlyC2 };
   });
 
-  test("AC-002: 2 つの事業所に所属する人には、現在の事業所 C1 のメンバーだけを返す", () =>
+  test("2 つの事業所に所属する人には、現在の事業所 C1 のメンバーだけを返す", () =>
     run(
       Effect.gen(function* () {
         const { c1, both, onlyC2 } = yield* seedTwoCompanies;
@@ -59,7 +59,7 @@ describe("ListCurrentCompanyMembers は現在の事業所のメンバーだけ�
       }),
     ));
 
-  test("AC-001: 実際の join で引いた名前・メールアドレス・role を、user ごとに正しく写す", () =>
+  test("実際の join で引いた名前・メールアドレス・role を、user ごとに正しく写す", () =>
     run(
       Effect.gen(function* () {
         const { both, onlyC1 } = yield* seedTwoCompanies;
@@ -81,7 +81,7 @@ describe("ListCurrentCompanyMembers は現在の事業所のメンバーだけ�
       }),
     ));
 
-  test("AC-003: 現在の事業所を C2 に切り替えると、C2 のメンバーを返す", () =>
+  test("現在の事業所を C2 に切り替えると、C2 のメンバーを返す", () =>
     run(
       Effect.gen(function* () {
         const { c1, c2, both } = yield* seedTwoCompanies;
@@ -113,7 +113,7 @@ describe("ListCurrentCompanyMembers の入口", () => {
     process.env = { ...originalEnv };
   });
 
-  test("AC-013: service key があれば route に届き、存在しない token は SESSION_NOT_FOUND", async () => {
+  test("service key があれば route に届き、存在しない token は SESSION_NOT_FOUND", async () => {
     const res = await post({ "x-service-key": SERVICE_KEY });
     expect([res.status, await res.json()]).toEqual([
       200,

@@ -111,11 +111,11 @@ describe("redirectTargetSchema", () => {
     redirect_url: "https://app.taimei-code.com/dashboard",
   } as const;
 
-  test("AC-001 allowlist 内の組は同じ 2 項目で返る", () => {
+  test("allowlist 内の組は同じ 2 項目で返る", () => {
     expect(redirectTargetSchema.parse(target)).toEqual(target);
   });
 
-  test("AC-002 redirect_url が allowlist 外は parse 失敗", () => {
+  test("redirect_url が allowlist 外は parse 失敗", () => {
     const result = redirectTargetSchema.safeParse({
       ...target,
       redirect_url: "https://evil.example.com/dashboard",
@@ -123,14 +123,14 @@ describe("redirectTargetSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  test("AC-003 片方だけは parse 失敗", () => {
+  test("片方だけは parse 失敗", () => {
     expect(redirectTargetSchema.safeParse({ service_name: "taimei" }).success).toBe(false);
     expect(redirectTargetSchema.safeParse({ redirect_url: target.redirect_url }).success).toBe(
       false,
     );
   });
 
-  test("AC-039 redirect_url は 2048 文字まで", () => {
+  test("redirect_url は 2048 文字まで", () => {
     const base = "https://app.taimei-code.com/";
     const ofLength = (n: number) => base + "a".repeat(n - base.length);
     expect(

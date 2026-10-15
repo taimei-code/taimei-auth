@@ -11,7 +11,7 @@ function makeFakeReq(): UnaryRequest {
 const fakeResponse = {} as UnaryResponse;
 
 describe("createServiceKeyInterceptor", () => {
-  test("S1: interceptor 経由のリクエストで X-Service-Key header が set される", async () => {
+  test("interceptor 経由のリクエストで X-Service-Key header が set される", async () => {
     const interceptor = createServiceKeyInterceptor("secret123");
 
     const captured = makeFakeReq();
@@ -33,7 +33,7 @@ describe("createServiceKeyInterceptor", () => {
 });
 
 describe("createAuthClient", () => {
-  test("S2: transport を直接渡せば authService / userService 両方が生える", () => {
+  test("transport を直接渡せば authService / userService 両方が生える", () => {
     const transport = {
       unary: async () => ({}),
       stream: async () => ({}),
