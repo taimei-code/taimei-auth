@@ -1,40 +1,42 @@
+import { getSessionCookie } from "better-auth/cookies";
 import { Effect, Layer } from "effect";
 import { HttpServerRequest } from "effect/http";
-import { spendAttemptBudgetFailOpen } from "../attempt-budget";
-import { RateLimited } from "../membership/guard/errors";
+import {
+  ATTEMPT_BUDGETS,
+  type AttemptBudget,
+  spendAttemptBudgetOrRateLimited,
+} from "../attempt-budget";
 import { ChallengeStateBudget, ChallengeVerifyBudget, MfaChangeBudget } from "../mfa/mfa-contract";
-import { limitForEnvironment, mfaAttemptKey } from "../rate-limit";
 import { getClientContext } from "../request-context";
 import type { SentryService } from "../sentry";
 import type { TtlStore } from "../ttl-store-service";
 import { headersOf } from "./request-http-api";
 
-const WINDOW_SECONDS = 60;
+export async function mfaAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
+  const sessionToken = getSessionCookie(headers);
+  if (!sessionToken) return `ip:${fallbackIp}`;
+  return `session:${await sha256Hex(sessionToken)}`;
+}
 
-type Budget = {
-  readonly keyOf: (headers: Headers, ip: string) => string | Promise<string>;
-  readonly limit: number;
-};
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 const budgetMiddleware = (
-  budget: Budget,
+  budget: AttemptBudget<"allow">,
+  subjectOf: (headers: Headers, ip: string) => string | Promise<string>,
 ): Effect.Effect<MfaChangeBudget["Service"], never, TtlStore | SentryService> =>
   Effect.gen(function* () {
     const services = yield* Effect.context<TtlStore | SentryService>();
     return Effect.fnUntraced(function* (httpEffect) {
       const headers = headersOf(yield* HttpServerRequest.HttpServerRequest);
-      const key = yield* Effect.promise(async () =>
-        budget.keyOf(headers, getClientContext(headers).ip),
+      const subject = yield* Effect.promise(async () =>
+        subjectOf(headers, getClientContext(headers).ip),
       );
-      yield* spendAttemptBudgetFailOpen({
-        key,
-        windowSeconds: WINDOW_SECONDS,
-        maxAttempts: limitForEnvironment(budget.limit),
-        component: "rate-limit",
-      }).pipe(
-        Effect.catchTag("AttemptBudgetExhausted", () => new RateLimited()),
-        Effect.provideContext(services),
-      );
+      yield* spendAttemptBudgetOrRateLimited(budget, subject).pipe(Effect.provideContext(services));
       return yield* httpEffect;
     });
   });
@@ -42,14 +44,14 @@ const budgetMiddleware = (
 export const AttemptBudgetsLive = Layer.mergeAll(
   Layer.effect(
     ChallengeVerifyBudget,
-    budgetMiddleware({ keyOf: (_headers, ip) => `rate-limit:mfa-challenge:ip:${ip}`, limit: 10 }),
+    budgetMiddleware(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, (_headers, ip) => ip),
   ),
   Layer.effect(
     ChallengeStateBudget,
-    budgetMiddleware({
-      keyOf: (_headers, ip) => `rate-limit:mfa-challenge-status:ip:${ip}`,
-      limit: 30,
-    }),
+    budgetMiddleware(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, (_headers, ip) => ip),
   ),
-  Layer.effect(MfaChangeBudget, budgetMiddleware({ keyOf: mfaAttemptKey, limit: 10 })),
+  Layer.effect(
+    MfaChangeBudget,
+    budgetMiddleware(ATTEMPT_BUDGETS.mfaChangePerSession, mfaAttemptSubject),
+  ),
 );

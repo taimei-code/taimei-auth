@@ -2,6 +2,7 @@ import { Deferred, Effect, Layer, Ref } from "effect";
 import { AuditLog } from "../audit/ports";
 import { AuditLogLive } from "../audit/wiring";
 import { AuthApi } from "../auth-service";
+import { authApiLive } from "../auth-wiring";
 import { AuthApiError, TtlStoreError } from "../errors";
 import { HealthRepo } from "../health/ports";
 import type { RateWindowResult } from "../ttl-store";
@@ -30,11 +31,9 @@ export const healthRepoLayer = (
 export const ttlStorePingLayer = (ping: TtlStore["Service"]["ping"]): Layer.Layer<TtlStore> =>
   Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ ping }));
 
-export const authApiWith = (override: (live: AuthApi["Service"]) => Partial<AuthApi["Service"]>) =>
-  Layer.effect(
-    AuthApi,
-    Effect.map(AuthApi, (live) => AuthApi.of({ ...live, ...override(live) })),
-  );
+export const authApiWith = (
+  override: (live: AuthApi["Service"]) => Partial<AuthApi["Service"]>,
+): Layer.Layer<AuthApi> => Layer.succeed(AuthApi, { ...authApiLive, ...override(authApiLive) });
 
 export const auditLogWith = (
   override: (live: AuditLog["Service"]) => Partial<AuditLog["Service"]>,

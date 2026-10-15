@@ -101,7 +101,7 @@ describe("db/testing seed", () => {
     expect(pendingRow && nullness(pendingRow)).toEqual(["PENDING", false, false, false]);
   });
 
-  test("createSeed の公開面は 11 関数 (AC-208)", () => {
+  test("createSeed の公開面は 11 関数", () => {
     expect(Object.keys(seed).sort()).toEqual(Object.keys(SEED_KEYS).sort());
   });
 

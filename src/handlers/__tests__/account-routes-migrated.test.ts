@@ -72,8 +72,8 @@ describe("account routes migration snapshot", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  describe("QA-H-04 success bodies (12 移行 route) — 変更前 fixture との JSON deep-equal", () => {
-    test("QA-H-02 GET /api/account/memberships (active membership 1 件)", () =>
+  describe("成功時の body は移行した 12 route すべてで変更前の fixture と JSON で一致する", () => {
+    test("GET /api/account/memberships (active membership 1 件)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -91,7 +91,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 / QA-H-03 POST /api/account/companies (signup 成功)", () =>
+    test("POST /api/account/companies (signup 成功)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -114,7 +114,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/add", () =>
+    test("POST /api/account/companies/add", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -137,7 +137,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId (update)", () =>
+    test("POST /api/account/companies/:companyId (update)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -153,7 +153,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 GET /api/account/companies/:companyId/members", () =>
+    test("GET /api/account/companies/:companyId/members", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -173,7 +173,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 GET /api/account/companies/:companyId/invitations", () =>
+    test("GET /api/account/companies/:companyId/invitations", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -195,7 +195,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/invitations (create)", () =>
+    test("POST /api/account/companies/:companyId/invitations (create)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -214,7 +214,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/invitations (reused for pending duplicate)", () =>
+    test("POST /api/account/companies/:companyId/invitations (reused for pending duplicate)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -238,7 +238,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/invitations/:invitationId/revoke", () =>
+    test("POST /api/account/companies/:companyId/invitations/:invitationId/revoke", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -261,7 +261,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/accept-invitation (OWNER 招待 · inviter 現役 OWNER)", () =>
+    test("POST /api/account/accept-invitation (OWNER 招待 · inviter 現役 OWNER)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -283,7 +283,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/members/:targetUserId/role", () =>
+    test("POST /api/account/companies/:companyId/members/:targetUserId/role", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -304,7 +304,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/members/:targetUserId/remove (self)", () =>
+    test("POST /api/account/companies/:companyId/members/:targetUserId/remove (self)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -323,7 +323,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-H-02 POST /api/account/companies/:companyId/transfer-ownership", () =>
+    test("POST /api/account/companies/:companyId/transfer-ownership", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -368,7 +368,7 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("error catalog (QA-E-02: 全 route の error tag × status)", () => {
+  describe("error catalog (全 route の error tag × status)", () => {
     test("招待の作成が事業所の招待の試行枠を超えると、429 で body は RateLimited", () =>
       run(
         Effect.gen(function* () {
@@ -388,7 +388,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-E-01 ADMIN が role=OWNER 招待 → 403 Forbidden (#104 route レベル regression)", () =>
+    test("ADMIN が role=OWNER で招待すると、route でも 403 Forbidden を返す", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -424,7 +424,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-E-03 POST /api/account/companies with empty name → 400 (decode 失敗、body 無し)", () =>
+    test("POST /api/account/companies with empty name → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -438,7 +438,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-E-03 POST /api/account/companies/add with empty name → 400 (decode 失敗、body 無し)", () =>
+    test("POST /api/account/companies/add with empty name → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -452,7 +452,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-E-03 POST invitations with invalid email → 400 (decode 失敗、body 無し)", () =>
+    test("POST invitations with invalid email → 400 (decode 失敗、body 無し)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -887,7 +887,7 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("QA-D-01 401 が 400/403/404 に優先 (順序保証)", () => {
+  describe("401 は 400/403/404 より先に返る (順序保証)", () => {
     test("cookie 無しで invalid body 付き invite → 401 Unauthorized (400 に落ちない)", () =>
       run(
         Effect.gen(function* () {
@@ -931,7 +931,7 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("QA-D-02 getSession が同期 throw (期限切れ cookie の DI 差替相当) でも fail-closed 401", () => {
+  describe("getSession が同期 throw (期限切れ cookie の DI 差替相当) しても fail-closed で 401", () => {
     test("所属のある actor でも getSession が同期 throw すれば 401 Unauthorized", () =>
       run(
         Effect.gen(function* () {
@@ -952,7 +952,7 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("QA-M-03 / QA-M-08 Content-Type 監視", () => {
+  describe("応答の Content-Type", () => {
     test("成功 response の Content-Type", () =>
       run(
         Effect.gen(function* () {
@@ -980,8 +980,8 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("QA-M-01 accept-invitation reused 短絡の route レベル担保", () => {
-    test("QA-M-01 既所属 member が PENDING invitation を再 accept → 200 reused", () =>
+  describe("accept-invitation の reused の短絡は route でも効く", () => {
+    test("既所属 member が PENDING invitation を再 accept → 200 reused", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -1006,7 +1006,7 @@ describe("account routes migration snapshot", () => {
         }),
       ));
 
-    test("QA-M-01 既所属 member が 期限切れ invitation を再 accept → 200 reused (isAcceptable より前に短絡)", () =>
+    test("既所属 member が 期限切れ invitation を再 accept → 200 reused (isAcceptable より前に短絡)", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -1032,7 +1032,7 @@ describe("account routes migration snapshot", () => {
       ));
   });
 
-  describe("QA-R-06 accept 経路の副作用不変性", () => {
+  describe("accept 経路の副作用は変わらない", () => {
     test("正常 accept (現役 OWNER 招待者) では invitation_accept_rejected event が 0 件", () =>
       run(
         Effect.gen(function* () {

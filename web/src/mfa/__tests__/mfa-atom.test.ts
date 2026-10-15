@@ -34,8 +34,8 @@ describe("mfaFailureMessage", () => {
     expect(mfaFailureMessage(Cause.fail(new Locked()))).not.toBe(rateLimited);
   });
 
-  test("Unauthorized は再ログインを促す", () => {
-    expect(mfaFailureMessage(Cause.fail(new Unauthorized()))).toContain("ログイン");
+  test("Unauthorized は表に無く、既定の文言を返す (ログイン画面へ移すのは SPA の API の client)", () => {
+    expect(mfaFailureMessage(Cause.fail(new Unauthorized()))).toContain("処理に失敗しました");
   });
 
   test.each([

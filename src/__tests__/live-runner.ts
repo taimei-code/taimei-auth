@@ -11,7 +11,7 @@ type TestServices = AppServices | TestDb;
 
 const testAppLayer = appLayer(testTtlStore);
 
-export const runTest =
+const runTest =
   (prefix: string) =>
   <A, E>(program: Effect.Effect<A, E, TestServices>): Promise<A> =>
     Effect.runPromise(Effect.provide(program, Layer.merge(testDbLayer(prefix), testAppLayer)));

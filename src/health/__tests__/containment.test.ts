@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { grepFiles, REPO_ROOT } from "../../__tests__/grep-files";
+import { grepFiles, REPO_ROOT } from "../../__tests__/source-scan";
 
 describe("/health probe の封じ込め (静的 tripwire)", () => {
   test("probe の呼び手は src/health/probe.ts だけ", () => {
-    expect(grepFiles("\\.pingDatabase\\(|\\.ping\\(", "src", { excludeTests: true })).toEqual([
+    expect(grepFiles("\\.pingDatabase\\(|\\.ping\\(", "src", { tests: "exclude" })).toEqual([
       "src/health/probe.ts",
     ]);
   });
@@ -18,7 +18,9 @@ describe("/health probe の封じ込め (静的 tripwire)", () => {
 
   test("TtlStore.ping は attemptOnce (retry なし、ADR-0017)", () => {
     expect(
-      grepFiles("ping: \\(\\) => attemptOnce\\(", "src/ttl-store-service.ts", { lines: true }),
+      readFileSync(join(REPO_ROOT, "src/ttl-store-service.ts"), "utf8").match(
+        /\bping:\s*\(\)\s*=>\s*attemptOnce\(/g,
+      ),
     ).toHaveLength(1);
   });
 

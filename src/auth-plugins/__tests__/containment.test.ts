@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { grepFiles, REPO_ROOT } from "../../__tests__/grep-files";
+import { grepFiles, REPO_ROOT } from "../../__tests__/source-scan";
 import { parsePrimaryAuthRoute } from "../primary-auth-routes";
 
 describe("auth-plugins の判定の封じ込め (静的 tripwire)", () => {
   test("一次認証 route と provider の literal 比較は primary-auth-routes.ts だけ (parser 1 本に集約)", () => {
     expect(
       grepFiles('"github"|"/callback/:id"|"/magic-link/verify"', "src/auth-plugins", {
-        excludeTests: true,
+        tests: "exclude",
       }),
     ).toEqual(["src/auth-plugins/primary-auth-routes.ts"]);
   });

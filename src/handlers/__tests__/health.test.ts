@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { healthRepoLayer, ttlStorePingLayer } from "../../__tests__/test-layers";
 import { buildApp } from "../../app";
 import { DbError } from "../../errors";
@@ -9,7 +9,7 @@ import { SentryLive } from "../../sentry";
 import { healthProgram } from "../health";
 import { runProgramInRoute } from "./run-program-in-route";
 
-recordSentryExceptions();
+recordSentry();
 
 const call = (pingDatabase: HealthRepo["Service"]["pingDatabase"]) =>
   runProgramInRoute(

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit, Layer } from "effect";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { healthRepoLayer, ttlStorePingLayer } from "../../__tests__/test-layers";
 import { DbError, TtlStoreError } from "../../errors";
 import { SentryLive } from "../../sentry";
@@ -8,7 +8,7 @@ import type { TtlStore } from "../../ttl-store-service";
 import type { HealthRepo } from "../ports";
 import { probeHealth } from "../probe";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 beforeEach(() => {
   captured.length = 0;
 });

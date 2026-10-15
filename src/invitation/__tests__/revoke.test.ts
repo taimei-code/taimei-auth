@@ -40,7 +40,7 @@ describe("revokeInvitation", () => {
       }),
     ));
 
-  test("QA-E-11 存在しない invitationId → not_found_or_not_pending / audit 発火なし", () =>
+  test("存在しない invitationId → not_found_or_not_pending / audit 発火なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

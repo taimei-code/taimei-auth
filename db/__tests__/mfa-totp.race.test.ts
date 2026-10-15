@@ -51,7 +51,7 @@ describe("mfa_totp repository の並行決着", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("AC-156 並行 insert ×2 → 勝者 1、行は勝者の enrollment_id", async () => {
+  test("並行 insert ×2 → 勝者 1、行は勝者の enrollment_id", async () => {
     const userId = await seedUser("insert");
 
     const results = await Promise.all([
@@ -64,7 +64,7 @@ describe("mfa_totp repository の並行決着", () => {
     expect((await findMfaTotp(userId))?.enrollmentId).toBe(winner);
   });
 
-  test("AC-113 並行 activate ×2 → 勝者 1、last_used_timestep は勝者の値", async () => {
+  test("並行 activate ×2 → 勝者 1、last_used_timestep は勝者の値", async () => {
     const userId = await seedUser("activate");
     await insertMfaTotpEnrollment(enrollmentOf(userId, "e-1"));
 
@@ -94,7 +94,7 @@ describe("mfa_totp repository の並行決着", () => {
     expect(await consumeTotpTimestep(userId, 200)).toBe(false);
   });
 
-  test("AC-119/120 timestep は単調消費 — 再消費・過去・並行敗者は false", async () => {
+  test("timestep は単調消費 — 再消費・過去・並行敗者は false", async () => {
     const userId = await seedUser("timestep");
     await insertMfaTotpEnrollment(enrollmentOf(userId, "e-1"));
     await activateMfaTotp(userId, "e-1", 100);
@@ -110,7 +110,7 @@ describe("mfa_totp repository の並行決着", () => {
     expect(race.filter(Boolean).length).toBe(1);
   });
 
-  test("AC-121 リカバリーコードの並行消費 ×2 → 勝者 1、countUnused が減る", async () => {
+  test("リカバリーコードの並行消費 ×2 → 勝者 1、countUnused が減る", async () => {
     const userId = await seedUser("recovery");
     await insertMfaTotpEnrollment(enrollmentOf(userId, "e-1"));
     await activateMfaTotp(userId, "e-1", 100);

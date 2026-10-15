@@ -20,6 +20,7 @@ import {
 } from "../gen/auth/v1/auth_pb";
 import { MembershipRepo } from "../membership/ports";
 import { captureCause, type SentryService } from "../sentry";
+import { checkSession } from "../session-check";
 import { toProtoCompanyMember, toProtoRole, toProtoSession, toProtoUser } from "./mappers";
 import { runRpc } from "./run-rpc";
 
@@ -40,25 +41,24 @@ const verifySessionUser = Effect.fnUntraced(function* (
   handler: string,
 ): Effect.fn.Return<SessionCheck, AuthApiError | DbError, AuthApi | UserRepo | SentryService> {
   const headers = new Headers({ cookie: buildSessionCookieHeader(sessionToken) });
-  const authApi = yield* AuthApi;
-  const result = yield* authApi.getSession(headers);
-
-  if (!result?.user || !result?.session) {
+  const status = yield* checkSession(headers);
+  if (status._tag === "NoSession") {
     return { _tag: "Rejected", reason: Result.SESSION_NOT_FOUND };
   }
-
-  const user = yield* UserRepo.use((users) => users.findUserById(result.user.id));
-  if (!user) {
+  if (status._tag === "UserDeleted") {
     return { _tag: "Rejected", reason: Result.USER_DELETED };
   }
 
-  const cachedRevision: number | undefined = result.user.revision;
+  const { session, user } = status;
+  const cachedRevision: number | undefined = session.user.revision;
   if (cachedRevision !== undefined && user.revision !== cachedRevision) {
-    yield* authApi.signOut(headers).pipe(Effect.catch(captureCause({ tags: { handler } })));
+    yield* AuthApi.use((authApi) => authApi.signOut(headers)).pipe(
+      Effect.catch(captureCause({ tags: { handler } })),
+    );
     return { _tag: "Rejected", reason: Result.REVISION_OUTDATED };
   }
 
-  return { _tag: "Verified", user, session: result.session };
+  return { _tag: "Verified", user, session: session.session };
 });
 
 export const verifySessionProgram = Effect.fnUntraced(function* (req: { sessionToken: string }) {

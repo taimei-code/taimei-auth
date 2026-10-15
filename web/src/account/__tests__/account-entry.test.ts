@@ -19,8 +19,8 @@ const stateWith = (count: number): CompanyState => ({
 });
 
 describe("accountEntryOf", () => {
-  test("事業所状態の取得が Unauthorized ならログイン画面へ", () => {
-    expect(accountEntryOf(Exit.fail(new Unauthorized()))).toEqual({ kind: "signIn" });
+  test("事業所状態の取得が Unauthorized でも画面を出す (ログイン画面へ移すのは SPA の API の client)", () => {
+    expect(accountEntryOf(Exit.fail(new Unauthorized()))).toEqual({ kind: "show" });
   });
 
   test("所属が 0 件なら事業所登録へ", () => {
@@ -31,7 +31,7 @@ describe("accountEntryOf", () => {
     expect(accountEntryOf(Exit.succeed(stateWith(1)))).toEqual({ kind: "show" });
   });
 
-  test("Unauthorized 以外の失敗は画面を出す (各画面が読み込みの失敗を出す)", () => {
+  test("通信の失敗は画面を出す (各画面が読み込みの失敗を出す)", () => {
     expect(accountEntryOf(Exit.die(new Error("network")))).toEqual({ kind: "show" });
   });
 });

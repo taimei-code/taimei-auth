@@ -1,19 +1,27 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Layer } from "effect";
 import { Hono } from "hono";
+import type { UserRepo } from "../account/ports";
 import type { AuthApi } from "../auth-service";
 import { SESSION_COOKIE_HEADER } from "../handlers/__tests__/helpers";
 import { runProgramInRoute } from "../handlers/__tests__/run-program-in-route";
 import { loginShortcut, loginShortcutProgram } from "../handlers/login-shortcut";
-import { authFailing, authLayer, sessionOf } from "../membership/__tests__/test-layers";
+import {
+  authFailing,
+  authLayer,
+  sessionOf,
+  signedIn,
+  userRepoFailing,
+  userRepoLayer,
+} from "../membership/__tests__/test-layers";
 import { SentryLive } from "../sentry";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 const ORIGIN = "http://auth.taimei-code.com";
 
 const app = new Hono().route("/", loginShortcut);
 
-const runProgram = (path: string, auth: Layer.Layer<AuthApi>, cookie = true) =>
+const runProgram = (path: string, auth: Layer.Layer<AuthApi | UserRepo>, cookie = true) =>
   runProgramInRoute(
     path,
     `${ORIGIN}${path}`,
@@ -64,16 +72,14 @@ describe("loginShortcut (未認証)", () => {
 });
 
 describe("loginShortcut (認証済み)", () => {
-  const signedIn = authLayer(() => sessionOf("u1"));
-
   test("GET /login で session 有り → /account に 302", async () => {
-    const res = await runProgram("/login", signedIn);
+    const res = await runProgram("/login", signedIn());
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(`${ORIGIN}/account`);
   });
 
   test("GET / で session 有り → /account に 302、cache headers 付き", async () => {
-    const res = await runProgram("/", signedIn);
+    const res = await runProgram("/", signedIn());
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe(`${ORIGIN}/account`);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
@@ -81,15 +87,49 @@ describe("loginShortcut (認証済み)", () => {
   });
 });
 
+describe("loginShortcut (削除済みの user)", () => {
+  test("user 行の無い session は session が無いとみなし、/account ではなくログインの流れへ 302", async () => {
+    const deletedUser = Layer.mergeAll(
+      authLayer(() => sessionOf("u1")),
+      userRepoLayer([]),
+    );
+
+    const res = await runProgram("/login", deletedUser);
+
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/auth/");
+  });
+});
+
 describe("loginShortcut (fail-open)", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   beforeEach(() => {
     captured.length = 0;
   });
 
   test("AuthApi が AuthApiError → fail-open で /auth/ に 302、Sentry warning 1 件", async () => {
     const cause = new Error("ttl store down");
-    const res = await runProgram("/login", authFailing(cause));
+    const res = await runProgram("/login", Layer.mergeAll(authFailing(cause), userRepoLayer([])));
+
+    expect(res.status).toBe(302);
+    expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/auth/");
+    expect(captured.length).toBe(1);
+    expect(captured[0]?.[0]).toBe(cause);
+    expect(captured[0]?.[1]).toMatchObject({
+      level: "warning",
+      tags: { handler: "loginShortcut" },
+    });
+  });
+
+  test("user 行の読み出しが DbError → fail-open で /auth/ に 302、Sentry warning 1 件", async () => {
+    const cause = new Error("db down");
+    const res = await runProgram(
+      "/login",
+      Layer.mergeAll(
+        authLayer(() => sessionOf("u1")),
+        userRepoFailing(cause),
+      ),
+    );
 
     expect(res.status).toBe(302);
     expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/auth/");
@@ -102,7 +142,11 @@ describe("loginShortcut (fail-open)", () => {
   });
 
   test("cookie 無しなら AuthApi に触れず /auth/ に 302 (Sentry 0 件)", async () => {
-    const res = await runProgram("/login", authFailing(new Error("must not be called")), false);
+    const res = await runProgram(
+      "/login",
+      Layer.mergeAll(authFailing(new Error("must not be called")), userRepoLayer([])),
+      false,
+    );
 
     expect(res.status).toBe(302);
     expect(new URL(res.headers.get("location") ?? "").pathname).toBe("/auth/");

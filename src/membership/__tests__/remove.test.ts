@@ -1,12 +1,12 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Ref } from "effect";
 import { auditRowsFor, dbTest, expectFailure } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
 import { auditLogWith, failingSessionDeletion } from "../../__tests__/test-layers";
 import { DbError } from "../../errors";
 import { storedSessionOf } from "../../__tests__/test-ttl-store";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { LastOwner } from "../errors";
 import { NotFound } from "../guard/errors";
 import { removeMember } from "../remove";
@@ -101,7 +101,7 @@ describe("removeMember", () => {
       }),
     ));
 
-  test("QA-D-03 他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", () =>
+  test("他事業所所属のあるメンバーを除名 → membership のみ削除し account 維持", () =>
     run(
       Effect.gen(function* () {
         const ownerId = yield* seedUser("multi-owner");
@@ -270,7 +270,7 @@ describe("removeMember", () => {
 });
 
 describe("removeMember の TTL store の session 削除", () => {
-  const sentry = recordSentryExceptions();
+  const { exceptions: sentry } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 

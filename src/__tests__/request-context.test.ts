@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { grepFiles } from "./grep-files";
+import { grepFiles } from "./source-scan";
 import {
   getClientContext,
   parseProxyTrust,
@@ -39,7 +39,7 @@ describe("parseProxyTrust (AUTH_TRUSTED_PROXY_HOPS の解釈)", () => {
 describe("AUTH_TRUSTED_PROXY_HOPS の封じ込め (静的 tripwire)", () => {
   test("env を読む production file は request-context.ts だけ (boot guard も proxyTrustFromEnv を通る)", () => {
     expect(
-      grepFiles("process\\.env\\.AUTH_TRUSTED_PROXY_HOPS", "src", { excludeTests: true }),
+      grepFiles("process\\.env\\.AUTH_TRUSTED_PROXY_HOPS", "src", { tests: "exclude" }),
     ).toEqual(["src/request-context.ts"]);
   });
 });
@@ -149,7 +149,7 @@ describe("resolveCloudflareClientIp (Workers: cf-connecting-ip のみ)", () => {
   });
 });
 
-describe("getClientContext (bun test = Bun runtime)", () => {
+describe("getClientContext (bun test = Bun runtime。process.env を丸ごと置き換えると Bun.env と食い違うので、env は key ごとに戻す)", () => {
   const ENV_KEYS = ["AUTH_TRUSTED_PROXY_HOPS", "APP_ENV"] as const;
   const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 

@@ -19,7 +19,7 @@ const unusedEntry: MfaCodeInput = {
   reset: () => undefined,
 };
 
-test("AC-034 redirecting view は status だけを表示して再入力を許さない", async () => {
+test("redirecting view は status だけを表示して再入力を許さない", async () => {
   const { MfaChallengeView } = await import("../MfaChallengeView");
   const html = renderToStaticMarkup(
     createElement(MfaChallengeView, {

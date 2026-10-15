@@ -2,12 +2,12 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Ref } from "effect";
 import { Forbidden } from "../../membership/guard/errors";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
 import { auditLogWith, authApiWith, failingSessionDeletion } from "../../__tests__/test-layers";
 import { storedSessionsOf } from "../../__tests__/test-ttl-store";
 import { DbError } from "../../errors";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { deleteCompany } from "../delete";
 
 const P = "delco-test-";
@@ -243,7 +243,7 @@ describe("deleteCompany", () => {
 });
 
 describe("deleteCompany の TTL store の session 削除", () => {
-  const sentry = recordSentryExceptions();
+  const { exceptions: sentry } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 

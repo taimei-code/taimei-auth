@@ -78,17 +78,14 @@ describe("authEntryRedirect", () => {
         }),
       ));
 
-    test("削除済み user の stale session (cookieCache 窓) は membership 0 件扱いで /auth/signup/company へ 302", () =>
+    test("削除済み user の stale session (cookieCache の窓) は session が無いとみなし、redirect せず SPA を返す", () =>
       run(
         Effect.gen(function* () {
           const ghost = { id: `${P}u-ghost`, email: `${P}ghost@example.com` };
           const res = yield* request(ghost, `/auth/?${VALID_QUERY}`, {
             headers: SESSION_COOKIE_HEADER,
           });
-
-          expect(res.status).toBe(302);
-          const location = new URL(res.headers.get("location") ?? "", "http://localhost");
-          expect(location.pathname).toBe("/auth/signup/company");
+          yield* expectPassThrough(res);
         }),
       ));
   });

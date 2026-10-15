@@ -11,13 +11,11 @@ import type {
 import { authClient } from "../auth/auth-client";
 import { runMutation } from "../shared/atom-runtime";
 import { failureMessage } from "../shared/failure-message";
+import type { RouteEntry } from "../shared/route-entry";
 import { acceptInvitationAtom } from "./invitation-atom";
 import { type AcceptInvitationSearch, redirectUrlAfterAccept } from "./redirect-target";
 
-export type AcceptOutcome =
-  | { kind: "signIn" }
-  | { kind: "goToRedirectUrl"; redirectUrl: string }
-  | { kind: "failed"; message: string };
+export type AcceptOutcome = Extract<RouteEntry, { kind: "signIn" | "goToRedirectUrl" | "failed" }>;
 
 type AcceptDeps = {
   hasSession: () => Promise<boolean>;
@@ -44,7 +42,6 @@ const outcomeOfAccepted = (
           "この招待は別のメールアドレス宛です。招待されたアドレスでログインし直してください。",
         ExpiredOrUsed: "この招待は期限切れか、既に使用されています。",
         NotFound: "招待が見つかりません。",
-        Unauthorized: ACCEPT_FAILED,
       },
       ACCEPT_FAILED,
     ),

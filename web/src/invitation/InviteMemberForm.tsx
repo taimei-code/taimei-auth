@@ -55,7 +55,6 @@ export const InviteMemberForm = ({ companyId, assignableRoles, redirectSearch }:
                 {
                   RateLimited: "招待の送信回数が上限に達しました。時間をおいて再試行してください。",
                   Forbidden: "招待する権限がありません。",
-                  Unauthorized: INVITE_FAILED,
                 },
                 INVITE_FAILED,
               ),

@@ -14,7 +14,7 @@ APP_ENV=development bun run build:web
 bun run e2e/seed.ts
 : > e2e/.server.log
 
-# src/mfa/__tests__/helpers.ts の既定値と同じダミー鍵
+# src/__tests__/test-env.ts の既定値と同じダミー鍵
 export MFA_TOTP_ENCRYPTION_KEYS="${MFA_TOTP_ENCRYPTION_KEYS:-v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}"
 
 export APP_ENV=development APP_NAME="${APP_NAME:-taimei}" PORT=3110

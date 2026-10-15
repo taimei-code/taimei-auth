@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, type Layer } from "effect";
 import { Hono } from "hono";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { mountSpaApi } from "../spa-http-api";
 import { AuthApi } from "../../auth-service";
 import { runBackground, withWaitUntil } from "../../background";
@@ -10,7 +10,7 @@ import { NotFound } from "../../membership/guard/errors";
 import { CONTINUE, respondWith, runMiddleware, runRoute } from "../run-route";
 import { provideAuthApi, stubAuthApi } from "./helpers";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 
 const boom = new Error("boom");
 const dbCause = new Error("db timeout");

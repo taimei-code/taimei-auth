@@ -1,20 +1,20 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { buildAppWith, requestApp, responseJson } from "./helpers";
-import { Effect, Layer, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import {
   countMfaTotpRows,
   countRecoveryCodeRows,
-  createSessionFor,
   enableMfaFor,
   findMfaTotpRow,
   secretFromTotpUri,
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
-import { authApiLive } from "../../auth-wiring";
-import { DISABLE_ATTEMPT_LIMIT } from "../../mfa/disable-attempt-budget";
+import { authApiWith } from "../../__tests__/test-layers";
+import { ATTEMPT_BUDGETS } from "../../attempt-budget";
 import { MfaEnrollment } from "../../mfa/mfa-contract";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -39,7 +39,7 @@ const postJson = (app: Hono, path: string, headers: Headers, body?: unknown) =>
 const FORWARDED_COOKIES = ["a=1; Path=/; HttpOnly", "b=2; Path=/; HttpOnly"];
 
 const appWithAuthApi = (overrides: Partial<AuthApi["Service"]>): Hono =>
-  buildAppWith(Layer.succeed(AuthApi, AuthApi.of({ ...authApiLive, ...overrides })));
+  buildAppWith(authApiWith(() => overrides));
 
 const appForwardingCookies = () =>
   appWithAuthApi({
@@ -58,7 +58,7 @@ describe("account MFA API", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-D-02 他人 userId 送っても本人のみ", () =>
+  test("他人の userId を送っても、本人の MFA の状態だけを扱う", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -83,7 +83,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-09 disable 誤コード連投 → アカウント単位でロックアウト", () =>
+  test("無効化に誤ったコードを続けて送ると、アカウント単位でロックする", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -92,7 +92,8 @@ describe("account MFA API", () => {
         const app = buildApp();
 
         const attempts: { status: number; body: unknown }[] = [];
-        for (let attempt = 0; attempt < DISABLE_ATTEMPT_LIMIT + 1; attempt++) {
+        const disableLimit = ATTEMPT_BUDGETS.mfaDisablePerUser.maxAttempts();
+        for (let attempt = 0; attempt < disableLimit + 1; attempt++) {
           const res = yield* postJson(app, "/api/account/mfa/disable", enabled.session.headers, {
             code: yield* wrongTotpCode(enabled.secret),
             kind: "totp",
@@ -100,8 +101,8 @@ describe("account MFA API", () => {
           attempts.push({ status: res.status, body: yield* responseJson(res) });
         }
 
-        expect(attempts.slice(0, DISABLE_ATTEMPT_LIMIT).map((attempt) => attempt.status)).toEqual(
-          Array(DISABLE_ATTEMPT_LIMIT).fill(400) as number[],
+        expect(attempts.slice(0, disableLimit).map((attempt) => attempt.status)).toEqual(
+          Array(disableLimit).fill(400) as number[],
         );
         expect(attempts.at(-1)).toEqual({ status: 429, body: { _tag: "Locked" } });
 
@@ -129,7 +130,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-H-01 enroll の応答は登録情報とopaqueな登録識別子だけを返す", () =>
+  test("enroll の応答は、登録情報と中身を読めない登録識別子だけを返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -151,7 +152,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-04 未登録ユーザーの GET /api/account/mfa も同じキー形 (enabled false)", () =>
+  test("未登録の user の GET /api/account/mfa も同じ key の形で enabled false を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -168,7 +169,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-25 登録済み未有効も enabled false", () =>
+  test("登録済みで未有効の user も enabled false を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -188,7 +189,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-01 有効ユーザーの enroll → 409 AlreadyEnabled", () =>
+  test("MFA が有効な user の enroll は 409 AlreadyEnabled を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -204,7 +205,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-04 有効ユーザーの activate 再実行 → 409 (正しいコードでも副作用なし)", () =>
+  test("MFA が有効な user が activate をもう一度実行すると、正しいコードでも 409 を返し、何も変えない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -224,7 +225,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-M-06 未登録ユーザーの activate → 404 MfaNotFound", () =>
+  test("未登録の user の activate は 404 MfaNotFound を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -241,7 +242,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-02 activate の識別子不一致 → 409 EnrollmentChanged (行は未 verified のまま)", () =>
+  test("activate の登録識別子が一致しないと 409 EnrollmentChanged を返し、行は未 verified のまま", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -330,7 +331,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("QA-E-02 activateの不正な登録識別子は400で副作用を起こさない", () =>
+  test("activate の不正な登録識別子は 400 を返し、何も変えない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -347,7 +348,7 @@ describe("account MFA API", () => {
       }),
     ));
 
-  test("AC-145 enrollment_id の欠落・空文字は 400 (decode 失敗、body 無し、必須化の境界)", () =>
+  test("enrollment_id が無いか空文字なら、decode に失敗して本文の無い 400 を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

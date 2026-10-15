@@ -6,7 +6,7 @@ import {
   TOTP_PERIOD_SECONDS,
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
-import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
 const MFA_EMAIL = "e2e-mfa@example.com";
@@ -85,9 +85,7 @@ const mfaRow = (page: Page) =>
 
 const challengeCodeInput = (page: Page) => page.locator("#mfa-challenge-code");
 
-test("QA-H-10 セキュリティページの MFA 行は有効化の前後で Badge と残数が変わる", async ({
-  page,
-}) => {
+test("セキュリティページの MFA 行は有効化の前後で Badge と残数が変わる", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await page.goto("/account/security");
 
@@ -104,9 +102,7 @@ test("QA-H-10 セキュリティページの MFA 行は有効化の前後で Bad
   await expect(row.getByRole("button", { name: "無効にする" })).toBeVisible();
 });
 
-test("AC-016 無効化ダイアログは error を表示し、閉じると入力状態を reset する", async ({
-  page,
-}) => {
+test("無効化ダイアログは error を表示し、閉じると入力状態を reset する", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   const { secret } = await enableMfaViaApi(page);
   await page.goto("/account/security");
@@ -130,7 +126,7 @@ test("AC-016 無効化ダイアログは error を表示し、閉じると入力
   await expect(row.getByText("無効", { exact: true })).toBeVisible();
 });
 
-test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリーコードの 3 ステップを順に見せる", async ({
+test("有効化ダイアログは QR・確認コード・リカバリーコードの 3 ステップを順に見せる", async ({
   page,
 }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
@@ -162,9 +158,7 @@ test("QA-H-11 有効化ダイアログは QR・確認コード・リカバリー
   expect(navigations.count()).toBe(0);
 });
 
-test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
-  page,
-}) => {
+test("有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({ page }) => {
   let enrollCalls = 0;
   await page.route("**/api/account/mfa/enroll", async (route) => {
     enrollCalls++;
@@ -189,9 +183,7 @@ test("QA-H-04 有効化ダイアログを閉じて開き直しても同じ secre
   expect(enrollCalls).toBe(1);
 });
 
-test("QA-M-07 チャレンジ画面のコード入力欄は種別に応じた入力支援属性と aria を持つ", async ({
-  page,
-}) => {
+test("チャレンジ画面のコード入力欄は種別に応じた入力支援属性と aria を持つ", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await enableMfaViaApi(page);
   await signOutAndReachChallenge(page);
@@ -209,10 +201,7 @@ test("QA-M-07 チャレンジ画面のコード入力欄は種別に応じた入
   await expect(input).toHaveAttribute("autocomplete", "one-time-code");
 });
 
-test("QA-E-10 cookie 無しで /auth/mfa を直接開くと期限切れ案内だけを出す", async ({
-  page,
-  context,
-}) => {
+test("cookie 無しで /auth/mfa を直接開くと期限切れ案内だけを出す", async ({ page, context }) => {
   await context.clearCookies();
   await page.goto("/auth/mfa");
 
@@ -223,7 +212,7 @@ test("QA-E-10 cookie 無しで /auth/mfa を直接開くと期限切れ案内だ
   await expect(page.getByRole("button", { name: "ログインを続ける" })).toHaveCount(0);
 });
 
-test("AC-006 verify が直接 challenge_expired を返したら入力を閉じる", async ({ page }) => {
+test("verify が直接 challenge_expired を返したら入力を閉じる", async ({ page }) => {
   await page.route("**/api/mfa/challenge**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({ json: { pending: true } });
@@ -242,7 +231,7 @@ test("AC-006 verify が直接 challenge_expired を返したら入力を閉じ�
   await expect(page.locator("#mfa-challenge-code-error")).toHaveCount(0);
 });
 
-test("AC-003/025 初期 GET が失敗しても一度の観測で入力を許す", async ({ page }) => {
+test("初期 GET が失敗しても一度の観測で入力を許す", async ({ page }) => {
   let getCalls = 0;
   await page.route("**/api/mfa/challenge**", async (route) => {
     if (route.request().method() !== "GET") {
@@ -261,7 +250,7 @@ test("AC-003/025 初期 GET が失敗しても一度の観測で入力を許す"
   await expect(page.getByText("セッションの有効期限が切れました")).toHaveCount(0);
 });
 
-test("AC-023 初期観測中は status だけを表示して入力を隠す", async ({ page }) => {
+test("初期観測中は status だけを表示して入力を隠す", async ({ page }) => {
   let releaseObservation: (() => void) | undefined;
   const observationPending = new Promise<void>((resolve) => {
     releaseObservation = resolve;
@@ -280,7 +269,7 @@ test("AC-023 初期観測中は status だけを表示して入力を隠す", as
   await expect(challengeCodeInput(page)).toBeVisible();
 });
 
-test("AC-004 Abort 済みの古い GET は新しい画面状態を上書きしない", async ({ page }) => {
+test("Abort 済みの古い GET は新しい画面状態を上書きしない", async ({ page }) => {
   let getCalls = 0;
   let releaseFirst: (() => void) | undefined;
   const firstPending = new Promise<void>((resolve) => {
@@ -315,7 +304,7 @@ test("AC-004 Abort 済みの古い GET は新しい画面状態を上書きし�
   await expect(page.getByText("セッションの有効期限が切れました")).toHaveCount(0);
 });
 
-test("AC-013/024 verify 中は操作を止め、同期二重 submit でも POST は一回", async ({ page }) => {
+test("verify 中は操作を止め、同期二重 submit でも POST は一回", async ({ page }) => {
   let postCalls = 0;
   let releaseVerify: (() => void) | undefined;
   const verifyPending = new Promise<void>((resolve) => {
@@ -356,7 +345,7 @@ test("AC-013/024 verify 中は操作を止め、同期二重 submit でも POST 
   await expect(challengeCodeInput(page)).toHaveAttribute("inputmode", "text");
 });
 
-test("AC-014 unmount 後も送信済み POST は完了し、遅い成功で遷移しない", async ({ page }) => {
+test("unmount 後も送信済み POST は完了し、遅い成功で遷移しない", async ({ page }) => {
   let postStarted: (() => void) | undefined;
   const started = new Promise<void>((resolve) => {
     postStarted = resolve;
@@ -453,7 +442,7 @@ test("「ログインをやり直す」は末尾スラッシュ無しのログ�
   expect(href?.startsWith(`${SIGN_IN_LANDING_PATH}&redirect_url=`)).toBe(true);
 });
 
-test("AC-033 空の code は verify を呼ばない", async ({ page }) => {
+test("空の code は verify を呼ばない", async ({ page }) => {
   let postCalls = 0;
   await page.route("**/api/mfa/challenge**", async (route) => {
     if (route.request().method() === "GET") {
@@ -472,7 +461,7 @@ test("AC-033 空の code は verify を呼ばない", async ({ page }) => {
   expect(postCalls).toBe(0);
 });
 
-test("MFA 有効化後のログインはチャレンジ画面を挟み、通過すると元の遷移先に着地する", async ({
+test("MFA 有効化後のログインはチャレンジ画面を挟み、通過すると履歴を積まずに元の遷移先に着地する", async ({
   page,
 }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
@@ -481,12 +470,14 @@ test("MFA 有効化後のログインはチャレンジ画面を挟み、通過�
 
   await signOutAndReachChallenge(page);
   await expect(page.getByText("ログインを完了するには、追加の確認が必要です")).toBeVisible();
+  const historyLengthOnChallenge = await page.evaluate(() => history.length);
 
   await challengeCodeInput(page).fill(await totpCode(secret));
   await page.getByRole("button", { name: "ログインを続ける" }).click();
 
   await expect(page).toHaveURL(/\/account$/);
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
+  expect(await page.evaluate(() => history.length)).toBe(historyLengthOnChallenge);
 });
 
 test("リカバリーコードでもチャレンジを通過でき、使った 1 本だけ残数が減る", async ({ page }) => {

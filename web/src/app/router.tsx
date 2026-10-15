@@ -23,12 +23,6 @@ import { Profile } from "../account/pages/Profile";
 import { Security } from "../account/pages/Security";
 import { Sessions } from "../account/pages/Sessions";
 import { AuthLayout } from "../auth/AuthLayout";
-import {
-  searchReturningTo,
-  signInLandingSearch,
-  signOutLoggingFailure,
-} from "../auth/auth-redirect";
-import { authClient } from "../auth/auth-client";
 import { authErrorSearchSchema } from "../auth/auth-error-reason";
 import { ErrorPage } from "../auth/pages/Error";
 import { SignIn } from "../auth/pages/SignIn";
@@ -46,9 +40,8 @@ import { MfaChallenge } from "../mfa/pages/MfaChallenge";
 import { readResult } from "../shared/atom-runtime";
 import { FullScreenLoader } from "../shared/FullScreenLoader";
 import { AccountLayout } from "./AccountLayout";
+import { redirectFor } from "./route-redirect";
 import { parseSearch, stringifySearch } from "./search-params";
-
-const fullReload = { reloadDocument: true, replace: true } as const;
 
 const rootRoute = createRootRouteWithContext<{ registry: AtomRegistry.AtomRegistry }>()({
   component: Outlet,
@@ -81,22 +74,6 @@ const signUpRoute = createRoute({
   component: SignUp,
 });
 
-const signInReturningTo = (href: string) =>
-  redirect({ to: "/auth/", search: searchReturningTo(href), ...fullReload });
-
-const fullReloadTo = (href: string) => redirect({ href, ...fullReload });
-
-const companySignupRedirects = {
-  signIn: ({ href }: CompanySignupRedirectInput) => signInReturningTo(href),
-  goToRedirectUrl: ({ redirectUrl }: CompanySignupRedirectInput) => fullReloadTo(redirectUrl),
-  discardStaleSession: () =>
-    signOutLoggingFailure(() => authClient.signOut()).then(() =>
-      redirect({ to: "/auth", search: signInLandingSearch(), ...fullReload }),
-    ),
-};
-
-type CompanySignupRedirectInput = { href: string; redirectUrl: string };
-
 const companySignupRoute = createRoute({
   getParentRoute: () => authRoute,
   path: "/signup/company",
@@ -105,13 +82,12 @@ const companySignupRoute = createRoute({
     redirect_url: "/account",
   }),
   beforeLoad: async ({ context, location, search, abortController }) => {
-    const entry = await readCompanySignupEntry(context.registry, abortController.signal);
-    if (entry.kind !== "form") {
-      throw await companySignupRedirects[entry.kind]({
-        href: location.href,
-        redirectUrl: search.redirect_url,
-      });
-    }
+    const entry = await readCompanySignupEntry(
+      context.registry,
+      abortController.signal,
+      search.redirect_url,
+    );
+    if (entry.kind !== "show") throw redirectFor(entry, location.href);
   },
   component: SignUpCompany,
 });
@@ -122,15 +98,9 @@ const acceptInvitationRoute = createRoute({
   validateSearch: acceptInvitationSearchSchema,
   loaderDeps: ({ search }) => acceptInvitationSearchSchema.parse(search),
   loader: async ({ context, deps, location }) => {
-    const outcome = await acceptInvitation(context.registry, deps);
-    switch (outcome.kind) {
-      case "signIn":
-        throw signInReturningTo(location.href);
-      case "goToRedirectUrl":
-        throw fullReloadTo(outcome.redirectUrl);
-      case "failed":
-        return { message: outcome.message };
-    }
+    const entry = await acceptInvitation(context.registry, deps);
+    if (entry.kind !== "failed") throw redirectFor(entry, location.href);
+    return { message: entry.message };
   },
   component: SignUpAcceptInvitation,
 });
@@ -162,14 +132,7 @@ const accountRoute = createRoute({
     const entry = accountEntryOf(
       await readResult(context.registry, companyStateAtom, abortController.signal),
     );
-    if (entry.kind === "signIn") throw signInReturningTo(location.href);
-    if (entry.kind === "companySignup") {
-      throw redirect({
-        to: "/auth/signup/company",
-        search: searchReturningTo(location.href),
-        ...fullReload,
-      });
-    }
+    if (entry.kind !== "show") throw redirectFor(entry, location.href);
   },
   component: function Account() {
     return (

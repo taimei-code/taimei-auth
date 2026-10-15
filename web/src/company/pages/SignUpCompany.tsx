@@ -5,9 +5,9 @@ import { Loader2 } from "lucide-react";
 
 import type { OrgCode } from "@core/company/org-code";
 
-import { authClient } from "../../auth/auth-client";
-import { signInLandingSearch } from "../../auth/auth-redirect";
+import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { hasFailureTag } from "../../shared/failure-message";
+import { leaveSpaTo, signInLandingSearch } from "../../shared/leave-spa";
 import { Button } from "../../shared/ui/button";
 import {
   Card,
@@ -39,11 +39,11 @@ export const SignUpCompany = () => {
     setErrorMessage(null);
     createCompany({ name: name.trim(), org_code: orgCode }).then(
       Exit.match({
-        onSuccess: () => window.location.replace(redirectUrl),
+        onSuccess: () => leaveSpaTo(redirectUrl),
         onFailure: (cause) => {
           const createdInAnotherTab = hasFailureTag(cause, "AlreadyExists");
           if (createdInAnotherTab) {
-            window.location.replace(redirectUrl);
+            leaveSpaTo(redirectUrl);
             return;
           }
           setErrorMessage("事業所登録に失敗しました");
@@ -97,13 +97,12 @@ export const SignUpCompany = () => {
       </Card>
       <button
         type="button"
-        onClick={() => {
-          authClient
-            .signOut()
-            .then(() =>
-              navigate({ to: "/auth", search: signInLandingSearch(), reloadDocument: true }),
-            )
-            .catch((e) => console.error("signOut failed:", e));
+        onClick={async () => {
+          if ((await signOut()) === "failed") {
+            setErrorMessage(SIGN_OUT_FAILED);
+            return;
+          }
+          await navigate({ to: "/auth", search: signInLandingSearch(), reloadDocument: true });
         }}
         className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >

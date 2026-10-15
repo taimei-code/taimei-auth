@@ -1,16 +1,16 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Deferred, Effect } from "effect";
-import { runTest, inTx } from "../../__tests__/live-runner";
+import { dbTest, inTx } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { auditLogWith, holdBeforeCommit } from "../../__tests__/test-layers";
 import { addCompany } from "../../company/create";
 import { removeMember } from "../../membership/remove";
 import { deleteAccountIfOrphaned } from "../orphan";
 import { storedSessionOf } from "../../__tests__/test-ttl-store";
-import { createSessionFor } from "../../mfa/__tests__/helpers";
+import { createSessionFor } from "../../__tests__/session-helpers";
 
 const P = "orphan-test-";
-const run = runTest(P);
+const { run } = dbTest(P);
 
 const cleanup = () => run(TestDb.use((db) => db.cleanup()));
 

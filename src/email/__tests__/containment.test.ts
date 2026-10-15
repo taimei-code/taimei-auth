@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { grepFiles } from "../../__tests__/grep-files";
+import { grepFiles } from "../../__tests__/source-scan";
 import WelcomeEmail from "../welcome";
 
 describe("email の DisplayText の封じ込め (静的 tripwire)", () => {
   test("DisplayText への cast は sanitize.ts の toDisplayText だけ", () => {
     expect(
       grepFiles("as DisplayText", "src", {
-        excludeTests: true,
-        include: ["*.ts", "*.tsx"],
+        tests: "exclude",
       }),
     ).toEqual(["src/email/sanitize.ts"]);
   });
@@ -22,8 +21,7 @@ describe("email の依存の封じ込め (静的 tripwire)", () => {
   test("起動時に prismjs を初期化する react-email の barrel / tailwind / code-block を import しない", () => {
     expect(
       grepFiles('"@react-email/(components|tailwind|code-block)"', "src", {
-        excludeTests: true,
-        include: ["*.ts", "*.tsx"],
+        tests: "exclude",
       }),
     ).toEqual([]);
   });
@@ -31,14 +29,12 @@ describe("email の依存の封じ込め (静的 tripwire)", () => {
   test("@react-email/render は workerd の bundle で static import すると render が undefined になるので、動的 import だけで読む", () => {
     expect(
       grepFiles('from "@react-email/render"', "src", {
-        excludeTests: true,
-        include: ["*.ts", "*.tsx"],
+        tests: "exclude",
       }),
     ).toEqual([]);
     expect(
       grepFiles(String.raw`import\("@react-email/render"\)`, "src", {
-        excludeTests: true,
-        include: ["*.ts", "*.tsx"],
+        tests: "exclude",
       }),
     ).toEqual(["src/email/client.ts"]);
   });
@@ -50,14 +46,14 @@ describe("email の依存の封じ込め (静的 tripwire)", () => {
 
 describe("email template の style の置き場所 (静的 tripwire)", () => {
   test("Tailwind が無いので className は CSS にならない。template は className を書かない", () => {
-    expect(
-      grepFiles("className=", "src/email", { excludeTests: true, include: ["*.tsx"] }),
-    ).toEqual([]);
+    expect(grepFiles("className=", "src/email", { tests: "exclude", include: ["*.tsx"] })).toEqual(
+      [],
+    );
   });
 
   test("template 間で見た目を揃えるため、style は styles.ts の名前付き object だけを渡す", () => {
     expect(
-      grepFiles("style=\\{\\{", "src/email", { excludeTests: true, include: ["*.tsx"] }),
+      grepFiles("style=\\{\\{", "src/email", { tests: "exclude", include: ["*.tsx"] }),
     ).toEqual([]);
   });
 });

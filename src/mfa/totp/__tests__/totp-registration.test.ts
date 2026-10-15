@@ -6,7 +6,6 @@ import {
   countMfaTotpRows,
   countRecoveryCodeRows,
   findMfaTotpRow,
-  installSentryRecorder,
   secretFromTotpUri,
   totpCode,
   wrongTotpCode,
@@ -36,11 +35,12 @@ import { MfaTotpRepo } from "../ports";
 import { readOwnedMfaStatus } from "../read-status";
 import { consumeMatchedCode, matchOwnedCode } from "../verify-code";
 import { testKvStore } from "../../../__tests__/test-ttl-store";
+import { recordSentry } from "../../../__tests__/sentry-recorder";
 
 const P = "mfa-totp-reg-";
 const ISSUER = "taimei-test";
 const { run, cleanup } = dbTest(P);
-const sentry = installSentryRecorder();
+const sentry = recordSentry();
 
 function buildOps(overrides?: {
   auditFails?: boolean;
@@ -84,8 +84,8 @@ const headers = new Headers({ "user-agent": "totp-reg-test", "x-forwarded-for": 
 
 const sentryAuditFailureEvents = () =>
   sentry.exceptions
-    .filter((e) => e.context?.tags?.component === "audit-log")
-    .map((e) => e.context?.tags?.event);
+    .filter(([, context]) => context?.tags?.component === "audit-log")
+    .map(([, context]) => context?.tags?.event);
 
 describe("MFA 登録遷移 (自前 totp)", () => {
   const originalAppName = process.env.APP_NAME;
@@ -96,10 +96,10 @@ describe("MFA 登録遷移 (自前 totp)", () => {
   afterAll(() => {
     if (originalAppName === undefined) delete process.env.APP_NAME;
     else process.env.APP_NAME = originalAppName;
-    return cleanup().then(() => sentry.restore());
+    return cleanup();
   });
 
-  test("AC-102/103/104 未登録: status 全 false・activate 404・disable 409", () =>
+  test("未登録の user は status がすべて false、activate は 404、disable は 409", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -123,7 +123,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-023 登録済み未有効: disable は not_enabled で、試行枠を消費しない", () =>
+  test("登録済みで未有効の user の disable は not_enabled を返し、試行枠を消費しない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -319,7 +319,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-121/122 リカバリーコードの消費と残数", () =>
+  test("リカバリーコードは 1 回だけ使え、使うと残数が減る", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -375,7 +375,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-116/117 disable の試行枠: 誤コードで消費し、成功で戻す", () =>
+  test("disable の試行枠は誤コードで消費し、成功すると戻す", () =>
     run(
       Effect.gen(function* () {
         const ops = buildOps();
@@ -400,7 +400,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-116 disable の試行枠を使い切ると、正しいコードでも locked", () =>
+  test("disable の試行枠を使い切ると、正しいコードでも locked を返す", () =>
     run(
       Effect.gen(function* () {
         const ops = buildOps();
@@ -417,7 +417,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-116 disable の試行枠を数えられない時も、正しいコードで locked (fail-closed)", () =>
+  test("disable の試行枠を数えられない時は、正しいコードでも locked を返す (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const ops = buildOps();
@@ -434,7 +434,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-157 audit 書込失敗でも操作は成功し Sentry で観測", () =>
+  test("audit の書き込みに失敗しても操作は成功し、Sentry に記録する", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -486,7 +486,7 @@ describe("MFA 登録遷移 (自前 totp)", () => {
       }),
     ));
 
-  test("AC-156 並行 enroll ×2 → 両応答が勝者の内容へ収束、DB は 1 行", () =>
+  test("enroll を同時に 2 回呼ぶと、両方の応答が先に書いた方の内容になり、DB の行は 1 つ", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

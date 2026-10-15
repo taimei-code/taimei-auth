@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { dockerfileViolations, REPO_ROOT, workspacePackageNames } from "./config-invariant-helpers";
 
 describe("Dockerfile stage 契約の config invariant", () => {
-  test("QA-M-12: Dockerfile の regression 4 種 (manifests COPY / workspace manifest 漏れ / deps 順序 / 最終 stage) を検出する", () => {
+  test("Dockerfile の regression 4 種 (manifests COPY / workspace manifest 漏れ / deps 順序 / 最終 stage) を検出する", () => {
     const dockerfile = readFileSync(join(REPO_ROOT, "Dockerfile"), "utf8");
     const packages = workspacePackageNames();
     expect(packages).toContain("auth-client");

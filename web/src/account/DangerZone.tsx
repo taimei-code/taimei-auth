@@ -2,10 +2,10 @@ import { Exit } from "effect";
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
 
-import { authClient } from "../auth/auth-client";
-import { discardStaleSession } from "../auth/auth-redirect";
+import { signOut } from "../auth/sign-out";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
 import { failureMessage } from "../shared/failure-message";
+import { leaveSpaAfterAccountDeleted } from "../shared/leave-spa";
 import { Button } from "../shared/ui/button";
 import { useDeleteAccount } from "./account-atom";
 
@@ -26,14 +26,14 @@ export const DangerZone = () => {
           {
             LastOwner: "所有者として残っている事業所があります。先に委譲または削除してください。",
             NotFound: DELETE_FAILED,
-            Unauthorized: DELETE_FAILED,
           },
           DELETE_FAILED,
         ),
       );
       return;
     }
-    await discardStaleSession(() => authClient.signOut());
+    await signOut();
+    leaveSpaAfterAccountDeleted();
   };
 
   return (

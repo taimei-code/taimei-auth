@@ -1,14 +1,22 @@
 import { Cause, Option } from "effect";
 
+import type { Unauthorized } from "@core/membership/guard/errors";
+
+export type FailureMessages<E extends { readonly _tag: string }> = {
+  readonly [Tag in Exclude<E["_tag"], Unauthorized["_tag"]>]: string;
+};
+
 export const failureMessage = <E extends { readonly _tag: string }>(
   cause: Cause.Cause<E>,
-  byTag: { readonly [Tag in E["_tag"]]: string },
+  byTag: FailureMessages<E>,
   fallback: string,
-): string =>
-  Option.match(Cause.findErrorOption(cause), {
+): string => {
+  const messages: { readonly [tag: string]: string | undefined } = byTag;
+  return Option.match(Cause.findErrorOption(cause), {
     onNone: () => fallback,
-    onSome: (error) => byTag[error._tag as E["_tag"]],
+    onSome: (error) => messages[error._tag] ?? fallback,
   });
+};
 
 export const hasFailureTag = <E extends { readonly _tag: string }>(
   cause: Cause.Cause<E>,

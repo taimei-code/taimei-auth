@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
+import { Option } from "effect";
+import { AsyncResult } from "effect/reactivity";
 import { Loader2 } from "lucide-react";
+
+import { failedBeforeAnyValue } from "./atom-runtime";
 
 export const LoadingRow = () => (
   <div className="flex justify-center py-12" role="status" aria-live="polite">
@@ -8,26 +12,26 @@ export const LoadingRow = () => (
   </div>
 );
 
-export const AsyncSection = ({
-  loading,
-  errorMessage,
-  isEmpty,
-  emptyText,
+export const AsyncSection = <A, E>({
+  result,
+  failedText,
+  empty,
   children,
 }: {
-  loading: boolean;
-  errorMessage: string | null;
-  isEmpty: boolean;
-  emptyText: string;
-  children: ReactNode;
+  result: AsyncResult.AsyncResult<A, E>;
+  failedText: string;
+  empty?: { readonly when: (value: A) => boolean; readonly text: string };
+  children: (value: A) => ReactNode;
 }) => {
-  if (loading) return <LoadingRow />;
-  if (errorMessage)
+  if (failedBeforeAnyValue(result))
     return (
       <p role="alert" className="text-sm text-destructive">
-        {errorMessage}
+        {failedText}
       </p>
     );
-  if (isEmpty) return <p className="text-sm text-muted-foreground">{emptyText}</p>;
-  return <>{children}</>;
+  const value = AsyncResult.value(result);
+  if (Option.isNone(value)) return <LoadingRow />;
+  if (empty?.when(value.value))
+    return <p className="text-sm text-muted-foreground">{empty.text}</p>;
+  return <>{children(value.value)}</>;
 };

@@ -13,7 +13,7 @@ describe("acceptInvitationPath", () => {
     );
   });
 
-  test("組ありは service_name と redirect_url も載せる", () => {
+  test("組ありは service_name と redirect_url も載せる (better-auth の magic-link の verify は callbackURL を 2 回 decode するので、redirect_url の query と fragment は保たれない)", () => {
     const url = new URL(acceptInvitationPath("inv/+abc", target), "http://localhost");
 
     expect(url.pathname).toBe("/auth/signup/accept-invitation");

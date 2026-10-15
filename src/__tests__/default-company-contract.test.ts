@@ -8,7 +8,7 @@ import { acceptInvitation } from "../invitation/accept";
 import { authLayer } from "../membership/__tests__/test-layers";
 import { MembershipRepo } from "../membership/ports";
 import { removeMember } from "../membership/remove";
-import { grepFiles } from "./grep-files";
+import { grepFiles } from "./source-scan";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
 import { verifySessionProgram } from "../rpc/auth-handler";
@@ -158,7 +158,7 @@ describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属の�
     const writers = grepFiles(
       "\\b(applyJoin|applyRemoval|applyCompanyRemoval)\\(|\\.updateUserLastUsedCompany\\(",
       "src",
-      { excludeTests: true },
+      { tests: "exclude" },
     ).filter((f) => f !== "src/membership/apply-change.ts");
     expect(writers.sort()).toEqual(Object.keys(scenarios).sort());
   });

@@ -74,7 +74,7 @@ taimei-auth 自身の **アカウント管理画面** へ向かうログイン�
 _Avoid_: ログイン入口, login redirect
 
 **session-aware redirect**:
-ログインの入口 (`/` と `/login`) を訪れた時に、**session** があれば **アカウント管理画面** へ移し、無ければ通常の認証の流れに進ませる、server 側の振る舞い。**共通ログイン画面** / **共通サインアップ画面** への直接の訪問には適用しない (多数派である未認証ユーザーに負担をかけないため)。
+ログインの入口 (`/` と `/login`) を訪れた時に、**session** があれば **アカウント管理画面** へ移し、無ければ通常の認証の流れに進ませる、server 側の振る舞い。user が削除された後に残った session は、session が無いとみなす。**共通ログイン画面** / **共通サインアップ画面** への直接の訪問には適用しない (多数派である未認証ユーザーに負担をかけないため)。
 _Avoid_: auto redirect, 自動リダイレクト
 
 **sign 流**:
@@ -150,8 +150,8 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (保存
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コードの識別子としてだけ使う), 救済スクリプト (実装形態の名前)
 
 **試行枠**:
-一定の時間内に試せる回数の上限。**auth ホスト** が **TTL store** で回数を数えて守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコードの確認 (ログイン時のチャレンジと無効化)。fail-open にするのは、経路ごとの IP や session 単位の上限 (**Magic Link**、**canary token**、**MFA チャレンジ** の API、MFA の状態の変更) と、**事業所** 単位の招待の上限である。code に残る「rate limit」と「quota」(招待) は同じ概念の別名で、設計の語彙では **試行枠** にそろえる。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
-_Avoid_: rate limit / quota / attempt budget (code の識別子に残る別名。設計の語彙では使わない), throttling (より広義)
+一定の時間内に試せる回数の上限。**auth ホスト** が **TTL store** で回数を数えて守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコードの確認 (ログイン時のチャレンジと無効化)。fail-open にするのは、経路ごとの IP や session 単位の上限 (**Magic Link**、**canary token**、**MFA チャレンジ** の API、MFA の状態の変更) と、**事業所** 単位の招待の上限である。code の名前は attempt budget で、別名は上限に達した時に client へ返す失敗の `RateLimited` だけである (SPA の契約の `_tag` で、client が読むので変えない)。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
+_Avoid_: rate limit (以前の code の名前), throttling (より広義)
 
 **fail-closed / fail-open**:
 判断材料が得られない時 (**TTL store** で数えられない、**session** から actor を決められない) に、拒否と通過のどちらを選ぶか。fail-closed は拒否し、fail-open は通す。auth は事業の critical path なので、通しても防御が消えない **試行枠** は availability を優先して fail-open にし、通すと第二要素の総当たりへの防御が消える MFA の試行枠と、認可の入口 (**membership guard** の actor の決定) は fail-closed にする。未知の role は状態として存在しない (**role** の項)。fail-open で通した事実は監視に残し、気付かれないまま通すことはしない。
@@ -232,5 +232,5 @@ _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort 
 - 「after-signin」「after-signup」は **プロダクト** 側の path (例: taimei の `/auth/after-signin`) を指す別の概念である。taimei-auth 側の **redirect_url** / **sign_up_url** とは指す対象が違うので混同しない
 - 「twoFactor」「backupCodes」「2fa-*」は、外部ライブラリの機能を撤去したため、もう使っていない。設計の語彙と自前の名前では **多要素認証 (MFA)** / **リカバリーコード** を使う
 - 「actor」は **membership guard** が **session** から決める、操作する人を指す。解決済み: MFA の操作の主体も actor と呼び、別の語を作らない
-- 「rate limit」「quota」「attempt budget」が code 上で並存し、どれも同じ「一定の時間内に試せる回数の上限」を指していた。解決済み: 設計の語彙は **試行枠** に統一し、code の識別子は別名として据え置いた
+- 「rate limit」「quota」「attempt budget」が code 上で並存し、どれも同じ「一定の時間内に試せる回数の上限」を指していた。解決済み: 設計の語彙は **試行枠** に統一し、code の名前も attempt budget にそろえた。残る別名は client に返す失敗の `RateLimited` だけ
 - 「Redis」は 2026-09 まで **TTL store** の実装の名前で、用語集でも保管先を指す語として使っていた。解決済み: 実装を替えた (ADR-0019) 際に **TTL store** を canonical 化した

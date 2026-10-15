@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
 import type { AuditLogEntry } from "@/db/repositories/audit-log";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { SentryLive } from "../../sentry";
 import { appendAuditBestEffort, signInEntry } from "../append";
@@ -13,7 +13,7 @@ const auditLogWhere = (appendAuditLog: AuditLog["Service"]["appendAuditLog"]) =>
   Layer.succeed(AuditLog, AuditLog.of({ appendAuditLog } as AuditLog["Service"]));
 
 describe("appendAuditBestEffort", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const run = (layer: Layer.Layer<AuditLog>) =>
     Effect.runPromise(
       Effect.exit(appendAuditBestEffort(entry)).pipe(Effect.provide([layer, SentryLive])),

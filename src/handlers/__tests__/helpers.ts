@@ -2,7 +2,7 @@ import { Effect, Layer } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
 import { mountSpaApi } from "../spa-http-api";
 import { AuthApi } from "../../auth-service";
-import { authApiLive } from "../../auth-wiring";
+import { authApiWith } from "../../__tests__/test-layers";
 import type { AppServices } from "../../runtime";
 import { runtimeServices } from "../spa-http-api";
 
@@ -18,17 +18,17 @@ export const stubAuthApi = (
   actor: StubActor,
   overrides: Partial<AuthApi["Service"]> = {},
 ): Layer.Layer<AuthApi> =>
-  Layer.succeed(
-    AuthApi,
-    AuthApi.of({
-      ...authApiLive,
-      getSession: () =>
-        Effect.succeed(
-          actor && ({ user: { id: actor.id, email: actor.email } } as unknown as Session),
-        ),
-      ...overrides,
-    }),
-  );
+  authApiWith(() => ({
+    getSession: () =>
+      Effect.succeed(
+        actor &&
+          ({
+            session: { userId: actor.id },
+            user: { id: actor.id, email: actor.email },
+          } as unknown as Session),
+      ),
+    ...overrides,
+  }));
 
 export const provideAuthApi =
   (layer: Layer.Layer<AuthApi>): MiddlewareHandler =>

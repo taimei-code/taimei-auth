@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { invitationLogPrefix, magicLinkLogPrefix } from "../src/email/local-delivery-log";
-import { SIGN_IN_LANDING_PATH } from "../web/src/auth/auth-redirect";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import type { ConsumableFixture } from "./fixture-names";
 
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");

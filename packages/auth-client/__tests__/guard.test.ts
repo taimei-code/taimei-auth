@@ -36,7 +36,7 @@ const okResponse = {
 };
 
 describe("createAuthGuard.getSession", () => {
-  test("G1: token 不在なら ok:false / SESSION_NOT_FOUND を返し verifySession を呼ばない", async () => {
+  test("token 不在なら ok:false / SESSION_NOT_FOUND を返し verifySession を呼ばない", async () => {
     let rpcCalled = false;
     const guard = createAuthGuard({
       client: makeClient(async () => {
@@ -54,7 +54,7 @@ describe("createAuthGuard.getSession", () => {
     expect(rpcCalled).toBe(false);
   });
 
-  test("G2: RPC throw → ok:false / UNSPECIFIED", async () => {
+  test("RPC throw → ok:false / UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => {
         throw new Error("connection refused");
@@ -69,7 +69,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.UNSPECIFIED);
   });
 
-  test("G2b: RPC が遅延後 reject (timeout 相当) → UNSPECIFIED", async () => {
+  test("RPC が遅延後 reject (timeout 相当) → UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(
         () => new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 10)),
@@ -83,7 +83,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.UNSPECIFIED);
   });
 
-  test("G3: outcome.case === 'error' → reason をそのまま返す", async () => {
+  test("outcome.case === 'error' → reason をそのまま返す", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => ({
         outcome: { case: "error", value: { reason: Result.REVISION_OUTDATED } },
@@ -97,7 +97,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.REVISION_OUTDATED);
   });
 
-  test("G4: outcome.case === 'ok' で user/session が欠落 → UNSPECIFIED", async () => {
+  test("outcome.case === 'ok' で user/session が欠落 → UNSPECIFIED", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => ({
         outcome: { case: "ok", value: { user: undefined, session: undefined } },
@@ -111,7 +111,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.UNSPECIFIED);
   });
 
-  test("G5: 正常系 — VerifyResult.ok = true で SessionData を返す", async () => {
+  test("正常系 — VerifyResult.ok = true で SessionData を返す", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => okResponse),
       getSessionToken: async () => "valid-token",
@@ -127,7 +127,7 @@ describe("createAuthGuard.getSession", () => {
     expect(Object.keys(result.data.session).sort()).toEqual(["expiresAt", "id", "kind"]);
   });
 
-  test("G5b: user.defaultCompanyId も session.companyId も無ければ companyId は undefined", async () => {
+  test("user.defaultCompanyId も session.companyId も無ければ companyId は undefined", async () => {
     const userWithoutCompany = {
       id: "user-2",
       name: "Bob",
@@ -156,7 +156,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.data.companyId).toBeUndefined();
   });
 
-  test("G5c: session.companyId 不在でも user.defaultCompanyId があれば fallback して載せる", async () => {
+  test("session.companyId 不在でも user.defaultCompanyId があれば fallback して載せる", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => okResponse),
       getSessionToken: async () => "valid-token",
@@ -167,7 +167,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.data.companyId).toBe("cmp_abcdefghijklmnopqrstuvwx");
   });
 
-  test("G5d: currentRole を role に変換し、空と UNSPECIFIED は undefined にする", async () => {
+  test("currentRole を role に変換し、空と UNSPECIFIED は undefined にする", async () => {
     const roleOf = async (currentRole?: ProtoRole) => {
       const guard = createAuthGuard({
         client: makeClient(async () => ({
@@ -190,7 +190,7 @@ describe("createAuthGuard.getSession", () => {
     expect(await roleOf(ProtoRole.UNSPECIFIED)).toBeUndefined();
   });
 
-  test("G6: cache 省略時も token 不在で SESSION_NOT_FOUND を返す", async () => {
+  test("cache 省略時も token 不在で SESSION_NOT_FOUND を返す", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => okResponse),
       getSessionToken: async () => undefined,
@@ -202,7 +202,7 @@ describe("createAuthGuard.getSession", () => {
     expect(result.reason).toBe(Result.SESSION_NOT_FOUND);
   });
 
-  test("G7: cache 注入時に同一 instance の getSession() を 2 回呼ぶと verifySession が 1 回しか呼ばれない", async () => {
+  test("cache 注入時に同一 instance の getSession() を 2 回呼ぶと verifySession が 1 回しか呼ばれない", async () => {
     const memo = <Args extends readonly unknown[], R>(fn: (...args: Args) => R) => {
       let cached: { value: R } | null = null;
       return (...args: Args): R => {
@@ -238,7 +238,7 @@ describe("MFA チャレンジ保留中の consumer 表面", () => {
     twoFactorSecret: "should-not-leak",
   };
 
-  test("QA-M-27 チャレンジ保留中は session token が無く RPC も呼ばずに未認証を返す", async () => {
+  test("チャレンジ保留中は session token が無く RPC も呼ばずに未認証を返す", async () => {
     let rpcCalled = false;
     const guard = createAuthGuard({
       client: makeClient(async () => {
@@ -256,7 +256,7 @@ describe("MFA チャレンジ保留中の consumer 表面", () => {
     expect(rpcCalled).toBe(false);
   });
 
-  test("QA-M-27 破棄済み token が残っていても SESSION_NOT_FOUND を未認証として返す", async () => {
+  test("破棄済み token が残っていても SESSION_NOT_FOUND を未認証として返す", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => ({
         outcome: { case: "error", value: { reason: Result.SESSION_NOT_FOUND } },
@@ -271,7 +271,7 @@ describe("MFA チャレンジ保留中の consumer 表面", () => {
     expect(result.reason).toBe(Result.SESSION_NOT_FOUND);
   });
 
-  test("QA-M-27 SessionData の shape は MFA 導入前と同一で MFA 由来のフィールドが増えない", async () => {
+  test("SessionData の shape は MFA 導入前と同一で MFA 由来のフィールドが増えない", async () => {
     const guard = createAuthGuard({
       client: makeClient(async () => ({
         outcome: {

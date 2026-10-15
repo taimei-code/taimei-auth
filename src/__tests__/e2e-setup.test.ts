@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { TEST_MFA_TOTP_ENCRYPTION_KEYS } from "../mfa/__tests__/helpers";
-import { REPO_ROOT } from "./grep-files";
+import { TEST_MFA_TOTP_ENCRYPTION_KEYS } from "./test-env";
+import { REPO_ROOT } from "./source-scan";
 
 describe("e2e の起動設定", () => {
   test("e2e サーバーの既定の暗号鍵は bun test の既定の鍵と同じ", () => {

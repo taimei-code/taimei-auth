@@ -9,6 +9,7 @@ import { AuthApiError, DbError } from "../../errors";
 import { InvitationRepo } from "../../invitation/ports";
 import { MembershipRepo } from "../ports";
 import { partial } from "../../__tests__/live-runner";
+import { authApiWith } from "../../__tests__/test-layers";
 import { SentryLive, type SentryService } from "../../sentry";
 
 export const run = <A, E>(p: Effect.Effect<A, E, SentryService>) =>
@@ -38,16 +39,13 @@ export const authLayer = (
   getSession: () => Effect.Effect<Session | null, AuthApiError> | Session | null,
   signOut: (headers: Headers) => Effect.Effect<void, AuthApiError> = () => Effect.void,
 ): Layer.Layer<AuthApi> =>
-  Layer.succeed(
-    AuthApi,
-    partial<AuthApi["Service"]>({
-      getSession: () => {
-        const r = getSession();
-        return Effect.isEffect(r) ? r : Effect.succeed(r);
-      },
-      signOut,
-    }),
-  );
+  authApiWith(() => ({
+    getSession: () => {
+      const r = getSession();
+      return Effect.isEffect(r) ? r : Effect.succeed(r);
+    },
+    signOut,
+  }));
 
 export const authFailing = (cause: unknown): Layer.Layer<AuthApi> =>
   authLayer(() => Effect.fail(new AuthApiError({ cause })));

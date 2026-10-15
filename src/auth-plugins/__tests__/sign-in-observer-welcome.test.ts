@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { drained, partial } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { AuditLog } from "../../audit/ports";
 import { BackgroundLive } from "../../background";
 import { EmailSender } from "../../email/ports";
@@ -10,7 +10,7 @@ import { SentryLive } from "../../sentry";
 import { observeSignInProgram } from "../sign-in-observer";
 
 describe("welcome メールの送信失敗", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const cause = new Error("resend down");
   const layers = Layer.mergeAll(
     Layer.succeed(
@@ -24,7 +24,7 @@ describe("welcome メールの送信失敗", () => {
     SentryLive,
   );
 
-  test("AC-037 新規 user への welcome 送信失敗は sign_in 観測を落とさず Sentry warning に残る", async () => {
+  test("新規 user への welcome 送信失敗は sign_in 観測を落とさず Sentry warning に残る", async () => {
     const before = captured.length;
     await Effect.runPromise(
       drained(

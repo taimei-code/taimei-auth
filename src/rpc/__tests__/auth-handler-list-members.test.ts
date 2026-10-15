@@ -20,7 +20,7 @@ import {
   Result,
 } from "../../gen/auth/v1/auth_pb";
 import { SentryLive } from "../../sentry";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { listCurrentCompanyMembersProgram } from "../auth-handler";
 
 const mockSignOut = mock();
@@ -91,7 +91,7 @@ const membershipsOfC1AndC2: Membership[] = [
 ];
 
 describe("ListCurrentCompanyMembers の一覧", () => {
-  test("AC-001/004/007: 本人を含む一覧は 4 項目で全員を返し (空の name はそのまま)、company_id はその事業所", async () => {
+  test("本人を含む一覧は 4 項目で全員を返し (空の name はそのまま)、company_id はその事業所", async () => {
     const ok = await okOf("c1", membershipRepoLayer(membershipsOfC1AndC2));
     expect(ok.companyId).toBe("c1");
     expect(
@@ -102,7 +102,7 @@ describe("ListCurrentCompanyMembers の一覧", () => {
     ]);
   });
 
-  test("AC-046: members は加入の古い順で、加入日時が同じ人は membership の ID 順", async () => {
+  test("members は加入の古い順で、加入日時が同じ人は membership の ID 順", async () => {
     const at = (day: number) => new Date(Date.UTC(2026, 0, day));
     const ok = await okOf(
       "c1",
@@ -115,12 +115,12 @@ describe("ListCurrentCompanyMembers の一覧", () => {
     expect(ok.members.map((m) => m.userId)).toEqual(["u2", "u3", "u1"]);
   });
 
-  test("AC-005: 現在の事業所が無ければ一覧を読まずに空の ok を返す", async () => {
+  test("現在の事業所が無ければ一覧を読まずに空の ok を返す", async () => {
     const ok = await okOf(null, failsIfMembersAreRead());
     expect([ok.companyId, ok.members]).toEqual([undefined, []]);
   });
 
-  test("AC-006: 一覧に本人がいなければ (user 行を読んだ後に除名された) 空の ok を返す", async () => {
+  test("一覧に本人がいなければ (user 行を読んだ後に除名された) 空の ok を返す", async () => {
     const ok = await okOf(
       "c1",
       membershipRepoLayer(membershipsOfC1AndC2.filter((r) => r.userId !== "u1")),
@@ -128,7 +128,7 @@ describe("ListCurrentCompanyMembers の一覧", () => {
     expect([ok.companyId, ok.members]).toEqual([undefined, []]);
   });
 
-  test("AC-012: 一覧の読み取りが失敗したら空の ok に縮退せず失敗する", async () => {
+  test("一覧の読み取りが失敗したら、空の ok にせず失敗する", async () => {
     const exit = await runListMembers(
       signedInWithRevision(7),
       [userRow("c1")],
@@ -139,7 +139,7 @@ describe("ListCurrentCompanyMembers の一覧", () => {
 });
 
 describe("ListCurrentCompanyMembers のセッションの判定", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
 
   test("revision 不一致の signOut が失敗しても REVISION_OUTDATED を返し、Sentry にはこの RPC の名前で送る", async () => {
     const cause = new Error("ttl store down");
@@ -153,7 +153,7 @@ describe("ListCurrentCompanyMembers のセッションの判定", () => {
     expect(captured.at(-1)?.[1]).toMatchObject({ tags: { handler: "listCurrentCompanyMembers" } });
   });
 
-  test("AC-008: session が無ければ SESSION_NOT_FOUND", async () => {
+  test("session が無ければ SESSION_NOT_FOUND を返す", async () => {
     expect(
       await reasonOf(
         sharedAuthLayer(() => null),
@@ -162,18 +162,18 @@ describe("ListCurrentCompanyMembers のセッションの判定", () => {
     ).toBe(Result.SESSION_NOT_FOUND);
   });
 
-  test("AC-009: user が消えていれば USER_DELETED", async () => {
+  test("user が消えていれば USER_DELETED を返す", async () => {
     expect(await reasonOf(signedInWithRevision(7), [])).toBe(Result.USER_DELETED);
   });
 
-  test("AC-010: revision が違えば signOut して REVISION_OUTDATED", async () => {
+  test("revision が違えば signOut して REVISION_OUTDATED を返す", async () => {
     expect(await reasonOf(signedInWithRevision(3), [userRow("c1", 5)])).toBe(
       Result.REVISION_OUTDATED,
     );
     expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 
-  test("AC-011: payload に revision が無ければ照合せずに ok を返す", async () => {
+  test("payload に revision が無ければ照合せずに ok を返す", async () => {
     const exit = await runListMembers(
       signedInWithRevision(undefined),
       [userRow("c1", 5)],
@@ -183,7 +183,7 @@ describe("ListCurrentCompanyMembers のセッションの判定", () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  test("AC-038: getSession が失敗したら outcome を返さずに失敗する", async () => {
+  test("getSession が失敗したら outcome を返さずに失敗する", async () => {
     const exit = await runListMembers(
       authFailing(new Error("auth down")),
       [userRow("c1")],

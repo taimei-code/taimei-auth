@@ -6,19 +6,18 @@ import {
   cleanupIssuedChallenges,
   enableMfaFor,
   issueTestChallenge,
-  requestHeaders,
-  tamperCookieSignature,
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
+import { requestHeaders, tamperCookieSignature } from "../../__tests__/session-helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { runTest } from "../../__tests__/live-runner";
+import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mountSpaApi } from "../spa-http-api";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const P = "mfa-h-challenge-";
-const run = runTest(P);
+const { run } = dbTest(P);
 
 const buildApp = (): Hono => {
   const app = new Hono();
@@ -45,7 +44,7 @@ describe("MFA チャレンジ API", () => {
   beforeEach(cleanupAll);
   afterAll(cleanupAll);
 
-  test("QA-H-04 正しい TOTP → 200 + Set-Cookie 転送", () =>
+  test("正しい TOTP → 200 + Set-Cookie 転送", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -85,7 +84,7 @@ describe("MFA チャレンジ API", () => {
       }),
     ));
 
-  test("QA-E-05 改ざん cookie → 401 情報漏洩なし", () =>
+  test("改ざん cookie → 401 情報漏洩なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -117,7 +116,7 @@ describe("MFA チャレンジ API", () => {
       }),
     ));
 
-  test("QA-M-08 期限切れ (TTL store 消滅) → 401 情報漏洩なし", () =>
+  test("期限切れ (TTL store 消滅) → 401 情報漏洩なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

@@ -2,10 +2,10 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { AuthApiError } from "../../errors";
 import { dbTest } from "../../__tests__/live-runner";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { authApiWith } from "../../__tests__/test-layers";
 import { TestDb } from "../../__tests__/test-db";
-import { createSessionFor, sessionUserIdOf } from "../../mfa/__tests__/helpers";
+import { createSessionFor, sessionUserIdOf } from "../../__tests__/session-helpers";
 import { deleteSessionsOf } from "../delete-sessions";
 
 const P = "delsess-test-";
@@ -20,7 +20,7 @@ const failingFor = (failingUserId: string) =>
   }));
 
 describe("deleteSessionsOf", () => {
-  const sentry = recordSentryExceptions();
+  const { exceptions: sentry } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 

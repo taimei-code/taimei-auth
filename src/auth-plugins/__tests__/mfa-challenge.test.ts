@@ -1,19 +1,16 @@
 import { afterAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Effect, Exit, Layer } from "effect";
 import { auth } from "../../auth";
-import { AuthApi } from "../../auth-service";
 import { AuthApiError, DbError, TtlStoreError } from "../../errors";
+import { cleanupIssuedChallenges, enableMfaFor } from "../../mfa/__tests__/helpers";
 import {
   browserCookieHeaders,
-  cleanupIssuedChallenges,
   countLiveSessions,
-  enableMfaFor,
   followMagicLink,
-  installSentryRecorder,
   issuedSessionCookieCount,
   loginWithMagicLink,
   requestMagicLink,
-} from "../../mfa/__tests__/helpers";
+} from "../../__tests__/session-helpers";
 import {
   attemptsKey,
   challengeKey,
@@ -25,22 +22,24 @@ import { withWaitUntil } from "../../background";
 import { type AppRuntime, getRuntime } from "../../runtime";
 import { TtlStore } from "../../ttl-store-service";
 import { SentryService } from "../../sentry";
-import { auditRowsFor, partial, runTest, withSpy } from "../../__tests__/live-runner";
+import { auditRowsFor, partial, dbTest, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { enforceChallenge, KILL_SWITCH_REPORT_INTERVAL_MS } from "../mfa-challenge";
 import { primaryAuth } from "../primary-auth";
 import type { PrimaryAuthRoute } from "../primary-auth-routes";
 import { testKvStore, testTtlStore } from "../../__tests__/test-ttl-store";
+import { recordSentry } from "../../__tests__/sentry-recorder";
+import { authApiWith } from "../../__tests__/test-layers";
 
 const P = "mfa-plugin-";
-const run = runTest(P);
-const sentry = installSentryRecorder();
+const { run } = dbTest(P);
+const sentry = recordSentry();
 const killSwitchWarnings = () =>
   sentry.messages.filter((capture) => capture.context?.tags?.component === "mfa-challenge");
 const expectMfaChallengeException = (count: number) => {
   expect(sentry.exceptions.length).toBe(count);
-  for (const capture of sentry.exceptions)
-    expect(capture.context?.tags).toEqual({ component: "mfa-challenge" });
+  for (const [, context] of sentry.exceptions)
+    expect(context?.tags).toEqual({ component: "mfa-challenge" });
 };
 const withKillSwitchOff = <A, E, R>(body: Effect.Effect<A, E, R>) =>
   Effect.acquireUseRelease(
@@ -146,13 +145,11 @@ const runOAuthCallbackHook = (
     return outcome;
   });
 
-afterAll(() => sentry.restore());
-
 describe("チャレンジ強制プラグイン", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
   afterAll(() => cleanupAll());
 
-  test("QA-H-03 magic link → 302 /auth/mfa", () =>
+  test("magic link → 302 /auth/mfa", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -179,7 +176,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-H-08 MFA 未設定 → callbackURL へ 302", () =>
+  test("MFA 未設定 → callbackURL へ 302", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -199,7 +196,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-E-12 チャレンジ発行失敗 fail-closed", () =>
+  test("チャレンジの発行に失敗すると fail-closed", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -229,7 +226,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-E-13 deleteSession 失敗 fail-closed", () =>
+  test("deleteSession に失敗すると fail-closed", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -262,7 +259,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-D-11 kill switch off → warning は再通知間隔ごとに 1 回", () =>
+  test("kill switch off → warning は再通知間隔ごとに 1 回", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -316,7 +313,7 @@ describe("チャレンジ強制プラグイン", () => {
         ),
     );
 
-  test("AC-019 runtime 不在 + kill switch on → session を落として 302 /auth/mfa、チャレンジ cookie は出ない", () =>
+  test("runtime 不在 + kill switch on → session を落として 302 /auth/mfa、チャレンジ cookie は出ない", () =>
     run(
       Effect.gen(function* () {
         const outcome = yield* runHookWithRuntimeDown();
@@ -329,7 +326,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("AC-020 runtime 不在 + kill switch off → 素通し", () =>
+  test("runtime 不在 + kill switch off → 素通し", () =>
     run(
       withKillSwitchOff(
         Effect.gen(function* () {
@@ -409,7 +406,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("QA-R-02 連携がチャレンジ誘発しない (実 OAuth は QA-MR-02)", () =>
+  test("連携アカウントの追加ではチャレンジを出さない (実 OAuth は QA-MR-02)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -489,17 +486,17 @@ describe("enforceChallenge (program 単体)", () => {
   const ttlStoreUntouched = Layer.succeed(TtlStore, partial<TtlStore["Service"]>({}));
   const untouched = Layer.mergeAll(
     ttlStoreUntouched,
-    Layer.succeed(AuthApi, partial<AuthApi["Service"]>({})),
+    authApiWith(() => ({
+      secret: Effect.die(new Error("test: AuthApi.secret は呼ばれない")),
+      deleteSession: () => Effect.die(new Error("test: AuthApi.deleteSession は呼ばれない")),
+    })),
   );
   const ttlStoreWith = (set: () => Effect.Effect<void, TtlStoreError>) =>
     Layer.succeed(TtlStore, partial<TtlStore["Service"]>({ set }));
-  const authApiWith = (deleteSession: (token: string) => Effect.Effect<void, AuthApiError>) =>
-    Layer.succeed(
-      AuthApi,
-      partial<AuthApi["Service"]>({ secret: Effect.succeed("test-secret"), deleteSession }),
-    );
+  const authApiDeleting = (deleteSession: (token: string) => Effect.Effect<void, AuthApiError>) =>
+    authApiWith(() => ({ secret: Effect.succeed("test-secret"), deleteSession }));
   const authApiRecording = (deleted: string[]) =>
-    authApiWith((token) =>
+    authApiDeleting((token) =>
       Effect.sync(() => {
         deleted.push(token);
       }),
@@ -529,7 +526,7 @@ describe("enforceChallenge (program 単体)", () => {
     ? true
     : never = true;
 
-  test("AC-007 介入成功: Challenge { cookie } と deleteSession(token) 1 回", () =>
+  test("介入成功: Challenge { cookie } と deleteSession(token) 1 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -543,7 +540,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-005 MFA 未有効は Pass、介入の副作用は 0 回", () =>
+  test("MFA 未有効は Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -555,7 +552,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-006 Unmapped でも MFA 未有効なら Pass、介入の副作用は 0 回", () =>
+  test("Unmapped でも MFA 未有効なら Pass、介入の副作用は 0 回", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -567,7 +564,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-008 未知 provider は fail-closed: Challenge { null }、deleteSession 1 回、TTL store 0 回、Sentry warning 1 件", () =>
+  test("未知 provider は fail-closed: Challenge { null }、deleteSession 1 回、TTL store 0 回、Sentry warning 1 件", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -578,14 +575,14 @@ describe("enforceChallenge (program 単体)", () => {
         expect(exit).toEqual(challengeWithoutCookie);
         expect(deleted).toEqual(["token-unit"]);
         expectMfaChallengeException(1);
-        expect(sentry.exceptions[0]?.context?.level).toBe("warning");
-        expect(sentry.exceptions[0]?.message).toContain(
+        expect(sentry.exceptions[0]?.[1]?.level).toBe("warning");
+        expect(String(sentry.exceptions[0]?.[0])).toContain(
           "unmapped primary auth route /callback/:id (id=gitlab)",
         );
       }),
     ));
 
-  test("AC-009 判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
+  test("判定の +1 SELECT が失敗しても fail-closed (介入はそのまま進む)", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -599,7 +596,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-010 チャレンジ発行失敗: Challenge { null } でも deleteSession は 1 回", () =>
+  test("チャレンジ発行失敗: Challenge { null } でも deleteSession は 1 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -617,7 +614,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-011 deleteSession 失敗: 発行済みの cookie は失わない", () =>
+  test("deleteSession 失敗: 発行済みの cookie は失わない", () =>
     run(
       Effect.gen(function* () {
         const exit = yield* decide(
@@ -625,7 +622,7 @@ describe("enforceChallenge (program 単体)", () => {
           Layer.mergeAll(
             mfaEnabled,
             ttlStoreWith(() => Effect.void),
-            authApiWith(() => new AuthApiError({ cause: new Error("session store down") })),
+            authApiDeleting(() => new AuthApiError({ cause: new Error("session store down") })),
           ),
         );
         expect(exit).toEqual(challengeWithCookie);
@@ -633,7 +630,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-012 Sentry backend の defect でも介入経路は Challenge で完走する", () =>
+  test("Sentry backend の defect でも介入経路は Challenge で完走する", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -651,7 +648,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-001 kill switch off は Pass、判定も介入も 0 回", () =>
+  test("kill switch off は Pass、判定も介入も 0 回", () =>
     run(
       Effect.gen(function* () {
         const deleted: string[] = [];
@@ -665,7 +662,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-002 Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
+  test("Sentry backend の defect でも kill switch off は Pass (kill switch が無効化されない)", () =>
     run(
       Effect.gen(function* () {
         const t0 = afterEveryEarlierKillSwitchReport();
@@ -680,7 +677,7 @@ describe("enforceChallenge (program 単体)", () => {
       }),
     ));
 
-  test("AC-003 / AC-004 再通知の境界: 初回で鳴り、INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
+  test("再通知の境界: 初回で鳴り、INTERVAL - 1 では鳴らず、ちょうど INTERVAL で鳴る", () =>
     run(
       Effect.gen(function* () {
         const layer = Layer.mergeAll(mfaEnabled, untouched);

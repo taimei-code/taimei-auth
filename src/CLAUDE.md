@@ -29,8 +29,28 @@
 ## test
 
 - domain のテストは `<domain>/__tests__/` に、Transport のテストは `handlers/__tests__/` / `rpc/__tests__/` に、複数 domain にまたがる invariant は `src/__tests__/` に置く。
-- DB に接触するテストは `TestDb` service を `yield*` し、`@/db/*` を runtime import しない (型 import は可)。テスト本体は `runTest(prefix)` に渡す 1 つの `Effect.gen` にし、失敗は `Effect.flip` / `Effect.exit` で failure class として観測する。DB への接触は fixture の setup と事後状態の観測に限り、production 境界の例外の根拠にしない。
+- DB に接触するテストは `TestDb` service を `yield*` し、`@/db/*` を runtime import しない (型 import は可)。テスト本体は `src/__tests__/live-runner.ts` の `dbTest(prefix)` が返す `run` に渡す 1 つの `Effect.gen` にし (後片付けは同じく返る `cleanup`)、失敗は `Effect.flip` / `Effect.exit` で failure class として観測する。DB への接触は fixture の setup と事後状態の観測に限り、production 境界の例外の根拠にしない。
 - `@core` の公開面を変えたら `src/__tests__/web-shared-core-runtime-free.test.ts` を実行する。workerd 固有の挙動は local のテストで完了扱いにせず、manual regression か `wrangler dev --remote` で確認する。
+
+## 静的な検査
+
+他の CLAUDE.md や ADR が path で名指さない、source を走査する検査は、守る規則とともにここに書く。
+
+- `__tests__/source-scan.test.ts`: 走査の module が、実行時に読み込まれる import だけを返すこと
+- `__tests__/default-company-contract.test.ts`: 現在の事業所を書き換える経路のすべてに、契約の scenario があること
+- `__tests__/e2e-setup.test.ts`: e2e の起動 script の MFA の鍵と、test の既定の鍵が同じであること
+- `__tests__/request-context.test.ts`: `AUTH_TRUSTED_PROXY_HOPS` を読むのが request-context だけであること
+- `__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであること
+- `__tests__/service-key.test.ts`: service key の検証が `verifyServiceKey` の 1 か所にあること
+- `__tests__/url-allowlist-production.test.ts`: production の redirect URL の許可が、production の値で読まれること
+- `__tests__/wrangler-dev-env.test.ts`: `scripts/wrangler-dev.sh` が上書きする env と `wrangler.jsonc` の vars が一致すること
+- `account/__tests__/containment.test.ts`: 退会の判定と、commit 後の session 削除の呼び手が 1 つであること
+- `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること
+- `email/__tests__/containment.test.ts`: メールの表示名が `DisplayText` を通り、template の依存と style の置き場が決まっていること
+- `health/__tests__/containment.test.ts`: `/health` の probe の呼び手が 1 つで、TTL store の ping が再試行しないこと
+- `membership/__tests__/no-hono-import.test.ts`: Guard 層が hono を import しないこと
+- `mfa/__tests__/containment.test.ts`: ログインの経路が import する MFA の module と、MFA の秘密の値の読み手が決まっていること
+- `mfa/__tests__/policy.test.ts`: `mfa/policy.ts` が他の module を import しないこと
 
 ## gotcha
 

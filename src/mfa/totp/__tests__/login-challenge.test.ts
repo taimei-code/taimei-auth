@@ -1,26 +1,26 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect } from "effect";
 import { serialize as serializeSetCookie } from "hono/utils/cookie";
 import { auth } from "../../../auth";
-import { AuthApi } from "../../../auth-service";
-import { authApiLive } from "../../../auth-wiring";
+import { authApiWith } from "../../../__tests__/test-layers";
 import { AuthApiError, TtlStoreError } from "../../../errors";
 import { TtlStore } from "../../../ttl-store-service";
-import { runTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
+import { dbTest, expectFailure, auditRowsFor } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
 import {
-  browserCookieHeaders,
   cleanupIssuedChallenges,
   enableMfaFor,
-  installSentryRecorder,
   issueTestChallenge,
+  totpCode,
+  wrongTotpCode,
+} from "../../__tests__/helpers";
+import {
+  browserCookieHeaders,
   requestHeaders,
   tamperCookieSignature,
   TEST_CLIENT_IP,
   TEST_USER_AGENT,
-  totpCode,
-  wrongTotpCode,
-} from "../../__tests__/helpers";
+} from "../../../__tests__/session-helpers";
 import { ChallengeExpired, InvalidCode, Locked } from "../../errors";
 import { completeLoginChallenge } from "../complete-login-challenge";
 import {
@@ -33,10 +33,11 @@ import {
 import { readOwnedMfaStatus } from "../read-status";
 import { disable } from "../../totp";
 import { testKvStore } from "../../../__tests__/test-ttl-store";
+import { recordSentry } from "../../../__tests__/sentry-recorder";
 
 const P = "mfa-lc-";
-const run = runTest(P);
-const sentry = installSentryRecorder();
+const { run } = dbTest(P);
+const sentry = recordSentry();
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
@@ -61,9 +62,9 @@ const sendWrongTotpCodes = (headers: Headers, secret: string, times: number) =>
 
 describe("ログインチャレンジ", () => {
   beforeEach(() => cleanupAll().then(() => sentry.reset()));
-  afterAll(() => cleanupAll().then(() => sentry.restore()));
+  afterAll(() => cleanupAll());
 
-  test("AC-133 発行: Set-Cookie 属性と pending、改ざん・欠落は false", () =>
+  test("チャレンジを発行すると Set-Cookie の属性がそろい pending は true、cookie の改ざんか欠落なら pending は false", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -108,7 +109,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-134/135/137 TOTP 通過: session 発行・audit・単回消費", () =>
+  test("TOTP で通過すると session を発行して audit を残し、チャレンジは 1 回だけ使える", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -166,7 +167,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-136 リカバリーコード通過: 成功 + 残数減", () =>
+  test("リカバリーコードで通過すると成功し、残数が減る", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -226,7 +227,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-138/139 試行枠: 4 回目まで 400 + pending true、最後の 5 回目の誤コードで破棄して challenge_expired", () =>
+  test("誤コードは 4 回目まで 400 で pending のまま、5 回目でチャレンジを破棄して challenge_expired を返す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -374,12 +375,14 @@ describe("ログインチャレンジ", () => {
 
         expectFailure(rejected, ChallengeExpired);
         expect(
-          sentry.exceptions.filter((e) => e.context?.tags?.component === "mfa-login-challenge"),
+          sentry.exceptions.filter(
+            ([, context]) => context?.tags?.component === "mfa-login-challenge",
+          ),
         ).toHaveLength(1);
       }),
     ));
 
-  test("AC-140 試行計数の TTL store 不能 → 429 locked (fail-closed)", () =>
+  test("試行の回数を TTL store で数えられない時は 429 locked を返す (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -404,7 +407,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-141 チャレンジ発行後の無効化交差 → 401 (not_enabled を漏らさない)", () =>
+  test("チャレンジの発行後に MFA が無効になると 401 を返し、not_enabled を明かさない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -432,7 +435,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-142 信頼外 redirectUrl は /account へ fallback (出口検証)", () =>
+  test("信頼できない redirectUrl は、通過の後に /account へ置き換える", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -453,7 +456,7 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
-  test("AC-158 session 発行失敗はチャレンジ消費後 — 再 verify は 401 (fail-closed)", () =>
+  test("session の発行に失敗してもチャレンジは消費済みで、もう一度 verify すると 401 を返す (fail-closed)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -467,10 +470,7 @@ describe("ログインチャレンジ", () => {
         const sessionStoreDown = new AuthApiError({
           cause: new Error("session store unavailable"),
         });
-        const failingAuthApi = Layer.succeed(
-          AuthApi,
-          AuthApi.of({ ...authApiLive, issueSession: () => sessionStoreDown }),
-        );
+        const failingAuthApi = authApiWith(() => ({ issueSession: () => sessionStoreDown }));
 
         const failed = yield* Effect.flip(
           completeLoginChallenge(challenge.headers, {

@@ -9,7 +9,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError, createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { auth } from "../auth";
 import { DbError } from "../errors";
-import { recordSentryExceptions } from "./sentry-recorder";
+import { recordSentry } from "./sentry-recorder";
 
 const thrown = new Error("boom");
 
@@ -92,7 +92,7 @@ describe("better-auth の router は hook の throw を onAPIError.onError に�
 });
 
 describe("src/auth.ts の onAPIError.onError", () => {
-  const captured = recordSentryExceptions();
+  const { exceptions: captured } = recordSentry();
   const ctx = {} as AuthContext;
   const onAPIError = (auth.options as BetterAuthOptions).onAPIError;
   const onError = (error: unknown): unknown => {
@@ -100,7 +100,7 @@ describe("src/auth.ts の onAPIError.onError", () => {
     return onAPIError.onError(error, ctx);
   };
 
-  test("onAPIError.onError が結線されている", () => {
+  test("onAPIError.onError が結線されている (未結線を describe の本体で throw すると、Bun は describe ごと落として件数が減るだけで fail にしないので、test の中で確かめる)", () => {
     expect(onAPIError?.onError).toBeDefined();
   });
 

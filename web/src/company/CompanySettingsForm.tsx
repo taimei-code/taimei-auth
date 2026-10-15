@@ -7,10 +7,10 @@ import type { OrgCode } from "@core/company/org-code";
 
 import { companyStateAtom } from "../account/account-atom";
 import type { Membership } from "../account/current-company";
-import { redirectAfterAuthChange } from "../auth/auth-redirect";
 import { ConfirmDestructiveDialog } from "../shared/ConfirmDestructiveDialog";
 import { useWaitForValue } from "../shared/atom-runtime";
 import { failureMessage } from "../shared/failure-message";
+import { leaveSpaAfterAccountDeleted } from "../shared/leave-spa";
 import { notifyAfterRefresh, notifyError } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -53,7 +53,6 @@ export const CompanySettingsForm = ({ membership, isLastCompany }: Props) => {
                 {
                   Forbidden: "編集する権限がありません。",
                   NotFound: UPDATE_FAILED,
-                  Unauthorized: UPDATE_FAILED,
                 },
                 UPDATE_FAILED,
               ),
@@ -112,7 +111,7 @@ const DeleteCompanySection = ({
       Exit.match({
         onSuccess: ({ account_deleted }) => {
           if (account_deleted) {
-            redirectAfterAuthChange("deleteAccount");
+            leaveSpaAfterAccountDeleted();
             return;
           }
           void navigate({ to: "/account/companies" });
@@ -128,7 +127,6 @@ const DeleteCompanySection = ({
               {
                 Forbidden: "この事業所を削除する権限がないか、既に削除されています。",
                 LastOwner: DELETE_FAILED,
-                Unauthorized: DELETE_FAILED,
               },
               DELETE_FAILED,
             ),

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
-import { recordSentryExceptions } from "../../__tests__/sentry-recorder";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { tryAuthApi } from "../../errors";
 import { requireActor, requireMembershipOf } from "../guard";
 import {
@@ -16,7 +16,7 @@ import {
   userRepoLayer,
 } from "./test-layers";
 
-const captured = recordSentryExceptions();
+const { exceptions: captured } = recordSentry();
 const headers = new Headers();
 
 describe("requireActor", () => {

@@ -4,6 +4,7 @@ import { AuthApi, type SessionRejected } from "../../auth-service";
 import { EmailSender } from "../../email/ports";
 import { type AuthApiError, DbError } from "../../errors";
 import { partial } from "../../__tests__/live-runner";
+import { authApiWith } from "../../__tests__/test-layers";
 
 export const revokeRecordingLayer = (
   recorded: { revokes: Headers[] },
@@ -11,13 +12,10 @@ export const revokeRecordingLayer = (
     () => new Headers({ "set-cookie": "revoked=stub" }),
   ),
 ): Layer.Layer<AuthApi> =>
-  Layer.succeed(
-    AuthApi,
-    partial<AuthApi["Service"]>({
-      revokeOtherSessions: (headers) =>
-        Effect.sync(() => recorded.revokes.push(headers)).pipe(Effect.andThen(outcome)),
-    }),
-  );
+  authApiWith(() => ({
+    revokeOtherSessions: (headers) =>
+      Effect.sync(() => recorded.revokes.push(headers)).pipe(Effect.andThen(outcome)),
+  }));
 
 export const mfaMailRecorderLayer = (sent: string[]): Layer.Layer<EmailSender> =>
   Layer.succeed(

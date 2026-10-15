@@ -50,7 +50,7 @@ describe("role CHECK constraint (ADR-0018)", () => {
     }
   });
 
-  test("membership.role の外れ値 ('SUPERVISOR' / 'owner' / '') は membership_role_check で reject、'OWNER' は成功", async () => {
+  test("membership.role の外れ値 ('SUPERVISOR' / 'owner' / '') は membership_role_check で reject、'OWNER' は成功 (drizzle は DB の失敗を DrizzleQueryError で包み、制約名は cause にだけある)", async () => {
     const co = await seed.seedCompany("edge");
     for (const bad of ["SUPERVISOR", "owner", ""]) {
       const u = await seed.seedUser(`edge-${bad || "empty"}`);

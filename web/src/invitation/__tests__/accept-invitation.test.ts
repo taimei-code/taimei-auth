@@ -34,6 +34,18 @@ describe("acceptInvitationOutcome", () => {
     expect(accept).not.toHaveBeenCalled();
   });
 
+  test("session の確認が reject したら、受諾せずに受諾の失敗の文言", async () => {
+    const accept = mock(async () => accepted);
+
+    const outcome = await acceptInvitationOutcome(searchWith({ invitation_token: "tok" }), {
+      hasSession: () => Promise.reject(new Error("network")),
+      accept,
+    });
+
+    expect(outcome).toEqual({ kind: "failed", message: "招待の受諾に失敗しました。" });
+    expect(accept).not.toHaveBeenCalled();
+  });
+
   test("受諾が成功し redirect target が無ければ /account へ", async () => {
     const outcome = await acceptInvitationOutcome(searchWith({ invitation_token: "tok" }), {
       hasSession: async () => true,

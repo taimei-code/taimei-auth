@@ -1,15 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { isAbsolute, join } from "node:path";
-import { type GrepOptions, grepFiles, REPO_ROOT } from "./grep-files";
+import { join } from "node:path";
+import { filesImporting, grepFiles, grepLines } from "./source-scan";
 
 const EFFECT_IMPORT = String.raw`(from|import|require\(|import\()\s*["']effect(/[^"']*)?["']`;
 
-const effectImports = (dir: string): string[] =>
-  grepFiles(EFFECT_IMPORT, dir, { include: ["*.ts", "*.tsx"] });
+const effectImports = (dir: string): string[] => grepFiles(EFFECT_IMPORT, dir);
 
-const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { excludeTests: true });
+const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { tests: "exclude" });
 
 describe("effect の import 境界 (ADR-0017)", () => {
   test("db/ は effect を import しない (Repository 境界。biome に db 専用の override を足すと web の ban の複製が崩れるので grep で固定する)", () => {
@@ -17,20 +16,17 @@ describe("effect の import 境界 (ADR-0017)", () => {
   });
 
   test("web/src の effect の subpath は effect/reactivity と effect/http だけ", () => {
-    const subpaths = grepFiles(String.raw`(from|import)\s*["']effect/`, "web/src", {
-      include: ["*.ts", "*.tsx"],
-      lines: true,
-    });
+    const subpaths = grepLines(String.raw`(from|import)\s*["']effect/`, "web/src", {});
     expect(subpaths.filter((line) => !/["']effect\/(reactivity|http)["']/.test(line))).toEqual([]);
   });
 });
 
-describe("Stage 2 ゲート (Use-case): Repository は ports 経由", () => {
+describe("Use-case は Repository を ports 経由で使う", () => {
   test("db/repositories と db/transaction の runtime import は wiring / id-generator / transaction / auth.ts に限る", () => {
     const allowed = new Set(["src/id-generator.ts", "src/transaction.ts", "src/auth.ts"]);
-    const offenders = srcFiles(
-      String.raw`^import (\{|\*) .* from "@/db/(repositories|transaction)`,
-    ).filter((f) => !f.endsWith("/wiring.ts") && !allowed.has(f));
+    const offenders = filesImporting(/^@\/db\/(repositories|transaction)/, "src", {
+      tests: "exclude",
+    }).filter((f) => !f.endsWith("/wiring.ts") && !allowed.has(f));
     expect(offenders).toEqual([]);
   });
 
@@ -39,13 +35,7 @@ describe("Stage 2 ゲート (Use-case): Repository は ports 経由", () => {
   });
 });
 
-describe("Stage 3 ゲート (MFA): 橋渡しの WireFailure / MfaFailure が消えている", () => {
-  test("WireFailure / MfaFailure / fromResult / fromMfaResult の出現が 0", () => {
-    expect(srcFiles("WireFailure|MfaFailure|fromResult\\(|fromMfaResult\\(")).toEqual([]);
-  });
-});
-
-describe("Stage 4 ゲート (seam / runtime primitive)", () => {
+describe("副作用と runtime の入口は、決まった module だけが呼ぶ", () => {
   test("Promise.all の直呼びが 0 (Effect.all に統一)", () => {
     expect(srcFiles("Promise\\.all\\(")).toEqual([]);
   });
@@ -129,15 +119,17 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
   });
 
   test("auth module を値で import するのは app.ts と auth-wiring.ts、initAuth を呼ぶ boot.ts だけ (複数行・名前空間・動的 import も数える)", () => {
-    expect(
-      valueImportFiles(gateFor(`["'](@/src/|(\\.\\.?/)+)auth["']`), "src", { excludeTests: true }),
-    ).toEqual(["src/app.ts", "src/auth-wiring.ts", "src/boot.ts"]);
+    expect(filesImporting(/^(@\/src\/|(\.\.?\/)+)auth$/, "src", { tests: "exclude" })).toEqual([
+      "src/app.ts",
+      "src/auth-wiring.ts",
+      "src/boot.ts",
+    ]);
   });
 
   test("initRuntime と initAuth を呼ぶのは boot.ts だけ (runtime と better-auth に同じ TTL store を渡す)", () => {
     const pattern = String.raw`\b(initRuntime|initAuth)\(`;
     expect(
-      [...srcFiles(pattern), ...grepFiles(pattern, "management", { excludeTests: true })].sort(),
+      [...srcFiles(pattern), ...grepFiles(pattern, "management", { tests: "exclude" })].sort(),
     ).toEqual(["src/auth.ts", "src/boot.ts", "src/runtime.ts"]);
   });
 
@@ -149,6 +141,13 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
     ]);
   });
 
+  test("有効な session の判定 (AuthApi.getSession) を呼ぶのは session-check.ts だけ (入口・SPA の guard・RPC が同じ判定を使う)", () => {
+    expect(srcFiles(String.raw`\.getSession\(`).sort()).toEqual([
+      "src/auth-wiring.ts",
+      "src/session-check.ts",
+    ]);
+  });
+
   test("better-auth の APIError の形 (body.code) を読むのは auth-wiring.ts だけ", () => {
     expect(srcFiles(String.raw`UNAUTHORIZED|cause\.body|body\.code`)).toEqual([
       "src/auth-wiring.ts",
@@ -156,75 +155,19 @@ describe("Stage 4 ゲート (seam / runtime primitive)", () => {
   });
 });
 
-type ImportGate = {
-  readonly specifier: RegExp;
-  readonly oneLine: string;
-  readonly closing: string;
-};
-const STATIC_FORMS = String.raw`^(import|export) (\{|\*|[A-Za-z_$][A-Za-z0-9_$]*).* from|^import`;
-const TYPE_ONLY = /^(import|export) type\b/;
-const gateFor = (specifier: string): ImportGate => ({
-  specifier: new RegExp(specifier),
-  oneLine: String.raw`(${STATIC_FORMS}|import\()\s*${specifier}`,
-  closing: String.raw`^\} from\s*${specifier}`,
-});
-const DB_IMPORTS = gateFor(`["']@/db/[^"']*["']`);
-const TS_FILES = ["*.ts", "*.tsx"];
-type ScanOptions = Pick<GrepOptions, "onlyTests" | "excludeTests">;
-
-type ImportHit = { file: string; specifier: string };
-
-const specifierOf = (gate: ImportGate, text: string): string =>
-  gate.specifier.exec(text)?.[0].slice(1, -1) ?? "";
-
-const multiLineImports = (gate: ImportGate, file: string): ImportHit[] => {
-  const lines = readFileSync(isAbsolute(file) ? file : join(REPO_ROOT, file), "utf8").split("\n");
-  const closing = new RegExp(gate.closing);
-  return lines.flatMap((line, i) => {
-    if (!closing.test(line)) return [];
-    const head =
-      lines
-        .slice(0, i)
-        .reverse()
-        .find((l) => /^(import|export)\b/.test(l)) ?? "";
-    return TYPE_ONLY.test(head) ? [] : [{ file, specifier: specifierOf(gate, line) }];
-  });
-};
-
-const valueImports = (gate: ImportGate, target: string, opts: ScanOptions = {}): ImportHit[] => {
-  const oneLine = grepFiles(gate.oneLine, target, {
-    ...opts,
-    include: TS_FILES,
-    lines: true,
-  }).flatMap((hit) => {
-    const sep = hit.indexOf(":");
-    const line = hit.slice(sep + 1);
-    return TYPE_ONLY.test(line)
-      ? []
-      : [{ file: hit.slice(0, sep), specifier: specifierOf(gate, line) }];
-  });
-  const multi = grepFiles(gate.closing, target, { ...opts, include: TS_FILES }).flatMap((file) =>
-    multiLineImports(gate, file),
-  );
-  return [...oneLine, ...multi];
-};
-
-const valueImportFiles = (gate: ImportGate, target: string, opts?: ScanOptions): string[] =>
-  [...new Set(valueImports(gate, target, opts).map((i) => i.file))].sort();
-
-const dbImportsOutsideTesting = (target: string): ImportHit[] =>
-  valueImports(DB_IMPORTS, target).filter((i) => !i.specifier.startsWith("@/db/testing/"));
+const DB_IMPORT = /^@\/db\//;
+const DB_IMPORT_OUTSIDE_TESTING = /^@\/db\/(?!testing\/)/;
 
 describe("test の DB 接触は db/testing/* に閉じる", () => {
   test("src の test の @/db runtime import は TestDb の face (src/__tests__/test-db.ts) のみ", () => {
-    expect(valueImportFiles(DB_IMPORTS, "src", { onlyTests: true })).toEqual([
+    expect(filesImporting(DB_IMPORT, "src", { tests: "only" })).toEqual([
       "src/__tests__/test-db.ts",
     ]);
   });
 
   test("e2e の @/db runtime import は e2e/fixtures.ts の @/db/testing/* のみ", () => {
-    expect(dbImportsOutsideTesting("e2e")).toEqual([]);
-    expect(valueImportFiles(DB_IMPORTS, "e2e")).toEqual(["e2e/fixtures.ts"]);
+    expect(filesImporting(DB_IMPORT_OUTSIDE_TESTING, "e2e")).toEqual([]);
+    expect(filesImporting(DB_IMPORT, "e2e")).toEqual(["e2e/fixtures.ts"]);
   });
 
   test("positive control: 静的 (1 行 / 複数行) と動的 import は検出され、型 import は検出されない", () => {
@@ -250,7 +193,7 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         join(dir, "re-export-type.ts"),
         'export type { DbTx } from "@/db/transaction";\n',
       );
-      expect(valueImportFiles(DB_IMPORTS, dir)).toEqual([
+      expect(filesImporting(DB_IMPORT, dir)).toEqual([
         join(dir, "default.ts"),
         join(dir, "dynamic.ts"),
         join(dir, "multi.ts"),
@@ -259,11 +202,7 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
         join(dir, "static.ts"),
         join(dir, "testing.ts"),
       ]);
-      expect(
-        dbImportsOutsideTesting(dir)
-          .map((i) => i.file)
-          .sort(),
-      ).toEqual([
+      expect(filesImporting(DB_IMPORT_OUTSIDE_TESTING, dir)).toEqual([
         join(dir, "default.ts"),
         join(dir, "dynamic.ts"),
         join(dir, "multi.ts"),
@@ -279,10 +218,7 @@ describe("test の DB 接触は db/testing/* に閉じる", () => {
 
 describe("appLayer は構築で失敗しない Layer だけで組む", () => {
   test("src の Layer constructor は Layer.succeed / Layer.mergeAll と、context を読むだけの SPA の API の 2 行 (ADR-0017) と試行枠の middleware だけ (Layer.provide は合成だけなので数えない。ManagedRuntime は初回の run で Layer を構築するので、失敗し得る Layer は本番の初回 request で落ちる)", () => {
-    const hits = grepFiles(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", {
-      excludeTests: true,
-      lines: true,
-    });
+    const hits = grepLines(String.raw`Layer\.[a-z][A-Za-z]*\(`, "src", { tests: "exclude" });
     const readsContextOnly =
       /^src\/handlers\/spa-http-api\.ts:(const AuthenticatedLive = Layer\.effect\(|\s*Layer\.effectContext\(getRuntime\(\)\.contextEffect\))|^src\/handlers\/attempt-budget-http-api\.ts:\s*Layer\.effect\(/;
     expect(

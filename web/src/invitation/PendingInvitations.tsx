@@ -66,7 +66,6 @@ export const PendingInvitations = ({ companyId }: { companyId: string }) => {
                 {
                   Forbidden: "招待を取り消す権限がありません。",
                   NotFoundOrNotPending: REVOKE_FAILED,
-                  Unauthorized: REVOKE_FAILED,
                 },
                 REVOKE_FAILED,
               ),

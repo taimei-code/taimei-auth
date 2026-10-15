@@ -37,7 +37,7 @@ describe("audit log repository", () => {
     expect(rows[0]?.payload).toEqual({});
   });
 
-  test("QA-M-01 mfa_enabled / mfa_disabled が union に載り 1 行ずつ追加される", async () => {
+  test("mfa_enabled / mfa_disabled が union に載り 1 行ずつ追加される", async () => {
     await appendAuditLog({
       eventType: "mfa_enabled",
       userId: testUserId,

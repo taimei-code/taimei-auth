@@ -3,7 +3,7 @@ import type { Cause } from "effect";
 import { Exit } from "effect";
 import type { Atom } from "effect/reactivity";
 
-import { failureMessage } from "../shared/failure-message";
+import { type FailureMessages, failureMessage } from "../shared/failure-message";
 import { SpaApiClient } from "../shared/spa-api-client";
 import type { MfaChallengeObservation } from "./mfa-challenge-flow";
 
@@ -11,7 +11,11 @@ import type { MfaCodeKind } from "@core/mfa/mfa-contract";
 
 export type { MfaCodeKind };
 
-export const mfaStatusAtom = SpaApiClient.query("mfa", "status", {});
+const MFA_STATUS_KEY = "mfa-status";
+
+export const mfaStatusAtom = SpaApiClient.query("mfa", "status", {
+  reactivityKeys: [MFA_STATUS_KEY],
+});
 const enrollMfaAtom = SpaApiClient.mutation("mfa", "enroll");
 const activateMfaAtom = SpaApiClient.mutation("mfa", "activate");
 const disableMfaAtom = SpaApiClient.mutation("mfa", "disable");
@@ -28,7 +32,7 @@ export type MfaFailure = Atom.Failure<
 
 const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
-export const MFA_FAILURE_MESSAGES: { readonly [Tag in MfaFailure["_tag"]]: string } = {
+export const MFA_FAILURE_MESSAGES: FailureMessages<MfaFailure> = {
   InvalidCode: "入力されたコードが正しくありません。",
   ChallengeExpired: "ログインの有効期限が切れました。お手数ですが、もう一度ログインしてください。",
   Locked:
@@ -37,7 +41,6 @@ export const MFA_FAILURE_MESSAGES: { readonly [Tag in MfaFailure["_tag"]]: strin
   AlreadyEnabled: "多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。",
   EnrollmentChanged: "登録情報が更新されました。もう一度登録を開始してください。",
   NotEnabled: "多要素認証 (MFA) は有効になっていません。ページを再読み込みしてください。",
-  Unauthorized: "ログイン状態が確認できませんでした。もう一度ログインしてください。",
   MfaNotFound: GENERIC_MESSAGE,
 };
 
@@ -56,7 +59,8 @@ export const useActivateMfa = () => {
 
 export const useDisableMfa = () => {
   const disable = useAtomSet(disableMfaAtom, { mode: "promiseExit" });
-  return (payload: { code: string; kind: MfaCodeKind }) => disable({ payload });
+  return (payload: { code: string; kind: MfaCodeKind }) =>
+    disable({ payload, reactivityKeys: [MFA_STATUS_KEY] });
 };
 
 export const useVerifyMfaChallenge = () => {

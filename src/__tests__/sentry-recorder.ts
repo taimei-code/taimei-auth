@@ -1,41 +1,32 @@
 import { afterAll, beforeAll } from "bun:test";
 import { type CaptureContext, consoleSentryBackend, setSentryBackend } from "../sentry";
 
-export function recordSentryExceptions(): Array<[unknown, CaptureContext | undefined]> {
-  const captured: Array<[unknown, CaptureContext | undefined]> = [];
+export type SentryMessage = { message: string; context?: CaptureContext };
+
+export function recordSentry(): {
+  exceptions: Array<[unknown, CaptureContext | undefined]>;
+  messages: SentryMessage[];
+  reset(): void;
+} {
+  const exceptions: Array<[unknown, CaptureContext | undefined]> = [];
+  const messages: SentryMessage[] = [];
   beforeAll(() => {
     setSentryBackend({
       captureException: (error, context) => {
-        captured.push([error, context]);
+        exceptions.push([error, context]);
       },
-      captureMessage: () => {},
+      captureMessage: (message, context) => {
+        messages.push({ message, context });
+      },
     });
   });
   afterAll(() => setSentryBackend(consoleSentryBackend));
-  return captured;
-}
-
-export type SentryCapture = { message: string; context?: CaptureContext };
-
-export function installSentryRecorder(): {
-  messages: SentryCapture[];
-  exceptions: SentryCapture[];
-  reset(): void;
-  restore(): void;
-} {
-  const messages: SentryCapture[] = [];
-  const exceptions: SentryCapture[] = [];
-  setSentryBackend({
-    captureMessage: (message, context) => messages.push({ message, context }),
-    captureException: (error, context) => exceptions.push({ message: String(error), context }),
-  });
   return {
-    messages,
     exceptions,
+    messages,
     reset: () => {
-      messages.length = 0;
       exceptions.length = 0;
+      messages.length = 0;
     },
-    restore: () => setSentryBackend(consoleSentryBackend),
   };
 }

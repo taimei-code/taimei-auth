@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 
+import { leaveSpaTo } from "../shared/leave-spa";
 import { notifyError } from "../shared/notify";
-import { authClient } from "./auth-client";
-import { redirectAfterAuthChange } from "./auth-redirect";
-
-const SIGN_OUT_FAILED = "ログアウトに失敗しました。しばらくしてから再度お試しください。";
+import { SIGN_OUT_FAILED, signOut } from "./sign-out";
 
 export const SignOutButton = () => {
   const [signingOut, setSigningOut] = useState(false);
@@ -13,17 +11,14 @@ export const SignOutButton = () => {
   const signOutAndRedirect = () => {
     if (signingOut) return;
     setSigningOut(true);
-    authClient
-      .signOut()
-      .then(({ error }) => {
-        if (error) {
-          notifyError(SIGN_OUT_FAILED);
-          return;
-        }
-        redirectAfterAuthChange("signOut");
-      })
-      .catch(() => notifyError(SIGN_OUT_FAILED))
-      .finally(() => setSigningOut(false));
+    void signOut().then((result) => {
+      if (result === "failed") {
+        setSigningOut(false);
+        notifyError(SIGN_OUT_FAILED);
+        return;
+      }
+      leaveSpaTo("/");
+    });
   };
 
   return (

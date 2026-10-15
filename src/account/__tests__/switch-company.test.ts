@@ -17,7 +17,7 @@ describe("switchCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-02 正常 切替 (別 companyId) → last_used 更新 / company_switched audit", () =>
+  test("正常 切替 (別 companyId) → last_used 更新 / company_switched audit", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -43,7 +43,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("QA-H-09 same-company 短絡 (fromCompanyId === targetCompanyId) → 200 / tx open せず audit 発火なし", () =>
+  test("same-company 短絡 (fromCompanyId === targetCompanyId) → 200 / tx open せず audit 発火なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -81,7 +81,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("QA-E-05 tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden (tx の外に事前確認が無いので、tx 開始前の除名で同じ経路を通す)", () =>
+  test("tx 中除名 race (TOCTOU) → tx 内 findMembership が null → forbidden (tx の外に事前確認が無いので、tx 開始前の除名で同じ経路を通す)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -102,7 +102,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("QA-D-02 初回切替 (lastUsedCompanyId=null) → from_company_id=null で audit / 切替成立", () =>
+  test("初回切替 (lastUsedCompanyId=null) → from_company_id=null で audit / 切替成立", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -123,7 +123,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("QA-H-12 mutation → audit 発火順 pin (audit の to_company_id が UPDATE 後の user.last_used_company_id と一致)", () =>
+  test("mutation → audit 発火順 pin (audit の to_company_id が UPDATE 後の user.last_used_company_id と一致)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

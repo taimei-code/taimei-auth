@@ -78,7 +78,7 @@ describe("resolveInvitationEmailContext", () => {
       }),
     ));
 
-  test("AC-018 callbackURL に service_name と redirect_url があっても同じ文脈を返す", () =>
+  test("callbackURL に service_name と redirect_url があっても同じ文脈を返す", () =>
     run(
       Effect.gen(function* () {
         const { invitation } = yield* seedInvite("MEMBER");

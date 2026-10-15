@@ -20,7 +20,7 @@ describe("changeRole", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("QA-H-05 正常 role 変更 (MEMBER → ADMIN) → membership.role 更新 + role_changed audit 発火", () =>
+  test("正常 role 変更 (MEMBER → ADMIN) → membership.role 更新 + role_changed audit 発火", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -81,7 +81,7 @@ describe("changeRole", () => {
       }),
     ));
 
-  test("QA-H-08 beforeRole === nextRole (MEMBER → MEMBER) → 200 短絡 (tx open せず audit 発火なし)", () =>
+  test("beforeRole === nextRole (MEMBER → MEMBER) → 200 短絡 (tx open せず audit 発火なし)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -105,7 +105,7 @@ describe("changeRole", () => {
       }),
     ));
 
-  test("QA-E-01 唯一の OWNER を降格 → last_owner Result / membership 無変更 / audit 発火なし", () =>
+  test("唯一の OWNER を降格 → last_owner Result / membership 無変更 / audit 発火なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -128,7 +128,7 @@ describe("changeRole", () => {
       }),
     ));
 
-  test("QA-E-06 target 不在 (updateMembershipRow が 0 件更新) → not_found Result / audit 発火なし", () =>
+  test("target 不在 (updateMembershipRow が 0 件更新) → not_found Result / audit 発火なし", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -150,7 +150,7 @@ describe("changeRole", () => {
       }),
     ));
 
-  test("QA-E-09 / QA-E-11 last_owner reject → audit 非発火 (rollback 契約)", () =>
+  test("last_owner reject → audit 非発火 (rollback 契約)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -172,7 +172,7 @@ describe("changeRole", () => {
       }),
     ));
 
-  test("QA-H-12 mutation → audit の発火順 pin (audit createdAt が UPDATE 完了後)", () =>
+  test("mutation → audit の発火順 pin (audit createdAt が UPDATE 完了後)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

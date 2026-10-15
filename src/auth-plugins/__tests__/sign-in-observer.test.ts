@@ -1,25 +1,27 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import {
-  actorOf,
   cleanupIssuedChallenges,
-  createSessionFor,
   enableMfaFor,
   issueTestChallenge,
-  loginWithMagicLink,
   secretFromTotpUri,
-  TEST_CLIENT_IP,
-  TEST_USER_AGENT,
   totpCode,
 } from "../../mfa/__tests__/helpers";
+import {
+  actorOf,
+  createSessionFor,
+  loginWithMagicLink,
+  TEST_CLIENT_IP,
+  TEST_USER_AGENT,
+} from "../../__tests__/session-helpers";
 import { WELCOME_EMAIL_LOG } from "../../email/local-delivery-log";
 import { activate, completeLoginChallenge, enroll } from "../../mfa/totp";
 import { NEW_USER_THRESHOLD_MS } from "../sign-in-observer";
-import { runTest, observing, auditRowsFor } from "../../__tests__/live-runner";
+import { dbTest, observing, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
 const P = "mfa-observer-";
-const run = runTest(P);
+const { run } = dbTest(P);
 
 const CONSUMER_CALLBACK = "https://app.example.com/dashboard";
 
@@ -43,7 +45,7 @@ describe("sign-in 観測プラグイン", () => {
   beforeEach(cleanupAll);
   afterAll(cleanupAll);
 
-  test("QA-H-13 magic link → sign_in method:magic_link", () =>
+  test("magic link → sign_in method:magic_link", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -66,7 +68,7 @@ describe("sign-in 観測プラグイン", () => {
       }),
     ));
 
-  test("QA-D-10 sign_in audit 1 件のみ", () =>
+  test("sign_in audit 1 件のみ", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -98,7 +100,7 @@ describe("sign-in 観測プラグイン", () => {
       }),
     ));
 
-  test("QA-R-03 welcome メール移設前と同じ", () =>
+  test("welcome メール移設前と同じ", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -121,7 +123,7 @@ describe("sign-in 観測プラグイン", () => {
       }),
     ));
 
-  test("QA-M-28 welcome もサインイン記帳も一次認証経路限定 (登録操作は auth route を通らない)", () =>
+  test("welcome もサインイン記帳も一次認証経路限定 (登録操作は auth route を通らない)", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
