@@ -7,6 +7,19 @@ import { KvStore as KvStoreBase } from "./kv-store.do";
 import { verifySessionProgram } from "./rpc/auth-handler";
 import { checkMembershipsProgram } from "./rpc/company-handler";
 import { runRpc, type RpcEffect } from "./rpc/run-rpc";
+import {
+  CookieHeader,
+  type ConsumerRpcContract,
+  GetSessionResult,
+  ListMembersResult,
+  VerifySessionResult,
+} from "./rpc/consumer-rpc-contract";
+import {
+  getSessionByCookie,
+  listMembersByCookie,
+  rpc,
+  verifySessionByCookie,
+} from "./rpc/consumer-rpc";
 import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
@@ -110,5 +123,23 @@ export class AuthRpc extends WorkerEntrypoint<Env> {
 
   checkMemberships(companyId: string, userIds: readonly string[]) {
     return runInRequest(this.env, this.ctx, () => checkMembershipsProgram({ companyId, userIds }));
+  }
+}
+
+const verifySessionRpc = rpc(CookieHeader, VerifySessionResult, verifySessionByCookie);
+const listMembersRpc = rpc(CookieHeader, ListMembersResult, listMembersByCookie);
+const getSessionRpc = rpc(CookieHeader, GetSessionResult, getSessionByCookie);
+
+export class ConsumerRpc extends WorkerEntrypoint<Env> implements ConsumerRpcContract {
+  verifySession(cookieHeader: string) {
+    return runInRequest(this.env, this.ctx, () => verifySessionRpc(cookieHeader));
+  }
+
+  listCurrentCompanyMembers(cookieHeader: string) {
+    return runInRequest(this.env, this.ctx, () => listMembersRpc(cookieHeader));
+  }
+
+  getSession(cookieHeader: string) {
+    return runInRequest(this.env, this.ctx, () => getSessionRpc(cookieHeader));
   }
 }
