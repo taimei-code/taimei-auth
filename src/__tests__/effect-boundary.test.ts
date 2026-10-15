@@ -141,6 +141,13 @@ describe("副作用と runtime の入口は、決まった module だけが呼�
     ]);
   });
 
+  test("有効な session の判定 (AuthApi.getSession) を呼ぶのは session-check.ts だけ (入口・SPA の guard・RPC が同じ判定を使う)", () => {
+    expect(srcFiles(String.raw`\.getSession\(`).sort()).toEqual([
+      "src/auth-wiring.ts",
+      "src/session-check.ts",
+    ]);
+  });
+
   test("better-auth の APIError の形 (body.code) を読むのは auth-wiring.ts だけ", () => {
     expect(srcFiles(String.raw`UNAUTHORIZED|cause\.body|body\.code`)).toEqual([
       "src/auth-wiring.ts",

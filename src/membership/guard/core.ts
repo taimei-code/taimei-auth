@@ -1,8 +1,7 @@
 import { Effect } from "effect";
 import type { Role } from "@/db/repositories/membership";
-import { UserRepo } from "../../account/ports";
-import { AuthApi } from "../../auth-service";
 import { captureCause } from "../../sentry";
+import { checkSession } from "../../session-check";
 import { isAtLeast } from "../policy";
 import type { Actor } from "../../account/actor-contract";
 import { MembershipRepo } from "../ports";
@@ -17,14 +16,13 @@ const failClosedAsUnauthorized = (failure: { readonly cause: unknown }) =>
 
 export const requireActor = Effect.fnUntraced(
   function* (headers: Headers) {
-    const session = yield* AuthApi.use((authApi) => authApi.getSession(headers));
-    if (!session?.user?.id) return yield* new Unauthorized();
-    const dbUser = yield* UserRepo.use((users) => users.findUserById(session.user.id));
-    if (!dbUser) return yield* new Unauthorized();
+    const status = yield* checkSession(headers);
+    if (status._tag !== "Active") return yield* new Unauthorized();
+    const { user } = status;
     return {
-      id: dbUser.id,
-      email: dbUser.email,
-      lastUsedCompanyId: dbUser.lastUsedCompanyId,
+      id: user.id,
+      email: user.email,
+      lastUsedCompanyId: user.lastUsedCompanyId,
     } satisfies Actor;
   },
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),

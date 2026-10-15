@@ -4,8 +4,8 @@ import { Effect } from "effect";
 import { Hono } from "hono";
 import type { Context } from "hono";
 
-import { AuthApi } from "../auth-service";
 import { captureCauseAs } from "../sentry";
+import { checkSession } from "../session-check";
 import { runRoute } from "./run-route";
 
 const PASSTHROUGH_QUERY_KEYS = ["error"] as const;
@@ -32,10 +32,10 @@ const buildLoginRedirect = (url: URL): URL => {
 export const loginShortcutProgram = Effect.fnUntraced(function* (c: Context) {
   const headers = c.req.raw.headers;
   const authenticated = getSessionCookie(headers)
-    ? yield* AuthApi.use((authApi) => authApi.getSession(headers)).pipe(
-        Effect.map((session) => session !== null),
+    ? yield* checkSession(headers).pipe(
+        Effect.map((status) => status._tag === "Active"),
         Effect.catchTag(
-          "AuthApiError",
+          ["AuthApiError", "DbError"],
           captureCauseAs(false, { tags: { handler: "loginShortcut" } }),
         ),
       )
