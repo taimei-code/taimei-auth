@@ -36,7 +36,7 @@ type SessionCheck =
   | { readonly _tag: "Verified"; readonly user: UserRow; readonly session: Session["session"] }
   | { readonly _tag: "Rejected"; readonly reason: Result };
 
-const verifySessionUser = Effect.fnUntraced(function* (
+export const verifySessionUser = Effect.fnUntraced(function* (
   sessionToken: string,
   handler: string,
 ): Effect.fn.Return<SessionCheck, AuthApiError | DbError, AuthApi | UserRepo | SentryService> {
