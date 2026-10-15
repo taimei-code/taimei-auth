@@ -11,35 +11,43 @@ import { removeMember } from "../membership/remove";
 import { grepFiles } from "./source-scan";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
-import { verifySessionProgram } from "../rpc/auth-handler";
+import { getSessionProgram, verifySessionProgram } from "../rpc/auth-handler";
 import { Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 const P = "dcc-test-";
 const { run, cleanup } = dbTest(P);
 
-const companySeenByConsumer = (userId: string) =>
-  verifySessionProgram({ sessionToken: "contract" }).pipe(
-    Effect.provide(
-      authLayer(
-        () =>
-          ({
-            user: { id: userId },
-            session: { id: `${P}s-${userId}`, expiresAt: new Date("2030-01-01") },
-          }) as unknown as Session,
-      ),
-    ),
-    Effect.map((res) => {
-      if (res.outcome.case !== "ok") throw new Error(`VerifySession: ${res.outcome.case}`);
-      return {
-        companyId: res.outcome.value.user?.defaultCompanyId,
-        role: res.outcome.value.currentRole,
-      };
-    }),
+const signedInAs = (userId: string) =>
+  authLayer(
+    () =>
+      ({
+        user: { id: userId },
+        session: { id: `${P}s-${userId}`, expiresAt: new Date("2030-01-01") },
+      }) as unknown as Session,
   );
+
+const companySeenByConsumer = (userId: string) =>
+  Effect.gen(function* () {
+    const verified = yield* verifySessionProgram({ sessionToken: "contract" });
+    const got = yield* getSessionProgram({ sessionToken: "contract" });
+    if (verified.outcome.case !== "ok") throw new Error(`VerifySession: ${verified.outcome.case}`);
+    if (got.outcome.case !== "ok") throw new Error(`GetSession: ${got.outcome.case}`);
+    return {
+      verifySession: {
+        companyId: verified.outcome.value.user?.defaultCompanyId,
+        role: verified.outcome.value.currentRole,
+      },
+      getSession: {
+        companyId: got.outcome.value.user?.defaultCompanyId,
+        role: got.outcome.value.currentRole,
+      },
+    };
+  }).pipe(Effect.provide(signedInAs(userId)));
 
 const expectConsumerSeesAnActiveCompanyAndItsRole = (userId: string) =>
   Effect.gen(function* () {
-    const seen = yield* companySeenByConsumer(userId);
+    const { verifySession, getSession: seen } = yield* companySeenByConsumer(userId);
+    expect(seen).toEqual(verifySession);
     const memberships = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(userId));
     const active = memberships
       .filter((m) => m.companyActivationStatus === "ACTIVE")
@@ -76,7 +84,7 @@ const scenario = (writer: string, name: string, body: Scenario) => {
   test(`${writer}: ${name}`, () => run(body));
 };
 
-describe("VerifySession の defaultCompanyId は、user の ACTIVE な所属のどれかか空で、currentRole はその所属の role", () => {
+describe("VerifySession と GetSession の defaultCompanyId は同じ値で、user の ACTIVE な所属のどれかか空で、currentRole はその所属の role", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 

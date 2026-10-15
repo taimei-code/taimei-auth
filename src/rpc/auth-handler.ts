@@ -1,7 +1,8 @@
 import { create, type MessageInitShape } from "@bufbuild/protobuf";
-import type { ConnectRouter } from "@connectrpc/connect";
+import type { ConnectRouter, ServiceImpl } from "@connectrpc/connect";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { Effect } from "effect";
+import type { MemberRow } from "@/db/repositories/membership";
 import type { UserRow } from "@/db/repositories/user";
 import { UserRepo } from "../account/ports";
 import type { Session } from "../auth";
@@ -9,6 +10,8 @@ import { AuthApi } from "../auth-service";
 import type { AuthApiError, DbError } from "../errors";
 import {
   AuthService,
+  GetSessionOkSchema,
+  GetSessionResponseSchema,
   ListCurrentCompanyMembersOkSchema,
   ListCurrentCompanyMembersResponseSchema,
   Result,
@@ -61,6 +64,16 @@ const verifySessionUser = Effect.fnUntraced(function* (
   return { _tag: "Verified", user, session: session.session };
 });
 
+const sessionSeenByConsumer = (
+  user: UserRow,
+  session: Session["session"],
+  role: MemberRow["role"] | undefined,
+) => ({
+  user: create(UserSchema, toProtoUser(user)),
+  session: create(SessionSchema, toProtoSession(session)),
+  currentRole: role ? toProtoRole(role) : undefined,
+});
+
 export const verifySessionProgram = Effect.fnUntraced(function* (req: { sessionToken: string }) {
   const check = yield* verifySessionUser(req.sessionToken, "verifySession");
   if (check._tag === "Rejected") {
@@ -76,14 +89,16 @@ export const verifySessionProgram = Effect.fnUntraced(function* (req: { sessionT
   return create(VerifySessionResponseSchema, {
     outcome: {
       case: "ok",
-      value: create(VerifySessionOkSchema, {
-        user: create(UserSchema, toProtoUser(user)),
-        session: create(SessionSchema, toProtoSession(session)),
-        currentRole: membership ? toProtoRole(membership.role) : undefined,
-      }),
+      value: create(VerifySessionOkSchema, sessionSeenByConsumer(user, session, membership?.role)),
     },
   });
 });
+
+const oldestJoinedFirst = (members: readonly MemberRow[]) =>
+  members.toSorted(
+    (a, b) =>
+      a.joinedAt.getTime() - b.joinedAt.getTime() || a.membershipId.localeCompare(b.membershipId),
+  );
 
 const listMembersError = (reason: Result) =>
   create(ListCurrentCompanyMembersResponseSchema, {
@@ -95,6 +110,14 @@ const listMembersOk = (value: MessageInitShape<typeof ListCurrentCompanyMembersO
     outcome: { case: "ok", value: create(ListCurrentCompanyMembersOkSchema, value) },
   });
 
+const currentCompanyMembers = Effect.fnUntraced(function* (user: UserRow) {
+  const companyId = user.lastUsedCompanyId;
+  if (!companyId) return undefined;
+  const members = yield* MembershipRepo.use((repo) => repo.findMembersByCompanyId(companyId));
+  const caller = members.find((m) => m.userId === user.id);
+  return caller && { companyId, callerRole: caller.role, members: oldestJoinedFirst(members) };
+});
+
 export const listCurrentCompanyMembersProgram = Effect.fnUntraced(function* (req: {
   sessionToken: string;
 }) {
@@ -103,28 +126,42 @@ export const listCurrentCompanyMembersProgram = Effect.fnUntraced(function* (req
     return listMembersError(check.reason);
   }
 
-  const { user } = check;
-  const companyId = user.lastUsedCompanyId;
-  if (!companyId) {
-    return listMembersOk({});
-  }
-
-  const members = yield* MembershipRepo.use((repo) => repo.findMembersByCompanyId(companyId));
-  const callerStillMember = members.some((m) => m.userId === user.id);
-  if (!callerStillMember) {
-    return listMembersOk({});
-  }
-
-  const byJoinedAt = members.toSorted(
-    (a, b) =>
-      a.joinedAt.getTime() - b.joinedAt.getTime() || a.membershipId.localeCompare(b.membershipId),
+  const current = yield* currentCompanyMembers(check.user);
+  return listMembersOk(
+    current
+      ? { companyId: current.companyId, members: current.members.map(toProtoCompanyMember) }
+      : {},
   );
-  return listMembersOk({ companyId, members: byJoinedAt.map(toProtoCompanyMember) });
+});
+
+const getSessionError = (reason: Result) =>
+  create(GetSessionResponseSchema, {
+    outcome: { case: "error", value: create(VerifySessionErrorSchema, { reason }) },
+  });
+
+export const getSessionProgram = Effect.fnUntraced(function* (req: { sessionToken: string }) {
+  const check = yield* verifySessionUser(req.sessionToken, "getSession");
+  if (check._tag === "Rejected") {
+    return getSessionError(check.reason);
+  }
+  const { user, session } = check;
+  const current = yield* currentCompanyMembers(user);
+
+  return create(GetSessionResponseSchema, {
+    outcome: {
+      case: "ok",
+      value: create(GetSessionOkSchema, {
+        ...sessionSeenByConsumer(user, session, current?.callerRole),
+        members: current ? current.members.map(toProtoCompanyMember) : [],
+      }),
+    },
+  });
 });
 
 export function registerAuthService(router: ConnectRouter) {
   router.service(AuthService, {
     verifySession: (req) => runRpc(verifySessionProgram(req)),
     listCurrentCompanyMembers: (req) => runRpc(listCurrentCompanyMembersProgram(req)),
-  });
+    getSession: (req) => runRpc(getSessionProgram(req)),
+  } satisfies ServiceImpl<typeof AuthService>);
 }
