@@ -1,8 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+import { REPO_ROOT } from "./source-scan";
+
+export { REPO_ROOT };
 
 export const WEB_ONLY_DEP_MESSAGE =
   "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";

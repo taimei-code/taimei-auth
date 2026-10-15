@@ -1,43 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const WEB_SRC = join(REPO_ROOT, "web/src");
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { REPO_ROOT, sourceFiles, valueImportsOf } from "./source-scan";
 
 const BROWSER_SAFE_PACKAGES = new Set(["zod", "effect", "effect/http-api"]);
 
-function walk(dir: string): string[] {
-  const files: string[] = [];
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      files.push(...walk(full));
-    } else if (name.endsWith(".ts") || name.endsWith(".tsx")) {
-      files.push(full);
-    }
-  }
-  return files;
-}
-
 function coreFilesImportedFromWeb(): string[] {
   const modules = new Set<string>();
-  for (const file of walk(WEB_SRC)) {
+  for (const file of sourceFiles("web/src").map((path) => join(REPO_ROOT, path))) {
     const content = readFileSync(file, "utf8");
     for (const m of content.matchAll(/from\s+["']@core\/([^"']+)["']/g)) {
       modules.add(m[1] as string);
     }
   }
   return [...modules].map((mod) => join(REPO_ROOT, "src", `${mod}.ts`));
-}
-
-const IMPORT_FROM = /(?:^|\n)\s*(import|export)\s+(type\b)?[^'"]*?from\s*["']([^"']+)["']/g;
-
-function runtimeImportSpecifiers(content: string): string[] {
-  return [...content.matchAll(IMPORT_FROM)]
-    .filter(([, , typeOnly]) => !typeOnly)
-    .map(([, , , specifier]) => specifier as string);
 }
 
 function resolveRelative(fromFile: string, specifier: string): string | null {
@@ -57,8 +33,7 @@ describe("web と共有する @core file の依存クロージャは browser-saf
     const violations: { file: string; specifier: string }[] = [];
     while (queue.length > 0) {
       const file = queue.pop() as string;
-      const content = readFileSync(file, "utf8");
-      for (const specifier of runtimeImportSpecifiers(content)) {
+      for (const specifier of valueImportsOf(file)) {
         if (specifier.startsWith(".")) {
           const resolved = resolveRelative(file, specifier);
           if (resolved === null) {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { grepFiles } from "./grep-files";
+import { grepFiles } from "./source-scan";
 import {
   getClientContext,
   parseProxyTrust,
@@ -39,7 +39,7 @@ describe("parseProxyTrust (AUTH_TRUSTED_PROXY_HOPS の解釈)", () => {
 describe("AUTH_TRUSTED_PROXY_HOPS の封じ込め (静的 tripwire)", () => {
   test("env を読む production file は request-context.ts だけ (boot guard も proxyTrustFromEnv を通る)", () => {
     expect(
-      grepFiles("process\\.env\\.AUTH_TRUSTED_PROXY_HOPS", "src", { excludeTests: true }),
+      grepFiles("process\\.env\\.AUTH_TRUSTED_PROXY_HOPS", "src", { tests: "exclude" }),
     ).toEqual(["src/request-context.ts"]);
   });
 });

@@ -1,48 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import { execSync } from "node:child_process";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { grepFiles, sourceFiles, valueImportsOf } from "../../__tests__/source-scan";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const SEARCH_ROOTS = "src web/src";
 
-function filesWithCodeLiteral(pattern: string, roots: string = SEARCH_ROOTS): string[] {
-  const command = [
-    `cd ${JSON.stringify(REPO_ROOT)} &&`,
-    `for f in $(grep -rlE ${JSON.stringify(pattern)}`,
-    `--include=*.ts --include=*.tsx --exclude-dir=__tests__ ${roots}); do`,
-    `if sed -E 's#(^|[^:])//.*#\\1#' "$f" | grep -qE ${JSON.stringify(pattern)};`,
-    `then echo "$f"; fi; done`,
-  ].join(" ");
-  return execSync(command, { encoding: "utf8", shell: "/bin/bash" })
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
+const filesWithCodeLiteral = (pattern: string, roots: string = SEARCH_ROOTS): string[] =>
+  roots
+    .split(" ")
+    .flatMap((root) => grepFiles(pattern, root, { tests: "exclude" }))
     .sort();
-}
 
-function importOccurrences(root: string, targetPattern: string): string[] {
-  const pattern = `(from|import)[ (]['"]${targetPattern}[^'"]*['"]`;
-  const command = [
-    `cd ${JSON.stringify(REPO_ROOT)} &&`,
-    `grep -roE ${JSON.stringify(pattern)} --include=*.ts --exclude-dir=__tests__ ${root} || true`,
-  ].join(" ");
-  return execSync(command, { encoding: "utf8", shell: "/bin/bash" })
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
+const importOccurrences = (root: string, specifier: RegExp): string[] =>
+  sourceFiles(root, { tests: "exclude" })
+    .flatMap((file) =>
+      valueImportsOf(file)
+        .filter((imported) => specifier.test(imported))
+        .map((imported) => `${file}:${imported}`),
+    )
     .sort();
-}
 
 describe("ログイン hot path の非影響 (静的 tripwire)", () => {
   test("auth-plugins が import してよい mfa モジュールは 4 つに限る", () => {
     expect(filesWithCodeLiteral("from ", "src/auth-plugins").length).toBeGreaterThan(0);
-    expect(importOccurrences("src/auth-plugins", "[^'\"]*mfa/")).toEqual([
-      `src/auth-plugins/mfa-challenge.ts:from "../mfa/redirect-guard"`,
-      `src/auth-plugins/mfa-challenge.ts:from "../mfa/totp/challenge-required"`,
-      `src/auth-plugins/mfa-challenge.ts:from "../mfa/totp/login-challenge"`,
-      `src/auth-plugins/primary-auth-routes.ts:from "../mfa/totp/login-challenge"`,
-      `src/auth-plugins/primary-auth.ts:from "../mfa/kill-switch"`,
+    expect(importOccurrences("src/auth-plugins", /mfa\//)).toEqual([
+      "src/auth-plugins/mfa-challenge.ts:../mfa/redirect-guard",
+      "src/auth-plugins/mfa-challenge.ts:../mfa/totp/challenge-required",
+      "src/auth-plugins/mfa-challenge.ts:../mfa/totp/login-challenge",
+      "src/auth-plugins/primary-auth.ts:../mfa/kill-switch",
     ]);
     expect(filesWithCodeLiteral("db/repositories/mfa-totp", "src/auth-plugins")).toEqual([]);
   });
@@ -108,11 +91,11 @@ describe("MFA totp module boundary", () => {
   });
 
   test("management/ の import 面は全列挙で固定する", () => {
-    expect(importOccurrences("management", `((\\.\\./)+(src|db)/|@/|@core/)`)).toEqual([
-      `management/disable-user-mfa.ts:from "../src/boot"`,
-      `management/disable-user-mfa.ts:from "../src/mfa/totp/disable-mfa"`,
-      `management/sweep-abandoned-signups.ts:from "../src/account/sweep-abandoned-signups"`,
-      `management/sweep-abandoned-signups.ts:from "../src/boot"`,
+    expect(importOccurrences("management", /^((\.\.\/)+(src|db)\/|@\/|@core\/)/)).toEqual([
+      "management/disable-user-mfa.ts:../src/boot",
+      "management/disable-user-mfa.ts:../src/mfa/totp/disable-mfa",
+      "management/sweep-abandoned-signups.ts:../src/account/sweep-abandoned-signups",
+      "management/sweep-abandoned-signups.ts:../src/boot",
     ]);
   });
 

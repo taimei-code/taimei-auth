@@ -1,23 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { posix } from "node:path";
 
-import { grepFiles } from "./grep-files";
+import { grepFiles, valueImportsInSource } from "./source-scan";
 import { readActualWebSources } from "./web-domain-structure-helpers";
 
-const transpilers = {
-  ts: new Bun.Transpiler({ loader: "ts" }),
-  tsx: new Bun.Transpiler({ loader: "tsx" }),
-};
-
 const runtimeImports = (path: string, source: string): string[] =>
-  (path.endsWith(".tsx") ? transpilers.tsx : transpilers.ts)
-    .scanImports(source)
-    .map((entry) => entry.path)
-    .map((specifier) =>
-      specifier.startsWith(".")
-        ? posix.normalize(posix.join(posix.dirname(path), specifier))
-        : specifier,
-    );
+  valueImportsInSource(path, source).map((specifier) =>
+    specifier.startsWith(".")
+      ? posix.normalize(posix.join(posix.dirname(path), specifier))
+      : specifier,
+  );
 
 const mayUseHttpClient = (path: string) =>
   path.endsWith("-atom.ts") || path === "shared/spa-api-client.ts";
@@ -78,24 +70,21 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
 
   test("reactivityKeys を書けるのは *-atom.ts だけ (一覧を変える更新は key を足した hook で渡す)", () => {
     const writers = grepFiles(String.raw`reactivityKeys:`, "web/src", {
-      include: ["*.ts", "*.tsx"],
-      excludeTests: true,
+      tests: "exclude",
     });
     expect(writers.filter((path) => !path.endsWith("-atom.ts"))).toEqual([]);
   });
 
   test("前回の成功値の有無は shared/atom-runtime.ts の failedBeforeAnyValue だけが読む", () => {
     const readers = grepFiles(String.raw`previousSuccess`, "web/src", {
-      include: ["*.ts", "*.tsx"],
-      excludeTests: true,
+      tests: "exclude",
     });
     expect(readers).toEqual(["web/src/shared/atom-runtime.ts"]);
   });
 
   test("失敗の _tag の判定は shared/failure-message.ts に集める", () => {
     const callers = grepFiles(String.raw`Cause\.findErrorOption`, "web/src", {
-      include: ["*.ts", "*.tsx"],
-      excludeTests: true,
+      tests: "exclude",
     });
     expect(callers).toEqual(["web/src/shared/failure-message.ts"]);
   });

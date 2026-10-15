@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { grepFiles } from "../../__tests__/grep-files";
+import { grepLines } from "../../__tests__/source-scan";
 import { isMfaEnabled } from "../policy";
 
 describe("isMfaEnabled (MFA 登録状態が「有効」かの判定)", () => {
@@ -22,7 +22,7 @@ describe("isMfaEnabled (MFA 登録状態が「有効」かの判定)", () => {
   });
 
   test("QA-M-05 述語は import 0 件 — verified_at を直接比較する第 2 の判定経路が生えない", () => {
-    expect(grepFiles("^import ", "src/mfa/policy.ts", { lines: true })).toEqual([]);
+    expect(grepLines("^import ", "src/mfa/policy.ts", {})).toEqual([]);
 
     const decidedSynchronously: boolean = isMfaEnabled({ verifiedAt: new Date() });
     expect(decidedSynchronously).toBe(true);

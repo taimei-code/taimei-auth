@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
-
-const REPO_ROOT = join(import.meta.dir, "..", "..");
+import { REPO_ROOT } from "./source-scan";
 
 const CHECK_SCRIPT = `
 import { validateRedirectUrl } from "./src/url-allowlist";

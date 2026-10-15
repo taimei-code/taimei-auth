@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { REPO_ROOT } from "./grep-files";
+import { REPO_ROOT } from "./source-scan";
 
 const DIRS = ["src", "db", "web", "e2e", "management"];
 const DIRECTIVE =

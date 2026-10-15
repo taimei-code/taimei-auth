@@ -6,7 +6,7 @@ import {
   ServiceKeyRejected,
   verifyServiceKey,
 } from "../service-key";
-import { grepFiles } from "./grep-files";
+import { grepFiles, grepLines } from "./source-scan";
 
 const originalEnv = { ...process.env };
 
@@ -107,21 +107,20 @@ describe("verifyServiceKey", () => {
 describe("service key の封じ込め (静的 tripwire)", () => {
   test("AC-023: AUTH_SERVICE_KEY の読み手は service-key.ts と index.ts の boot guard だけ", () => {
     expect(
-      grepFiles("process\\.env\\.AUTH_SERVICE_KEY", "src", { excludeTests: true }).sort(),
+      grepFiles("process\\.env\\.AUTH_SERVICE_KEY", "src", { tests: "exclude" }).sort(),
     ).toEqual(["src/index.ts", "src/service-key.ts"]);
   });
 
   test("AC-035: 鍵の比較は timingSafeEqual (digest 経由) だけで、includes / === を使わない", () => {
-    expect(grepFiles("timingSafeEqual\\(", "src/service-key.ts", { lines: true })).toHaveLength(1);
+    expect(grepLines("timingSafeEqual\\(", "src/service-key.ts", {})).toHaveLength(1);
     expect(grepFiles("\\.includes\\(|=== presented|presented ===", "src/service-key.ts")).toEqual(
       [],
     );
   });
 
   test("AC-024: X-Service-Key header の読み手は app.ts の /rpc/* middleware 1 行だけ", () => {
-    const hits = grepFiles('c\\.req\\.header\\("X-Service-Key"\\)', "src", {
-      excludeTests: true,
-      lines: true,
+    const hits = grepLines('c\\.req\\.header\\("X-Service-Key"\\)', "src", {
+      tests: "exclude",
     });
     expect(hits).toHaveLength(1);
     expect(hits[0]).toContain("src/app.ts");
@@ -129,9 +128,8 @@ describe("service key の封じ込め (静的 tripwire)", () => {
 
   test("AC-033: 手書きの応答 body (c.json({ error:) は production src に無い", () => {
     expect(
-      grepFiles("c\\.json\\([[:space:]]*\\{[[:space:]]*error", "src", {
-        excludeTests: true,
-        lines: true,
+      grepLines("c\\.json\\([[:space:]]*\\{[[:space:]]*error", "src", {
+        tests: "exclude",
       }),
     ).toEqual([]);
   });
