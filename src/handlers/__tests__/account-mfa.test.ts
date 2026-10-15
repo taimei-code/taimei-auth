@@ -14,7 +14,7 @@ import {
 import { createSessionFor } from "../../__tests__/session-helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
 import { authApiWith } from "../../__tests__/test-layers";
-import { DISABLE_ATTEMPT_LIMIT } from "../../mfa/disable-attempt-budget";
+import { ATTEMPT_BUDGETS } from "../../attempt-budget";
 import { MfaEnrollment } from "../../mfa/mfa-contract";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -92,7 +92,8 @@ describe("account MFA API", () => {
         const app = buildApp();
 
         const attempts: { status: number; body: unknown }[] = [];
-        for (let attempt = 0; attempt < DISABLE_ATTEMPT_LIMIT + 1; attempt++) {
+        const disableLimit = ATTEMPT_BUDGETS.mfaDisablePerUser.maxAttempts();
+        for (let attempt = 0; attempt < disableLimit + 1; attempt++) {
           const res = yield* postJson(app, "/api/account/mfa/disable", enabled.session.headers, {
             code: yield* wrongTotpCode(enabled.secret),
             kind: "totp",
@@ -100,8 +101,8 @@ describe("account MFA API", () => {
           attempts.push({ status: res.status, body: yield* responseJson(res) });
         }
 
-        expect(attempts.slice(0, DISABLE_ATTEMPT_LIMIT).map((attempt) => attempt.status)).toEqual(
-          Array(DISABLE_ATTEMPT_LIMIT).fill(400) as number[],
+        expect(attempts.slice(0, disableLimit).map((attempt) => attempt.status)).toEqual(
+          Array(disableLimit).fill(400) as number[],
         );
         expect(attempts.at(-1)).toEqual({ status: 429, body: { _tag: "Locked" } });
 

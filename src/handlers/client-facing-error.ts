@@ -1,6 +1,6 @@
 import { Cause, Predicate, Schema } from "effect";
 import { type BoundaryError, isBoundaryError } from "../errors";
-import type { InvalidArgument, NotFound } from "../membership/guard/errors";
+import type { InvalidArgument, NotFound, RateLimited } from "../membership/guard/errors";
 import { type CaptureContext, Sentry } from "../sentry";
 import type { ServiceKeyMisconfigured, ServiceKeyRejected } from "../service-key";
 
@@ -8,6 +8,7 @@ export type RouteError =
   | BoundaryError
   | InvalidArgument
   | NotFound
+  | RateLimited
   | ServiceKeyRejected
   | ServiceKeyMisconfigured;
 

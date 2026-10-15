@@ -11,7 +11,8 @@ import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { CONTINUE, runMiddleware, runRoute } from "./handlers/run-route";
 import { captureThrown, internalErrorResponse } from "./handlers/client-facing-error";
 import { NotFound } from "./membership/guard/errors";
-import { createRateLimitMiddleware, limitForEnvironment, magicLinkKey } from "./rate-limit";
+import { ATTEMPT_BUDGETS } from "./attempt-budget";
+import { attemptBudgetMiddleware } from "./handlers/attempt-budget-hono";
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
@@ -57,26 +58,20 @@ export function buildApp(options: AppOptions): Hono {
 
   app.use(
     "/auth/canary-token/*",
-    createRateLimitMiddleware({
-      keyFn: (c) => `rate-limit:canary:ip:${getClientContext(c.req.raw.headers).ip}`,
-      limit: limitForEnvironment(10),
-      windowSec: 60,
-    }),
+    attemptBudgetMiddleware(
+      ATTEMPT_BUDGETS.canaryTokenPerIp,
+      (c) => getClientContext(c.req.raw.headers).ip,
+    ),
   );
   app.route("/", canaryToken);
 
   app.use(
     "/api/auth/sign-in/magic-link",
-    createRateLimitMiddleware({
-      keyFn: (c) => magicLinkKey("ip", getClientContext(c.req.raw.headers).ip),
-      limit: limitForEnvironment(5),
-      windowSec: 60,
-    }),
-    createRateLimitMiddleware({
-      keyFn: async (c) => magicLinkKey("email", await readEmailWithoutCloningBody(c)),
-      limit: limitForEnvironment(3),
-      windowSec: 60,
-    }),
+    attemptBudgetMiddleware(
+      ATTEMPT_BUDGETS.magicLinkPerIp,
+      (c) => getClientContext(c.req.raw.headers).ip,
+    ),
+    attemptBudgetMiddleware(ATTEMPT_BUDGETS.magicLinkPerEmail, readEmailWithoutCloningBody),
   );
 
   app.on([...BETTER_AUTH_METHODS], "/api/auth/*", async (c) => {

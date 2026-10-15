@@ -1,19 +1,11 @@
-import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
-import { createRateLimitMiddleware } from "../../rate-limit";
-import { consoleSentryBackend, setSentryBackend, type CaptureContext } from "../../sentry";
+import { attemptBudgetMiddleware } from "../attempt-budget-hono";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { canaryToken } from "../canary-token";
 
-type Captured = { message: string; context?: CaptureContext };
-
-let captured: Captured[] = [];
-
-const spyBackend = {
-  captureException: () => {},
-  captureMessage: (message: string, context?: CaptureContext) => {
-    captured.push({ message, context });
-  },
-};
+const sentry = recordSentry();
+const captured = sentry.messages;
 
 const buildApp = () => {
   const app = new Hono();
@@ -23,12 +15,7 @@ const buildApp = () => {
 
 describe("canary token endpoint", () => {
   beforeEach(() => {
-    captured = [];
-    setSentryBackend(spyBackend);
-  });
-
-  afterAll(() => {
-    setSentryBackend(consoleSentryBackend);
+    sentry.reset();
   });
 
   test("GET /auth/canary-token/abc123 は 204 + token_id/embed_type を Sentry に送る", async () => {
@@ -74,20 +61,24 @@ describe("canary token endpoint", () => {
 
 describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
   beforeEach(() => {
-    captured = [];
-    setSentryBackend(spyBackend);
-  });
-
-  afterAll(() => {
-    setSentryBackend(consoleSentryBackend);
+    sentry.reset();
   });
 
   test("上限超過は 429 になり Sentry 送信自体が止まる (quota 保護)", async () => {
     const app = new Hono();
-    const key = `rate-limit:canary-test:${crypto.randomUUID()}`;
+    const subject = crypto.randomUUID();
     app.use(
       "/auth/canary-token/*",
-      createRateLimitMiddleware({ keyFn: () => key, limit: 2, windowSec: 60 }),
+      attemptBudgetMiddleware(
+        {
+          keyPrefix: "canary-test",
+          windowSeconds: 60,
+          maxAttempts: () => 2,
+          whenUncountable: "allow",
+          component: "rate-limit",
+        },
+        () => subject,
+      ),
     );
     app.route("/", canaryToken);
 

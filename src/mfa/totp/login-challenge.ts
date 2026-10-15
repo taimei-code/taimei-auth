@@ -6,17 +6,21 @@ import { AuthApi } from "../../auth-service";
 import { isLocalEnvironment } from "../../env";
 import { TtlStore } from "../../ttl-store-service";
 import { captureCause, SentryService } from "../../sentry";
-import { spendAttemptBudgetFailClosed } from "../../attempt-budget";
+import {
+  ATTEMPT_BUDGETS,
+  attemptBudgetKey,
+  spendAttemptBudgetFailClosed,
+} from "../../attempt-budget";
 import { ChallengeExpired, type InvalidCode, Locked } from "../errors";
 
 const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
 
-const CHALLENGE_TTL_SECONDS = 600;
-const MAX_ATTEMPTS = 5;
+const ATTEMPT_BUDGET = ATTEMPT_BUDGETS.mfaLoginChallenge;
+const CHALLENGE_TTL_SECONDS = ATTEMPT_BUDGET.windowSeconds;
 
 export const challengeKey = (challengeId: string): string => `mfa:login-challenge:${challengeId}`;
 export const attemptsKey = (challengeId: string): string =>
-  `mfa:login-challenge-attempts:${challengeId}`;
+  attemptBudgetKey(ATTEMPT_BUDGET, challengeId);
 
 const CHALLENGE_METHODS = ["magic_link", "github"] as const;
 export type ChallengeMethod = (typeof CHALLENGE_METHODS)[number];
@@ -90,12 +94,7 @@ const expireLoginChallenge = Effect.fnUntraced(function* (challengeId: string) {
 
 export const spendLoginChallengeAttempt = Effect.fnUntraced(
   function* (challengeId: string) {
-    const { attemptsLeft } = yield* spendAttemptBudgetFailClosed({
-      key: attemptsKey(challengeId),
-      windowSeconds: CHALLENGE_TTL_SECONDS,
-      maxAttempts: MAX_ATTEMPTS,
-      component: "mfa-login-challenge",
-    });
+    const { attemptsLeft } = yield* spendAttemptBudgetFailClosed(ATTEMPT_BUDGET, challengeId);
     return Effect.fnUntraced(function* (wrongCode: InvalidCode) {
       if (attemptsLeft === 0) return yield* expireLoginChallenge(challengeId);
       return yield* wrongCode;

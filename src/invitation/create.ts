@@ -5,7 +5,7 @@ import { appendAuditInTx } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";
-import { consumeInvitationQuota } from "./rate-limit";
+import { spendInvitationAttempt } from "./attempt-budget";
 
 const INVITE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -23,7 +23,7 @@ export const createInvitation = Effect.fnUntraced(function* (params: {
   const existing = yield* invitations.findActivePendingInvitation(companyId, email);
   if (existing) return { invitation: existing, reused: true };
 
-  yield* consumeInvitationQuota(companyId);
+  yield* spendInvitationAttempt(companyId);
 
   const nowMillis = yield* Clock.currentTimeMillis;
   const inserted = yield* tx.run(

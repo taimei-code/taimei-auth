@@ -384,7 +384,7 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
   (5 回 / 15 分、TTL は試行のたびに引き直すスライディング窓) だけである。計数は
   `incrementRateWindow` の MULTI (INCR + EXPIRE を 1 往復) で atomic に行い、
   並行リクエストで加算を取りこぼさない。軸をセッションでなくアカウントに取るのは、cookie を
-  盗んだ攻撃者がセッションを取り直すたびに枠を得るのを防ぐためである。汎用の `createRateLimitMiddleware` は
+  盗んだ攻撃者がセッションを取り直すたびに枠を得るのを防ぐためである。汎用の `attemptBudgetMiddleware` (`src/handlers/attempt-budget-hono.ts`) は
   availability 優先で Redis 障害時に fail-open するが、**このカウンタは数えられない時に必ず拒否する**。
   逆にすると Redis を落とすだけで第二要素の総当たり防御が消えるためである。代償として、Redis 障害中は
   MFA の無効化が全ユーザーで不能になる (救済は `management/disable-user-mfa.ts`)。
