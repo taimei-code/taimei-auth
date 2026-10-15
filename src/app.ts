@@ -3,6 +3,7 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
+import { mountPocMeasure } from "./rpc/poc-measure";
 import { loginShortcut } from "./handlers/login-shortcut";
 import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
@@ -43,6 +44,8 @@ export function buildApp(options: AppOptions): Hono {
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     }),
   );
+
+  mountPocMeasure(app);
 
   app.use("/rpc/*", (c, next) =>
     runMiddleware(
