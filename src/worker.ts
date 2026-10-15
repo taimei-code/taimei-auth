@@ -21,6 +21,7 @@ import {
   verifySessionByCookie,
 } from "./rpc/consumer-rpc";
 import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
+import { markDirtyOnSessionDelete, trackIdentityWrites, withIdentityWrites } from "./identity-writes";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
@@ -33,6 +34,7 @@ type Env = {
   ASSETS: { fetch: (req: Request) => Promise<Response> };
   SENTRY_DSN?: string;
   APP_ENV?: string;
+  AUTH_EDGE?: { invalidateAll(): Promise<number> };
   [key: string]: unknown;
 };
 
@@ -53,7 +55,7 @@ function bootstrap(env: Env): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  boot(durableObjectBackend(env.KV_STORE));
+  boot(markDirtyOnSessionDelete(durableObjectBackend(env.KV_STORE)));
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
       app.all("*", (c) => {
@@ -74,18 +76,23 @@ const handler = {
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
     const app = bootstrap(env);
     const backgroundPromises: Promise<unknown>[] = [];
-    return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
-      try {
-        return await withWaitUntil(
-          (promise) => {
-            backgroundPromises.push(promise);
-          },
-          () => app.fetch(req, env, ctx as never),
-        );
-      } finally {
-        ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));
-      }
-    });
+    return withIdentityWrites(env.AUTH_EDGE, (afterBackground) =>
+      runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
+        trackIdentityWrites(pool);
+        try {
+          return await withWaitUntil(
+            (promise) => {
+              backgroundPromises.push(promise);
+            },
+            () => app.fetch(req, env, ctx as never),
+          );
+        } finally {
+          ctx.waitUntil(
+            afterBackground(Promise.allSettled(backgroundPromises)).then(() => pool.end()),
+          );
+        }
+      }),
+    );
   },
 };
 
@@ -102,18 +109,23 @@ export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, K
 const runInRequest = <A>(env: Env, ctx: ExecutionCtx, program: () => RpcEffect<A>): Promise<A> => {
   bootstrap(env);
   const backgroundPromises: Promise<unknown>[] = [];
-  return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
-    try {
-      return await withWaitUntil(
-        (promise) => {
-          backgroundPromises.push(promise);
-        },
-        () => runRpc(program()),
-      );
-    } finally {
-      ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));
-    }
-  });
+  return withIdentityWrites(env.AUTH_EDGE, (afterBackground) =>
+    runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
+      trackIdentityWrites(pool);
+      try {
+        return await withWaitUntil(
+          (promise) => {
+            backgroundPromises.push(promise);
+          },
+          () => runRpc(program()),
+        );
+      } finally {
+        ctx.waitUntil(
+          afterBackground(Promise.allSettled(backgroundPromises)).then(() => pool.end()),
+        );
+      }
+    }),
+  );
 };
 
 export class AuthRpc extends WorkerEntrypoint<Env> {
