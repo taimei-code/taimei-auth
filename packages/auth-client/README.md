@@ -50,7 +50,7 @@ const guard = createAuthGuard({
 });
 
 export const getSession = guard.getSession;
-// 現在の事業所のメンバー一覧。事業所が getSession と食い違う時は ok: false を返す
+// 現在の事業所のメンバー一覧。getSession と同じ 1 回の RPC の応答から作る
 export const listMembers = guard.listMembers;
 
 // redirect は consumer が所有する。SDK には持たせない (framework 中立のため)

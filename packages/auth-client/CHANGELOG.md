@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.4.0 — 2026-10-15
+
+consumer の 1 request で auth ホストに届く RPC を 2 回から 1 回にする。session、user、現在の事業所での role、メンバー一覧を 1 回で返す RPC を足し、guard の `getSession()` と `listMembers()` はその応答を共有する。公開 API は変えず、wire 互換は保つ (`buf breaking` 通過)。
+
+### Features
+
+- proto に `AuthService.GetSession` と、`GetSessionRequest`・`GetSessionOk`・`GetSessionResponse` を追加した。値の約束 (`current_role` と `members` が空になる時、順序) は proto の `GetSessionOk` のコメントにある
+- guard の `getSession()` と `listMembers()` は `GetSession` を呼ぶようにした。同じ `cache` を渡すと、両方を呼んでも 1 request で `GetSession` は 1 回である。`cache` を渡さない時は、それぞれが 1 回ずつ呼ぶ
+- `listMembers()` は、一覧の事業所を `SessionData.companyId` と比べなくなった。session と一覧を 1 回の応答で受けるので、2 回の呼び出しの間に事業所が切り替わることが起きない。このため、本人が現在の事業所から除名された直後 (`SessionData.companyId` はあり、`role` は `undefined`) は、3.3.0 の `{ ok: false, reason: UNSPECIFIED }` ではなく、事業所未選択の時と同じ `{ ok: true, data: { companyId: undefined, members: [] } }` を返す
+- `GetSession` が Connect の `Unimplemented` (HTTP 404) で失敗した時だけ、`VerifySession` と `ListCurrentCompanyMembers` を順に呼んで答える。`GetSession` を持たない auth ホストへ deploy の失敗や rollback で戻っても、login は止まらない。この経路の `listMembers()` は 3.3.0 と同じく事業所を比べ、違えば `{ ok: false, reason: UNSPECIFIED }` を返す
+
+### Breaking changes
+
+なし。公開 API (`createAuthGuard` の options、`getSession()`・`listMembers()`、`SessionData`・`Member`・`ListMembersResult`) は変えていない。
+
+### 移行
+
+- auth ホストを先に展開してから 3.4.0 に上げる。`GetSession` を持たない auth ホストでも動くが、1 request で失敗する `GetSession` と `VerifySession` と `ListCurrentCompanyMembers` の 3 回を呼ぶ (`getSession()` だけを使う request でも一覧を取る)
+- SDK が送る RPC の path (`/rpc/auth.v1.AuthService/VerifySession` など) を固定している consumer の試験は、`/rpc/auth.v1.AuthService/GetSession` を 1 回送る期待に直す
+
 ## 3.3.0 — 2026-10-06
 
 consumer が、自分の DB にある事業所と人がまだ taimei-auth で有効かを照合できるよう、service key で呼ぶ RPC を足す。抜けた人と削除された事業所のデータを consumer が消すために使う。追加だけで、wire 互換は保つ。
