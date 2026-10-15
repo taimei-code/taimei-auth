@@ -1,0 +1,5 @@
+package: consumer
+output: gen/consumer/client.gen.go
+generate:
+  client: true
+  models: true

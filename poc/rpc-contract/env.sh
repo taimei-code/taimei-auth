@@ -1,0 +1,10 @@
+export APP_ENV=development
+export APP_NAME=taimei
+export DATABASE_URL=postgres://postgres:password@127.0.0.1:5435/auth
+export AUTH_SERVICE_KEY=poc-service-key
+export AUTH_SERVICE_URL=http://localhost:3200
+export AUTH_TRUSTED_ORIGINS=http://localhost:3200
+export AUTH_COOKIE_DOMAIN=localhost
+export BETTER_AUTH_SECRET=poc-better-auth-secret-0123456789abcdef
+export MFA_TOTP_ENCRYPTION_KEYS='{"1":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}'
+export WRANGLER_SEND_METRICS=false

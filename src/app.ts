@@ -3,6 +3,7 @@ import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
 import { auth } from "./auth";
 import { handleRpc } from "./rpc/fetch-handler";
+import { mountConsumerApi } from "./rpc/consumer-http-api";
 import { loginShortcut } from "./handlers/login-shortcut";
 import { canaryToken } from "./handlers/canary-token";
 import { health } from "./handlers/health";
@@ -53,6 +54,7 @@ export function buildApp(options: AppOptions): Hono {
   );
 
   app.all("/rpc/*", async (c) => (await handleRpc(c.req.raw)) ?? runRoute(c, new NotFound()));
+  mountConsumerApi(app);
 
   app.route("/", loginShortcut);
 
