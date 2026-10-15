@@ -4,6 +4,7 @@ package auth.v1;
 service AuthService {
   rpc VerifySession(VerifySessionRequest) returns (VerifySessionResponse);
   rpc ListCurrentCompanyMembers(ListCurrentCompanyMembersRequest) returns (ListCurrentCompanyMembersResponse);
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
 }
 
 service UserService {
@@ -168,4 +169,23 @@ message CheckMembershipsResponse {
   bool company_active = 1;
   // user_ids のうち、company_id の事業所に今所属している人。順序は決めない。
   repeated string member_user_ids = 2;
+}
+
+message GetSessionRequest {
+  string cookie_header = 1;
+}
+
+message GetSessionOk {
+  User user = 1;
+  Session session = 2;
+  optional string company_id = 3;
+  optional Role role = 4;
+  repeated CompanyMember members = 5;
+}
+
+message GetSessionResponse {
+  oneof outcome {
+    GetSessionOk ok = 1;
+    VerifySessionError error = 2;
+  }
 }

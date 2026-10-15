@@ -70,6 +70,24 @@ const v1 = async (env: FlowEnv, cookieHeader: string): Promise<Normalized> => {
   };
 };
 
+const ROLE_NAME = ["UNSPECIFIED", "OWNER", "ADMIN", "MEMBER"] as const;
+
+const v8 = async (env: FlowEnv, cookieHeader: string): Promise<Normalized> => {
+  const response = await v1Client(env).authService.getSession({ cookieHeader });
+  if (response.outcome.case !== "ok") {
+    return { ok: false, reason: String(response.outcome.value?.reason ?? "UNSPECIFIED") };
+  }
+  const { user, companyId, role, members } = response.outcome.value;
+  return {
+    ok: true,
+    userId: user?.id ?? "",
+    email: user?.email ?? "",
+    companyId: companyId ?? null,
+    role: role === undefined ? null : ROLE_NAME[role],
+    members: members.map((m) => ({ userId: m.userId, email: m.email, role: ROLE_NAME[m.role] })),
+  };
+};
+
 const decodeVerify = Schema.decodeUnknownSync(VerifySessionResult);
 const decodeList = Schema.decodeUnknownSync(ListMembersResult);
 const decodeGet = Schema.decodeUnknownSync(GetSessionResult);
@@ -106,7 +124,7 @@ const v3 = async (env: FlowEnv, cookieHeader: string) => fromGetSession(await en
 
 const v4 = async (env: FlowEnv, cookieHeader: string) => fromGetSession(await env.AUTH_READ.getSession(cookieHeader));
 
-export const flows = { v1, v2, v3, v4 } as const;
+export const flows = { v1, v2, v3, v4, v8 } as const;
 
 export const seedReadModel = async (env: FlowEnv, cookieHeader: string) => {
   const snapshot = await env.AUTH_CONSUMER.getSession(cookieHeader);
