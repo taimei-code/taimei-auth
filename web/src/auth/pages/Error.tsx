@@ -1,9 +1,9 @@
 import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "../../shared/ui/alert";
-import type { AuthErrorReason } from "../auth-error-reason";
+import type { ErrorPageReason } from "../auth-error-reason";
 
-const ERROR_MESSAGES: Record<AuthErrorReason, { title: string; description: string }> = {
+const ERROR_MESSAGES: Record<ErrorPageReason, { title: string; description: string }> = {
   invalid_redirect_url: {
     title: "不正なリダイレクト URL",
     description:
@@ -24,7 +24,7 @@ const DEFAULT_MESSAGE = {
   description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
 };
 
-export const ErrorPage = ({ reason }: { reason?: AuthErrorReason }) => {
+export const ErrorPage = ({ reason }: { reason?: ErrorPageReason }) => {
   const message = reason === undefined ? DEFAULT_MESSAGE : ERROR_MESSAGES[reason];
 
   return (

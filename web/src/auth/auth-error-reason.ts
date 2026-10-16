@@ -1,13 +1,10 @@
+import { AUTH_ERROR_REASONS } from "@taimei-code/auth-client";
 import { z } from "zod";
 
-const AUTH_ERROR_REASONS = [
-  "invalid_redirect_url",
-  "signup_already_completed",
-  "signin_failed",
-] as const;
+const ERROR_PAGE_REASONS = [...AUTH_ERROR_REASONS, "invalid_redirect_url"] as const;
 
-export type AuthErrorReason = (typeof AUTH_ERROR_REASONS)[number];
+export type ErrorPageReason = (typeof ERROR_PAGE_REASONS)[number];
 
 export const authErrorSearchSchema = z.object({
-  reason: z.enum(AUTH_ERROR_REASONS).optional().catch(undefined),
+  reason: z.enum(ERROR_PAGE_REASONS).optional().catch(undefined),
 });
