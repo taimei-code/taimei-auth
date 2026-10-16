@@ -55,6 +55,10 @@ _Avoid_: SignUp 画面, 新規登録画面, サインアップ
 ログイン後にプロフィール、セキュリティ、セッション、連携アカウントを管理する画面 (`/account/*`)。**共通画面 SPA** が出す 3 つ目の画面群である。
 _Avoid_: マイページ, account ページ
 
+**エラー画面**:
+認証の流れを続けられない時に、理由を示す画面 (`/auth/error`)。**共通画面 SPA** が出す画面の 1 つである。**プロダクト** が利用者をこの画面へ移す時に付けられる理由は、ログインの失敗と、登録済みの 2 つである。
+_Avoid_: error page, エラーページ
+
 **auth ホスト**:
 `auth.taimei-code.com` への HTTP の要求をすべて受ける、taimei-auth の server。IdP、consumer app 向けの RPC、**`/login` ショートカット**、ヘルスチェック、**共通画面 SPA** の配信を同じ host で受け持つ。**共通画面 SPA** からの要求と consumer app からの RPC の両方を受ける。
 _Avoid_: Layer A (順序ラベルで内容を示さない), バックエンド, server (より広義), Hono server (実装名なので抽象を表せない)
@@ -110,7 +114,7 @@ _Avoid_: onboarding URL, after-signup URL (こちらはプロダクト側の pat
 ### 認証手段 / セッション
 
 **Magic Link**:
-メールアドレス宛に送る、1 回だけ使えるログイン用のリンク。開くと本人の確認、**session** の確立、**redirect_url** への移動までが済む。
+メールアドレス宛に送る、1 回だけ使えるログイン用のリンク。開くと本人の確認、**session** の確立、**redirect_url** への移動までが済む。有効期限は 5 分で、consumer app は auth-client を通じてこの値を受け取る。
 _Avoid_: メールリンク
 
 **多要素認証 (MFA)**:
