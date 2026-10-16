@@ -10,3 +10,5 @@ test-results/
 playwright-report/
 # TLS を復号する proxy 用のローカル CA (Dockerfile が COPY する)
 certs/*.pem
+# release で digest を埋めて生成する (scripts/stamp-testing-fragment.ts)
+packages/auth-client/testing/compose.yml

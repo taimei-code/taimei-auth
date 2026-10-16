@@ -2,6 +2,9 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import type { Session } from "../auth";
 import { switchCompany } from "../account/switch-company";
+import { createSignedInUser } from "../testing/create-signed-in-user";
+import { MagicLinkOutbox } from "../testing/magic-link-outbox";
+import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 import { addCompany, createSignupCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
 import { acceptInvitation } from "../invitation/accept";
@@ -159,6 +162,18 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const member = yield* seedMemberOf("switcher", [from, to], from);
       yield* switchCompany({ actorUserId: member.id, fromCompanyId: from, targetCompanyId: to });
       yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
+    }),
+  );
+
+  scenario(
+    "src/testing/create-signed-in-user.ts",
+    "試験 API が OWNER と ADMIN の所属を持つ利用者を作る",
+    Effect.gen(function* () {
+      const created = yield* createSignedInUser({
+        companies: [{ role: "OWNER" }, { role: "ADMIN" }],
+        returnTo: "http://localhost/after-sign-in",
+      }).pipe(Effect.provideService(MagicLinkOutbox, testMagicLinkOutbox));
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(created.userId);
     }),
   );
 

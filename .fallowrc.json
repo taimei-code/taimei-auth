@@ -2,6 +2,8 @@
   "$schema": "./node_modules/fallow/schema.json",
   "entry": [
     "src/index.ts",
+    "src/testing-server.ts",
+    "scripts/stamp-testing-fragment.ts",
     "web/index.html",
     "db/migrate-manual.ts",
     "management/*.ts",

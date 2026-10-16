@@ -53,6 +53,26 @@ jobs:
         working-directory: packages/auth-client
         run: bun run build
 
+      # 試験用の image は SDK と同じ版で出し、SDK の断片はその digest を参照する (consumer が固定する版を SDK の 1 つにする)
+      - name: Build and push the testing image
+        if: steps.ver.outputs.published == 'false'
+        id: image
+        env:
+          IMAGE: ghcr.io/taimei-code/taimei-auth-testing:auth-client-v${{ steps.ver.outputs.version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          docker build --target dev --build-arg APP_ENV=test \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            -t "$IMAGE" .
+          docker run --rm --entrypoint sh "$IMAGE" -c 'test ! -e /opt/certs/palo-root.pem'
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE"
+          echo "pinned=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp the testing compose fragment
+        if: steps.ver.outputs.published == 'false'
+        run: bun run scripts/stamp-testing-fragment.ts "${{ steps.image.outputs.pinned }}"
+
       # bun publish でなく npm publish (認証が setup-node の生成する .npmrc と NODE_AUTH_TOKEN に依存する)
       - name: Publish to GitHub Packages
         if: steps.ver.outputs.published == 'false'

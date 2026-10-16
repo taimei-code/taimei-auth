@@ -13,6 +13,10 @@ export class AuthApi extends Context.Service<
     deleteSession(token: string): Effect.Effect<void, AuthApiError>;
     revokeOtherSessions(headers: Headers): Effect.Effect<Headers, SessionRejected | AuthApiError>;
     issueSession(userId: string): Effect.Effect<Headers, AuthApiError>;
+    createUser(input: {
+      email: string;
+      name: string;
+    }): Effect.Effect<{ id: string; email: string }, AuthApiError>;
     signInMagicLink(input: {
       email: string;
       callbackURL: string;
