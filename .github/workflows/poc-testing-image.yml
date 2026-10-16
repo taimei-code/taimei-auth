@@ -1,0 +1,33 @@
+name: poc testing image
+
+on:
+  push:
+    branches:
+      - poc/2026-10-16-consumer-test-harness
+    paths:
+      - .github/workflows/poc-testing-image.yml
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/taimei-code/taimei-auth-testing:poc-2026-10-16
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: build
+        run: |
+          docker build --target dev --build-arg APP_ENV=test \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            -t "$IMAGE" .
+      - name: no proxy CA in the image
+        run: |
+          docker run --rm --entrypoint sh "$IMAGE" -c 'ls -A /opt/certs; test ! -e /opt/certs/palo-root.pem'
+      - name: push
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE"
+          docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE"

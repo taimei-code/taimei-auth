@@ -20,3 +20,4 @@ export {
   type BuildAuthLoginUrlOptions,
 } from "./url-builder";
 export { AUTH_RPC_PATH, COMPANY_ID_PATTERN, MAGIC_LINK_EXPIRES_IN_SECONDS } from "./auth-host";
+export { isJustSignedUp } from "./just-signed-up";
