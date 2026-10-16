@@ -1,0 +1,6 @@
+  app.use(`${TESTING_PATH}/*`, async (c, next) => {
+    const key = process.env.AUTH_TESTING_KEY;
+    if (!key || c.req.header("X-Testing-Key") !== key) return c.notFound();
+    await next();
+  });
+  app.route("/", testingRoutes);

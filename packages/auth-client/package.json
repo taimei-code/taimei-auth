@@ -23,6 +23,10 @@
     "./cookie": {
       "types": "./dist/cookie.d.ts",
       "default": "./dist/cookie.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     }
   },
   "files": [

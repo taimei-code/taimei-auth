@@ -1,0 +1,14 @@
+import { createConnectTransport } from "@connectrpc/connect-web";
+import { Role } from "@taimei-code/auth-client";
+import { createTestingRpcClient, TESTING_RPC_PATH } from "@taimei-code/auth-client/testing-rpc";
+
+const testing = createTestingRpcClient(
+  createConnectTransport({
+    baseUrl: new URL(TESTING_RPC_PATH, process.env.AUTH_BASE_URL ?? "http://auth.taimei-code.local:3100").toString(),
+  }),
+);
+
+const signedIn = await testing.createSignedInUser({
+  companies: [{ role: Role.OWNER }, { role: Role.OWNER }],
+  returnTo: `${APP_BASE_URL}/auth/after-signin`,
+});

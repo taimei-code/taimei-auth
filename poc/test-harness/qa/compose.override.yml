@@ -1,0 +1,4 @@
+services:
+  taimei-auth:
+    ports:
+      - "127.0.0.1:3110:3100"

@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package auth.testing.v1;
+
+import "auth/v1/auth.proto";
+
+message CompanySpec {
+  optional string id = 1;
+  optional string name = 2;
+  auth.v1.Role role = 3;
+}
+
+message CreateSignedInUserRequest {
+  optional string name = 1;
+  repeated CompanySpec companies = 2;
+  optional string current_company_id = 3;
+  string return_to = 4;
+}
+
+message CreateSignedInUserResponse {
+  string user_id = 1;
+  string email = 2;
+  repeated string company_ids = 3;
+  string login_url = 4;
+}
+
+message SetCurrentCompanyRequest {
+  string user_id = 1;
+  string company_id = 2;
+}
+
+message SetCurrentCompanyResponse {}
+
+service TestingService {
+  rpc CreateSignedInUser(CreateSignedInUserRequest) returns (CreateSignedInUserResponse);
+  rpc SetCurrentCompany(SetCurrentCompanyRequest) returns (SetCurrentCompanyResponse);
+}
