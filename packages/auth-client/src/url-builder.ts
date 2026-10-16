@@ -6,10 +6,23 @@ export interface BuildAuthLoginUrlOptions {
   hash?: string;
 }
 
-export const buildAuthLoginUrl = (opts: BuildAuthLoginUrlOptions): string => {
-  const url = new URL(`${opts.authBaseUrl.replace(/\/$/, "")}/auth/`);
+type ReturnToServiceOptions = Pick<
+  BuildAuthLoginUrlOptions,
+  "authBaseUrl" | "service" | "returnTo"
+>;
+
+const authHostUrl = (authBaseUrl: string, path: string): URL =>
+  new URL(`${authBaseUrl.replace(/\/$/, "")}${path}`);
+
+const authHostUrlReturningToService = (opts: ReturnToServiceOptions, path: string): URL => {
+  const url = authHostUrl(opts.authBaseUrl, path);
   url.searchParams.set("service_name", opts.service);
   url.searchParams.set("redirect_url", opts.returnTo);
+  return url;
+};
+
+export const buildAuthLoginUrl = (opts: BuildAuthLoginUrlOptions): string => {
+  const url = authHostUrlReturningToService(opts, "/auth/");
   if (opts.signUpUrl !== undefined) {
     url.searchParams.set("sign_up_url", opts.signUpUrl);
   }
@@ -18,3 +31,25 @@ export const buildAuthLoginUrl = (opts: BuildAuthLoginUrlOptions): string => {
   }
   return url.toString();
 };
+
+export const AUTH_ERROR_REASONS = ["signin_failed", "signup_already_completed"] as const;
+
+export type AuthErrorReason = (typeof AUTH_ERROR_REASONS)[number];
+
+export const buildAuthErrorUrl = (opts: {
+  authBaseUrl: string;
+  reason: AuthErrorReason;
+}): string => {
+  const url = authHostUrl(opts.authBaseUrl, "/auth/error");
+  url.searchParams.set("reason", opts.reason);
+  return url.toString();
+};
+
+export const buildCompanySignupUrl = (opts: ReturnToServiceOptions): string =>
+  authHostUrlReturningToService(opts, "/auth/signup/company").toString();
+
+export const buildMembersUrl = (opts: ReturnToServiceOptions): string =>
+  authHostUrlReturningToService(opts, "/account/members").toString();
+
+export const buildAccountUrl = (opts: { authBaseUrl: string }): string =>
+  authHostUrl(opts.authBaseUrl, "/account").toString();

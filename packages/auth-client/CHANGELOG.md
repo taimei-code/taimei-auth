@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.5.0 — 2026-10-16
+
+taimei-auth の決めごと (画面の URL、Magic Link の有効期限、RPC の path、事業所 id の形) を SDK から出す。taimei-auth が変えた時に、SDK の版上げで consumer に届く。追加だけで、wire 互換は保つ (proto は変えていない)。
+
+### Features
+
+- 画面の URL を組む関数を追加した。どれも `buildAuthLoginUrl` と同じく options の object を受け、`authBaseUrl` の末尾の `/` の有無に左右されない
+  - `buildAuthErrorUrl({ authBaseUrl, reason })`: エラー画面 (`/auth/error?reason=`)
+  - `buildCompanySignupUrl({ authBaseUrl, service, returnTo })`: 事業所作成画面 (`/auth/signup/company?service_name=&redirect_url=`)
+  - `buildMembersUrl({ authBaseUrl, service, returnTo })`: メンバー画面 (`/account/members?service_name=&redirect_url=`)
+  - `buildAccountUrl({ authBaseUrl })`: アカウント管理画面 (`/account`)
+- `AUTH_ERROR_REASONS` と `AuthErrorReason` を追加した。consumer がエラー画面へ送れる理由は `signin_failed` と `signup_already_completed` の 2 つで、`buildAuthErrorUrl` はこれ以外を型で受けない
+- `AUTH_RPC_PATH` (`"/rpc"`) を追加した。transport の `baseUrl` は auth ホストの origin にこれを付ける
+- `MAGIC_LINK_EXPIRES_IN_SECONDS` (`300`) を追加した。単位は秒である
+- `COMPANY_ID_PATTERN` (`/^cmp_[A-Za-z0-9_-]{24}$/`) を追加した
+
+### Breaking changes
+
+なし。公開 API の追加だけ (additive)。
+
+### 移行
+
+- taimei-auth の画面の URL と値を自分で組んでいた所は、この版の export に置き換える
+- `COMPANY_ID_PATTERN` は `cmp_` に続く 24 文字ちょうどの id だけを受ける。これに合わない id を事業所 id として扱っていた所は、この形に合わせる
+
 ## 3.4.0 — 2026-10-15
 
 consumer の 1 request で auth ホストに届く RPC を 2 回から 1 回にする。session、user、現在の事業所での role、メンバー一覧を 1 回で返す RPC を足し、guard の `getSession()` と `listMembers()` はその応答を共有する。公開 API は変えず、wire 互換は保つ (`buf breaking` 通過)。

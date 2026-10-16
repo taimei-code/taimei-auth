@@ -10,6 +10,6 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 | 2. 戻り型 | `redirect: (url) => never` (Next.js の throw 前提) | 副作用 callback を持たず、consumer に `getSession()` の戻り値で分岐させる |
 | 3. データ shape | `CookieReader { get(name): { value: string } }` (Next.js `cookies()` 専用) | 最大公約数の `(name) => string \| undefined` で受ける |
 | 4. runtime API | `@connectrpc/connect-node` の hardcode と peerDeps | transport は `createAuthClient({ transport })` で注入する |
-| 5. URL / path | `"/auth?callbackUrl=..."` などの consumer 固有の path | path の構築は consumer 側の helper が行い、SDK は session contract だけを持つ |
+| 5. URL / path | `"/auth?callbackUrl=..."` などの consumer 固有の path | consumer が持つ path は consumer 側の helper が組む。taimei-auth が持つ画面の URL (`buildAuthLoginUrl`・`buildAuthErrorUrl` など) は SDK が組む |
 
 層 4 だけは root `biome.json` の `packages/auth-client/**` override が禁止し、root の `src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。

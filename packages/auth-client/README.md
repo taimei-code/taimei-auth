@@ -14,7 +14,7 @@ taimei-auth 認証サービス (IdP) のクライアント SDK。
 // lib/auth/client.ts
 import "server-only";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { createAuthClient, createServiceKeyInterceptor } from "@taimei-code/auth-client";
+import { AUTH_RPC_PATH, createAuthClient, createServiceKeyInterceptor } from "@taimei-code/auth-client";
 
 const interceptors = process.env.AUTH_SERVICE_KEY
   ? [createServiceKeyInterceptor(process.env.AUTH_SERVICE_KEY)]
@@ -22,7 +22,7 @@ const interceptors = process.env.AUTH_SERVICE_KEY
 
 const transport = createConnectTransport({
   httpVersion: "1.1", // Vercel Node runtime
-  baseUrl: process.env.AUTH_BASE_URL!,
+  baseUrl: `${process.env.AUTH_BASE_URL!}${AUTH_RPC_PATH}`,
   interceptors,
 });
 
@@ -126,7 +126,26 @@ function requireSession(req, res, next) {
 
 ---
 
-## 5. Migration from 0.4.0
+## 5. auth ホストの画面の URL と決めごと
+
+consumer が利用者を taimei-auth の画面へ移す URL と、consumer が頼る taimei-auth の値は SDK から読む。taimei-auth が変えた時は、SDK の版上げで consumer に届く。
+
+| export | 中身 |
+|--------|------|
+| `buildAuthErrorUrl({ authBaseUrl, reason })` | エラー画面 (`/auth/error?reason=`) |
+| `AUTH_ERROR_REASONS` / `AuthErrorReason` | consumer が送れるエラーの理由 (`signin_failed` と `signup_already_completed`) |
+| `buildCompanySignupUrl({ authBaseUrl, service, returnTo })` | 事業所作成画面 (`/auth/signup/company?service_name=&redirect_url=`) |
+| `buildMembersUrl({ authBaseUrl, service, returnTo })` | メンバー画面 (`/account/members?service_name=&redirect_url=`) |
+| `buildAccountUrl({ authBaseUrl })` | アカウント管理画面 (`/account`) |
+| `AUTH_RPC_PATH` | RPC の mount の path (`/rpc`)。transport の `baseUrl` は auth ホストの origin にこれを付ける |
+| `MAGIC_LINK_EXPIRES_IN_SECONDS` | Magic Link の有効期限 (秒) |
+| `COMPANY_ID_PATTERN` | 事業所 id の形 (`cmp_` に続く 24 文字) の正規表現 |
+
+URL を組む関数は `buildAuthLoginUrl` と同じく、`authBaseUrl` の末尾の `/` の有無に左右されない。
+
+---
+
+## 6. Migration from 0.4.0
 
 | 依存 | 0.4.0 | 0.5.0 |
 |------|-------|-------|
