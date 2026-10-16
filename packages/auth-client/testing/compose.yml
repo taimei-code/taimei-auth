@@ -1,0 +1,33 @@
+services:
+  taimei-auth-postgres:
+    image: postgres:16.8-alpine3.21
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: pg_isready -U postgres -d auth
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  taimei-auth:
+    image: ghcr.io/taimei-code/taimei-auth-testing@sha256:8ff4dfa6eb91b122d137009dfb4533cd47a7a989014185eae1c87934dd8017ac
+    command: sh -c "bun run db:migrate && bun run db:migrate-manual && bun run src/testing-server.ts"
+    environment:
+      PORT: ${TAIMEI_AUTH_PORT:-3100}
+      DATABASE_URL: postgres://postgres:password@taimei-auth-postgres:5432/auth
+      AUTH_SERVICE_URL: ${TAIMEI_AUTH_URL:?TAIMEI_AUTH_URL is required}
+      AUTH_COOKIE_DOMAIN: ${TAIMEI_AUTH_COOKIE_DOMAIN?TAIMEI_AUTH_COOKIE_DOMAIN is required (empty for localhost)}
+      AUTH_TRUSTED_ORIGINS: ${TAIMEI_AUTH_URL},${TAIMEI_AUTH_CONSUMER_ORIGINS:?TAIMEI_AUTH_CONSUMER_ORIGINS is required}
+      AUTH_SECRET: ${TAIMEI_AUTH_SECRET:?TAIMEI_AUTH_SECRET is required}
+      APP_ENV: test
+      APP_NAME: ${TAIMEI_AUTH_APP_NAME:-taimei}
+      MFA_TOTP_ENCRYPTION_KEYS: v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    depends_on:
+      taimei-auth-postgres:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - ${TAIMEI_AUTH_HOSTNAME:?TAIMEI_AUTH_HOSTNAME is required}
