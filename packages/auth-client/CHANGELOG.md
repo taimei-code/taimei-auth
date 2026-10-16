@@ -102,7 +102,7 @@ consumer が現在の事業所での role で操作を分けられるよう、Ve
 
 ## 3.0.0 — 2026-10-03
 
-consumer が使っていない RPC を削除する。consumer は taimei だけで、本番の経路で呼ぶのは `AuthService.VerifySession` と `UserService.FindUserByEmail` だけだった。削除した RPC を 2.x の client から呼ぶと、auth ホストは 404 を返す。
+consumer が使っていない RPC を削除する。consumer が本番の経路で呼ぶのは `AuthService.VerifySession` と `UserService.FindUserByEmail` だけだった。削除した RPC を 2.x の client から呼ぶと、auth ホストは 404 を返す。
 
 ### Breaking changes
 
@@ -112,12 +112,12 @@ consumer が使っていない RPC を削除する。consumer は taimei だけ�
 
 ### 移行
 
-- `userService.findUserById` を呼んでいるコードを消す (taimei は test からしか呼ばない wrapper を消す)。他の削除した method は taimei が呼んでいない
+- `userService.findUserById` を呼んでいるコードを消す。他の削除した method を呼んでいるコードも消す
 - sign-out と magic link の送信は、今までどおり共通画面 SPA が better-auth で行う
 
 ## 2.0.0 — 2026-10-03
 
-使われていない公開 API を削除する。consumer は taimei だけで、削除した API をどれも使っていないので、code の変更は要らない (version を上げるだけでよい)。deprecate を挟まずに削除したのは、consumer が 1 つで利用が無いことを確認できたため。削除した RPC を 1.x の client から呼ぶと、auth ホストは 404 を返す。
+使われていない公開 API を削除する。consumer は削除した API をどれも使っていないので、code の変更は要らない (version を上げるだけでよい)。deprecate を挟まずに削除したのは、consumer に利用が無いことを確認できたため。削除した RPC を 1.x の client から呼ぶと、auth ホストは 404 を返す。
 
 ### Breaking changes
 
