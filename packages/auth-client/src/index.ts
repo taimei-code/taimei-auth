@@ -9,4 +9,14 @@ export {
   hasAuthCookie,
   type CookieReader,
 } from "./cookie";
-export { buildAuthLoginUrl, type BuildAuthLoginUrlOptions } from "./url-builder";
+export {
+  AUTH_ERROR_REASONS,
+  buildAccountUrl,
+  buildAuthErrorUrl,
+  buildAuthLoginUrl,
+  buildCompanySignupUrl,
+  buildMembersUrl,
+  type AuthErrorReason,
+  type BuildAuthLoginUrlOptions,
+} from "./url-builder";
+export { AUTH_RPC_PATH, COMPANY_ID_PATTERN, MAGIC_LINK_EXPIRES_IN_SECONDS } from "./auth-host";

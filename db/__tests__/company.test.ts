@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { COMPANY_ID_PATTERN } from "@taimei-code/auth-client";
 import { generateCompanyId } from "../repositories/company";
 import { generateInvitationId } from "../repositories/invitation";
 import { generateMembershipId } from "../repositories/membership";
 
 describe("ID generator format", () => {
-  test("generateCompanyId は cmp_<24chars> URL-safe alphabet を返す", () => {
+  test("generateCompanyId は auth-client が consumer に約束する事業所 id の形を返す", () => {
     const id = generateCompanyId();
-    expect(id).toMatch(/^cmp_[A-Za-z0-9_-]{24}$/);
+    expect(id).toMatch(COMPANY_ID_PATTERN);
   });
 
   test("generateMembershipId は mbr_<24chars> URL-safe alphabet を返す", () => {

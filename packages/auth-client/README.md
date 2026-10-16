@@ -14,7 +14,7 @@ taimei-auth 認証サービス (IdP) のクライアント SDK。
 // lib/auth/client.ts
 import "server-only";
 import { createConnectTransport } from "@connectrpc/connect-node";
-import { createAuthClient, createServiceKeyInterceptor } from "@taimei-code/auth-client";
+import { AUTH_RPC_PATH, createAuthClient, createServiceKeyInterceptor } from "@taimei-code/auth-client";
 
 const interceptors = process.env.AUTH_SERVICE_KEY
   ? [createServiceKeyInterceptor(process.env.AUTH_SERVICE_KEY)]
@@ -22,7 +22,7 @@ const interceptors = process.env.AUTH_SERVICE_KEY
 
 const transport = createConnectTransport({
   httpVersion: "1.1", // Vercel Node runtime
-  baseUrl: process.env.AUTH_BASE_URL!,
+  baseUrl: `${process.env.AUTH_BASE_URL!}${AUTH_RPC_PATH}`,
   interceptors,
 });
 
@@ -34,7 +34,7 @@ export const authClient = createAuthClient({ transport });
 ```ts
 // app/lib/auth-guard.ts
 import "server-only";
-import { createAuthGuard, getSessionToken } from "@taimei-code/auth-client";
+import { buildAuthLoginUrl, createAuthGuard, getSessionToken } from "@taimei-code/auth-client";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
@@ -53,10 +53,19 @@ export const getSession = guard.getSession;
 // 現在の事業所のメンバー一覧。getSession と同じ 1 回の RPC の応答から作る
 export const listMembers = guard.listMembers;
 
+// login の入口は consumer が決める。taimei-auth の共通ログイン画面へ直接移すなら buildAuthLoginUrl で組む
+// AUTH_SERVICE_NAME は、consumer が taimei-auth に登録した service_name
+export const loginUrlOf = (returnTo: string) =>
+  buildAuthLoginUrl({
+    authBaseUrl: process.env.AUTH_BASE_URL!,
+    service: process.env.AUTH_SERVICE_NAME!,
+    returnTo,
+  });
+
 // redirect は consumer が所有する。SDK には持たせない (framework 中立のため)
 export const requireSession = async ({ returnTo }: { returnTo: string }) => {
   const session = await getSession();
-  if (!session) redirect(`/auth?callbackUrl=${encodeURIComponent(returnTo)}`);
+  if (!session) redirect(loginUrlOf(returnTo));
   return session;
 };
 ```
@@ -109,7 +118,7 @@ SDK は `getSession` と `listMembers` を提供し、redirect は持たない (
 // Hono
 app.use(async (c, next) => {
   const session = await getSession();
-  if (!session) return c.redirect(`/auth?callbackUrl=${encodeURIComponent(c.req.url)}`);
+  if (!session) return c.redirect(loginUrlOf(c.req.url));
   c.set("session", session);
   await next();
 });
@@ -117,7 +126,7 @@ app.use(async (c, next) => {
 // Express
 function requireSession(req, res, next) {
   getSession().then((session) => {
-    if (!session) return res.redirect(`/auth?callbackUrl=${encodeURIComponent(req.originalUrl)}`);
+    if (!session) return res.redirect(loginUrlOf(req.originalUrl));
     req.session = session;
     next();
   });
@@ -126,7 +135,26 @@ function requireSession(req, res, next) {
 
 ---
 
-## 5. Migration from 0.4.0
+## 5. auth ホストの画面の URL と決めごと
+
+consumer が利用者を taimei-auth の画面へ移す URL と、consumer が頼る taimei-auth の値は SDK から読む。taimei-auth が変えた時は、SDK の版上げで consumer に届く。
+
+| export | 中身 |
+|--------|------|
+| `buildAuthErrorUrl({ authBaseUrl, reason })` | エラー画面 (`/auth/error?reason=`) |
+| `AUTH_ERROR_REASONS` / `AuthErrorReason` | consumer が送れるエラーの理由 (`signin_failed` と `signup_already_completed`) |
+| `buildCompanySignupUrl({ authBaseUrl, service, returnTo })` | 事業所作成画面 (`/auth/signup/company?service_name=&redirect_url=`) |
+| `buildMembersUrl({ authBaseUrl, service, returnTo })` | メンバー画面 (`/account/members?service_name=&redirect_url=`) |
+| `buildAccountUrl({ authBaseUrl })` | アカウント管理画面 (`/account`) |
+| `AUTH_RPC_PATH` | RPC の mount の path (`/rpc`)。transport の `baseUrl` は auth ホストの origin にこれを付ける |
+| `MAGIC_LINK_EXPIRES_IN_SECONDS` | Magic Link の有効期限 (秒) |
+| `COMPANY_ID_PATTERN` | 事業所 id の形 (`cmp_` に続く 24 文字) の正規表現 |
+
+URL を組む関数は `buildAuthLoginUrl` と同じく、`authBaseUrl` の末尾の `/` の有無に左右されない。
+
+---
+
+## 6. Migration from 0.4.0
 
 | 依存 | 0.4.0 | 0.5.0 |
 |------|-------|-------|
@@ -134,7 +162,7 @@ function requireSession(req, res, next) {
 | L2: `redirect` の注入 | `createAuthGuard({ redirect })` | consumer 側の wrapper に移す (SDK の戻り値は `{ getSession }` だけ) |
 | L3: `CookieReader` の shape | `{ get(name): { value } }` interface | `(name: string) => string \| undefined` の関数型 |
 | L4: `@connectrpc/connect-node` | SDK が `createConnectTransport` を内蔵し、peerDeps にも存在する | consumer が transport を構築して `createAuthClient({ transport })` に渡す。SDK の peerDeps から削除 |
-| L5: `/auth?callbackUrl=` のハードコード | SDK の `buildLoginRedirectPath` が組み立てる | consumer 側の wrapper で組み立てる (URL の規約は consumer が所有する) |
+| L5: consumer の login の path のハードコード | SDK の `buildLoginRedirectPath` が consumer の login の path を組み立てる | consumer 側の wrapper で組み立てる (URL の規約は consumer が所有する) |
 
 主な API の rename:
 

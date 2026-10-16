@@ -1,3 +1,4 @@
+import { buildCompanySignupUrl } from "@taimei-code/auth-client";
 import { getSessionCookie } from "better-auth/cookies";
 import { Effect } from "effect";
 import type { Context, Next } from "hono";
@@ -20,9 +21,8 @@ export const authEntryRedirect = (c: Context, next: Next) => {
 export const authEntryRedirectProgram = Effect.fnUntraced(
   function* (c: Context) {
     const headers = c.req.raw.headers;
-    const params = signInParamsSchema.safeParse(
-      Object.fromEntries(new URL(c.req.url).searchParams),
-    );
+    const requestUrl = new URL(c.req.url);
+    const params = signInParamsSchema.safeParse(Object.fromEntries(requestUrl.searchParams));
     if (!params.success) return CONTINUE;
 
     const status = yield* checkSession(headers);
@@ -37,10 +37,14 @@ export const authEntryRedirectProgram = Effect.fnUntraced(
     );
     const activeMemberships = memberships.filter((m) => m.companyActivationStatus === "ACTIVE");
     if (activeMemberships.length === 0) {
-      const companyUrl = new URL("/auth/signup/company", c.req.url);
-      companyUrl.searchParams.set("service_name", params.data.service_name);
-      companyUrl.searchParams.set("redirect_url", params.data.redirect_url);
-      return respondWith(c.redirect(companyUrl.pathname + companyUrl.search));
+      const { pathname, search } = new URL(
+        buildCompanySignupUrl({
+          authBaseUrl: requestUrl.origin,
+          service: params.data.service_name,
+          returnTo: params.data.redirect_url,
+        }),
+      );
+      return respondWith(c.redirect(pathname + search));
     }
 
     return respondWith(c.redirect(params.data.redirect_url));

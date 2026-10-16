@@ -1,4 +1,4 @@
-import { buildAuthLoginUrl } from "@taimei-code/auth-client";
+import { buildAccountUrl, buildAuthLoginUrl } from "@taimei-code/auth-client";
 import { getSessionCookie } from "better-auth/cookies";
 import { Effect } from "effect";
 import { Hono } from "hono";
@@ -15,7 +15,7 @@ const buildLoginRedirect = (url: URL): URL => {
     buildAuthLoginUrl({
       authBaseUrl: url.origin,
       service: "accounts",
-      returnTo: `${url.origin}/account`,
+      returnTo: buildAccountUrl({ authBaseUrl: url.origin }),
     }),
   );
 
@@ -46,7 +46,9 @@ export const loginShortcutProgram = Effect.fnUntraced(function* (c: Context) {
 
   const url = new URL(c.req.url);
   return c.redirect(
-    authenticated ? `${url.origin}/account` : buildLoginRedirect(url).toString(),
+    authenticated
+      ? buildAccountUrl({ authBaseUrl: url.origin })
+      : buildLoginRedirect(url).toString(),
     302,
   );
 });

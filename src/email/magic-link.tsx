@@ -10,7 +10,10 @@ import { Link } from "@react-email/link";
 import { Preview } from "@react-email/preview";
 import { Section } from "@react-email/section";
 import { Text } from "@react-email/text";
+import { MAGIC_LINK_EXPIRES_IN_SECONDS } from "@taimei-code/auth-client";
 import * as styles from "./styles";
+
+const EXPIRES_IN_MINUTES = MAGIC_LINK_EXPIRES_IN_SECONDS / 60;
 
 type MagicLinkEmailProps = {
   url: string;
@@ -33,7 +36,7 @@ export default function MagicLinkEmail({
           `}
         </style>
       </Head>
-      <Preview>{appName} へのログインリンク - 5分間有効</Preview>
+      <Preview>{`${appName} へのログインリンク - ${EXPIRES_IN_MINUTES}分間有効`}</Preview>
       <Body style={styles.body}>
         <Container style={styles.container}>
           <Section style={styles.logoSection}>
@@ -56,7 +59,7 @@ export default function MagicLinkEmail({
             </Button>
           </Section>
 
-          <Text style={styles.expiryNotice}>このリンクは5分間有効です</Text>
+          <Text style={styles.expiryNotice}>{`このリンクは${EXPIRES_IN_MINUTES}分間有効です`}</Text>
 
           <Hr style={styles.divider} />
 
