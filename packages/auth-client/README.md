@@ -1,173 +1,100 @@
 # @taimei-code/auth-client
 
-taimei-auth 認証サービス (IdP) のクライアント SDK。
+taimei-auth (認証サービス) を consumer の server から使うための SDK。session の確認、現在の事業所のメンバー一覧、taimei-auth の画面の URL、taimei-auth が決める値を提供する。
 
-**設計方針 (taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41)**: SDK は consumer の framework に依存しない。`@connectrpc/connect` で抽象化された Transport / Interceptor だけを受け取り、`next/*`、`react`、`@connectrpc/connect-node` などの framework や runtime に固有の module を import しない。Node runtime、Edge runtime、Cloudflare Workers、Bun fetch、Deno のどれからでも利用できる。
+SDK は framework と runtime に依存しない。transport は consumer が組み立てて渡し、redirect と cookie の読み出しは consumer が行う。
 
----
+## 導入
 
-## 1. Quickstart (Next.js)
+GitHub Packages で公開している。`.npmrc` に registry と、`read:packages` を持つ token を設定する。
 
-### transport 構築
-
-```ts
-// lib/auth/client.ts
-import "server-only";
-import { createConnectTransport } from "@connectrpc/connect-node";
-import { AUTH_RPC_PATH, createAuthClient, createServiceKeyInterceptor } from "@taimei-code/auth-client";
-
-const interceptors = process.env.AUTH_SERVICE_KEY
-  ? [createServiceKeyInterceptor(process.env.AUTH_SERVICE_KEY)]
-  : [];
-
-const transport = createConnectTransport({
-  httpVersion: "1.1", // Vercel Node runtime
-  baseUrl: `${process.env.AUTH_BASE_URL!}${AUTH_RPC_PATH}`,
-  interceptors,
-});
-
-export const authClient = createAuthClient({ transport });
+```ini
+@taimei-code:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
 ```
 
-### auth guard
+peerDependencies の `@bufbuild/protobuf` (^2) と `@connectrpc/connect` (^2) に加えて、transport を 1 つ入れる。fetch で動く `@connectrpc/connect-web` は Node、Cloudflare Workers、Bun、Deno のどれでも使える。
+
+## 組み立て
 
 ```ts
-// app/lib/auth-guard.ts
-import "server-only";
-import { buildAuthLoginUrl, createAuthGuard, getSessionToken } from "@taimei-code/auth-client";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { cache } from "react";
-import { authClient } from "@/lib/auth/client";
+import { createConnectTransport } from "@connectrpc/connect-web";
+import {
+  AUTH_RPC_PATH,
+  createAuthClient,
+  createAuthGuard,
+  createServiceKeyInterceptor,
+  extractSessionTokenFromCookieHeader,
+} from "@taimei-code/auth-client";
 
-const guard = createAuthGuard({
-  client: authClient,
-  cache, // 1 request 内の重複呼び出しをまとめる
-  getSessionToken: async () => {
-    const cookieStore = await cookies();
-    return getSessionToken((name) => cookieStore.get(name)?.value);
-  },
+const client = createAuthClient({
+  transport: createConnectTransport({
+    baseUrl: `${authBaseUrl}${AUTH_RPC_PATH}`,
+    interceptors: [createServiceKeyInterceptor(serviceKey)],
+  }),
 });
 
-export const getSession = guard.getSession;
-// 現在の事業所のメンバー一覧。getSession と同じ 1 回の RPC の応答から作る
-export const listMembers = guard.listMembers;
-
-// login の入口は consumer が決める。taimei-auth の共通ログイン画面へ直接移すなら buildAuthLoginUrl で組む
-// AUTH_SERVICE_NAME は、consumer が taimei-auth に登録した service_name
-export const loginUrlOf = (returnTo: string) =>
-  buildAuthLoginUrl({
-    authBaseUrl: process.env.AUTH_BASE_URL!,
-    service: process.env.AUTH_SERVICE_NAME!,
-    returnTo,
+export const guardOf = (request: Request) =>
+  createAuthGuard({
+    client,
+    getSessionToken: async () =>
+      extractSessionTokenFromCookieHeader(request.headers.get("cookie") ?? ""),
   });
-
-// redirect は consumer が所有する。SDK には持たせない (framework 中立のため)
-export const requireSession = async ({ returnTo }: { returnTo: string }) => {
-  const session = await getSession();
-  if (!session) redirect(loginUrlOf(returnTo));
-  return session;
-};
 ```
 
----
+- `authBaseUrl` は auth ホストの origin、`serviceKey` は consumer に発行された service key である。
+- auth ホストは、local 以外ではすべての RPC に service key を求める。interceptor を付けないと、すべての RPC が拒否され、guard の結果は `reason: Result.UNSPECIFIED` になる。
+- `createAuthGuard` は request ごとに作る。`getSessionToken` がその request の cookie を読むためである。
+- `cache` (省略可) に `(fn) => fn` の形の関数を渡すと、`getSession()` と `listMembers()` が 1 回の RPC を共有する。省略すると、呼ぶたびに RPC を送る。
 
-## 2. Cookie reader 例
-
-`getSessionToken` / `hasAuthCookie` は `(name: string) => string | undefined` の lambda を受け取る。framework ごとの差は次のように吸収する。
-
-```ts
-// Next.js (`next/headers`)
-const cookieStore = await cookies();
-getSessionToken((name) => cookieStore.get(name)?.value);
-
-// Hono
-getSessionToken((name) => getCookie(c, name));
-
-// Express
-getSessionToken((name) => req.cookies[name]);
-
-// 生の Request (fetch API)
-const cookieHeader = request.headers.get("cookie") ?? "";
-// この場合は extractSessionTokenFromCookieHeader(cookieHeader) を直接使う方が簡潔
-```
-
-`SESSION_COOKIE_NAMES` (`better-auth.session_token` / `__Secure-better-auth.session_token`) は SDK の内部に閉じる。consumer が cookie 名を知る必要はない。
-
----
-
-## 3. Transport 選択
-
-| Runtime | 推奨 transport | 備考 |
-|---------|----------------|------|
-| Node.js / Vercel Node | `@connectrpc/connect-node` | `httpVersion: "1.1"` などを指定する |
-| Edge / Cloudflare Workers / Bun fetch / browser | `@connectrpc/connect-web` | `httpVersion` は不要 (fetch ベース) |
-| Deno | `@connectrpc/connect-web` | 同上 |
-
-どちらの transport も `Transport` 型を返すため、SDK 側のコード (`createAuthClient({ transport })`) は変更なしで動く。
-
-**Note**: `createServiceKeyInterceptor(serviceKey)` は **app の初期化時に 1 度だけ呼び出して transport に渡す** こと。リクエストごとに呼ぶと closure 生成のオーバーヘッドが加わる。
-
----
-
-## 4. `requireSession` 自前実装 (Next.js 以外の framework)
-
-SDK は `getSession` と `listMembers` を提供し、redirect は持たない (`packages/auth-client/CLAUDE.md` ルール 7)。redirect の制御フロー (副作用) は consumer 側の wrapper で書く。Next.js 版は §1 Quickstart を参照。他の framework での例:
+## session とメンバー一覧
 
 ```ts
-// Hono
-app.use(async (c, next) => {
-  const session = await getSession();
-  if (!session) return c.redirect(loginUrlOf(c.req.url));
-  c.set("session", session);
-  await next();
-});
+import { buildAuthLoginUrl } from "@taimei-code/auth-client";
 
-// Express
-function requireSession(req, res, next) {
-  getSession().then((session) => {
-    if (!session) return res.redirect(loginUrlOf(req.originalUrl));
-    req.session = session;
-    next();
-  });
+const session = await guardOf(request).getSession();
+if (!session.ok) {
+  return Response.redirect(buildAuthLoginUrl({ authBaseUrl, service, returnTo: request.url }), 302);
 }
 ```
 
----
+- `getSession()` は `{ ok: true, data: SessionData } | { ok: false, reason: Result }` を返す。cookie が無い時は RPC を送らず、`reason: Result.SESSION_NOT_FOUND` を返す。
+- `listMembers()` は現在の事業所のメンバー一覧を返す。`getSession()` が失敗する時は同じ `reason` で失敗する。
+- RPC の失敗 (通信の失敗、service key の拒否、auth ホストの障害) は例外にならず、`reason: Result.UNSPECIFIED` になる。session が無い・失効した時の `reason` (`SESSION_NOT_FOUND`・`REVOKED` など) と区別して、監視に記録する。
+- `SessionData.companyId` が `undefined` の時は事業所が未選択なので、`buildCompanySignupUrl` の画面へ移す。
+- `SessionData.role` と `Member.role` が `undefined` の時は、権限なしとして扱う。
+- redirect は consumer が行う。SDK は redirect をしない。
+- 1 request で auth ホストに送る RPC は `/rpc/auth.v1.AuthService/GetSession` の 1 回である。auth ホストが `GetSession` を持たない (`Unimplemented`) 時だけ、`VerifySession` と `ListCurrentCompanyMembers` を順に送る。
 
-## 5. auth ホストの画面の URL と決めごと
+値の約束の詳細は、この package の `dist/types.d.ts` と `dist/gen/auth/v1/auth_pb.d.ts` のコメントにある。
 
-consumer が利用者を taimei-auth の画面へ移す URL と、consumer が頼る taimei-auth の値は SDK から読む。taimei-auth が変えた時は、SDK の版上げで consumer に届く。
+## SDK の export を使い、自分で書かないもの
 
-| export | 中身 |
-|--------|------|
-| `buildAuthErrorUrl({ authBaseUrl, reason })` | エラー画面 (`/auth/error?reason=`) |
-| `AUTH_ERROR_REASONS` / `AuthErrorReason` | consumer が送れるエラーの理由 (`signin_failed` と `signup_already_completed`) |
-| `buildCompanySignupUrl({ authBaseUrl, service, returnTo })` | 事業所作成画面 (`/auth/signup/company?service_name=&redirect_url=`) |
-| `buildMembersUrl({ authBaseUrl, service, returnTo })` | メンバー画面 (`/account/members?service_name=&redirect_url=`) |
-| `buildAccountUrl({ authBaseUrl })` | アカウント管理画面 (`/account`) |
-| `AUTH_RPC_PATH` | RPC の mount の path (`/rpc`)。transport の `baseUrl` は auth ホストの origin にこれを付ける |
-| `MAGIC_LINK_EXPIRES_IN_SECONDS` | Magic Link の有効期限 (秒) |
-| `COMPANY_ID_PATTERN` | 事業所 id の形 (`cmp_` に続く 24 文字) の正規表現 |
+taimei-auth が変えた時に SDK の版上げで届くよう、次の値を consumer のコードに直接書かない。
 
-URL を組む関数は `buildAuthLoginUrl` と同じく、`authBaseUrl` の末尾の `/` の有無に左右されない。
+| 書かないもの | 使う export |
+|---|---|
+| session cookie の名前と cookie header の解析 | `extractSessionTokenFromCookieHeader(header)`、`getSessionToken(readCookie)`、`hasAuthCookie(readCookie)` |
+| 試験で送る session cookie の header | `buildSessionCookieHeader(token)` |
+| RPC の path (`/rpc`) | `AUTH_RPC_PATH` |
+| login 画面の URL (`/auth/`) | `buildAuthLoginUrl({ authBaseUrl, service, returnTo, signUpUrl?, hash? })` |
+| エラー画面の URL (`/auth/error`) と理由 | `buildAuthErrorUrl({ authBaseUrl, reason })`、`AUTH_ERROR_REASONS` |
+| 事業所作成画面の URL | `buildCompanySignupUrl({ authBaseUrl, service, returnTo })` |
+| メンバー画面の URL | `buildMembersUrl({ authBaseUrl, service, returnTo })` |
+| アカウント管理画面の URL | `buildAccountUrl({ authBaseUrl })` |
+| Magic Link の有効期限 (秒) | `MAGIC_LINK_EXPIRES_IN_SECONDS` |
+| 事業所 id の形 | `COMPANY_ID_PATTERN` |
+| role の値 | `Role` 型 (`"OWNER" \| "ADMIN" \| "MEMBER"`) |
 
----
+`service` は、consumer が taimei-auth に登録した service 名である。URL を組む関数は、`authBaseUrl` の末尾の `/` の有無に左右されない。
 
-## 6. Migration from 0.4.0
+## server 間の RPC
 
-| 依存 | 0.4.0 | 0.5.0 |
-|------|-------|-------|
-| L1: `React.cache` の暗黙利用 | SDK が `cache` の注入を必須にする | `cache?` を optional にし、Next.js の consumer は `cache` (`React.cache`) を明示的に注入する |
-| L2: `redirect` の注入 | `createAuthGuard({ redirect })` | consumer 側の wrapper に移す (SDK の戻り値は `{ getSession }` だけ) |
-| L3: `CookieReader` の shape | `{ get(name): { value } }` interface | `(name: string) => string \| undefined` の関数型 |
-| L4: `@connectrpc/connect-node` | SDK が `createConnectTransport` を内蔵し、peerDeps にも存在する | consumer が transport を構築して `createAuthClient({ transport })` に渡す。SDK の peerDeps から削除 |
-| L5: consumer の login の path のハードコード | SDK の `buildLoginRedirectPath` が consumer の login の path を組み立てる | consumer 側の wrapper で組み立てる (URL の規約は consumer が所有する) |
+`createAuthClient` の戻り値から、session を持たない処理 (batch など) で呼ぶ。
 
-主な API の rename:
+- `companyService.checkMemberships({ companyId, userIds })`: 事業所が ACTIVE か (`companyActive`) と、`userIds` のうち今所属している人 (`memberUserIds`) を返す。consumer の DB に残る、抜けた人や削除された事業所のデータを見つけるために使う。RPC の失敗を「事業所が無い」と扱わない。
+- `userService.findUserByEmail({ email })`: メールアドレスで user を引く。いなければ `user` は `undefined` である。
 
-- `getSessionTokenFromCookieStore(store)` → `getSessionToken(reader)`
-- `createAuthClient({ baseUrl, serviceKey })` → `createAuthClient({ transport })` (transport は consumer が組み立て、Service Key は `createServiceKeyInterceptor(key)` を interceptor として transport に注入する)
-- `createAuthGuard(...).requireSession` は廃止し、consumer 側の 4 行の wrapper に移す
+## 版上げ
 
-詳細: taimei-auth repo の `packages/auth-client/CLAUDE.md` ルール 7 / PR #41 を参照。
+この package の `CHANGELOG.md` に、版ごとの変更と移行の手順がある。版を上げる時は、今の版から上げる先の版までの「Breaking changes」と「移行」を読む。
