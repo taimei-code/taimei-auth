@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { REPO_ROOT, filesImporting, grepFiles, valueImportsOf } from "../../__tests__/source-scan";
 
-const TESTING_MODULE = /(^|\/)(testing\/|handlers\/testing-routes|testing-server)/;
+const TESTING_MODULE = /(^|\/)(testing\/|testing-routes|testing-server)/;
 
 const resolveLocal = (from: string, specifier: string): string | undefined => {
   const base = specifier.startsWith("@/")

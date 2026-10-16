@@ -23,13 +23,25 @@ describe("試験用の entry と本番", () => {
     );
   });
 
-  test("本番の worker と同じ app には、APP_ENV がどの値でも試験 API の route が無い", async () => {
-    const app = buildApp({ mountStatic: () => {} });
-    const response = await app.request("/testing/v1/signed-in-users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: "{}",
-    });
-    expect(response.status).toBe(404);
+  test("本番の worker と同じ app には、APP_ENV が未設定・production・誤記・test のどれでも試験 API の route が無い", async () => {
+    const previous = process.env.APP_ENV;
+    const statuses: Record<string, number> = {};
+    try {
+      for (const value of [undefined, "production", "prodution", "test"]) {
+        if (value === undefined) delete process.env.APP_ENV;
+        else process.env.APP_ENV = value;
+        const app = buildApp({ mountStatic: () => {} });
+        const response = await app.request("/testing/v1/signed-in-users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        statuses[value ?? "(unset)"] = response.status;
+      }
+    } finally {
+      if (previous === undefined) delete process.env.APP_ENV;
+      else process.env.APP_ENV = previous;
+    }
+    expect(statuses).toEqual({ "(unset)": 404, production: 404, prodution: 404, test: 404 });
   });
 });

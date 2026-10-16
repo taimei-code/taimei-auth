@@ -1,8 +1,14 @@
 import { boot } from "../boot";
 import { recordingEmailSender } from "../testing/magic-link-outbox";
-import { TEST_MFA_TOTP_ENCRYPTION_KEYS } from "./test-env";
+import {
+  TEST_AUTH_SERVICE_URL,
+  TEST_AUTH_TRUSTED_ORIGINS,
+  TEST_MFA_TOTP_ENCRYPTION_KEYS,
+} from "./test-env";
 import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 import { testTtlStore } from "./test-ttl-store";
 
 process.env.MFA_TOTP_ENCRYPTION_KEYS ??= TEST_MFA_TOTP_ENCRYPTION_KEYS;
+process.env.AUTH_SERVICE_URL ??= TEST_AUTH_SERVICE_URL;
+process.env.AUTH_TRUSTED_ORIGINS ??= TEST_AUTH_TRUSTED_ORIGINS;
 boot(testTtlStore, recordingEmailSender(testMagicLinkOutbox));

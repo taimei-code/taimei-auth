@@ -11,6 +11,9 @@ import { TestDb } from "../../__tests__/test-db";
 
 const { run } = dbTest("signed-in-user-test-");
 const [trustedOrigin] = getTrustedOrigins();
+if (trustedOrigin === undefined) {
+  throw new Error("AUTH_TRUSTED_ORIGINS is empty; the testing API refuses every returnTo");
+}
 const RETURN_TO = `${trustedOrigin}/after-sign-in`;
 
 const app = buildApp({ mountStatic: () => {} });
