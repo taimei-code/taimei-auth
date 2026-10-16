@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.5.1 — 2026-10-16
+
+README を、consumer の repo で `node_modules` の中から読んで組み込みと版上げができる内容に書き直した。package に `CHANGELOG.md` を含めた。コードと wire は変えていない。
+
+### Docs
+
+- README から特定の framework を前提にした例と、0.4.0 からの移行の節を消した。組み立ての例は `@connectrpc/connect-web` と `Request` だけで書く
+- README に、導入 (registry と peerDependencies)、service key が local 以外のすべての RPC で必須なこと、RPC の失敗が `reason: Result.UNSPECIFIED` になること、自分で書かずに SDK の export を使う値の一覧、`checkMemberships`・`findUserByEmail` の用途を足した
+- `package.json` の `files` に `CHANGELOG.md` を足した。版上げの時に、`node_modules/@taimei-code/auth-client/CHANGELOG.md` で移行の手順を読める
+
+### Breaking changes
+
+なし。
+
 ## 3.5.0 — 2026-10-16
 
 taimei-auth の決めごと (画面の URL、Magic Link の有効期限、RPC の path、事業所 id の形) を SDK から出す。taimei-auth が変えた時に、SDK の版上げで consumer に届く。追加だけで、wire 互換は保つ (proto は変えていない)。
