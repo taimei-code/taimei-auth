@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from "bun:test";
+import { buildAccountUrl } from "@taimei-code/auth-client";
 import { Layer } from "effect";
 import { Hono } from "hono";
 import type { UserRepo } from "../account/ports";
@@ -18,6 +19,7 @@ import { SentryLive } from "../sentry";
 import { recordSentry } from "./sentry-recorder";
 
 const ORIGIN = "http://auth.taimei-code.com";
+const ACCOUNT_URL = buildAccountUrl({ authBaseUrl: ORIGIN });
 
 const app = new Hono().route("/", loginShortcut);
 
@@ -38,7 +40,7 @@ describe("loginShortcut (未認証)", () => {
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.pathname).toBe("/auth/");
     expect(location.searchParams.get("service_name")).toBe("accounts");
-    expect(location.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account`);
+    expect(location.searchParams.get("redirect_url")).toBe(ACCOUNT_URL);
   });
 
   test("GET / → /login と同等の 302 + 必須クエリ付与", async () => {
@@ -48,7 +50,7 @@ describe("loginShortcut (未認証)", () => {
     const location = new URL(res.headers.get("location") ?? "");
     expect(location.pathname).toBe("/auth/");
     expect(location.searchParams.get("service_name")).toBe("accounts");
-    expect(location.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account`);
+    expect(location.searchParams.get("redirect_url")).toBe(ACCOUNT_URL);
   });
 
   test("error クエリは passthrough する (/login)", async () => {
@@ -75,13 +77,13 @@ describe("loginShortcut (認証済み)", () => {
   test("GET /login で session 有り → /account に 302", async () => {
     const res = await runProgram("/login", signedIn());
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/account`);
+    expect(res.headers.get("location")).toBe(ACCOUNT_URL);
   });
 
   test("GET / で session 有り → /account に 302、cache headers 付き", async () => {
     const res = await runProgram("/", signedIn());
     expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe(`${ORIGIN}/account`);
+    expect(res.headers.get("location")).toBe(ACCOUNT_URL);
     expect(res.headers.get("cache-control")).toBe("private, no-store");
     expect(res.headers.get("vary")).toBe("Cookie");
   });

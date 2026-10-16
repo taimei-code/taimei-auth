@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { buildCompanySignupUrl } from "@taimei-code/auth-client";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import { dbTest } from "../../__tests__/live-runner";
@@ -107,7 +108,7 @@ describe("authEntryRedirect", () => {
         }),
       ));
 
-    test("membership 0 件は /auth/signup/company へ 302 し service_name / redirect_url を伝播、sign_up_url は伝播しない", () =>
+    test("membership 0 件は、SDK が組む事業所作成画面の path と query へ 302 し、sign_up_url は伝播しない", () =>
       run(
         Effect.gen(function* () {
           const db = yield* TestDb;
@@ -120,11 +121,14 @@ describe("authEntryRedirect", () => {
           );
 
           expect(res.status).toBe(302);
-          const location = new URL(res.headers.get("location") ?? "", "http://localhost");
-          expect(location.pathname).toBe("/auth/signup/company");
-          expect(location.searchParams.get("service_name")).toBe("accounts");
-          expect(location.searchParams.get("redirect_url")).toBe(REDIRECT_URL);
-          expect(location.searchParams.has("sign_up_url")).toBe(false);
+          const expected = new URL(
+            buildCompanySignupUrl({
+              authBaseUrl: "http://localhost",
+              service: "accounts",
+              returnTo: REDIRECT_URL,
+            }),
+          );
+          expect(res.headers.get("location")).toBe(`${expected.pathname}${expected.search}`);
         }),
       ));
 

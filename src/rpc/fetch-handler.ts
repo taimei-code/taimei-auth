@@ -1,8 +1,7 @@
 import { createConnectRouter } from "@connectrpc/connect";
 import { createFetchHandler } from "@connectrpc/connect/protocol";
+import { AUTH_RPC_PATH } from "@taimei-code/auth-client";
 import { registerRoutes } from "./routes";
-
-const RPC_PREFIX = "/rpc";
 
 let handlers: Map<string, (req: Request) => Promise<Response>> | null = null;
 
@@ -20,8 +19,8 @@ function ensureHandlers(): Map<string, (req: Request) => Promise<Response>> {
 
 export async function handleRpc(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
-  if (!url.pathname.startsWith(`${RPC_PREFIX}/`)) return null;
-  const connectPath = url.pathname.slice(RPC_PREFIX.length);
+  if (!url.pathname.startsWith(`${AUTH_RPC_PATH}/`)) return null;
+  const connectPath = url.pathname.slice(AUTH_RPC_PATH.length);
   const handler = ensureHandlers().get(connectPath);
   if (!handler) return null;
   url.pathname = connectPath;

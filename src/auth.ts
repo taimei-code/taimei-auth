@@ -1,3 +1,4 @@
+import { MAGIC_LINK_EXPIRES_IN_SECONDS } from "@taimei-code/auth-client";
 import { betterAuth } from "better-auth";
 import { isAPIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -75,7 +76,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         sendMagicLink: async ({ email, url }) => {
           await runtime.runPromise(dispatchMagicLink(email, url));
         },
-        expiresIn: 300,
+        expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
         rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
       }),
       primaryAuth(runtime),

@@ -1,3 +1,4 @@
+import { AUTH_RPC_PATH } from "@taimei-code/auth-client";
 import { Effect } from "effect";
 import { type Context, Hono } from "hono";
 import { cors } from "hono/cors";
@@ -44,7 +45,7 @@ export function buildApp(options: AppOptions): Hono {
     }),
   );
 
-  app.use("/rpc/*", (c, next) =>
+  app.use(`${AUTH_RPC_PATH}/*`, (c, next) =>
     runMiddleware(
       c,
       next,
@@ -52,7 +53,10 @@ export function buildApp(options: AppOptions): Hono {
     ),
   );
 
-  app.all("/rpc/*", async (c) => (await handleRpc(c.req.raw)) ?? runRoute(c, new NotFound()));
+  app.all(
+    `${AUTH_RPC_PATH}/*`,
+    async (c) => (await handleRpc(c.req.raw)) ?? runRoute(c, new NotFound()),
+  );
 
   app.route("/", loginShortcut);
 
