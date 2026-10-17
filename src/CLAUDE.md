@@ -51,8 +51,6 @@
 - `membership/__tests__/no-hono-import.test.ts`: Guard 層が hono を import しないこと
 - `mfa/__tests__/containment.test.ts`: ログインの経路が import する MFA の module と、MFA の秘密の値の読み手が決まっていること
 - `mfa/__tests__/policy.test.ts`: `mfa/policy.ts` が他の module を import しないこと
-- `testing/__tests__/containment.test.ts`: 本番の worker と通常の Bun の entry から試験の module (`testing/`、`handlers/testing-routes.ts`、`testing-server.ts`) に届かず、資格情報なしに user を作る `AuthApi.createUser` の呼び手が試験の use-case だけであること
-- `testing/__tests__/testing-server.test.ts`: 試験用の entry が `APP_ENV=production` で起動を拒むこと
 
 ## gotcha
 

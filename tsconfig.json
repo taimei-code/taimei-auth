@@ -4,6 +4,7 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "strict": true,
+    "composite": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
@@ -51,6 +52,7 @@
     "db/**/*.ts",
     "management/**/*.ts",
     "e2e/**/*.ts",
+    "web/src/shared/leave-spa.ts",
     "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist", "packages"]

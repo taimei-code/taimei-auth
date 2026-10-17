@@ -13,7 +13,7 @@ services:
 
   taimei-auth:
     image: __TAIMEI_AUTH_TESTING_IMAGE__
-    command: sh -c "bun run db:migrate && bun run db:migrate-manual && bun run src/testing-server.ts"
+    command: sh -c "bun run db:migrate && bun run db:migrate-manual && bun run testing/server.ts"
     environment:
       PORT: ${TAIMEI_AUTH_PORT:-3100}
       DATABASE_URL: postgres://postgres:password@taimei-auth-postgres:5432/auth

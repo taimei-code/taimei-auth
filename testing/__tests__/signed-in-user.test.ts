@@ -2,12 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { isJustSignedUp, type SessionData } from "@taimei-code/auth-client";
 import { createTestingClient, TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
-import { buildApp } from "../../app";
-import { getTrustedOrigins } from "../../env";
-import { testingRoutes } from "../../handlers/testing-routes";
-import { dbTest } from "../../__tests__/live-runner";
-import { testMagicLinkOutbox } from "../../__tests__/test-magic-link-outbox";
-import { TestDb } from "../../__tests__/test-db";
+import { buildApp } from "../../src/app";
+import { getTrustedOrigins } from "../../src/env";
+import { testingRoutes } from "../routes";
+import { dbTest } from "../../src/__tests__/live-runner";
+import { testMagicLinkOutbox } from "./test-magic-link-outbox";
+import { TestDb } from "../../src/__tests__/test-db";
 
 const { run } = dbTest("signed-in-user-test-");
 const [trustedOrigin] = getTrustedOrigins();

@@ -1,12 +1,12 @@
 import type { SignedInUser } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
-import { switchCompany } from "../account/switch-company";
-import { AuthApi } from "../auth-service";
-import { addCompany } from "../company/create";
-import { IdGenerator } from "../id-generator";
-import { applyJoin } from "../membership/apply-change";
-import type { Role } from "../membership/policy";
-import { Transaction } from "../transaction";
+import { switchCompany } from "../src/account/switch-company";
+import { AuthApi } from "../src/auth-service";
+import { addCompany } from "../src/company/create";
+import { IdGenerator } from "../src/id-generator";
+import { applyJoin } from "../src/membership/apply-change";
+import type { Role } from "../src/membership/policy";
+import { Transaction } from "../src/transaction";
 import { MagicLinkOutbox } from "./magic-link-outbox";
 
 const TEST_COMPANY_ORG_CODE = "CORPORATE";

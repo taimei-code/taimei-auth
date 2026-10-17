@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./source-scan";
 
-const DIRS = ["src", "db", "web", "e2e", "management"];
+const DIRS = ["src", "db", "web", "e2e", "management", "testing"];
 const DIRECTIVE =
   /^(\/\/\/\s*<reference|\/\/\s*@ts-expect-error|\/[/*]\s*biome-ignore|\/\*\s*@vite-ignore)/;
 const REGEX_CAN_START =

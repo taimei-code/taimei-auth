@@ -1,65 +1,17 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import type { Session } from "../auth";
 import { switchCompany } from "../account/switch-company";
-import { createSignedInUser } from "../testing/create-signed-in-user";
-import { MagicLinkOutbox } from "../testing/magic-link-outbox";
-import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 import { addCompany, createSignupCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
 import { acceptInvitation } from "../invitation/accept";
-import { authLayer } from "../membership/__tests__/test-layers";
-import { MembershipRepo } from "../membership/ports";
 import { removeMember } from "../membership/remove";
+import { expectConsumerSeesAnActiveCompanyAndItsRole } from "./consumer-company-view";
 import { grepFiles } from "./source-scan";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
-import { getSessionProgram, verifySessionProgram } from "../rpc/auth-handler";
-import { Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 const P = "dcc-test-";
 const { run, cleanup } = dbTest(P);
-
-const signedInAs = (userId: string) =>
-  authLayer(
-    () =>
-      ({
-        user: { id: userId },
-        session: { id: `${P}s-${userId}`, expiresAt: new Date("2030-01-01") },
-      }) as unknown as Session,
-  );
-
-const companySeenByConsumer = (userId: string) =>
-  Effect.gen(function* () {
-    const verified = yield* verifySessionProgram({ sessionToken: "contract" });
-    const got = yield* getSessionProgram({ sessionToken: "contract" });
-    if (verified.outcome.case !== "ok") throw new Error(`VerifySession: ${verified.outcome.case}`);
-    if (got.outcome.case !== "ok") throw new Error(`GetSession: ${got.outcome.case}`);
-    return {
-      verifySession: {
-        companyId: verified.outcome.value.user?.defaultCompanyId,
-        role: verified.outcome.value.currentRole,
-      },
-      getSession: {
-        companyId: got.outcome.value.user?.defaultCompanyId,
-        role: got.outcome.value.currentRole,
-      },
-    };
-  }).pipe(Effect.provide(signedInAs(userId)));
-
-const expectConsumerSeesAnActiveCompanyAndItsRole = (userId: string) =>
-  Effect.gen(function* () {
-    const { verifySession, getSession: seen } = yield* companySeenByConsumer(userId);
-    expect(seen).toEqual(verifySession);
-    const memberships = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(userId));
-    const active = memberships
-      .filter((m) => m.companyActivationStatus === "ACTIVE")
-      .map((m) => m.companyId);
-    if (active.length === 0) expect(seen.companyId).toBeUndefined();
-    else expect(active).toContain(String(seen.companyId));
-    const currentMembership = memberships.find((m) => m.companyId === seen.companyId);
-    expect(seen.role).toBe(currentMembership ? ProtoRole[currentMembership.role] : undefined);
-  });
 
 const seedMemberOf = (suffix: string, companies: string[], current: string) =>
   Effect.gen(function* () {
@@ -97,9 +49,9 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
     Effect.gen(function* () {
       const u = yield* TestDb.use((db) => db.seedUser("creator"));
       yield* createSignupCompany(u.id, { name: `${P}co-signup`, orgCode: "PERSONAL" });
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(u.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, u.id);
       yield* addCompany(u.id, { name: `${P}co-added`, orgCode: "CORPORATE" });
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(u.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, u.id);
     }),
   );
 
@@ -120,7 +72,7 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const invitation = yield* db.readInvitationByToken(inv.token);
       if (!invitation) throw new Error("seed failed");
       yield* acceptInvitation({ actor: { id: invitee.id, email: invitee.email }, invitation });
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(invitee.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, invitee.id);
     }),
   );
 
@@ -137,7 +89,7 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
         companyId: co,
         targetRole: "MEMBER",
       });
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );
 
@@ -149,7 +101,7 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const { co: other } = yield* seedOwnedCompany("survive");
       const member = yield* seedMemberOf("survivor", [co, other], co);
       yield* deleteCompany(owner.id, co);
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );
 
@@ -161,19 +113,7 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const { co: to } = yield* seedOwnedCompany("to");
       const member = yield* seedMemberOf("switcher", [from, to], from);
       yield* switchCompany({ actorUserId: member.id, fromCompanyId: from, targetCompanyId: to });
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(member.id);
-    }),
-  );
-
-  scenario(
-    "src/testing/create-signed-in-user.ts",
-    "試験 API が OWNER と ADMIN の所属を持つ利用者を作る",
-    Effect.gen(function* () {
-      const created = yield* createSignedInUser({
-        companies: [{ role: "OWNER" }, { role: "ADMIN" }],
-        returnTo: "http://localhost/after-sign-in",
-      }).pipe(Effect.provideService(MagicLinkOutbox, testMagicLinkOutbox));
-      yield* expectConsumerSeesAnActiveCompanyAndItsRole(created.userId);
+      yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );
 

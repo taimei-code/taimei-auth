@@ -1,6 +1,6 @@
-import { startBunServer } from "./bun-server";
-import { testingRoutes } from "./handlers/testing-routes";
-import { makeMagicLinkOutbox, recordingEmailSender } from "./testing/magic-link-outbox";
+import { startBunServer } from "../src/bun-server";
+import { testingRoutes } from "./routes";
+import { makeMagicLinkOutbox, recordingEmailSender } from "./magic-link-outbox";
 
 if (process.env.APP_ENV === "production") {
   console.error("FATAL: testing-server refuses to start with APP_ENV=production.");

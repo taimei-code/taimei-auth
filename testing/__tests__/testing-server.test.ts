@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildApp } from "../../app";
-import { REPO_ROOT } from "../../__tests__/source-scan";
+import { buildApp } from "../../src/app";
+import { REPO_ROOT } from "../../src/__tests__/source-scan";
 
 describe("試験用の entry と本番", () => {
   test("試験用の entry は APP_ENV=production では起動を拒み、0 以外で終わる", async () => {
-    const child = Bun.spawn(["bun", "run", "src/testing-server.ts"], {
+    const child = Bun.spawn(["bun", "run", "testing/server.ts"], {
       cwd: REPO_ROOT,
       env: {
         ...process.env,

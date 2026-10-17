@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect";
-import { EmailSender } from "../email/ports";
-import { emailSenderLive } from "../email/wiring";
+import { EmailSender } from "../src/email/ports";
+import { emailSenderLive } from "../src/email/wiring";
 
 export class MagicLinkOutbox extends Context.Service<
   MagicLinkOutbox,

@@ -12,3 +12,5 @@ playwright-report/
 certs/*.pem
 # release で digest を埋めて生成する (scripts/stamp-testing-fragment.ts)
 packages/auth-client/testing/compose.yml
+
+*.tsbuildinfo
