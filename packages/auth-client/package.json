@@ -1,6 +1,6 @@
 {
   "name": "@taimei-code/auth-client",
-  "version": "3.5.1",
+  "version": "3.6.0",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -23,15 +23,20 @@
     "./cookie": {
       "types": "./dist/cookie.d.ts",
       "default": "./dist/cookie.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
     }
   },
   "files": [
     "dist",
+    "testing/compose.yml",
     "CHANGELOG.md"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json --outDir dist --declaration --declarationMap",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build && grep -q '@sha256:' testing/compose.yml"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.0.0",

@@ -41,6 +41,12 @@ export const authApiLive = AuthApi.of({
         }),
       ),
     ),
+  createUser: ({ email, name }) =>
+    tryAuthApi(async () => {
+      const ctx = await auth.$context;
+      const user = await ctx.internalAdapter.createUser({ email, name, emailVerified: false });
+      return { id: user.id, email: user.email };
+    }),
   signInMagicLink: ({ email, callbackURL }) =>
     tryAuthApi(async () => {
       await auth.api.signInMagicLink({ body: { email, callbackURL }, headers: new Headers() });

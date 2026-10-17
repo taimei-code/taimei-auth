@@ -1,1 +1,5 @@
 export const TEST_MFA_TOTP_ENCRYPTION_KEYS = "v1:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
+
+export const TEST_AUTH_SERVICE_URL = "http://localhost:3100";
+
+export const TEST_AUTH_TRUSTED_ORIGINS = "http://localhost:3000,http://localhost:3100";
