@@ -6,7 +6,15 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-export const SOURCE_ROOTS = ["src", "db", "web/src", "e2e", "management", "packages"] as const;
+export const SOURCE_ROOTS = [
+  "src",
+  "db",
+  "web/src",
+  "e2e",
+  "management",
+  "packages",
+  "testing",
+] as const;
 
 type TestFiles = "include" | "exclude" | "only";
 

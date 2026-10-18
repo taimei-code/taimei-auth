@@ -64,7 +64,7 @@
   },
   "overrides": [
     {
-      "includes": ["src/**", "db/**", "management/**"],
+      "includes": ["src/**", "db/**", "management/**", "testing/**"],
       "linter": {
         "rules": {
           "style": {
@@ -103,7 +103,13 @@
       }
     },
     {
-      "includes": ["src/**", "!src/**/__tests__/**", "!src/auth.ts"],
+      "includes": [
+        "src/**",
+        "!src/**/__tests__/**",
+        "!src/auth.ts",
+        "testing/**",
+        "!testing/__tests__/**"
+      ],
       "linter": {
         "rules": {
           "style": {
