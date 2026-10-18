@@ -27,6 +27,6 @@ API のレベルでは新規か既存かを分岐させず、SignIn と SignUp �
 
 ## Consequences
 
-- 「新規登録のつもりが既存ユーザーとして session が確立される」のは仕様である (welcome email は `isJustSignedUp` により `createdAt` が新しい時だけ送る)
+- 「新規登録のつもりが既存ユーザーとして session が確立される」のは仕様である (welcome email は `createdAt` が `NEW_USER_THRESHOLD_MS` (10 秒) より新しい時だけ送る)
 - SignUp 経路で `name` を入れても既存ユーザーの name は更新しない。`signIn.magicLink({ name })` は better-auth 側で「新規作成時のみ name を使う」挙動になっている
 - ユーザーに見せる文言は画面ごとに分ける ("ログイン" と "登録") が、内部処理は同じである。文言だけでは使い分けを説明できない要件 (例: 規約同意フロー) が出たらこの ADR を再検討する
