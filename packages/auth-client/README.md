@@ -63,6 +63,7 @@ if (!session.ok) {
 - RPC の失敗 (通信の失敗、service key の拒否、auth ホストの障害) は例外にならず、`reason: Result.UNSPECIFIED` になる。session が無い・失効した時の `reason` (`SESSION_NOT_FOUND`・`REVOKED` など) と区別して、監視に記録する。
 - `SessionData.companyId` が `undefined` の時は事業所が未選択なので、`buildCompanySignupUrl` の画面へ移す。
 - `SessionData.role` と `Member.role` が `undefined` の時は、権限なしとして扱う。
+- 新規登録の直後かは `isJustSignedUp(session.data)` で判定する。user を作ってから Magic Link の有効期限の内側なら `true` を返す。`user.createdAt` と有効期限を自分で比べない。
 - redirect は consumer が行う。SDK は redirect をしない。
 - 1 request で auth ホストに送る RPC は `/rpc/auth.v1.AuthService/GetSession` の 1 回である。auth ホストが `GetSession` を持たない (`Unimplemented`) 時だけ、`VerifySession` と `ListCurrentCompanyMembers` を順に送る。
 
@@ -83,6 +84,7 @@ taimei-auth が変えた時に SDK の版上げで届くよう、次の値を co
 | メンバー画面の URL | `buildMembersUrl({ authBaseUrl, service, returnTo })` |
 | アカウント管理画面の URL | `buildAccountUrl({ authBaseUrl })` |
 | Magic Link の有効期限 (秒) | `MAGIC_LINK_EXPIRES_IN_SECONDS` |
+| 新規登録の直後か (`user.createdAt` と Magic Link の有効期限の比較) | `isJustSignedUp(sessionData, now?)` |
 | 事業所 id の形 | `COMPANY_ID_PATTERN` |
 | role の値 | `Role` 型 (`"OWNER" \| "ADMIN" \| "MEMBER"`) |
 
