@@ -40,6 +40,12 @@ jobs:
       - name: Build web SPA
         run: bun run build:web
 
+      - name: Check production bundle has no testing API
+        run: |
+          set -euo pipefail
+          bunx wrangler versions upload --dry-run --outdir "$RUNNER_TEMP/production-bundle"
+          bash scripts/check-production-bundle.sh "$RUNNER_TEMP/production-bundle"
+
       # DATABASE_URL は Neon の直接接続文字列 (Hyperdrive 経由でなく DDL 用)
       - name: Apply migrations (drizzle/*.sql があれば)
         env:
