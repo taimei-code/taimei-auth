@@ -205,6 +205,10 @@ _Avoid_: log entry, audit record
 記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立の条件にすると、audit の保存の障害がそのまま user の操作の失敗になるので、失敗は監視に集め、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと取り消す「tx 内記帳」と対になる。ログイン、MFA の有効化と無効化、招待の受諾の拒否がこちらに当たる。
 _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
 
+**試験 API**:
+consumer app の e2e と手元の確認で、資格情報なしにログイン済みの試験の利用者を作るための API。試験用に起動した時だけ開き、本番の **auth ホスト** には存在しない。
+_Avoid_: test API, testing endpoint (英語の混在), backdoor (意図を誤って伝える)
+
 ## Relationships
 
 - **共通ログイン画面** ↔ **共通サインアップ画面**: 相互リンクで往復でき、**service_name** / **redirect_url** / **sign_up_url** は引き継がれる
