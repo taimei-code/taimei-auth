@@ -1,4 +1,7 @@
+import type { Layer } from "effect";
+import type { Hono } from "hono";
 import { serveStatic } from "hono/bun";
+import type { EmailSender } from "./email/ports";
 import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "./app";
 import { bootInMemory } from "./boot";
@@ -7,9 +10,11 @@ import { proxyTrustFromEnv } from "./request-context";
 
 const WEB_DIST = "./web/dist";
 
-export const startBunServer = () => {
+export const startBunServer = (
+  options: { emailSender?: Layer.Layer<EmailSender>; extend?: (app: Hono) => void } = {},
+) => {
   initBunSentry();
-  bootInMemory();
+  bootInMemory(options.emailSender);
 
   if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
     console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
@@ -38,6 +43,7 @@ export const startBunServer = () => {
       honoApp.get("/account/*", spaFallback);
     },
   });
+  options.extend?.(app);
 
   const port = Number(process.env.PORT) || 3100;
   console.log(`auth-service listening on port ${port}`);

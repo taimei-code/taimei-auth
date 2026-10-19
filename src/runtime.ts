@@ -2,6 +2,7 @@ import { Layer, ManagedRuntime } from "effect";
 import { UserRepoLive } from "./account/wiring";
 import { BackgroundLive } from "./background";
 import { EmailSenderLive } from "./email/wiring";
+import type { EmailSender } from "./email/ports";
 import { HealthRepoLive } from "./health/wiring";
 import { ttlStoreLayer } from "./ttl-store-service";
 import type { TtlStoreBackend } from "./ttl-store";
@@ -15,7 +16,10 @@ import { MembershipRepoLive } from "./membership/wiring";
 import { MfaLayers } from "./mfa/totp/wiring";
 import { TransactionLive } from "./transaction";
 
-export const appLayer = (ttlStore: TtlStoreBackend) =>
+export const appLayer = (
+  ttlStore: TtlStoreBackend,
+  emailSender: Layer.Layer<EmailSender> = EmailSenderLive,
+) =>
   Layer.mergeAll(
     AuthApiLive,
     UserRepoLive,
@@ -29,7 +33,7 @@ export const appLayer = (ttlStore: TtlStoreBackend) =>
     ttlStoreLayer(ttlStore),
     SentryLive,
     BackgroundLive,
-    EmailSenderLive,
+    emailSender,
     HealthRepoLive,
   );
 
@@ -39,8 +43,11 @@ export type AppRuntime = ManagedRuntime.ManagedRuntime<AppServices, never>;
 
 let runtime: AppRuntime | undefined;
 
-export function initRuntime(ttlStore: TtlStoreBackend): AppRuntime {
-  runtime ??= ManagedRuntime.make(appLayer(ttlStore));
+export function initRuntime(
+  ttlStore: TtlStoreBackend,
+  emailSender?: Layer.Layer<EmailSender>,
+): AppRuntime {
+  runtime ??= ManagedRuntime.make(appLayer(ttlStore, emailSender));
   return runtime;
 }
 
