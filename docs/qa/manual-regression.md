@@ -94,17 +94,19 @@
   3. リカバリーコード入力に切り替え、同様に貼り付けて送信する
 - **期待結果**: 6 桁入力欄で数字キーボードが開く。OS が OTP 自動入力の候補を出した場合はタップだけで 6 桁が入る。貼り付け時に全角数字や空白が混ざっても半角詰めに正規化されて通り、`invalid_code` にならない。リカバリーコード入力に切り替えると 6 桁前提の入力制限が外れ、コードをそのまま入力・貼り付けできる
 
-## QA-MR-09: consumer repo (taimei) からの cross-repo build と起動
+## QA-MR-09: consumer が受け取る試験用の image の起動と試験 API のログイン
 
-- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR
-- **前提**: consumer repo `~/github/taimei` を clone 済みであること。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。taimei の e2e は本 repo を submodule `vendor/taimei-auth` で commit に固定して build する (taimei の ADR-0003)。本 repo の変更が taimei に届くのは、Dependabot の bump PR を taimei で merge した時で、その PR の e2e が build と起動を自動で確かめる。このケースは、その前 (本 repo のマージ前) に同じ経路を確かめるためのもの。本 repo 側の CI docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、consumer 側の compose から build して起動する経路は、このケースと taimei の bump PR だけがカバーする
+- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR、`testing/server.ts`・`testing/routes.ts`・`src/bun-server.ts` を変える PR
+- **前提**: consumer は試験用の image を build せず、publish の workflow が出した image を使う (配り方は ADR-0020 の Decision 1・2)。このケースは同じ image をローカルで build し、migrate から試験 API でのログインまでを通して確かめる。本 repo の CI の docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、この経路を通して流さない。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。手順 2・3・6 は、次で試験の値を入れた同じ shell で実行する: `export QA_PG_PASSWORD="$(openssl rand -hex 16)" QA_AUTH_SECRET="$(openssl rand -hex 32)" QA_MFA_KEYS="v1:$(openssl rand -base64 32)"`
 - **手順**:
-  1. `cd ~/github/taimei/vendor/taimei-auth && git fetch origin <本 PR の branch> && git checkout FETCH_HEAD` で、submodule を検証する commit に一時的に向ける
-  2. `cd ~/github/taimei && docker compose -f docker-compose.e2e.yml build e2e-auth-service`
-  3. 依存 service ごと up し、`e2e-auth-service` の起動ログ (migration 実行を含む) を確認する
-  4. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
-  5. `cd ~/github/taimei && git submodule update` で submodule を固定された commit に戻す
-- **期待結果**: build が `Workspace dependency not found` 等で落ちず、`bunx drizzle-kit migrate` が完走して `/health` が 200 を返す
+  1. `docker build --target dev --build-arg APP_ENV=test -t taimei-auth-testing:local .`
+  2. `docker network create qa-mr-09 && docker run -d --rm --name qa-mr-09-db --network qa-mr-09 -e POSTGRES_DB=auth -e POSTGRES_PASSWORD="$QA_PG_PASSWORD" postgres:16.8-alpine3.21 && until docker exec qa-mr-09-db pg_isready -U postgres -d auth; do sleep 1; done`
+  3. `docker run --rm --name qa-mr-09-auth --network qa-mr-09 -p 3100:3100 -e APP_ENV=test -e DATABASE_URL="postgres://postgres:$QA_PG_PASSWORD@qa-mr-09-db:5432/auth" -e AUTH_SERVICE_URL=http://localhost:3100 -e AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3100 -e AUTH_SECRET="$QA_AUTH_SECRET" -e MFA_TOTP_ENCRYPTION_KEYS="$QA_MFA_KEYS" taimei-auth-testing:local sh -c "bun run db:migrate && bun run db:migrate-manual && bun run testing/server.ts"`
+  4. 別の terminal で `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
+  5. `curl -s -X POST http://localhost:3100/testing/v1/signed-in-users -H 'Content-Type: application/json' -d '{"companies":[{"role":"OWNER"}],"returnTo":"http://localhost:3100/account"}'` の `loginUrl` を host の browser で開く
+  6. 手順 3 の container を止め、`docker run --rm --network qa-mr-09 -e APP_ENV=production -e DATABASE_URL="postgres://postgres:$QA_PG_PASSWORD@qa-mr-09-db:5432/auth" -e AUTH_SERVICE_URL=http://localhost:3100 -e AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3100 -e AUTH_SECRET="$QA_AUTH_SECRET" -e MFA_TOTP_ENCRYPTION_KEYS="$QA_MFA_KEYS" taimei-auth-testing:local bun run testing/server.ts; echo "exit=$?"`
+  7. 後片付け: `docker stop qa-mr-09-db && docker network rm qa-mr-09`
+- **期待結果**: 手順 3 の migrate が完走し、手順 4 が 200、手順 5 で `/account` に移ってログインした状態になる。手順 6 は `FATAL: testing/server.ts starts only with APP_ENV=test.` を出して 0 以外で終わる
 
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
 

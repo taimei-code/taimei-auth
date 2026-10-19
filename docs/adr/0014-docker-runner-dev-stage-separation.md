@@ -11,6 +11,10 @@ Decision 1 の依存分類は「本番 runtime の契約」ではなくなり、
 として残る (理由は ADR-0019 の Decision「runner stage を撤去」と Consequences に書いた)。
 Context は当時の実測として残す。
 
+[ADR-0020](./0020-consumer-testing-environment.md) (2026-10-19) で、consumer は試験用の image を Dockerfile から build せず、publish の workflow が出した image を pull する形に変える (同 ADR の Decision 2)。
+これにより Context の「taimei 側の e2e はこの Dockerfile を build し」と、Decision 3 の理由 (consumer の build との cross-repo 契約) は前提ではなくなる。
+位置契約 (既定 target は dev) そのものは残る。publish の workflow、ローカルの compose、`scripts/docker-smoke.sh` が dev target を build するためである。
+
 ## Context
 
 PR #136 の /code-review で「`qrcode` を devDependencies へ移す」という提案が出た。しかし当時の Dockerfile は
