@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { type SignedInUser, TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { buildApp } from "../../src/app";
+import { getTrustedOrigins } from "../../src/env";
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -62,6 +64,32 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
     try {
       const response = await waitForResponse(`http://localhost:${port}/api/auth/ok`, child);
       expect(response.status).toBe(200);
+    } finally {
+      child.kill();
+      await child.exited;
+    }
+  }, 15_000);
+
+  test("APP_ENV=test なら試験 API を載せ、試験の利用者を作るとログイン URL を返す", async () => {
+    const port = unusedPort();
+    const child = Bun.spawn(testingServerCommand, {
+      cwd: tmpdir(),
+      env: testingServerEnv("test", port),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    try {
+      await waitForResponse(`http://localhost:${port}/api/auth/ok`, child);
+      const response = await fetch(`http://localhost:${port}${TESTING_PATH}/signed-in-users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companies: [], returnTo: `${getTrustedOrigins()[0]}/` }),
+      });
+      expect(response.status).toBe(200);
+      const { loginUrl } = (await response.json()) as SignedInUser;
+      expect(loginUrl).toStartWith(
+        `${process.env.AUTH_SERVICE_URL}/api/auth/magic-link/verify?token=`,
+      );
     } finally {
       child.kill();
       await child.exited;

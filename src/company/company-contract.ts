@@ -10,8 +10,10 @@ import { AlreadyExists } from "./errors";
 
 export const OrgCodeSchema = Schema.Literals(ORG_CODES);
 
+export const CompanyNameSchema = Schema.Trim.check(Schema.isBetweenLength(1, 100));
+
 const CompanyInput = Schema.Struct({
-  name: Schema.Trim.check(Schema.isBetweenLength(1, 100)),
+  name: CompanyNameSchema,
   org_code: OrgCodeSchema,
 });
 
