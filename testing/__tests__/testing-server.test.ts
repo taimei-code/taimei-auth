@@ -100,22 +100,33 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
 describe("本番の worker と同じ app", () => {
   test("APP_ENV が未設定・production・誤記・test のどれでも、試験用の route (POST /testing/v1/*) が無い", async () => {
     const previous = process.env.APP_ENV;
-    const statuses: Record<string, number> = {};
+    const statuses: Record<string, number[]> = {};
     try {
       for (const value of [undefined, "production", "prodution", "test"]) {
         if (value === undefined) delete process.env.APP_ENV;
         else process.env.APP_ENV = value;
-        const response = await buildApp({ mountStatic: () => {} }).request(
-          "/testing/v1/signed-in-users",
-          { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+        const app = buildApp({ mountStatic: () => {} });
+        const responses = await Promise.all(
+          [`${TESTING_PATH}/signed-in-users`, `${TESTING_PATH}/current-company`].map((path) =>
+            app.request(path, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: "{}",
+            }),
+          ),
         );
-        statuses[value ?? "(unset)"] = response.status;
+        statuses[value ?? "(unset)"] = responses.map((response) => response.status);
       }
     } finally {
       if (previous === undefined) delete process.env.APP_ENV;
       else process.env.APP_ENV = previous;
     }
 
-    expect(statuses).toEqual({ "(unset)": 404, production: 404, prodution: 404, test: 404 });
+    expect(statuses).toEqual({
+      "(unset)": [404, 404],
+      production: [404, 404],
+      prodution: [404, 404],
+      test: [404, 404],
+    });
   });
 });

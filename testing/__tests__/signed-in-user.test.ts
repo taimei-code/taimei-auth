@@ -7,13 +7,16 @@ import {
 } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
 import { buildApp } from "../../src/app";
+import { companySeenByConsumer } from "../../src/__tests__/consumer-company-view";
+import { Role as ProtoRole } from "../../src/gen/auth/v1/auth_pb";
 import { getTrustedOrigins } from "../../src/env";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testingRoutes } from "../routes";
 import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 
-const { run } = dbTest("signed-in-user-test-");
+const P = "signed-in-user-test-";
+const { run } = dbTest(P);
 const [trustedOrigin] = getTrustedOrigins();
 if (trustedOrigin === undefined) {
   throw new Error("AUTH_TRUSTED_ORIGINS is empty; the testing API refuses every returnTo");
@@ -43,13 +46,18 @@ const openLoginUrl = (loginUrl: string) => {
   return Effect.promise(() => Promise.resolve(app.request(`${url.pathname}${url.search}`)));
 };
 
-const postSignedInUsers = (body: string) =>
+const postToTestingApi = (path: "/signed-in-users" | "/current-company", body: string) =>
   Promise.resolve(
-    app.request(`${TESTING_PATH}/signed-in-users`, {
+    app.request(`${TESTING_PATH}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
     }),
+  );
+
+const switchAuditCount = (userId: string) =>
+  TestDb.use((db) => db.readAuditRows(userId, "company_switched")).pipe(
+    Effect.map((rows) => rows.length),
   );
 
 const sessionDataOf = (createdAt: Date): SessionData => ({
@@ -177,6 +185,100 @@ describe("試験 API で作る利用者と事業所", () => {
     ));
 });
 
+describe("試験 API で試験の利用者の現在の事業所を切り替える", () => {
+  test("SDK の setCurrentCompany で切り替えると、VerifySession と GetSession がその事業所と role を現在の事業所として見せ、切り替えを audit に残す", () =>
+    run(
+      Effect.gen(function* () {
+        const signedIn = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }, { role: "ADMIN" }],
+          returnTo: RETURN_TO,
+        });
+        const [first, second] = signedIn.companyIds;
+        if (first === undefined || second === undefined) throw new Error("no company was created");
+        const switchAuditCountBefore = yield* switchAuditCount(signedIn.userId);
+
+        const result = yield* Effect.promise(() =>
+          testing.setCurrentCompany({ userId: signedIn.userId, companyId: second }),
+        );
+
+        expect(result).toEqual({ ok: true });
+        const seen = yield* companySeenByConsumer(P, signedIn.userId);
+        expect(seen.verifySession).toEqual({ companyId: second, role: ProtoRole.ADMIN });
+        expect(seen.getSession).toEqual(seen.verifySession);
+        const switched = yield* TestDb.use((db) =>
+          db.readAuditRows(signedIn.userId, "company_switched"),
+        );
+        expect(switched).toHaveLength(switchAuditCountBefore + 1);
+        expect(switched.at(-1)?.payload).toEqual({
+          from_company_id: first,
+          to_company_id: second,
+        });
+      }),
+    ));
+
+  test("既に現在の事業所である事業所へ切り替えると ok を返し、現在の事業所も audit も変えない", () =>
+    run(
+      Effect.gen(function* () {
+        const signedIn = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }, { role: "ADMIN" }],
+          returnTo: RETURN_TO,
+        });
+        const [first] = signedIn.companyIds;
+        if (first === undefined) throw new Error("no company was created");
+        const switchAuditCountBefore = yield* switchAuditCount(signedIn.userId);
+
+        const result = yield* Effect.promise(() =>
+          testing.setCurrentCompany({ userId: signedIn.userId, companyId: first }),
+        );
+
+        expect(result).toEqual({ ok: true });
+        expect(yield* switchAuditCount(signedIn.userId)).toBe(switchAuditCountBefore);
+        expect((yield* TestDb.use((db) => db.readUser(signedIn.userId)))?.lastUsedCompanyId).toBe(
+          first,
+        );
+      }),
+    ));
+
+  test("所属しない事業所への SDK の setCurrentCompany は 400 の例外になり、現在の事業所を変えない", () =>
+    run(
+      Effect.gen(function* () {
+        const signedIn = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }],
+          returnTo: RETURN_TO,
+        });
+        const other = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }],
+          returnTo: RETURN_TO,
+        });
+
+        const [otherCompany] = other.companyIds;
+        if (otherCompany === undefined) throw new Error("no company was created");
+        const rejected = yield* Effect.tryPromise(() =>
+          testing.setCurrentCompany({
+            userId: signedIn.userId,
+            companyId: otherCompany,
+          }),
+        ).pipe(Effect.flip);
+
+        expect(rejected.cause).toEqual(
+          new Error("taimei-auth testing /current-company failed with 400"),
+        );
+        expect((yield* TestDb.use((db) => db.readUser(signedIn.userId)))?.lastUsedCompanyId).toBe(
+          signedIn.companyIds[0],
+        );
+      }),
+    ));
+
+  test.each([
+    ["利用者がいなければ 404", JSON.stringify({ userId: `${P}missing-user`, companyId: "c" }), 404],
+    ["body が JSON でなければ 400", "{", 400],
+    ["companyId が無ければ 400", JSON.stringify({ userId: "u" }), 400],
+    ["userId が文字列でなければ 400", JSON.stringify({ userId: 1, companyId: "c" }), 400],
+  ])("%s を返す", async (_, body, status) => {
+    expect((await postToTestingApi("/current-company", body)).status).toBe(status);
+  });
+});
+
 describe("試験 API が受け付けない request", () => {
   test("returnTo の origin が信頼する origin でなければ 400 を返し、利用者を作らない", () =>
     run(
@@ -184,7 +286,10 @@ describe("試験 API が受け付けない request", () => {
         const db = yield* TestDb;
         const before = (yield* db.readUserIdsByEmailPrefix("test-user-")).length;
         const response = yield* Effect.promise(() =>
-          postSignedInUsers(JSON.stringify({ companies: [], returnTo: UNTRUSTED_RETURN_TO })),
+          postToTestingApi(
+            "/signed-in-users",
+            JSON.stringify({ companies: [], returnTo: UNTRUSTED_RETURN_TO }),
+          ),
         );
         expect(response.status).toBe(400);
         expect((yield* db.readUserIdsByEmailPrefix("test-user-")).length).toBe(before);
@@ -204,7 +309,7 @@ describe("試験 API が受け付けない request", () => {
     ],
     ["利用者の名前が空白だけ", JSON.stringify({ name: "   ", companies: [], returnTo: RETURN_TO })],
   ])("%s なら 400 を返す", async (_, body) => {
-    expect((await postSignedInUsers(body)).status).toBe(400);
+    expect((await postToTestingApi("/signed-in-users", body)).status).toBe(400);
   });
 
   test("SDK の client は 2xx でない応答を、path と status を含む例外にする", async () => {

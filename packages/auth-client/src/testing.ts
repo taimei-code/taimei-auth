@@ -15,6 +15,8 @@ export type SignedInUser = {
   loginUrl: string;
 };
 
+export type SetCurrentCompanyRequest = { userId: string; companyId: string };
+
 const post = async <T>(authBaseUrl: string, path: string, body: unknown): Promise<T> => {
   const response = await fetch(new URL(`${TESTING_PATH}${path}`, authBaseUrl), {
     method: "POST",
@@ -30,4 +32,6 @@ const post = async <T>(authBaseUrl: string, path: string, body: unknown): Promis
 export const createTestingClient = (authBaseUrl: string) => ({
   createSignedInUser: (request: SignedInUserRequest) =>
     post<SignedInUser>(authBaseUrl, "/signed-in-users", request),
+  setCurrentCompany: (request: SetCurrentCompanyRequest) =>
+    post<{ ok: true }>(authBaseUrl, "/current-company", request),
 });

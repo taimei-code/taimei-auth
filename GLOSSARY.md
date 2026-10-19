@@ -210,7 +210,7 @@ _Avoid_: log entry, audit record
 _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
 
 **試験 API**:
-consumer app の e2e と手元の確認で、資格情報なしにログイン済みの試験の利用者を作るための API。試験用に起動した時だけ開き、本番の **auth ホスト** には存在しない。
+consumer app の e2e と手元の確認で、資格情報なしにログイン済みの試験の利用者を作り、その **現在の事業所** を切り替えるための API。試験用に起動した時だけ開き、本番の **auth ホスト** には存在しない。
 _Avoid_: test API, testing endpoint (英語の混在), backdoor (意図を誤って伝える)
 
 ## Relationships

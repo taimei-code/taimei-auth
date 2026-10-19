@@ -23,7 +23,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 1. **起動は SDK に同梱した compose の断片で配る**。断片は `@taimei-code/auth-client` の package に入り、consumer の compose が `include:` する。断片は試験用の image と Postgres を起動し、migrate のあとに試験用の entry `testing/server.ts` を動かす
 2. **試験用の image は private の GHCR に置き、SDK と同じ版で出して digest で固定する**。publish の workflow が image を build して push し、その digest を断片に埋めてから npm に publish する。consumer は image を build せず、公開した digest を pull する。consumer が固定する版は root の SDK の 1 か所になる
 3. **断片の変数名 (`TAIMEI_AUTH_*`) と service 名 `taimei-auth` は、consumer が依存する公開の契約とする**。内部の環境変数名 (`AUTH_SERVICE_URL` など) と `DATABASE_URL` は断片の中で対応させ、consumer には書かせない
-4. **試験の利用者は試験 API と SDK の client で作る**。consumer は `@taimei-code/auth-client/testing` の `createTestingClient(authBaseUrl).createSignedInUser(...)` を呼び、返る `loginUrl` を browser で開いてログインする。`loginUrl` は本物の Magic Link で、試験用の entry だけが Magic Link の URL を記録する `EmailSender` を使う。利用者は `AuthApi.createUser` で作り、事業所と所属は既存の use-case で作る
+4. **試験の利用者は試験 API と SDK の client で作る**。consumer は `@taimei-code/auth-client/testing` の `createTestingClient(authBaseUrl).createSignedInUser(...)` を呼び、返る `loginUrl` を browser で開いてログインする。`loginUrl` は本物の Magic Link で、試験用の entry だけが Magic Link の URL を記録する `EmailSender` を使う。利用者は `AuthApi.createUser` で作り、事業所と所属は既存の use-case で作る。試験の利用者の現在の事業所も、同じ client の `setCurrentCompany(...)` で既存の切り替えの use-case を通して切り替える
 5. **試験 API を本番に出さない守りを 3 段にする**。どの段も単独で、試験 API が本番に出ることを止める
    - 型の境界: 試験のコードを `src/` の外の `testing/` に置く。root の `tsconfig.json` は composite で `testing/` を含まないので、`src/` から `testing/` を import すると typecheck が TS6307 で落ちる。`testing/` は `testing/tsconfig.json` で typecheck する (`scripts/typecheck.sh`)
    - 本番の bundle の検査: `deploy.yml` は upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path があれば deploy を止める
@@ -33,6 +33,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 
 - **submodule に置いた断片を `include:` する**: 起動の手順は consumer から消えるが、版の固定が SDK と submodule に分かれたまま残り、taimei-auth の更新に consumer の手順が 2 つ要る
 - **本番のコードからの import を lint (biome の `noRestrictedImports`) で禁じる**: 呼び出し箇所に `biome-ignore` を 1 行書けば越えられ、その directive は repo で許されている。型の境界は `tsconfig.json` そのものを書き換えないと越えられない
+- **現在の事業所の切り替えに、本番の `/api/account/current-company` を consumer の試験から呼ぶ**: SPA のための endpoint が consumer の依存する公開の契約になり、SPA の都合で変えられなくなる。切り替えを試験 API に置けば、本番の公開面は増えない
 - **試験用の鍵や opt-in の環境変数で、本番の app の中の試験 API を開く**: 鍵は `APP_ENV=production` でも鍵があれば開く。環境変数は設定を誤ると開き、試験のコードが本番の bundle に入る。entry を分ければ、本番の artifact に試験のコードが入らない
 
 ## Consequences
