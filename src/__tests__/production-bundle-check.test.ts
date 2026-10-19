@@ -2,11 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { REPO_ROOT } from "./config-invariant-helpers";
 
 const CHECK_SCRIPT = join(REPO_ROOT, "scripts/check-production-bundle.sh");
-const TESTING_API_PATH = "/testing/v1";
-const WORKER_WITH_TESTING_API = `app.post("${TESTING_API_PATH}/signed-in-users")`;
+const WORKER_WITH_TESTING_API = `app.post("${TESTING_PATH}/signed-in-users")`;
 const WORKER_WITHOUT_TESTING_API = 'app.get("/health")';
 
 const bundleDirs: string[] = [];
@@ -32,6 +32,14 @@ const runBundleCheck = (...args: string[]) => {
 };
 
 describe("本番の bundle の検査は、試験 API の path を含む bundle で deploy を止める", () => {
+  test("検査する path は、試験 API の route と SDK が使う TESTING_PATH と同じ", () => {
+    const scriptPath = readFileSync(CHECK_SCRIPT, "utf8").match(
+      /^testing_api_path="([^"]*)"$/m,
+    )?.[1];
+
+    expect(scriptPath).toBe(TESTING_PATH);
+  });
+
   test("worker.js が試験 API の path を含むと、0 以外で終わる", () => {
     const dir = bundleDir({ "worker.js": WORKER_WITH_TESTING_API });
 
@@ -47,7 +55,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
   test("worker.js 以外の module が試験 API の path を含むと、0 以外で終わる", () => {
     const dir = bundleDir({
       "worker.js": 'import "./extra.mjs";',
-      "extra.mjs": `export const path = "${TESTING_API_PATH}";`,
+      "extra.mjs": `export const path = "${TESTING_PATH}";`,
     });
 
     expect(runBundleCheck(dir).exitCode).not.toBe(0);
@@ -62,14 +70,14 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
 
     expect(runBundleCheck(dir)).toMatchObject({
       exitCode: 0,
-      stdout: `OK: production bundle has no ${TESTING_API_PATH}\n`,
+      stdout: `OK: production bundle has no ${TESTING_PATH}\n`,
     });
   });
 
   test("実行されない source map だけが試験 API の path を含む bundle は、0 で終わる", () => {
     const dir = bundleDir({
       "worker.js": WORKER_WITHOUT_TESTING_API,
-      "worker.js.map": `{"sourcesContent":["${TESTING_API_PATH}"]}`,
+      "worker.js.map": `{"sourcesContent":["${TESTING_PATH}"]}`,
     });
 
     expect(runBundleCheck(dir).exitCode).toBe(0);
