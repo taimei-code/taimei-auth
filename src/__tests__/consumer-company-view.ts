@@ -15,7 +15,7 @@ const signedInAs = (prefix: string, userId: string) =>
       }) as unknown as Session,
   );
 
-const companySeenByConsumer = (prefix: string, userId: string) =>
+export const companySeenByConsumer = (prefix: string, userId: string) =>
   Effect.gen(function* () {
     const verified = yield* verifySessionProgram({ sessionToken: "contract" });
     const got = yield* getSessionProgram({ sessionToken: "contract" });

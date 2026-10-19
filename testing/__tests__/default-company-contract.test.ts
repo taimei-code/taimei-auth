@@ -11,14 +11,14 @@ const P = "tdcc-test-";
 const { run } = dbTest(P);
 
 describe("試験 API が作る利用者も、VerifySession と GetSession で ACTIVE な所属のどれかを現在の事業所として見せる", () => {
-  test("試験の module で現在の事業所を書き換えるのは、試験の利用者を作る use-case だけ", () => {
+  test("試験の module で現在の事業所を書き換えるのは、試験の利用者を作る use-case と現在の事業所を切り替える use-case だけ", () => {
     expect(
       grepFiles(
         "\\b(applyJoin|applyRemoval|applyCompanyRemoval|switchCompany)\\(|\\.updateUserLastUsedCompany\\(",
         "testing",
         { tests: "exclude" },
       ),
-    ).toEqual(["testing/create-signed-in-user.ts"]);
+    ).toEqual(["testing/create-signed-in-user.ts", "testing/set-current-company.ts"]);
   });
 
   test("試験 API が OWNER と ADMIN の所属を持つ利用者を作る", () =>
