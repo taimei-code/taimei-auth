@@ -14,6 +14,8 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 - テストの seed、観測、cleanup: 実体は `db/testing/*` (Promise) に閉じる。src のテストは `TestDb` service (`src/__tests__/test-db.ts`) を経由し、`e2e/fixtures.ts` は直接使う (理由: ADR-0017 の依存注入の項)。
 - `e2e/fixtures.ts`: spec からは `e2e/seed.ts` の子プロセス経由でだけ呼ぶ。
 
+試験が `DATABASE_URL` の向き先を判定するのは `db/testing/local-database.ts` の `databaseTarget` だけである (`db/__tests__/containment.test.ts` が固定)。
+
 ## 認証ドメインのモデルは repository 経由で触る
 
 `User` / `Session` / `Account` / `Verification` への query は `db/repositories/<entity>.ts` の関数に局所化し、handler から `db.select()` や `db.insert()` を呼ばない。

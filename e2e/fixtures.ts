@@ -4,6 +4,7 @@ import {
   deleteInvitationByToken,
   deleteUsersByIds,
 } from "@/db/testing/cleanup";
+import { databaseTarget, LOCAL_DATABASE_HOSTNAMES } from "@/db/testing/local-database";
 import {
   readCompanyIdsByName,
   readUser,
@@ -15,14 +16,12 @@ import type { ConsumableFixture } from "./fixture-names";
 
 type Role = SeedInvitationOptions["role"];
 
-const LOCAL_DB_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]", "auth-postgres"]);
-
 function assertLocalDatabase(): void {
-  const url = process.env.DATABASE_URL;
-  const hostname = url && URL.canParse(url) ? new URL(url).hostname : null;
-  if (hostname === null || !LOCAL_DB_HOSTNAMES.has(hostname)) {
+  const target = databaseTarget(process.env.DATABASE_URL);
+  if (target._tag !== "Local") {
+    const hostname = target._tag === "Remote" ? target.hostname : null;
     console.error(
-      `[e2e-seed] abort: DATABASE_URL の host "${hostname ?? "(unset or unparsable)"}" はローカル DB (${[...LOCAL_DB_HOSTNAMES].join(" / ")}) ではない。e2e seed は e2e- prefix の user / company を削除するため実行しない`,
+      `[e2e-seed] abort: DATABASE_URL の host "${hostname ?? "(unset or unparsable)"}" はローカル DB (${[...LOCAL_DATABASE_HOSTNAMES].join(" / ")}) ではない。e2e seed は e2e- prefix の user / company を削除するため実行しない`,
     );
     process.exit(1);
   }

@@ -1,7 +1,8 @@
 import { expect } from "bun:test";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Predicate } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { withWaitUntil } from "../background";
+import { HealthRepo } from "../health/ports";
 import { type AppServices, appLayer } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer } from "./test-db";
@@ -11,10 +12,35 @@ type TestServices = AppServices | TestDb;
 
 const testAppLayer = appLayer(testTtlStore);
 
+let reachabilityCheck: Promise<void> | undefined;
+
+const requireReachableDatabase = (): Promise<void> =>
+  (reachabilityCheck ??= Effect.runPromise(
+    HealthRepo.use((repo) => repo.pingDatabase()).pipe(
+      Effect.catchTag("DbError", ({ cause }) =>
+        Effect.die(
+          new Error(
+            `DB に接続できない (${unreachableReason(cause)})。.env の DATABASE_URL を確かめ、docker compose up auth-postgres -d && bun run db:migrate && bun run db:migrate-manual を実行する`,
+          ),
+        ),
+      ),
+      Effect.provide(testAppLayer),
+    ),
+  ));
+
+export const unreachableReason = (error: unknown): string =>
+  Predicate.hasProperty(error, "code") && Predicate.isString(error.code)
+    ? error.code
+    : Predicate.hasProperty(error, "cause")
+      ? unreachableReason(error.cause)
+      : String(error);
+
 const runTest =
   (prefix: string) =>
   <A, E>(program: Effect.Effect<A, E, TestServices>): Promise<A> =>
-    Effect.runPromise(Effect.provide(program, Layer.merge(testDbLayer(prefix), testAppLayer)));
+    requireReachableDatabase().then(() =>
+      Effect.runPromise(Effect.provide(program, Layer.merge(testDbLayer(prefix), testAppLayer))),
+    );
 
 export const dbTest = (prefix: string) => {
   const run = runTest(prefix);
