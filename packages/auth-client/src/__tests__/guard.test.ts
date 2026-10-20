@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
-import { createAuthGuard } from "../src/guard";
-import { Result, Role as ProtoRole } from "../src/gen/auth/v1/auth_pb";
+import { createAuthGuard } from "../guard";
+import { Result, Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 type SessionTokenArgs = { sessionToken: string };
 

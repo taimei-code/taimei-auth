@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { createFetchClient } from "@connectrpc/connect/protocol";
 import { createTransport } from "@connectrpc/connect/protocol-connect";
-import { createAuthGuard } from "../src/guard";
-import { createAuthClient } from "../src/server";
+import { createAuthGuard } from "../guard";
+import { createAuthClient } from "../server";
 
 const verifySessionOk = {
   ok: {

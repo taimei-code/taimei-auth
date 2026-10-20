@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { CookieReader } from "../src/cookie";
+import type { CookieReader } from "../cookie";
 import {
   buildSessionCookieHeader,
   extractSessionTokenFromCookieHeader,
   getSessionToken,
   hasAuthCookie,
-} from "../src/cookie";
+} from "../cookie";
 
 const makeReader = (entries: Record<string, string>): CookieReader => {
   return (name) => entries[name];
@@ -119,7 +119,7 @@ describe("session cookie 契約の SDK 側", () => {
   });
 
   test("SESSION_COOKIE_NAMES は export されない (ADR-0006)", async () => {
-    const keys = Object.keys(await import("../src/index"));
+    const keys = Object.keys(await import("../index"));
     expect(keys).toContain("getSessionToken");
     expect(keys).not.toContain("SESSION_COOKIE_NAMES");
   });

@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { createAuthGuard } from "../src/guard";
-import { Result, Role as ProtoRole } from "../src/gen/auth/v1/auth_pb";
+import { createAuthGuard } from "../guard";
+import { Result, Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 type GuardOptions = Parameters<typeof createAuthGuard>[0];
 type Rpc = (request: { sessionToken: string }) => Promise<unknown>;
@@ -15,7 +15,9 @@ const user = (companyId: string | undefined) => ({
 });
 const session = { id: "s1", expiresAt: "2030-01-01T00:00:00Z", sessionKind: "user" };
 
-const ok = (value: unknown) => async () => ({ outcome: { case: "ok" as const, value } });
+const ok = (value: unknown) => async (_request?: unknown) => ({
+  outcome: { case: "ok" as const, value },
+});
 const failWith = (reason: Result) => async () => ({
   outcome: { case: "error" as const, value: { reason } },
 });

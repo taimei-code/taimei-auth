@@ -22,6 +22,12 @@
 - source を走査する検査は `src/__tests__/source-scan.ts` で書き、守る規則を書いた CLAUDE.md (規則が無ければ `src/CLAUDE.md` の「静的な検査」節) か ADR に path で名指す (`src/__tests__/static-check-index.test.ts` が固定)。
 - CLAUDE.md の規則を引く時は、file の path と節の見出しで書き (例: db/CLAUDE.md「例外 path (正本)」)、規則の番号で書かない (`src/__tests__/static-check-index.test.ts` が見出しの実在を固定)。
 
+## 検証
+
+- 変更を終える前に `bun run check` を走らせる。CI の check job もこの script を呼び、ほかに `bun audit`、shellcheck、`buf breaking` を別の step で走らせる。root の typecheck、`bun test`、web は SDK の `dist/` を読む。そのため、SDK の src を変えた後に `bun run typecheck` や `bun test` を単独で走らせる時は、先に `bun run --cwd packages/auth-client build` を走らせる。DB を使う試験があるので、先に `docker compose up auth-postgres -d && bun run db:migrate && bun run db:migrate-manual` で local の Postgres を用意する。
+- 画面か e2e の対象を触ったら `bun run test:e2e` を走らせる (`e2e/CLAUDE.md`)。
+- shell script を触ったら `shellcheck scripts/*.sh e2e/*.sh` を走らせる。
+
 ## Effect
 
 Effect の書き方は `node_modules/effect/AGENTS.md` に従い、各 scope の `CLAUDE.md` には書き方の規則を置かない。コードを書く前に AGENTS.md を最後まで読み、書く API に関わるリンク先を辿る (v4 の API は学習データの v3 と違う)。そこに無い API は `node_modules/effect/src` を検索する。
