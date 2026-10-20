@@ -8,7 +8,7 @@
 
 - `app`: route、layout、provider、guard の結線。他 domain の `pages` を import できる唯一の場所。
 - `auth`: ログイン、サインアップ、認証 client、認証後の redirect。
-- `account`: プロフィール、削除、セキュリティ、セッション、連携アカウント、現在 active な事業所の read model。
+- `account`: プロフィール、削除、セキュリティ、セッション、連携アカウント、現在の事業所の read model。
 - `company` / `membership` / `invitation` / `mfa`: 各業務の操作。
 - `shared`: domain を知らない UI primitive、通知、汎用 hook、HTTP 基盤。複数の domain から使われることだけを理由に `shared` へ移さない。`shared/ui/` は domain の型と domain の判断を import しない。
 
@@ -16,7 +16,7 @@
 
 - route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
 - `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
-- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。better-auth の client の一覧 (session・連携アカウント) も `account/account-atom.ts` の atom で読み、client が返す `error` を失敗にする。他の場所から `fetch`・`SpaApiClient`・better-auth の一覧の読み出しを使うと `src/__tests__/web-data-access.test.ts` が落とす。画面は読み出しの結果を `shared/AsyncSection.tsx` にそのまま渡す。
+- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。見本は `membership/membership-atom.ts` と、それを読む `membership/MemberList.tsx` (画面は `membership/pages/Members.tsx`)。better-auth の client の一覧 (session・連携アカウント) も `account/account-atom.ts` の atom で読み、client が返す `error` を失敗にする。他の場所から `fetch`・`SpaApiClient`・better-auth の一覧の読み出しを使うと `src/__tests__/web-data-access.test.ts` が落とす。読み取りだけの画面は、読み出しの結果を `shared/AsyncSection.tsx` にそのまま渡す。取り直しの間も古い行を残す一覧は、`membership/MemberList.tsx` のように読み込み中の行と `failedBeforeAnyValue` の文言を自分で書く。
 - 更新は `*-atom.ts` が hook (例: `useChangeRole`) として渡し、mutation の atom は export しない (route の loader が `runMutation` で使う atom だけを export する)。一覧や事業所状態を変える更新は、hook が `reactivityKeys` を足し、画面は取り直しの完了を `shared/atom-runtime.ts` の `useWaitForValue` で待つ。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。取り直しを利用者の操作まで遅らせる時だけ `useRefreshAndWait` を使う (MFA の有効化の後、リカバリーコードを閉じるまで)。
 - 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` を `Unauthorized` を除いてすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。`Unauthorized` は `shared/spa-api-client.ts` だけが扱い、今の URL を戻り先にして共通ログイン画面 (`/auth/`) へ移すので、表に書かない。特定の `_tag` かどうかで分岐する時は、同じ file の `hasFailureTag` を使う。MFA の画面は同じ失敗に同じ文言を出すので、`mfa/mfa-atom.ts` の 1 つの表を共有する。
 

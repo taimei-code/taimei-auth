@@ -1,7 +1,7 @@
 # taimei-auth
 
 将来 identity DB を別 process へ分離できるよう、consumer、server、DB、SDK の境界を保つ。
-各 scope の本文は `CLAUDE.md` に書き、同じ階層に相対 symlink `AGENTS.md -> CLAUDE.md` を同じ変更で置く。
+各 scope の本文は `CLAUDE.md` に書き、同じ階層に相対 symlink `AGENTS.md -> CLAUDE.md` を同じ変更で置く (`src/__tests__/static-check-index.test.ts` が固定)。
 
 ## 共通境界
 

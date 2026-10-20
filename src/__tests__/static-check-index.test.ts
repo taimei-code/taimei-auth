@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { REPO_ROOT, repoFiles, SOURCE_ROOTS, sourceFiles, valueImportsOf } from "./source-scan";
 
@@ -86,6 +86,17 @@ describe("規則から静的な検査へ 1 hop で着く", () => {
 
   test("CLAUDE.md の見出しへの参照は、その file に実在する見出しを指す", () => {
     expect(missingHeadings(repoTexts())).toEqual([]);
+  });
+
+  test("CLAUDE.md と同じ dir に、CLAUDE.md を指す相対 symlink の AGENTS.md がある", () => {
+    const withoutAgents = repoFiles(":(glob)**/CLAUDE.md").filter((path) => {
+      const agents = join(REPO_ROOT, dirname(path), "AGENTS.md");
+      return !(
+        lstatSync(agents, { throwIfNoEntry: false })?.isSymbolicLink() &&
+        readlinkSync(agents) === "CLAUDE.md"
+      );
+    });
+    expect(withoutAgents).toEqual([]);
   });
 
   test("CLAUDE.md が path で名指す test file は存在する", () => {
