@@ -47,6 +47,7 @@ export async function runMiddleware(
   c: Context,
   next: Next,
   program: RouteEffect<MiddlewareDecision>,
+  // biome-ignore lint/suspicious/noConfusingVoidType: Hono の middleware の戻り値は next() の Promise<void> を含む
 ): Promise<Response | void> {
   const exit = await runToExit(c, program);
   if (!Exit.isSuccess(exit)) return causeToResponse(c, exit.cause, "runMiddleware");
