@@ -20,6 +20,7 @@
 - test 名は振る舞いの文で書き、設計書や issue の番号 (AC-001、QA-H-02、#52 など) を書かない。repo の外にしか定義が無く、番号から意味を引けないためである。書いてよい番号は repo の中に定義がある `QA-MR-*` (`docs/qa/manual-regression.md`) と `ADR-NNNN` だけである (`src/__tests__/test-names.test.ts` が固定)。
 - 判定を 1 本の述語に集めた時は、所有 domain の `__tests__` にある `containment.test.ts` の静的 tripwire で、直接比較の再発を止める。構造や型で書けなくした時は、tripwire を置かない。
 - source を走査する検査は `src/__tests__/source-scan.ts` で書き、守る規則を書いた CLAUDE.md (規則が無ければ `src/CLAUDE.md` の「静的な検査」節) か ADR に path で名指す (`src/__tests__/static-check-index.test.ts` が固定)。
+- CLAUDE.md の規則を引く時は、file の path と節の見出しで書き (例: db/CLAUDE.md「例外 path (正本)」)、規則の番号で書かない (`src/__tests__/static-check-index.test.ts` が見出しの実在を固定)。
 
 ## Effect
 

@@ -36,7 +36,7 @@
 ## QA-MR-03: workerd 固有挙動 (Worker hung 非再発、#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
-- **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。ルート CLAUDE.md の gotcha を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
+- **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。src/CLAUDE.md「gotcha」を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する

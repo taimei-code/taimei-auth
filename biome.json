@@ -117,9 +117,9 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
-                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
                 },
                 "patterns": [
                   {
@@ -161,9 +161,9 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
-                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
                   "effect/http-api": {
                     "importNames": ["HttpApiBuilder", "HttpApiTest"],
                     "message": "契約の module は web と共有するため、server の実装 (HttpApiBuilder) を import しない。実装は src/handlers/*-http-api.ts に置く"
@@ -209,9 +209,9 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md 末尾の例外規定)",
-                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md ルール 1)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                  "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
+                  "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
                 },
                 "patterns": [
                   {
@@ -255,7 +255,7 @@
                 "patterns": [
                   {
                     "group": ["@/db/**", "**/db/**", "drizzle-orm", "drizzle-orm/**", "pg"],
-                    "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md ルール 1 の例外)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
+                    "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md「例外 path (正本)」)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
                   }
                 ]
               }
@@ -313,15 +313,15 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "next": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "next/headers": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "next/navigation": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "next/server": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "next/cache": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "react": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "react-dom": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)",
-                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md ルール 7 / PR #41)"
+                  "next": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "next/headers": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "next/navigation": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "next/server": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "next/cache": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "react": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "react-dom": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
                 }
               }
             }
