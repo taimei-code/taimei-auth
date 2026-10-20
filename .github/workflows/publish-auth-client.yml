@@ -53,6 +53,34 @@ jobs:
         working-directory: packages/auth-client
         run: bun run build
 
+      - name: Build the testing image with the SDK version
+        if: steps.ver.outputs.published == 'false'
+        env:
+          IMAGE: ghcr.io/taimei-code/taimei-auth-testing:auth-client-v${{ steps.ver.outputs.version }}
+        run: |
+          docker build --target dev --build-arg APP_ENV=test \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            -t "$IMAGE" .
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Assert no proxy CA in /opt/certs or /app/certs of the testing image
+        if: steps.ver.outputs.published == 'false'
+        run: docker run --rm --entrypoint sh "$IMAGE" -c 'test -z "$(find /opt/certs /app/certs -type f ! -name .gitkeep)"'
+
+      - name: Push the testing image and read its digest
+        if: steps.ver.outputs.published == 'false'
+        id: image
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          docker push "$IMAGE"
+          echo "image_with_digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate the testing compose fragment after the image build
+        if: steps.ver.outputs.published == 'false'
+        run: bash scripts/generate-testing-fragment.sh "${{ steps.image.outputs.image_with_digest }}" > packages/auth-client/testing/compose.yml
+
       # bun publish でなく npm publish (認証が setup-node の生成する .npmrc と NODE_AUTH_TOKEN に依存する)
       - name: Publish to GitHub Packages
         if: steps.ver.outputs.published == 'false'
