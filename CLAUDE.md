@@ -1,7 +1,7 @@
 # taimei-auth
 
 将来 identity DB を別 process へ分離できるよう、consumer、server、DB、SDK の境界を保つ。
-各 scope の本文は `CLAUDE.md` に書き、同じ階層に相対 symlink `AGENTS.md -> CLAUDE.md` を同じ変更で置く。
+各 scope の本文は `CLAUDE.md` に書き、同じ階層に相対 symlink `AGENTS.md -> CLAUDE.md` を同じ変更で置く (`src/__tests__/static-check-index.test.ts` が固定)。
 
 ## 共通境界
 
@@ -20,6 +20,13 @@
 - test 名は振る舞いの文で書き、設計書や issue の番号 (AC-001、QA-H-02、#52 など) を書かない。repo の外にしか定義が無く、番号から意味を引けないためである。書いてよい番号は repo の中に定義がある `QA-MR-*` (`docs/qa/manual-regression.md`) と `ADR-NNNN` だけである (`src/__tests__/test-names.test.ts` が固定)。
 - 判定を 1 本の述語に集めた時は、所有 domain の `__tests__` にある `containment.test.ts` の静的 tripwire で、直接比較の再発を止める。構造や型で書けなくした時は、tripwire を置かない。
 - source を走査する検査は `src/__tests__/source-scan.ts` で書き、守る規則を書いた CLAUDE.md (規則が無ければ `src/CLAUDE.md` の「静的な検査」節) か ADR に path で名指す (`src/__tests__/static-check-index.test.ts` が固定)。
+- CLAUDE.md の規則を引く時は、file の path と節の見出しで書き (例: db/CLAUDE.md「例外 path (正本)」)、規則の番号で書かない (`src/__tests__/static-check-index.test.ts` が見出しの実在を固定)。
+
+## 検証
+
+- 変更を終える前に `bun run check` を走らせる。CI の check job もこの script を呼び、ほかに `bun audit`、shellcheck、`buf breaking` を別の step で走らせる。root の typecheck、`bun test`、web は SDK の `dist/` を読む。そのため、SDK の src を変えた後に `bun run typecheck` や `bun test` を単独で走らせる時は、先に `bun run --cwd packages/auth-client build` を走らせる。DB を使う試験があるので、先に `docker compose up auth-postgres -d && bun run db:migrate && bun run db:migrate-manual` で local の Postgres を用意する。
+- 画面か e2e の対象を触ったら `bun run test:e2e` を走らせる (`e2e/CLAUDE.md`)。
+- shell script を触ったら `shellcheck scripts/*.sh e2e/*.sh` を走らせる。
 
 ## Effect
 

@@ -71,7 +71,7 @@ status は **unverified / grounded / killed** の 3 値だけを使う。grounde
   - ground-truth: `user` 行が 1 件生成された (email と `revision:0` の default が成立)。つまり drizzleAdapter(pg) の書き込みが Hyperdrive 越しに成立した
   - cookie 属性: `Domain=.taimei-code.local` + `HttpOnly` + `SameSite=Lax`。crossSubDomain cookie が workerd で正しく発行された
 - 学び (移植 TODO の実データ):
-  - **session は DB の session テーブルに入らない**。secondaryStorage 構成では session は secondary storage (本番は Upstash) に格納され、DB の `session` は空になる。これは現行設計どおりである (db/CLAUDE.md ルール 2 の例外である cookieCache と整合する)。DB の session を直接読むコードがあれば移植時に注意が要る (無い想定だが grep する)。
+  - **session は DB の session テーブルに入らない**。secondaryStorage 構成では session は secondary storage (本番は Upstash) に格納され、DB の `session` は空になる。これは現行設計どおりである (db/CLAUDE.md「認証ドメインのモデルは repository 経由で触る」の例外である cookieCache と整合する)。DB の session を直接読むコードがあれば移植時に注意が要る (無い想定だが grep する)。
   - server API `auth.api.*` を server-side で呼ぶ時は `headers` が必須である (spike では明示的な注入が要った)。本番は `auth.handler(req.raw)` 経由で実際の headers が渡るので問題にならない。
 - 残: **C2** (react-email の render / resend / sentry の workerd 互換) は未検証である。これは better-auth core とは独立した、周辺依存の移植項目である。
 

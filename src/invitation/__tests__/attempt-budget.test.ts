@@ -5,7 +5,7 @@ import { failingTtlStoreLayer } from "../../__tests__/test-layers";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import type { TtlStore } from "../../ttl-store-service";
 import { SentryLive, type SentryService } from "../../sentry";
-import { RateLimited } from "../../membership/guard/errors";
+import { RateLimited } from "../../failures";
 import { spendInvitationAttempt } from "../attempt-budget";
 import { testKvStore, testTtlStoreLayer } from "../../__tests__/test-ttl-store";
 

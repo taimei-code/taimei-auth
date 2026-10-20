@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect, Exit, Ref } from "effect";
-import { Forbidden } from "../../membership/guard/errors";
+import { Forbidden } from "../../failures";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";

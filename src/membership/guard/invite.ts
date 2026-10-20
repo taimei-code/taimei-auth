@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { Role } from "@/db/repositories/membership";
 import { canInviteRole } from "../policy";
 import { type Actor, requireMembershipOf } from "./core";
-import { Forbidden } from "./errors";
+import { Forbidden } from "../../failures";
 
 export const requireInvite = Effect.fnUntraced(function* <
   Body extends { email: string; role: Role },

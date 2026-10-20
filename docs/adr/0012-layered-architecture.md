@@ -53,7 +53,7 @@ use-case (Use-case 層) に集約する規律である (PR #103–#108 とこの
 Transport の禁止事項: policy 述語の直接呼び出し / repository への直接 write / `runInTransaction` の所有。
 Rails との対応: Controller が Transport、before_action と Pundit が Guard、Service Object が Use-case、
 AR クエリが Repository にあたる。fat model を採らない理由は、identity DB レイヤの将来のプロセス分離
-(CLAUDE.md の最上位制約) のために repository を薄く保つルール (db/CLAUDE.md ルール 2) が既にあり、
+(CLAUDE.md の最上位制約) のために repository を薄く保つルール (db/CLAUDE.md「認証ドメインのモデルは repository 経由で触る」) が既にあり、
 drizzle の行はデータだけでメソッドを持てないためである。
 
 ### Guard 層の構成 (directory module)

@@ -3,7 +3,7 @@ import { Exit } from "effect";
 import { AtomRegistry } from "effect/reactivity";
 
 import type { CompanyState } from "@core/account/account-contract";
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 
 import { companySignupEntryOf, readCompanySignupEntry } from "../company-signup-entry";
 

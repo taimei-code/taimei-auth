@@ -41,7 +41,7 @@ const spendAllowing = (subject: string) => spendAttemptBudgetFailOpen(budgetOf("
 
 const resultOf = (
   program: Effect.Effect<
-    { attemptsLeft: number } | void,
+    unknown,
     AttemptBudgetExhausted | AttemptBudgetUnavailable,
     TtlStore | SentryService
   >,

@@ -6,7 +6,7 @@ import { UserRepoLive } from "../../account/wiring";
 import { dbTest, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { LastOwner } from "../errors";
-import { Forbidden } from "../guard/errors";
+import { Forbidden } from "../../failures";
 import { MembershipRepo } from "../ports";
 import { removeMember } from "../remove";
 import { MembershipRepoLive } from "../wiring";

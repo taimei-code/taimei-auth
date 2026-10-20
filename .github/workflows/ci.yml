@@ -51,25 +51,8 @@ jobs:
       - name: Audit dependencies
         run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-68fv-2mgg-jv7q
 
-      # typecheck が SDK の dist/*.d.ts を解決するため先に build する
-      - name: Build auth-client SDK
-        working-directory: packages/auth-client
-        run: bun run build
-
-      - name: Lint (Biome + fallow audit)
-        run: bun run lint
-
       - name: Lint (shellcheck)
         run: shellcheck scripts/*.sh e2e/*.sh
-
-      - name: Assert generated proto copies are identical
-        run: bun run generate:check
-
-      - name: Assert worker-configuration.d.ts is up to date
-        run: bun run types:check
-
-      - name: Typecheck
-        run: bun run typecheck
 
       # shallow clone に main の ref が無いため remote URL 経由で参照する。意図的に breaking にする時は SDK の major を上げ、一時的に --against を外す
       - name: Buf breaking check
@@ -78,8 +61,8 @@ jobs:
       - name: Apply migrations
         run: bun run db:migrate && bun run db:migrate-manual
 
-      - name: Test
-        run: bun test
+      - name: Check (SDK build, lint, generated files, typecheck, test)
+        run: bun run check
 
   e2e:
     runs-on: ubuntu-latest

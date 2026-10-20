@@ -26,24 +26,6 @@ export class InvalidArgument extends Schema.TaggedError<InvalidArgument>()(
   { httpApiStatus: 400 },
 ) {}
 
-export class EmailMismatch extends Schema.TaggedError<EmailMismatch>()(
-  "EmailMismatch",
-  {},
-  { httpApiStatus: 403 },
-) {}
-
-export class AlreadyOwner extends Schema.TaggedError<AlreadyOwner>()(
-  "AlreadyOwner",
-  {},
-  { httpApiStatus: 400 },
-) {}
-
-export class ExpiredOrUsed extends Schema.TaggedError<ExpiredOrUsed>()(
-  "ExpiredOrUsed",
-  {},
-  { httpApiStatus: 410 },
-) {}
-
 export class RateLimited extends Schema.TaggedError<RateLimited>()(
   "RateLimited",
   {},

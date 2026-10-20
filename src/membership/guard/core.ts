@@ -5,7 +5,7 @@ import { checkSession } from "../../session-check";
 import { isAtLeast } from "../policy";
 import type { Actor } from "../../account/actor-contract";
 import { MembershipRepo } from "../ports";
-import { Forbidden, NotFound, Unauthorized } from "./errors";
+import { Forbidden, NotFound, Unauthorized } from "../../failures";
 
 export type { Actor } from "../../account/actor-contract";
 

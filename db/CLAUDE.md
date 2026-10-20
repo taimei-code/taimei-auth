@@ -3,7 +3,7 @@
 ## DB アクセスは `db/` に閉じる
 
 drizzle の client、schema、query は `db/` に置き、`src/` `web/` `packages/` から `drizzle-orm` や `pg` を直接 import しない。将来 `db/` を別 process に切り出して RPC 越しに呼ぶためである。
-`src/**` からの import は `biome.json` の `noRestrictedImports` が止める。`web/` と `packages/` は lint が止めないので review で守る。
+`biome.json` の `noRestrictedImports` が、`src/**` からの `drizzle-orm`・`@/db/schema`・`@/db/client` と、`web/**`・`packages/auth-client/**` からの `drizzle-orm`・`pg` の import を止める。
 
 ### 例外 path (正本)
 
@@ -13,6 +13,8 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 - `src/worker.ts`: per-request の pool を供給する `@/db/client` の import だけを許す (`biome-ignore` で個別に許可)。
 - テストの seed、観測、cleanup: 実体は `db/testing/*` (Promise) に閉じる。src のテストは `TestDb` service (`src/__tests__/test-db.ts`) を経由し、`e2e/fixtures.ts` は直接使う (理由: ADR-0017 の依存注入の項)。
 - `e2e/fixtures.ts`: spec からは `e2e/seed.ts` の子プロセス経由でだけ呼ぶ。
+
+試験が `DATABASE_URL` の向き先を判定するのは `db/testing/local-database.ts` の `databaseTarget` だけである (`db/__tests__/containment.test.ts` が固定)。
 
 ## 認証ドメインのモデルは repository 経由で触る
 

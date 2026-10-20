@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { Forbidden } from "../../membership/guard/errors";
+import { Forbidden } from "../../failures";
 import {
   dbTest,
   recordingTransaction,

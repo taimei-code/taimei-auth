@@ -64,7 +64,7 @@ describe("CompanyService.CheckMemberships は service key で呼び、入力の�
     ));
 
   test.each([
-    ["company_id", (co: string, value: string) => ({ companyId: value, userIds: [] }), "c"],
+    ["company_id", (_co: string, value: string) => ({ companyId: value, userIds: [] }), "c"],
     [
       "user_ids の各要素",
       (co: string, value: string) => ({ companyId: co, userIds: [value] }),

@@ -7,8 +7,9 @@
 変更理由を所有する業務ドメインを決め、次に層を決め、両方に合う既存の場所へ置く。所有 domain、層、依存方向、テストの配置を説明できた時点で配置を完了とする。
 
 - **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。SPA が呼ぶ API は契約 (`src/<domain>/*-contract.ts`) を `src/handlers/*-http-api.ts` で実装し、`mountSpaApi` で載せる。それ以外の Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`httpApiStatus` を持つ失敗の class から HTTP / Connect へ) に変換するのは adapter だけである。policy 述語、repository への直接 write、transaction は持たない。
-- **Guard** (`membership/guard/`、`membership/policy.ts`): Hono に依存しない、操作単位の認可。失敗は `membership/guard/errors.ts` の failure class で返す。
-- **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。失敗は各 domain の `errors.ts` の failure class で表し、status は class の `httpApiStatus` にだけ書く。
+- **Guard** (`membership/guard/`、`membership/policy.ts`): Hono に依存しない、操作単位の認可。
+- **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。
+- Guard と Use-case の失敗は failure class で表し、status は class の `httpApiStatus` にだけ書く。どの domain にも属さない失敗 (`Unauthorized`・`Forbidden`・`NotFound`・`InvalidArgument`・`RateLimited`) は `src/failures.ts` に、domain の不変条件が破れた失敗はその domain の `errors.ts` に置く。ほかの domain が同じ失敗を返す時は、その `errors.ts` から import する (例: `membership/errors.ts` の `LastOwner`)。
 - **Repository** (`db/repositories/`): query を提供し、業務判断を持たない。境界と例外 path は [`db/CLAUDE.md`](../db/CLAUDE.md) が定義元。
 - domain が肥大化したら、技術分類ではなく操作名で下位ディレクトリを作る。`services/` や `utils/` のような、無関係な実装の寄せ集めを作らない。
 - web から `@core` として参照される module は、browser-safe な依存だけを持つ。
@@ -17,7 +18,7 @@
 
 - Effect の書き方は root の [`CLAUDE.md`](../CLAUDE.md#effect) の通り `node_modules/effect/AGENTS.md` に従う。以下は配置と依存の規則だけを定める。
 - Guard と Use-case は、依存を ports の service から `yield*` で取る。
-- 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側が直接 import する。
+- 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`) は `liftAll` の対象外なので、必要な側が直接 import する。
 - Repository 以外の port は、Layer で差し替えた時に何かを隠せる場合だけ置く。既存の service (`TtlStore` / `EmailSender` など) を使う関数は use-case から直接呼び、テストはその service の Layer を差し替えて、起きた結果 (計数、送信) を観測する。
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置くか、tx の中から `afterCommit` で commit 後に登録する (例: `account/delete-account.ts` の session 削除)。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` を使う (渡す effect の失敗は渡す前に catch する)。

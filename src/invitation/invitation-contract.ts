@@ -2,13 +2,8 @@ import { Schema, SchemaTransformation } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { z } from "zod";
 import { Authenticated } from "../account/actor-contract";
-import {
-  EmailMismatch,
-  ExpiredOrUsed,
-  Forbidden,
-  NotFound,
-  RateLimited,
-} from "../membership/guard/errors";
+import { EmailMismatch, ExpiredOrUsed } from "./errors";
+import { Forbidden, NotFound, RateLimited } from "../failures";
 import { RoleSchema } from "../membership/membership-contract";
 import { CompanyParams, Ok } from "../spa-contract-schemas";
 import { SERVICE_NAMES } from "../services";

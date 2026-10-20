@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { UnaryRequest, UnaryResponse } from "@connectrpc/connect";
-import { createAuthClient, createServiceKeyInterceptor } from "../src/server";
+import { createAuthClient, createServiceKeyInterceptor } from "../server";
 
 function makeFakeReq(): UnaryRequest {
   return {

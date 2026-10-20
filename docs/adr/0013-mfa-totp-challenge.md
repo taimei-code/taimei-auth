@@ -411,7 +411,7 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
   Redis 上のセッション実体を消すが、`cookieCache` (maxAge 5 分) が生きている間は他セッションが
   `requireActor` や consumer の VerifySession を通過し続ける (`two_factor_enabled` は revision
   トリガーの対象列ではないため、フラグ更新でも失効しない)。退会・事業所削除など既存の revoke 経路と
-  同じ platform 挙動 (`db/CLAUDE.md` ルール 2 の例外規定) であり、ログインの hot path を変えてまで
+  同じ platform 挙動 (db/CLAUDE.md「認証ドメインのモデルは repository 経由で触る」の例外規定) であり、ログインの hot path を変えてまで
   詰める価値は無いと判断し、既知の bound として記録するに留める。
 
 ## 検討した代替案 (不採用)

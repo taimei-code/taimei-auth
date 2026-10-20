@@ -8,7 +8,7 @@ import { DbError } from "../../errors";
 import { storedSessionOf } from "../../__tests__/test-ttl-store";
 import { createSessionFor } from "../../__tests__/session-helpers";
 import { LastOwner } from "../errors";
-import { NotFound } from "../guard/errors";
+import { NotFound } from "../../failures";
 import { removeMember } from "../remove";
 
 const P = "rmmem-test-";

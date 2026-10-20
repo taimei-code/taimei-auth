@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { dbTest, auditRowsFor, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { NotFound } from "../guard/errors";
+import { NotFound } from "../../failures";
 import { transferOwnership } from "../transfer-ownership";
 
 const P = "trans-test-";

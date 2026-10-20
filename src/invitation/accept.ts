@@ -6,7 +6,7 @@ import { appendAuditBestEffort, appendAuditInTx } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { applyJoin } from "../membership/apply-change";
 import { verifyInviter } from "../membership/policy";
-import { ExpiredOrUsed } from "../membership/guard/errors";
+import { ExpiredOrUsed } from "./errors";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { InvitationRepo } from "./ports";

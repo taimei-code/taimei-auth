@@ -1,6 +1,6 @@
 import { Data, Effect } from "effect";
 import { isLocalEnvironment } from "./env";
-import { RateLimited } from "./membership/guard/errors";
+import { RateLimited } from "./failures";
 import { TtlStore } from "./ttl-store-service";
 import { captureCauseAs } from "./sentry";
 

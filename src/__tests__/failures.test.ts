@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { InvalidArgument } from "../guard/errors";
+import { InvalidArgument } from "../failures";
 
-describe("guard errors", () => {
+describe("InvalidArgument", () => {
   test("InvalidArgument は details 未指定なら own property を持たず、指定時は同一 object を持つ", () => {
     const without = new InvalidArgument({});
     expect(Object.hasOwn(without, "details") && without.details !== undefined).toBe(false);

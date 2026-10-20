@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
-import { RateLimited } from "../membership/guard/errors";
+import { RateLimited } from "../failures";
 import { Ok } from "../spa-contract-schemas";
 import {
   AlreadyEnabled,

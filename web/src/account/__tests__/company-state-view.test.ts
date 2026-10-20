@@ -6,7 +6,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import type { CompanyState } from "@core/account/account-contract";
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 
 import { companyStateAtom } from "../account-atom";
 import { CurrentCompanyProvider, useCurrentCompany } from "../current-company";

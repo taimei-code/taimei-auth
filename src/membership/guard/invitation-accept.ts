@@ -4,7 +4,8 @@ import { isAcceptableAt } from "../../invitation/policy";
 import { InvitationRepo } from "../../invitation/ports";
 import { MembershipRepo } from "../ports";
 import type { Actor } from "./core";
-import { EmailMismatch, ExpiredOrUsed, NotFound } from "./errors";
+import { EmailMismatch, ExpiredOrUsed } from "../../invitation/errors";
+import { NotFound } from "../../failures";
 
 type InvitationAcceptGrant =
   | { mode: "proceed"; actor: Actor; invitation: InvitationRow }

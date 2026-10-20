@@ -11,7 +11,7 @@ import { mountSpaApi } from "./handlers/spa-http-api";
 import { authEntryRedirect } from "./handlers/auth-entry-redirect";
 import { CONTINUE, runMiddleware, runRoute } from "./handlers/run-route";
 import { captureThrown, internalErrorResponse } from "./handlers/client-facing-error";
-import { NotFound } from "./membership/guard/errors";
+import { NotFound } from "./failures";
 import { ATTEMPT_BUDGETS } from "./attempt-budget";
 import { attemptBudgetMiddleware } from "./handlers/attempt-budget-hono";
 import { getClientContext } from "./request-context";

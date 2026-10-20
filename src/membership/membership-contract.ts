@@ -2,7 +2,8 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { LastOwner } from "./errors";
-import { AlreadyOwner, Forbidden, InvalidArgument, NotFound } from "./guard/errors";
+import { AlreadyOwner } from "./errors";
+import { Forbidden, InvalidArgument, NotFound } from "../failures";
 import { ROLES } from "../../db/enums";
 import { AccountDeleted, CompanyParams, Id, Ok } from "../spa-contract-schemas";
 

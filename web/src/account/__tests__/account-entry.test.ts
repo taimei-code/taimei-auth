@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Exit } from "effect";
 
 import type { CompanyState } from "@core/account/account-contract";
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 
 import { accountEntryOf } from "../account-entry";
 

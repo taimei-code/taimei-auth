@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { appendAuditInTx } from "../audit/append";
 import { LastOwner } from "../membership/errors";
-import { orNotFound } from "../membership/guard/errors";
+import { orNotFound } from "../failures";
 import { MembershipRepo } from "../membership/ports";
 import { afterCommit, Transaction } from "../transaction";
 import { type AccountDeletionFlow, deleteSessionsOf } from "./delete-sessions";

@@ -86,7 +86,7 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
   });
 
   test("reactivityKeys を書けるのは *-atom.ts だけ (一覧を変える更新は key を足した hook で渡す)", () => {
-    const writers = grepFiles(String.raw`reactivityKeys:`, "web/src", {
+    const writers = grepFiles("reactivityKeys:", "web/src", {
       tests: "exclude",
     });
     expect(writers.filter((path) => !path.endsWith("-atom.ts"))).toEqual([]);
@@ -105,7 +105,7 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
   });
 
   test("前回の成功値の有無は shared/atom-runtime.ts の failedBeforeAnyValue だけが読む", () => {
-    const readers = grepFiles(String.raw`previousSuccess`, "web/src", {
+    const readers = grepFiles("previousSuccess", "web/src", {
       tests: "exclude",
     });
     expect(readers).toEqual(["web/src/shared/atom-runtime.ts"]);

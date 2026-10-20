@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Exit } from "effect";
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-import { RateLimited, Unauthorized } from "@core/membership/guard/errors";
+import { RateLimited, Unauthorized } from "@core/failures";
 import { InvalidCode, Locked } from "@core/mfa/errors";
 
 import { mfaChallengeObservationOf, mfaFailureMessage } from "../mfa-atom";

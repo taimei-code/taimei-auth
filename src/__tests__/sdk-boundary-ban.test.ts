@@ -4,11 +4,13 @@ import { type BiomeOverride, readBiomeConfig, webOnlyGroupOf } from "./config-in
 const SDK_BANNED_PATHS = [
   "@connectrpc/connect-node",
   "@connectrpc/connect-web",
+  "drizzle-orm",
   "next",
   "next/cache",
   "next/headers",
   "next/navigation",
   "next/server",
+  "pg",
   "react",
   "react-dom",
 ];

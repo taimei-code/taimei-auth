@@ -1,6 +1,6 @@
 # packages/auth-client/ 境界ルール
 
-## ルール 7: SDK の公開 API は consumer framework に依存させない
+## SDK の公開 API は consumer framework に依存させない
 
 root の「共通境界」は consumer から SDK への方向を制限する。逆方向の依存 (SDK が Next.js / React / Node に暗黙に依存すること) は、`import` の grep が 0 件でも型、shape、runtime API に残るため、interface を追加・変更する時は次の 5 層を目視で audit する。
 
@@ -14,10 +14,10 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 
 層 4 だけは root `biome.json` の `packages/auth-client/**` override が禁止し、root の `src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。
 
-## ルール 8: SDK は taimei-auth の決めごとだけを持ち、consumer の知識を持たない
+## SDK は taimei-auth の決めごとだけを持ち、consumer の知識を持たない
 
 依存の向きは consumer → SDK → taimei-auth の一方向である。SDK の code、試験、README、CHANGELOG に、consumer の名前、host、path、consumer が画面を使う目的を書かない。名前は taimei-auth の画面や値から付け、試験の値は `example-service` や `app.example` のような中立の値にする。root の `src/__tests__/sdk-consumer-knowledge.test.ts` が、consumer の名前・host・login の path が出てこないことを確かめる。
 
-## ルール 9: 試験の環境の compose の断片は release で生成し、digest の無い断片を publish しない
+## 試験の環境の compose の断片は release で生成し、digest の無い断片を publish しない
 
 repo に置くのは template の `testing/compose.template.yml` だけである。publish の workflow が試験用の image を push した後に、`scripts/generate-testing-fragment.sh` でその digest を埋めた `testing/compose.yml` を生成する。生成した断片が git の対象外で package に入ること、digest の無い断片では `prepublishOnly` が build の前に止まること、断片が `TAIMEI_AUTH_*` 以外の変数を参照しないことは、root の `src/__tests__/testing-fragment.test.ts` が確かめる。

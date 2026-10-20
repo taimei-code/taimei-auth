@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { Effect } from "effect";
 import { LastOwner } from "../../membership/errors";
-import { NotFound } from "../../membership/guard/errors";
+import { NotFound } from "../../failures";
 import type { RouteEffect } from "../run-route";
 
 const _declared: RouteEffect<Response> = Effect.fail(new NotFound());
