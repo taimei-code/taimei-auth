@@ -141,7 +141,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 
 - Transport に adapter が加わり (Decision の境界表 2 行目)、失敗の変換点はその 3 つに閉じる。`membership/guard/respond.ts` (`guardErrorResponse` / `reasonToGuardError`) は廃止する。(2026-10-11 再改訂) SPA の API の失敗は HttpApi が変換する (「SPA の API 契約」節)
 - Guard の公開 API は `Effect<A, GuardError, R>` とする。deps factory (`createMembershipGuard` / `makeRequireX`) は廃止し、依存は ports の service を `yield*` する。判定順 (401 → 400 → 403 → 404 → ...) と fail-closed (session 解決だけ 401、membership 断は 500) は変えない。(2026-10-11 再改訂) SPA の API では、401 の判定と session の解決は契約の middleware が行う。ADR-0012 の表で 403 (ADMIN 以上) を 400 より先に置く `requireInvite` も、400 (decode) が先になる (「SPA の API 契約」節の判定順)
-- Use-case が ports (`src/<domain>/ports.ts`) を所有し、Repository の Effect face は src 側に置く。`db/repositories/` は薄い Promise のまま。port の method 名は repository の関数名と同一で、ports は `LiftedModule<typeof repo>`、wiring は `liftAll(repo)` として repository module から導出する (port 側で名前を付け替えない。同期 helper `generate*` / `isAcceptable` は `liftAll` の対象外で、必要な側が直接 import する)
+- Use-case が ports (`src/<domain>/ports.ts`) を所有し、Repository の Effect face は src 側に置く。`db/repositories/` は薄い Promise のまま。port の method 名は repository の関数名と同一で、ports は `LiftedModule<typeof repo>`、wiring は `liftAll(repo)` として repository module から導出する (port 側で名前を付け替えない。同期 helper `generate*` は `liftAll` の対象外で、必要な側が直接 import する)
 - 1 ファイル 200 行以下、1 操作 1 ファイル、Guard は hono 非依存、Transport は tx を所有しない (`src/rpc/user-handler.ts` の例外は退会の use-case への移動で 2026-10 に解消した) は維持する
 
 ## Did not adopt

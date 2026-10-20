@@ -17,7 +17,7 @@
 
 - Effect の書き方は root の [`CLAUDE.md`](../CLAUDE.md#effect) の通り `node_modules/effect/AGENTS.md` に従う。以下は配置と依存の規則だけを定める。
 - Guard と Use-case は、依存を ports の service から `yield*` で取る。
-- 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`、`isAcceptable`) は `liftAll` の対象外なので、必要な側が直接 import する。
+- 各 domain は `ports.ts` に Repository の Effect 面 (`Context.Service`、型は `LiftedModule<typeof repo>`) を、`wiring.ts` に production の結線 (`liftAll(repo)`) を置く。port の method 名は repository の関数名と同じにする。同期 helper (`generate*`) は `liftAll` の対象外なので、必要な側が直接 import する。
 - Repository 以外の port は、Layer で差し替えた時に何かを隠せる場合だけ置く。既存の service (`TtlStore` / `EmailSender` など) を使う関数は use-case から直接呼び、テストはその service の Layer を差し替えて、起きた結果 (計数、送信) を観測する。
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置くか、tx の中から `afterCommit` で commit 後に登録する (例: `account/delete-account.ts` の session 削除)。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` を使う (渡す effect の失敗は渡す前に catch する)。

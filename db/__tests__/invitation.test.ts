@@ -8,7 +8,6 @@ import {
   generateInvitationId,
   generateInvitationToken,
   insertInvitation,
-  isAcceptable,
   listPendingInvitations,
   markInvitationAccepted,
   markInvitationRevoked,
@@ -61,22 +60,6 @@ describe("invitation repository", () => {
 
     const found = await findInvitationByToken(token);
     expect(found?.id).toBe(row.id);
-    expect(isAcceptable(found as typeof row)).toBe(true);
-  });
-
-  test("期限切れ PENDING は acceptable=false (status は PENDING のまま derived expired)", async () => {
-    const { userId, companyId } = await seedInviter();
-    const row = await insertInvitation({
-      id: generateInvitationId(),
-      companyId,
-      email: "inv-test-expired@example.com",
-      role: "MEMBER",
-      token: generateInvitationToken(),
-      expiresAt: new Date(Date.now() - 1000),
-      invitedByUserId: userId,
-    });
-    expect(row.status).toBe("PENDING");
-    expect(isAcceptable(row)).toBe(false);
   });
 
   test("findActivePendingInvitation は有効 PENDING のみ返す (idempotency 判定)", async () => {

@@ -145,7 +145,3 @@ export async function revokePendingInvitationsOfCompany(
     .where(and(eq(invitation.companyId, companyId), eq(invitation.status, "PENDING")))
     .returning();
 }
-
-export function isAcceptable(row: InvitationRow): boolean {
-  return row.status === "PENDING" && row.expiresAt.getTime() > Date.now();
-}
