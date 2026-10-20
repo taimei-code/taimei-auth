@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
 import { switchCompany } from "../src/account/switch-company";
-import { InvalidArgument, NotFound } from "../src/membership/guard/errors";
+import { InvalidArgument, NotFound } from "../src/failures";
 
 export const setCurrentCompany = Effect.fnUntraced(function* (input: {
   userId: string;

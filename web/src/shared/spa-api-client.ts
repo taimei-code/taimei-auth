@@ -1,5 +1,5 @@
 import { SpaApi } from "@core/spa-contract";
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 import { Effect, Schema } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { AtomHttpApi } from "effect/reactivity";

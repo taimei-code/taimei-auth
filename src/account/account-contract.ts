@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { LastOwner } from "../membership/errors";
-import { Forbidden, NotFound } from "../membership/guard/errors";
+import { Forbidden, NotFound } from "../failures";
 import { OrgCodeSchema } from "../company/company-contract";
 import { RoleSchema } from "../membership/membership-contract";
 import { Id, Ok } from "../spa-contract-schemas";

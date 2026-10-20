@@ -4,7 +4,7 @@ import { AsyncResult } from "effect/reactivity";
 import { createContext, use, useMemo, type ReactNode } from "react";
 
 import type { CompanyState } from "@core/account/account-contract";
-import type { Unauthorized } from "@core/membership/guard/errors";
+import type { Unauthorized } from "@core/failures";
 
 import { useWaitForValue } from "../shared/atom-runtime";
 import { notifyAfterRefresh, notifyError } from "../shared/notify";

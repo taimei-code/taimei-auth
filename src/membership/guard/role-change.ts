@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { Role } from "@/db/repositories/membership";
 import { canChangeRole } from "../policy";
 import { type Actor, requireMembershipOf, requireTargetMembership } from "./core";
-import { Forbidden } from "./errors";
+import { Forbidden } from "../../failures";
 
 export const requireRoleChange = Effect.fnUntraced(function* (opts: {
   actor: Actor;

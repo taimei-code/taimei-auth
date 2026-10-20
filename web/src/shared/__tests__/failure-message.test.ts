@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Cause } from "effect";
 
 import { LastOwner } from "@core/membership/errors";
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 
 import { failureMessage, hasFailureTag } from "../failure-message";
 

@@ -3,7 +3,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { Effect } from "effect";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
-import { InvalidArgument, NotFound } from "../../membership/guard/errors";
+import { InvalidArgument, NotFound } from "../../failures";
 import { runRpc, statusToCode } from "../run-rpc";
 
 const { exceptions: captured } = recordSentry();

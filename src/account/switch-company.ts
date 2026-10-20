@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { appendAuditInTx } from "../audit/append";
-import { Forbidden } from "../membership/guard/errors";
+import { Forbidden } from "../failures";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { UserRepo } from "./ports";

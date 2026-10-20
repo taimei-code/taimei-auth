@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { NotFound } from "../../membership/guard/errors";
+import { NotFound } from "../../failures";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { updateCompanyInfo } from "../update";

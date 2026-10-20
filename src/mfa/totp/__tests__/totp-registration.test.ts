@@ -12,7 +12,7 @@ import {
 } from "../../__tests__/helpers";
 import { SessionRejected } from "../../../auth-service";
 import { AuthApiError } from "../../../errors";
-import { Unauthorized } from "../../../membership/guard/errors";
+import { Unauthorized } from "../../../failures";
 import {
   auditFailingLayer,
   mfaMailRecorderLayer,

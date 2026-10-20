@@ -6,7 +6,7 @@ import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../attemp
 import { attemptBudgetMiddleware, attemptBudgetProgram } from "../handlers/attempt-budget-hono";
 import { mfaAttemptSubject } from "../handlers/attempt-budget-http-api";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
-import { RateLimited } from "../membership/guard/errors";
+import { RateLimited } from "../failures";
 import { toRateWindowResult } from "../ttl-store";
 import type { TtlStore } from "../ttl-store-service";
 import { type SentryService, SentryLive } from "../sentry";

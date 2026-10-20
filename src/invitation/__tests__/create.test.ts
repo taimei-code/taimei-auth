@@ -14,7 +14,7 @@ import { getAppUrl } from "../../email/client";
 import { tryAuthApi } from "../../errors";
 import { acceptInvitationPath } from "../accept-path";
 import { createInvitation } from "../create";
-import { RateLimited } from "../../membership/guard/errors";
+import { RateLimited } from "../../failures";
 import { testKvStore } from "../../__tests__/test-ttl-store";
 
 const { run, cleanup } = dbTest(TEST_PREFIX);

@@ -4,7 +4,7 @@ import type { DbTx } from "@/db/transaction";
 import { UserRepo } from "../account/ports";
 import type { DbError } from "../errors";
 import { LastOwner } from "./errors";
-import { orNotFound } from "./guard/errors";
+import { orNotFound } from "../failures";
 import { MembershipRepo } from "./ports";
 
 type Write = (

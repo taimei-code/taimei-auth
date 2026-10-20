@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { LastOwner } from "../membership/errors";
-import { Forbidden, NotFound } from "../membership/guard/errors";
+import { Forbidden, NotFound } from "../failures";
 import { ORG_CODES } from "../../db/enums";
 import { RoleSchema } from "../membership/membership-contract";
 import { AccountDeleted, CompanyParams } from "../spa-contract-schemas";

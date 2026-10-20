@@ -1,12 +1,8 @@
 import { Exit } from "effect";
 import type { AtomRegistry } from "effect/reactivity";
 
-import type {
-  EmailMismatch,
-  ExpiredOrUsed,
-  NotFound,
-  Unauthorized,
-} from "@core/membership/guard/errors";
+import type { EmailMismatch, ExpiredOrUsed } from "@core/invitation/errors";
+import type { NotFound, Unauthorized } from "@core/failures";
 
 import { authClient } from "../auth/auth-client";
 import { runMutation } from "../shared/atom-runtime";

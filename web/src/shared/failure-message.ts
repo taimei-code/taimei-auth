@@ -1,6 +1,6 @@
 import { Cause, Option } from "effect";
 
-import type { Unauthorized } from "@core/membership/guard/errors";
+import type { Unauthorized } from "@core/failures";
 
 export type FailureMessages<E extends { readonly _tag: string }> = {
   readonly [Tag in Exclude<E["_tag"], Unauthorized["_tag"]>]: string;

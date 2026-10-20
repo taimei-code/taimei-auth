@@ -11,7 +11,7 @@ import { auditLogWith } from "../../__tests__/test-layers";
 import { DbError } from "../../errors";
 import { changeRole } from "../change-role";
 import { LastOwner } from "../errors";
-import { NotFound } from "../guard/errors";
+import { NotFound } from "../../failures";
 
 const P = "chrole-test-";
 const { run, cleanup } = dbTest(P);

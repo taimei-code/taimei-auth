@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { Exit } from "effect";
 
-import { ExpiredOrUsed } from "@core/membership/guard/errors";
+import { ExpiredOrUsed } from "@core/invitation/errors";
 
 import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
 

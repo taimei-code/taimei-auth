@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, type Mock, spyOn, test } from "bun:test";
 import { Effect, Exit } from "effect";
-import { ExpiredOrUsed } from "../../membership/guard/errors";
+import { ExpiredOrUsed } from "../errors";
 import { auditRowsFor, dbTest, expectFailure, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { auditLogWith } from "../../__tests__/test-layers";

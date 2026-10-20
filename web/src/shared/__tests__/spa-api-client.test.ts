@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { Effect, Exit } from "effect";
 
-import { Unauthorized } from "@core/membership/guard/errors";
+import { Unauthorized } from "@core/failures";
 import { ChallengeExpired } from "@core/mfa/errors";
 
 import { leaveForSignInOnUnauthorized } from "../spa-api-client";

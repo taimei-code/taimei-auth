@@ -1,6 +1,6 @@
 import { Context } from "effect";
 import { HttpApiMiddleware } from "effect/http-api";
-import { Unauthorized } from "../membership/guard/errors";
+import { Unauthorized } from "../failures";
 
 export type Actor = {
   readonly id: string;

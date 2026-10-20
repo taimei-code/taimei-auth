@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { z } from "zod";
 import { CompanyRepo } from "../company/ports";
 import { CheckMembershipsResponseSchema, CompanyService } from "../gen/auth/v1/auth_pb";
-import { InvalidArgument } from "../membership/guard/errors";
+import { InvalidArgument } from "../failures";
 import { MembershipRepo } from "../membership/ports";
 import { runRpc } from "./run-rpc";
 

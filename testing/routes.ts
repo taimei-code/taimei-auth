@@ -2,7 +2,7 @@ import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { Effect, Schema } from "effect";
 import { type Context, Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
-import { InvalidArgument } from "../src/membership/guard/errors";
+import { InvalidArgument } from "../src/failures";
 import { createSignedInUser } from "./create-signed-in-user";
 import type { MagicLinkOutbox } from "./magic-link-outbox";
 import { setCurrentCompany } from "./set-current-company";

@@ -4,7 +4,7 @@ import { deleteAccountIfOrphaned } from "../account/orphan";
 import { appendAuditInTx, invitationRevokedEntry, membershipRemovedEntry } from "../audit/append";
 import { InvitationRepo } from "../invitation/ports";
 import { applyCompanyRemoval } from "../membership/apply-change";
-import { Forbidden } from "../membership/guard/errors";
+import { Forbidden } from "../failures";
 import { isAtLeast } from "../membership/policy";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";

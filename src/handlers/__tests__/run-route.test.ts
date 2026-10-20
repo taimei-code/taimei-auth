@@ -6,7 +6,7 @@ import { mountSpaApi } from "../spa-http-api";
 import { AuthApi } from "../../auth-service";
 import { runBackground, withWaitUntil } from "../../background";
 import { DbError } from "../../errors";
-import { NotFound } from "../../membership/guard/errors";
+import { NotFound } from "../../failures";
 import { CONTINUE, respondWith, runMiddleware, runRoute } from "../run-route";
 import { provideAuthApi, stubAuthApi } from "./helpers";
 

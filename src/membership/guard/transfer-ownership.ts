@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { type Actor, requireMembershipOf, requireTargetMembership } from "./core";
-import { AlreadyOwner, InvalidArgument } from "./errors";
+import { AlreadyOwner } from "../errors";
+import { InvalidArgument } from "../../failures";
 
 export const requireTransferOwnership = Effect.fnUntraced(function* (opts: {
   actor: Actor;

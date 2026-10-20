@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import type { OrgCode } from "@/db/repositories/company";
 import type { DbTx } from "@/db/transaction";
 import { appendAuditInTx } from "../audit/append";
-import { NotFound } from "../membership/guard/errors";
+import { NotFound } from "../failures";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
 
