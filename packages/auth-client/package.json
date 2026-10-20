@@ -1,6 +1,6 @@
 {
   "name": "@taimei-code/auth-client",
-  "version": "3.5.1",
+  "version": "3.6.0",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,11 +31,13 @@
   },
   "files": [
     "dist",
+    "testing/compose.yml",
     "CHANGELOG.md"
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json --outDir dist --declaration --declarationMap",
-    "prepublishOnly": "bun run build"
+    "check:testing-fragment": "grep -q 'taimei-auth-testing@sha256:' testing/compose.yml",
+    "prepublishOnly": "bun run check:testing-fragment && bun run build"
   },
   "peerDependencies": {
     "@bufbuild/protobuf": "^2.0.0",

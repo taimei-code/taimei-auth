@@ -96,17 +96,16 @@
 
 ## QA-MR-09: consumer が受け取る試験用の image の起動と試験 API のログイン
 
-- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR、`testing/server.ts`・`testing/routes.ts`・`src/bun-server.ts` を変える PR
-- **前提**: consumer は試験用の image を build せず、publish の workflow が出した image を使う (配り方は ADR-0020 の Decision 1・2)。このケースは同じ image をローカルで build し、migrate から試験 API でのログインまでを通して確かめる。本 repo の CI の docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、この経路を通して流さない。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。手順 2・3・6 は、次で試験の値を入れた同じ shell で実行する: `export QA_PG_PASSWORD="$(openssl rand -hex 16)" QA_AUTH_SECRET="$(openssl rand -hex 32)" QA_MFA_KEYS="v1:$(openssl rand -base64 32)"`
+- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR、`testing/server.ts`・`testing/routes.ts`・`src/bun-server.ts`・`packages/auth-client/testing/compose.template.yml` を変える PR
+- **前提**: consumer は試験用の image を build せず、SDK に同梱した compose の断片が、publish の workflow が出した image を digest で参照する (ADR-0020 の Decision 1・2)。このケースは同じ image をローカルで build し、断片の template に image と port の override を重ねて単体で起動し、migrate から SDK の client でのログインまでを通して確かめる。本 repo の CI の docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、この経路を通して流さない。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。SDK を build しておく (`cd packages/auth-client && bun run build`)。手順 2・5・6 は、次で試験の値と断片を起動する関数を入れた同じ shell で、repo の root から実行する: `export TAIMEI_AUTH_URL=http://localhost:3100 TAIMEI_AUTH_HOSTNAME=localhost TAIMEI_AUTH_COOKIE_DOMAIN= TAIMEI_AUTH_CONSUMER_ORIGINS=http://localhost:3000 TAIMEI_AUTH_SECRET="$(openssl rand -hex 32)" TAIMEI_AUTH_APP_NAME=qa-mr-09; qa() { printf 'services:\n  taimei-auth:\n    image: taimei-auth-testing:local\n    ports: ["127.0.0.1:3100:3100"]\n' | docker compose -p qa-mr-09 -f packages/auth-client/testing/compose.template.yml -f - "$@"; }`
 - **手順**:
   1. `docker build --target dev --build-arg APP_ENV=test -t taimei-auth-testing:local .`
-  2. `docker network create qa-mr-09 && docker run -d --rm --name qa-mr-09-db --network qa-mr-09 -e POSTGRES_DB=auth -e POSTGRES_PASSWORD="$QA_PG_PASSWORD" postgres:16.8-alpine3.21 && until docker exec qa-mr-09-db pg_isready -U postgres -d auth; do sleep 1; done`
-  3. `docker run --rm --name qa-mr-09-auth --network qa-mr-09 -p 3100:3100 -e APP_ENV=test -e DATABASE_URL="postgres://postgres:$QA_PG_PASSWORD@qa-mr-09-db:5432/auth" -e AUTH_SERVICE_URL=http://localhost:3100 -e AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3100 -e AUTH_SECRET="$QA_AUTH_SECRET" -e MFA_TOTP_ENCRYPTION_KEYS="$QA_MFA_KEYS" taimei-auth-testing:local sh -c "bun run db:migrate && bun run db:migrate-manual && bun run testing/server.ts"`
-  4. 別の terminal で `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
-  5. `curl -s -X POST http://localhost:3100/testing/v1/signed-in-users -H 'Content-Type: application/json' -d '{"companies":[{"role":"OWNER"}],"returnTo":"http://localhost:3100/account"}'` の `loginUrl` を host の browser で開く
-  6. 手順 3 の container を止め、`docker run --rm --network qa-mr-09 -e APP_ENV=production -e DATABASE_URL="postgres://postgres:$QA_PG_PASSWORD@qa-mr-09-db:5432/auth" -e AUTH_SERVICE_URL=http://localhost:3100 -e AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://localhost:3100 -e AUTH_SECRET="$QA_AUTH_SECRET" -e MFA_TOTP_ENCRYPTION_KEYS="$QA_MFA_KEYS" taimei-auth-testing:local bun run testing/server.ts; echo "exit=$?"`
-  7. 後片付け: `docker stop qa-mr-09-db && docker network rm qa-mr-09`
-- **期待結果**: 手順 3 の migrate が完走し、手順 4 が 200、手順 5 で `/account` に移ってログインした状態になる。手順 6 は `FATAL: testing/server.ts starts only with APP_ENV=test.` を出して 0 以外で終わる
+  2. `qa up --wait`
+  3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
+  4. repo の root から `bun -e 'import { createTestingClient } from "@taimei-code/auth-client/testing"; const user = await createTestingClient("http://localhost:3100").createSignedInUser({ companies: [{ role: "OWNER" }], returnTo: "http://localhost:3100/account" }); console.log(user.loginUrl)'` を実行し、出た `loginUrl` を host の browser で開く
+  5. `qa run --rm --no-deps -e APP_ENV=production taimei-auth bun run testing/server.ts; echo "exit=$?"`
+  6. 後片付け: `qa down`
+- **期待結果**: 手順 2 は `taimei-auth` が healthy になって終わり (migrate の完走の後に healthy になる)、手順 3 が 200、手順 4 で `/account` に移ってログインした状態になる。手順 5 は `FATAL: testing/server.ts starts only with APP_ENV=test.` を出して 0 以外で終わる
 
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
 
