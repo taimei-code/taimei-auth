@@ -1,5 +1,27 @@
 # Changelog
 
+## 3.6.0 — 2026-10-19
+
+consumer が taimei-auth の内部を知らずに、試験の環境 (e2e と手元の確認) で taimei-auth を動かし、試験の利用者でログインできるようにした。新規登録の直後かを判定する関数を足した。追加だけで、既存の export と wire は変えていない。
+
+### Features
+
+- compose の断片 `testing/compose.yml` を package に入れた。consumer の compose から `include:` すると、試験の環境の taimei-auth と DB が起動する。image はこの版と同じ版で出し、digest で固定している。設定の一覧は README の「試験の環境」にある
+- `@taimei-code/auth-client/testing` を足した
+  - `createTestingClient(authBaseUrl)` の `createSignedInUser(request)`: 利用者と事業所と所属を作り、一度だけ使えるログイン URL を返す
+  - `createTestingClient(authBaseUrl)` の `setCurrentCompany({ userId, companyId })`: 試験の利用者の現在の事業所を切り替える
+  - `TESTING_PATH` (`"/testing/v1"`) と、型 `SignedInUserRequest`・`SignedInUser`・`SetCurrentCompanyRequest`
+- `isJustSignedUp(sessionData, now?)` を足した。user を作ってから Magic Link の有効期限の内側なら `true` を返す
+
+### 移行
+
+- 試験の環境で、taimei-auth の DB の表への直接の書き込み、Magic Link の token の読み取り、taimei-auth の起動の command と内部の環境変数を使っていたら、README の「試験の環境」の compose の断片と `createTestingClient` に置き換える
+- 新規登録の直後かを `user.createdAt` と `MAGIC_LINK_EXPIRES_IN_SECONDS` で自分で比べていたら、`isJustSignedUp` に置き換える
+
+### Breaking changes
+
+なし。
+
 ## 3.5.1 — 2026-10-16
 
 README を、consumer の repo で `node_modules` の中から読んで組み込みと版上げができる内容に書き直した。package に `CHANGELOG.md` を含めた。コードと wire は変えていない。
