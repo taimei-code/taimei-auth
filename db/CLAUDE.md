@@ -3,7 +3,7 @@
 ## DB アクセスは `db/` に閉じる
 
 drizzle の client、schema、query は `db/` に置き、`src/` `web/` `packages/` から `drizzle-orm` や `pg` を直接 import しない。将来 `db/` を別 process に切り出して RPC 越しに呼ぶためである。
-`src/**` からの import は `biome.json` の `noRestrictedImports` が止める。`web/` と `packages/` は lint が止めないので review で守る。
+`biome.json` の `noRestrictedImports` が、`src/**` からの `drizzle-orm`・`@/db/schema`・`@/db/client` と、`web/**`・`packages/auth-client/**` からの `drizzle-orm`・`pg` の import を止める。
 
 ### 例外 path (正本)
 

@@ -273,12 +273,42 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                  "sonner": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)",
+                  "drizzle-orm": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)",
+                  "pg": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
                 },
                 "patterns": [
                   {
                     "group": ["effect/*", "effect/**", "!effect/reactivity", "!effect/http"],
                     "message": "web で使える effect の subpath は effect/reactivity と effect/http だけ (docs/adr/0017-effect-v4-full-adoption.md)"
+                  },
+                  {
+                    "group": ["drizzle-orm/**"],
+                    "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["web/src/shared/notify.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "drizzle-orm": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)",
+                  "pg": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+                },
+                "patterns": [
+                  {
+                    "group": ["drizzle-orm/**"],
+                    "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
                   }
                 ]
               }
@@ -321,8 +351,16 @@
                   "react": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
                   "react-dom": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
                   "@connectrpc/connect-node": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
-                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-                }
+                  "@connectrpc/connect-web": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)",
+                  "drizzle-orm": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)",
+                  "pg": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+                },
+                "patterns": [
+                  {
+                    "group": ["drizzle-orm/**"],
+                    "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+                  }
+                ]
               }
             }
           }
