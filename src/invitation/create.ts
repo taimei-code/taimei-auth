@@ -20,7 +20,11 @@ export const createInvitation = Effect.fnUntraced(function* (params: {
   const ids = yield* IdGenerator;
   const tx = yield* Transaction;
 
-  const existing = yield* invitations.findActivePendingInvitation(companyId, email);
+  const existing = yield* invitations.findActivePendingInvitation(
+    companyId,
+    email,
+    new Date(yield* Clock.currentTimeMillis),
+  );
   if (existing) return { invitation: existing, reused: true };
 
   yield* spendInvitationAttempt(companyId);

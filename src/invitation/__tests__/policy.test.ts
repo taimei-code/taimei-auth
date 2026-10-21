@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import type { InvitationRow } from "@/db/repositories/invitation";
+import { dbTest } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
 import { isAcceptableAt } from "../policy";
+import { InvitationRepo } from "../ports";
 
 const NOW = Date.UTC(2026, 8, 5, 12, 0, 0);
 
@@ -40,4 +44,36 @@ describe("isAcceptableAt", () => {
     expect(isAcceptableAt(rowOf({ status: "ACCEPTED" }), NOW)).toBe(false);
     expect(isAcceptableAt(rowOf({ status: "REVOKED" }), NOW)).toBe(false);
   });
+});
+
+describe("未対応で期限内の判定は、repository の SQL と isAcceptableAt で同じ向き", () => {
+  const { run, cleanup } = dbTest("policy-test-");
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  test("期限がちょうど now の招待を、repository の SQL と isAcceptableAt の両方が期限切れとする", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const owner = yield* db.seedUser("owner");
+        const co = yield* db.seedCompany("expiry");
+        const now = new Date(Date.now() + 3_600_000);
+        const seeded = yield* db.seedInvitation({
+          companyId: co,
+          email: "policy-test-invitee@example.com",
+          role: "MEMBER",
+          invitedByUserId: owner.id,
+          expiresAt: now,
+        });
+        const row = yield* db.readInvitationByToken(seeded.token);
+        if (!row) throw new Error("seed failed");
+
+        const foundBySql = yield* InvitationRepo.use((repo) =>
+          repo.findActivePendingInvitation(co, row.email, now),
+        );
+
+        expect(foundBySql).toBeUndefined();
+        expect(isAcceptableAt(row, now.getTime())).toBe(false);
+      }),
+    ));
 });

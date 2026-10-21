@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { CurrentActor } from "../account/actor-contract";
 import { AuthApi } from "../auth-service";
@@ -18,8 +18,9 @@ export const InvitationHandlers = HttpApiBuilder.group(SpaApi, "invitation", (ha
   handlers.handleAll({
     pending: Effect.fnUntraced(function* ({ params }) {
       yield* requireMembershipOf(yield* CurrentActor, params.companyId, "ADMIN");
+      const now = new Date(yield* Clock.currentTimeMillis);
       const invitations = yield* InvitationRepo.use((repo) =>
-        repo.listPendingInvitations(params.companyId),
+        repo.listPendingInvitations(params.companyId, now),
       );
       return {
         invitations: invitations.map((inv) => ({
