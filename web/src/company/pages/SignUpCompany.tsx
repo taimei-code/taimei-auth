@@ -6,7 +6,7 @@ import { Loader2 } from "lucide-react";
 import type { OrgCode } from "@core/company/org-code";
 
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
-import { hasFailureTag } from "../../shared/failure-message";
+import { failureOutcome } from "../../shared/failure-message";
 import { leaveSpaTo, signInLandingSearch } from "../../shared/leave-spa";
 import { Button } from "../../shared/ui/button";
 import {
@@ -41,7 +41,11 @@ export const SignUpCompany = () => {
       Exit.match({
         onSuccess: () => leaveSpaTo(redirectUrl),
         onFailure: (cause) => {
-          const createdInAnotherTab = hasFailureTag(cause, "AlreadyExists");
+          const createdInAnotherTab: boolean = failureOutcome(
+            cause,
+            { AlreadyExists: true },
+            false,
+          );
           if (createdInAnotherTab) {
             leaveSpaTo(redirectUrl);
             return;

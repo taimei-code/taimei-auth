@@ -25,7 +25,7 @@ import {
   useActivateMfa,
   useEnrollMfa,
 } from "./mfa-atom";
-import { hasFailureTag } from "../shared/failure-message";
+import { failureOutcome } from "../shared/failure-message";
 import { useMfaCodeEntry } from "./use-mfa-code-entry";
 
 const CODE_INPUT_ID = "mfa-enroll-code";
@@ -201,7 +201,19 @@ export const MfaEnrollDialog = ({ trigger }: Props) => {
             return null;
           },
           onFailure: (cause) => {
-            if (hasFailureTag(cause, "EnrollmentChanged")) setResumableEnrollment(null);
+            const enrollmentChanged: boolean = failureOutcome(
+              cause,
+              {
+                EnrollmentChanged: true,
+                InvalidCode: false,
+                Locked: false,
+                RateLimited: false,
+                AlreadyEnabled: false,
+                MfaNotFound: false,
+              },
+              false,
+            );
+            if (enrollmentChanged) setResumableEnrollment(null);
             return mfaFailureMessage(cause);
           },
         }),

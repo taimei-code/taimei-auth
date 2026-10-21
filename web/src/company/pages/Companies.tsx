@@ -16,11 +16,11 @@ import { TransferOwnershipModal } from "../../membership/TransferOwnershipModal"
 import { useRemoveMember } from "../../membership/membership-atom";
 import { useWaitForValue } from "../../shared/atom-runtime";
 import { leaveSpaAfterAccountDeleted } from "../../shared/leave-spa";
-import { hasFailureTag } from "../../shared/failure-message";
 import { notifyAfterRefresh, notifyError } from "../../shared/notify";
 import { Button } from "../../shared/ui/button";
 import { Separator } from "../../shared/ui/separator";
 import { AddCompanyDialog } from "../AddCompanyDialog";
+import { leaveCompanyOutcome } from "../leave-company-outcome";
 
 export const Companies = () => {
   const { memberships, currentCompanyId } = useCurrentCompany();
@@ -59,10 +59,11 @@ export const Companies = () => {
             });
           },
           onFailure: (cause) => {
-            if (hasFailureTag(cause, "LastOwner")) {
+            const outcome = leaveCompanyOutcome(cause);
+            if (outcome.kind === "soleOwner") {
               setSoleOwnerCompanyId(m.company_id);
             } else {
-              notifyError("事業所から抜けられませんでした。");
+              notifyError(outcome.message);
             }
           },
         }),

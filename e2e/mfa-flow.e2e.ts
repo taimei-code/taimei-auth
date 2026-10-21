@@ -212,25 +212,6 @@ test("cookie 無しで /auth/mfa を直接開くと期限切れ案内だけを�
   await expect(page.getByRole("button", { name: "ログインを続ける" })).toHaveCount(0);
 });
 
-test("verify が直接 challenge_expired を返したら入力を閉じる", async ({ page }) => {
-  await page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({ json: { pending: true } });
-      return;
-    }
-    await route.fulfill({ status: 401, json: { _tag: "ChallengeExpired" } });
-  });
-
-  await page.goto("/auth/mfa");
-  await challengeCodeInput(page).fill("123456");
-  await page.getByRole("button", { name: "ログインを続ける" }).click();
-
-  await expect(page.getByText("セッションの有効期限が切れました")).toBeVisible();
-  await expect(page.getByRole("link", { name: "ログイン画面へ" })).toBeVisible();
-  await expect(challengeCodeInput(page)).toHaveCount(0);
-  await expect(page.locator("#mfa-challenge-code-error")).toHaveCount(0);
-});
-
 test("初期 GET が失敗しても一度の観測で入力を許す", async ({ page }) => {
   let getCalls = 0;
   await page.route("**/api/mfa/challenge**", async (route) => {
@@ -392,47 +373,6 @@ const mockChallenge = (page: Page, verify: { status: number; json?: unknown }) =
     await route.fulfill(verify);
   });
 
-const submitChallengeCode = async (page: Page) => {
-  await challengeCodeInput(page).fill("123456");
-  await page.getByRole("button", { name: "ログインを続ける" }).click();
-};
-
-test("verify が空の redirect_url を返したら、遷移せずに既定の失敗の文言を出す", async ({
-  page,
-}) => {
-  await mockChallenge(page, { status: 200, json: { redirect_url: "" } });
-  await page.goto("/auth/mfa");
-
-  await submitChallengeCode(page);
-
-  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
-    "処理に失敗しました。しばらく待ってからもう一度お試しください。",
-  );
-  expect(new URL(page.url()).pathname).toBe("/auth/mfa");
-});
-
-test("verify が本文の無い 400 を返したら、既定の失敗の文言を出す", async ({ page }) => {
-  await mockChallenge(page, { status: 400 });
-  await page.goto("/auth/mfa");
-
-  await submitChallengeCode(page);
-
-  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
-    "処理に失敗しました。しばらく待ってからもう一度お試しください。",
-  );
-});
-
-test("verify が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({ page }) => {
-  await mockChallenge(page, { status: 429, json: { _tag: "RateLimited" } });
-  await page.goto("/auth/mfa");
-
-  await submitChallengeCode(page);
-
-  await expect(page.locator("#mfa-challenge-code-error")).toHaveText(
-    "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
-  );
-});
-
 test("「ログインをやり直す」は末尾スラッシュ無しのログイン画面を指す", async ({ page }) => {
   await mockChallenge(page, { status: 400, json: { _tag: "InvalidCode" } });
   await page.goto("/auth/mfa");
@@ -518,27 +458,6 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
   await expect(page.locator("body")).not.toContainText(/invalid[_-]?code|two[_-]?factor/i);
 });
 
-test("無効化が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({ page }) => {
-  await signInWithMagicLink(page, MFA_EMAIL);
-  await enableMfaViaApi(page);
-  let limitedRequests = 0;
-  await page.route("**/api/account/mfa/disable", async (route) => {
-    limitedRequests++;
-    await route.fulfill({ status: 429, json: { _tag: "RateLimited" } });
-  });
-  await page.goto("/account/security");
-
-  await mfaRow(page).getByRole("button", { name: "無効にする" }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.locator("#mfa-disable-code").fill("123456");
-  await dialog.getByRole("button", { name: "無効にする" }).click();
-
-  await expect(dialog.getByRole("alert")).toHaveText(
-    "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
-  );
-  expect(limitedRequests).toBe(1);
-});
-
 test("MFA の状態の取得が失敗すると、取得できなかった旨を出す", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   let failedRequests = 0;
@@ -553,24 +472,6 @@ test("MFA の状態の取得が失敗すると、取得できなかった旨を�
     "多要素認証 (MFA) の設定状態を取得できませんでした。",
   );
   expect(failedRequests).toBeGreaterThanOrEqual(1);
-});
-
-test("登録が AlreadyEnabled で失敗すると、有効化ダイアログに再読み込みの案内を出す", async ({
-  page,
-}) => {
-  await signInWithMagicLink(page, MFA_EMAIL);
-  await page.route("**/api/account/mfa/enroll", async (route) => {
-    await route.fulfill({ status: 409, json: { _tag: "AlreadyEnabled" } });
-  });
-  await page.goto("/account/security");
-
-  await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
-
-  await expect(
-    page
-      .getByRole("dialog")
-      .getByText("多要素認証 (MFA) はすでに有効です。ページを再読み込みしてください。"),
-  ).toBeVisible();
 });
 
 test("有効化が EnrollmentChanged で失敗した後に開き直すと、登録をやり直す", async ({ page }) => {

@@ -6,6 +6,7 @@ import type { OrgCode } from "@core/company/org-code";
 
 import { companyStateAtom } from "../account/account-atom";
 import { useWaitForValue } from "../shared/atom-runtime";
+import { failureMessage } from "../shared/failure-message";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import { Input } from "../shared/ui/input";
@@ -63,7 +64,8 @@ export const AddCompanyDialog = ({ trigger }: Props) => {
               staleShort: "事業所を作成しました",
             });
           },
-          onFailure: () => setErrorMessage("事業所の作成に失敗しました。"),
+          onFailure: (cause) =>
+            setErrorMessage(failureMessage(cause, {}, "事業所の作成に失敗しました。")),
         }),
       )
       .finally(() => setSubmitting(false));

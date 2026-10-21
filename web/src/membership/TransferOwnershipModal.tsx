@@ -9,6 +9,7 @@ import type { Member } from "@core/membership/membership-contract";
 import { useSelfUserId } from "../auth/auth-client";
 import { companyStateAtom } from "../account/account-atom";
 import { failedBeforeAnyValue, useWaitForValue } from "../shared/atom-runtime";
+import { failureMessage } from "../shared/failure-message";
 import { notifyAfterRefresh } from "../shared/notify";
 import { Button } from "../shared/ui/button";
 import {
@@ -21,6 +22,8 @@ import {
 } from "../shared/ui/dialog";
 import { memberLabel } from "./member-label";
 import { membersOf, useTransferOwnership } from "./membership-atom";
+
+const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
 type Props = {
   companyId: string;
@@ -101,17 +104,30 @@ const TransferPicker = ({
 }: TransferCandidatesProps & { candidates: readonly Member[] }) => {
   const transferOwnership = useTransferOwnership();
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
-  const [transferFailed, setTransferFailed] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
 
   const handleTransfer = (to: Member) => {
     if (busyUserId) return;
     setBusyUserId(to.user_id);
-    setTransferFailed(false);
+    setTransferError(null);
     transferOwnership(companyId, to.user_id)
       .then(
         Exit.match({
           onSuccess: () => onTransferred(to),
-          onFailure: () => setTransferFailed(true),
+          onFailure: (cause) =>
+            setTransferError(
+              failureMessage(
+                cause,
+                {
+                  Forbidden: TRANSFER_FAILED,
+                  NotFound: TRANSFER_FAILED,
+                  InvalidArgument: TRANSFER_FAILED,
+                  AlreadyOwner: TRANSFER_FAILED,
+                  LastOwner: TRANSFER_FAILED,
+                },
+                TRANSFER_FAILED,
+              ),
+            ),
         }),
       )
       .finally(() => setBusyUserId(null));
@@ -120,7 +136,7 @@ const TransferPicker = ({
   return (
     <>
       <CandidateList candidates={candidates} busyUserId={busyUserId} onTransfer={handleTransfer} />
-      {transferFailed && <p className="text-sm text-destructive">オーナー委譲に失敗しました。</p>}
+      {transferError && <p className="text-sm text-destructive">{transferError}</p>}
     </>
   );
 };
