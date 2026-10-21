@@ -1,3 +1,4 @@
+import { seedDevAccounts } from "../db/testing/dev-accounts";
 import { postgresTtlStore } from "../db/testing/ttl-store";
 import { startBunServer } from "../src/bun-server";
 import { testingRoutes } from "./routes";
@@ -9,11 +10,12 @@ if (process.env.APP_ENV !== "test") {
 }
 
 const ttlStore = await postgresTtlStore();
+await seedDevAccounts();
 
 export default startBunServer({
   emailSender: recordingEmailSender,
   ttlStore,
-  extend: (app) => {
+  extendBeforeStatic: (app) => {
     app.route("/", testingRoutes());
   },
 }).server;

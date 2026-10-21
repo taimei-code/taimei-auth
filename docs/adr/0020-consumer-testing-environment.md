@@ -28,7 +28,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - 型の境界: 試験のコードを `src/` の外の `testing/` に置く。root の `tsconfig.json` は composite で `testing/` を含まないので、`src/` から `testing/` を import すると typecheck が TS6307 で落ちる。`testing/` は `testing/tsconfig.json` で typecheck する (`scripts/typecheck.sh`)
    - 本番の bundle の検査: `deploy.yml` は upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path があれば deploy を止める
    - 起動の判定: `testing/server.ts` は boot の前に `APP_ENV === "test"` を確かめ、違えば exit 1 する
+   - (2026-10-21 追記) **アカウント選択画面** とその API も `testing/` に置き、form の送り先を `TESTING_PATH` から組むので、同じ 3 段で守る
 6. **試験の環境の auth の DB と session は volume に残す (2026-10-21 追加)**。断片の Postgres は名前付き volume に data を置き、試験用の entry は **TTL store** を同じ DB の表に置く (本番と `src/index.ts` は変えない)。`down` → `up` の後も利用者・事業所・所属・session が残り、`down -v` で一緒に消える。版を上げて image が変わっても、起動の migrate は未適用の分だけを当てる
+7. **開発用アカウントとアカウント選択画面 (2026-10-21 追加)**。試験用の entry は listen の前に、固定の id の **開発用アカウント** のうち無い行だけを足す。共通ログイン画面の URL (`GET /auth/`) には **アカウント選択画面** を返し、選んだ利用者は Decision 4 と同じく本物の Magic Link でログインさせる。session が有効なら一覧を出さずに戻り先へ移し、招待の受諾の途中 (invitation の token を伴う) は共通ログイン画面を出す
 
 ## 採らなかった案
 
@@ -37,8 +39,11 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - **現在の事業所の切り替えに、本番の `/api/account/current-company` を consumer の試験から呼ぶ**: SPA のための endpoint が consumer の依存する公開の契約になり、SPA の都合で変えられなくなる。切り替えを試験 API に置けば、本番の公開面は増えない
 - **試験用の鍵や opt-in の環境変数で、本番の app の中の試験 API を開く**: 鍵は `APP_ENV=production` でも鍵があれば開く。環境変数は設定を誤ると開き、試験のコードが本番の bundle に入る。entry を分ければ、本番の artifact に試験のコードが入らない
 
+- **アカウント選択画面を SPA に置き、build の時の `APP_ENV` で本番の bundle から消す** (2026-10-21): 「env の判定で隠す」形になり、本番の SPA の bundle を検査する仕組みが別に要る。`testing/` に置けば Decision 5 の 3 段で守れる
+- **選んだ利用者の session を `AuthApi.issueSession` で張る** (2026-10-21): 資格情報を確かめずに session を出す呼び手は第二要素の検証の後に固定しており、MFA を有効にした利用者の第二要素を飛ばす経路になる
 - **session を名前付き volume の file に置く** (2026-10-21): volume が 2 つになり、`down -v` で利用者と session が一緒に消えることを 2 か所で保つことになる
 - **session を better-auth の session の表にも書く (`storeSessionInDatabase`)** (2026-10-21): 試験の環境だけ session の置き場が本番と変わり、TTL store を前提にした session の削除と食い違う
+- **開発用アカウントを既存の use-case で作る** (2026-10-21): use-case は id を自分で作り、ADMIN と MEMBER の所属は招待と受諾を経るので、固定の id で冪等に書けない
 
 ## Consequences
 
@@ -52,3 +57,5 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - 資格情報なしの session 発行 (`AuthApi.issueSession`) の呼び手の固定 (`src/__tests__/effect-boundary.test.ts`) は変えない。試験 API は本物の Magic Link でログインさせる
 - `bun test` の preload は `testing/__tests__/preload.ts` になり、taimei-auth 自身の試験の runtime も Magic Link の URL を記録する
 - (2026-10-21) 試験の環境の Postgres の major を上げると、残った volume を読めずに起動しない。断片の Postgres の image を上げる時は、consumer に `down -v` を求める版の扱いを決めてから上げる
+- (2026-10-21) ADR-0019 の「Bun の TTL store は in-memory」の例外が試験用の entry に 1 つできる。`testing-server.test.ts` が本物の entry を local の DB に向けて起動するので、開発者の local の DB にも試験用の TTL store の表と開発用アカウントの行ができる
+- (2026-10-21) 開発用アカウントを退会させ、同じ email で別の利用者を作った後に起動すると、開発用アカウントの所属を足せずに起動が止まる。`down -v` で戻す

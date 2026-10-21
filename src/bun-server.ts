@@ -15,7 +15,7 @@ export const startBunServer = (
   options: {
     emailSender?: Layer.Layer<EmailSender>;
     ttlStore?: TtlStoreBackend;
-    extend?: (app: Hono) => void;
+    extendBeforeStatic?: (app: Hono) => void;
   } = {},
 ) => {
   initBunSentry();
@@ -38,6 +38,7 @@ export const startBunServer = (
 
   const app = buildApp({
     mountStatic: (honoApp) => {
+      options.extendBeforeStatic?.(honoApp);
       honoApp.use(
         "/auth/*",
         serveStatic({
@@ -49,7 +50,6 @@ export const startBunServer = (
       honoApp.get("/account/*", spaFallback);
     },
   });
-  options.extend?.(app);
 
   const port = Number(process.env.PORT) || 3100;
   console.log(`auth-service listening on port ${port}`);

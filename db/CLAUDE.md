@@ -13,6 +13,7 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 - `src/worker.ts`: per-request の pool を供給する `@/db/client` の import だけを許す (`biome-ignore` で個別に許可)。
 - テストの seed、観測、cleanup: 実体は `db/testing/*` (Promise) に閉じる。src のテストは `TestDb` service (`src/__tests__/test-db.ts`) を経由し、`e2e/fixtures.ts` は直接使う (理由: ADR-0017 の依存注入の項)。
 - `e2e/fixtures.ts`: spec からは `e2e/seed.ts` の子プロセス経由でだけ呼ぶ。
+- `testing/server.ts` と、そこから辿る `testing/*` (consumer の試験の環境の entry): 開発用アカウントの seed と一覧、session を置く TTL store の表を `db/testing/*` で読み書きする (理由: ADR-0020 の Decision 6・7)。
 
 試験が `DATABASE_URL` の向き先を判定するのは `db/testing/local-database.ts` の `databaseTarget` だけである (`db/__tests__/containment.test.ts` が固定)。
 

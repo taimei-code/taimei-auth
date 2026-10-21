@@ -4,6 +4,7 @@ import { expectConsumerSeesAnActiveCompanyAndItsRole } from "../../src/__tests__
 import { dbTest } from "../../src/__tests__/live-runner";
 import { grepFiles } from "../../src/__tests__/source-scan";
 import { getTrustedOrigins } from "../../src/env";
+import { DEV_ACCOUNTS, seedDevAccounts } from "../../db/testing/dev-accounts";
 import { createSignedInUser } from "../create-signed-in-user";
 
 const P = "tdcc-test-";
@@ -28,6 +29,16 @@ describe("試験 API が作る利用者も、VerifySession と GetSession で AC
           returnTo: `${getTrustedOrigins()[0]}/after-sign-in`,
         });
         yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, created.userId);
+      }),
+    ));
+
+  test("開発用アカウントのそれぞれも、ACTIVE な所属のどれかを現在の事業所とその role として見せる", () =>
+    run(
+      Effect.gen(function* () {
+        yield* Effect.promise(seedDevAccounts);
+        for (const devUser of DEV_ACCOUNTS.users) {
+          yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, devUser.id);
+        }
       }),
     ));
 });
