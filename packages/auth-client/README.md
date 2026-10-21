@@ -128,8 +128,22 @@ include:
 - 断片の image は linux/amd64 だけである。arm64 の host では amd64 の emulation が要る。
 - 断片の image は private である。pull する前に、この package を入れるのと同じ `read:packages` の token で `docker login ghcr.io` する。
 - `include:` は host の `node_modules` を読むので、compose を起動する前に、この package を host に install しておく。
-- 断片は auth ホスト専用の DB を起動する。DB は container と一緒に消える。
+- 断片は auth ホスト専用の DB を起動する。利用者・事業所・所属と session、ログインの試行回数の制限の計数は compose の volume に残り、`docker compose down` の後の `up` でも消えない。消すには `docker compose down -v` を使う。
 - 手元の確認で host から auth ホストに届かせる時は、override の file で `taimei-auth` に `ports` を足す。host で待ち受ける address は `127.0.0.1:3100:3100` のように loopback に限る。
+
+### 開発用アカウントでログインする
+
+試験の環境で auth ホストのログイン画面 (`buildAuthLoginUrl` の URL) を開くと、メールの入力の代わりに利用者の一覧が出る。選ぶとその利用者でログインし、`returnTo` へ移る。一覧には次の開発用アカウントと、試験の環境で作った利用者が出る。
+
+| 利用者 | 事業所 1 | 事業所 2 |
+|---|---|---|
+| `dev-owner@example.com` | OWNER | OWNER |
+| `dev-admin@example.com` | ADMIN | MEMBER |
+| `dev-member@example.com` | MEMBER | — |
+
+- auth ホストは起動するたびに、開発用アカウントのうち無いものだけを足す。利用者と事業所の id は何度起動しても変わらない。現在の事業所は事業所 1 である
+- ログインしたままログイン画面を開くと、一覧を出さずに `returnTo` へ移る。ACTIVE な事業所に 1 つも所属していない利用者は、`returnTo` の代わりに事業所の新規登録の画面 (`buildCompanySignupUrl` の URL) へ移る。別の利用者に替える時は、先にログアウトする
+- 一覧と選んだ後のログインは試験用の image の中にだけあり、本番の auth ホストには無い
 
 ### 試験の利用者
 

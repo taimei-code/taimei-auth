@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.7.0 — 2026-10-21
+
+試験の環境で、ログイン画面から開発用アカウントを選ぶだけでログインできるようにした。試験の環境の auth の DB と session を、container を作り直しても残るようにした。SDK の export と wire は変えていない。
+
+### Features
+
+- 試験の環境のログイン画面に、開発用アカウントと試験の環境で作った利用者の一覧を出す。選ぶとその利用者でログインし、`returnTo` へ移る。開発用アカウントは OWNER・ADMIN・MEMBER と 2 つの事業所をそろえ、何度起動しても利用者と事業所の id が変わらない。開発用アカウントの一覧は README の「開発用アカウントでログインする」にある
+- compose の断片の DB を volume に置いた。利用者・事業所・所属と session は `docker compose down` の後の `up` でも残り、`docker compose down -v` で消える。これまでは DB が container と一緒に消えていた
+
+### 移行
+
+- 試験の環境を起動するたびに auth の DB を空にしていた (自分の DB を毎回作り直すなど) 場合は、`docker compose down` を `docker compose down -v` に替える。替えないと、auth の DB だけが前回の利用者と事業所を持ったまま起動する
+- ログインのために Magic Link を auth ホストのログから拾っていたら、ログイン画面で開発用アカウントを選ぶ形に替える
+
+### Breaking changes
+
+なし。
+
 ## 3.6.0 — 2026-10-19
 
 consumer が taimei-auth の内部を知らずに、試験の環境 (e2e と手元の確認) で taimei-auth を動かし、試験の利用者でログインできるようにした。新規登録の直後かを判定する関数を足した。追加だけで、既存の export と wire は変えていない。
