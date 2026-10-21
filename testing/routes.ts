@@ -1,20 +1,11 @@
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
-import { Effect, Schema } from "effect";
-import { type Context, Hono } from "hono";
+import { Effect } from "effect";
+import { Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
-import { InvalidArgument } from "../src/failures";
 import { createSignedInUser } from "./create-signed-in-user";
+import { decodeBody } from "./decode-body";
 import { setCurrentCompany } from "./set-current-company";
 import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
-
-const decodeBody = <S extends Schema.Codec<unknown, unknown, never, never>>(
-  c: Context,
-  schema: S,
-) =>
-  Effect.tryPromise(() => c.req.json()).pipe(
-    Effect.flatMap(Schema.decodeUnknownEffect(schema)),
-    Effect.mapError(() => new InvalidArgument({})),
-  );
 
 export const testingRoutes = () =>
   new Hono()
@@ -22,7 +13,7 @@ export const testingRoutes = () =>
       runRoute(
         c,
         Effect.gen(function* () {
-          const body = yield* decodeBody(c, SignedInUserRequest);
+          const body = yield* decodeBody(() => c.req.json(), SignedInUserRequest);
           return c.json(yield* createSignedInUser(body));
         }),
       ),
@@ -31,7 +22,7 @@ export const testingRoutes = () =>
       runRoute(
         c,
         Effect.gen(function* () {
-          const body = yield* decodeBody(c, SetCurrentCompanyRequest);
+          const body = yield* decodeBody(() => c.req.json(), SetCurrentCompanyRequest);
           return c.json(yield* setCurrentCompany(body));
         }),
       ),

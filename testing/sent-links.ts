@@ -1,4 +1,5 @@
 import { Effect, Layer } from "effect";
+import { AuthApi } from "../src/auth-service";
 import { EmailSender } from "../src/email/ports";
 import { emailSenderLive } from "../src/email/wiring";
 
@@ -17,6 +18,17 @@ export const takeSentLink = (email: string, callbackURL: string) =>
     sentLinks.delete(email);
     return url;
   });
+
+export const magicLinkUrlFor = Effect.fnUntraced(function* (email: string, callbackURL: string) {
+  yield* AuthApi.use((authApi) => authApi.signInMagicLink({ email, callbackURL }));
+  const url = yield* takeSentLink(email, callbackURL);
+  if (url === undefined) {
+    return yield* Effect.die(
+      new Error("no email to the user was recorded with the callbackURL of the Magic Link"),
+    );
+  }
+  return url;
+});
 
 export const recordingEmailSender: Layer.Layer<EmailSender> = Layer.succeed(
   EmailSender,
