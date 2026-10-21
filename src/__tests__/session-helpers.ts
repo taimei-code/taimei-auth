@@ -2,7 +2,7 @@ import { makeSignature } from "better-auth/crypto";
 import { Effect } from "effect";
 import { auth } from "../auth";
 import { AuthApi } from "../auth-service";
-import { magicLinkLogPrefix } from "../email/local-delivery-log";
+import { sentLinkIn } from "../email/local-delivery-log";
 import { TtlStore } from "../ttl-store-service";
 import type { Actor } from "../account/actor-contract";
 import { observing } from "./live-runner";
@@ -114,9 +114,9 @@ export const requestMagicLink = (input: { email: string; callbackURL: string }) 
         body: JSON.stringify({ email: input.email, callbackURL: input.callbackURL }),
       }),
     );
-    const emailed = logs.find((line) => line.includes(magicLinkLogPrefix(input.email)));
-    if (!emailed) return yield* Effect.die(new Error(`no magic link was sent to ${input.email}`));
-    return emailed.slice(emailed.indexOf("http"));
+    const link = sentLinkIn(logs, input.email);
+    if (!link) return yield* Effect.die(new Error(`no magic link was sent to ${input.email}`));
+    return link;
   });
 
 export const followMagicLink = (link: string) =>

@@ -17,4 +17,5 @@
 
 - file 名は `<name>.e2e.ts` にする。`.test.` や `.spec.` を含めると `bun test` が拾う (`src/__tests__/e2e-setup.test.ts`)。
 - 画面は GLOSSARY の語で呼ぶ (例: 共通ログイン画面)。
+- 送ったメールの URL は `helpers.ts` の `sentLinkAfter(email, 送る操作)` で、その操作より後に log に出た行から読む。同じ email の古い行を拾わないためである (server の log は spec と実行をまたいで残る)。
 - `@/` は root の tsconfig では repo root を、web の tsconfig では `web/src` を指す。`e2e/` の `@/db/...` を web にそのまま写さない。

@@ -6,7 +6,7 @@ import { createInvitation } from "../src/invitation/create";
 import { switchCurrentCompany } from "../src/membership/current-company";
 import { requireInvitationAccept, requireInvite } from "../src/membership/guard";
 import type { Role } from "../src/membership/policy";
-import type { MagicLinkOutbox } from "./magic-link-outbox";
+import { takeSentLink } from "./sent-links";
 
 const TEST_COMPANY_ORG_CODE = "CORPORATE";
 
@@ -61,14 +61,11 @@ const companyWithRole = Effect.fnUntraced(function* (
   return created.company.id;
 });
 
-export const createSignedInUser = Effect.fnUntraced(function* (
-  input: {
-    name?: string;
-    companies: readonly { name?: string; role: Role }[];
-    returnTo: string;
-  },
-  outbox: MagicLinkOutbox,
-) {
+export const createSignedInUser = Effect.fnUntraced(function* (input: {
+  name?: string;
+  companies: readonly { name?: string; role: Role }[];
+  returnTo: string;
+}) {
   const authApi = yield* AuthApi;
   const email = testEmail("user");
   const user = yield* authApi.createUser({ email, name: input.name ?? "Test User" });
@@ -85,12 +82,10 @@ export const createSignedInUser = Effect.fnUntraced(function* (
   }
 
   yield* authApi.signInMagicLink({ email, callbackURL: input.returnTo });
-  const loginUrl = yield* outbox.take(email);
+  const loginUrl = yield* takeSentLink(email, input.returnTo);
   if (loginUrl === undefined) {
     return yield* Effect.die(
-      new Error(
-        "the magic link for the test user was not recorded; a returnTo carrying an invitation token sends an invitation email instead",
-      ),
+      new Error("no email to the test user was recorded with returnTo as its callbackURL"),
     );
   }
   return { userId: user.id, email, companyIds, loginUrl };

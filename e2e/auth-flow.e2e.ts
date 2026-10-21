@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { magicLinkFor, signInWithMagicLink } from "./helpers";
+import { signInWithMagicLink } from "./helpers";
 
 const signUpUntilCompanyForm = async (page: Page): Promise<void> => {
   await signInWithMagicLink(page, `e2e-newbie-${Date.now()}@example.com`);
@@ -41,9 +41,8 @@ test("新規 user の sign-up は事業所登録に誘導され、作成後に /
 });
 
 test("使用済み magic link の再クリックでは session を得られない", async ({ page, context }) => {
-  await signInWithMagicLink(page, "e2e-signin@example.com");
+  const usedLink = await signInWithMagicLink(page, "e2e-signin@example.com");
   await expect(page).toHaveURL(/\/account/);
-  const usedLink = await magicLinkFor("e2e-signin@example.com");
 
   await context.clearCookies();
   await page.goto(usedLink);

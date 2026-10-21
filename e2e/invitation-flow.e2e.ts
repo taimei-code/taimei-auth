@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import {
   authEntryUrl,
   BASE_URL,
-  magicLinkFor,
   reseedFixture,
+  sentLinkAfter,
   signInWithMagicLink,
 } from "./helpers";
 
@@ -25,10 +25,12 @@ test("SignIn 画面からの magic link でも招待を受諾でき /account に
   await expect(page.getByRole("button", { name: "GitHub でログイン" })).toHaveCount(0);
 
   await page.getByPlaceholder("you@example.com").fill(INVITEE_EMAIL);
-  await page.getByRole("button", { name: "Magic Link を送信" }).click();
-  await expect(page.getByText("を送信しました")).toBeVisible();
+  const link = await sentLinkAfter(INVITEE_EMAIL, async () => {
+    await page.getByRole("button", { name: "Magic Link を送信" }).click();
+    await expect(page.getByText("を送信しました")).toBeVisible();
+  });
 
-  await page.goto(await magicLinkFor(INVITEE_EMAIL));
+  await page.goto(link);
 
   await expect(page).toHaveURL(/\/account/);
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
@@ -50,18 +52,14 @@ test("メンバー画面が受けた redirect_url へ、招待された人が受
   );
   const inviteForm = page.getByRole("region", { name: "メンバーを招待" });
   await inviteForm.getByLabel("メールアドレス").fill(INVITEE_EMAIL);
-  await inviteForm.getByRole("button", { name: "招待する" }).click();
-
-  const redirectUrlInMagicLink = (magicLink: string) => {
-    const callbackURL = new URL(magicLink).searchParams.get("callbackURL") ?? "";
-    return new URL(callbackURL).searchParams.get("redirect_url");
-  };
-  await expect
-    .poll(async () => redirectUrlInMagicLink(await magicLinkFor(INVITEE_EMAIL)))
-    .toBe(redirectUrl);
+  const invitationLink = await sentLinkAfter(INVITEE_EMAIL, () =>
+    inviteForm.getByRole("button", { name: "招待する" }).click(),
+  );
+  const callbackURL = new URL(invitationLink).searchParams.get("callbackURL") ?? "";
+  expect(new URL(callbackURL).searchParams.get("redirect_url")).toBe(redirectUrl);
 
   const inviteePage = await (await browser.newContext()).newPage();
-  await inviteePage.goto(await magicLinkFor(INVITEE_EMAIL));
+  await inviteePage.goto(invitationLink);
   await expect(inviteePage).toHaveURL(redirectUrl);
 });
 

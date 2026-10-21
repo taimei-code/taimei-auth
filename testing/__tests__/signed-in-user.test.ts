@@ -13,7 +13,6 @@ import { getTrustedOrigins } from "../../src/env";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testingRoutes } from "../routes";
-import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 
 const P = "signed-in-user-test-";
 const { run, cleanup } = dbTest(P);
@@ -25,7 +24,7 @@ const RETURN_TO = `${trustedOrigin}/after-sign-in`;
 const UNTRUSTED_RETURN_TO = "https://attacker.example/";
 
 const app = buildApp({ mountStatic: () => {} });
-app.route("/", testingRoutes(testMagicLinkOutbox));
+app.route("/", testingRoutes());
 let server: ReturnType<typeof Bun.serve>;
 let testing: ReturnType<typeof createTestingClient>;
 
@@ -220,6 +219,25 @@ describe("試験 API で作る利用者と事業所", () => {
 
         const reopened = yield* openLoginUrl(signedIn.loginUrl);
         expect(reopened.headers.get("location")).not.toBe(RETURN_TO);
+      }),
+    ));
+
+  test("returnTo に実在する招待の token があり招待のメールが送られても、利用者を作り、loginUrl の callbackURL は returnTo になる", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const owner = yield* db.seedUser("invitation-return-owner");
+        const co = yield* db.seedCompany("invitation-return");
+        yield* db.seedMembership(owner.id, co, "OWNER");
+        const invitation = yield* db.seedInvitation({
+          companyId: co,
+          email: `${P}invitee@example.com`,
+          role: "MEMBER",
+          invitedByUserId: owner.id,
+        });
+        const returnTo = `${trustedOrigin}/auth/signup/accept-invitation?invitation_token=${invitation.token}`;
+        const signedIn = yield* createSignedInUser({ companies: [], returnTo });
+        expect(new URL(signedIn.loginUrl).searchParams.get("callbackURL")).toBe(returnTo);
       }),
     ));
 
