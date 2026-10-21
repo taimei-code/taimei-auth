@@ -28,6 +28,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - 型の境界: 試験のコードを `src/` の外の `testing/` に置く。root の `tsconfig.json` は composite で `testing/` を含まないので、`src/` から `testing/` を import すると typecheck が TS6307 で落ちる。`testing/` は `testing/tsconfig.json` で typecheck する (`scripts/typecheck.sh`)
    - 本番の bundle の検査: `deploy.yml` は upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path があれば deploy を止める
    - 起動の判定: `testing/server.ts` は boot の前に `APP_ENV === "test"` を確かめ、違えば exit 1 する
+6. **試験の環境の auth の DB と session は volume に残す (2026-10-21 追加)**。断片の Postgres は名前付き volume に data を置き、試験用の entry は **TTL store** を同じ DB の表に置く (本番と `src/index.ts` は変えない)。`down` → `up` の後も利用者・事業所・所属・session が残り、`down -v` で一緒に消える。版を上げて image が変わっても、起動の migrate は未適用の分だけを当てる
 
 ## 採らなかった案
 
@@ -35,6 +36,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - **本番のコードからの import を lint (biome の `noRestrictedImports`) で禁じる**: 呼び出し箇所に `biome-ignore` を 1 行書けば越えられ、その directive は repo で許されている。型の境界は `tsconfig.json` そのものを書き換えないと越えられない
 - **現在の事業所の切り替えに、本番の `/api/account/current-company` を consumer の試験から呼ぶ**: SPA のための endpoint が consumer の依存する公開の契約になり、SPA の都合で変えられなくなる。切り替えを試験 API に置けば、本番の公開面は増えない
 - **試験用の鍵や opt-in の環境変数で、本番の app の中の試験 API を開く**: 鍵は `APP_ENV=production` でも鍵があれば開く。環境変数は設定を誤ると開き、試験のコードが本番の bundle に入る。entry を分ければ、本番の artifact に試験のコードが入らない
+
+- **session を名前付き volume の file に置く** (2026-10-21): volume が 2 つになり、`down -v` で利用者と session が一緒に消えることを 2 か所で保つことになる
+- **session を better-auth の session の表にも書く (`storeSessionInDatabase`)** (2026-10-21): 試験の環境だけ session の置き場が本番と変わり、TTL store を前提にした session の削除と食い違う
 
 ## Consequences
 
@@ -47,3 +51,4 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - 試験の利用者も、consumer が受け取る現在の事業所の契約 (VerifySession と GetSession) を満たす。`testing/` の中で現在の事業所を書き換える呼び手を `testing/__tests__/default-company-contract.test.ts` が固定する
 - 資格情報なしの session 発行 (`AuthApi.issueSession`) の呼び手の固定 (`src/__tests__/effect-boundary.test.ts`) は変えない。試験 API は本物の Magic Link でログインさせる
 - `bun test` の preload は `testing/__tests__/preload.ts` になり、taimei-auth 自身の試験の runtime も Magic Link の URL を記録する
+- (2026-10-21) 試験の環境の Postgres の major を上げると、残った volume を読めずに起動しない。断片の Postgres の image を上げる時は、consumer に `down -v` を求める版の扱いを決めてから上げる

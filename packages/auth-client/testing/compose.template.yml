@@ -4,8 +4,8 @@ services:
     environment:
       POSTGRES_DB: auth
       POSTGRES_HOST_AUTH_METHOD: trust
-    tmpfs:
-      - /var/lib/postgresql/data
+    volumes:
+      - taimei-auth-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: pg_isready -h 127.0.0.1 -U postgres -d auth
       interval: 3s
@@ -37,3 +37,6 @@ services:
       default:
         aliases:
           - ${TAIMEI_AUTH_HOSTNAME:?TAIMEI_AUTH_HOSTNAME is required}
+
+volumes:
+  taimei-auth-postgres-data:

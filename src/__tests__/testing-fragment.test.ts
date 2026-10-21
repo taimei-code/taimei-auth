@@ -117,6 +117,18 @@ describe("consumer が書く設定は TAIMEI_AUTH_* だけで、DB は断片の�
     expect(template()).toMatch(/DATABASE_URL: postgres:\/\/[^\s]*@taimei-auth-postgres:5432\//);
   });
 
+  test("断片の Postgres は data を名前付き volume に置くので、down の後の up でも DB が残り、down -v で消える", () => {
+    const fragment = Bun.YAML.parse(template()) as {
+      services: { "taimei-auth-postgres": { volumes?: string[]; tmpfs?: unknown } };
+      volumes?: Record<string, unknown>;
+    };
+    const postgres = fragment.services["taimei-auth-postgres"];
+
+    expect(postgres.volumes).toEqual(["taimei-auth-postgres-data:/var/lib/postgresql/data"]);
+    expect(postgres.tmpfs).toBeUndefined();
+    expect(Object.keys(fragment.volumes ?? {})).toEqual(["taimei-auth-postgres-data"]);
+  });
+
   test("断片が参照する変数は、すべて TAIMEI_AUTH_ で始まる", () => {
     const variables = [...template().matchAll(/\$\{([A-Z_]+)/g)].map(([, name]) => name);
 
