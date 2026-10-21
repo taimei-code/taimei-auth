@@ -7,7 +7,11 @@ import {
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
+import { declaredFailure, routeEndpoint } from "./contract-mock";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
+
+const challengePending = (page: Page) =>
+  routeEndpoint(page, "mfaChallenge.state", (route) => route.fulfill({ json: { pending: true } }));
 
 const MFA_EMAIL = "e2e-mfa@example.com";
 
@@ -160,7 +164,7 @@ test("有効化ダイアログは QR・確認コード・リカバリーコー�
 
 test("有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({ page }) => {
   let enrollCalls = 0;
-  await page.route("**/api/account/mfa/enroll", async (route) => {
+  await routeEndpoint(page, "mfa.enroll", async (route) => {
     enrollCalls++;
     await route.continue();
   });
@@ -214,11 +218,8 @@ test("cookie 無しで /auth/mfa を直接開くと期限切れ案内だけを�
 
 test("初期 GET が失敗しても一度の観測で入力を許す", async ({ page }) => {
   let getCalls = 0;
-  await page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() !== "GET") {
-      await route.abort();
-      return;
-    }
+  await routeEndpoint(page, "mfaChallenge.verify", (route) => route.abort());
+  await routeEndpoint(page, "mfaChallenge.state", async (route) => {
     getCalls++;
     await route.fulfill({ status: 503, json: {} });
   });
@@ -236,7 +237,7 @@ test("初期観測中は status だけを表示して入力を隠す", async ({ 
   const observationPending = new Promise<void>((resolve) => {
     releaseObservation = resolve;
   });
-  await page.route("**/api/mfa/challenge", async (route) => {
+  await routeEndpoint(page, "mfaChallenge.state", async (route) => {
     await observationPending;
     await route.fulfill({ json: { pending: true } });
   });
@@ -256,7 +257,7 @@ test("Abort 済みの古い GET は新しい画面状態を上書きしない", 
   const firstPending = new Promise<void>((resolve) => {
     releaseFirst = resolve;
   });
-  await page.route("**/api/mfa/challenge", async (route) => {
+  await routeEndpoint(page, "mfaChallenge.state", async (route) => {
     getCalls++;
     if (getCalls === 1) {
       await firstPending;
@@ -291,14 +292,11 @@ test("verify 中は操作を止め、同期二重 submit でも POST は一回",
   const verifyPending = new Promise<void>((resolve) => {
     releaseVerify = resolve;
   });
-  await page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({ json: { pending: true } });
-      return;
-    }
+  await challengePending(page);
+  await routeEndpoint(page, "mfaChallenge.verify", async (route) => {
     postCalls++;
     await verifyPending;
-    await route.fulfill({ status: 400, json: { _tag: "InvalidCode" } });
+    await route.fulfill(declaredFailure("mfaChallenge.verify", "InvalidCode"));
   });
 
   await page.goto("/auth/mfa");
@@ -336,11 +334,8 @@ test("unmount 後も送信済み POST は完了し、遅い成功で遷移しな
     releaseVerify = resolve;
   });
   let postCompleted = false;
-  await page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({ json: { pending: true } });
-      return;
-    }
+  await challengePending(page);
+  await routeEndpoint(page, "mfaChallenge.verify", async (route) => {
     postStarted?.();
     await verifyPending;
     await route.fulfill({ json: { redirect_url: "/account" } });
@@ -364,17 +359,11 @@ test("unmount 後も送信済み POST は完了し、遅い成功で遷移しな
   await expect(challengeCodeInput(page)).toHaveCount(0);
 });
 
-const mockChallenge = (page: Page, verify: { status: number; json?: unknown }) =>
-  page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({ json: { pending: true } });
-      return;
-    }
-    await route.fulfill(verify);
-  });
-
 test("「ログインをやり直す」は末尾スラッシュ無しのログイン画面を指す", async ({ page }) => {
-  await mockChallenge(page, { status: 400, json: { _tag: "InvalidCode" } });
+  await challengePending(page);
+  await routeEndpoint(page, "mfaChallenge.verify", (route) =>
+    route.fulfill(declaredFailure("mfaChallenge.verify", "InvalidCode")),
+  );
   await page.goto("/auth/mfa");
 
   const href = await page.getByRole("link", { name: "ログインをやり直す" }).getAttribute("href");
@@ -384,11 +373,8 @@ test("「ログインをやり直す」は末尾スラッシュ無しのログ�
 
 test("空の code は verify を呼ばない", async ({ page }) => {
   let postCalls = 0;
-  await page.route("**/api/mfa/challenge**", async (route) => {
-    if (route.request().method() === "GET") {
-      await route.fulfill({ json: { pending: true } });
-      return;
-    }
+  await challengePending(page);
+  await routeEndpoint(page, "mfaChallenge.verify", async (route) => {
     postCalls++;
     await route.abort();
   });
@@ -461,7 +447,7 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
 test("MFA の状態の取得が失敗すると、取得できなかった旨を出す", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   let failedRequests = 0;
-  await page.route("**/api/account/mfa", async (route) => {
+  await routeEndpoint(page, "mfa.status", async (route) => {
     failedRequests++;
     await route.fulfill({ status: 500, body: "" });
   });
@@ -477,12 +463,12 @@ test("MFA の状態の取得が失敗すると、取得できなかった旨を�
 test("有効化が EnrollmentChanged で失敗した後に開き直すと、登録をやり直す", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   let enrollRequests = 0;
-  await page.route("**/api/account/mfa/enroll", async (route) => {
+  await routeEndpoint(page, "mfa.enroll", async (route) => {
     enrollRequests++;
     await route.continue();
   });
-  await page.route("**/api/account/mfa/activate", async (route) => {
-    await route.fulfill({ status: 409, json: { _tag: "EnrollmentChanged" } });
+  await routeEndpoint(page, "mfa.activate", async (route) => {
+    await route.fulfill(declaredFailure("mfa.activate", "EnrollmentChanged"));
   });
   await page.goto("/account/security");
 

@@ -18,4 +18,6 @@
 - file 名は `<name>.e2e.ts` にする。`.test.` や `.spec.` を含めると `bun test` が拾う (`src/__tests__/e2e-setup.test.ts`)。
 - 画面は GLOSSARY の語で呼ぶ (例: 共通ログイン画面)。
 - 送ったメールの URL は `helpers.ts` の `sentLinkAfter(email, 送る操作)` で、その操作より後に log に出た行から読む。同じ email の古い行を拾わないためである (server の log は spec と実行をまたいで残る)。
+- SPA の API のモックは `contract-mock.ts` の `routeEndpoint(page, "<group>.<endpoint>", handler)` で張る。path と method を契約から取り、同じ path の別の method の request は素通しにする。
+- 契約で宣言した失敗の応答は `contract-mock.ts` の `declaredFailure` で作る。契約を変えるとモックを作る所で throw するので、契約とずれたモックに気づかないことはない。契約に無い応答 (body の無い 500、遅延、`abort`) は応答だけを手で書く。
 - `@/` は root の tsconfig では repo root を、web の tsconfig では `web/src` を指す。`e2e/` の `@/db/...` を web にそのまま写さない。
