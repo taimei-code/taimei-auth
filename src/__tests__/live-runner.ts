@@ -8,7 +8,7 @@ import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer } from "./test-db";
 import { testTtlStore } from "./test-ttl-store";
 
-type TestServices = AppServices | TestDb;
+export type TestServices = AppServices | TestDb;
 
 const testAppLayer = appLayer(testTtlStore);
 

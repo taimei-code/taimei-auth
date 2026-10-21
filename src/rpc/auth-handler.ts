@@ -2,7 +2,7 @@ import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import type { ConnectRouter, ServiceImpl } from "@connectrpc/connect";
 import { buildSessionCookieHeader } from "@taimei-code/auth-client";
 import { Effect } from "effect";
-import type { MemberRow } from "@/db/repositories/membership";
+import type { Role } from "@/db/repositories/membership";
 import type { UserRow } from "@/db/repositories/user";
 import { UserRepo } from "../account/ports";
 import type { Session } from "../auth";
@@ -21,7 +21,7 @@ import {
   VerifySessionOkSchema,
   VerifySessionResponseSchema,
 } from "../gen/auth/v1/auth_pb";
-import { MembershipRepo } from "../membership/ports";
+import { currentCompanyMembersOf, currentRoleOf } from "../membership/current-company";
 import { captureCause, type SentryService } from "../sentry";
 import { checkSession } from "../session-check";
 import { toProtoCompanyMember, toProtoRole, toProtoSession, toProtoUser } from "./mappers";
@@ -67,7 +67,7 @@ const verifySessionUser = Effect.fnUntraced(function* (
 const sessionSeenByConsumer = (
   user: UserRow,
   session: Session["session"],
-  role: MemberRow["role"] | undefined,
+  role: Role | undefined,
 ) => ({
   user: create(UserSchema, toProtoUser(user)),
   session: create(SessionSchema, toProtoSession(session)),
@@ -81,24 +81,15 @@ export const verifySessionProgram = Effect.fnUntraced(function* (req: { sessionT
   }
   const { user, session } = check;
 
-  const companyId = user.lastUsedCompanyId;
-  const membership = companyId
-    ? yield* MembershipRepo.use((repo) => repo.findMembership(user.id, companyId))
-    : undefined;
+  const role = yield* currentRoleOf(user);
 
   return create(VerifySessionResponseSchema, {
     outcome: {
       case: "ok",
-      value: create(VerifySessionOkSchema, sessionSeenByConsumer(user, session, membership?.role)),
+      value: create(VerifySessionOkSchema, sessionSeenByConsumer(user, session, role)),
     },
   });
 });
-
-const oldestJoinedFirst = (members: readonly MemberRow[]) =>
-  members.toSorted(
-    (a, b) =>
-      a.joinedAt.getTime() - b.joinedAt.getTime() || a.membershipId.localeCompare(b.membershipId),
-  );
 
 const listMembersError = (reason: Result) =>
   create(ListCurrentCompanyMembersResponseSchema, {
@@ -110,14 +101,6 @@ const listMembersOk = (value: MessageInitShape<typeof ListCurrentCompanyMembersO
     outcome: { case: "ok", value: create(ListCurrentCompanyMembersOkSchema, value) },
   });
 
-const currentCompanyMembers = Effect.fnUntraced(function* (user: UserRow) {
-  const companyId = user.lastUsedCompanyId;
-  if (!companyId) return undefined;
-  const members = yield* MembershipRepo.use((repo) => repo.findMembersByCompanyId(companyId));
-  const caller = members.find((m) => m.userId === user.id);
-  return caller && { companyId, callerRole: caller.role, members: oldestJoinedFirst(members) };
-});
-
 export const listCurrentCompanyMembersProgram = Effect.fnUntraced(function* (req: {
   sessionToken: string;
 }) {
@@ -126,7 +109,7 @@ export const listCurrentCompanyMembersProgram = Effect.fnUntraced(function* (req
     return listMembersError(check.reason);
   }
 
-  const current = yield* currentCompanyMembers(check.user);
+  const current = yield* currentCompanyMembersOf(check.user);
   return listMembersOk(
     current
       ? { companyId: current.companyId, members: current.members.map(toProtoCompanyMember) }
@@ -145,7 +128,7 @@ export const getSessionProgram = Effect.fnUntraced(function* (req: { sessionToke
     return getSessionError(check.reason);
   }
   const { user, session } = check;
-  const current = yield* currentCompanyMembers(user);
+  const current = yield* currentCompanyMembersOf(user);
 
   return create(GetSessionResponseSchema, {
     outcome: {

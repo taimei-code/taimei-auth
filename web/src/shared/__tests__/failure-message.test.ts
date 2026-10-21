@@ -4,7 +4,7 @@ import { Cause } from "effect";
 import { LastOwner } from "@core/membership/errors";
 import { Unauthorized } from "@core/failures";
 
-import { failureMessage, hasFailureTag } from "../failure-message";
+import { failureMessage, failureOutcome } from "../failure-message";
 
 const MESSAGES = { LastOwner: "最後のオーナーです" };
 
@@ -37,20 +37,25 @@ describe("failureMessage", () => {
   });
 });
 
-describe("hasFailureTag", () => {
-  test("宣言した失敗の _tag が一致する時だけ true", () => {
-    const cause: Cause.Cause<LastOwner | Unauthorized> = Cause.fail(new LastOwner());
-
-    expect(hasFailureTag(cause, "LastOwner")).toBe(true);
-    expect(hasFailureTag(cause, "Unauthorized")).toBe(false);
+describe("failureOutcome", () => {
+  test("宣言した失敗の _tag ごとに表の値を返し、型付きの失敗を持たない cause は既定の値を返す", () => {
+    const outcomes = { LastOwner: "soleOwner" };
+    const failed: Cause.Cause<LastOwner | Unauthorized> = Cause.fail(new LastOwner());
     const defect: Cause.Cause<LastOwner | Unauthorized> = Cause.die(new Error("network"));
-    expect(hasFailureTag(defect, "LastOwner")).toBe(false);
+
+    const fromDeclared = failureOutcome(failed, outcomes, "failed");
+    const fromDefect = failureOutcome(defect, outcomes, "failed");
+
+    expect(fromDeclared).toBe("soleOwner");
+    expect(fromDefect).toBe("failed");
   });
 
-  test("宣言していない _tag を渡すと型エラーになる", () => {
+  test("宣言した失敗の _tag を表から欠くと型エラーになる", () => {
     const cause: Cause.Cause<LastOwner | Unauthorized> = Cause.fail(new LastOwner());
 
-    // @ts-expect-error AlreadyExists はこの cause の失敗に無い
-    expect(hasFailureTag(cause, "AlreadyExists")).toBe(false);
+    // @ts-expect-error LastOwner の結果が無い
+    const outcome = failureOutcome(cause, {}, "failed");
+
+    expect(outcome).toBe("failed");
   });
 });

@@ -1,5 +1,6 @@
-import { and, asc, count, eq, gt, inArray, like } from "drizzle-orm";
+import { and, asc, count, eq, inArray, like } from "drizzle-orm";
 import { db } from "../client";
+import { pendingAt } from "../repositories/invitation";
 import {
   auditLog,
   company,
@@ -84,14 +85,7 @@ export function readPendingInvitation(
   return db
     .select()
     .from(invitation)
-    .where(
-      and(
-        eq(invitation.companyId, companyId),
-        eq(invitation.email, email),
-        eq(invitation.status, "PENDING"),
-        gt(invitation.expiresAt, now),
-      ),
-    )
+    .where(and(eq(invitation.companyId, companyId), eq(invitation.email, email), pendingAt(now)))
     .then(first);
 }
 

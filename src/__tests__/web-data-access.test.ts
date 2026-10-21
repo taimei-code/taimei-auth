@@ -58,6 +58,11 @@ const RULES: readonly Rule[] = [
       path !== "shared/leave-spa.ts",
   },
   {
+    name: "cause を捨てる onFailure",
+    violates: (path, source) =>
+      /\bonFailure:\s*\(\s*(_\w*)?\s*\)\s*=>/.test(source) && !path.endsWith("-atom.ts"),
+  },
+  {
     name: "sign-out",
     violates: (path, source) =>
       /\bauthClient\.signOut\(/.test(source) && path !== "auth/sign-out.ts",
@@ -125,6 +130,16 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
           'const add = useAtomSet(addCompanyAtom, { mode: "promiseExit" });',
       }),
     ).toEqual(["company/AddCompanyDialog.tsx: promiseExit"]);
+  });
+
+  test("画面と hook は mutation の失敗の cause を捨てず、query を観測する *-atom.ts だけが捨ててよい", () => {
+    const discard = "Exit.match(exit, { onSuccess: () => 1, onFailure: () => 0 });";
+    expect(
+      analyzeWebDataAccess({
+        "web/src/company/AddCompanyDialog.tsx": discard,
+        "web/src/company/company-atom.ts": discard,
+      }),
+    ).toEqual(["company/AddCompanyDialog.tsx: cause を捨てる onFailure"]);
   });
 
   test("名前が -api.ts で終わる file でも fetch を書くと落ちる", () => {

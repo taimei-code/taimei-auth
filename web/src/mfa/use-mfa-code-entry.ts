@@ -1,12 +1,7 @@
-import {
-  useRef,
-  useState,
-  type ChangeEvent,
-  type ComponentPropsWithoutRef,
-  type FormEvent,
-} from "react";
+import { useState, type ChangeEvent, type ComponentPropsWithoutRef, type FormEvent } from "react";
 
 import type { MfaCodeKind } from "./mfa-atom";
+import { oneAtATime } from "./one-at-a-time";
 
 const WHITESPACE = /\s+/g;
 const PASTE_TOLERANT_MAX_LENGTH = 32;
@@ -106,7 +101,7 @@ export function useMfaCodeEntry(options: {
 }): MfaCodeInput {
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const submitInFlight = useRef(false);
+  const [runOneAtATime] = useState(oneAtATime);
 
   const input = useMfaCodeInput({
     inputId: options.inputId,
@@ -114,17 +109,14 @@ export function useMfaCodeEntry(options: {
     errorMessage,
     onKindChange: () => setErrorMessage(null),
     submit: (value) => {
-      if (submitInFlight.current) return;
-      submitInFlight.current = true;
-      setSubmitting(true);
-      setErrorMessage(null);
-      void options
-        .submit(value)
-        .then(setErrorMessage)
-        .finally(() => {
-          submitInFlight.current = false;
-          setSubmitting(false);
-        });
+      runOneAtATime(() => {
+        setSubmitting(true);
+        setErrorMessage(null);
+        return options
+          .submit(value)
+          .then(setErrorMessage)
+          .finally(() => setSubmitting(false));
+      });
     },
   });
 

@@ -1,26 +1,19 @@
 import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { CurrentActor } from "../account/actor-contract";
-import { AuthApi } from "../auth-service";
-import { Background } from "../background";
-import { getAppUrl } from "../email/client";
 import { acceptInvitation } from "../invitation/accept";
-import { acceptInvitationPath } from "../invitation/accept-path";
 import { createInvitation } from "../invitation/create";
-import { InvitationRepo } from "../invitation/ports";
+import { pendingInvitationsOf } from "../invitation/pending-invitations";
 import { revokeInvitation } from "../invitation/revoke";
 import { requireInvitationAccept, requireInvite, requireMembershipOf } from "../membership/guard";
-import { captureCause } from "../sentry";
 import { SpaApi } from "../spa-contract";
 import { dieOnBoundary } from "./request-http-api";
 
 export const InvitationHandlers = HttpApiBuilder.group(SpaApi, "invitation", (handlers) =>
   handlers.handleAll({
     pending: Effect.fnUntraced(function* ({ params }) {
-      yield* requireMembershipOf(yield* CurrentActor, params.companyId, "ADMIN");
-      const invitations = yield* InvitationRepo.use((repo) =>
-        repo.listPendingInvitations(params.companyId),
-      );
+      const member = yield* requireMembershipOf(yield* CurrentActor, params.companyId, "ADMIN");
+      const invitations = yield* pendingInvitationsOf(member);
       return {
         invitations: invitations.map((inv) => ({
           id: inv.id,
@@ -32,44 +25,25 @@ export const InvitationHandlers = HttpApiBuilder.group(SpaApi, "invitation", (ha
       };
     }, dieOnBoundary),
     create: Effect.fnUntraced(function* ({ params, payload }) {
-      const { actor, email, role, redirect_target } = yield* requireInvite({
+      const grant = yield* requireInvite({
         actor: yield* CurrentActor,
         companyId: params.companyId,
         body: payload,
       });
-      const result = yield* createInvitation({
-        actorUserId: actor.id,
-        companyId: params.companyId,
-        email,
-        role,
-      });
-      const invitationRow = result.invitation;
-      const callbackURL = `${getAppUrl()}${acceptInvitationPath(invitationRow.token, redirect_target)}`;
-      const authApi = yield* AuthApi;
-      const background = yield* Background;
-      yield* background.run(
-        authApi
-          .signInMagicLink({ email, callbackURL })
-          .pipe(Effect.catch(captureCause({ tags: { handler: "accountInvitation" } }))),
-      );
+      const { invitation, reused } = yield* createInvitation(grant);
       return {
         invitation: {
-          id: invitationRow.id,
-          email: invitationRow.email,
-          role: invitationRow.role,
-          expires_at: invitationRow.expiresAt.toISOString(),
+          id: invitation.id,
+          email: invitation.email,
+          role: invitation.role,
+          expires_at: invitation.expiresAt.toISOString(),
         },
-        reused: result.reused,
+        reused,
       };
     }, dieOnBoundary),
     revoke: Effect.fnUntraced(function* ({ params }) {
-      const actor = yield* CurrentActor;
-      yield* requireMembershipOf(actor, params.companyId, "ADMIN");
-      yield* revokeInvitation({
-        actorUserId: actor.id,
-        companyId: params.companyId,
-        invitationId: params.invitationId,
-      });
+      const member = yield* requireMembershipOf(yield* CurrentActor, params.companyId, "ADMIN");
+      yield* revokeInvitation(member, params.invitationId);
       return { ok: true as const };
     }, dieOnBoundary),
     accept: Effect.fnUntraced(function* ({ payload }) {
@@ -80,10 +54,7 @@ export const InvitationHandlers = HttpApiBuilder.group(SpaApi, "invitation", (ha
       if (grant.mode === "reused") {
         return { ok: true as const, company_id: grant.companyId, reused: true as const };
       }
-      const result = yield* acceptInvitation({
-        actor: grant.actor,
-        invitation: grant.invitation,
-      });
+      const result = yield* acceptInvitation(grant);
       return { ok: true as const, company_id: result.companyId };
     }, dieOnBoundary),
   }),

@@ -8,6 +8,7 @@ import { removeMember } from "../../membership/remove";
 import { deleteAccountIfOrphaned } from "../orphan";
 import { storedSessionOf } from "../../__tests__/test-ttl-store";
 import { createSessionFor } from "../../__tests__/session-helpers";
+import { removalGrantForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "orphan-test-";
 const { run } = dbTest(P);
@@ -164,12 +165,14 @@ describe("orphan の判定と事業所追加の競合", () => {
         );
         const removal = Deferred.await(written).pipe(
           Effect.andThen(
-            removeMember({
-              actorUserId: owner.id,
-              targetUserId: member.id,
-              companyId: company,
-              targetRole: "MEMBER",
-            }),
+            removeMember(
+              removalGrantForTest({
+                actorUserId: owner.id,
+                targetUserId: member.id,
+                companyId: company,
+                targetRole: "MEMBER",
+              }),
+            ),
           ),
         );
 

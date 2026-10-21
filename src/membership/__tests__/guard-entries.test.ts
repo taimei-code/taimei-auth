@@ -131,13 +131,13 @@ describe("requireRemoval (403 (membership) → 403 (canAttemptRemoval) → 404 �
     expect(e._tag).toBe("Forbidden");
   });
 
-  test("MEMBER の自己離脱 → ok { isSelf: true }", async () => {
+  test("MEMBER の自己離脱 → ok", async () => {
     const r = await runOk(
       requireRemoval({ actor, companyId: "c1", targetUserId: "u1" }).pipe(
         Effect.provide(members(["u1", "c1", "MEMBER"])),
       ),
     );
-    expect(r).toMatchObject({ actor: { id: "u1" }, targetRole: "MEMBER", isSelf: true });
+    expect(r).toMatchObject({ actor: { id: "u1" }, targetUserId: "u1", targetRole: "MEMBER" });
   });
 });
 

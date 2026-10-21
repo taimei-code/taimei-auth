@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { reseedFixture, signInWithMagicLink, SWITCH_EMAIL } from "./helpers";
+import { declaredFailure, routeEndpoint } from "./contract-mock";
 
 test.beforeEach(() => reseedFixture("switch"));
 
@@ -48,12 +49,8 @@ test("招待の送信が試行枠の 429 (RateLimited) を受けると、回数�
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/members");
-  await page.route(/\/api\/account\/companies\/[^/]+\/invitations$/, async (route) => {
-    if (route.request().method() !== "POST") {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({ status: 429, json: { _tag: "RateLimited" } });
+  await routeEndpoint(page, "invitation.create", async (route) => {
+    await route.fulfill(declaredFailure("invitation.create", "RateLimited"));
   });
 
   await page.getByLabel("メールアドレス").fill("e2e-switch-invitee@example.com");
@@ -70,10 +67,12 @@ test("メンバー一覧と招待中の一覧の取得が失敗すると、見�
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   let failedRequests = 0;
-  await page.route(/\/api\/account\/companies\/[^/]+\/(members|invitations)$/, async (route) => {
-    failedRequests++;
-    await route.fulfill({ status: 500, body: "" });
-  });
+  for (const endpoint of ["membership.list", "invitation.pending"]) {
+    await routeEndpoint(page, endpoint, async (route) => {
+      failedRequests++;
+      await route.fulfill({ status: 500, body: "" });
+    });
+  }
 
   await page.goto("/account/members");
 

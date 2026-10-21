@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { magicLinkFor, signInWithMagicLink } from "./helpers";
+import { signInWithMagicLink } from "./helpers";
+import { declaredFailure, routeEndpoint } from "./contract-mock";
 
 const signUpUntilCompanyForm = async (page: Page): Promise<void> => {
   await signInWithMagicLink(page, `e2e-newbie-${Date.now()}@example.com`);
@@ -41,9 +42,8 @@ test("新規 user の sign-up は事業所登録に誘導され、作成後に /
 });
 
 test("使用済み magic link の再クリックでは session を得られない", async ({ page, context }) => {
-  await signInWithMagicLink(page, "e2e-signin@example.com");
+  const usedLink = await signInWithMagicLink(page, "e2e-signin@example.com");
   await expect(page).toHaveURL(/\/account/);
-  const usedLink = await magicLinkFor("e2e-signin@example.com");
 
   await context.clearCookies();
   await page.goto(usedLink);
@@ -61,7 +61,7 @@ test("session の無い browser で /account を開くとログイン画面に�
 test("事業所登録の作成が失敗すると、応答の body ではなく固定の文言を出す", async ({ page }) => {
   await signUpUntilCompanyForm(page);
   let failedRequests = 0;
-  await page.route("**/api/account/companies", async (route) => {
+  await routeEndpoint(page, "company.create", async (route) => {
     failedRequests++;
     await route.fulfill({ status: 500, json: { leaked: "upstream-detail" } });
   });
@@ -77,9 +77,9 @@ test("事業所登録の作成が AlreadyExists (別のタブで作成済み) �
   page,
 }) => {
   await signUpUntilCompanyForm(page);
-  await page.route("**/api/account/companies", async (route) => {
+  await routeEndpoint(page, "company.create", async (route) => {
     await route.fetch();
-    await route.fulfill({ status: 409, json: { _tag: "AlreadyExists" } });
+    await route.fulfill(declaredFailure("company.create", "AlreadyExists"));
   });
 
   await submitCompanyForm(page);

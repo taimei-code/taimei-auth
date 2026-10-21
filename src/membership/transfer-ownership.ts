@@ -3,13 +3,11 @@ import type { DbTx } from "@/db/transaction";
 import { appendAuditInTx } from "../audit/append";
 import { Transaction } from "../transaction";
 import { applyTransfer } from "./apply-change";
+import type { OwnershipTransferGrant } from "./guard";
 
-export const transferOwnership = Effect.fnUntraced(function* (params: {
-  actorUserId: string;
-  toUserId: string;
-  companyId: string;
-}) {
-  const { actorUserId, toUserId, companyId } = params;
+export const transferOwnership = Effect.fnUntraced(function* (grant: OwnershipTransferGrant) {
+  const { toUserId, companyId } = grant;
+  const actorUserId = grant.actor.id;
   const tx = yield* Transaction;
 
   yield* tx.run(

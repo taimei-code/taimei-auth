@@ -6,6 +6,7 @@ import { TestDb } from "../../__tests__/test-db";
 import { auditLogWith } from "../../__tests__/test-layers";
 import { DbError } from "../../errors";
 import { acceptInvitation } from "../accept";
+import { acceptGrantForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "acc-test-";
 const { run, cleanup } = dbTest(P);
@@ -54,10 +55,12 @@ describe("acceptInvitation", () => {
 
         yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
-            const result = yield* acceptInvitation({
-              actor: { id: invitee.id, email: invitee.email },
-              invitation: invitationRow,
-            });
+            const result = yield* acceptInvitation(
+              acceptGrantForTest({
+                actor: { id: invitee.id, email: invitee.email },
+                invitation: invitationRow,
+              }),
+            );
             expect(result).toEqual({ companyId: co });
             expect(warn).not.toHaveBeenCalled();
           }),
@@ -93,10 +96,12 @@ describe("acceptInvitation", () => {
 
         const exit = yield* withWarnSpy(() =>
           Effect.exit(
-            acceptInvitation({
-              actor: { id: invitee.id, email: invitee.email },
-              invitation: invitationRow,
-            }),
+            acceptInvitation(
+              acceptGrantForTest({
+                actor: { id: invitee.id, email: invitee.email },
+                invitation: invitationRow,
+              }),
+            ),
           ),
         );
         expect(Exit.isFailure(exit)).toBe(true);
@@ -125,10 +130,12 @@ describe("acceptInvitation", () => {
         const { e, warnCalls } = yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
             const e = yield* Effect.flip(
-              acceptInvitation({
-                actor: { id: invitee.id, email: invitee.email },
-                invitation: invitationRow,
-              }),
+              acceptInvitation(
+                acceptGrantForTest({
+                  actor: { id: invitee.id, email: invitee.email },
+                  invitation: invitationRow,
+                }),
+              ),
             );
             return { e, warnCalls: warn.mock.calls.map((c) => Array.from(c)) };
           }),
@@ -183,10 +190,12 @@ describe("acceptInvitation", () => {
         const { e, warnCalls } = yield* withWarnSpy((warn) =>
           Effect.gen(function* () {
             const e = yield* Effect.flip(
-              acceptInvitation({
-                actor: { id: invitee.id, email: invitee.email },
-                invitation: invitationRow,
-              }).pipe(Effect.provide(failingAudit)),
+              acceptInvitation(
+                acceptGrantForTest({
+                  actor: { id: invitee.id, email: invitee.email },
+                  invitation: invitationRow,
+                }),
+              ).pipe(Effect.provide(failingAudit)),
             );
             return { e, warnCalls: warn.mock.calls.map((c) => Array.from(c)) };
           }),
@@ -220,10 +229,12 @@ describe("acceptInvitation", () => {
 
         const failure = yield* withWarnSpy(() =>
           Effect.flip(
-            acceptInvitation({
-              actor: { id: invitee.id, email: invitee.email },
-              invitation: invitationRow,
-            }),
+            acceptInvitation(
+              acceptGrantForTest({
+                actor: { id: invitee.id, email: invitee.email },
+                invitation: invitationRow,
+              }),
+            ),
           ),
         );
         expect(failure).toBeInstanceOf(ExpiredOrUsed);
@@ -251,10 +262,12 @@ describe("acceptInvitation", () => {
         yield* db.removeMembership(inviter.id, co);
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        const result = yield* acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        });
+        const result = yield* acceptInvitation(
+          acceptGrantForTest({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        );
         expect(result).toEqual({ companyId: co });
         expect((yield* db.readMembership(invitee.id, co))?.role).toBe("MEMBER");
         expect(yield* auditCountByType(invitee.id, "invitation_accept_rejected")).toBe(0);
@@ -277,20 +290,24 @@ describe("acceptInvitation", () => {
         });
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        const first = yield* acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        });
+        const first = yield* acceptInvitation(
+          acceptGrantForTest({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        );
         expect(first.companyId).toBe(co);
 
         const stale = yield* reloadInvitation(inv.token);
 
         const second = yield* withWarnSpy(() =>
           Effect.flip(
-            acceptInvitation({
-              actor: { id: invitee.id, email: invitee.email },
-              invitation: stale,
-            }),
+            acceptInvitation(
+              acceptGrantForTest({
+                actor: { id: invitee.id, email: invitee.email },
+                invitation: stale,
+              }),
+            ),
           ),
         );
         expect(second).toBeInstanceOf(ExpiredOrUsed);
@@ -317,10 +334,12 @@ describe("acceptInvitation", () => {
         });
         const invitationRow = yield* reloadInvitation(inv.token);
 
-        const accept = acceptInvitation({
-          actor: { id: invitee.id, email: invitee.email },
-          invitation: invitationRow,
-        });
+        const accept = acceptInvitation(
+          acceptGrantForTest({
+            actor: { id: invitee.id, email: invitee.email },
+            invitation: invitationRow,
+          }),
+        );
         const results = yield* withWarnSpy(() =>
           Effect.all([Effect.exit(accept), Effect.exit(accept)], { concurrency: "unbounded" }),
         );
@@ -350,10 +369,12 @@ describe("acceptInvitation", () => {
           const invitationRow = yield* reloadInvitation(inv.token);
           const failure = yield* withWarnSpy(() =>
             Effect.flip(
-              acceptInvitation({
-                actor: { id: invitee.id, email: invitee.email },
-                invitation: invitationRow,
-              }),
+              acceptInvitation(
+                acceptGrantForTest({
+                  actor: { id: invitee.id, email: invitee.email },
+                  invitation: invitationRow,
+                }),
+              ),
             ),
           );
           expect(failure).toBeInstanceOf(ExpiredOrUsed);
@@ -374,10 +395,12 @@ describe("acceptInvitation", () => {
             invitedByUserId: inviter.id,
           });
           const invitationRow = yield* reloadInvitation(inv.token);
-          const acceptResult = yield* acceptInvitation({
-            actor: { id: invitee.id, email: invitee.email },
-            invitation: invitationRow,
-          });
+          const acceptResult = yield* acceptInvitation(
+            acceptGrantForTest({
+              actor: { id: invitee.id, email: invitee.email },
+              invitation: invitationRow,
+            }),
+          );
           expect(acceptResult.companyId).toBe(co);
           expect((yield* db.readMembership(invitee.id, co))?.role).toBe("OWNER");
           yield* db.setMembershipRole(inviter.id, co, "ADMIN");

@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { reseedFixture, signInWithMagicLink, SWITCH_EMAIL } from "./helpers";
-
-const UNAUTHORIZED = { status: 401, json: { _tag: "Unauthorized" } };
+import { declaredFailure, routeEndpoint } from "./contract-mock";
 
 const signInDocumentReturningTo = (page: import("@playwright/test").Page, path: string) =>
   page.waitForRequest((request) => {
@@ -18,9 +17,10 @@ test("画面の途中で SPA の API が Unauthorized を返すと、今の画�
 }) => {
   reseedFixture("switch");
   await signInWithMagicLink(page, SWITCH_EMAIL);
-  await page.route(
-    /\/api\/account\/companies\/[^/]+\/members$/,
-    (route) => route.fulfill(UNAUTHORIZED),
+  await routeEndpoint(
+    page,
+    "membership.list",
+    (route) => route.fulfill(declaredFailure("membership.list", "Unauthorized")),
     { times: 1 },
   );
 
@@ -36,9 +36,12 @@ test("招待の受諾が Unauthorized を受けると、受諾の失敗の文言
 }) => {
   reseedFixture("invitation");
   await signInWithMagicLink(page, "e2e-signin@example.com");
-  await page.route(/\/api\/account\/accept-invitation$/, (route) => route.fulfill(UNAUTHORIZED), {
-    times: 1,
-  });
+  await routeEndpoint(
+    page,
+    "invitation.accept",
+    (route) => route.fulfill(declaredFailure("invitation.accept", "Unauthorized")),
+    { times: 1 },
+  );
 
   const leaving = signInDocumentReturningTo(page, "/auth/signup/accept-invitation");
   await page.goto("/auth/signup/accept-invitation?invitation_token=e2e-invitation-token");

@@ -6,6 +6,7 @@ import {
   SWITCH_EMAIL,
   watchMainFrameNavigations,
 } from "./helpers";
+import { routeEndpoint } from "./contract-mock";
 
 test.beforeEach(() => reseedFixture("switch"));
 
@@ -67,7 +68,7 @@ test("保存は成功したが事業所の状態の再取得が失敗すると�
   await companySwitcher(page).selectOption({ label: "e2e-co-switch-b" });
   await expect(nameInput).toHaveValue("e2e-co-switch-b");
   let failedRefetches = 0;
-  await page.route("**/api/account/memberships", async (route) => {
+  await routeEndpoint(page, "account.memberships", async (route) => {
     failedRefetches++;
     await route.fulfill({ status: 500, body: "" });
   });
@@ -135,7 +136,7 @@ test("委譲の一覧の取得が失敗すると、招待を促す文言では�
   await page.goto("/account/companies");
   const rowA = companyRow(page, "e2e-co-switch-a");
   await rowA.getByRole("button", { name: "抜ける" }).click();
-  await page.route("**/api/account/companies/*/members", async (route) => {
+  await routeEndpoint(page, "membership.list", async (route) => {
     await route.fulfill({ status: 500, body: "" });
   });
 
@@ -153,7 +154,7 @@ test("サイドバーで切替中は、事業所一覧の切替ボタンも押�
   const switchHeld = new Promise<void>((resolve) => {
     releaseSwitch = resolve;
   });
-  await page.route("**/api/account/current-company", async (route) => {
+  await routeEndpoint(page, "account.switchCompany", async (route) => {
     await switchHeld;
     await route.continue();
   });

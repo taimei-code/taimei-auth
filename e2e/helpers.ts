@@ -1,8 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { invitationLogPrefix, magicLinkLogPrefix } from "../src/email/local-delivery-log";
+import { sentLinkIn } from "../src/email/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import type { ConsumableFixture } from "./fixture-names";
 
@@ -36,20 +36,21 @@ export const authEntryUrl = (opts: { invitationToken?: string } = {}): string =>
   return url.toString();
 };
 
-export const magicLinkFor = async (email: string): Promise<string> => {
-  const markers = [magicLinkLogPrefix(email), invitationLogPrefix(email)];
+export const sentLinkAfter = async (
+  email: string,
+  send: () => Promise<unknown>,
+): Promise<string> => {
+  const logSizeBeforeSend = statSync(SERVER_LOG).size;
+  await send();
   for (let attempt = 0; attempt < 50; attempt++) {
-    const line = readFileSync(SERVER_LOG, "utf8")
-      .split("\n")
-      .filter((l) => markers.some((m) => l.includes(m)))
-      .at(-1);
-    if (line) {
-      const marker = markers.find((m) => line.includes(m)) as string;
-      return line.slice(line.indexOf(marker) + marker.length).trim();
-    }
+    const lines = readFileSync(SERVER_LOG).subarray(logSizeBeforeSend).toString("utf8").split("\n");
+    const link = sentLinkIn(lines, email);
+    if (link) return link;
     await new Promise((resolve) => setTimeout(resolve, 200));
   }
-  throw new Error(`magic link for ${email} not found in ${SERVER_LOG}`);
+  throw new Error(
+    `no email to ${email} was logged in ${SERVER_LOG} after byte ${logSizeBeforeSend}`,
+  );
 };
 
 export const expectSignInLanding = async (page: Page): Promise<void> => {
@@ -59,11 +60,13 @@ export const expectSignInLanding = async (page: Page): Promise<void> => {
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
 };
 
-export const signInWithMagicLink = async (page: Page, email: string): Promise<void> => {
+export const signInWithMagicLink = async (page: Page, email: string): Promise<string> => {
   await page.goto(authEntryUrl());
   await page.getByPlaceholder("you@example.com").fill(email);
-  await page.getByRole("button", { name: "Magic Link を送信" }).click();
-  await expect(page.getByText("を送信しました")).toBeVisible();
-
-  await page.goto(await magicLinkFor(email));
+  const link = await sentLinkAfter(email, async () => {
+    await page.getByRole("button", { name: "Magic Link を送信" }).click();
+    await expect(page.getByText("を送信しました")).toBeVisible();
+  });
+  await page.goto(link);
+  return link;
 };

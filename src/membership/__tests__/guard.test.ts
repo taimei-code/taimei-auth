@@ -97,15 +97,16 @@ describe("requireMembershipOf", () => {
 
   test("非所属 → Forbidden (403)", async () => {
     const e = await run(
-      requireMembershipOf(actor, "c1").pipe(Effect.provide(membershipRepoLayer([]))),
+      requireMembershipOf(actor, "c1", "MEMBER").pipe(Effect.provide(membershipRepoLayer([]))),
     );
     expect(e._tag).toBe("Forbidden");
   });
 
-  test("所属あり minRole 省略 → role (MEMBER でも通る)", async () => {
-    expect(await runOk(requireMembershipOf(actor, "c1").pipe(Effect.provide(rows("MEMBER"))))).toBe(
-      "MEMBER",
+  test("所属あり minRole が MEMBER → role (MEMBER でも通る)", async () => {
+    const member = await runOk(
+      requireMembershipOf(actor, "c1", "MEMBER").pipe(Effect.provide(rows("MEMBER"))),
     );
+    expect(member.role).toBe("MEMBER");
   });
 
   test("MEMBER が ADMIN 要求 → Forbidden", async () => {
@@ -117,7 +118,8 @@ describe("requireMembershipOf", () => {
 
   test("ADMIN が ADMIN 要求 → ok", async () => {
     expect(
-      await runOk(requireMembershipOf(actor, "c1", "ADMIN").pipe(Effect.provide(rows("ADMIN")))),
+      (await runOk(requireMembershipOf(actor, "c1", "ADMIN").pipe(Effect.provide(rows("ADMIN")))))
+        .role,
     ).toBe("ADMIN");
   });
 
@@ -131,7 +133,8 @@ describe("requireMembershipOf", () => {
   test("OWNER は全 minRole を満たす", async () => {
     for (const min of ["MEMBER", "ADMIN", "OWNER"] as const) {
       expect(
-        await runOk(requireMembershipOf(actor, "c1", min).pipe(Effect.provide(rows("OWNER")))),
+        (await runOk(requireMembershipOf(actor, "c1", min).pipe(Effect.provide(rows("OWNER")))))
+          .role,
       ).toBe("OWNER");
     }
   });
@@ -141,12 +144,5 @@ describe("requireMembershipOf", () => {
       requireMembershipOf(actor, "c1", "MEMBER").pipe(Effect.provide(rows("SUPERUSER"))),
     );
     expect(e._tag).toBe("Forbidden");
-  });
-
-  test("minRole 省略なら想定外 role でも通る (旧挙動等価)", async () => {
-    const role: string = await runOk(
-      requireMembershipOf(actor, "c1").pipe(Effect.provide(rows("SUPERUSER"))),
-    );
-    expect(role).toBe("SUPERUSER");
   });
 });

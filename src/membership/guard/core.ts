@@ -2,10 +2,11 @@ import { Effect } from "effect";
 import type { Role } from "@/db/repositories/membership";
 import { captureCause } from "../../sentry";
 import { checkSession } from "../../session-check";
-import { isAtLeast } from "../policy";
+import { isAtLeast, type RoleAtLeast } from "../policy";
 import type { Actor } from "../../account/actor-contract";
 import { MembershipRepo } from "../ports";
 import { Forbidden, NotFound, Unauthorized } from "../../failures";
+import { type Verified, verified } from "./verified";
 
 export type { Actor } from "../../account/actor-contract";
 
@@ -28,15 +29,22 @@ export const requireActor = Effect.fnUntraced(
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),
 );
 
-export const requireMembershipOf = Effect.fnUntraced(function* (
+export type VerifiedMember<R extends Role = "MEMBER"> = Verified<{
+  readonly actor: Actor;
+  readonly companyId: string;
+  readonly role: RoleAtLeast<R>;
+}>;
+
+export const requireMembershipOf = Effect.fnUntraced(function* <R extends Role>(
   actor: Actor,
   companyId: string,
-  minRole?: Role,
+  minRole: R,
 ) {
   const membership = yield* MembershipRepo.use((repo) => repo.findMembership(actor.id, companyId));
   if (!membership) return yield* new Forbidden();
-  if (minRole && !isAtLeast(membership.role, minRole)) return yield* new Forbidden();
-  return membership.role;
+  const { role } = membership;
+  if (!isAtLeast(role, minRole)) return yield* new Forbidden();
+  return verified({ actor, companyId, role }) as VerifiedMember<R>;
 });
 
 export const requireTargetMembership = Effect.fnUntraced(function* (

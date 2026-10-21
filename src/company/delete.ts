@@ -5,12 +5,15 @@ import { appendAuditInTx, invitationRevokedEntry, membershipRemovedEntry } from 
 import { InvitationRepo } from "../invitation/ports";
 import { applyCompanyRemoval } from "../membership/apply-change";
 import { Forbidden } from "../failures";
+import type { VerifiedMember } from "../membership/guard";
 import { isAtLeast } from "../membership/policy";
 import { MembershipRepo } from "../membership/ports";
 import { Transaction } from "../transaction";
 import { CompanyRepo } from "./ports";
 
-export const deleteCompany = Effect.fnUntraced(function* (actorUserId: string, companyId: string) {
+export const deleteCompany = Effect.fnUntraced(function* (member: VerifiedMember<"OWNER">) {
+  const actorUserId = member.actor.id;
+  const { companyId } = member;
   const companies = yield* CompanyRepo;
   const memberships = yield* MembershipRepo;
   const invitations = yield* InvitationRepo;

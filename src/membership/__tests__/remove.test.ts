@@ -10,6 +10,7 @@ import { createSessionFor } from "../../__tests__/session-helpers";
 import { LastOwner } from "../errors";
 import { NotFound } from "../../failures";
 import { removeMember } from "../remove";
+import { removalGrantForTest } from "./verified-for-test";
 
 const P = "rmmem-test-";
 const { run, cleanup } = dbTest(P);
@@ -58,12 +59,14 @@ describe("removeMember", () => {
         yield* join(memberId, companyId, "MEMBER");
         const actorUserId = self ? memberId : ownerId;
 
-        yield* removeMember({
-          actorUserId,
-          targetUserId: memberId,
-          companyId,
-          targetRole: "MEMBER",
-        });
+        yield* removeMember(
+          removalGrantForTest({
+            actorUserId,
+            targetUserId: memberId,
+            companyId,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(
           (yield* auditRowsFor(actorUserId, "membership_removed")).map((r) => r.payload),
@@ -88,12 +91,14 @@ describe("removeMember", () => {
         yield* join(ownerId, companyId, "OWNER");
         yield* join(memberId, companyId, "MEMBER");
 
-        const result = yield* removeMember({
-          actorUserId: ownerId,
-          targetUserId: memberId,
-          companyId,
-          targetRole: "MEMBER",
-        });
+        const result = yield* removeMember(
+          removalGrantForTest({
+            actorUserId: ownerId,
+            targetUserId: memberId,
+            companyId,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(result).toEqual({ accountDeleted: true });
         expect(yield* membershipExists(memberId, companyId)).toBe(false);
@@ -112,12 +117,14 @@ describe("removeMember", () => {
         yield* join(memberId, target, "MEMBER");
         yield* join(memberId, other, "MEMBER");
 
-        const result = yield* removeMember({
-          actorUserId: ownerId,
-          targetUserId: memberId,
-          companyId: target,
-          targetRole: "MEMBER",
-        });
+        const result = yield* removeMember(
+          removalGrantForTest({
+            actorUserId: ownerId,
+            targetUserId: memberId,
+            companyId: target,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(result).toEqual({ accountDeleted: false });
         expect(yield* membershipExists(memberId, target)).toBe(false);
@@ -135,12 +142,14 @@ describe("removeMember", () => {
         yield* setLastUsed(ownerId, companyId);
 
         const e = yield* Effect.flip(
-          removeMember({
-            actorUserId: ownerId,
-            targetUserId: ownerId,
-            companyId,
-            targetRole: "OWNER",
-          }),
+          removeMember(
+            removalGrantForTest({
+              actorUserId: ownerId,
+              targetUserId: ownerId,
+              companyId,
+              targetRole: "OWNER",
+            }),
+          ),
         );
 
         expectFailure(e, LastOwner);
@@ -162,12 +171,14 @@ describe("removeMember", () => {
         yield* join(memberId, other, "MEMBER");
         yield* setLastUsed(memberId, target);
 
-        const result = yield* removeMember({
-          actorUserId: ownerId,
-          targetUserId: memberId,
-          companyId: target,
-          targetRole: "MEMBER",
-        });
+        const result = yield* removeMember(
+          removalGrantForTest({
+            actorUserId: ownerId,
+            targetUserId: memberId,
+            companyId: target,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(result).toEqual({ accountDeleted: false });
         expect(yield* lastUsedOf(memberId)).toBe(other);
@@ -186,12 +197,14 @@ describe("removeMember", () => {
         yield* join(memberId, other, "MEMBER");
         yield* setLastUsed(memberId, other);
 
-        yield* removeMember({
-          actorUserId: ownerId,
-          targetUserId: memberId,
-          companyId: target,
-          targetRole: "MEMBER",
-        });
+        yield* removeMember(
+          removalGrantForTest({
+            actorUserId: ownerId,
+            targetUserId: memberId,
+            companyId: target,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(yield* membershipExists(memberId, target)).toBe(false);
         expect(yield* lastUsedOf(memberId)).toBe(other);
@@ -211,12 +224,14 @@ describe("removeMember", () => {
         yield* join(leaverId, other, "MEMBER");
         yield* setLastUsed(ownerId, target);
 
-        yield* removeMember({
-          actorUserId: ownerId,
-          targetUserId: leaverId,
-          companyId: target,
-          targetRole: "MEMBER",
-        });
+        yield* removeMember(
+          removalGrantForTest({
+            actorUserId: ownerId,
+            targetUserId: leaverId,
+            companyId: target,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(yield* membershipExists(leaverId, target)).toBe(false);
         expect(yield* lastUsedOf(ownerId)).toBe(target);
@@ -232,12 +247,14 @@ describe("removeMember", () => {
         yield* join(ownerId, companyId, "OWNER");
         yield* join(memberId, companyId, "MEMBER");
 
-        const result = yield* removeMember({
-          actorUserId: memberId,
-          targetUserId: memberId,
-          companyId,
-          targetRole: "MEMBER",
-        });
+        const result = yield* removeMember(
+          removalGrantForTest({
+            actorUserId: memberId,
+            targetUserId: memberId,
+            companyId,
+            targetRole: "MEMBER",
+          }),
+        );
 
         expect(result).toEqual({ accountDeleted: true });
         expect(yield* userExists(memberId)).toBe(false);
@@ -253,12 +270,14 @@ describe("removeMember", () => {
         yield* join(ownerId, companyId, "OWNER");
         yield* join(memberId, companyId, "MEMBER");
         const remove = () =>
-          removeMember({
-            actorUserId: ownerId,
-            targetUserId: memberId,
-            companyId,
-            targetRole: "MEMBER",
-          });
+          removeMember(
+            removalGrantForTest({
+              actorUserId: ownerId,
+              targetUserId: memberId,
+              companyId,
+              targetRole: "MEMBER",
+            }),
+          );
 
         expect(yield* remove()).toEqual({ accountDeleted: true });
         const e = yield* Effect.flip(remove());
@@ -282,12 +301,14 @@ describe("removeMember の TTL store の session 削除", () => {
       yield* join(ownerId, companyId, "OWNER");
       yield* join(memberId, companyId, "MEMBER");
       const session = yield* createSessionFor(memberId);
-      const remove = removeMember({
-        actorUserId: ownerId,
-        targetUserId: memberId,
-        companyId,
-        targetRole: "MEMBER",
-      });
+      const remove = removeMember(
+        removalGrantForTest({
+          actorUserId: ownerId,
+          targetUserId: memberId,
+          companyId,
+          targetRole: "MEMBER",
+        }),
+      );
       return { memberId, companyId, session, remove };
     });
 

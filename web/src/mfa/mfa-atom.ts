@@ -30,6 +30,8 @@ export type MfaFailure = Atom.Failure<
   | typeof verifyMfaChallengeAtom
 >;
 
+export type MfaVerifyFailure = Atom.Failure<typeof verifyMfaChallengeAtom>;
+
 const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
 export const MFA_FAILURE_MESSAGES: FailureMessages<MfaFailure> = {

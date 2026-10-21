@@ -1,18 +1,14 @@
 import { Effect } from "effect";
-import type { Role } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
 import { deleteAccountIfOrphaned } from "../account/orphan";
 import { appendAuditInTx, membershipRemovedEntry } from "../audit/append";
 import { Transaction } from "../transaction";
 import { applyRemoval } from "./apply-change";
+import type { RemovalGrant } from "./guard";
 
-export const removeMember = Effect.fnUntraced(function* (params: {
-  actorUserId: string;
-  targetUserId: string;
-  companyId: string;
-  targetRole: Role;
-}) {
-  const { actorUserId, targetUserId, companyId, targetRole } = params;
+export const removeMember = Effect.fnUntraced(function* (grant: RemovalGrant) {
+  const { targetUserId, companyId, targetRole } = grant;
+  const actorUserId = grant.actor.id;
   const tx = yield* Transaction;
 
   return yield* tx.run(

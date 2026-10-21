@@ -4,12 +4,17 @@ import { dbTest, auditRowsFor, expectFailure } from "../../__tests__/live-runner
 import { TestDb } from "../../__tests__/test-db";
 import { NotFound } from "../../failures";
 import { transferOwnership } from "../transfer-ownership";
+import { transferGrantForTest } from "./verified-for-test";
 
 const P = "trans-test-";
 const { run, cleanup } = dbTest(P);
 
 const transferToNobody = (actorUserId: string, companyId: string) =>
-  Effect.flip(transferOwnership({ actorUserId, toUserId: `${P}nonexistent-user`, companyId }));
+  Effect.flip(
+    transferOwnership(
+      transferGrantForTest({ actorUserId, toUserId: `${P}nonexistent-user`, companyId }),
+    ),
+  );
 
 describe("transferOwnership", () => {
   beforeEach(cleanup);
@@ -25,7 +30,9 @@ describe("transferOwnership", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
         yield* db.seedMembership(admin.id, co, "ADMIN");
 
-        yield* transferOwnership({ actorUserId: owner.id, toUserId: admin.id, companyId: co });
+        yield* transferOwnership(
+          transferGrantForTest({ actorUserId: owner.id, toUserId: admin.id, companyId: co }),
+        );
         expect((yield* db.readMembership(admin.id, co))?.role).toBe("OWNER");
         expect((yield* db.readMembership(owner.id, co))?.role).toBe("ADMIN");
 
@@ -51,8 +58,12 @@ describe("transferOwnership", () => {
         yield* db.seedMembership(B.id, co, "ADMIN");
         yield* db.seedMembership(C.id, co, "ADMIN");
 
-        yield* transferOwnership({ actorUserId: A.id, toUserId: B.id, companyId: co });
-        yield* transferOwnership({ actorUserId: B.id, toUserId: C.id, companyId: co });
+        yield* transferOwnership(
+          transferGrantForTest({ actorUserId: A.id, toUserId: B.id, companyId: co }),
+        );
+        yield* transferOwnership(
+          transferGrantForTest({ actorUserId: B.id, toUserId: C.id, companyId: co }),
+        );
 
         expect((yield* db.readMembership(A.id, co))?.role).toBe("ADMIN");
         expect((yield* db.readMembership(B.id, co))?.role).toBe("ADMIN");
@@ -75,10 +86,14 @@ describe("transferOwnership", () => {
         const settled = yield* Effect.all(
           [
             Effect.exit(
-              transferOwnership({ actorUserId: owner.id, toUserId: a.id, companyId: co }),
+              transferOwnership(
+                transferGrantForTest({ actorUserId: owner.id, toUserId: a.id, companyId: co }),
+              ),
             ),
             Effect.exit(
-              transferOwnership({ actorUserId: owner.id, toUserId: b.id, companyId: co }),
+              transferOwnership(
+                transferGrantForTest({ actorUserId: owner.id, toUserId: b.id, companyId: co }),
+              ),
             ),
           ],
           { concurrency: "unbounded" },
@@ -101,7 +116,9 @@ describe("transferOwnership", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
         yield* db.seedMembership(to.id, co, "ADMIN");
 
-        yield* transferOwnership({ actorUserId: owner.id, toUserId: to.id, companyId: co });
+        yield* transferOwnership(
+          transferGrantForTest({ actorUserId: owner.id, toUserId: to.id, companyId: co }),
+        );
         const audits = yield* auditRowsFor(owner.id, "ownership_transferred");
         const finalOwnerId = (yield* db.readMembership(to.id, co))?.role === "OWNER" ? to.id : null;
         const payload = audits[0]?.payload as Record<string, unknown>;

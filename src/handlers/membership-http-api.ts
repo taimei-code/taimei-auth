@@ -2,13 +2,13 @@ import { Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { CurrentActor } from "../account/actor-contract";
 import { changeRole } from "../membership/change-role";
+import { listMembers } from "../membership/list-members";
 import {
   requireMembershipOf,
   requireRemoval,
   requireRoleChange,
   requireTransferOwnership,
 } from "../membership/guard";
-import { MembershipRepo } from "../membership/ports";
 import { removeMember } from "../membership/remove";
 import { transferOwnership } from "../membership/transfer-ownership";
 import { SpaApi } from "../spa-contract";
@@ -17,10 +17,8 @@ import { dieOnBoundary } from "./request-http-api";
 export const MembershipHandlers = HttpApiBuilder.group(SpaApi, "membership", (handlers) =>
   handlers.handleAll({
     list: Effect.fnUntraced(function* ({ params }) {
-      yield* requireMembershipOf(yield* CurrentActor, params.companyId);
-      const members = yield* MembershipRepo.use((repo) =>
-        repo.findMembersByCompanyId(params.companyId),
-      );
+      const member = yield* requireMembershipOf(yield* CurrentActor, params.companyId, "MEMBER");
+      const members = yield* listMembers(member);
       return {
         members: members.map((m) => ({
           membership_id: m.membershipId,
@@ -39,27 +37,16 @@ export const MembershipHandlers = HttpApiBuilder.group(SpaApi, "membership", (ha
         targetUserId: params.targetUserId,
         nextRole: payload.role,
       });
-      yield* changeRole({
-        actorUserId: grant.actor.id,
-        targetUserId: params.targetUserId,
-        companyId: params.companyId,
-        beforeRole: grant.targetRole,
-        nextRole: grant.nextRole,
-      });
+      yield* changeRole(grant);
       return { ok: true as const };
     }, dieOnBoundary),
     remove: Effect.fnUntraced(function* ({ params }) {
-      const { actor, targetRole } = yield* requireRemoval({
+      const grant = yield* requireRemoval({
         actor: yield* CurrentActor,
         companyId: params.companyId,
         targetUserId: params.targetUserId,
       });
-      const result = yield* removeMember({
-        actorUserId: actor.id,
-        targetUserId: params.targetUserId,
-        companyId: params.companyId,
-        targetRole,
-      });
+      const result = yield* removeMember(grant);
       return { ok: true as const, account_deleted: result.accountDeleted };
     }, dieOnBoundary),
     transferOwnership: Effect.fnUntraced(function* ({ params, payload }) {
@@ -68,11 +55,7 @@ export const MembershipHandlers = HttpApiBuilder.group(SpaApi, "membership", (ha
         companyId: params.companyId,
         toUserId: payload.to_user_id,
       });
-      yield* transferOwnership({
-        actorUserId: grant.actor.id,
-        toUserId: grant.toUserId,
-        companyId: params.companyId,
-      });
+      yield* transferOwnership(grant);
       return { ok: true as const };
     }, dieOnBoundary),
   }),

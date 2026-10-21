@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { companySwitcher, reseedFixture, signInWithMagicLink, SWITCH_EMAIL } from "./helpers";
+import { routeEndpoint } from "./contract-mock";
 
 test.beforeEach(() => reseedFixture("switch"));
 
@@ -7,7 +8,7 @@ test("事業所を切り替えた後、前の事業所の遅れて届いた一�
   await signInWithMagicLink(page, SWITCH_EMAIL);
 
   let delayed = false;
-  await page.route("**/api/account/companies/*/members", async (route) => {
+  await routeEndpoint(page, "membership.list", async (route) => {
     if (!delayed) {
       delayed = true;
       await new Promise((resolve) => setTimeout(resolve, 1_500));

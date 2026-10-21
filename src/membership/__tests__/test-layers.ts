@@ -30,7 +30,10 @@ export type Membership = {
 };
 
 export const sessionOf = (userId: string): Session =>
-  ({ session: { userId }, user: { id: userId } }) as unknown as Session;
+  ({
+    session: { id: `s-${userId}`, userId, expiresAt: new Date("2030-01-01") },
+    user: { id: userId },
+  }) as unknown as Session;
 
 const userOf = (id: string, email: string): UserRow =>
   ({ id, email, lastUsedCompanyId: null }) as unknown as UserRow;

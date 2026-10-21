@@ -6,7 +6,7 @@
 
 変更理由を所有する業務ドメインを決め、次に層を決め、両方に合う既存の場所へ置く。所有 domain、層、依存方向、テストの配置を説明できた時点で配置を完了とする。
 
-- **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。SPA が呼ぶ API は契約 (`src/<domain>/*-contract.ts`) を `src/handlers/*-http-api.ts` で実装し、`mountSpaApi` で載せる。それ以外の Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`httpApiStatus` を持つ失敗の class から HTTP / Connect へ) に変換するのは adapter だけである。policy 述語、repository への直接 write、transaction は持たない。
+- **Transport** (`handlers/`、`rpc/`): parameter の parse、認証、Guard と Use-case の呼び出し、response への変換を受け持つ。SPA の handler は repository の port を import せず、guard の値を use-case か読み出しの関数に渡す (`handlers/__tests__/no-transport-tx.test.ts`)。SPA が呼ぶ API は契約 (`src/<domain>/*-contract.ts`) を `src/handlers/*-http-api.ts` で実装し、`mountSpaApi` で載せる。それ以外の Effect program は `runRoute` / `runMiddleware` / `runRpc` の adapter で走らせ、failure と defect を client-facing の応答 (`httpApiStatus` を持つ失敗の class から HTTP / Connect へ) に変換するのは adapter だけである。policy 述語、repository への直接 write、transaction は持たない。
 - **Guard** (`membership/guard/`、`membership/policy.ts`): Hono に依存しない、操作単位の認可。
 - **Use-case** (`account/`、`company/`、`invitation/`、`membership/`、`mfa/`): 業務手続、transaction、audit、不変条件、TOCTOU の再検証を受け持つ。
 - Guard と Use-case の失敗は failure class で表し、status は class の `httpApiStatus` にだけ書く。どの domain にも属さない失敗 (`Unauthorized`・`Forbidden`・`NotFound`・`InvalidArgument`・`RateLimited`) は `src/failures.ts` に、domain の不変条件が破れた失敗はその domain の `errors.ts` に置く。ほかの domain が同じ失敗を返す時は、その `errors.ts` から import する (例: `membership/errors.ts` の `LastOwner`)。
@@ -49,6 +49,7 @@
 - `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること
 - `email/__tests__/containment.test.ts`: メールの表示名が `DisplayText` を通り、template の依存と style の置き場が決まっていること
 - `health/__tests__/containment.test.ts`: `/health` の probe の呼び手が 1 つで、TTL store の ping が再試行しないこと
+- `membership/__tests__/containment.test.ts`: guard を通った印 (`Verified`) を付けられるのが guard だけであること
 - `membership/__tests__/no-hono-import.test.ts`: Guard 層が hono を import しないこと
 - `mfa/__tests__/containment.test.ts`: ログインの経路が import する MFA の module と、MFA の秘密の値の読み手が決まっていること
 - `mfa/__tests__/policy.test.ts`: `mfa/policy.ts` が他の module を import しないこと

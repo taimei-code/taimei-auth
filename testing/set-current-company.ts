@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { UserRepo } from "../src/account/ports";
-import { switchCompany } from "../src/account/switch-company";
+import { switchCurrentCompany } from "../src/membership/current-company";
 import { InvalidArgument, NotFound } from "../src/failures";
 
 export const setCurrentCompany = Effect.fnUntraced(function* (input: {
@@ -9,10 +9,8 @@ export const setCurrentCompany = Effect.fnUntraced(function* (input: {
 }) {
   const user = yield* UserRepo.use((users) => users.findUserById(input.userId));
   if (!user) return yield* new NotFound();
-  yield* switchCompany({
-    actorUserId: user.id,
-    fromCompanyId: user.lastUsedCompanyId,
-    targetCompanyId: input.companyId,
-  }).pipe(Effect.catchTag("Forbidden", () => new InvalidArgument({})));
+  yield* switchCurrentCompany({ userId: user.id, companyId: input.companyId }).pipe(
+    Effect.catchTag("Forbidden", () => new InvalidArgument({})),
+  );
   return { ok: true as const };
 });

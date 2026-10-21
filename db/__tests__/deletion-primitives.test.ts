@@ -50,6 +50,12 @@ async function join(userId: string, companyId: string, role: Role = "OWNER") {
   await insertMembership({ id: generateMembershipId(), userId, companyId, role });
 }
 
+async function joinAt(userId: string, companyId: string, joinedAt: Date) {
+  await db
+    .insert(membership)
+    .values({ id: generateMembershipId(), userId, companyId, role: "MEMBER", joinedAt });
+}
+
 describe("countActiveMembershipsByUserId", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
@@ -140,6 +146,33 @@ describe("reassignLastUsedCompanyAfterLeaving", () => {
 
     expect((await findUserById(leaver))?.lastUsedCompanyId).toBe(other);
     expect((await findUserById(stayer))?.lastUsedCompanyId).toBe(left);
+  });
+
+  test("残る active membership が 2 つあれば、参加の古い方へ付け替える", async () => {
+    const left = await seedCompany("re-order-left");
+    const newer = await seedCompany("re-order-newer");
+    const older = await seedCompany("re-order-older");
+    const userId = await seedUser("re-order", left);
+    await joinAt(userId, newer, new Date("2026-02-01T00:00:00Z"));
+    await joinAt(userId, older, new Date("2026-01-01T00:00:00Z"));
+
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(left, [userId], tx));
+
+    expect((await findUserById(userId))?.lastUsedCompanyId).toBe(older);
+  });
+
+  test("残る所属が ACTIVE な事業所と削除済みの事業所なら、参加が新しくても ACTIVE な方へ付け替える", async () => {
+    const left = await seedCompany("re-active-left");
+    const deleted = await seedCompany("re-active-deleted");
+    const active = await seedCompany("re-active-active");
+    const userId = await seedUser("re-active", left);
+    await joinAt(userId, deleted, new Date("2026-01-01T00:00:00Z"));
+    await joinAt(userId, active, new Date("2026-02-01T00:00:00Z"));
+    await softDeleteCompany(deleted);
+
+    await runInTransaction((tx) => reassignLastUsedCompanyAfterLeaving(left, [userId], tx));
+
+    expect((await findUserById(userId))?.lastUsedCompanyId).toBe(active);
   });
 
   test("削除 company 以外を last_used に持つ user は不変", async () => {

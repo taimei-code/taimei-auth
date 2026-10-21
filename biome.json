@@ -153,7 +153,7 @@
       }
     },
     {
-      "includes": ["src/**/*-contract.ts", "!src/**/__tests__/**"],
+      "includes": ["src/**/*-contract.ts", "src/spa-contract-table.ts", "!src/**/__tests__/**"],
       "linter": {
         "rules": {
           "style": {
@@ -256,6 +256,10 @@
                   {
                     "group": ["@/db/**", "**/db/**", "drizzle-orm", "drizzle-orm/**", "pg"],
                     "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md「例外 path (正本)」)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
+                  },
+                  {
+                    "group": ["effect", "effect/*", "effect/**"],
+                    "message": "e2e は effect を直接 import しない。モックの path と失敗の応答は e2e/contract-mock.ts で契約から作る (docs/adr/0017-effect-v4-full-adoption.md)"
                   }
                 ]
               }

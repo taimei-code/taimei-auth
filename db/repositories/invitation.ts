@@ -1,4 +1,4 @@
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, gt, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { type InvitationStatus, invitation, type Role } from "../schema";
@@ -14,6 +14,9 @@ export const invitationStatusColumns = (status: InvitationStatus, now: Date) => 
   revokedAt: status === "REVOKED" ? now : null,
   usedAt: status === "PENDING" ? null : now,
 });
+
+export const pendingAt = (now: Date): SQL | undefined =>
+  and(eq(invitation.status, "PENDING"), gt(invitation.expiresAt, now));
 
 export type InvitationRow = typeof invitation.$inferSelect;
 export type { Role };
@@ -45,6 +48,7 @@ export async function findInvitationById(
 export async function findActivePendingInvitation(
   companyId: string,
   email: string,
+  now: Date,
   txOrDb: DbOrTx = db,
 ): Promise<InvitationRow | undefined> {
   return txOrDb
@@ -54,8 +58,7 @@ export async function findActivePendingInvitation(
       and(
         eq(invitation.companyId, companyId),
         sql`lower(${invitation.email}) = lower(${email})`,
-        eq(invitation.status, "PENDING"),
-        gt(invitation.expiresAt, new Date()),
+        pendingAt(now),
       ),
     )
     .limit(1)
@@ -64,12 +67,13 @@ export async function findActivePendingInvitation(
 
 export async function listPendingInvitations(
   companyId: string,
+  now: Date,
   txOrDb: DbOrTx = db,
 ): Promise<InvitationRow[]> {
   return txOrDb
     .select()
     .from(invitation)
-    .where(and(eq(invitation.companyId, companyId), eq(invitation.status, "PENDING")));
+    .where(and(eq(invitation.companyId, companyId), pendingAt(now)));
 }
 
 export async function insertInvitation(

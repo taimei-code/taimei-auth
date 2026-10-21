@@ -1,10 +1,10 @@
 import { Effect } from "effect";
 import type { MembershipRow, Role } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
-import { UserRepo } from "../account/ports";
 import type { DbError } from "../errors";
 import { LastOwner } from "./errors";
 import { orNotFound } from "../failures";
+import { becomeCurrentOnJoin, reassignCurrentAfterLeaving } from "./current-company";
 import { MembershipRepo } from "./ports";
 
 type Write = (
@@ -31,12 +31,6 @@ export const applyRoleChange = (
     repo.updateMembershipRole(change.targetUserId, change.companyId, change.nextRole, t),
   );
 
-const reassignLastUsedCompanyAfterLeaving = (
-  tx: DbTx,
-  companyId: string,
-  userIds: readonly string[],
-) => UserRepo.use((users) => users.reassignLastUsedCompanyAfterLeaving(companyId, userIds, tx));
-
 export const applyJoin = (
   tx: DbTx,
   row: { id: string; userId: string; companyId: string; role: Role },
@@ -45,25 +39,17 @@ export const applyJoin = (
     repo
       .lockMembershipChangesOfUser(tx, row.userId)
       .pipe(Effect.andThen(repo.insertMembership(row, tx))),
-  ).pipe(
-    Effect.tap(() =>
-      UserRepo.use((users) => users.updateUserLastUsedCompany(row.userId, row.companyId, tx)),
-    ),
-  );
+  ).pipe(Effect.tap(() => becomeCurrentOnJoin(tx, row.userId, row.companyId)));
 
 export const applyRemoval = (tx: DbTx, change: { targetUserId: string; companyId: string }) =>
   keepingAnOwner(tx, change.companyId, (repo, t) =>
     repo.deleteMembership(change.targetUserId, change.companyId, t),
-  ).pipe(
-    Effect.andThen(
-      reassignLastUsedCompanyAfterLeaving(tx, change.companyId, [change.targetUserId]),
-    ),
-  );
+  ).pipe(Effect.andThen(reassignCurrentAfterLeaving(tx, change.companyId, [change.targetUserId])));
 
 export const applyCompanyRemoval = (tx: DbTx, companyId: string) =>
   MembershipRepo.use((repo) => repo.removeMembershipsOfCompany(companyId, tx)).pipe(
     Effect.tap((removed) =>
-      reassignLastUsedCompanyAfterLeaving(
+      reassignCurrentAfterLeaving(
         tx,
         companyId,
         removed.map((m) => m.userId),

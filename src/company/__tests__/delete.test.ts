@@ -9,6 +9,7 @@ import { storedSessionsOf } from "../../__tests__/test-ttl-store";
 import { DbError } from "../../errors";
 import { createSessionFor } from "../../__tests__/session-helpers";
 import { deleteCompany } from "../delete";
+import { memberForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "delco-test-";
 const { run, cleanup } = dbTest(P);
@@ -46,7 +47,7 @@ describe("deleteCompany", () => {
         const companyId = yield* seedCompany("sole");
         yield* join(ownerId, companyId);
 
-        const result = yield* deleteCompany(ownerId, companyId);
+        const result = yield* deleteCompany(memberForTest(ownerId, companyId, "OWNER"));
 
         expect(result).toEqual({ actorDeleted: true });
         expect((yield* db.readCompany(companyId))?.activationStatus).toBe("DELETED");
@@ -76,7 +77,7 @@ describe("deleteCompany", () => {
         yield* join(ownerId, target);
         yield* join(ownerId, other);
 
-        const result = yield* deleteCompany(ownerId, target);
+        const result = yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect(result).toEqual({ actorDeleted: false });
         expect(yield* db.readUser(ownerId)).toBeDefined();
@@ -99,7 +100,7 @@ describe("deleteCompany", () => {
         yield* join(survivor, target, "MEMBER");
         yield* join(survivor, other, "OWNER");
 
-        yield* deleteCompany(ownerId, target);
+        yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect(yield* db.readUser(orphanMember)).toBeUndefined();
         expect(yield* db.readUser(survivor)).toBeDefined();
@@ -119,7 +120,7 @@ describe("deleteCompany", () => {
         yield* join(survivor, target, "MEMBER");
         yield* join(survivor, other, "MEMBER");
 
-        yield* deleteCompany(ownerId, target);
+        yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect((yield* db.readUser(survivor))?.lastUsedCompanyId).toBe(other);
       }),
@@ -141,7 +142,7 @@ describe("deleteCompany", () => {
           invitedByUserId: ownerId,
         });
 
-        yield* deleteCompany(ownerId, target);
+        yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect((yield* db.readInvitation(inv.id))?.status).toBe("REVOKED");
       }),
@@ -166,7 +167,7 @@ describe("deleteCompany", () => {
           });
         }
 
-        yield* deleteCompany(ownerId, target);
+        yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect([
           yield* auditCount(ownerId, "invitation_revoked"),
@@ -185,7 +186,25 @@ describe("deleteCompany", () => {
         yield* join(ownerId, companyId);
         yield* join(memberId, companyId, "MEMBER");
 
-        const e = yield* Effect.flip(deleteCompany(memberId, companyId));
+        const e = yield* Effect.flip(deleteCompany(memberForTest(memberId, companyId, "OWNER")));
+
+        expectFailure(e, Forbidden);
+        expect((yield* db.readCompany(companyId))?.activationStatus).toBe("ACTIVE");
+        expect(yield* membershipCount(companyId)).toBe(2);
+      }),
+    ));
+
+  test("guard 通過後に OWNER から ADMIN へ降格された actor は lock 後の再確認で forbidden、無変更", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const ownerId = yield* seedUser("fb-admin-owner");
+        const demotedId = yield* seedUser("fb-admin-demoted");
+        const companyId = yield* seedCompany("fb-admin");
+        yield* join(ownerId, companyId);
+        yield* join(demotedId, companyId, "ADMIN");
+
+        const e = yield* Effect.flip(deleteCompany(memberForTest(demotedId, companyId, "OWNER")));
 
         expectFailure(e, Forbidden);
         expect((yield* db.readCompany(companyId))?.activationStatus).toBe("ACTIVE");
@@ -197,7 +216,9 @@ describe("deleteCompany", () => {
     run(
       Effect.gen(function* () {
         const ownerId = yield* seedUser("nf");
-        const e = yield* Effect.flip(deleteCompany(ownerId, "cmp_does_not_exist"));
+        const e = yield* Effect.flip(
+          deleteCompany(memberForTest(ownerId, "cmp_does_not_exist", "OWNER")),
+        );
         expectFailure(e, Forbidden);
       }),
     ));
@@ -211,8 +232,8 @@ describe("deleteCompany", () => {
         yield* join(ownerId, target);
         yield* join(ownerId, other);
 
-        yield* deleteCompany(ownerId, target);
-        const second = yield* deleteCompany(ownerId, target);
+        yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
+        const second = yield* deleteCompany(memberForTest(ownerId, target, "OWNER"));
 
         expect(second).toEqual({ actorDeleted: false });
       }),
@@ -229,8 +250,8 @@ describe("deleteCompany", () => {
 
         const results = yield* Effect.all(
           [
-            Effect.exit(deleteCompany(ownerId, target)),
-            Effect.exit(deleteCompany(ownerId, target)),
+            Effect.exit(deleteCompany(memberForTest(ownerId, target, "OWNER"))),
+            Effect.exit(deleteCompany(memberForTest(ownerId, target, "OWNER"))),
           ],
           { concurrency: "unbounded" },
         );
@@ -266,7 +287,9 @@ describe("deleteCompany の TTL store の session 削除", () => {
       Effect.gen(function* () {
         const { ownerId, companyId, sessions } = yield* seedTwoOrphans("ttl-both");
 
-        expect(yield* deleteCompany(ownerId, companyId)).toEqual({ actorDeleted: true });
+        expect(yield* deleteCompany(memberForTest(ownerId, companyId, "OWNER"))).toEqual({
+          actorDeleted: true,
+        });
 
         expect(yield* storedSessionsOf(sessions)).toEqual([
           { session: false, index: false },
@@ -293,7 +316,7 @@ describe("deleteCompany の TTL store の session 削除", () => {
           { userId: stayerId, token: (yield* createSessionFor(stayerId)).token },
         ];
 
-        yield* deleteCompany(ownerId, companyId);
+        yield* deleteCompany(memberForTest(ownerId, companyId, "OWNER"));
 
         expect(yield* storedSessionsOf(sessions)).toEqual([
           { session: false, index: false },
@@ -310,7 +333,9 @@ describe("deleteCompany の TTL store の session 削除", () => {
         const failing = yield* failingSessionDeletion;
         sentry.length = 0;
 
-        yield* deleteCompany(ownerId, companyId).pipe(Effect.provide(failing.layer));
+        yield* deleteCompany(memberForTest(ownerId, companyId, "OWNER")).pipe(
+          Effect.provide(failing.layer),
+        );
 
         expect((yield* db.readCompany(companyId))?.activationStatus).toBe("DELETED");
         expect(yield* db.readUser(ownerId)).toBeUndefined();
@@ -341,7 +366,9 @@ describe("deleteCompany の TTL store の session 削除", () => {
         }));
 
         const exit = yield* Effect.exit(
-          deleteCompany(ownerId, companyId).pipe(Effect.provide(failingAudit)),
+          deleteCompany(memberForTest(ownerId, companyId, "OWNER")).pipe(
+            Effect.provide(failingAudit),
+          ),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
@@ -368,7 +395,11 @@ describe("deleteCompany の TTL store の session 削除", () => {
             Ref.update(calls, (n) => n + 1).pipe(Effect.andThen(live.deleteUserSessions(userId))),
         }));
 
-        expect(yield* deleteCompany(ownerId, companyId).pipe(Effect.provide(counting))).toEqual({
+        expect(
+          yield* deleteCompany(memberForTest(ownerId, companyId, "OWNER")).pipe(
+            Effect.provide(counting),
+          ),
+        ).toEqual({
           actorDeleted: false,
         });
         expect(yield* Ref.get(calls)).toBe(0);
@@ -397,7 +428,7 @@ describe("共通の member を持つ事業所の同時削除 (不安定な失敗
               "OWNER",
             );
             for (const userId of shared) yield* join(userId, companyId, "MEMBER");
-            deletions.push(deleteCompany(ownerId, companyId));
+            deletions.push(deleteCompany(memberForTest(ownerId, companyId, "OWNER")));
           }
 
           yield* Effect.all(deletions, { concurrency: "unbounded" });

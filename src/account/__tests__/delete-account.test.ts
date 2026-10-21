@@ -18,6 +18,7 @@ import { addCompany } from "../../company/create";
 import { deleteAccountUnlessLastOwner } from "../delete-account";
 import { UserRepo } from "../ports";
 import { UserRepoLive } from "../wiring";
+import { transferGrantForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "delacc-test-";
 const { run, cleanup } = dbTest(P);
@@ -212,11 +213,13 @@ describe("退会と OWNER 委譲の race", () => {
         const written = yield* Deferred.make<void>();
         const release = yield* Deferred.make<void>();
         const lockRequested = yield* Deferred.make<void>();
-        const transfer = transferOwnership({
-          actorUserId: from.id,
-          toUserId: to.id,
-          companyId: co,
-        }).pipe(
+        const transfer = transferOwnership(
+          transferGrantForTest({
+            actorUserId: from.id,
+            toUserId: to.id,
+            companyId: co,
+          }),
+        ).pipe(
           Effect.provide(
             auditLogWith((live) => ({
               appendAuditLogs: (entries, tx) =>

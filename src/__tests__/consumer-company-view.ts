@@ -37,10 +37,10 @@ export const expectConsumerSeesAnActiveCompanyAndItsRole = (prefix: string, user
   Effect.gen(function* () {
     const { verifySession, getSession: seen } = yield* companySeenByConsumer(prefix, userId);
     expect(seen).toEqual(verifySession);
-    const memberships = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(userId));
-    const active = memberships
-      .filter((m) => m.companyActivationStatus === "ACTIVE")
-      .map((m) => m.companyId);
+    const memberships = yield* MembershipRepo.use((repo) =>
+      repo.findActiveMembershipsByUserId(userId),
+    );
+    const active = memberships.map((m) => m.companyId);
     if (active.length === 0) expect(seen.companyId).toBeUndefined();
     else expect(active).toContain(String(seen.companyId));
     const currentMembership = memberships.find((m) => m.companyId === seen.companyId);

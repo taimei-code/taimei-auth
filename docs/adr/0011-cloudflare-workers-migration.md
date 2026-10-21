@@ -163,7 +163,7 @@ spike では予測しきれず、本番 (auth.taimei-code.com) で初めて当�
   ADR-0019 で Upstash ごと撤去した。
 - **Hyperdrive の query caching は無効にする**: Hyperdrive は既定で parameterized な SELECT の結果を
   max_age 60s / stale-while-revalidate 15s で cache する (tx 内の読み取りと mutation は対象外)。この service
-  の membership の読み取り (`findMembershipsByUserId`) は cache の対象になるため、signup、事業所作成、`/account`
+  の membership の読み取り (`findActiveMembershipsByUserId`) は cache の対象になるため、signup、事業所作成、`/account`
   の直後に `/api/account/memberships` が作成前の空の結果を返し、SessionGuard が `/auth/signup/company` へ
   戻す (2026-09-03 に本番で再現。約 60s 後に正しく 1 件返る)。認証と membership の読み取りは stale を
   許容できないため、本番の config は `wrangler hyperdrive update <id> --caching-disabled` で cache を切り、

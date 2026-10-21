@@ -1,4 +1,4 @@
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { nanoid } from "nanoid";
 import { db } from "../client";
 import { company, membership, type OrgCode, type Role, user } from "../schema";
@@ -25,6 +25,8 @@ export const lockOwnerMembershipsOfUserCompanies = (tx: DbTx, userId: string): P
     sql`company_id IN (SELECT company_id FROM membership WHERE user_id = ${userId})`,
   );
 
+const oldestJoinedFirst = [asc(membership.joinedAt), asc(membership.id)] as const;
+
 export type MembershipRow = typeof membership.$inferSelect;
 export type { Role };
 
@@ -35,10 +37,9 @@ export type InviterSeen =
 export type MembershipWithCompany = MembershipRow & {
   companyName: string;
   companyOrgCode: OrgCode;
-  companyActivationStatus: string;
 };
 
-export async function findMembershipsByUserId(
+export async function findActiveMembershipsByUserId(
   userId: string,
   txOrDb: DbOrTx = db,
 ): Promise<MembershipWithCompany[]> {
@@ -53,11 +54,11 @@ export async function findMembershipsByUserId(
       updatedAt: membership.updatedAt,
       companyName: company.name,
       companyOrgCode: company.orgCode,
-      companyActivationStatus: company.activationStatus,
     })
     .from(membership)
     .innerJoin(company, eq(company.id, membership.companyId))
-    .where(eq(membership.userId, userId));
+    .where(and(eq(membership.userId, userId), eq(company.activationStatus, "ACTIVE")))
+    .orderBy(...oldestJoinedFirst);
 }
 
 export async function countActiveMembershipsByUserId(
@@ -103,7 +104,8 @@ export async function findMembersByCompanyId(
     })
     .from(membership)
     .innerJoin(user, eq(user.id, membership.userId))
-    .where(eq(membership.companyId, companyId));
+    .where(eq(membership.companyId, companyId))
+    .orderBy(...oldestJoinedFirst);
 }
 
 export async function findMemberUserIds(

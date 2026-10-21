@@ -5,7 +5,6 @@ import { dbTest } from "../../src/__tests__/live-runner";
 import { grepFiles } from "../../src/__tests__/source-scan";
 import { getTrustedOrigins } from "../../src/env";
 import { createSignedInUser } from "../create-signed-in-user";
-import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 
 const P = "tdcc-test-";
 const { run } = dbTest(P);
@@ -14,7 +13,7 @@ describe("試験 API が作る利用者も、VerifySession と GetSession で AC
   test("試験の module で現在の事業所を書き換えるのは、試験の利用者を作る use-case と現在の事業所を切り替える use-case だけ", () => {
     expect(
       grepFiles(
-        "\\b(applyJoin|applyRemoval|applyCompanyRemoval|switchCompany)\\(|\\.updateUserLastUsedCompany\\(",
+        "\\b(applyJoin|applyRemoval|applyCompanyRemoval|switchCurrentCompany)\\(|\\.updateUserLastUsedCompany\\(",
         "testing",
         { tests: "exclude" },
       ),
@@ -24,13 +23,10 @@ describe("試験 API が作る利用者も、VerifySession と GetSession で AC
   test("試験 API が OWNER と ADMIN の所属を持つ利用者を作る", () =>
     run(
       Effect.gen(function* () {
-        const created = yield* createSignedInUser(
-          {
-            companies: [{ role: "OWNER" }, { role: "ADMIN" }],
-            returnTo: `${getTrustedOrigins()[0]}/after-sign-in`,
-          },
-          testMagicLinkOutbox,
-        );
+        const created = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }, { role: "ADMIN" }],
+          returnTo: `${getTrustedOrigins()[0]}/after-sign-in`,
+        });
         yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, created.userId);
       }),
     ));

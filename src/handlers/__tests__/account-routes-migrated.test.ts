@@ -1083,6 +1083,75 @@ describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 �
     ));
 });
 
+describe("GET /api/account/companies/:companyId/members の並び", () => {
+  beforeEach(cleanup);
+
+  test("メンバーは登録の順ではなく参加の古い順に並ぶ", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const co = yield* db.seedCompany("members-order");
+        const third = yield* db.seedUser("members-order-third");
+        const second = yield* db.seedUser("members-order-second");
+        const first = yield* db.seedUser("members-order-first");
+        yield* db.seedMembership(third.id, co, "MEMBER", new Date("2026-03-01T00:00:00Z"));
+        yield* db.seedMembership(second.id, co, "MEMBER", new Date("2026-02-01T00:00:00Z"));
+        yield* db.seedMembership(first.id, co, "OWNER", new Date("2026-01-01T00:00:00Z"));
+
+        const actual = yield* invoke(
+          buildTestApp(third),
+          "GET",
+          `/api/account/companies/${co}/members`,
+        );
+
+        const body = actual.body as { members: { user_id: string }[] };
+        expect(body.members.map((member) => member.user_id)).toEqual([
+          first.id,
+          second.id,
+          third.id,
+        ]);
+      }),
+    ));
+});
+
+describe("GET /api/account/companies/:companyId/invitations の期限", () => {
+  beforeEach(cleanup);
+
+  test("期限切れの未対応の招待は一覧に出ず、期限内の未対応の招待だけが出る", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const owner = yield* db.seedUser("invs-expiry-owner");
+        const co = yield* db.seedCompany("invs-expiry");
+        yield* db.seedMembership(owner.id, co, "OWNER");
+        const expired = yield* db.seedInvitation({
+          companyId: co,
+          email: `${TEST_PREFIX}expired@example.com`,
+          role: "MEMBER",
+          invitedByUserId: owner.id,
+          expiresAt: new Date(Date.now() - 60_000),
+        });
+        const valid = yield* db.seedInvitation({
+          companyId: co,
+          email: `${TEST_PREFIX}valid@example.com`,
+          role: "MEMBER",
+          invitedByUserId: owner.id,
+        });
+
+        const actual = yield* invoke(
+          buildTestApp(owner),
+          "GET",
+          `/api/account/companies/${co}/invitations`,
+        );
+
+        expect(actual.status).toBe(200);
+        const body = actual.body as { invitations: { id: string }[] };
+        expect(body.invitations.map((inv) => inv.id)).toEqual([valid.id]);
+        expect(body.invitations.map((inv) => inv.id)).not.toContain(expired.id);
+      }),
+    ));
+});
+
 type MembershipsBody = { current_company_id: string | null; memberships: { company_id: string }[] };
 
 describe("GET /api/account/memberships の current_company_id", () => {

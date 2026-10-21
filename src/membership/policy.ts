@@ -4,7 +4,13 @@ export type { Role } from "../../db/repositories/membership";
 
 const ROLE_LEVEL = { MEMBER: 0, ADMIN: 1, OWNER: 2 } as const;
 
-export function isAtLeast(role: Role, minRole: Role): boolean {
+export type RoleAtLeast<R extends Role> = R extends "OWNER"
+  ? "OWNER"
+  : R extends "ADMIN"
+    ? "ADMIN" | "OWNER"
+    : Role;
+
+export function isAtLeast<R extends Role>(role: Role, minRole: R): role is RoleAtLeast<R> {
   return ROLE_LEVEL[role] >= ROLE_LEVEL[minRole];
 }
 

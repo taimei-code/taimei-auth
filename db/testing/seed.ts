@@ -91,9 +91,12 @@ export function createSeed(prefix: string) {
     userId: string,
     companyId: string,
     role: Role = "MEMBER",
+    joinedAt?: Date,
   ): Promise<string> => {
     const membershipId = generateMembershipId();
-    await db.insert(membership).values({ id: membershipId, userId, companyId, role });
+    await db
+      .insert(membership)
+      .values({ id: membershipId, userId, companyId, role, ...(joinedAt ? { joinedAt } : {}) });
     return membershipId;
   };
 

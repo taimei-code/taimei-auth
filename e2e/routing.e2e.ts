@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE_URL, expectSignInLanding, signInWithMagicLink } from "./helpers";
+import { routeEndpoint } from "./contract-mock";
 
 const EVIL_URL = "https://evil.example.com/";
 
@@ -88,7 +89,7 @@ test("事業所に所属しない user が /account を開くと、事業所登�
 test("事業所状態の取得が 500 で失敗しても、/account から移らない", async ({ page }) => {
   await signedIn(page);
   let failed = 0;
-  await page.route("**/api/account/memberships", async (route) => {
+  await routeEndpoint(page, "account.memberships", async (route) => {
     failed++;
     await route.fulfill({ status: 500, json: {} });
   });
@@ -116,7 +117,7 @@ test("/account の初回表示で、事業所状態の GET は 1 回", async ({ 
 
 test("事業所状態の応答を待つ間は読み込み中の表示を出す", async ({ page }) => {
   await signedIn(page);
-  await page.route("**/api/account/memberships", async (route) => {
+  await routeEndpoint(page, "account.memberships", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
     await route.continue();
   });

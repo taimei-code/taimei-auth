@@ -4,7 +4,6 @@ import { type Context, Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
 import { InvalidArgument } from "../src/failures";
 import { createSignedInUser } from "./create-signed-in-user";
-import type { MagicLinkOutbox } from "./magic-link-outbox";
 import { setCurrentCompany } from "./set-current-company";
 import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
 
@@ -17,14 +16,14 @@ const decodeBody = <S extends Schema.Codec<unknown, unknown, never, never>>(
     Effect.mapError(() => new InvalidArgument({})),
   );
 
-export const testingRoutes = (outbox: MagicLinkOutbox) =>
+export const testingRoutes = () =>
   new Hono()
     .post(`${TESTING_PATH}/signed-in-users`, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {
           const body = yield* decodeBody(c, SignedInUserRequest);
-          return c.json(yield* createSignedInUser(body, outbox));
+          return c.json(yield* createSignedInUser(body));
         }),
       ),
     )

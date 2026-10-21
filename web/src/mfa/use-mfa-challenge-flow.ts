@@ -1,33 +1,62 @@
 import { Exit } from "effect";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useState } from "react";
 
 import {
   mfaChallengeFlowStateOf,
   reduceMfaChallengeFlow,
+  type MfaChallengeFlowEvent,
   type MfaChallengeFlowState,
   type MfaChallengeObservation,
   type MfaChallengeVerification,
 } from "./mfa-challenge-flow";
-import { hasFailureTag } from "../shared/failure-message";
+import { failureOutcome } from "../shared/failure-message";
 import { leaveSpaTo } from "../shared/leave-spa";
 import {
   mfaFailureMessage,
   useVerifyMfaChallenge,
   type MfaCodeKind,
-  type MfaFailure,
+  type MfaVerifyFailure,
 } from "./mfa-atom";
+import { oneAtATime } from "./one-at-a-time";
 import { useMfaCodeInput, type MfaCodeInput } from "./use-mfa-code-entry";
 
-type VerifyExit = Exit.Exit<{ readonly redirect_url: string }, MfaFailure>;
+type VerifyExit = Exit.Exit<{ readonly redirect_url: string }, MfaVerifyFailure>;
 
 export const verificationOf = (exit: VerifyExit): MfaChallengeVerification =>
   Exit.match(exit, {
     onSuccess: ({ redirect_url }) => ({ kind: "passed", redirectUrl: redirect_url }),
-    onFailure: (cause) =>
-      hasFailureTag(cause, "ChallengeExpired")
-        ? { kind: "expired" }
-        : { kind: "rejected", errorMessage: mfaFailureMessage(cause) },
+    onFailure: (cause) => {
+      const rejected: MfaChallengeVerification = {
+        kind: "rejected",
+        errorMessage: mfaFailureMessage(cause),
+      };
+      return failureOutcome<MfaVerifyFailure, MfaChallengeVerification>(
+        cause,
+        {
+          ChallengeExpired: { kind: "expired" },
+          InvalidCode: rejected,
+          Locked: rejected,
+          RateLimited: rejected,
+        },
+        rejected,
+      );
+    },
   });
+
+export const submitVerification = (
+  input: { code: string; kind: MfaCodeKind },
+  deps: {
+    verify: (input: { code: string; kind: MfaCodeKind }) => Promise<VerifyExit>;
+    dispatch: (event: MfaChallengeFlowEvent) => void;
+  },
+): Promise<void> => {
+  deps.dispatch({ type: "verification_started" });
+  return deps
+    .verify(input)
+    .then((exit) =>
+      deps.dispatch({ type: "verification_resolved", verification: verificationOf(exit) }),
+    );
+};
 
 type MfaChallengeViewKind = "redirecting" | "expired" | "entry";
 
@@ -46,20 +75,11 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
     mfaChallengeFlowStateOf,
   );
   const verify = useVerifyMfaChallenge();
-  const verificationInFlight = useRef(false);
+  const [runOneAtATime] = useState(oneAtATime);
 
   const submit = (input: { code: string; kind: MfaCodeKind }) => {
-    if (state.phase !== "ready" || verificationInFlight.current) return;
-
-    verificationInFlight.current = true;
-    dispatch({ type: "verification_started" });
-    void verify(input)
-      .then((exit) =>
-        dispatch({ type: "verification_resolved", verification: verificationOf(exit) }),
-      )
-      .finally(() => {
-        verificationInFlight.current = false;
-      });
+    if (state.phase !== "ready") return;
+    runOneAtATime(() => submitVerification(input, { verify, dispatch }));
   };
 
   const entry = useMfaCodeInput({

@@ -32,11 +32,10 @@ export const authEntryRedirectProgram = Effect.fnUntraced(
       return respondWith(c.redirect(acceptInvitationPath(params.data.invitation_token)));
     }
 
-    const memberships = yield* MembershipRepo.use((repo) =>
-      repo.findMembershipsByUserId(status.user.id),
+    const activeMembershipCount = yield* MembershipRepo.use((repo) =>
+      repo.countActiveMembershipsByUserId(status.user.id),
     );
-    const activeMemberships = memberships.filter((m) => m.companyActivationStatus === "ACTIVE");
-    if (activeMemberships.length === 0) {
+    if (activeMembershipCount === 0) {
       const { pathname, search } = new URL(
         buildCompanySignupUrl({
           authBaseUrl: requestUrl.origin,

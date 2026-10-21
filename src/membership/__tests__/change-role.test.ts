@@ -12,6 +12,7 @@ import { DbError } from "../../errors";
 import { changeRole } from "../change-role";
 import { LastOwner } from "../errors";
 import { NotFound } from "../../failures";
+import { roleChangeGrantForTest } from "./verified-for-test";
 
 const P = "chrole-test-";
 const { run, cleanup } = dbTest(P);
@@ -31,13 +32,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(target.id, co, "MEMBER");
 
         const tx = recordingTransaction();
-        yield* changeRole({
-          actorUserId: owner.id,
-          targetUserId: target.id,
-          companyId: co,
-          beforeRole: "MEMBER",
-          nextRole: "ADMIN",
-        }).pipe(Effect.provide(tx.layer));
+        yield* changeRole(
+          roleChangeGrantForTest({
+            actorUserId: owner.id,
+            targetUserId: target.id,
+            companyId: co,
+            beforeRole: "MEMBER",
+            nextRole: "ADMIN",
+          }),
+        ).pipe(Effect.provide(tx.layer));
         expect(tx.calls.n).toBe(1);
         expect((yield* db.readMembership(target.id, co))?.role).toBe("ADMIN");
 
@@ -67,13 +70,15 @@ describe("changeRole", () => {
         }));
 
         const exit = yield* Effect.exit(
-          changeRole({
-            actorUserId: owner.id,
-            targetUserId: target.id,
-            companyId: co,
-            beforeRole: "MEMBER",
-            nextRole: "ADMIN",
-          }).pipe(Effect.provide(failingAudit)),
+          changeRole(
+            roleChangeGrantForTest({
+              actorUserId: owner.id,
+              targetUserId: target.id,
+              companyId: co,
+              beforeRole: "MEMBER",
+              nextRole: "ADMIN",
+            }),
+          ).pipe(Effect.provide(failingAudit)),
         );
 
         expect(Exit.isFailure(exit)).toBe(true);
@@ -92,13 +97,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(target.id, co, "MEMBER");
 
         const tx = recordingTransaction();
-        yield* changeRole({
-          actorUserId: owner.id,
-          targetUserId: target.id,
-          companyId: co,
-          beforeRole: "MEMBER",
-          nextRole: "MEMBER",
-        }).pipe(Effect.provide(tx.layer));
+        yield* changeRole(
+          roleChangeGrantForTest({
+            actorUserId: owner.id,
+            targetUserId: target.id,
+            companyId: co,
+            beforeRole: "MEMBER",
+            nextRole: "MEMBER",
+          }),
+        ).pipe(Effect.provide(tx.layer));
         expect(tx.calls.n).toBe(0);
         expect((yield* db.readMembership(target.id, co))?.role).toBe("MEMBER");
         expect((yield* auditRowsFor(owner.id, "role_changed")).length).toBe(0);
@@ -114,13 +121,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
 
         const e = yield* Effect.flip(
-          changeRole({
-            actorUserId: owner.id,
-            targetUserId: owner.id,
-            companyId: co,
-            beforeRole: "OWNER",
-            nextRole: "MEMBER",
-          }),
+          changeRole(
+            roleChangeGrantForTest({
+              actorUserId: owner.id,
+              targetUserId: owner.id,
+              companyId: co,
+              beforeRole: "OWNER",
+              nextRole: "MEMBER",
+            }),
+          ),
         );
         expectFailure(e, LastOwner);
         expect((yield* db.readMembership(owner.id, co))?.role).toBe("OWNER");
@@ -137,13 +146,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
 
         const e = yield* Effect.flip(
-          changeRole({
-            actorUserId: owner.id,
-            targetUserId: `${P}nonexistent-user`,
-            companyId: co,
-            beforeRole: "MEMBER",
-            nextRole: "ADMIN",
-          }),
+          changeRole(
+            roleChangeGrantForTest({
+              actorUserId: owner.id,
+              targetUserId: `${P}nonexistent-user`,
+              companyId: co,
+              beforeRole: "MEMBER",
+              nextRole: "ADMIN",
+            }),
+          ),
         );
         expectFailure(e, NotFound);
         expect((yield* auditRowsFor(owner.id, "role_changed")).length).toBe(0);
@@ -159,13 +170,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
 
         const e = yield* Effect.flip(
-          changeRole({
-            actorUserId: owner.id,
-            targetUserId: owner.id,
-            companyId: co,
-            beforeRole: "OWNER",
-            nextRole: "ADMIN",
-          }),
+          changeRole(
+            roleChangeGrantForTest({
+              actorUserId: owner.id,
+              targetUserId: owner.id,
+              companyId: co,
+              beforeRole: "OWNER",
+              nextRole: "ADMIN",
+            }),
+          ),
         );
         expect(e).toBeInstanceOf(LastOwner);
         expect((yield* auditRowsFor(owner.id, "role_changed")).length).toBe(0);
@@ -182,13 +195,15 @@ describe("changeRole", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
         yield* db.seedMembership(target.id, co, "MEMBER");
 
-        yield* changeRole({
-          actorUserId: owner.id,
-          targetUserId: target.id,
-          companyId: co,
-          beforeRole: "MEMBER",
-          nextRole: "ADMIN",
-        });
+        yield* changeRole(
+          roleChangeGrantForTest({
+            actorUserId: owner.id,
+            targetUserId: target.id,
+            companyId: co,
+            beforeRole: "MEMBER",
+            nextRole: "ADMIN",
+          }),
+        );
         const finalRole = (yield* db.readMembership(target.id, co))?.role;
         const audits = yield* auditRowsFor(owner.id, "role_changed");
         expect(audits.length).toBe(1);
