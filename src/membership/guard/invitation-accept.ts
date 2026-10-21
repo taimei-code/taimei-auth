@@ -6,10 +6,15 @@ import { MembershipRepo } from "../ports";
 import type { Actor } from "./core";
 import { EmailMismatch, ExpiredOrUsed } from "../../invitation/errors";
 import { NotFound } from "../../failures";
+import { type Verified, verified } from "./verified";
 
-type InvitationAcceptGrant =
-  | { mode: "proceed"; actor: Actor; invitation: InvitationRow }
-  | { mode: "reused"; companyId: string };
+export type AcceptGrant = Verified<{
+  readonly mode: "proceed";
+  readonly actor: Actor;
+  readonly invitation: InvitationRow;
+}>;
+
+type InvitationAcceptGrant = AcceptGrant | { readonly mode: "reused"; readonly companyId: string };
 
 export const requireInvitationAccept = Effect.fnUntraced(function* (opts: {
   actor: Actor;
@@ -29,5 +34,5 @@ export const requireInvitationAccept = Effect.fnUntraced(function* (opts: {
     return { mode: "reused", companyId: invitation.companyId } satisfies InvitationAcceptGrant;
   if (!isAcceptableAt(invitation, yield* Clock.currentTimeMillis))
     return yield* new ExpiredOrUsed();
-  return { mode: "proceed", actor, invitation } satisfies InvitationAcceptGrant;
+  return verified({ mode: "proceed" as const, actor, invitation }) satisfies InvitationAcceptGrant;
 });

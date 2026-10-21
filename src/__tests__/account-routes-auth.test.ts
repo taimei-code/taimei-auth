@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { Hono } from "hono";
 import { Authenticated } from "../account/actor-contract";
 import { JSON_HEADERS } from "../handlers/client-facing-error";
-import { mountSpaApi, spaEndpoints } from "../handlers/spa-http-api";
+import { mountSpaApi } from "../handlers/spa-http-api";
+import { spaEndpointTable } from "../spa-contract-table";
 
 const app = new Hono();
 mountSpaApi(app);
 
-const routes = spaEndpoints().map(({ method, path, middleware }) => ({
+const routes = spaEndpointTable().map(({ method, path, middleware }) => ({
   method,
   path: path.replace(/:(\w+)/g, "$1_x"),
   authenticated: [...middleware].some(({ key }) => key === Authenticated.key),

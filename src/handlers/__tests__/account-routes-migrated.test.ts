@@ -1083,6 +1083,37 @@ describe("GET /api/account/memberships の ACTIVE filter (redirect loop の 2 �
     ));
 });
 
+describe("GET /api/account/companies/:companyId/members の並び", () => {
+  beforeEach(cleanup);
+
+  test("メンバーは登録の順ではなく参加の古い順に並ぶ", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const co = yield* db.seedCompany("members-order");
+        const third = yield* db.seedUser("members-order-third");
+        const second = yield* db.seedUser("members-order-second");
+        const first = yield* db.seedUser("members-order-first");
+        yield* db.seedMembership(third.id, co, "MEMBER", new Date("2026-03-01T00:00:00Z"));
+        yield* db.seedMembership(second.id, co, "MEMBER", new Date("2026-02-01T00:00:00Z"));
+        yield* db.seedMembership(first.id, co, "OWNER", new Date("2026-01-01T00:00:00Z"));
+
+        const actual = yield* invoke(
+          buildTestApp(third),
+          "GET",
+          `/api/account/companies/${co}/members`,
+        );
+
+        const body = actual.body as { members: { user_id: string }[] };
+        expect(body.members.map((member) => member.user_id)).toEqual([
+          first.id,
+          second.id,
+          third.id,
+        ]);
+      }),
+    ));
+});
+
 describe("GET /api/account/companies/:companyId/invitations の期限", () => {
   beforeEach(cleanup);
 

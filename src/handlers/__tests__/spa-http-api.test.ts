@@ -180,7 +180,7 @@ describe("Hono に載せた SPA の HttpApi", () => {
   test("途中で接続を切った request は Sentry に送らない", async () => {
     const hanging = Layer.succeed(
       MembershipRepo,
-      partial<MembershipRepo["Service"]>({ findMembershipsByUserId: () => Effect.never }),
+      partial<MembershipRepo["Service"]>({ findActiveMembershipsByUserId: () => Effect.never }),
     );
     const abort = new AbortController();
     const pending = signedInApp(hanging).request("/api/account/memberships", {

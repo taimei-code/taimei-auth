@@ -63,7 +63,7 @@ describe("副作用と runtime の入口は、決まった module だけが呼�
       "src/audit/append.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
-      "src/handlers/invitation-http-api.ts",
+      "src/invitation/create.ts",
       "src/membership/guard/core.ts",
       "src/mfa/disable-attempt-budget.ts",
       "src/mfa/notification-adapter.ts",
@@ -81,16 +81,15 @@ describe("副作用と runtime の入口は、決まった module だけが呼�
     ]);
   });
 
-  test("membership 行の増減と role 変更、それに伴う current 事業所の付け替えは apply-change だけが呼ぶ", () => {
+  test("membership 行の増減と role 変更は apply-change だけが、現在の事業所の書き込みは current-company だけが呼ぶ", () => {
     expect(
       srcFiles(
-        "\\.(insertMembership|updateMembershipRole|deleteMembership|removeMembershipsOfCompany|reassignLastUsedCompanyAfterLeaving)\\(",
-      ),
+        "\\.(insertMembership|updateMembershipRole|deleteMembership|removeMembershipsOfCompany)\\(",
+      ).sort(),
     ).toEqual(["src/membership/apply-change.ts"]);
-    expect(srcFiles("\\.updateUserLastUsedCompany\\(").sort()).toEqual([
-      "src/account/switch-company.ts",
-      "src/membership/apply-change.ts",
-    ]);
+    expect(
+      srcFiles("\\.(updateUserLastUsedCompany|reassignLastUsedCompanyAfterLeaving)\\(").sort(),
+    ).toEqual(["src/membership/current-company.ts"]);
   });
 
   test("settleCause / captureThrown の呼び出しは adapter (run-route / run-rpc) と better-auth の結線 (auth.ts / app.ts) だけ", () => {

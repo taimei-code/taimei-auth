@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { isJustSignedUp, type SessionData } from "@taimei-code/auth-client";
 import {
   createTestingClient,
@@ -16,7 +16,7 @@ import { testingRoutes } from "../routes";
 import { testMagicLinkOutbox } from "./test-magic-link-outbox";
 
 const P = "signed-in-user-test-";
-const { run } = dbTest(P);
+const { run, cleanup } = dbTest(P);
 const [trustedOrigin] = getTrustedOrigins();
 if (trustedOrigin === undefined) {
   throw new Error("AUTH_TRUSTED_ORIGINS is empty; the testing API refuses every returnTo");
@@ -73,6 +73,9 @@ const sessionDataOf = (createdAt: Date): SessionData => ({
 });
 
 describe("試験 API で作る利用者と事業所", () => {
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
   test("SDK の testing の subpath は試験 API の path の接頭辞を出す", () => {
     expect(TESTING_PATH).toBe("/testing/v1");
   });
@@ -92,6 +95,52 @@ describe("試験 API で作る利用者と事業所", () => {
         expect((yield* db.readUser(signedIn.userId))?.lastUsedCompanyId).toBe(
           signedIn.companyIds[0],
         );
+      }),
+    ));
+
+  test("ADMIN と MEMBER の所属は招待と受諾で作り、事業所ごとに招待の送信と受諾の audit を 1 件ずつ残す", () =>
+    run(
+      Effect.gen(function* () {
+        const signedIn = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }, { role: "ADMIN" }, { role: "MEMBER" }],
+          returnTo: RETURN_TO,
+        });
+        const db = yield* TestDb;
+        const [, adminCompany, memberCompany] = signedIn.companyIds;
+        const invitedCompanies = [adminCompany, memberCompany];
+        const companyIdsOf = (rows: readonly { payload: unknown }[]) =>
+          rows.map((row) => (row.payload as { company_id: string }).company_id).sort();
+
+        const accepted = yield* db.readAuditRows(signedIn.userId, "invitation_accepted");
+        expect(companyIdsOf(accepted)).toEqual([...invitedCompanies].sort());
+        for (const companyId of invitedCompanies) {
+          if (companyId === undefined) throw new Error("no company was created");
+          const [owner] = (yield* db.readMembershipsOfCompany(companyId)).filter(
+            (m) => m.role === "OWNER",
+          );
+          if (owner === undefined) throw new Error("the company has no owner");
+          expect(companyIdsOf(yield* db.readAuditRows(owner.userId, "invitation_sent"))).toEqual([
+            companyId,
+          ]);
+        }
+      }),
+    ));
+
+  test("最初の事業所へ戻す切り替えの audit は、直前の事業所を最後に所属した事業所とする", () =>
+    run(
+      Effect.gen(function* () {
+        const signedIn = yield* createSignedInUser({
+          companies: [{ role: "OWNER" }, { role: "ADMIN" }],
+          returnTo: RETURN_TO,
+        });
+        const [first, second] = signedIn.companyIds;
+        const switched = yield* TestDb.use((db) =>
+          db.readAuditRows(signedIn.userId, "company_switched"),
+        );
+        expect(switched.at(-1)?.payload).toEqual({
+          from_company_id: second,
+          to_company_id: first,
+        });
       }),
     ));
 

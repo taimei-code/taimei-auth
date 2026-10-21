@@ -42,19 +42,13 @@ export const CompanyHandlers = HttpApiBuilder.group(SpaApi, "company", (handlers
       return serializeCreatedCompany(yield* addCompany(actor.id, toCompanyInput(payload)));
     }, dieOnBoundary),
     update: Effect.fnUntraced(function* ({ params, payload }) {
-      const actor = yield* CurrentActor;
-      yield* requireMembershipOf(actor, params.companyId, "OWNER");
-      const result = yield* updateCompanyInfo({
-        actorUserId: actor.id,
-        companyId: params.companyId,
-        input: toCompanyInput(payload),
-      });
+      const member = yield* requireMembershipOf(yield* CurrentActor, params.companyId, "OWNER");
+      const result = yield* updateCompanyInfo(member, toCompanyInput(payload));
       return { company: serializeCompany(result.company) };
     }, dieOnBoundary),
     delete: Effect.fnUntraced(function* ({ params }) {
-      const actor = yield* CurrentActor;
-      yield* requireMembershipOf(actor, params.companyId, "OWNER");
-      const result = yield* deleteCompany(actor.id, params.companyId);
+      const member = yield* requireMembershipOf(yield* CurrentActor, params.companyId, "OWNER");
+      const result = yield* deleteCompany(member);
       return { ok: true as const, account_deleted: result.actorDeleted };
     }, dieOnBoundary),
   }),

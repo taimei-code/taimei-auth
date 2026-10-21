@@ -56,8 +56,7 @@ export const createSignupCompany = Effect.fnUntraced(function* (
   return yield* tx.run(
     Effect.fnUntraced(function* (t: DbTx) {
       yield* memberships.lockMembershipChangesOfUser(t, userId);
-      const rows = yield* memberships.findMembershipsByUserId(userId, t);
-      if (rows.some((m) => m.companyActivationStatus === "ACTIVE")) {
+      if ((yield* memberships.countActiveMembershipsByUserId(userId, t)) > 0) {
         return yield* new AlreadyExists();
       }
       return yield* createCompanyWithOwner(t, userId, input);

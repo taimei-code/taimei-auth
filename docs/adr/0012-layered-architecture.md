@@ -67,15 +67,17 @@ drizzle の行はデータだけでメソッドを持てないためである。
 
 閾値は 1 ファイル 200 行以下とする。後続案件で entry を足す場合も、1 操作 1 ファイルで同じディレクトリに追加する。
 
+(2026-10-20 改訂) entry は `guard/verified.ts` の印を付けた値 (`Verified<T>`) を返し、use-case と、事業所を指す読み出しはその値だけを引数に受ける。`requireMembershipOf(actor, companyId, minRole)` は `VerifiedMember<minRole>` を返し、必要な role は use-case の引数の型 (`VerifiedMember<"OWNER">` など) が宣言する。handler が guard を呼び忘れるか、弱い role の値を渡すと型エラーになる。印の cast を書けるのは `guard/verified.ts` だけで、`src/membership/__tests__/containment.test.ts` が固定する。use-case 側の TOCTOU の再検証 (事業所の削除の OWNER の再確認、OWNER 招待の受諾) は残し、全操作へは広げない (下の「招待受諾の再検証を OWNER 招待に限定する脅威モデル」)。
+
 ### 操作単位 entry の判定順
 
-| entry | route | 内部で実行する判定 (この順) |
-|---|---|---|
-| `requireRoleChange` | POST `.../members/:targetUserId/role` | 401 (actor) → 400 (parseBody) → 403 (ADMIN 以上) → 404 (target membership) → 403 (canChangeRole) |
-| `requireRemoval` | POST `.../members/:targetUserId/remove` | 401 → 403 (membership) → 403 (canAttemptRemoval) → 404 (target) → 403 (canRemoveTarget) ※body なし |
-| `requireTransferOwnership` | POST `.../transfer-ownership` | 401 → 400 (parseBody + self 委譲 400) → 403 (OWNER) → 404 (target) → 400 (already_owner) |
-| `requireInvite` | POST `.../invitations` | 401 → 403 (ADMIN 以上) → 400 (parseBody, details 付き) → 403 (canInviteRole) |
-| `requireInvitationAccept` | POST `/api/account/accept-invitation` | 401 → 400 (parseBody) → 404 (token) → 403 (email_mismatch) → 既所属短絡 (ok, reused) → 410 (isAcceptable) |
+| entry | route | 内部で実行する判定 (この順) | 返す値 (2026-10-20 改訂) |
+|---|---|---|---|
+| `requireRoleChange` | POST `.../members/:targetUserId/role` | 401 (actor) → 400 (parseBody) → 403 (ADMIN 以上) → 404 (target membership) → 403 (canChangeRole) | `RoleChangeGrant` |
+| `requireRemoval` | POST `.../members/:targetUserId/remove` | 401 → 403 (membership) → 403 (canAttemptRemoval) → 404 (target) → 403 (canRemoveTarget) ※body なし | `RemovalGrant` |
+| `requireTransferOwnership` | POST `.../transfer-ownership` | 401 → 400 (parseBody + self 委譲 400) → 403 (OWNER) → 404 (target) → 400 (already_owner) | `OwnershipTransferGrant` |
+| `requireInvite` | POST `.../invitations` | 401 → 403 (ADMIN 以上) → 400 (parseBody, details 付き) → 403 (canInviteRole) | `InviteGrant` |
+| `requireInvitationAccept` | POST `/api/account/accept-invitation` | 401 → 400 (parseBody) → 404 (token) → 403 (email_mismatch) → 既所属短絡 (ok, reused) → 410 (isAcceptable) | `AcceptGrant` か既所属の短絡 |
 
 `requireInvite` は現行実装の判定順 (403 ADMIN、400 parse、403 canInviteRole) を維持する。
 `requireInvitationAccept` の既所属短絡は、「期限切れでも既所属なら 200 reused」という現行の冪等性を保つため

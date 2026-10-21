@@ -1,6 +1,11 @@
-export { type Actor, requireActor, requireMembershipOf } from "./core";
-export { requireInvitationAccept } from "./invitation-accept";
-export { requireInvite } from "./invite";
-export { requireRemoval } from "./removal";
-export { requireRoleChange } from "./role-change";
-export { requireTransferOwnership } from "./transfer-ownership";
+export {
+  type Actor,
+  requireActor,
+  requireMembershipOf,
+  type VerifiedMember,
+} from "./core";
+export { type AcceptGrant, requireInvitationAccept } from "./invitation-accept";
+export { type InviteGrant, requireInvite } from "./invite";
+export { type RemovalGrant, requireRemoval } from "./removal";
+export { type RoleChangeGrant, requireRoleChange } from "./role-change";
+export { type OwnershipTransferGrant, requireTransferOwnership } from "./transfer-ownership";

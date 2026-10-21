@@ -1,12 +1,14 @@
 import { afterAll, afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { switchCompany } from "../../account/switch-company";
+import { switchCurrentCompany } from "../../membership/current-company";
 import { buildApp } from "../../app";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { authLayer, sessionOf } from "../../membership/__tests__/test-layers";
 import { Role as ProtoRole } from "../../gen/auth/v1/auth_pb";
-import { listCurrentCompanyMembersProgram } from "../auth-handler";
+import { listMembers } from "../../membership/list-members";
+import { memberForTest } from "../../membership/__tests__/verified-for-test";
+import { getSessionProgram, listCurrentCompanyMembersProgram } from "../auth-handler";
 
 const P = "list-members-";
 const { run, cleanup } = dbTest(P);
@@ -84,12 +86,38 @@ describe("ListCurrentCompanyMembers は現在の事業所のメンバーだけ�
   test("現在の事業所を C2 に切り替えると、C2 のメンバーを返す", () =>
     run(
       Effect.gen(function* () {
-        const { c1, c2, both } = yield* seedTwoCompanies;
-        yield* switchCompany({ actorUserId: both.id, fromCompanyId: c1, targetCompanyId: c2 });
+        const { c2, both } = yield* seedTwoCompanies;
+        yield* switchCurrentCompany({ userId: both.id, companyId: c2 });
 
         const seen = yield* listSeenBy(both.id);
 
         expect(seen).toEqual({ companyId: c2, userIds: yield* userIdsOf(c2) });
+      }),
+    ));
+});
+
+describe("consumer と画面は、同じ事業所のメンバーを同じ順に見る", () => {
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  test("GetSession の members と画面のメンバーの一覧は、参加の古い順で同じ並びになる", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const co = yield* db.seedCompany("same-order");
+        const late = yield* db.seedUser("same-order-late", { lastUsedCompanyId: co });
+        const early = yield* db.seedUser("same-order-early");
+        yield* db.seedMembership(late.id, co, "MEMBER", new Date("2026-02-01T00:00:00Z"));
+        yield* db.seedMembership(early.id, co, "OWNER", new Date("2026-01-01T00:00:00Z"));
+
+        const res = yield* getSessionProgram({ sessionToken: "db" }).pipe(
+          Effect.provide(authLayer(() => sessionOf(late.id))),
+        );
+        if (res.outcome.case !== "ok") throw new Error(res.outcome.case);
+        const onScreen = yield* listMembers(memberForTest(late.id, co, "MEMBER"));
+
+        expect(res.outcome.value.members.map((m) => m.userId)).toEqual([early.id, late.id]);
+        expect(onScreen.map((m) => m.userId)).toEqual([early.id, late.id]);
       }),
     ));
 });

@@ -4,8 +4,7 @@ import { HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import { CurrentActor } from "../account/actor-contract";
 import { deleteAccountUnlessLastOwner } from "../account/delete-account";
-import { switchCompany } from "../account/switch-company";
-import { MembershipRepo } from "../membership/ports";
+import { activeMembershipsOf, switchCurrentCompany } from "../membership/current-company";
 import { SpaApi } from "../spa-contract";
 import { dieOnBoundary } from "./request-http-api";
 
@@ -16,27 +15,24 @@ export const AccountHandlers = HttpApiBuilder.group(SpaApi, "account", (handlers
   handlers.handleAll({
     memberships: Effect.fnUntraced(function* () {
       const actor = yield* CurrentActor;
-      const rows = yield* MembershipRepo.use((repo) => repo.findMembershipsByUserId(actor.id));
+      const rows = yield* activeMembershipsOf(actor.id);
       return {
         current_company_id: actor.lastUsedCompanyId,
-        memberships: rows
-          .filter((m) => m.companyActivationStatus === "ACTIVE")
-          .map((row) => ({
-            id: row.id,
-            company_id: row.companyId,
-            company_name: row.companyName,
-            company_org_code: row.companyOrgCode,
-            role: row.role,
-            joined_at: row.joinedAt.toISOString(),
-          })),
+        memberships: rows.map((row) => ({
+          id: row.id,
+          company_id: row.companyId,
+          company_name: row.companyName,
+          company_org_code: row.companyOrgCode,
+          role: row.role,
+          joined_at: row.joinedAt.toISOString(),
+        })),
       };
     }, dieOnBoundary),
     switchCompany: Effect.fnUntraced(function* ({ payload }) {
       const actor = yield* CurrentActor;
-      const result = yield* switchCompany({
-        actorUserId: actor.id,
-        fromCompanyId: actor.lastUsedCompanyId,
-        targetCompanyId: payload.company_id,
+      const result = yield* switchCurrentCompany({
+        userId: actor.id,
+        companyId: payload.company_id,
       });
       return { ok: true as const, company_id: result.companyId };
     }, dieOnBoundary),

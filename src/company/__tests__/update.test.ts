@@ -4,6 +4,7 @@ import { NotFound } from "../../failures";
 import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { updateCompanyInfo } from "../update";
+import { memberForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "coupd-test-";
 const { run, cleanup } = dbTest(P);
@@ -22,10 +23,9 @@ describe("updateCompanyInfo", () => {
         const before = yield* db.readCompany(co);
         if (!before) throw new Error("seed failed");
 
-        const result = yield* updateCompanyInfo({
-          actorUserId: owner.id,
-          companyId: co,
-          input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+        const result = yield* updateCompanyInfo(memberForTest(owner.id, co, "OWNER"), {
+          name: `${P}renamed`,
+          orgCode: "CORPORATE",
         });
         expect(result.company.name).toBe(`${P}renamed`);
         expect(result.company.orgCode).toBe("CORPORATE");
@@ -54,10 +54,9 @@ describe("updateCompanyInfo", () => {
         yield* db.markCompanyDeleted(co);
 
         const e = yield* Effect.flip(
-          updateCompanyInfo({
-            actorUserId: owner.id,
-            companyId: co,
-            input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+          updateCompanyInfo(memberForTest(owner.id, co, "OWNER"), {
+            name: `${P}renamed`,
+            orgCode: "CORPORATE",
           }),
         );
         expectFailure(e, NotFound);
@@ -78,10 +77,9 @@ describe("updateCompanyInfo", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
 
         const e = yield* Effect.flip(
-          updateCompanyInfo({
-            actorUserId: owner.id,
-            companyId: `${P}nonexistent`,
-            input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+          updateCompanyInfo(memberForTest(owner.id, `${P}nonexistent`, "OWNER"), {
+            name: `${P}renamed`,
+            orgCode: "CORPORATE",
           }),
         );
         expectFailure(e, NotFound);
@@ -97,10 +95,9 @@ describe("updateCompanyInfo", () => {
         const co = yield* db.seedCompany("h12", "PERSONAL");
         yield* db.seedMembership(owner.id, co, "OWNER");
 
-        const result = yield* updateCompanyInfo({
-          actorUserId: owner.id,
-          companyId: co,
-          input: { name: `${P}h12-renamed`, orgCode: "CORPORATE" },
+        const result = yield* updateCompanyInfo(memberForTest(owner.id, co, "OWNER"), {
+          name: `${P}h12-renamed`,
+          orgCode: "CORPORATE",
         });
         expect(result.company.name).toBe(`${P}h12-renamed`);
 

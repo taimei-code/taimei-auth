@@ -1,16 +1,17 @@
 import { Effect } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { appendAuditInTx, invitationRevokedEntry } from "../audit/append";
+import type { VerifiedMember } from "../membership/guard";
 import { Transaction } from "../transaction";
 import { NotFoundOrNotPending } from "./errors";
 import { InvitationRepo } from "./ports";
 
-export const revokeInvitation = Effect.fnUntraced(function* (params: {
-  actorUserId: string;
-  companyId: string;
-  invitationId: string;
-}) {
-  const { actorUserId, companyId, invitationId } = params;
+export const revokeInvitation = Effect.fnUntraced(function* (
+  member: VerifiedMember<"ADMIN">,
+  invitationId: string,
+) {
+  const actorUserId = member.actor.id;
+  const { companyId } = member;
   const invitations = yield* InvitationRepo;
   const tx = yield* Transaction;
 

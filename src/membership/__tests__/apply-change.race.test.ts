@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Deferred, Effect, Exit, Layer } from "effect";
 import { UserRepo } from "../../account/ports";
-import { switchCompany } from "../../account/switch-company";
+import { switchCurrentCompany } from "../../membership/current-company";
 import { UserRepoLive } from "../../account/wiring";
 import { dbTest, expectFailure } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -10,6 +10,7 @@ import { Forbidden } from "../../failures";
 import { MembershipRepo } from "../ports";
 import { removeMember } from "../remove";
 import { MembershipRepoLive } from "../wiring";
+import { removalGrantForTest } from "./verified-for-test";
 
 const P = "race-test-";
 const { run, cleanup } = dbTest(P);
@@ -40,12 +41,14 @@ describe("OWNER race", () => {
 
           const leave = (userId: string) =>
             Effect.exit(
-              removeMember({
-                actorUserId: userId,
-                targetUserId: userId,
-                companyId: co,
-                targetRole: "OWNER",
-              }),
+              removeMember(
+                removalGrantForTest({
+                  actorUserId: userId,
+                  targetUserId: userId,
+                  companyId: co,
+                  targetRole: "OWNER",
+                }),
+              ),
             );
           const results = yield* Effect.forEach(owners, (o) => leave(o.id), {
             concurrency: "unbounded",
@@ -100,20 +103,16 @@ describe("除名と current 事業所の切替の競合", () => {
         const switchFinished = yield* Deferred.make<void>();
         const holdRemovalOpen = holdTxOpenAfterReassign(reassigned, switchFinished);
 
-        const removal = removeMember({
-          actorUserId: owner.id,
-          targetUserId: member.id,
-          companyId: left,
-          targetRole: "MEMBER",
-        }).pipe(Effect.provide(holdRemovalOpen));
+        const removal = removeMember(
+          removalGrantForTest({
+            actorUserId: owner.id,
+            targetUserId: member.id,
+            companyId: left,
+            targetRole: "MEMBER",
+          }),
+        ).pipe(Effect.provide(holdRemovalOpen));
         const switching = Deferred.await(reassigned).pipe(
-          Effect.andThen(
-            switchCompany({
-              actorUserId: member.id,
-              fromCompanyId: other,
-              targetCompanyId: left,
-            }),
-          ),
+          Effect.andThen(switchCurrentCompany({ userId: member.id, companyId: left })),
           Effect.exit,
           Effect.tap(() => Deferred.succeed(switchFinished, undefined)),
         );
@@ -152,7 +151,14 @@ describe("同じ user の別々の事業所からの同時除名", () => {
         const secondReassigned = yield* Deferred.make<void>();
         const firstFinished = yield* Deferred.make<void>();
         const removeFrom = (companyId: string, actorUserId: string) =>
-          removeMember({ actorUserId, targetUserId: member.id, companyId, targetRole: "MEMBER" });
+          removeMember(
+            removalGrantForTest({
+              actorUserId,
+              targetUserId: member.id,
+              companyId,
+              targetRole: "MEMBER",
+            }),
+          );
 
         const removedFromSecond = removeFrom(second, secondOwner.id).pipe(
           Effect.provide(holdTxOpenAfterReassign(secondReassigned, firstFinished)),

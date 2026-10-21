@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
-import { switchCompany } from "../account/switch-company";
+import { switchCurrentCompany } from "../membership/current-company";
 import { addCompany, createSignupCompany } from "../company/create";
 import { deleteCompany } from "../company/delete";
 import { acceptInvitation } from "../invitation/accept";
@@ -9,6 +9,11 @@ import { expectConsumerSeesAnActiveCompanyAndItsRole } from "./consumer-company-
 import { grepFiles } from "./source-scan";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
+import {
+  acceptGrantForTest,
+  memberForTest,
+  removalGrantForTest,
+} from "../membership/__tests__/verified-for-test";
 
 const P = "dcc-test-";
 const { run, cleanup } = dbTest(P);
@@ -71,7 +76,9 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       });
       const invitation = yield* db.readInvitationByToken(inv.token);
       if (!invitation) throw new Error("seed failed");
-      yield* acceptInvitation({ actor: { id: invitee.id, email: invitee.email }, invitation });
+      yield* acceptInvitation(
+        acceptGrantForTest({ actor: { id: invitee.id, email: invitee.email }, invitation }),
+      );
       yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, invitee.id);
     }),
   );
@@ -83,12 +90,14 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const { owner, co } = yield* seedOwnedCompany("removing");
       const { co: other } = yield* seedOwnedCompany("remain");
       const member = yield* seedMemberOf("removed", [co, other], co);
-      yield* removeMember({
-        actorUserId: owner.id,
-        targetUserId: member.id,
-        companyId: co,
-        targetRole: "MEMBER",
-      });
+      yield* removeMember(
+        removalGrantForTest({
+          actorUserId: owner.id,
+          targetUserId: member.id,
+          companyId: co,
+          targetRole: "MEMBER",
+        }),
+      );
       yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );
@@ -100,19 +109,19 @@ describe("VerifySession と GetSession の defaultCompanyId は同じ値で、us
       const { owner, co } = yield* seedOwnedCompany("deleting");
       const { co: other } = yield* seedOwnedCompany("survive");
       const member = yield* seedMemberOf("survivor", [co, other], co);
-      yield* deleteCompany(owner.id, co);
+      yield* deleteCompany(memberForTest(owner.id, co, "OWNER"));
       yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );
 
   scenario(
-    "src/account/switch-company.ts",
+    "src/membership/current-company.ts",
     "別の所属へ切り替える",
     Effect.gen(function* () {
       const { co: from } = yield* seedOwnedCompany("from");
       const { co: to } = yield* seedOwnedCompany("to");
       const member = yield* seedMemberOf("switcher", [from, to], from);
-      yield* switchCompany({ actorUserId: member.id, fromCompanyId: from, targetCompanyId: to });
+      yield* switchCurrentCompany({ userId: member.id, companyId: to });
       yield* expectConsumerSeesAnActiveCompanyAndItsRole(P, member.id);
     }),
   );

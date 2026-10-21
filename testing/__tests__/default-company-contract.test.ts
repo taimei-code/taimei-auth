@@ -14,7 +14,7 @@ describe("試験 API が作る利用者も、VerifySession と GetSession で AC
   test("試験の module で現在の事業所を書き換えるのは、試験の利用者を作る use-case と現在の事業所を切り替える use-case だけ", () => {
     expect(
       grepFiles(
-        "\\b(applyJoin|applyRemoval|applyCompanyRemoval|switchCompany)\\(|\\.updateUserLastUsedCompany\\(",
+        "\\b(applyJoin|applyRemoval|applyCompanyRemoval|switchCurrentCompany)\\(|\\.updateUserLastUsedCompany\\(",
         "testing",
         { tests: "exclude" },
       ),

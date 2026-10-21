@@ -102,19 +102,6 @@ describe("ListCurrentCompanyMembers の一覧", () => {
     ]);
   });
 
-  test("members は加入の古い順で、加入日時が同じ人は membership の ID 順", async () => {
-    const at = (day: number) => new Date(Date.UTC(2026, 0, day));
-    const ok = await okOf(
-      "c1",
-      membershipRepoLayer([
-        { userId: "u1", companyId: "c1", role: "OWNER", joinedAt: at(3) },
-        { userId: "u3", companyId: "c1", role: "MEMBER", joinedAt: at(1) },
-        { userId: "u2", companyId: "c1", role: "MEMBER", joinedAt: at(1) },
-      ]),
-    );
-    expect(ok.members.map((m) => m.userId)).toEqual(["u2", "u3", "u1"]);
-  });
-
   test("現在の事業所が無ければ一覧を読まずに空の ok を返す", async () => {
     const ok = await okOf(null, failsIfMembersAreRead());
     expect([ok.companyId, ok.members]).toEqual([undefined, []]);

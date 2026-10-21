@@ -183,20 +183,6 @@ describe("GetSession の現在の事業所と一覧", () => {
     ]);
   });
 
-  test("members は加入の古い順で、加入日時が同じ人は membership の ID 順", async () => {
-    const at = (day: number) => new Date(Date.UTC(2026, 0, day));
-    const ok = await okOf(
-      "c1",
-      membershipRepoLayer([
-        { userId: "u1", companyId: "c1", role: "OWNER", joinedAt: at(3) },
-        { userId: "u4", companyId: "c1", role: "MEMBER", joinedAt: at(2) },
-        { userId: "u3", companyId: "c1", role: "MEMBER", joinedAt: at(1) },
-        { userId: "u2", companyId: "c1", role: "MEMBER", joinedAt: at(1) },
-      ]),
-    );
-    expect(ok.members.map((m) => m.userId)).toEqual(["u2", "u3", "u4", "u1"]);
-  });
-
   test("一覧の読み取りが失敗したら、ok を返さずに失敗する", async () => {
     const exit = await runGetSession(
       signedInWithRevision(7),

@@ -1,5 +1,6 @@
 import { Data, Effect } from "effect";
 import type { InvitationRow } from "@/db/repositories/invitation";
+import type { AcceptGrant } from "../membership/guard";
 import type { InviterSeen } from "@/db/repositories/membership";
 import type { DbTx } from "@/db/transaction";
 import { appendAuditBestEffort, appendAuditInTx } from "../audit/append";
@@ -24,11 +25,8 @@ class InviterNotOwner extends Data.TaggedError("InviterNotOwner")<{
   readonly reason = "inviter_not_owner_or_missing" as const;
 }
 
-export const acceptInvitation = Effect.fnUntraced(function* (params: {
-  actor: { id: string; email: string };
-  invitation: InvitationRow;
-}) {
-  const { actor, invitation } = params;
+export const acceptInvitation = Effect.fnUntraced(function* (grant: AcceptGrant) {
+  const { actor, invitation } = grant;
   const invitations = yield* InvitationRepo;
   const memberships = yield* MembershipRepo;
   const ids = yield* IdGenerator;

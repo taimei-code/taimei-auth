@@ -8,12 +8,12 @@ import {
   auditRowsFor,
 } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
-import { switchCompany } from "../switch-company";
+import { switchCurrentCompany } from "../current-company";
 
 const P = "swco-test-";
 const { run, cleanup } = dbTest(P);
 
-describe("switchCompany", () => {
+describe("switchCurrentCompany", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -28,11 +28,9 @@ describe("switchCompany", () => {
         yield* db.seedMembership(u.id, co2, "MEMBER");
 
         const tx = recordingTransaction();
-        const result = yield* switchCompany({
-          actorUserId: u.id,
-          fromCompanyId: co1,
-          targetCompanyId: co2,
-        }).pipe(Effect.provide(tx.layer));
+        const result = yield* switchCurrentCompany({ userId: u.id, companyId: co2 }).pipe(
+          Effect.provide(tx.layer),
+        );
         expect(result).toEqual({ companyId: co2 });
         expect(tx.calls.n).toBe(1);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co2);
@@ -43,7 +41,7 @@ describe("switchCompany", () => {
       }),
     ));
 
-  test("same-company 短絡 (fromCompanyId === targetCompanyId) → 200 / tx open せず audit 発火なし", () =>
+  test("現在の事業所と同じ事業所への切り替えは成功し、現在の事業所も audit も変えない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -51,14 +49,8 @@ describe("switchCompany", () => {
         const u = yield* db.seedUser("h09", { lastUsedCompanyId: co });
         yield* db.seedMembership(u.id, co, "OWNER");
 
-        const tx = recordingTransaction();
-        const result = yield* switchCompany({
-          actorUserId: u.id,
-          fromCompanyId: co,
-          targetCompanyId: co,
-        }).pipe(Effect.provide(tx.layer));
+        const result = yield* switchCurrentCompany({ userId: u.id, companyId: co });
         expect(result).toEqual({ companyId: co });
-        expect(tx.calls.n).toBe(0);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co);
         expect((yield* auditRowsFor(u.id, "company_switched")).length).toBe(0);
       }),
@@ -72,9 +64,7 @@ describe("switchCompany", () => {
         const co2 = yield* db.seedCompany("nm-b");
         const u = yield* db.seedUser("nm", { lastUsedCompanyId: co1 });
         yield* db.seedMembership(u.id, co1, "OWNER");
-        const e = yield* Effect.flip(
-          switchCompany({ actorUserId: u.id, fromCompanyId: co1, targetCompanyId: co2 }),
-        );
+        const e = yield* Effect.flip(switchCurrentCompany({ userId: u.id, companyId: co2 }));
         expectFailure(e, Forbidden);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co1);
         expect((yield* auditRowsFor(u.id, "company_switched")).length).toBe(0);
@@ -93,16 +83,14 @@ describe("switchCompany", () => {
 
         yield* db.removeMembership(u.id, co2);
 
-        const e = yield* Effect.flip(
-          switchCompany({ actorUserId: u.id, fromCompanyId: co1, targetCompanyId: co2 }),
-        );
+        const e = yield* Effect.flip(switchCurrentCompany({ userId: u.id, companyId: co2 }));
         expectFailure(e, Forbidden);
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co1);
         expect((yield* auditRowsFor(u.id, "company_switched")).length).toBe(0);
       }),
     ));
 
-  test("初回切替 (lastUsedCompanyId=null) → from_company_id=null で audit / 切替成立", () =>
+  test("現在の事業所が無い利用者の切り替えは、from_company_id を null にして audit を残す", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
@@ -110,16 +98,31 @@ describe("switchCompany", () => {
         const u = yield* db.seedUser("d02");
         yield* db.seedMembership(u.id, co, "OWNER");
 
-        const result = yield* switchCompany({
-          actorUserId: u.id,
-          fromCompanyId: null,
-          targetCompanyId: co,
-        });
+        const result = yield* switchCurrentCompany({ userId: u.id, companyId: co });
         expect(result).toEqual({ companyId: co });
         const audits = yield* auditRowsFor(u.id, "company_switched");
         expect(audits.length).toBe(1);
         expect(audits[0]?.payload).toEqual({ from_company_id: null, to_company_id: co });
         expect((yield* db.readUser(u.id))?.lastUsedCompanyId).toBe(co);
+      }),
+    ));
+
+  test("呼び手が直前の事業所を渡さなくても、切り替えの audit の from_company_id は DB の現在の事業所になる", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const current = yield* db.seedCompany("from-db-current");
+        const target = yield* db.seedCompany("from-db-target");
+        const u = yield* db.seedUser("from-db", { lastUsedCompanyId: current });
+        yield* db.seedMembership(u.id, current, "OWNER");
+        yield* db.seedMembership(u.id, target, "MEMBER");
+
+        yield* switchCurrentCompany({ userId: u.id, companyId: target });
+
+        const audits = yield* auditRowsFor(u.id, "company_switched");
+        expect(audits.map((audit) => audit.payload)).toEqual([
+          { from_company_id: current, to_company_id: target },
+        ]);
       }),
     ));
 
@@ -133,11 +136,7 @@ describe("switchCompany", () => {
         yield* db.seedMembership(u.id, co1, "OWNER");
         yield* db.seedMembership(u.id, co2, "MEMBER");
 
-        const result = yield* switchCompany({
-          actorUserId: u.id,
-          fromCompanyId: co1,
-          targetCompanyId: co2,
-        });
+        const result = yield* switchCurrentCompany({ userId: u.id, companyId: co2 });
         expect(result.companyId).toBe(co2);
         const finalLastUsed = (yield* db.readUser(u.id))?.lastUsedCompanyId;
         const payload = (yield* auditRowsFor(u.id, "company_switched"))[0]?.payload as Record<

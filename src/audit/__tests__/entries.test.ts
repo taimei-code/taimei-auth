@@ -4,7 +4,7 @@ import type { AuditLogEntry } from "@/db/repositories/audit-log";
 import { auditRowsFor, dbTest, drained, withSpy } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { deleteAccountUnlessLastOwner } from "../../account/delete-account";
-import { switchCompany } from "../../account/switch-company";
+import { switchCurrentCompany } from "../../membership/current-company";
 import { addCompany } from "../../company/create";
 import { deleteCompany } from "../../company/delete";
 import { updateCompanyInfo } from "../../company/update";
@@ -18,6 +18,14 @@ import { enableMfaFor, totpCode } from "../../mfa/__tests__/helpers";
 import { loginWithMagicLink } from "../../__tests__/session-helpers";
 import { disable } from "../../mfa/totp";
 import type { AppServices } from "../../runtime";
+import {
+  acceptGrantForTest,
+  inviteGrantForTest,
+  memberForTest,
+  removalGrantForTest,
+  roleChangeGrantForTest,
+  transferGrantForTest,
+} from "../../membership/__tests__/verified-for-test";
 
 type EventType = AuditLogEntry["eventType"];
 type Drive = Effect.Effect<string, unknown, AppServices | TestDb>;
@@ -110,10 +118,9 @@ const WRITTEN_BEFORE_REFACTOR = {
     keys: ["company_id", "before", "after"],
     drive: Effect.gen(function* () {
       const { owner, companyId } = yield* seedOwnedCompany("company-updated");
-      yield* updateCompanyInfo({
-        actorUserId: owner.id,
-        companyId,
-        input: { name: `${P}renamed`, orgCode: "CORPORATE" },
+      yield* updateCompanyInfo(memberForTest(owner.id, companyId, "OWNER"), {
+        name: `${P}renamed`,
+        orgCode: "CORPORATE",
       });
       return owner.id;
     }),
@@ -123,7 +130,7 @@ const WRITTEN_BEFORE_REFACTOR = {
     drive: Effect.gen(function* () {
       const { db, owner, companyId } = yield* seedOwnedCompany("company-deleted");
       yield* db.seedMembership(owner.id, yield* db.seedCompany("company-deleted-kept"), "OWNER");
-      yield* deleteCompany(owner.id, companyId);
+      yield* deleteCompany(memberForTest(owner.id, companyId, "OWNER"));
       return owner.id;
     }),
   },
@@ -131,12 +138,14 @@ const WRITTEN_BEFORE_REFACTOR = {
     keys: ["invitation_id", "company_id", "invited_email", "role", "invited_by_user_id"],
     drive: Effect.gen(function* () {
       const { db, owner, companyId } = yield* seedOwnedCompany("invitation-sent");
-      yield* createInvitation({
-        actorUserId: owner.id,
-        companyId,
-        email: db.ids.email("invitation-sent-invitee"),
-        role: "MEMBER",
-      });
+      yield* createInvitation(
+        inviteGrantForTest({
+          actorUserId: owner.id,
+          companyId,
+          email: db.ids.email("invitation-sent-invitee"),
+          role: "MEMBER",
+        }),
+      );
       return owner.id;
     }),
   },
@@ -148,7 +157,7 @@ const WRITTEN_BEFORE_REFACTOR = {
         "MEMBER",
         "OWNER",
       );
-      yield* acceptInvitation({ actor: invitee, invitation });
+      yield* acceptInvitation(acceptGrantForTest({ actor: invitee, invitation }));
       return invitee.id;
     }),
   },
@@ -160,7 +169,7 @@ const WRITTEN_BEFORE_REFACTOR = {
         "MEMBER",
         "OWNER",
       );
-      yield* revokeInvitation({ actorUserId: owner.id, companyId, invitationId });
+      yield* revokeInvitation(memberForTest(owner.id, companyId, "ADMIN"), invitationId);
       return owner.id;
     }),
   },
@@ -181,7 +190,7 @@ const WRITTEN_BEFORE_REFACTOR = {
       );
       yield* withSpy(
         () => spyOn(console, "warn").mockImplementation(() => {}),
-        () => Effect.flip(acceptInvitation({ actor: invitee, invitation })),
+        () => Effect.flip(acceptInvitation(acceptGrantForTest({ actor: invitee, invitation }))),
       );
       return invitee.id;
     }),
@@ -192,12 +201,14 @@ const WRITTEN_BEFORE_REFACTOR = {
       const { db, owner, companyId } = yield* seedOwnedCompany("membership-removed");
       const member = yield* db.seedUser("membership-removed-member");
       yield* db.seedMembership(member.id, companyId, "MEMBER");
-      yield* removeMember({
-        actorUserId: owner.id,
-        targetUserId: member.id,
-        companyId,
-        targetRole: "MEMBER",
-      });
+      yield* removeMember(
+        removalGrantForTest({
+          actorUserId: owner.id,
+          targetUserId: member.id,
+          companyId,
+          targetRole: "MEMBER",
+        }),
+      );
       return owner.id;
     }),
   },
@@ -207,13 +218,15 @@ const WRITTEN_BEFORE_REFACTOR = {
       const { db, owner, companyId } = yield* seedOwnedCompany("role-changed");
       const member = yield* db.seedUser("role-changed-member");
       yield* db.seedMembership(member.id, companyId, "MEMBER");
-      yield* changeRole({
-        actorUserId: owner.id,
-        targetUserId: member.id,
-        companyId,
-        beforeRole: "MEMBER",
-        nextRole: "ADMIN",
-      });
+      yield* changeRole(
+        roleChangeGrantForTest({
+          actorUserId: owner.id,
+          targetUserId: member.id,
+          companyId,
+          beforeRole: "MEMBER",
+          nextRole: "ADMIN",
+        }),
+      );
       return owner.id;
     }),
   },
@@ -223,21 +236,19 @@ const WRITTEN_BEFORE_REFACTOR = {
       const { db, owner, companyId } = yield* seedOwnedCompany("ownership-transferred");
       const admin = yield* db.seedUser("ownership-transferred-admin");
       yield* db.seedMembership(admin.id, companyId, "ADMIN");
-      yield* transferOwnership({ actorUserId: owner.id, toUserId: admin.id, companyId });
+      yield* transferOwnership(
+        transferGrantForTest({ actorUserId: owner.id, toUserId: admin.id, companyId }),
+      );
       return owner.id;
     }),
   },
   company_switched: {
     keys: ["from_company_id", "to_company_id"],
     drive: Effect.gen(function* () {
-      const { db, owner, companyId } = yield* seedOwnedCompany("company-switched");
+      const { db, owner } = yield* seedOwnedCompany("company-switched");
       const target = yield* db.seedCompany("company-switched-target");
       yield* db.seedMembership(owner.id, target, "MEMBER");
-      yield* switchCompany({
-        actorUserId: owner.id,
-        fromCompanyId: companyId,
-        targetCompanyId: target,
-      });
+      yield* switchCurrentCompany({ userId: owner.id, companyId: target });
       return owner.id;
     }),
   },

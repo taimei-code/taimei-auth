@@ -7,8 +7,15 @@ import {
   responseJson,
   TEST_PREFIX,
 } from "../../handlers/__tests__/helpers";
-import { auditRowsFor, dbTest, drained, expectFailure } from "../../__tests__/live-runner";
+import {
+  auditRowsFor,
+  dbTest,
+  drained,
+  expectFailure,
+  type TestServices,
+} from "../../__tests__/live-runner";
 import { recordSentry } from "../../__tests__/sentry-recorder";
+import { authApiWith } from "../../__tests__/test-layers";
 import { TestDb } from "../../__tests__/test-db";
 import { getAppUrl } from "../../email/client";
 import { tryAuthApi } from "../../errors";
@@ -16,6 +23,7 @@ import { acceptInvitationPath } from "../accept-path";
 import { createInvitation } from "../create";
 import { RateLimited } from "../../failures";
 import { testKvStore } from "../../__tests__/test-ttl-store";
+import { inviteGrantForTest } from "../../membership/__tests__/verified-for-test";
 
 const { run, cleanup } = dbTest(TEST_PREFIX);
 const INVITATION_HOURLY_LIMIT_DEFAULT = "50";
@@ -44,12 +52,134 @@ const presetRate = (companyId: string, value: string) =>
     ),
   );
 
+const recordMagicLinks = () => {
+  const sentTo: string[] = [];
+  const callbackURLs: URL[] = [];
+  const signInMagicLink = ({ email, callbackURL }: { email: string; callbackURL: string }) =>
+    Effect.sync(() => {
+      sentTo.push(email);
+      callbackURLs.push(new URL(callbackURL));
+    });
+  return { sentTo, callbackURLs, signInMagicLink };
+};
+
+const seedOwnerCompany = (key: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const owner = yield* db.seedUser(`${key}-owner`);
+    const co = yield* db.seedCompany(key);
+    yield* db.seedMembership(owner.id, co, "OWNER");
+    return { owner, co, email: `${TEST_PREFIX}${key}-invitee@example.com` };
+  });
+
+const sentLinks = recordMagicLinks();
+
+const runUseCase = <A, E>(program: Effect.Effect<A, E, TestServices>) =>
+  run(
+    program.pipe(
+      Effect.provide(authApiWith(() => ({ signInMagicLink: sentLinks.signInMagicLink }))),
+    ),
+  );
+
 describe("createInvitation (use-case)", () => {
-  beforeEach(cleanup);
+  beforeEach(() => {
+    sentLinks.sentTo.length = 0;
+    sentLinks.callbackURLs.length = 0;
+    return cleanup();
+  });
   afterAll(cleanup);
 
+  const { exceptions: captured } = recordSentry();
+
+  const ownerWithCompany = (key: string) =>
+    seedOwnerCompany(key).pipe(Effect.tap(({ co }) => clearRateKey(co)));
+
+  test("新しい招待を作ると、招待した email 宛に、招待の受諾の URL を callbackURL にした Magic Link を 1 回送る", () =>
+    runUseCase(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* ownerWithCompany("send-new");
+        const result = yield* drained(
+          createInvitation(
+            inviteGrantForTest({
+              actorUserId: owner.id,
+              companyId: co,
+              email,
+              role: "MEMBER",
+              redirectTarget: REDIRECT_TARGET,
+            }),
+          ),
+        );
+        expect(sentLinks.sentTo).toEqual([email]);
+        expect(sentLinks.callbackURLs.map(String)).toEqual([
+          `${getAppUrl()}${acceptInvitationPath(result.invitation.token, REDIRECT_TARGET)}`,
+        ]);
+      }),
+    ));
+
+  test("未対応の招待がある email へは既存の招待を返し、その招待の token の Magic Link を 1 回送る", () =>
+    runUseCase(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* ownerWithCompany("send-reused");
+        const grant = inviteGrantForTest({
+          actorUserId: owner.id,
+          companyId: co,
+          email,
+          role: "MEMBER",
+        });
+        const first = yield* drained(createInvitation(grant));
+        sentLinks.callbackURLs.length = 0;
+        const second = yield* drained(createInvitation(grant));
+        expect(second.reused).toBe(true);
+        expect(
+          sentLinks.callbackURLs.map((url) => url.searchParams.get("invitation_token")),
+        ).toEqual([first.invitation.token]);
+      }),
+    ));
+
+  test("Magic Link の送信が失敗しても招待の作成は成功し、Sentry に warning と handler の tag で 1 件残す", () =>
+    runUseCase(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* ownerWithCompany("send-fail");
+        const cause = new Error("resend down");
+        const before = captured.length;
+        const result = yield* drained(
+          createInvitation(
+            inviteGrantForTest({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+          ),
+        ).pipe(
+          Effect.provide(
+            authApiWith(() => ({ signInMagicLink: () => tryAuthApi(() => Promise.reject(cause)) })),
+          ),
+        );
+        expect(result.reused).toBe(false);
+        expect(captured.length).toBe(before + 1);
+        expect(captured.at(-1)?.[0]).toBe(cause);
+        expect(captured.at(-1)?.[1]).toMatchObject({
+          level: "warning",
+          tags: { handler: "accountInvitation" },
+        });
+      }),
+    ));
+
+  test("試行枠の上限で招待の作成が失敗した時は、Magic Link を送らない", () =>
+    runUseCase(
+      Effect.gen(function* () {
+        const { owner, co, email } = yield* ownerWithCompany("send-limited");
+        yield* presetRate(co, INVITATION_HOURLY_LIMIT_DEFAULT);
+        const e = yield* Effect.flip(
+          drained(
+            createInvitation(
+              inviteGrantForTest({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+            ),
+          ),
+        );
+        expectFailure(e, RateLimited);
+        expect(sentLinks.sentTo).toEqual([]);
+      }),
+    ));
+
   test("新しい email には invitation を作り、試行枠を 1 消費し、invitation_sent の audit を残して reused=false を返す", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("h07-owner");
@@ -59,12 +189,14 @@ describe("createInvitation (use-case)", () => {
         const email = `${TEST_PREFIX}h07-invitee@example.com`;
 
         const before = yield* rateCount(co);
-        const result = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "MEMBER",
-        });
+        const result = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "MEMBER",
+          }),
+        );
         const after = yield* rateCount(co);
 
         expect(result.reused).toBe(false);
@@ -87,7 +219,7 @@ describe("createInvitation (use-case)", () => {
     ));
 
   test("PENDING の invitation がある email への再送は reused=true を返し、試行枠を消費せず audit も残さない", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("m02-owner");
@@ -103,12 +235,14 @@ describe("createInvitation (use-case)", () => {
         yield* clearRateKey(co);
 
         const before = yield* rateCount(co);
-        const result = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "MEMBER",
-        });
+        const result = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "MEMBER",
+          }),
+        );
         const after = yield* rateCount(co);
 
         expect(result.reused).toBe(true);
@@ -119,7 +253,7 @@ describe("createInvitation (use-case)", () => {
     ));
 
   test("試行枠の上限に達すると rate_limited を返し、invitation も audit も作らない", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("e02-owner");
@@ -131,7 +265,9 @@ describe("createInvitation (use-case)", () => {
         yield* presetRate(co, INVITATION_HOURLY_LIMIT_DEFAULT);
 
         const e = yield* Effect.flip(
-          createInvitation({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+          createInvitation(
+            inviteGrantForTest({ actorUserId: owner.id, companyId: co, email, role: "MEMBER" }),
+          ),
         );
         expectFailure(e, RateLimited);
         expect((yield* invitationRowsByEmail(co, email)).length).toBe(0);
@@ -140,7 +276,7 @@ describe("createInvitation (use-case)", () => {
     ));
 
   test("試行枠の上限に達していても、PENDING の invitation がある email への再送は reused=true を返す (再送の判定を試行枠より先に行う)", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("m02b-owner");
@@ -156,19 +292,21 @@ describe("createInvitation (use-case)", () => {
         yield* clearRateKey(co);
         yield* presetRate(co, "999");
 
-        const result = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "MEMBER",
-        });
+        const result = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "MEMBER",
+          }),
+        );
         expect(result.reused).toBe(true);
         expect(result.invitation.id).toBe(existing.id);
       }),
     ));
 
   test("先の招待が commit した後の 2 回目の招待は、既存の invitation を返して試行枠を消費しない", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("h13-owner");
@@ -178,22 +316,26 @@ describe("createInvitation (use-case)", () => {
         const email = `${TEST_PREFIX}h13-invitee@example.com`;
 
         const before = yield* rateCount(co);
-        const first = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "MEMBER",
-        });
+        const first = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "MEMBER",
+          }),
+        );
         expect(first.reused).toBe(false);
         const afterFirst = yield* rateCount(co);
         expect(afterFirst - before).toBe(1);
 
-        const second = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "MEMBER",
-        });
+        const second = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "MEMBER",
+          }),
+        );
         expect(second.reused).toBe(true);
         expect(second.invitation.id).toBe(first.invitation.id);
         const afterSecond = yield* rateCount(co);
@@ -204,7 +346,7 @@ describe("createInvitation (use-case)", () => {
     ));
 
   test("invitation を作った後に audit を残し、audit の invitation_id は返した invitation と一致する", () =>
-    run(
+    runUseCase(
       Effect.gen(function* () {
         const db = yield* TestDb;
         const owner = yield* db.seedUser("h12-owner");
@@ -213,12 +355,14 @@ describe("createInvitation (use-case)", () => {
         yield* clearRateKey(co);
         const email = `${TEST_PREFIX}h12-invitee@example.com`;
 
-        const result = yield* createInvitation({
-          actorUserId: owner.id,
-          companyId: co,
-          email,
-          role: "ADMIN",
-        });
+        const result = yield* createInvitation(
+          inviteGrantForTest({
+            actorUserId: owner.id,
+            companyId: co,
+            email,
+            role: "ADMIN",
+          }),
+        );
         const persisted = yield* db.readPendingInvitation(co, email);
         const audit = (yield* auditRowsFor(owner.id, "invitation_sent"))[0];
         const payload = audit?.payload as Record<string, unknown>;
@@ -242,37 +386,17 @@ const postInvitation = (
     }),
   );
 
-const recordMagicLinks = () => {
-  const sentTo: string[] = [];
-  const callbackURLs: URL[] = [];
-  const signInMagicLink = ({ email, callbackURL }: { email: string; callbackURL: string }) =>
-    Effect.sync(() => {
-      sentTo.push(email);
-      callbackURLs.push(new URL(callbackURL));
-    });
-  return { sentTo, callbackURLs, signInMagicLink };
-};
-
 const REDIRECT_TARGET = {
   service_name: "taimei",
   redirect_url: "https://app.taimei-code.com/dashboard",
 } as const;
-
-const seedOwnerCompany = (key: string) =>
-  Effect.gen(function* () {
-    const db = yield* TestDb;
-    const owner = yield* db.seedUser(`${key}-owner`);
-    const co = yield* db.seedCompany(key);
-    yield* db.seedMembership(owner.id, co, "OWNER");
-    return { owner, co, email: `${TEST_PREFIX}${key}-invitee@example.com` };
-  });
 
 describe("POST /api/account/companies/:companyId/invitations (handler)", () => {
   const { exceptions: captured } = recordSentry();
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("magic-link は handler post-commit で reused=false 経路 1 回だけ呼ばれる", () =>
+  test("招待の作成の route は、新しい招待を作った時に Magic Link を 1 回送る", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;

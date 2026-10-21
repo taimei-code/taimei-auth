@@ -39,6 +39,18 @@ export async function updateUserLastUsedCompany(
   await txOrDb.update(user).set({ lastUsedCompanyId: companyId }).where(eq(user.id, userId));
 }
 
+export async function lockCurrentCompanyOf(
+  tx: DbTx,
+  userId: string,
+): Promise<{ lastUsedCompanyId: string | null } | undefined> {
+  return tx
+    .select({ lastUsedCompanyId: user.lastUsedCompanyId })
+    .from(user)
+    .where(eq(user.id, userId))
+    .for("no key update")
+    .then((rows) => rows.at(0));
+}
+
 export async function findAbandonedSignupUserIds(
   olderThan: Date,
   txOrDb: DbOrTx = db,
@@ -81,6 +93,7 @@ export async function reassignLastUsedCompanyAfterLeaving(
         SELECT m.company_id FROM membership m
         JOIN company c ON c.id = m.company_id
         WHERE m.user_id = ${user.id} AND c.activation_status = 'ACTIVE'
+        ORDER BY m.joined_at, m.id
         LIMIT 1
       )`,
     })

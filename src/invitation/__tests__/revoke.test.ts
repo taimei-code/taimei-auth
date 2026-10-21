@@ -4,6 +4,7 @@ import { dbTest, expectFailure, auditRowsFor } from "../../__tests__/live-runner
 import { TestDb } from "../../__tests__/test-db";
 import { NotFoundOrNotPending } from "../errors";
 import { revokeInvitation } from "../revoke";
+import { memberForTest } from "../../membership/__tests__/verified-for-test";
 
 const P = "revinv-test-";
 const { run, cleanup } = dbTest(P);
@@ -26,7 +27,7 @@ describe("revokeInvitation", () => {
           invitedByUserId: owner.id,
         });
 
-        yield* revokeInvitation({ actorUserId: owner.id, companyId: co, invitationId: inv.id });
+        yield* revokeInvitation(memberForTest(owner.id, co, "ADMIN"), inv.id);
         const persisted = yield* db.readInvitation(inv.id);
         expect(persisted?.status).toBe("REVOKED");
 
@@ -49,11 +50,7 @@ describe("revokeInvitation", () => {
         yield* db.seedMembership(owner.id, co, "OWNER");
 
         const e = yield* Effect.flip(
-          revokeInvitation({
-            actorUserId: owner.id,
-            companyId: co,
-            invitationId: `${P}inv-nonexistent`,
-          }),
+          revokeInvitation(memberForTest(owner.id, co, "ADMIN"), `${P}inv-nonexistent`),
         );
         expectFailure(e, NotFoundOrNotPending);
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
@@ -76,7 +73,7 @@ describe("revokeInvitation", () => {
         });
 
         const e = yield* Effect.flip(
-          revokeInvitation({ actorUserId: owner.id, companyId: co, invitationId: inv.id }),
+          revokeInvitation(memberForTest(owner.id, co, "ADMIN"), inv.id),
         );
         expectFailure(e, NotFoundOrNotPending);
         expect((yield* auditRowsFor(owner.id, "invitation_revoked")).length).toBe(0);
@@ -100,7 +97,7 @@ describe("revokeInvitation", () => {
         });
 
         const e = yield* Effect.flip(
-          revokeInvitation({ actorUserId: owner.id, companyId: co2, invitationId: inv.id }),
+          revokeInvitation(memberForTest(owner.id, co2, "ADMIN"), inv.id),
         );
         expectFailure(e, NotFoundOrNotPending);
         const persisted = yield* db.readInvitation(inv.id);
