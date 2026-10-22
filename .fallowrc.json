@@ -3,6 +3,7 @@
   "entry": [
     "src/index.ts",
     "testing/server.ts",
+    "testing/worker.ts",
     "web/index.html",
     "db/migrate.ts",
     "db/migrate-manual.ts",

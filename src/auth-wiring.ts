@@ -53,7 +53,8 @@ export const authApiLive = AuthApi.of({
     }),
   signOut: (headers) =>
     tryAuthApi(async () => {
-      await auth.api.signOut({ headers });
+      const { headers: clearing } = await auth.api.signOut({ headers, returnHeaders: true });
+      return clearing ?? new Headers();
     }),
   secret: tryAuthApi(async () => (await auth.$context).secret),
 });

@@ -21,7 +21,7 @@ export class AuthApi extends Context.Service<
       email: string;
       callbackURL: string;
     }): Effect.Effect<void, AuthApiError>;
-    signOut(headers: Headers): Effect.Effect<void, AuthApiError>;
+    signOut(headers: Headers): Effect.Effect<Headers, AuthApiError>;
     readonly secret: Effect.Effect<string, AuthApiError>;
   }
 >()("taimei/AuthApi") {}
