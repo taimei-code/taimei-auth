@@ -1,31 +1,24 @@
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { db } from "./client";
 import { sql } from "drizzle-orm";
+import type { DbTx } from "./transaction";
 
 const manualDir = join(import.meta.dir, "..", "drizzle", "manual");
 
-if (!existsSync(manualDir)) {
-  console.log("[migrate-manual] drizzle/manual/ not found, skip.");
-  process.exit(0);
-}
-
-const sqlFilesInApplyOrder = readdirSync(manualDir)
-  .filter((f) => f.endsWith(".sql"))
-  .sort();
-
-if (sqlFilesInApplyOrder.length === 0) {
-  console.log("[migrate-manual] no manual SQL files, skip.");
-  process.exit(0);
-}
-
-await db.transaction(async (tx) => {
-  for (const f of sqlFilesInApplyOrder) {
-    const content = readFileSync(join(manualDir, f), "utf-8");
+export async function applyManualSql(tx: DbTx): Promise<string[]> {
+  const files = readdirSync(manualDir)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+  for (const f of files) {
     console.log(`[migrate-manual] applying ${f}...`);
-    await tx.execute(sql.raw(content));
+    await tx.execute(sql.raw(readFileSync(join(manualDir, f), "utf-8")));
   }
-});
+  return files;
+}
 
-console.log(`[migrate-manual] applied ${sqlFilesInApplyOrder.length} file(s).`);
-process.exit(0);
+if (import.meta.main) {
+  const applied = await db.transaction(applyManualSql);
+  console.log(`[migrate-manual] applied ${applied.length} file(s).`);
+  process.exit(0);
+}
