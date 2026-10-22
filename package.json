@@ -14,7 +14,7 @@
     "generate": "buf generate",
     "generate:check": "diff -r src/gen packages/auth-client/src/gen",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
+    "db:migrate": "bun run db/migrate.ts",
     "db:migrate-manual": "bun run db/migrate-manual.ts",
     "sweep:abandoned-signups": "bun run management/sweep-abandoned-signups.ts",
     "test": "bun test",

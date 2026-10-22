@@ -27,6 +27,7 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 ## drizzle-kit が管理できない SQL は `drizzle/manual/` に置く
 
 trigger、VIEW、FUNCTION などの手書き SQL を `drizzle/` 直下に置くと、`bun run db:generate` の再生成と衝突する。`drizzle/manual/NNNN_*.sql` を 1 ファイルずつ足し、`db/migrate-manual.ts` (compose の `auth-migrate`) で適用する。host から `psql` で手動適用しない。
+`db/migrate-manual.ts` は起動と deploy のたびに全 file を流す。そのため `drizzle/manual/` には何度流しても結果が同じ DDL と修復だけを置く。一度だけのデータ移行はここに置かず、`management/` の script にする (ADR-0010)。新規登録の途中で所属の無い利用者に事業所を作らないことを `db/__tests__/manual-sql.test.ts` が固定する。
 
 ## gotcha
 

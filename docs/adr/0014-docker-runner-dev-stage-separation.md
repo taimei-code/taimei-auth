@@ -33,10 +33,12 @@ image から何も消えないため見送った。根本には 2 つの問題�
 
 設計を制約した実測の事実は次のとおりである。
 
-- **taimei 側の e2e はこの Dockerfile を build し、`bunx drizzle-kit migrate` を実行する**
+- **taimei 側の e2e はこの Dockerfile を build し、`bunx drizzle-kit migrate` を実行していた**
   (`docker-compose.e2e.yml` の `e2e-auth-service`)。taimei #533 で `target: dev` を pin 済みだが、
   位置契約 (既定 target が最終 stage であり、それが dev であること) は、pin を持たない consumer に対する
-  多層防御として維持する (検証方法は下記 Consequences)
+  多層防御として維持する (検証方法は下記 Consequences)。2026-10-22 時点では、taimei は auth-client の
+  compose の断片 (ADR-0020) で試験用 image を起動し、image の中で drizzle-kit を実行しない。本 repo の
+  `db:migrate` も drizzle-kit を使わず、`db/migrate.ts` で migration を流す
 - README の codegen の手順 (`db:generate` / `generate`) は drizzle-kit と @bufbuild/buf という
   devDependencies の binary を前提にする
 - `bun install --frozen-lockfile --ignore-scripts --production` は**既存の full node_modules を

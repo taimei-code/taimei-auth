@@ -6,14 +6,13 @@ import { generateCompanyId, insertCompany, softDeleteCompany } from "../reposito
 import { generateMembershipId, insertMembership } from "../repositories/membership";
 import { company, membership, user } from "../schema";
 import type { DbTx } from "../transaction";
+import { inRolledBackTx } from "./rolled-back-tx";
 
 const P = "repairlu-test-";
 const REPAIR_SQL = readFileSync(
   new URL("../../drizzle/manual/0005_repair_last_used_company.sql", import.meta.url),
   "utf-8",
 );
-
-class Rollback extends Error {}
 
 async function cleanup() {
   await db.delete(membership).where(like(membership.userId, `${P}%`));
@@ -47,16 +46,6 @@ async function lastUsedOf(tx: DbTx, userId: string) {
   );
   return rows.rows[0]?.last_used_company_id;
 }
-
-const inRolledBackTx = (body: (tx: DbTx) => Promise<void>) =>
-  db
-    .transaction(async (tx) => {
-      await body(tx);
-      throw new Rollback();
-    })
-    .catch((e) => {
-      if (!(e instanceof Rollback)) throw e;
-    });
 
 describe("drizzle/manual/0005_repair_last_used_company.sql", () => {
   beforeEach(cleanup);

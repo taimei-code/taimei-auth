@@ -139,9 +139,6 @@ for path in $forbidden_paths; do
   check_batch_item "/app/$path が image に載っていない (.dockerignore)" "$forbidden_probe" "$path"
 done
 
-# 素の `drizzle-kit` は oven/bun の PATH に /app/node_modules/.bin が無く exit 127 で誤って FAIL になる。bunx はローカルの .bin を先に見る
-assert_in_image "dev image で bunx drizzle-kit が実行できる (auth-migrate / taimei e2e の前提)" \
-  'bunx drizzle-kit --version'
 assert_in_image "dev image に 共通画面 SPA の build 成果物がある" \
   'test -f /app/web/dist/index.html'
 # $1 はコンテナ内の sh の位置引数 (ホスト側で展開させない)

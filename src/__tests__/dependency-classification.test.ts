@@ -32,7 +32,7 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
-  "drizzle-kit": "build-tool: migration 生成 / 適用 CLI (dev image と auth-migrate が実行)",
+  "drizzle-kit": "build-tool: migration 生成 CLI (host の bun run db:generate)",
   fallow: "build-tool: dead code / 循環依存の静的解析 CLI (CI の fallow audit と MCP server)",
   postcss: "build-tool: web の CSS build pipeline",
   tailwindcss: "build-tool: web の CSS build pipeline",

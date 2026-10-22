@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.7.1 — 2026-10-22
+
+試験の環境の起動で、所属の無い利用者に事業所を作っていたのを止めた。migrate が失敗した時に原因を出すようにした。SDK の export と wire は変えていない。
+
+### Bug fixes
+
+- 試験の環境を起動するたびに、所属の無い利用者 (`companies: []` で作った利用者など) へ事業所を作り、その利用者を OWNER にしていたのを止めた。3.7.0 では、所属の無い利用者が `docker compose down` → `up` の後に事業所を 1 つ持っていた
+- 試験の環境の起動で auth の DB の migrate が失敗した時、原因 (接続の失敗、Postgres の error code など) を auth ホストの log に出す。これまでは `exited with code 1` だけだった
+
+### 移行
+
+- 3.7.0 の volume には、起動のたびに作られた事業所が残っている。所属の無い利用者を試す試験があれば、`docker compose down -v` で volume を消してから起動する
+
+### Breaking changes
+
+なし。
+
 ## 3.7.0 — 2026-10-21
 
 試験の環境で、ログイン画面から開発用アカウントを選ぶだけでログインできるようにした。試験の環境の auth の DB と session を、container を作り直しても残るようにした。SDK の export と wire は変えていない。
