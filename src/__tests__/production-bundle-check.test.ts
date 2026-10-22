@@ -9,6 +9,11 @@ const CHECK_SCRIPT = join(REPO_ROOT, "scripts/check-production-bundle.sh");
 const WORKER_WITH_TESTING_API = `app.post("${TESTING_PATH}/signed-in-users")`;
 const WORKER_WITHOUT_TESTING_API = 'app.get("/health")';
 
+const scriptVariable = (name: string) =>
+  readFileSync(CHECK_SCRIPT, "utf8").match(new RegExp(`^${name}="([^"]*)"$`, "m"))?.[1];
+
+const devHomeSignInPath = scriptVariable("dev_home_sign_in_path");
+
 const bundleDirs: string[] = [];
 
 afterEach(() => {
@@ -31,13 +36,9 @@ const runBundleCheck = (...args: string[]) => {
   };
 };
 
-describe("本番の bundle の検査は、試験 API の path を含む bundle で deploy を止める", () => {
+describe("本番の bundle の検査は、試験 API の path か開発者ホームのログインの送り先を含む bundle で deploy を止める", () => {
   test("検査する path は、試験 API の route と SDK が使う TESTING_PATH と同じ", () => {
-    const scriptPath = readFileSync(CHECK_SCRIPT, "utf8").match(
-      /^testing_api_path="([^"]*)"$/m,
-    )?.[1];
-
-    expect(scriptPath).toBe(TESTING_PATH);
+    expect(scriptVariable("testing_api_path")).toBe(TESTING_PATH);
   });
 
   test("worker.js が試験 API の path を含むと、0 以外で終わる", () => {
@@ -50,6 +51,15 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
     const dir = bundleDir({ "worker.js": WORKER_WITH_TESTING_API });
 
     expect(runBundleCheck(dir).stdout).toBe(`${join(dir, "worker.js")}\n`);
+  });
+
+  test("worker.js が開発者ホームのログインの送り先を含むと、0 以外で終わり、その file の path を stdout に出す", () => {
+    const dir = bundleDir({ "worker.js": `app.post("${devHomeSignInPath}")` });
+
+    expect(devHomeSignInPath).toBeDefined();
+    const result = runBundleCheck(dir);
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout).toBe(`${join(dir, "worker.js")}\n`);
   });
 
   test("worker.js 以外の module が試験 API の path を含むと、0 以外で終わる", () => {
@@ -70,7 +80,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
 
     expect(runBundleCheck(dir)).toMatchObject({
       exitCode: 0,
-      stdout: `OK: production bundle has no ${TESTING_PATH}\n`,
+      stdout: `OK: production bundle has no ${TESTING_PATH} or ${devHomeSignInPath}\n`,
     });
   });
 

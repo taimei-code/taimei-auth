@@ -28,9 +28,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - 型の境界: 試験のコードを `src/` の外の `testing/` に置く。root の `tsconfig.json` は composite で `testing/` を含まないので、`src/` から `testing/` を import すると typecheck が TS6307 で落ちる。`testing/` は `testing/tsconfig.json` で typecheck する (`scripts/typecheck.sh`)
    - 本番の bundle の検査: `deploy.yml` は upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path があれば deploy を止める
    - 起動の判定: `testing/server.ts` は boot の前に `APP_ENV === "test"` を確かめ、違えば exit 1 する
-   - (2026-10-21 追記) **アカウント選択画面** とその API も `testing/` に置き、form の送り先を `TESTING_PATH` から組むので、同じ 3 段で守る
+   - (2026-10-22 改訂) **開発者ホーム** とその form の送り先も `testing/` に置くので、同じ 3 段で守る。本番の bundle の検査は試験 API の path に加えて開発者ホームのログインの送り先 (`/dev/sign-in`) を探す。開発者ホームの path は `TESTING_PATH` の下に置かない。試験 API は SDK が JSON で呼ぶものだけにする
 6. **試験の環境の auth の DB と session は volume に残す (2026-10-21 追加)**。断片の Postgres は名前付き volume に data を置き、試験用の entry は **TTL store** を同じ DB の表に置く (本番と `src/index.ts` は変えない)。`down` → `up` の後も利用者・事業所・所属・session が残り、`down -v` で一緒に消える。版を上げて image が変わっても、起動の migrate は未適用の分だけを当てる
-7. **開発用アカウントとアカウント選択画面 (2026-10-21 追加)**。試験用の entry は listen の前に、固定の id の **開発用アカウント** のうち無い行だけを足す。共通ログイン画面の URL (`GET /auth/`) には **アカウント選択画面** を返し、選んだ利用者は Decision 4 と同じく本物の Magic Link でログインさせる。session が有効なら一覧を出さずに戻り先へ移し、招待の受諾の途中 (invitation の token を伴う) は共通ログイン画面を出す
+7. **開発用アカウントと開発者ホーム (2026-10-21 追加、2026-10-22 改訂)**。試験用の entry は listen の前に、固定の id の **開発用アカウント** のうち無い行だけを足す。**開発者ホーム** (`/dev`) はログインしている利用者を出し、ドロップダウンで選んだ利用者を Decision 4 と同じく本物の Magic Link でログインさせて `/dev` に戻す。ログアウトも同じドロップダウンで行う。共通ログイン画面と共通サインアップ画面は、試験の環境でも本番と同じ画面を出す
 
 ## 採らなかった案
 
@@ -44,6 +44,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - **session を名前付き volume の file に置く** (2026-10-21): volume が 2 つになり、`down -v` で利用者と session が一緒に消えることを 2 か所で保つことになる
 - **session を better-auth の session の表にも書く (`storeSessionInDatabase`)** (2026-10-21): 試験の環境だけ session の置き場が本番と変わり、TTL store を前提にした session の削除と食い違う
 - **開発用アカウントを既存の use-case で作る** (2026-10-21): use-case は id を自分で作り、ADMIN と MEMBER の所属は招待と受諾を経るので、固定の id で冪等に書けない
+- **アカウント選択画面を共通ログイン画面の URL (`GET /auth/`) に出す** (2026-10-21 に採り、2026-10-22 にやめた): consumer の開発者が試験の環境で本番と同じログイン画面と新規登録の画面を見られない。ログイン済みだと一覧を出さずに戻り先へ移るので、利用者を替えるたびにログアウトが要る
+- **開発者ホームで選んだ後、fetch でログイン中の利用者の欄だけ描き直す** (2026-10-22): JSON の API と browser 側の描画のコードが要り、その欄を server と browser の 2 か所で描くことになる
+- **本番の bundle の検査で `/dev` を探す** (2026-10-22): `/dev/null` などの無関係な文字列で deploy が止まる
 
 ## Consequences
 

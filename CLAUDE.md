@@ -7,7 +7,7 @@
 
 - consumer app が使うのは `@taimei-code/auth-client` の公開 API と、HTTP または Connect RPC の endpoint だけである。`db/` は import しない。
 - consumer 向けの機能は、先に SDK または公開 endpoint の interface を設計する。identity DB を分離する時に consumer 側で必要になる変更を、version の更新だけに収めるためである。
-- 試験 API (`/testing/v1`) は本番の worker に入れない。`deploy.yml` は migrations と upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path が含まれていれば deploy を止める (`src/__tests__/production-bundle-check.test.ts` が固定)。
+- 試験 API (`/testing/v1`) と開発者ホーム (`/dev`) は本番の worker に入れない。`deploy.yml` は migrations と upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path か開発者ホームのログインの送り先 (`/dev/sign-in`) が含まれていれば deploy を止める (`src/__tests__/production-bundle-check.test.ts` が固定し、検査の文字列と route の定数が同じことを `testing/__tests__/dev-home.test.ts` が固定)。
 
 ## リポジトリ共通規則
 

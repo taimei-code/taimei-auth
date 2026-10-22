@@ -95,3 +95,27 @@ describe("AuthApiLive.revokeOtherSessions", () => {
     expect(isBoundaryError(new SessionRejected())).toBe(false);
   });
 });
+
+describe("AuthApiLive.signOut", () => {
+  test("better-auth の signOut に headers を渡し、cookie を消す Set-Cookie をそのまま返す", async () => {
+    const requestHeaders = new Headers({ cookie: "session_token=t" });
+    const cleared = new Headers({ "set-cookie": "session_token=; Max-Age=0" });
+    const program = withSpy(
+      () =>
+        spyOn(auth.api, "signOut").mockResolvedValue({
+          headers: cleared,
+          response: { success: true },
+        } as never),
+      (spy) =>
+        AuthApi.use((authApi) => authApi.signOut(requestHeaders)).pipe(
+          Effect.map((headers) => ({
+            setCookies: headers.getSetCookie(),
+            requests: spy.mock.calls.map(([request]) => request),
+          })),
+        ),
+    );
+    const { setCookies, requests } = await Effect.runPromise(Effect.provide(program, AuthApiLive));
+    expect(setCookies).toEqual(["session_token=; Max-Age=0"]);
+    expect(requests).toEqual([{ headers: requestHeaders, returnHeaders: true }]);
+  });
+});

@@ -6,6 +6,7 @@ import {
   buildCompanySignupUrl,
   buildMembersUrl,
 } from "../index";
+import { buildDevHomeUrl } from "../testing";
 
 describe("buildAuthErrorUrl", () => {
   test.each([
@@ -74,5 +75,22 @@ describe("auth ホストの画面の URL は authBaseUrl の末尾の / に左�
     ["buildAccountUrl", (authBaseUrl: string) => buildAccountUrl({ authBaseUrl })],
   ])("%s", (_, build) => {
     expect(build("https://auth.example/")).toBe(build("https://auth.example"));
+  });
+});
+
+describe("buildDevHomeUrl", () => {
+  test("開発者ホームの URL に service_name と redirect_url だけを付ける", () => {
+    const url = new URL(buildDevHomeUrl(screenOptions));
+    expect(url.origin).toBe("https://auth.example");
+    expect(url.pathname).toBe("/dev");
+    expect([...url.searchParams.keys()]).toEqual(["service_name", "redirect_url"]);
+    expect(url.searchParams.get("service_name")).toBe("example-service");
+    expect(url.searchParams.get("redirect_url")).toBe("https://app.example/x");
+  });
+
+  test("authBaseUrl の末尾の / に左右されない", () => {
+    expect(buildDevHomeUrl({ ...screenOptions, authBaseUrl: "https://auth.example/" })).toBe(
+      buildDevHomeUrl(screenOptions),
+    );
   });
 });

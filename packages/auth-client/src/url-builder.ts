@@ -51,5 +51,8 @@ export const buildCompanySignupUrl = (opts: ReturnToServiceOptions): string =>
 export const buildMembersUrl = (opts: ReturnToServiceOptions): string =>
   authHostUrlReturningToService(opts, "/account/members").toString();
 
+export const buildDevHomeUrl = (opts: ReturnToServiceOptions): string =>
+  authHostUrlReturningToService(opts, "/dev").toString();
+
 export const buildAccountUrl = (opts: { authBaseUrl: string }): string =>
   authHostUrl(opts.authBaseUrl, "/account").toString();

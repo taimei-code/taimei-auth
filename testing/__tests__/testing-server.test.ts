@@ -28,6 +28,7 @@ const testingServerCommand = [process.execPath, TESTING_ENTRY];
 
 const SIGN_IN_QUERY = `?${new URLSearchParams({ service_name: "accounts", redirect_url: "http://localhost:3100/account" })}`;
 const SIGN_IN_PATH = `/auth/${SIGN_IN_QUERY}`;
+const DEV_HOME_PATH = `/dev${SIGN_IN_QUERY}`;
 const devEmails = DEV_ACCOUNTS.users.map((devUser) => devUser.email);
 
 const sessionTokenCookieWithoutCookieCache = (response: Response) =>
@@ -114,13 +115,17 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
   }, 15_000);
 });
 
-describe("試験用の entry は、起動の前に開発用アカウントをそろえ、共通ログイン画面でアカウントを選ばせる", () => {
-  test("共通ログイン画面の URL は、SPA より先に、開発用アカウントの一覧を返す", async () => {
-    const body = await withTestingServer(async (baseUrl) =>
-      (await fetch(`${baseUrl}${SIGN_IN_PATH}`)).text(),
-    );
+describe("試験用の entry は、起動の前に開発用アカウントをそろえ、開発者ホームでアカウントを選ばせる", () => {
+  test("開発者ホームは開発用アカウントを出し、共通ログイン画面は出さない", async () => {
+    const { devHome, signIn } = await withTestingServer(async (baseUrl) => ({
+      devHome: await (await fetch(`${baseUrl}${DEV_HOME_PATH}`)).text(),
+      signIn: await (await fetch(`${baseUrl}${SIGN_IN_PATH}`)).text(),
+    }));
 
-    for (const email of devEmails) expect(body).toContain(email);
+    for (const email of devEmails) {
+      expect(devHome).toContain(email);
+      expect(signIn).not.toContain(email);
+    }
   }, 15_000);
 
   test("選んだアカウントの session は、entry を起動し直しても TTL store に残る (session の cookie cache を送らずに確かめる)", async () => {
@@ -128,7 +133,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
     if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
 
     const sessionCookie = await withTestingServer(async (baseUrl) => {
-      const picked = await fetch(`${baseUrl}${TESTING_PATH}/account-picker${SIGN_IN_QUERY}`, {
+      const picked = await fetch(`${baseUrl}/dev/sign-in${SIGN_IN_QUERY}`, {
         method: "POST",
         body: new URLSearchParams({ userId: owner.id }),
         redirect: "manual",
@@ -164,7 +169,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
 });
 
 describe("本番の worker と同じ app", () => {
-  test("APP_ENV が未設定・production・誤記・test のどれでも、試験用の route (POST /testing/v1/*) が無い", async () => {
+  test("APP_ENV が未設定・production・誤記・test のどれでも、試験 API と開発者ホームの route が無い", async () => {
     const previous = process.env.APP_ENV;
     const statuses: Record<string, number[]> = {};
     try {
@@ -172,11 +177,12 @@ describe("本番の worker と同じ app", () => {
         if (value === undefined) delete process.env.APP_ENV;
         else process.env.APP_ENV = value;
         const app = buildApp({ mountStatic: () => {} });
-        const responses = await Promise.all(
-          [
+        const responses = await Promise.all([
+          ...[
             `${TESTING_PATH}/signed-in-users`,
             `${TESTING_PATH}/current-company`,
-            `${TESTING_PATH}/account-picker`,
+            "/dev/sign-in",
+            "/dev/sign-out",
           ].map((path) =>
             app.request(path, {
               method: "POST",
@@ -184,7 +190,8 @@ describe("本番の worker と同じ app", () => {
               body: "{}",
             }),
           ),
-        );
+          app.request("/dev"),
+        ]);
         statuses[value ?? "(unset)"] = responses.map((response) => response.status);
       }
     } finally {
@@ -193,18 +200,10 @@ describe("本番の worker と同じ app", () => {
     }
 
     expect(statuses).toEqual({
-      "(unset)": [404, 404, 404],
-      production: [404, 404, 404],
-      prodution: [404, 404, 404],
-      test: [404, 404, 404],
+      "(unset)": [404, 404, 404, 404, 404],
+      production: [404, 404, 404, 404, 404],
+      prodution: [404, 404, 404, 404, 404],
+      test: [404, 404, 404, 404, 404],
     });
-  });
-
-  test("共通ログイン画面の URL に、開発用アカウントの一覧を返さない", async () => {
-    const app = buildApp({ mountStatic: () => {} });
-
-    const body = await (await app.request(SIGN_IN_PATH)).text();
-
-    for (const email of devEmails) expect(body).not.toContain(email);
   });
 });

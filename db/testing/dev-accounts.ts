@@ -94,11 +94,12 @@ export const seedDevAccounts = () =>
 
 export const listAccounts = () =>
   db.query.user.findMany({
-    columns: { id: true, name: true, email: true },
+    columns: { id: true, name: true, email: true, lastUsedCompanyId: true },
     with: {
       memberships: {
         columns: { role: true },
-        with: { company: { columns: { name: true, activationStatus: true } } },
+        with: { company: { columns: { id: true, name: true, activationStatus: true } } },
+        orderBy: [asc(membership.joinedAt), asc(membership.id)],
       },
     },
     orderBy: [asc(user.createdAt), asc(user.id)],
