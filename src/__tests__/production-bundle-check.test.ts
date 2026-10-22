@@ -84,6 +84,22 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
   });
 });
 
+describe("本番以外の entry だけが持つ module は、本番に紛れ込むと本番の bundle の検査が止める", () => {
+  test("開発者ホームの module を bundle すると、検査が 0 以外で終わる", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "dev-home-bundle-"));
+    bundleDirs.push(dir);
+    const built = await Bun.build({
+      entrypoints: [join(REPO_ROOT, "testing/dev-home.ts")],
+      outdir: dir,
+      naming: "worker.js",
+      target: "bun",
+    });
+
+    expect(built.success).toBe(true);
+    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+  });
+});
+
 describe("本番の bundle の検査は、検査できない時に通さない", () => {
   test("bundle の dir を渡さないと、使い方を出して 0 以外で終わる", () => {
     const result = runBundleCheck();
