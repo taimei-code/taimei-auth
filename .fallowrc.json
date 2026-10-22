@@ -4,6 +4,7 @@
     "src/index.ts",
     "testing/server.ts",
     "web/index.html",
+    "db/migrate.ts",
     "db/migrate-manual.ts",
     "management/*.ts",
     "e2e/*.ts",

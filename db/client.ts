@@ -12,7 +12,7 @@ function requireCurrentPool(): Pool {
   const pool = requestPoolStore.getStore() ?? singletonPool;
   if (!pool) {
     throw new Error(
-      "DB pool is not initialized: call initDb() (Bun/Node) or runWithRequestPool() (Workers) first",
+      "DB pool is not initialized: set DATABASE_URL (Bun/Node) or call runWithRequestPool() (Workers) first",
     );
   }
   return pool;
