@@ -6,7 +6,7 @@ import { createInvitation } from "../src/invitation/create";
 import { switchCurrentCompany } from "../src/membership/current-company";
 import { requireInvitationAccept, requireInvite } from "../src/membership/guard";
 import type { Role } from "../src/membership/policy";
-import { takeSentLink } from "./sent-links";
+import { magicLinkUrlFor } from "./sent-links";
 
 const TEST_COMPANY_ORG_CODE = "CORPORATE";
 
@@ -81,12 +81,6 @@ export const createSignedInUser = Effect.fnUntraced(function* (input: {
     );
   }
 
-  yield* authApi.signInMagicLink({ email, callbackURL: input.returnTo });
-  const loginUrl = yield* takeSentLink(email, input.returnTo);
-  if (loginUrl === undefined) {
-    return yield* Effect.die(
-      new Error("no email to the test user was recorded with returnTo as its callbackURL"),
-    );
-  }
+  const loginUrl = yield* magicLinkUrlFor(email, input.returnTo);
   return { userId: user.id, email, companyIds, loginUrl };
 });
