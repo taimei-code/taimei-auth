@@ -40,7 +40,7 @@ const userOf = (id: string, email: string): UserRow =>
 
 export const authLayer = (
   getSession: () => Effect.Effect<Session | null, AuthApiError> | Session | null,
-  signOut: (headers: Headers) => Effect.Effect<void, AuthApiError> = () => Effect.void,
+  signOut: (headers: Headers) => Effect.Effect<Headers, AuthApiError> = () => Effect.succeed(new Headers()),
 ): Layer.Layer<AuthApi> =>
   authApiWith(() => ({
     getSession: () => {

@@ -8,7 +8,7 @@ import { decodeBody } from "./decode-body";
 import { setCurrentCompany } from "./set-current-company";
 import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
 
-export const testingRoutes = () =>
+export const testingApiRoutes = () =>
   new Hono()
     .post(`${TESTING_PATH}/signed-in-users`, (c) =>
       runRoute(
@@ -27,5 +27,6 @@ export const testingRoutes = () =>
           return c.json(yield* setCurrentCompany(body));
         }),
       ),
-    )
-    .route("/", accountPickerRoutes());
+    );
+
+export const testingRoutes = () => testingApiRoutes().route("/", accountPickerRoutes());
