@@ -1,4 +1,6 @@
+import type { Layer } from "effect";
 import type { Hono } from "hono";
+import type { EmailSender } from "./email/ports";
 // biome-ignore lint/style/noRestrictedImports: Workers では request ごとに実際の Pool を供給する経路だけを許可する
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
@@ -32,13 +34,19 @@ function copyEnvToProcess(env: Env): void {
   process.env.CF_VERSION_ID = env.CF_VERSION_METADATA.id;
 }
 
-function bootstrap(env: Env): Hono {
+export type WorkerOptions = {
+  emailSender?: Layer.Layer<EmailSender>;
+  extendBeforeStatic?: (app: Hono) => void;
+};
+
+function bootstrap(env: Env, options: WorkerOptions): Hono {
   if (bootstrappedApp) return bootstrappedApp;
   copyEnvToProcess(env);
   initCloudflareSentry(env.SENTRY_DSN);
-  boot(durableObjectBackend(env.KV_STORE));
+  boot(durableObjectBackend(env.KV_STORE), options.emailSender);
   bootstrappedApp = buildApp({
     mountStatic: (app) => {
+      options.extendBeforeStatic?.(app);
       app.all("*", (c) => {
         const requestEnv = c.env as Env;
         const url = new URL(c.req.url);
@@ -53,12 +61,15 @@ function bootstrap(env: Env): Hono {
   return bootstrappedApp;
 }
 
-const handler = {
+export const workerHandler = (
+  options: WorkerOptions & { beforeRequest?: (env: Env) => Promise<void> } = {},
+) => ({
   async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
-    const app = bootstrap(env);
+    const app = bootstrap(env, options);
     const backgroundPromises: Promise<unknown>[] = [];
     return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
       try {
+        await options.beforeRequest?.(env);
         return await withWaitUntil(
           (promise) => {
             backgroundPromises.push(promise);
@@ -70,14 +81,16 @@ const handler = {
       }
     });
   },
-};
+});
 
-const sentryOptions = (env: Env) => ({
+export type WorkerEnv = Env;
+
+export const sentryOptions = (env: Env) => ({
   dsn: env.SENTRY_DSN,
   environment: env.APP_ENV ?? "production",
   tracesSampleRate: 0.1,
 });
 
-export default Sentry.withSentry(sentryOptions, handler);
+export default Sentry.withSentry(sentryOptions, workerHandler());
 
 export const KvStore = Sentry.instrumentDurableObjectWithSentry(sentryOptions, KvStoreBase);
