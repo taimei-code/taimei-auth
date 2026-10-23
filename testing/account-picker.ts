@@ -7,6 +7,7 @@ import { UserRepo } from "../src/account/ports";
 import { InvalidArgument, NotFound } from "../src/failures";
 import { runRoute } from "../src/handlers/run-route";
 import { INVALID_REDIRECT_URL_PAGE, signInParamsSchema } from "../src/sign-in-params";
+import { requireAuthHostOrigin } from "./auth-host-origin";
 import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
 import { decodeBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
@@ -54,7 +55,7 @@ export const accountPickerRoutes = () =>
         ),
       );
     })
-    .post(ACCOUNT_PICKER_PATH, (c) =>
+    .post(ACCOUNT_PICKER_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {

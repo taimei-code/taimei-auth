@@ -12,6 +12,7 @@ import {
   type RedirectTarget,
   redirectTargetSchema,
 } from "../src/sign-in-params";
+import { requireAuthHostOrigin } from "./auth-host-origin";
 import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
 import { decodeBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
@@ -106,7 +107,7 @@ export const devHomeRoutes = () =>
         ),
       ),
     )
-    .post(DEV_HOME_SIGN_IN_PATH, (c) =>
+    .post(DEV_HOME_SIGN_IN_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {
@@ -122,7 +123,7 @@ export const devHomeRoutes = () =>
         }),
       ),
     )
-    .post(DEV_HOME_SIGN_OUT_PATH, (c) =>
+    .post(DEV_HOME_SIGN_OUT_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {

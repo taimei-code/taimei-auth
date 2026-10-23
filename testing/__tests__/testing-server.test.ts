@@ -8,6 +8,7 @@ import { readUserIdsByEmails } from "../../db/testing/read";
 import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
+import { AUTH_HOST_ORIGIN } from "./origins";
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -131,6 +132,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
     const sessionCookie = await withTestingServer(async (baseUrl) => {
       const picked = await fetch(`${baseUrl}${TESTING_PATH}/account-picker${SIGN_IN_QUERY}`, {
         method: "POST",
+        headers: { origin: AUTH_HOST_ORIGIN },
         body: new URLSearchParams({ userId: owner.id }),
         redirect: "manual",
       });
