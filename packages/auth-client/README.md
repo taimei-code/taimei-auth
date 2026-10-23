@@ -164,6 +164,7 @@ const devHomeUrl = buildDevHomeUrl({
 
 - 開発者ホームは、ログイン画面と同じく、`service` に許可されない `returnTo` を受けるとエラー画面へ移す。`returnTo` の origin は `TAIMEI_AUTH_CONSUMER_ORIGINS` に含める
 - 開発者ホームの「アプリケーションに戻る」は、ログインし直さずに `returnTo` へ戻る
+- ログイン画面の一覧と開発者ホームの form の POST は、Origin が `TAIMEI_AUTH_URL` の origin の時だけ受け付け、それ以外は 403 になる。browser ではログイン画面と開発者ホームを `TAIMEI_AUTH_URL` と同じ host で開く。browser を通さずに POST する時は `Origin: <TAIMEI_AUTH_URL の origin>` を付ける
 
 ### 試験の利用者
 
@@ -183,6 +184,7 @@ await testing.setCurrentCompany({ userId: signedIn.userId, companyId: signedIn.c
 - 戻り値の `loginUrl` を browser で開くと、session cookie が付いて `returnTo` へ移る。一度だけ使える。
 - `returnTo` の origin は `TAIMEI_AUTH_URL` か `TAIMEI_AUTH_CONSUMER_ORIGINS` に含める。含まないと 400 になる。
 - `returnTo` に招待の URL を渡さない。招待のメールが送られてログイン URL を返せず、500 になる。
+- `createTestingClient` を使わずに試験 API を呼ぶ時は `Content-Type: application/json` を付ける。付けないと 400 になる。
 - `setCurrentCompany` は現在の事業所を切り替える。所属しない事業所を渡すと 400、無い利用者を渡すと 404 になる。
 - 失敗した時、client は status を message に含めた `Error` を投げる。
 - 試験 API は、試験用の image の中でだけ動く。本番の auth ホストには無い。誰でもログインした利用者を作れるので、試験の環境を外から届く場所で動かさない。

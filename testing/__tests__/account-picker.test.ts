@@ -7,6 +7,8 @@ import { dbTest } from "../../src/__tests__/live-runner";
 import { browserCookieHeaders } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testingApiAndAccountPickerRoutes } from "../routes";
+import { magicLinksSentWhile } from "./magic-links-sent";
+import { AUTH_HOST_ORIGIN, HEADERS_WITHOUT_AUTH_HOST_ORIGIN } from "./origins";
 
 const P = "account-picker-test-";
 const { run, cleanup } = dbTest(P);
@@ -31,9 +33,14 @@ const openPicker = async (query = SIGN_IN_QUERY, headers?: HeadersInit) => {
   return { response, body: await response.text() };
 };
 
-const pick = (userId: string | undefined, query = SIGN_IN_QUERY) =>
+const pick = (
+  userId: string | undefined,
+  query = SIGN_IN_QUERY,
+  headers: HeadersInit = { origin: AUTH_HOST_ORIGIN },
+) =>
   request(`${PICKER_PATH}${query}`, {
     method: "POST",
+    headers,
     body: new URLSearchParams(userId === undefined ? {} : { userId }),
   });
 
@@ -168,5 +175,26 @@ describe("一覧で選んだ利用者は、本物の Magic Link でログイン�
 
   test("利用者を送らないと 400", async () => {
     expect((await pick(undefined)).status).toBe(400);
+  });
+});
+
+describe("一覧で選ぶ POST は、auth ホスト以外の Origin から送られると 403 を返し、Magic Link を送らない", () => {
+  test("auth ホストの Origin から選ぶと、Magic Link を 1 通送る", async () => {
+    const { response, magicLinksSent } = await run(magicLinksSentWhile(() => pick(owner.id)));
+
+    expect(response.status).toBe(303);
+    expect(magicLinksSent).toBe(1);
+  });
+
+  test.each(
+    HEADERS_WITHOUT_AUTH_HOST_ORIGIN,
+  )("%s から選ぶと 403 で、Magic Link を送らない", async (_, headers) => {
+    const { response, magicLinksSent } = await run(
+      magicLinksSentWhile(() => pick(owner.id, SIGN_IN_QUERY, headers)),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe('{"_tag":"Forbidden"}');
+    expect(magicLinksSent).toBe(0);
   });
 });

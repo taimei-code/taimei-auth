@@ -12,8 +12,9 @@ import {
   type RedirectTarget,
   redirectTargetSchema,
 } from "../src/sign-in-params";
+import { requireAuthHostOrigin } from "./auth-host-origin";
 import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
-import { decodeBody } from "./decode-body";
+import { decodeFormBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
 
 export const DEV_HOME_SIGN_IN_PATH = `${DEV_HOME_PATH}/sign-in`;
@@ -106,12 +107,12 @@ export const devHomeRoutes = () =>
         ),
       ),
     )
-    .post(DEV_HOME_SIGN_IN_PATH, (c) =>
+    .post(DEV_HOME_SIGN_IN_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {
           const redirectTarget = yield* redirectTargetOf(new URL(c.req.url));
-          const { userId } = yield* decodeBody(() => c.req.parseBody(), ChosenUser);
+          const { userId } = yield* decodeFormBody(c, ChosenUser);
           const user = yield* UserRepo.use((users) => users.findUserById(userId));
           if (!user) return yield* new NotFound();
           const callbackUrl = redirectTarget.pipe(
@@ -122,7 +123,7 @@ export const devHomeRoutes = () =>
         }),
       ),
     )
-    .post(DEV_HOME_SIGN_OUT_PATH, (c) =>
+    .post(DEV_HOME_SIGN_OUT_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {

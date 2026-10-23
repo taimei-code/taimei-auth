@@ -15,6 +15,8 @@ import {
 import { TestDb } from "../../src/__tests__/test-db";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
+import { magicLinksSentWhile } from "./magic-links-sent";
+import { AUTH_HOST_ORIGIN, HEADERS_WITHOUT_AUTH_HOST_ORIGIN } from "./origins";
 
 const REDIRECT_URL = "http://localhost:3100/account?tab=a&x=1";
 const REDIRECT_QUERY = `?${new URLSearchParams({ service_name: "accounts", redirect_url: REDIRECT_URL })}`;
@@ -33,15 +35,24 @@ if (!owner || !admin) throw new Error("DEV_ACCOUNTS has fewer than 2 users");
 const openHome = async (headers?: HeadersInit, query = "") =>
   (await request(`${DEV_HOME_PATH}${query}`, { headers })).text();
 
+const withAuthHostOrigin = (headers?: HeadersInit) => {
+  const headersWithOrigin = new Headers(headers);
+  headersWithOrigin.set("origin", AUTH_HOST_ORIGIN);
+  return headersWithOrigin;
+};
+
 const choose = (userId: string, headers?: HeadersInit, query = "") =>
   request(`${DEV_HOME_SIGN_IN_PATH}${query}`, {
     method: "POST",
-    headers,
+    headers: withAuthHostOrigin(headers),
     body: new URLSearchParams({ userId }),
   });
 
 const signOut = (headers: HeadersInit, query = "") =>
-  request(`${DEV_HOME_SIGN_OUT_PATH}${query}`, { method: "POST", headers });
+  request(`${DEV_HOME_SIGN_OUT_PATH}${query}`, {
+    method: "POST",
+    headers: withAuthHostOrigin(headers),
+  });
 
 const openMagicLink = (chosen: Response, headers?: HeadersInit) => {
   const magicLink = new URL(chosen.headers.get("location") ?? "");
@@ -162,6 +173,7 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
   test("利用者を送らないと 400", async () => {
     const response = await request(DEV_HOME_SIGN_IN_PATH, {
       method: "POST",
+      headers: withAuthHostOrigin(),
       body: new URLSearchParams(),
     });
 
@@ -264,6 +276,50 @@ describe("開発者ホームは、許可されない redirect_url を共通ロ�
     const signedOut = await signOut(signedIn, query);
 
     expect(signedOut.status).toBe(400);
+    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBe(owner.id);
+  });
+});
+
+describe("開発者ホームで利用者を選ぶ POST は、auth ホスト以外の Origin から送られると 403 を返し、Magic Link を送らない", () => {
+  test("auth ホストの Origin から選ぶと、Magic Link を 1 通送る", async () => {
+    const { response, magicLinksSent } = await run(magicLinksSentWhile(() => choose(owner.id)));
+
+    expect(response.status).toBe(303);
+    expect(magicLinksSent).toBe(1);
+  });
+
+  test.each(
+    HEADERS_WITHOUT_AUTH_HOST_ORIGIN,
+  )("%s から選ぶと 403 で、Magic Link を送らない", async (_, headers) => {
+    const { response, magicLinksSent } = await run(
+      magicLinksSentWhile(() =>
+        request(DEV_HOME_SIGN_IN_PATH, {
+          method: "POST",
+          headers,
+          body: new URLSearchParams({ userId: owner.id }),
+        }),
+      ),
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe('{"_tag":"Forbidden"}');
+    expect(magicLinksSent).toBe(0);
+  });
+});
+
+describe("開発者ホームのログアウトの POST は、auth ホスト以外の Origin から送られると 403 を返し、session を残す", () => {
+  test.each([
+    ...HEADERS_WITHOUT_AUTH_HOST_ORIGIN,
+    ["別の origin の JSON", { origin: "https://evil.example", "content-type": "application/json" }],
+  ])("%s から送ると 403 で、session は残る", async (_, headers) => {
+    const signedIn = await signInAs(owner.id);
+
+    const signedOut = await request(DEV_HOME_SIGN_OUT_PATH, {
+      method: "POST",
+      headers: { ...headers, cookie: signedIn.get("cookie") ?? "" },
+    });
+
+    expect(signedOut.status).toBe(403);
     expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBe(owner.id);
   });
 });

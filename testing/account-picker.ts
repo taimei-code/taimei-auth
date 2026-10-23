@@ -7,8 +7,9 @@ import { UserRepo } from "../src/account/ports";
 import { InvalidArgument, NotFound } from "../src/failures";
 import { runRoute } from "../src/handlers/run-route";
 import { INVALID_REDIRECT_URL_PAGE, signInParamsSchema } from "../src/sign-in-params";
+import { requireAuthHostOrigin } from "./auth-host-origin";
 import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
-import { decodeBody } from "./decode-body";
+import { decodeFormBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
 
 const ACCOUNT_PICKER_PATH = `${TESTING_PATH}/account-picker`;
@@ -54,13 +55,13 @@ export const accountPickerRoutes = () =>
         ),
       );
     })
-    .post(ACCOUNT_PICKER_PATH, (c) =>
+    .post(ACCOUNT_PICKER_PATH, requireAuthHostOrigin, (c) =>
       runRoute(
         c,
         Effect.gen(function* () {
           const params = signInParamsOf(c);
           if (!params.success) return yield* new InvalidArgument({});
-          const { userId } = yield* decodeBody(() => c.req.parseBody(), ChosenUser);
+          const { userId } = yield* decodeFormBody(c, ChosenUser);
           const user = yield* UserRepo.use((users) => users.findUserById(userId));
           if (!user) return yield* new NotFound();
           return c.redirect(yield* magicLinkUrlFor(user.email, params.data.redirect_url), 303);
