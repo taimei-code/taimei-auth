@@ -16,6 +16,10 @@ import { TestDb } from "../../src/__tests__/test-db";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
 
+const REDIRECT_URL = "http://localhost:3100/account?tab=a&x=1";
+const REDIRECT_QUERY = `?${new URLSearchParams({ service_name: "accounts", redirect_url: REDIRECT_URL })}`;
+const escapedForHtmlAttribute = (value: string) => value.replaceAll("&", "&amp;");
+
 const P = "dev-home-test-";
 const { run } = dbTest(P);
 
@@ -26,15 +30,18 @@ const request = (path: string, init?: RequestInit) => Promise.resolve(app.reques
 const [owner, admin] = DEV_ACCOUNTS.users;
 if (!owner || !admin) throw new Error("DEV_ACCOUNTS has fewer than 2 users");
 
-const openHome = async (headers?: HeadersInit) =>
-  (await request(DEV_HOME_PATH, { headers })).text();
+const openHome = async (headers?: HeadersInit, query = "") =>
+  (await request(`${DEV_HOME_PATH}${query}`, { headers })).text();
 
-const choose = (userId: string, headers?: HeadersInit) =>
-  request(DEV_HOME_SIGN_IN_PATH, {
+const choose = (userId: string, headers?: HeadersInit, query = "") =>
+  request(`${DEV_HOME_SIGN_IN_PATH}${query}`, {
     method: "POST",
     headers,
     body: new URLSearchParams({ userId }),
   });
+
+const signOut = (headers: HeadersInit, query = "") =>
+  request(`${DEV_HOME_SIGN_OUT_PATH}${query}`, { method: "POST", headers });
 
 const openMagicLink = (chosen: Response, headers?: HeadersInit) => {
   const magicLink = new URL(chosen.headers.get("location") ?? "");
@@ -88,6 +95,10 @@ describe("開発者ホームは、ログイン中の利用者と、選んでロ�
         expect(body).toContain("&lt;script&gt;x&lt;/script&gt;");
       }),
     ));
+
+  test("redirect_url を受けなければ、アプリケーションに戻る link を出さない", async () => {
+    expect(await openHome()).not.toContain("アプリケーションに戻る");
+  });
 });
 
 describe("開発者ホームで利用者を選ぶと、Magic Link でその利用者にログインし、開発者ホームに戻る", () => {
@@ -123,13 +134,18 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
     expect(signedInSectionOf(await openHome(asAdmin))).toContain(admin.email);
   });
 
-  test("MFA を有効にした利用者を選ぶと、session を作らず MFA チャレンジへ移す", () =>
+  test.each([
+    ["redirect_url を受けない", ""],
+    ["redirect_url を受けた", REDIRECT_QUERY],
+  ])("MFA を有効にした利用者を選ぶと、%s時も session を作らず MFA チャレンジへ移す", (_, query) =>
     run(
       Effect.gen(function* () {
         const user = yield* TestDb.use((db) => db.seedUser("mfa"));
         yield* enableMfaFor(user);
 
-        const opened = yield* Effect.promise(async () => openMagicLink(await choose(user.id)));
+        const opened = yield* Effect.promise(async () =>
+          openMagicLink(await choose(user.id, undefined, query)),
+        );
 
         expect(opened.status).toBe(302);
         expect(new URL(opened.headers.get("location") ?? "", "http://localhost").pathname).toBe(
@@ -157,7 +173,7 @@ describe("開発者ホームでログアウトすると、session を消して�
   test("ログアウトすると、開発者ホームへ 303 で移し、server の session が無くなる (session の cookie cache を送らずに確かめる)", async () => {
     const signedIn = await signInAs(owner.id);
 
-    const signedOut = await request(DEV_HOME_SIGN_OUT_PATH, { method: "POST", headers: signedIn });
+    const signedOut = await signOut(signedIn);
 
     expect(signedOut.status).toBe(303);
     expect(signedOut.headers.get("location")).toBe(DEV_HOME_PATH);
@@ -167,13 +183,88 @@ describe("開発者ホームでログアウトすると、session を消して�
   test("ログアウトの応答は、browser の session の cookie を消す Set-Cookie を返す", async () => {
     const signedIn = await signInAs(owner.id);
 
-    const signedOut = await request(DEV_HOME_SIGN_OUT_PATH, { method: "POST", headers: signedIn });
+    const signedOut = await signOut(signedIn);
     const afterSignOut = browserCookieHeaders(signedOut);
 
     expect(
       signedOut.headers.getSetCookie().some((cookie) => cookie.includes("session_token=;")),
     ).toBe(true);
     expect(signedInSectionOf(await openHome(afterSignOut))).toContain("ログインしていません");
+  });
+});
+
+describe("開発者ホームは service_name と redirect_url を受けると、ログインの後に redirect_url へ移す", () => {
+  test("redirect_url へ戻る link を出し、ログインとログアウトの送り先に同じ query を付ける", async () => {
+    const response = await request(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      `<a href="${escapedForHtmlAttribute(REDIRECT_URL)}">アプリケーションに戻る</a>`,
+    );
+    expect(body).toContain(
+      `action="${escapedForHtmlAttribute(`${DEV_HOME_SIGN_IN_PATH}${REDIRECT_QUERY}`)}"`,
+    );
+    const signedIn = await signInAs(owner.id);
+    expect(await openHome(signedIn, REDIRECT_QUERY)).toContain(
+      `action="${escapedForHtmlAttribute(`${DEV_HOME_SIGN_OUT_PATH}${REDIRECT_QUERY}`)}"`,
+    );
+  });
+
+  test("選ぶと redirect_url を callbackURL にした Magic Link へ移し、開くと session ができて query ごと同じ redirect_url へ移る", async () => {
+    const chosen = await choose(owner.id, undefined, REDIRECT_QUERY);
+
+    expect(chosen.status).toBe(303);
+    expect(new URL(chosen.headers.get("location") ?? "").searchParams.get("callbackURL")).toBe(
+      REDIRECT_URL,
+    );
+    const opened = await openMagicLink(chosen);
+    expect(opened.status).toBe(302);
+    expect(opened.headers.get("location")).toBe(REDIRECT_URL);
+    expect(await signedInUserIdOf(browserCookieHeaders(opened))).toBe(owner.id);
+  });
+
+  test("ログアウトすると、同じ query を付けて開発者ホームへ 303 で移し、server の session が無くなる", async () => {
+    const signedIn = await signInAs(owner.id);
+
+    const signedOut = await signOut(signedIn, REDIRECT_QUERY);
+
+    expect(signedOut.status).toBe(303);
+    expect(signedOut.headers.get("location")).toBe(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
+    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBeUndefined();
+  });
+});
+
+const notAllowedQueries = (
+  [
+    [
+      "許可されない host の redirect_url",
+      { service_name: "accounts", redirect_url: "https://evil.example/" },
+    ],
+    ["service_name だけ", { service_name: "accounts" }],
+    ["redirect_url だけ", { redirect_url: REDIRECT_URL }],
+  ] as const
+).map(([label, query]) => [label, `?${new URLSearchParams(query)}`] as const);
+
+describe("開発者ホームは、許可されない redirect_url を共通ログイン画面と同じく受け付けない", () => {
+  test.each(notAllowedQueries)("%s で開くと、エラー画面へ 302 で移す", async (_, query) => {
+    const response = await request(`${DEV_HOME_PATH}${query}`);
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/auth/error?reason=invalid_redirect_url");
+  });
+
+  test.each(notAllowedQueries)("%s で利用者を選ぶと 400", async (_, query) => {
+    expect((await choose(owner.id, undefined, query)).status).toBe(400);
+  });
+
+  test.each(notAllowedQueries)("%s でログアウトすると 400 で、session は残る", async (_, query) => {
+    const signedIn = await signInAs(owner.id);
+
+    const signedOut = await signOut(signedIn, query);
+
+    expect(signedOut.status).toBe(400);
+    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBe(owner.id);
   });
 });
 
