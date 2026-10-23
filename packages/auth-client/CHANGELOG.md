@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.8.1 — 2026-10-23
+
+試験の環境で、ログイン画面の一覧、開発者ホームの form、試験 API が auth ホスト以外の site から送られた POST を受け付けていたのを止めた。SDK の export と wire は変えていない。
+
+### Bug fixes
+
+- ログイン画面の一覧と開発者ホームで利用者を選ぶ POST と、開発者ホームのログアウトの POST は、Origin が auth ホスト (`TAIMEI_AUTH_URL` の origin) でない時と Origin header が無い時に 403 を返す。これまでは、試験の環境の auth ホストを動かしたまま別の site を開くと、その site が自動で送る form で、開発者の browser が別の利用者にログインし直したりログアウトしたりした
+- 試験 API (`createTestingClient` が呼ぶ `/testing/v1/signed-in-users` と `/testing/v1/current-company`) は、`Content-Type` が `application/json` でない POST に 400 を返す。これまでは、別の site が `text/plain` の form で JSON を組んで送ると、試験の利用者を作ったり現在の事業所を切り替えたりできた
+
+### 移行
+
+browser での操作は変わらない。試験の code がこれらの form を browser を通さずに POST している時は、`Origin: <TAIMEI_AUTH_URL の origin>` を付ける。`createTestingClient` を使わずに試験 API を呼んでいる時は、`Content-Type: application/json` を付ける。
+
+### Breaking changes
+
+なし。
+
 ## 3.8.0 — 2026-10-23
 
 試験の環境に開発者ホームと、その URL を組む `buildDevHomeUrl` を足した。wire は変えていない。
