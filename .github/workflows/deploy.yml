@@ -40,7 +40,7 @@ jobs:
       - name: Build web SPA
         run: bun run build:web
 
-      - name: Check production bundle has no testing API
+      - name: Check production bundle has no testing API or developer home
         run: |
           set -euo pipefail
           bunx wrangler versions upload --dry-run --outdir "$RUNNER_TEMP/production-bundle"

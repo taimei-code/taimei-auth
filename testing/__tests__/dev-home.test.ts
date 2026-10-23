@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Effect } from "effect";
 import { DEV_ACCOUNTS, seedDevAccounts } from "../../db/testing/dev-accounts";
 import { buildApp } from "../../src/app";
+import { REPO_ROOT } from "../../src/__tests__/config-invariant-helpers";
 import { dbTest } from "../../src/__tests__/live-runner";
 import {
   browserCookieHeaders,
@@ -175,5 +178,16 @@ describe("開発者ホームでログアウトすると、session を消して�
       signedOut.headers.getSetCookie().some((cookie) => cookie.includes("session_token=;")),
     ).toBe(true);
     expect(signedInSectionOf(await openHome(afterSignOut))).toContain("ログインしていません");
+  });
+});
+
+describe("本番の bundle の検査は、開発者ホームの path を探す", () => {
+  test("検査が探す開発者ホームの path は、開発者ホームの route と同じ", () => {
+    const scriptPath = readFileSync(
+      join(REPO_ROOT, "scripts/check-production-bundle.sh"),
+      "utf8",
+    ).match(/^dev_home_path="([^"]*)"$/m)?.[1];
+
+    expect(scriptPath).toBe(DEV_HOME_PATH);
   });
 });

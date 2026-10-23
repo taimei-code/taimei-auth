@@ -8,6 +8,7 @@ import { REPO_ROOT } from "./config-invariant-helpers";
 const CHECK_SCRIPT = join(REPO_ROOT, "scripts/check-production-bundle.sh");
 const WORKER_WITH_TESTING_API = `app.post("${TESTING_PATH}/signed-in-users")`;
 const WORKER_WITHOUT_TESTING_API = 'app.get("/health")';
+const WORKER_WITH_DEV_HOME = 'app.get("/dev-home")';
 
 const bundleDirs: string[] = [];
 
@@ -61,7 +62,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
     expect(runBundleCheck(dir).exitCode).not.toBe(0);
   });
 
-  test("試験 API の path を含まない bundle は、0 で終わり OK を出す", () => {
+  test("試験 API の path も開発者ホームの path も含まない bundle は、0 で終わり OK を出す", () => {
     const dir = bundleDir({
       "worker.js": WORKER_WITHOUT_TESTING_API,
       "worker.js.map": '{"sources":["src/worker.ts"]}',
@@ -70,7 +71,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
 
     expect(runBundleCheck(dir)).toMatchObject({
       exitCode: 0,
-      stdout: `OK: production bundle has no ${TESTING_PATH}\n`,
+      stdout: `OK: production bundle has no ${TESTING_PATH} or /dev-home\n`,
     });
   });
 
@@ -81,6 +82,27 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
     });
 
     expect(runBundleCheck(dir).exitCode).toBe(0);
+  });
+});
+
+describe("本番の bundle の検査は、本番以外の entry だけが持つ開発者ホームを含む bundle で deploy を止める", () => {
+  test("worker.js が開発者ホームの path を含むと、0 以外で終わる", () => {
+    const dir = bundleDir({ "worker.js": WORKER_WITH_DEV_HOME });
+
+    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+  });
+
+  test("開発者ホームの module を bundle すると、検査が 0 以外で終わる", async () => {
+    const dir = bundleDir({});
+    const built = await Bun.build({
+      entrypoints: [join(REPO_ROOT, "testing/dev-home.ts")],
+      outdir: dir,
+      naming: "worker.js",
+      target: "bun",
+    });
+
+    expect(built.success).toBe(true);
+    expect(runBundleCheck(dir).exitCode).not.toBe(0);
   });
 });
 
