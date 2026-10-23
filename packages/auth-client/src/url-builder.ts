@@ -6,7 +6,7 @@ export interface BuildAuthLoginUrlOptions {
   hash?: string;
 }
 
-type ReturnToServiceOptions = Pick<
+export type ReturnToServiceOptions = Pick<
   BuildAuthLoginUrlOptions,
   "authBaseUrl" | "service" | "returnTo"
 >;
@@ -14,7 +14,7 @@ type ReturnToServiceOptions = Pick<
 const authHostUrl = (authBaseUrl: string, path: string): URL =>
   new URL(`${authBaseUrl.replace(/\/$/, "")}${path}`);
 
-const authHostUrlReturningToService = (opts: ReturnToServiceOptions, path: string): URL => {
+export const authHostUrlReturningToService = (opts: ReturnToServiceOptions, path: string): URL => {
   const url = authHostUrl(opts.authBaseUrl, path);
   url.searchParams.set("service_name", opts.service);
   url.searchParams.set("redirect_url", opts.returnTo);

@@ -14,6 +14,10 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 
 層 4 だけは root `biome.json` の `packages/auth-client/**` override が禁止し、root の `src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。
 
+## testing の subpath の相対 import は `.js` まで書く
+
+consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読む。Node の ESM は拡張子の無い相対 import を解決できない。そのため `src/testing.ts` の相対 import は `./url-builder.js` のように `.js` まで書く。ほかの entry は consumer の bundler が読むので、拡張子を書かない。root `biome.json` の `useImportExtensions` は `src/testing.ts` だけで効く。この repo の試験は Bun で走り、拡張子が無くても解決するので、この誤りを捕まえるのは lint だけである。
+
 ## SDK は taimei-auth の決めごとだけを持ち、consumer の知識を持たない
 
 依存の向きは consumer → SDK → taimei-auth の一方向である。SDK の code、試験、README、CHANGELOG に、consumer の名前、host、path、consumer が画面を使う目的を書かない。名前は taimei-auth の画面や値から付け、試験の値は `example-service` や `app.example` のような中立の値にする。root の `src/__tests__/sdk-consumer-knowledge.test.ts` が、consumer の名前・host・login の path が出てこないことを確かめる。

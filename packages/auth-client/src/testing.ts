@@ -1,6 +1,14 @@
-import type { Role } from "./types";
+import type { Role } from "./types.js";
+import { authHostUrlReturningToService, type ReturnToServiceOptions } from "./url-builder.js";
 
 export const TESTING_PATH = "/testing/v1";
+
+export const DEV_HOME_PATH = "/dev-home";
+
+export type BuildDevHomeUrlOptions = ReturnToServiceOptions;
+
+export const buildDevHomeUrl = (opts: BuildDevHomeUrlOptions): string =>
+  authHostUrlReturningToService(opts, DEV_HOME_PATH).toString();
 
 export type SignedInUserRequest = {
   name?: string;

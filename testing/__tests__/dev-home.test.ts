@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
 import { DEV_ACCOUNTS, seedDevAccounts } from "../../db/testing/dev-accounts";
 import { buildApp } from "../../src/app";
@@ -13,12 +14,7 @@ import {
 } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
-import {
-  DEV_HOME_PATH,
-  DEV_HOME_SIGN_IN_PATH,
-  DEV_HOME_SIGN_OUT_PATH,
-  devHomeRoutes,
-} from "../dev-home";
+import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
 
 const P = "dev-home-test-";
 const { run } = dbTest(P);

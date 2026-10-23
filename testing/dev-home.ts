@@ -1,3 +1,4 @@
+import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import { html } from "hono/html";
@@ -10,7 +11,6 @@ import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account
 import { decodeBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
 
-export const DEV_HOME_PATH = "/dev-home";
 export const DEV_HOME_SIGN_IN_PATH = `${DEV_HOME_PATH}/sign-in`;
 export const DEV_HOME_SIGN_OUT_PATH = `${DEV_HOME_PATH}/sign-out`;
 
