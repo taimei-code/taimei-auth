@@ -52,9 +52,11 @@ export const authApiLive = AuthApi.of({
       await auth.api.signInMagicLink({ body: { email, callbackURL }, headers: new Headers() });
     }),
   signOut: (headers) =>
-    tryAuthApi(async () => {
-      await auth.api.signOut({ headers });
-    }),
+    tryAuthApi(() =>
+      auth.api
+        .signOut({ headers, returnHeaders: true })
+        .then(({ headers: clearCookieHeaders }) => clearCookieHeaders),
+    ),
   secret: tryAuthApi(async () => (await auth.$context).secret),
 });
 

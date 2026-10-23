@@ -7,6 +7,7 @@ import { DEV_ACCOUNTS } from "../../db/testing/dev-accounts";
 import { readUserIdsByEmails } from "../../db/testing/read";
 import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
+import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -164,7 +165,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
 });
 
 describe("本番の worker と同じ app", () => {
-  test("APP_ENV が未設定・production・誤記・test のどれでも、試験用の route (POST /testing/v1/*) が無い", async () => {
+  test("APP_ENV が未設定・production・誤記・test のどれでも、試験用の route と開発者ホームの POST が無い", async () => {
     const previous = process.env.APP_ENV;
     const statuses: Record<string, number[]> = {};
     try {
@@ -177,6 +178,8 @@ describe("本番の worker と同じ app", () => {
             `${TESTING_PATH}/signed-in-users`,
             `${TESTING_PATH}/current-company`,
             `${TESTING_PATH}/account-picker`,
+            DEV_HOME_SIGN_IN_PATH,
+            DEV_HOME_SIGN_OUT_PATH,
           ].map((path) =>
             app.request(path, {
               method: "POST",
@@ -193,10 +196,10 @@ describe("本番の worker と同じ app", () => {
     }
 
     expect(statuses).toEqual({
-      "(unset)": [404, 404, 404],
-      production: [404, 404, 404],
-      prodution: [404, 404, 404],
-      test: [404, 404, 404],
+      "(unset)": [404, 404, 404, 404, 404],
+      production: [404, 404, 404, 404, 404],
+      prodution: [404, 404, 404, 404, 404],
+      test: [404, 404, 404, 404, 404],
     });
   });
 
