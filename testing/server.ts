@@ -1,7 +1,7 @@
 import { seedDevAccounts } from "../db/testing/dev-accounts";
 import { postgresTtlStore } from "../db/testing/ttl-store";
 import { startBunServer } from "../src/bun-server";
-import { testingRoutes } from "./routes";
+import { testingApiAndAccountPickerRoutes } from "./routes";
 import { recordingEmailSender } from "./sent-links";
 
 if (process.env.APP_ENV !== "test") {
@@ -16,6 +16,6 @@ export default startBunServer({
   emailSender: recordingEmailSender,
   ttlStore,
   extendBeforeStatic: (app) => {
-    app.route("/", testingRoutes());
+    app.route("/", testingApiAndAccountPickerRoutes());
   },
 }).server;

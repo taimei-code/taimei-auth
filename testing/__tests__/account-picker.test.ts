@@ -6,7 +6,7 @@ import { buildApp } from "../../src/app";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { browserCookieHeaders } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
-import { testingRoutes } from "../routes";
+import { testingApiAndAccountPickerRoutes } from "../routes";
 
 const P = "account-picker-test-";
 const { run, cleanup } = dbTest(P);
@@ -19,7 +19,7 @@ const PICKER_PATH = `${TESTING_PATH}/account-picker`;
 
 const app = buildApp({
   mountStatic: (honoApp) => {
-    honoApp.route("/", testingRoutes());
+    honoApp.route("/", testingApiAndAccountPickerRoutes());
     honoApp.use("/auth/*", async (c) => c.text(SPA_RESPONSE));
   },
 });
