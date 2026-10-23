@@ -45,11 +45,15 @@ const openLoginUrl = (loginUrl: string) => {
   return Effect.promise(() => Promise.resolve(app.request(`${url.pathname}${url.search}`)));
 };
 
-const postToTestingApi = (path: "/signed-in-users" | "/current-company", body: string) =>
+const postToTestingApi = (
+  path: "/signed-in-users" | "/current-company",
+  body: string,
+  contentType = "application/json",
+) =>
   Promise.resolve(
     app.request(`${TESTING_PATH}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": contentType },
       body,
     }),
   );
@@ -377,6 +381,13 @@ describe("試験 API が受け付けない request", () => {
     ["利用者の名前が空白だけ", JSON.stringify({ name: "   ", companies: [], returnTo: RETURN_TO })],
   ])("%s なら 400 を返す", async (_, body) => {
     expect((await postToTestingApi("/signed-in-users", body)).status).toBe(400);
+  });
+
+  test.each([
+    ["/signed-in-users", JSON.stringify({ companies: [], returnTo: RETURN_TO })],
+    ["/current-company", JSON.stringify({ userId: `${P}missing-user`, companyId: "c" })],
+  ] as const)("%s は、Content-Type が application/json でなければ body が JSON でも 400 を返す", async (path, body) => {
+    expect((await postToTestingApi(path, body, "text/plain")).status).toBe(400);
   });
 
   test("SDK の client は 2xx でない応答を、path と status を含む例外にする", async () => {

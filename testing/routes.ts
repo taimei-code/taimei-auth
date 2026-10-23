@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
 import { accountPickerRoutes } from "./account-picker";
 import { createSignedInUser } from "./create-signed-in-user";
-import { decodeBody } from "./decode-body";
+import { decodeJsonBody } from "./decode-body";
 import { setCurrentCompany } from "./set-current-company";
 import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
 
@@ -14,7 +14,7 @@ export const testingApiRoutes = () =>
       runRoute(
         c,
         Effect.gen(function* () {
-          const body = yield* decodeBody(() => c.req.json(), SignedInUserRequest);
+          const body = yield* decodeJsonBody(c, SignedInUserRequest);
           return c.json(yield* createSignedInUser(body));
         }),
       ),
@@ -23,7 +23,7 @@ export const testingApiRoutes = () =>
       runRoute(
         c,
         Effect.gen(function* () {
-          const body = yield* decodeBody(() => c.req.json(), SetCurrentCompanyRequest);
+          const body = yield* decodeJsonBody(c, SetCurrentCompanyRequest);
           return c.json(yield* setCurrentCompany(body));
         }),
       ),
