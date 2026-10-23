@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type SignedInUser, TESTING_PATH } from "@taimei-code/auth-client/testing";
+import { DEV_HOME_PATH, type SignedInUser, TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { deleteCompaniesByNames, deleteUsersByIds } from "../../db/testing/cleanup";
 import { DEV_ACCOUNTS } from "../../db/testing/dev-accounts";
 import { readUserIdsByEmails } from "../../db/testing/read";
@@ -162,6 +162,19 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
     expect(statuses).toEqual([200, 200]);
     expect(await readUserIdsByEmails(devEmails)).toHaveLength(DEV_ACCOUNTS.users.length);
   }, 30_000);
+});
+
+describe("試験用の entry は、開発環境と同じ開発者ホームを載せる", () => {
+  test("開発者ホームを開くと、開発用アカウントの一覧を返す", async () => {
+    const { status, body } = await withTestingServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}${DEV_HOME_PATH}`);
+      return { status: response.status, body: await response.text() };
+    });
+
+    expect(status).toBe(200);
+    expect(body).toContain("<h1>開発者ホーム</h1>");
+    for (const email of devEmails) expect(body).toContain(email);
+  }, 15_000);
 });
 
 describe("本番の worker と同じ app", () => {
