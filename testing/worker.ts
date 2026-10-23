@@ -1,5 +1,6 @@
 import { seedDevAccounts } from "../db/testing/dev-accounts";
 import { createWorker } from "../src/worker";
+import { devHomeRoutes } from "./dev-home";
 import { testingApiRoutes } from "./routes";
 import { recordingEmailSender } from "./sent-links";
 import { serveOnlyOutsideProduction } from "./serve-only-outside-production";
@@ -11,6 +12,7 @@ export default serveOnlyOutsideProduction(
     emailSender: recordingEmailSender,
     extendBeforeStatic: (app) => {
       app.route("/", testingApiRoutes());
+      app.route("/", devHomeRoutes());
     },
     beforeFirstRequest: seedDevAccounts,
   }),
