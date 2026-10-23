@@ -43,7 +43,7 @@ services:
 
   auth-service:
     build: *dev-build
-    command: bash scripts/wrangler-dev.sh
+    command: bash scripts/wrangler-dev.sh testing/worker.ts
     ports:
       - "3100:3100"
     env_file:
@@ -76,6 +76,9 @@ services:
         - action: sync
           path: ./db
           target: /app/db
+        - action: sync
+          path: ./testing
+          target: /app/testing
         - action: rebuild
           path: package.json
         # advisory 対応では bun.lock だけが変わり package.json の trigger では rebuild が起きない

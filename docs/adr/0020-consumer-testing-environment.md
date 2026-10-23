@@ -28,6 +28,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - 型の境界: 試験のコードを `src/` の外の `testing/` に置く。root の `tsconfig.json` は composite で `testing/` を含まないので、`src/` から `testing/` を import すると typecheck が TS6307 で落ちる。`testing/` は `testing/tsconfig.json` で typecheck する (`scripts/typecheck.sh`)
    - 本番の bundle の検査: `deploy.yml` は upload の前に本番の bundle を `scripts/check-production-bundle.sh` で検査し、試験 API の path があれば deploy を止める
    - 起動の判定: `testing/server.ts` は boot の前に `APP_ENV === "test"` を確かめ、違えば exit 1 する
+   - (2026-10-22 追記) 開発環境と taimei-auth 自身の e2e が使う本番以外の entry `testing/worker.ts` は workerd で動いて exit できないので、`APP_ENV` が `development` か `test` でない時は app に届く前にすべての request を 500 で拒む (taimei-code/taimei-auth#318)
    - (2026-10-21 追記) **アカウント選択画面** とその API も `testing/` に置き、form の送り先を `TESTING_PATH` から組むので、同じ 3 段で守る
 6. **試験の環境の auth の DB と session は volume に残す (2026-10-21 追加)**。断片の Postgres は名前付き volume に data を置き、試験用の entry は **TTL store** を同じ DB の表に置く (本番と `src/index.ts` は変えない)。`down` → `up` の後も利用者・事業所・所属・session が残り、`down -v` で一緒に消える。版を上げて image が変わっても、起動の migrate は未適用の分だけを当てる
 7. **開発用アカウントとアカウント選択画面 (2026-10-21 追加)**。試験用の entry は listen の前に、固定の id の **開発用アカウント** のうち無い行だけを足す。共通ログイン画面の URL (`GET /auth/`) には **アカウント選択画面** を返し、選んだ利用者は Decision 4 と同じく本物の Magic Link でログインさせる。session が有効なら一覧を出さずに戻り先へ移し、招待の受諾の途中 (invitation の token を伴う) は共通ログイン画面を出す

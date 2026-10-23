@@ -12,7 +12,7 @@ import { Role as ProtoRole } from "../../src/gen/auth/v1/auth_pb";
 import { getTrustedOrigins } from "../../src/env";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
-import { testingRoutes } from "../routes";
+import { testingApiAndAccountPickerRoutes } from "../routes";
 
 const P = "signed-in-user-test-";
 const { run, cleanup } = dbTest(P);
@@ -24,7 +24,7 @@ const RETURN_TO = `${trustedOrigin}/after-sign-in`;
 const UNTRUSTED_RETURN_TO = "https://attacker.example/";
 
 const app = buildApp({ mountStatic: () => {} });
-app.route("/", testingRoutes());
+app.route("/", testingApiAndAccountPickerRoutes());
 let server: ReturnType<typeof Bun.serve>;
 let testing: ReturnType<typeof createTestingClient>;
 

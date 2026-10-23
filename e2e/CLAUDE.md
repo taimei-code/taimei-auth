@@ -4,7 +4,7 @@
 
 - repo root で `bun run test:e2e` を走らせる。1 つの spec だけなら `bun run test:e2e e2e/<name>.e2e.ts`。`helpers.ts` が `process.cwd()` から path を組むので、root 以外では動かない。
 - 前提は、root の CLAUDE.md「検証」にある local の Postgres の用意と `.env` である。auth-service の container は要らない。
-- `e2e/start-server.sh` が web の build、全 fixture の seed、wrangler dev (:3110) を行う。server の log は `e2e/.server.log` に出る。local で :3110 に server が既に動いていれば、Playwright はその server を使い、build と seed は走らない (`playwright.config.ts` の `reuseExistingServer`)。古い build や古い seed の行で spec が落ちる時は、その server を止めてから走らせ直す。
+- `e2e/start-server.sh` が web の build、全 fixture の seed、本番以外の entry `testing/worker.ts` の wrangler dev (:3110) を行う。server の log は `e2e/.server.log` に出る。local で :3110 に server が既に動いていれば、Playwright はその server を使い、build と seed は走らない (`playwright.config.ts` の `reuseExistingServer`)。古い build や古い seed の行で spec が落ちる時は、その server を止めてから走らせ直す。
 - spec は server の log と seed を共有するので、1 worker で順に走る (`playwright.config.ts`)。
 
 ## fixture
