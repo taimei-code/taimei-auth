@@ -6,6 +6,7 @@ import {
   buildCompanySignupUrl,
   buildMembersUrl,
 } from "../index";
+import { buildDevHomeUrl } from "../testing";
 
 describe("buildAuthErrorUrl", () => {
   test.each([
@@ -40,6 +41,7 @@ describe("service から移る画面の URL", () => {
   test.each([
     ["事業所作成画面", buildCompanySignupUrl, "/auth/signup/company"],
     ["メンバー画面", buildMembersUrl, "/account/members"],
+    ["開発者ホーム", buildDevHomeUrl, "/dev-home"],
   ])("%s の URL に service_name と redirect_url だけを付ける", (_, build, pathname) => {
     const url = new URL(build(screenOptions));
     expect(url.pathname).toBe(pathname);
@@ -70,6 +72,10 @@ describe("auth ホストの画面の URL は authBaseUrl の末尾の / に左�
     [
       "buildMembersUrl",
       (authBaseUrl: string) => buildMembersUrl({ ...screenOptions, authBaseUrl }),
+    ],
+    [
+      "buildDevHomeUrl",
+      (authBaseUrl: string) => buildDevHomeUrl({ ...screenOptions, authBaseUrl }),
     ],
     ["buildAccountUrl", (authBaseUrl: string) => buildAccountUrl({ authBaseUrl })],
   ])("%s", (_, build) => {

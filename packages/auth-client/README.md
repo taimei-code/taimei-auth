@@ -83,6 +83,7 @@ taimei-auth が変えた時に SDK の版上げで届くよう、次の値を co
 | 事業所作成画面の URL | `buildCompanySignupUrl({ authBaseUrl, service, returnTo })` |
 | メンバー画面の URL | `buildMembersUrl({ authBaseUrl, service, returnTo })` |
 | アカウント管理画面の URL | `buildAccountUrl({ authBaseUrl })` |
+| 試験の環境の開発者ホームの URL (`/dev-home`) | `@taimei-code/auth-client/testing` の `buildDevHomeUrl({ authBaseUrl, service, returnTo })` |
 | Magic Link の有効期限 (秒) | `MAGIC_LINK_EXPIRES_IN_SECONDS` |
 | 新規登録の直後か (`user.createdAt` と Magic Link の有効期限の比較) | `isJustSignedUp(sessionData, now?)` |
 | 事業所 id の形 | `COMPANY_ID_PATTERN` |
@@ -142,8 +143,27 @@ include:
 | `dev-member@example.com` | MEMBER | — |
 
 - auth ホストは起動するたびに、開発用アカウントのうち無いものだけを足す。利用者と事業所の id は何度起動しても変わらない。現在の事業所は事業所 1 である
-- ログインしたままログイン画面を開くと、一覧を出さずに `returnTo` へ移る。ACTIVE な事業所に 1 つも所属していない利用者は、`returnTo` の代わりに事業所の新規登録の画面 (`buildCompanySignupUrl` の URL) へ移る。別の利用者に替える時は、先にログアウトする
-- 一覧と選んだ後のログインは試験用の image の中にだけあり、本番の auth ホストには無い
+- 一覧、選んだ後のログイン、開発者ホームは試験用の image の中にだけあり、本番の auth ホストには無い
+
+ログインしたまま別の利用者に替える時とログアウトする時は、開発者ホーム (`buildDevHomeUrl` の URL) を開く。
+
+```ts
+import { buildDevHomeUrl } from "@taimei-code/auth-client/testing";
+
+const devHomeUrl = buildDevHomeUrl({
+  authBaseUrl: "http://auth.example.local:3100",
+  service: "example-service",
+  returnTo: "http://app.example.local:3001/current-page",
+});
+```
+
+| 画面 | ログインしていない時 | ログイン中 |
+|---|---|---|
+| ログイン画面 (`buildAuthLoginUrl`) | 一覧を出し、選ぶと `returnTo` へ移る | 一覧を出さずに `returnTo` へ移る。ACTIVE な事業所に 1 つも所属していない利用者は、`returnTo` の代わりに事業所の新規登録の画面 (`buildCompanySignupUrl` の URL) へ移る |
+| 開発者ホーム (`buildDevHomeUrl`) | 一覧を出し、選ぶと `returnTo` へ移る | ログイン中の利用者と一覧を出し、別の利用者を選ぶと切り替えて `returnTo` へ移る。ログアウトすると開発者ホームに戻る |
+
+- 開発者ホームは、ログイン画面と同じく、`service` に許可されない `returnTo` を受けるとエラー画面へ移す。`returnTo` の origin は `TAIMEI_AUTH_CONSUMER_ORIGINS` に含める
+- 開発者ホームの「アプリケーションに戻る」は、ログインし直さずに `returnTo` へ戻る
 
 ### 試験の利用者
 
