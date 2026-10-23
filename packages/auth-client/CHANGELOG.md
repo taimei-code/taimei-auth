@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.8.0 — 2026-10-23
+
+試験の環境に開発者ホームと、その URL を組む `buildDevHomeUrl` を足した。wire は変えていない。
+
+### Features
+
+- `@taimei-code/auth-client/testing` に `buildDevHomeUrl({ authBaseUrl, service, returnTo })` を足した。試験の環境の開発者ホーム (`/dev-home`) の URL を、`service_name` と `redirect_url` を付けて組む
+- 試験の環境の auth ホストに開発者ホームを足した。ログイン中の利用者と利用者の一覧を出し、ログインしたまま別の利用者に切り替えて `returnTo` へ移る。ログアウトもできる。ログイン画面 (`buildAuthLoginUrl` の URL) の一覧は今までどおり
+- 開発者ホームは、ログイン画面と同じく、`service` に許可されない `returnTo` を受けるとエラー画面へ移す
+
+### 移行
+
+なし。
+
+### Breaking changes
+
+なし。
+
 ## 3.7.1 — 2026-10-22
 
 試験の環境の起動で、所属の無い利用者に事業所を作っていたのを止めた。migrate が失敗した時に原因を出すようにした。SDK の export と wire は変えていない。
