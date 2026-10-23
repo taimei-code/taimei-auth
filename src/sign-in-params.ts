@@ -33,3 +33,5 @@ export const redirectTargetSchema = signInParamsObjectSchema
   .refine(isRedirectUrlAllowed, redirectUrlNotAllowedIssue);
 
 export type RedirectTarget = z.infer<typeof redirectTargetSchema>;
+
+export const INVALID_REDIRECT_URL_PAGE = "/auth/error?reason=invalid_redirect_url";

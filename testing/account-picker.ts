@@ -6,14 +6,12 @@ import { listAccounts } from "../db/testing/dev-accounts";
 import { UserRepo } from "../src/account/ports";
 import { InvalidArgument, NotFound } from "../src/failures";
 import { runRoute } from "../src/handlers/run-route";
-import { signInParamsSchema } from "../src/sign-in-params";
+import { INVALID_REDIRECT_URL_PAGE, signInParamsSchema } from "../src/sign-in-params";
 import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
 import { decodeBody } from "./decode-body";
 import { magicLinkUrlFor } from "./sent-links";
 
 const ACCOUNT_PICKER_PATH = `${TESTING_PATH}/account-picker`;
-
-const INVALID_REDIRECT_URL_PAGE = "/auth/error?reason=invalid_redirect_url";
 
 const accountRow = (account: Account, search: string) => html`<li>
   <form method="post" action="${ACCOUNT_PICKER_PATH}${search}">
