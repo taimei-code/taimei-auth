@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
+import {
+  NON_PRODUCTION_ENTRY_NAME,
+  NON_PRODUCTION_SCRIPT_FILE,
+  NON_PRODUCTION_STYLESHEET_FILE,
+} from "../../web/non-production/assets";
 import { REPO_ROOT } from "./config-invariant-helpers";
 
 const CHECK_SCRIPT = join(REPO_ROOT, "scripts/check-production-bundle.sh");
@@ -19,9 +24,17 @@ afterEach(() => {
 const bundleDir = (files: Record<string, string>) => {
   const dir = mkdtempSync(join(tmpdir(), "production-bundle-"));
   bundleDirs.push(dir);
-  for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
+  for (const [name, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, name)), { recursive: true });
+    writeFileSync(join(dir, name), content);
+  }
   return dir;
 };
+
+const PRODUCTION_WEB_DIST = { "index.html": "<!doctype html>", "assets/index-abc.js": "spa" };
+
+const webDistDir = (files: Record<string, string> = {}) =>
+  bundleDir({ ...PRODUCTION_WEB_DIST, ...files });
 
 const runBundleCheck = (...args: string[]) => {
   const result = Bun.spawnSync(["bash", CHECK_SCRIPT, ...args]);
@@ -44,13 +57,13 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
   test("worker.js が試験 API の path を含むと、0 以外で終わる", () => {
     const dir = bundleDir({ "worker.js": WORKER_WITH_TESTING_API });
 
-    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).not.toBe(0);
   });
 
   test("試験 API の path を含む file の path を stdout に出す", () => {
     const dir = bundleDir({ "worker.js": WORKER_WITH_TESTING_API });
 
-    expect(runBundleCheck(dir).stdout).toBe(`${join(dir, "worker.js")}\n`);
+    expect(runBundleCheck(dir, webDistDir()).stdout).toBe(`${join(dir, "worker.js")}\n`);
   });
 
   test("worker.js 以外の module が試験 API の path を含むと、0 以外で終わる", () => {
@@ -59,7 +72,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
       "extra.mjs": `export const path = "${TESTING_PATH}";`,
     });
 
-    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).not.toBe(0);
   });
 
   test("試験 API の path も開発者ホームの path も含まない bundle は、0 で終わり OK を出す", () => {
@@ -69,7 +82,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
       "README.md": "wrangler output",
     });
 
-    expect(runBundleCheck(dir)).toMatchObject({
+    expect(runBundleCheck(dir, webDistDir())).toMatchObject({
       exitCode: 0,
       stdout: `OK: production bundle has no ${TESTING_PATH} or /dev-home\n`,
     });
@@ -81,7 +94,7 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
       "worker.js.map": `{"sourcesContent":["${TESTING_PATH}"]}`,
     });
 
-    expect(runBundleCheck(dir).exitCode).toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).toBe(0);
   });
 });
 
@@ -89,24 +102,75 @@ describe("本番の bundle の検査は、本番以外の entry だけが持つ�
   test("worker.js が開発者ホームの path を含むと、0 以外で終わる", () => {
     const dir = bundleDir({ "worker.js": WORKER_WITH_DEV_HOME });
 
-    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).not.toBe(0);
   });
 
-  test("開発者ホームの module を bundle すると、検査が 0 以外で終わる", async () => {
+  test("開発者ホームの module を bundle すると、検査が 0 以外で終わる (bun test の中の Bun.build は web/ の file の拡張子の無い相対 import を解決できないので、別の process の bun build で bundle する)", () => {
     const dir = bundleDir({});
-    const built = await Bun.build({
-      entrypoints: [join(REPO_ROOT, "testing/dev-home.ts")],
-      outdir: dir,
-      naming: "worker.js",
-      target: "bun",
-    });
+    const built = Bun.spawnSync([
+      "bun",
+      "build",
+      join(REPO_ROOT, "testing/dev-home.ts"),
+      "--outfile",
+      join(dir, "worker.js"),
+      "--target",
+      "bun",
+    ]);
 
-    expect(built.success).toBe(true);
-    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+    expect(built.exitCode).toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).not.toBe(0);
+  });
+});
+
+describe("本番の bundle の検査は、本番以外の画面を含む web の build で deploy を止める", () => {
+  test("検査が探す file の名前は、web の build が本番以外の画面に付ける entry の名前と同じ", () => {
+    const scriptAssetName = readFileSync(CHECK_SCRIPT, "utf8").match(
+      /^non_production_asset_name="([^"]*)"$/m,
+    )?.[1];
+
+    expect(scriptAssetName).toBe(`${NON_PRODUCTION_ENTRY_NAME}.*`);
+  });
+
+  test.each([
+    NON_PRODUCTION_SCRIPT_FILE,
+    NON_PRODUCTION_STYLESHEET_FILE,
+  ])("web の build が本番以外の画面の %s を含むと、0 以外で終わり、その file を stdout に出す", (file) => {
+    const webDist = webDistDir({ [file]: "x" });
+
+    const result = runBundleCheck(bundleDir({ "worker.js": WORKER_WITHOUT_TESTING_API }), webDist);
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stdout).toBe(`${join(webDist, file)}\n`);
+  });
+
+  test("web の build が開発者ホームの path を含むと、0 以外で終わる", () => {
+    const result = runBundleCheck(
+      bundleDir({ "worker.js": WORKER_WITHOUT_TESTING_API }),
+      webDistDir({ "assets/index-abc.js": 'fetch("/dev-home")' }),
+    );
+
+    expect(result.exitCode).not.toBe(0);
   });
 });
 
 describe("本番の bundle の検査は、検査できない時に通さない", () => {
+  test("web の build の dir を渡さないと、使い方を出して 0 以外で終わる", () => {
+    const result = runBundleCheck(bundleDir({ "worker.js": WORKER_WITHOUT_TESTING_API }));
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("usage:");
+  });
+
+  test("web の build の dir に index.html が無いと、0 以外で終わる", () => {
+    const result = runBundleCheck(
+      bundleDir({ "worker.js": WORKER_WITHOUT_TESTING_API }),
+      bundleDir({ "assets/index-abc.js": "spa" }),
+    );
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr).toContain("index.html is missing or empty");
+  });
+
   test("bundle の dir を渡さないと、使い方を出して 0 以外で終わる", () => {
     const result = runBundleCheck();
 
@@ -115,21 +179,21 @@ describe("本番の bundle の検査は、検査できない時に通さない",
   });
 
   test("worker.js が無い dir は、0 以外で終わる", () => {
-    const result = runBundleCheck(bundleDir({ "README.md": "wrangler output" }));
+    const result = runBundleCheck(bundleDir({ "README.md": "wrangler output" }), webDistDir());
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr).toContain("worker.js is missing or empty");
   });
 
   test("worker.js が 0 byte の dir は、0 以外で終わる", () => {
-    expect(runBundleCheck(bundleDir({ "worker.js": "" })).exitCode).not.toBe(0);
+    expect(runBundleCheck(bundleDir({ "worker.js": "" }), webDistDir()).exitCode).not.toBe(0);
   });
 
   test("読めない file を含む dir は、0 以外で終わる", () => {
     const dir = bundleDir({ "worker.js": WORKER_WITHOUT_TESTING_API, "chunk.js": "" });
     chmodSync(join(dir, "chunk.js"), 0o000);
 
-    expect(runBundleCheck(dir).exitCode).not.toBe(0);
+    expect(runBundleCheck(dir, webDistDir()).exitCode).not.toBe(0);
   });
 });
 
@@ -143,18 +207,19 @@ const deploySteps = (): WorkflowStep[] => {
 };
 
 const DRY_RUN_OUTDIR = /wrangler versions upload --dry-run --outdir (\S+)/;
-const CHECKED_DIR = /scripts\/check-production-bundle\.sh (\S+)/;
+const CHECKED_DIR = /scripts\/check-production-bundle\.sh (\S+) (\S+)/;
 
 const isBundleCheckStep = ({ run = "" }: WorkflowStep) => {
   const outdir = run.match(DRY_RUN_OUTDIR)?.[1];
-  return outdir !== undefined && run.match(CHECKED_DIR)?.[1] === outdir;
+  const checked = run.match(CHECKED_DIR);
+  return outdir !== undefined && checked?.[1] === outdir && checked[2] === "web/dist";
 };
 
 const indexOfStepRunning = (steps: readonly WorkflowStep[], fragment: string) =>
   steps.findIndex(({ run = "" }) => run.includes(fragment));
 
 describe("deploy の workflow は、本番の状態を変える前に本番の bundle を検査する", () => {
-  test("dry-run で出した dir をそのまま検査する step がちょうど 1 つある", () => {
+  test("dry-run で出した dir と web の build の出力 (web/dist) を検査する step がちょうど 1 つある", () => {
     expect(deploySteps().filter(isBundleCheckStep)).toHaveLength(1);
   });
 
