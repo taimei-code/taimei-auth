@@ -3,7 +3,11 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
-import { DEV_ACCOUNTS, seedDevAccounts } from "../../db/testing/dev-accounts";
+import {
+  addBrowserAccount,
+  DEV_ACCOUNTS,
+  prepareChoosableAccounts,
+} from "../../db/testing/dev-accounts";
 import { buildApp } from "../../src/app";
 import { REPO_ROOT } from "../../src/__tests__/config-invariant-helpers";
 import { dbTest } from "../../src/__tests__/live-runner";
@@ -11,29 +15,45 @@ import {
   browserCookieHeaders,
   issuedSessionCookieCount,
   sessionUserIdOf,
+  setCookieValue,
 } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
+import { BROWSER_KEY_COOKIE } from "../browser-key";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
+import { inBrowser, requestInBrowser, seedBrowserAccount, withCookies } from "./in-browser";
 import { magicLinksSentWhile } from "./magic-links-sent";
+import { devHomePropsOf } from "./page-props-of";
 import { AUTH_HOST_ORIGIN, HEADERS_WITHOUT_AUTH_HOST_ORIGIN } from "./origins";
 
 const REDIRECT_URL = "http://localhost:3100/account?tab=a&x=1";
 const REDIRECT_QUERY = `?${new URLSearchParams({ service_name: "accounts", redirect_url: REDIRECT_URL })}`;
-const escapedForHtmlAttribute = (value: string) => value.replaceAll("&", "&amp;");
 
 const P = "dev-home-test-";
 const { run } = dbTest(P);
 
 const app = buildApp({ mountStatic: (honoApp) => honoApp.route("/", devHomeRoutes()) });
 
-const request = (path: string, init?: RequestInit) => Promise.resolve(app.request(path, init));
+const TEST_BROWSER_KEY = crypto.randomUUID();
+
+const request = requestInBrowser(app, TEST_BROWSER_KEY);
+
+const seedChoosableUser = (suffix: string, options?: { name?: string; email?: string }) =>
+  seedBrowserAccount(TEST_BROWSER_KEY, suffix, options);
 
 const [owner, admin] = DEV_ACCOUNTS.users;
 if (!owner || !admin) throw new Error("DEV_ACCOUNTS has fewer than 2 users");
 
 const openHome = async (headers?: HeadersInit, query = "") =>
-  (await request(`${DEV_HOME_PATH}${query}`, { headers })).text();
+  devHomePropsOf(await (await request(`${DEV_HOME_PATH}${query}`, { headers })).text());
+
+const emailsOf = (accounts: readonly { readonly email: string }[]) =>
+  accounts.map(({ email }) => email);
+
+const signedInEmailOf = ({ viewer }: Awaited<ReturnType<typeof openHome>>) =>
+  viewer._tag === "SignedIn" ? viewer.account.email : undefined;
+
+const noticeOf = ({ viewer }: Awaited<ReturnType<typeof openHome>>) => viewer.notice;
 
 const withAuthHostOrigin = (headers?: HeadersInit) => {
   const headersWithOrigin = new Headers(headers);
@@ -72,9 +92,6 @@ const withoutCookieCache = (headers: Headers) =>
       .join("; "),
   });
 
-const signedInSectionOf = (body: string) =>
-  body.slice(body.indexOf('id="signed-in"'), body.indexOf('id="accounts"'));
-
 const cleanupAll = () =>
   run(
     Effect.gen(function* () {
@@ -83,33 +100,108 @@ const cleanupAll = () =>
     }),
   );
 
-beforeAll(seedDevAccounts);
+beforeAll(prepareChoosableAccounts);
 beforeEach(cleanupAll);
 afterAll(cleanupAll);
 
 describe("開発者ホームは、ログイン中の利用者と、選んでログインできる利用者の一覧を出す", () => {
-  test("ログインしていなければ、そのことと、開発用アカウントの一覧を出す", async () => {
-    const body = await openHome();
+  test("ログインしていなければ、そのことと、開発用アカウントを決めた順に渡す", async () => {
+    const props = await openHome();
 
-    expect(signedInSectionOf(body)).toContain("ログインしていません");
-    for (const devUser of DEV_ACCOUNTS.users) expect(body).toContain(devUser.email);
+    expect(props.viewer._tag).toBe("SignedOut");
+    expect(emailsOf(props.devAccounts)).toEqual(DEV_ACCOUNTS.users.map(({ email }) => email));
   });
 
-  test("利用者の名前に HTML があっても、escape して出す", () =>
+  test("利用者の名前に HTML があっても、page の script 要素を閉じずに、そのままの名前を渡す", () =>
     run(
       Effect.gen(function* () {
-        yield* TestDb.use((db) => db.seedUser("escape", { name: "<script>x</script>" }));
+        const name = "</script><script>x</script>";
+        const user = yield* seedChoosableUser("escape", { name });
 
-        const body = yield* Effect.promise(() => openHome());
+        const body = yield* Effect.promise(async () =>
+          (await request(DEV_HOME_PATH, { headers: await signInAs(user.id) })).text(),
+        );
 
-        expect(body).not.toContain("<script>x</script>");
-        expect(body).toContain("&lt;script&gt;x&lt;/script&gt;");
+        expect(body).not.toContain("<script>x");
+        const { viewer } = devHomePropsOf(body);
+        expect(viewer._tag === "SignedIn" ? viewer.account.name : undefined).toBe(name);
       }),
     ));
 
-  test("redirect_url を受けなければ、アプリケーションに戻る link を出さない", async () => {
-    expect(await openHome()).not.toContain("アプリケーションに戻る");
+  test("redirect_url を受けなければ、戻り先をアカウント管理画面にする", async () => {
+    expect((await openHome()).destination).toEqual({ _tag: "AccountPage" });
   });
+
+  test("ログイン中の利用者は、ACTIVE の事業所と role を渡し、現在の事業所に印を付ける", async () => {
+    const { viewer } = await openHome(await signInAs(owner.id));
+
+    const companies = viewer._tag === "SignedIn" ? viewer.account.companies : [];
+    expect(companies.length).toBeGreaterThan(0);
+    expect(companies.filter(({ isCurrent }) => isCurrent)).toHaveLength(1);
+  });
+});
+
+describe("開発者ホームは、開発用アカウントと、この browser でログインした利用者だけを候補に出す", () => {
+  test("browser の鍵の cookie が無ければ、開発者ホームを開くと、全 path に届く HttpOnly の cookie を置き、開発用アカウントを出す", async () => {
+    const response = await app.request(DEV_HOME_PATH);
+
+    const cookie = setCookieOf(response, BROWSER_KEY_COOKIE) ?? "";
+    expect(setCookieValue(cookie)).not.toBe("");
+    expect(cookie).toContain("Path=/;");
+    expect(cookie).toContain("HttpOnly");
+    const props = devHomePropsOf(await response.text());
+    expect(emailsOf(props.devAccounts)).toEqual(DEV_ACCOUNTS.users.map(({ email }) => email));
+  });
+
+  test("browser の鍵の cookie があれば、置き直さない", async () => {
+    expect(setCookieOf(await request(DEV_HOME_PATH), BROWSER_KEY_COOKIE)).toBeUndefined();
+  });
+
+  test.each([
+    "",
+    "planted-key",
+  ])("browser の鍵の cookie が server の発行した形でなければ (%p)、新しい鍵を置き直す", async (value) => {
+    const response = await app.request(DEV_HOME_PATH, {
+      headers: withCookies(undefined, { [BROWSER_KEY_COOKIE]: value }),
+    });
+
+    const issued = setCookieValue(setCookieOf(response, BROWSER_KEY_COOKIE) ?? "");
+    expect(issued).not.toBe("");
+    expect(issued).not.toBe(value);
+  });
+
+  test("ほかの browser でログインした利用者は、一覧に出さず、選んでも 404 で、Magic Link を送らない", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) => db.seedUser("other-browser"));
+        yield* Effect.promise(() => addBrowserAccount(`${P}other-browser`, user.id));
+
+        const props = yield* Effect.promise(() => openHome());
+        const { response, magicLinksSent } = yield* magicLinksSentWhile(() => choose(user.id));
+
+        expect(emailsOf([...props.devAccounts, ...props.browserAccounts])).not.toContain(
+          user.email,
+        );
+        expect(response.status).toBe(404);
+        expect(magicLinksSent).toBe(0);
+      }),
+    ));
+
+  test("ログイン中に開発者ホームを開くと、その利用者をその browser の候補に足し、選べるようにする", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* seedChoosableUser("recorded");
+        const signedIn = yield* Effect.promise(() => signInAs(user.id));
+        const newBrowserKey = crypto.randomUUID();
+        const newBrowser = (headers?: HeadersInit) => inBrowser(newBrowserKey, headers);
+
+        const props = yield* Effect.promise(() => openHome(newBrowser(signedIn)));
+        const chosen = yield* Effect.promise(() => choose(user.id, newBrowser()));
+
+        expect(emailsOf(props.browserAccounts)).toContain(user.email);
+        expect(chosen.status).toBe(303);
+      }),
+    ));
 });
 
 describe("開発者ホームで利用者を選ぶと、Magic Link でその利用者にログインし、開発者ホームに戻る", () => {
@@ -131,9 +223,7 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
       DEV_HOME_PATH,
     );
     expect(await signedInUserIdOf(headers)).toBe(owner.id);
-    const body = await openHome(headers);
-    expect(signedInSectionOf(body)).toContain(owner.email);
-    expect(body).toMatch(new RegExp(`<button type="submit" disabled>[^<]*${owner.email}`));
+    expect(signedInEmailOf(await openHome(headers))).toBe(owner.email);
   });
 
   test("ログイン中に別の利用者を選ぶと、その利用者の session に切り替わる", async () => {
@@ -142,7 +232,7 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
     const asAdmin = await signInAs(admin.id, asOwner);
 
     expect(await signedInUserIdOf(asAdmin)).toBe(admin.id);
-    expect(signedInSectionOf(await openHome(asAdmin))).toContain(admin.email);
+    expect(signedInEmailOf(await openHome(asAdmin))).toBe(admin.email);
   });
 
   test.each([
@@ -151,7 +241,7 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
   ])("MFA を有効にした利用者を選ぶと、%s時も session を作らず MFA チャレンジへ移す", (_, query) =>
     run(
       Effect.gen(function* () {
-        const user = yield* TestDb.use((db) => db.seedUser("mfa"));
+        const user = yield* seedChoosableUser("mfa");
         yield* enableMfaFor(user);
 
         const opened = yield* Effect.promise(async () =>
@@ -201,26 +291,19 @@ describe("開発者ホームでログアウトすると、session を消して�
     expect(
       signedOut.headers.getSetCookie().some((cookie) => cookie.includes("session_token=;")),
     ).toBe(true);
-    expect(signedInSectionOf(await openHome(afterSignOut))).toContain("ログインしていません");
+    expect((await openHome(afterSignOut)).viewer._tag).toBe("SignedOut");
   });
 });
 
 describe("開発者ホームは service_name と redirect_url を受けると、ログインの後に redirect_url へ移す", () => {
-  test("redirect_url へ戻る link を出し、ログインとログアウトの送り先に同じ query を付ける", async () => {
+  test("redirect_url を戻り先にし、ログインとログアウトの送り先に同じ query を付ける", async () => {
     const response = await request(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
-    const body = await response.text();
+    const props = devHomePropsOf(await response.text());
 
     expect(response.status).toBe(200);
-    expect(body).toContain(
-      `<a href="${escapedForHtmlAttribute(REDIRECT_URL)}">アプリケーションに戻る</a>`,
-    );
-    expect(body).toContain(
-      `action="${escapedForHtmlAttribute(`${DEV_HOME_SIGN_IN_PATH}${REDIRECT_QUERY}`)}"`,
-    );
-    const signedIn = await signInAs(owner.id);
-    expect(await openHome(signedIn, REDIRECT_QUERY)).toContain(
-      `action="${escapedForHtmlAttribute(`${DEV_HOME_SIGN_OUT_PATH}${REDIRECT_QUERY}`)}"`,
-    );
+    expect(props.destination).toEqual({ _tag: "Application", redirectUrl: REDIRECT_URL });
+    expect(props.signInAction).toBe(`${DEV_HOME_SIGN_IN_PATH}${REDIRECT_QUERY}`);
+    expect(props.signOutAction).toBe(`${DEV_HOME_SIGN_OUT_PATH}${REDIRECT_QUERY}`);
   });
 
   test("選ぶと redirect_url を callbackURL にした Magic Link へ移し、開くと session ができて query ごと同じ redirect_url へ移る", async () => {
@@ -332,5 +415,91 @@ describe("本番の bundle の検査は、開発者ホームの path を探す",
     ).match(/^dev_home_path="([^"]*)"$/m)?.[1];
 
     expect(scriptPath).toBe(DEV_HOME_PATH);
+  });
+});
+
+const setCookieOf = (response: Response, name: string) =>
+  response.headers.getSetCookie().find((cookie) => cookie.startsWith(`${name}=`));
+
+const noticeCookieAttributes = ["Path=/dev-home", "HttpOnly", "SameSite=Lax", "Max-Age=300"];
+
+describe("開発者ホームは、利用者を選んだ直後とログアウトした直後を、一度きりの cookie で次の画面に伝える", () => {
+  test("redirect_url を受けずに選ぶと、選んだ利用者の id を開発者ホームの path に限った cookie に置く", async () => {
+    const cookie = setCookieOf(await choose(owner.id), "dev_home_chosen_user");
+
+    expect(setCookieValue(cookie ?? "")).toBe(owner.id);
+    for (const attribute of noticeCookieAttributes) expect(cookie).toContain(attribute);
+  });
+
+  test("redirect_url を受けて選ぶと、開発者ホームに戻らないので cookie を置かない", async () => {
+    expect(
+      setCookieOf(await choose(owner.id, undefined, REDIRECT_QUERY), "dev_home_chosen_user"),
+    ).toBeUndefined();
+  });
+
+  test("Magic Link を作れずに選ぶのが失敗すると、選んだ利用者の cookie を置かない", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* seedChoosableUser("no-link", { email: `${P}not-an-email` });
+
+        const chosen = yield* Effect.promise(() => choose(user.id));
+
+        expect(chosen.status).toBeGreaterThanOrEqual(400);
+        expect(setCookieOf(chosen, "dev_home_chosen_user")).toBeUndefined();
+      }),
+    ));
+
+  test("ログアウトの応答は、session の cookie を消す Set-Cookie と、ログアウトした印の Set-Cookie の両方を持つ (Hono は、返した応答の Set-Cookie を c.header で足した Set-Cookie で置き換えるので、どちらも c.header で足す)", async () => {
+    const signedOut = await signOut(await signInAs(owner.id));
+
+    const cookie = setCookieOf(signedOut, "dev_home_signed_out");
+    expect(cookie).toBeDefined();
+    for (const attribute of noticeCookieAttributes) expect(cookie).toContain(attribute);
+    expect(
+      signedOut.headers.getSetCookie().some((setCookie) => setCookie.includes("session_token=;")),
+    ).toBe(true);
+  });
+
+  test("選んだ利用者の cookie が session の利用者と一致すると、ログインしたことを出し、通知の cookie を両方消す", async () => {
+    const response = await request(DEV_HOME_PATH, {
+      headers: withCookies(await signInAs(owner.id), { dev_home_chosen_user: owner.id }),
+    });
+
+    expect(noticeOf(devHomePropsOf(await response.text()))).toBe("JustSignedIn");
+    for (const name of ["dev_home_chosen_user", "dev_home_signed_out"]) {
+      const cookie = setCookieOf(response, name);
+      expect(cookie).toBeDefined();
+      expect(setCookieValue(cookie ?? "")).toBe("");
+      expect(cookie).toContain("Max-Age=0");
+      expect(cookie).toContain("Path=/dev-home");
+    }
+  });
+
+  test("選んだ利用者の cookie が session の利用者と違うと、ログインしたことを出さない", async () => {
+    const props = await openHome(
+      withCookies(await signInAs(admin.id), { dev_home_chosen_user: owner.id }),
+    );
+
+    expect(noticeOf(props)).toBe("None");
+  });
+
+  test("ログアウトした印の cookie があり、ログインしていなければ、ログアウトしたことを出す", async () => {
+    const signedOut = await signOut(await signInAs(owner.id));
+
+    expect(noticeOf(await openHome(browserCookieHeaders(signedOut)))).toBe("JustSignedOut");
+  });
+
+  test("ログアウトした印の cookie があっても、ログイン中ならログアウトしたことを出さない", async () => {
+    const props = await openHome(
+      withCookies(await signInAs(owner.id), { dev_home_signed_out: "1" }),
+    );
+
+    expect(noticeOf(props)).toBe("None");
+  });
+
+  test("通知の cookie が無ければ、ログイン中でも未ログインでも何も出さない", async () => {
+    for (const props of [await openHome(), await openHome(await signInAs(owner.id))]) {
+      expect(noticeOf(props)).toBe("None");
+    }
   });
 });

@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "tailwindcss";
+import { isProductionWebBuild } from "./build-app-env";
 import formsPlugin from "@tailwindcss/forms";
 import animatePlugin from "tailwindcss-animate";
 
@@ -8,7 +9,11 @@ const dir = path.dirname(fileURLToPath(import.meta.url));
 
 const config: Config = {
   darkMode: ["class"],
-  content: [path.join(dir, "index.html"), path.join(dir, "src/**/*.{ts,tsx}")],
+  content: [
+    path.join(dir, "index.html"),
+    path.join(dir, "src/**/*.{ts,tsx}"),
+    ...(isProductionWebBuild ? [] : [path.join(dir, "non-production/**/*.tsx")]),
+  ],
   theme: {
     extend: {
       fontFamily: {

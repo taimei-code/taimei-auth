@@ -1,11 +1,14 @@
 import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { Effect, Option } from "effect";
-import { Hono } from "hono";
-import { html } from "hono/html";
-import { listAccounts } from "../db/testing/dev-accounts";
-import { UserRepo } from "../src/account/ports";
+import { type Context, Hono } from "hono";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
+import {
+  addBrowserAccount,
+  DEV_ACCOUNT_IDS,
+  listChoosableAccounts,
+} from "../db/testing/dev-accounts";
 import { AuthApi } from "../src/auth-service";
-import { InvalidArgument, NotFound } from "../src/failures";
+import { InvalidArgument } from "../src/failures";
 import { runRoute } from "../src/handlers/run-route";
 import {
   INVALID_REDIRECT_URL_PAGE,
@@ -13,8 +16,10 @@ import {
   redirectTargetSchema,
 } from "../src/sign-in-params";
 import { requireAuthHostOrigin } from "./auth-host-origin";
-import { type Account, activeCompanyItemsOf, ChosenUser } from "./chosen-account";
-import { decodeFormBody } from "./decode-body";
+import { browserKeyIssuedIfMissing } from "./browser-key";
+import type { Destination, PageAccount, Viewer } from "../web/non-production/page-props";
+import { chosenAccountOf, pageAccountOf } from "./chosen-account";
+import { nonProductionShell } from "./non-production-shell";
 import { magicLinkUrlFor } from "./sent-links";
 
 export const DEV_HOME_SIGN_IN_PATH = `${DEV_HOME_PATH}/sign-in`;
@@ -30,56 +35,32 @@ const redirectTargetOf = (
   return parsed.success ? Effect.succeedSome(parsed.data) : Effect.fail(new InvalidArgument({}));
 };
 
-const signedInSection = (signedIn: Account | undefined, search: string) =>
-  signedIn
-    ? html`<p>${signedIn.name} (${signedIn.email})</p>
-        <ul>${activeCompanyItemsOf(signedIn)}</ul>
-        <form method="post" action="${DEV_HOME_SIGN_OUT_PATH}${search}">
-          <button type="submit">ログアウト</button>
-        </form>`
-    : html`<p>ログインしていません</p>`;
+const CHOSEN_USER_COOKIE = "dev_home_chosen_user";
+const SIGNED_OUT_COOKIE = "dev_home_signed_out";
+const NOTICE_COOKIE_OPTIONS = {
+  path: DEV_HOME_PATH,
+  httpOnly: true,
+  sameSite: "Lax",
+  maxAge: 300,
+} as const;
 
-const accountRow = (account: Account, signedIn: Account | undefined, search: string) => html`<li>
-  <form method="post" action="${DEV_HOME_SIGN_IN_PATH}${search}">
-    <input type="hidden" name="userId" value="${account.id}" />
-    <button type="submit"${account.id === signedIn?.id ? html` disabled` : ""}>${account.name} (${account.email})</button>
-  </form>
-  <ul>${activeCompanyItemsOf(account)}</ul>
-</li>`;
-
-const returnLink = (redirectTarget: Option.Option<RedirectTarget>) =>
+const destinationOf = (redirectTarget: Option.Option<RedirectTarget>): Destination =>
   Option.match(redirectTarget, {
-    onNone: () => "",
-    onSome: ({ redirect_url }) => html`<p><a href="${redirect_url}">アプリケーションに戻る</a></p>`,
+    onNone: () => ({ _tag: "AccountPage" }),
+    onSome: ({ redirect_url }) => ({ _tag: "Application", redirectUrl: redirect_url }),
   });
 
-const devHomePage = (
-  accounts: readonly Account[],
-  signedIn: Account | undefined,
-  redirectTarget: Option.Option<RedirectTarget>,
-  search: string,
-) => html`<!doctype html>
-<html lang="ja">
-  <head>
-    <meta charset="utf-8" />
-    <title>開発者ホーム</title>
-  </head>
-  <body>
-    <main>
-      <h1>開発者ホーム</h1>
-      <section aria-labelledby="signed-in">
-        <h2 id="signed-in">ログイン中の利用者</h2>
-        ${signedInSection(signedIn, search)}
-      </section>
-      <section aria-labelledby="accounts">
-        <h2 id="accounts">利用者を選んでログイン</h2>
-        <ul>${accounts.map((account) => accountRow(account, signedIn, search))}</ul>
-      </section>
-      ${returnLink(redirectTarget)}
-      <p><a href="/account">アカウント管理画面を開く</a></p>
-    </main>
-  </body>
-</html>`;
+const viewerOf = (c: Context, signedIn: PageAccount | undefined): Viewer =>
+  signedIn
+    ? {
+        _tag: "SignedIn",
+        account: signedIn,
+        notice: getCookie(c, CHOSEN_USER_COOKIE) === signedIn.id ? "JustSignedIn" : "None",
+      }
+    : {
+        _tag: "SignedOut",
+        notice: getCookie(c, SIGNED_OUT_COOKIE) === undefined ? "None" : "JustSignedOut",
+      };
 
 export const devHomeRoutes = () =>
   new Hono()
@@ -89,16 +70,28 @@ export const devHomeRoutes = () =>
         Effect.gen(function* () {
           const url = new URL(c.req.url);
           const redirectTarget = yield* redirectTargetOf(url);
-          const [session, accounts] = yield* Effect.all(
-            [
-              AuthApi.use((authApi) => authApi.getSession(c.req.raw.headers)),
-              Effect.promise(listAccounts),
-            ],
-            { concurrency: "unbounded" },
+          const browserKey = browserKeyIssuedIfMissing(c);
+          const session = yield* AuthApi.use((authApi) => authApi.getSession(c.req.raw.headers));
+          if (session) yield* Effect.promise(() => addBrowserAccount(browserKey, session.user.id));
+          const accounts = (yield* Effect.promise(() => listChoosableAccounts(browserKey))).map(
+            pageAccountOf,
           );
           const signedIn = accounts.find((account) => account.id === session?.user.id);
+          const viewer = viewerOf(c, signedIn);
+          deleteCookie(c, CHOSEN_USER_COOKIE, NOTICE_COOKIE_OPTIONS);
+          deleteCookie(c, SIGNED_OUT_COOKIE, NOTICE_COOKIE_OPTIONS);
           return yield* Effect.promise(async () =>
-            c.html(devHomePage(accounts, signedIn, redirectTarget, url.search)),
+            c.html(
+              nonProductionShell({
+                _tag: "DevHome",
+                devAccounts: accounts.filter(({ id }) => DEV_ACCOUNT_IDS.includes(id)),
+                browserAccounts: accounts.filter(({ id }) => !DEV_ACCOUNT_IDS.includes(id)),
+                viewer,
+                destination: destinationOf(redirectTarget),
+                signInAction: `${DEV_HOME_SIGN_IN_PATH}${url.search}`,
+                signOutAction: `${DEV_HOME_SIGN_OUT_PATH}${url.search}`,
+              }),
+            ),
           );
         }).pipe(
           Effect.catchTag("InvalidArgument", () =>
@@ -112,14 +105,15 @@ export const devHomeRoutes = () =>
         c,
         Effect.gen(function* () {
           const redirectTarget = yield* redirectTargetOf(new URL(c.req.url));
-          const { userId } = yield* decodeFormBody(c, ChosenUser);
-          const user = yield* UserRepo.use((users) => users.findUserById(userId));
-          if (!user) return yield* new NotFound();
+          const user = yield* chosenAccountOf(c);
           const callbackUrl = redirectTarget.pipe(
             Option.map(({ redirect_url }) => redirect_url),
             Option.getOrElse(() => DEV_HOME_PATH),
           );
-          return c.redirect(yield* magicLinkUrlFor(user.email, callbackUrl), 303);
+          const magicLinkUrl = yield* magicLinkUrlFor(user.email, callbackUrl);
+          if (Option.isNone(redirectTarget))
+            setCookie(c, CHOSEN_USER_COOKIE, user.id, NOTICE_COOKIE_OPTIONS);
+          return c.redirect(magicLinkUrl, 303);
         }),
       ),
     )
@@ -132,11 +126,11 @@ export const devHomeRoutes = () =>
           const clearCookieHeaders = yield* AuthApi.use((authApi) =>
             authApi.signOut(c.req.raw.headers),
           );
-          const response = c.redirect(`${DEV_HOME_PATH}${url.search}`, 303);
           for (const cookie of clearCookieHeaders.getSetCookie()) {
-            response.headers.append("set-cookie", cookie);
+            c.header("set-cookie", cookie, { append: true });
           }
-          return response;
+          setCookie(c, SIGNED_OUT_COOKIE, "1", NOTICE_COOKIE_OPTIONS);
+          return c.redirect(`${DEV_HOME_PATH}${url.search}`, 303);
         }),
       ),
     );

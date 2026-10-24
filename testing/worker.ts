@@ -1,4 +1,4 @@
-import { seedDevAccounts } from "../db/testing/dev-accounts";
+import { prepareChoosableAccounts } from "../db/testing/dev-accounts";
 import { createWorker } from "../src/worker";
 import { devHomeRoutes } from "./dev-home";
 import { testingApiRoutes } from "./routes";
@@ -14,6 +14,6 @@ export default serveOnlyOutsideProduction(
       app.route("/", testingApiRoutes());
       app.route("/", devHomeRoutes());
     },
-    beforeFirstRequest: seedDevAccounts,
+    beforeFirstRequest: prepareChoosableAccounts,
   }),
 );

@@ -1,12 +1,38 @@
-import { Schema } from "effect";
-import { html } from "hono/html";
-import type { listAccounts } from "../db/testing/dev-accounts";
+import { Effect, Schema } from "effect";
+import type { Context } from "hono";
+import { findChoosableAccount, type listChoosableAccounts } from "../db/testing/dev-accounts";
+import { NotFound } from "../src/failures";
+import type { PageAccount } from "../web/non-production/page-props";
+import { browserKeyOf } from "./browser-key";
+import { decodeFormBody } from "./decode-body";
 
-export const ChosenUser = Schema.Struct({ userId: Schema.String });
+const ChosenUser = Schema.Struct({ userId: Schema.String });
 
-export type Account = Awaited<ReturnType<typeof listAccounts>>[number];
+type Account = Awaited<ReturnType<typeof listChoosableAccounts>>[number];
 
-export const activeCompanyItemsOf = (account: Account) =>
-  account.memberships
+export const chosenAccountOf = Effect.fnUntraced(function* (c: Context) {
+  const { userId } = yield* decodeFormBody(c, ChosenUser);
+  const account = yield* Effect.promise(() => findChoosableAccount(browserKeyOf(c), userId));
+  if (!account) return yield* new NotFound();
+  return account;
+});
+
+export const pageAccountOf = ({
+  id,
+  name,
+  email,
+  lastUsedCompanyId,
+  memberships,
+}: Account): PageAccount => ({
+  id,
+  name,
+  email,
+  companies: memberships
     .filter(({ company }) => company.activationStatus === "ACTIVE")
-    .map(({ company, role }) => html`<li>${company.name}: ${role}</li>`);
+    .map(({ company, role }) => ({
+      id: company.id,
+      name: company.name,
+      role,
+      isCurrent: company.id === lastUsedCompanyId,
+    })),
+});

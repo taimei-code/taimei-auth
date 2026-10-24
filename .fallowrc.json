@@ -5,6 +5,7 @@
     "testing/server.ts",
     "testing/worker.ts",
     "web/index.html",
+    "web/non-production/main.tsx",
     "db/migrate.ts",
     "db/migrate-manual.ts",
     "management/*.ts",

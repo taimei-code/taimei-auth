@@ -15,5 +15,11 @@
       "@core/*": ["./src/*", "../src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "non-production/**/*.ts",
+    "non-production/**/*.tsx",
+    "vite.config.ts"
+  ]
 }

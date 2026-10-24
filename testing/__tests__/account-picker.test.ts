@@ -1,13 +1,15 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
-import { DEV_ACCOUNTS, seedDevAccounts } from "../../db/testing/dev-accounts";
+import { DEV_ACCOUNTS, prepareChoosableAccounts } from "../../db/testing/dev-accounts";
 import { buildApp } from "../../src/app";
 import { dbTest } from "../../src/__tests__/live-runner";
-import { browserCookieHeaders } from "../../src/__tests__/session-helpers";
-import { TestDb } from "../../src/__tests__/test-db";
+import { browserCookieHeaders, setCookieValue } from "../../src/__tests__/session-helpers";
+import { BROWSER_KEY_COOKIE } from "../browser-key";
 import { testingApiAndAccountPickerRoutes } from "../routes";
+import { requestInBrowser, seedBrowserAccount } from "./in-browser";
 import { magicLinksSentWhile } from "./magic-links-sent";
+import { accountPickerPropsOf } from "./page-props-of";
 import { AUTH_HOST_ORIGIN, HEADERS_WITHOUT_AUTH_HOST_ORIGIN } from "./origins";
 
 const P = "account-picker-test-";
@@ -26,7 +28,9 @@ const app = buildApp({
   },
 });
 
-const request = (path: string, init?: RequestInit) => Promise.resolve(app.request(path, init));
+const TEST_BROWSER_KEY = crypto.randomUUID();
+
+const request = requestInBrowser(app, TEST_BROWSER_KEY);
 
 const openPicker = async (query = SIGN_IN_QUERY, headers?: HeadersInit) => {
   const response = await request(`/auth/${query}`, { headers });
@@ -44,13 +48,7 @@ const pick = (
     body: new URLSearchParams(userId === undefined ? {} : { userId }),
   });
 
-const unescapeAmpersands = (value: string) => value.replaceAll("&amp;", "&");
-
-const formsOf = (body: string) =>
-  [...body.matchAll(/<form method="(\w+)" action="([^"]*)">/g)].map(([, method, action]) => ({
-    method,
-    action: unescapeAmpersands(action ?? ""),
-  }));
+const emailsOf = (body: string) => accountPickerPropsOf(body).accounts.map(({ email }) => email);
 
 const [owner] = DEV_ACCOUNTS.users;
 if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
@@ -61,65 +59,73 @@ const signInAs = async (userId: string) => {
   return request(`${magicLink.pathname}${magicLink.search}`);
 };
 
-beforeAll(seedDevAccounts);
+beforeAll(prepareChoosableAccounts);
 beforeEach(cleanup);
 afterAll(cleanup);
 
-describe("試験の環境の共通ログイン画面は、開発用アカウントと利用者の一覧を出す", () => {
-  test("一覧は、開発用アカウントの名前・email と、所属する事業所の名前と role を出す", async () => {
+describe("試験の環境の共通ログイン画面は、開発用アカウントと、この browser でログインした利用者の一覧を出す", () => {
+  test("一覧は、開発用アカウントの名前・email と、所属する事業所の名前と role を渡す", async () => {
     const { response, body } = await openPicker();
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toStartWith("text/html");
+    const { accounts } = accountPickerPropsOf(body);
     for (const devUser of DEV_ACCOUNTS.users) {
-      expect(body).toContain(devUser.name);
-      expect(body).toContain(devUser.email);
+      expect(accounts).toContainEqual(
+        expect.objectContaining({ name: devUser.name, email: devUser.email }),
+      );
     }
-    for (const devCompany of DEV_ACCOUNTS.companies) expect(body).toContain(devCompany.name);
-    for (const role of ["OWNER", "ADMIN", "MEMBER"]) expect(body).toContain(role);
+    const companies = accounts.flatMap((account) => account.companies);
+    for (const devCompany of DEV_ACCOUNTS.companies) {
+      expect(companies.map(({ name }) => name)).toContain(devCompany.name);
+    }
+    expect(new Set(companies.map(({ role }) => role))).toEqual(
+      new Set(["OWNER", "ADMIN", "MEMBER"]),
+    );
   });
 
-  test("一覧は開発用アカウント以外の利用者も出し、開発用アカウントを先頭に並べる", () =>
+  test("browser の鍵の cookie が無ければ、アカウント選択画面を開くと、全 path に届く HttpOnly の cookie を置く", async () => {
+    const response = await app.request(`/auth/${SIGN_IN_QUERY}`);
+
+    const cookie =
+      response.headers.getSetCookie().find((c) => c.startsWith(`${BROWSER_KEY_COOKIE}=`)) ?? "";
+    expect(setCookieValue(cookie)).not.toBe("");
+    expect(cookie).toContain("Path=/;");
+    expect(cookie).toContain("HttpOnly");
+  });
+
+  test("一覧は、この browser でログインした利用者を、開発用アカウントの後に並べる", () =>
     run(
       Effect.gen(function* () {
-        const other = yield* TestDb.use((db) => db.seedUser("other"));
+        const other = yield* seedBrowserAccount(TEST_BROWSER_KEY, "other");
 
         const { body } = yield* Effect.promise(() => openPicker());
 
-        const devPositions = DEV_ACCOUNTS.users.map((devUser) => body.indexOf(devUser.email));
-        expect(body.indexOf(other.email)).toBeGreaterThan(Math.max(...devPositions));
-        expect(Math.min(...devPositions)).toBeGreaterThan(-1);
+        expect(emailsOf(body)).toEqual([
+          ...DEV_ACCOUNTS.users.map(({ email }) => email),
+          other.email,
+        ]);
       }),
     ));
 
-  test("一覧の各行は、開いた時の query を付けた試験 API へ利用者を POST する form である", async () => {
+  test("選ぶ送り先と新規登録の画面に、開いた時の query を付ける", async () => {
     const { body } = await openPicker();
 
-    const forms = formsOf(body);
-    expect(forms.length).toBeGreaterThanOrEqual(DEV_ACCOUNTS.users.length);
-    for (const form of forms) {
-      expect(form).toEqual({ method: "post", action: `${PICKER_PATH}${SIGN_IN_QUERY}` });
-    }
+    const { chooseAction, signUpHref } = accountPickerPropsOf(body);
+    expect(chooseAction).toBe(`${PICKER_PATH}${SIGN_IN_QUERY}`);
+    expect(signUpHref).toBe(`/auth/signup${SIGN_IN_QUERY}`);
   });
 
-  test("一覧から、開いた時の query を付けた新規登録の画面へ移れる", async () => {
-    const { body } = await openPicker();
-
-    const hrefs = [...body.matchAll(/href="([^"]*)"/g)].map(([, href]) =>
-      unescapeAmpersands(href ?? ""),
-    );
-    expect(hrefs).toContain(`/auth/signup${SIGN_IN_QUERY}`);
-  });
-
-  test("利用者の名前に HTML があっても、escape して出す", () =>
+  test("利用者の名前に HTML があっても、page の script 要素を閉じずに、そのままの名前を渡す", () =>
     run(
       Effect.gen(function* () {
-        yield* TestDb.use((db) => db.seedUser("html", { name: "<script>alert(1)</script>" }));
+        const name = "</script><script>alert(1)</script>";
+        yield* seedBrowserAccount(TEST_BROWSER_KEY, "html", { name });
 
         const { body } = yield* Effect.promise(() => openPicker());
 
-        expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
         expect(body).not.toContain("<script>alert(1)");
+        expect(accountPickerPropsOf(body).accounts.map((account) => account.name)).toContain(name);
       }),
     ));
 
@@ -168,6 +174,20 @@ describe("一覧で選んだ利用者は、本物の Magic Link でログイン�
   test("いない利用者を選ぶと 404", async () => {
     expect((await pick("missing-user")).status).toBe(404);
   });
+
+  test("ほかの browser でログインした利用者は、一覧に出さず、選んでも 404 で、Magic Link を送らない", () =>
+    run(
+      Effect.gen(function* () {
+        const other = yield* seedBrowserAccount(crypto.randomUUID(), "elsewhere");
+
+        const { body } = yield* Effect.promise(() => openPicker());
+        const { response, magicLinksSent } = yield* magicLinksSentWhile(() => pick(other.id));
+
+        expect(emailsOf(body)).not.toContain(other.email);
+        expect(response.status).toBe(404);
+        expect(magicLinksSent).toBe(0);
+      }),
+    ));
 
   test("redirect_url が許可されない query で選ぶと 400", async () => {
     expect((await pick(owner.id, DISALLOWED_QUERY)).status).toBe(400);
