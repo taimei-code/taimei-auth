@@ -28,6 +28,11 @@ const nonProductionBuildOutput = (): Rollup.OutputOptions => ({
 export default mergeConfig(
   productionConfig,
   defineConfig({
+    resolve: {
+      alias: {
+        "@taimei-auth/redirect-hosts": path.join(nonProductionDir, "../../testing/redirect-hosts.ts"),
+      },
+    },
     build: {
       cssCodeSplit: false,
       rollupOptions: {

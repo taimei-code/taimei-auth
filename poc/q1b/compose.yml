@@ -1,0 +1,39 @@
+name: poc-q1b
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+
+services:
+  auth:
+    image: oven/bun:1.3
+    hostname: auth-host
+    environment: [SERVER_NAME=auth, PORT=3100]
+    command: bun /poc/server.ts
+    volumes: [./server.ts:/poc/server.ts:ro]
+    networks:
+      default:
+        ipv4_address: 172.30.0.10
+        aliases: [auth.taimei-code.localhost]
+
+  app:
+    image: oven/bun:1.3
+    hostname: app-host
+    environment: [SERVER_NAME=app, PORT=3001]
+    command: bun /poc/server.ts
+    volumes: [./server.ts:/poc/server.ts:ro]
+    networks:
+      default:
+        ipv4_address: 172.30.0.11
+        aliases: [app.taimei-code.localhost]
+
+  probe:
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    working_dir: /probe
+    command: node probe.mjs
+    volumes:
+      - ./probe.mjs:/probe/probe.mjs:ro
+      - ${PLAYWRIGHT_NODE_MODULES:?set to a node_modules dir with playwright 1.63.0}:/probe/node_modules:ro
+    depends_on: [auth, app]

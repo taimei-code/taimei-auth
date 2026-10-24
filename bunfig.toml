@@ -1,5 +1,5 @@
 [test]
-preload = ["./testing/__tests__/preload.ts"]
+preload = ["./testing/redirect-hosts-plugin.ts", "./testing/__tests__/preload.ts"]
 
 [install]
 minimumReleaseAge = 604800

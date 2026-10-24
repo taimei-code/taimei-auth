@@ -26,6 +26,7 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@core": path.resolve(__dirname, "../src"),
+      "@taimei-auth/redirect-hosts": path.resolve(__dirname, "../src/redirect-hosts.ts"),
     },
   },
   build: {

@@ -4,9 +4,10 @@ import { Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
 import { accountPickerRoutes } from "./account-picker";
 import { createSignedInUser } from "./create-signed-in-user";
+import { magicLinkUrlFor } from "./sent-links";
 import { decodeJsonBody } from "./decode-body";
 import { setCurrentCompany } from "./set-current-company";
-import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
+import { LoginLinkRequest, SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
 
 export const testingApiRoutes = () =>
   new Hono()
@@ -16,6 +17,15 @@ export const testingApiRoutes = () =>
         Effect.gen(function* () {
           const body = yield* decodeJsonBody(c, SignedInUserRequest);
           return c.json(yield* createSignedInUser(body));
+        }),
+      ),
+    )
+    .post(`${TESTING_PATH}/login-links`, (c) =>
+      runRoute(
+        c,
+        Effect.gen(function* () {
+          const body = yield* decodeJsonBody(c, LoginLinkRequest);
+          return c.json({ loginUrl: yield* magicLinkUrlFor(body.email, body.returnTo) });
         }),
       ),
     )
