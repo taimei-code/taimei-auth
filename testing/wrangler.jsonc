@@ -1,0 +1,35 @@
+{
+  "name": "taimei-auth-non-production",
+  "main": "./worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat", "delete_all_deletes_alarm"],
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "single-page-application"
+  },
+  "durable_objects": { "bindings": [{ "name": "KV_STORE", "class_name": "KvStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["KvStore"] }],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://postgres:password@127.0.0.1:5435/auth"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "",
+    "APP_NAME": "",
+    "AUTH_SERVICE_URL": "",
+    "AUTH_COOKIE_DOMAIN": "",
+    "AUTH_TRUSTED_ORIGINS": "",
+    "AUTH_FROM_EMAIL_MAGIC_LINK": "",
+    "AUTH_FROM_EMAIL_WELCOME": "",
+    "AUTH_FROM_EMAIL_INVITATION": "",
+    "AUTH_FROM_EMAIL_SECURITY": ""
+  },
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
+  "workers_dev": false,
+  "alias": { "@taimei-auth/redirect-hosts": "./redirect-hosts.ts" }
+}

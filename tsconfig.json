@@ -14,7 +14,8 @@
     "jsx": "react-jsx",
     "paths": {
       "@/*": ["./*"],
-      "@core/*": ["./src/*"]
+      "@core/*": ["./src/*"],
+      "@taimei-auth/redirect-hosts": ["./src/redirect-hosts.ts"]
     },
     "plugins": [
       {
@@ -53,7 +54,7 @@
     "management/**/*.ts",
     "e2e/**/*.ts",
     "web/src/shared/leave-spa.ts",
-    "web/non-production/assets.ts",
+    "web/web-base-path.ts",
     "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist", "packages"]

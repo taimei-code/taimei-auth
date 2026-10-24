@@ -21,6 +21,11 @@ export const SignedInUserRequest = Schema.Struct({
   returnTo: TrustedReturnTo,
 });
 
+export const LoginLinkRequest = Schema.Struct({
+  email: Schema.String,
+  returnTo: TrustedReturnTo,
+});
+
 export const SetCurrentCompanyRequest = Schema.Struct({
   userId: Schema.String,
   companyId: Schema.String,

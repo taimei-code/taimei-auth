@@ -1,0 +1,18 @@
+{
+  "name": "taimei-auth-poc-do-migration",
+  "main": "./worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "durable_objects": {
+    "bindings": [
+      { "name": "FIRST", "class_name": "First" },
+      { "name": "SECOND", "class_name": "Second" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["First"] },
+    { "tag": "v2", "new_sqlite_classes": ["Second"] }
+  ]
+}

@@ -27,7 +27,7 @@ const testingServerEnv = (appEnv: string | undefined, port: number) => {
   return env;
 };
 
-const testingServerCommand = [process.execPath, TESTING_ENTRY];
+const testingServerCommand = [process.execPath, "--preload", `${import.meta.dir}/../redirect-hosts-plugin.ts`, TESTING_ENTRY];
 
 const SIGN_IN_QUERY = `?${new URLSearchParams({ service_name: "accounts", redirect_url: "http://localhost:3100/account" })}`;
 const SIGN_IN_PATH = `/auth/${SIGN_IN_QUERY}`;

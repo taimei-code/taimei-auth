@@ -4,7 +4,7 @@ WORKDIR /app
 COPY certs/ /opt/certs/
 ENV NODE_EXTRA_CA_CERTS=/opt/certs/palo-root.pem
 EXPOSE 3100
-CMD ["bun", "run", "src/index.ts"]
+CMD ["bun", "run", "testing/bun-dev.ts"]
 
 # workspace package を packages/ に増やしたら package.json の COPY をここに 1 行足す (glob では COPY できない)
 FROM base AS manifests

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { sentLinkIn } from "../src/email/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
+import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import type { ConsumableFixture } from "./fixture-names";
 
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");
@@ -61,6 +62,16 @@ export const expectSignInLanding = async (page: Page): Promise<void> => {
 };
 
 export const signInWithMagicLink = async (page: Page, email: string): Promise<string> => {
+  const response = await page.request.post(`${BASE_URL}${TESTING_PATH}/login-links`, {
+    data: { email, returnTo: `${BASE_URL}/account` },
+  });
+  expect(response.status()).toBe(200);
+  const { loginUrl } = (await response.json()) as { loginUrl: string };
+  await page.goto(loginUrl);
+  return loginUrl;
+};
+
+export const signInThroughMagicLinkForm = async (page: Page, email: string): Promise<string> => {
   await page.goto(authEntryUrl());
   await page.getByPlaceholder("you@example.com").fill(email);
   const link = await sentLinkAfter(email, async () => {
