@@ -1,13 +1,13 @@
 import type { Layer } from "effect";
 import type { Hono } from "hono";
 import { serveStatic } from "hono/bun";
-import type { EmailSender } from "./email/ports";
+import type { EmailSender } from "../src/email/ports";
 import { initBunSentry } from "./sentry-bun";
-import { buildApp } from "./app";
-import { boot, bootInMemory } from "./boot";
-import { buildSpaFallbackHandler } from "./handlers/spa-fallback";
-import { proxyTrustFromEnv } from "./request-context";
-import type { TtlStoreBackend } from "./ttl-store";
+import { buildApp } from "../src/app";
+import { boot, bootInMemory } from "../src/boot";
+import { buildSpaFallbackHandler } from "../src/handlers/spa-fallback";
+import { proxyTrustFromEnv } from "../src/request-context";
+import type { TtlStoreBackend } from "../src/ttl-store";
 
 const WEB_DIST = "./web/dist";
 

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { requestApp, responseJson } from "../handlers/__tests__/helpers";
-import { createSessionFor } from "./session-helpers";
+import { requestApp, responseJson } from "../../src/handlers/__tests__/helpers";
+import { createSessionFor } from "../../src/__tests__/session-helpers";
 import { Effect } from "effect";
-import { app } from "../index";
-import { dbTest } from "./live-runner";
-import { TestDb } from "./test-db";
-import { testKvStore } from "./test-ttl-store";
+import { app } from "../bun-dev";
+import { dbTest } from "../../src/__tests__/live-runner";
+import { TestDb } from "../../src/__tests__/test-db";
+import { testKvStore } from "../../src/__tests__/test-ttl-store";
 
 const P = "enum-test-";
 const { run } = dbTest(P);

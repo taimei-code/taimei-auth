@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 import type { ReactElement } from "react";
-import { isLocalEnvironment } from "../env";
 import {
   getAppName,
   getAppUrl,
@@ -19,11 +18,6 @@ const sendMfaNotification = Effect.fnUntraced(function* (params: {
   render: (props: { appName: string; securityUrl: string; supportEmail: string }) => ReactElement;
   kind: "mfa enabled" | "mfa disabled";
 }) {
-  if (isLocalEnvironment()) {
-    yield* Effect.sync(() => console.log(`[TEST] ${params.kind} email for ${params.email}`));
-    return;
-  }
-
   const appName = getAppName();
   yield* renderAndSendEmail({
     from: getSecurityFromEmail(),

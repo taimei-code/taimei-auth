@@ -1,5 +1,4 @@
 import { Effect } from "effect";
-import { isLocalEnvironment } from "../env";
 import {
   getAbuseInfoUrl,
   getAppName,
@@ -21,11 +20,6 @@ export type InvitationEmailParams = {
 };
 
 export const sendInvitationEmail = Effect.fnUntraced(function* (params: InvitationEmailParams) {
-  if (isLocalEnvironment()) {
-    yield* Effect.sync(() => console.log(invitationLogLine(params.inviteeEmail, params.url)));
-    return;
-  }
-
   const appName = getAppName();
   yield* renderAndSendEmail({
     from: getInvitationFromEmail(),

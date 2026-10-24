@@ -7,10 +7,11 @@
   ],
   "trustedDependencies": [],
   "scripts": {
-    "dev": "bun run src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "dev": "bun run testing/bun-dev.ts",
+    "build": "bun build testing/bun-dev.ts --outdir dist --target bun",
     "dev:web": "vite --config web/vite.config.ts",
     "build:web": "vite build --config web/vite.config.ts",
+    "build:web:non-production": "vite build --config web/non-production/vite.config.ts",
     "generate": "buf generate",
     "generate:check": "diff -r src/gen packages/auth-client/src/gen",
     "db:generate": "drizzle-kit generate",

@@ -6,11 +6,11 @@ import {
   SentryLive,
   SentryService,
   setSentryBackend,
-} from "../sentry";
-import { captureThrown } from "../handlers/client-facing-error";
+} from "../../src/sentry";
+import { captureThrown } from "../../src/handlers/client-facing-error";
 import { initBunSentry } from "../sentry-bun";
-import { grepFiles } from "./source-scan";
-import { recordSentry } from "./sentry-recorder";
+import { grepFiles } from "../../src/__tests__/source-scan";
+import { recordSentry } from "../../src/__tests__/sentry-recorder";
 
 describe("captureCauseAs", () => {
   const { exceptions: captured } = recordSentry();
@@ -72,10 +72,10 @@ describe("SentryLive", () => {
 });
 
 test("Sentry の SDK を import するのは runtime ごとの初期化 file と worker.ts だけ (共通の sentry.ts から import すると Workers の bundle に @sentry/bun が混ざる)", () => {
-  expect(grepFiles('from "@sentry/', "src", { tests: "exclude" }).sort()).toEqual([
-    "src/sentry-bun.ts",
+  expect(["src", "testing"].flatMap((root) => grepFiles('from "@sentry/', root, { tests: "exclude" })).sort()).toEqual([
     "src/sentry-cloudflare.ts",
     "src/worker.ts",
+    "testing/sentry-bun.ts",
   ]);
 });
 
