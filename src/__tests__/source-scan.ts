@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { Predicate } from "effect";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -78,6 +78,49 @@ export const valueImportsInSource = (file: string, source: string): string[] =>
 
 export const valueImportsOf = (file: string): string[] =>
   valueImportsInSource(file, readFileSync(absolute(file), "utf8"));
+
+const REPO_ROOT_ALIAS = "@/";
+
+const isSourceImport = (specifier: string) =>
+  specifier.startsWith(".") || specifier.startsWith(REPO_ROOT_ALIAS);
+
+const resolveSourceImport = (fromFile: string, specifier: string): string | null => {
+  const base = specifier.startsWith(REPO_ROOT_ALIAS)
+    ? join(REPO_ROOT, specifier.slice(REPO_ROOT_ALIAS.length))
+    : join(dirname(absolute(fromFile)), specifier);
+  for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
+    if (existsSync(candidate)) return candidate;
+  }
+  return null;
+};
+
+type ImportViolation = { readonly file: string; readonly specifier: string };
+
+export const disallowedImportsReachableFrom = (
+  startFiles: readonly string[],
+  isAllowedPackage: (specifier: string) => boolean,
+): ImportViolation[] => {
+  const queue = startFiles.map(absolute);
+  const seen = new Set(queue);
+  const violations: ImportViolation[] = [];
+  while (queue.length > 0) {
+    const file = queue.pop() as string;
+    for (const specifier of valueImportsOf(file)) {
+      if (!isSourceImport(specifier)) {
+        if (!isAllowedPackage(specifier)) violations.push({ file: fromRepoRoot(file), specifier });
+        continue;
+      }
+      const resolved = resolveSourceImport(file, specifier);
+      if (resolved === null) {
+        violations.push({ file: fromRepoRoot(file), specifier });
+      } else if (!seen.has(resolved)) {
+        seen.add(resolved);
+        queue.push(resolved);
+      }
+    }
+  }
+  return violations;
+};
 
 export const repoFiles = (...pathspecs: string[]): string[] =>
   execFileSync(
