@@ -4,7 +4,13 @@ import { count, eq, inArray } from "drizzle-orm";
 import { db } from "../client";
 import { auditLog, company, membership, user } from "../schema";
 import { deleteUsersByIds } from "../testing/cleanup";
-import { DEV_ACCOUNTS, listAccounts, seedDevAccounts } from "../testing/dev-accounts";
+import {
+  addBrowserAccount,
+  DEV_ACCOUNTS,
+  listChoosableAccounts,
+  prepareChoosableAccounts,
+  seedDevAccounts,
+} from "../testing/dev-accounts";
 import { readCompany, readMemberships, readUser } from "../testing/read";
 
 const devUserIds = DEV_ACCOUNTS.users.map((devUser) => devUser.id);
@@ -35,7 +41,7 @@ if (!owner || !admin || !member || !firstCompany) {
   throw new Error("DEV_ACCOUNTS lacks the owner, admin, member or the first company");
 }
 
-beforeAll(seedDevAccounts);
+beforeAll(prepareChoosableAccounts);
 
 describe("開発用アカウントは、何度起動しても重複せず、利用者と事業所の id が変わらない", () => {
   test("seed をもう一度走らせても、開発用の利用者・事業所・所属の id の集合は変わらない", async () => {
@@ -103,7 +109,7 @@ describe("一覧の並び", () => {
     await deleteUsersByIds(devUserIds);
     await seedDevAccounts();
 
-    const listedDevIds = (await listAccounts())
+    const listedDevIds = (await listChoosableAccounts(undefined))
       .map((account) => account.id)
       .filter((id) => devUserIds.includes(id));
 
@@ -137,5 +143,15 @@ describe("起動のたびに、開発用アカウントの無い行だけを足�
         .set({ activationStatus: "ACTIVE" })
         .where(eq(company.id, firstCompany.id));
     }
+  });
+});
+
+describe("browser ごとの候補", () => {
+  test("削除済みの利用者を browser の鍵に結びつけても失敗せず、候補に足さない", async () => {
+    const browserKey = crypto.randomUUID();
+
+    await addBrowserAccount(browserKey, `deleted-${crypto.randomUUID()}`);
+
+    expect(sortedIds(await listChoosableAccounts(browserKey))).toEqual([...devUserIds].sort());
   });
 });

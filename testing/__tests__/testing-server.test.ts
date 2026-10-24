@@ -9,6 +9,7 @@ import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
 import { AUTH_HOST_ORIGIN } from "./origins";
+import { accountPickerPropsOf, devHomePropsOf } from "./page-props-of";
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -122,7 +123,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
       (await fetch(`${baseUrl}${SIGN_IN_PATH}`)).text(),
     );
 
-    for (const email of devEmails) expect(body).toContain(email);
+    expect(accountPickerPropsOf(body).accounts.map(({ email }) => email)).toEqual(devEmails);
   }, 15_000);
 
   test("選んだアカウントの session は、entry を起動し直しても TTL store に残る (session の cookie cache を送らずに確かめる)", async () => {
@@ -174,8 +175,7 @@ describe("試験用の entry は、開発環境と同じ開発者ホームを載
     });
 
     expect(status).toBe(200);
-    expect(body).toContain("<h1>開発者ホーム</h1>");
-    for (const email of devEmails) expect(body).toContain(email);
+    expect(devHomePropsOf(body).devAccounts.map(({ email }) => email)).toEqual(devEmails);
   }, 15_000);
 });
 

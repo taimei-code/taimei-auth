@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { db } from "../client";
 import { company, membership, type Role, user } from "../schema";
 
@@ -92,14 +92,55 @@ export const seedDevAccounts = () =>
       .onConflictDoNothing();
   });
 
-export const listAccounts = () =>
+export const DEV_ACCOUNT_IDS: readonly string[] = DEV_ACCOUNTS.users.map(({ id }) => id);
+
+const createBrowserAccountTable = () =>
+  db.execute(sql`
+    CREATE TABLE IF NOT EXISTS testing_browser_account (
+      browser_key text NOT NULL,
+      user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (browser_key, user_id)
+    )`);
+
+export const prepareChoosableAccounts = async () => {
+  await createBrowserAccountTable();
+  await seedDevAccounts();
+};
+
+export const addBrowserAccount = async (browserKey: string, userId: string) => {
+  await db.execute(sql`
+    INSERT INTO testing_browser_account (browser_key, user_id)
+    SELECT ${browserKey}, id FROM "user" WHERE id = ${userId}
+    ON CONFLICT DO NOTHING`);
+};
+
+const choosableBy = (browserKey: string | undefined) =>
+  or(
+    inArray(user.id, DEV_ACCOUNT_IDS),
+    browserKey === undefined
+      ? undefined
+      : inArray(
+          user.id,
+          sql`(SELECT user_id FROM testing_browser_account WHERE browser_key = ${browserKey})`,
+        ),
+  );
+
+export const listChoosableAccounts = (browserKey: string | undefined) =>
   db.query.user.findMany({
-    columns: { id: true, name: true, email: true },
+    columns: { id: true, name: true, email: true, lastUsedCompanyId: true },
     with: {
       memberships: {
         columns: { role: true },
-        with: { company: { columns: { name: true, activationStatus: true } } },
+        with: { company: { columns: { id: true, name: true, activationStatus: true } } },
       },
     },
+    where: choosableBy(browserKey),
     orderBy: [asc(user.createdAt), asc(user.id)],
+  });
+
+export const findChoosableAccount = (browserKey: string | undefined, userId: string) =>
+  db.query.user.findFirst({
+    columns: { id: true, email: true },
+    where: and(eq(user.id, userId), choosableBy(browserKey)),
   });

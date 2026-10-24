@@ -1,4 +1,4 @@
-import { seedDevAccounts } from "../db/testing/dev-accounts";
+import { prepareChoosableAccounts } from "../db/testing/dev-accounts";
 import { postgresTtlStore } from "../db/testing/ttl-store";
 import { startBunServer } from "../src/bun-server";
 import { devHomeRoutes } from "./dev-home";
@@ -11,7 +11,7 @@ if (process.env.APP_ENV !== "test") {
 }
 
 const ttlStore = await postgresTtlStore();
-await seedDevAccounts();
+await prepareChoosableAccounts();
 
 export default startBunServer({
   emailSender: recordingEmailSender,
