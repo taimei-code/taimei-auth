@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
+import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { sentLinkIn } from "../testing/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import type { ConsumableFixture } from "./fixture-names";
@@ -61,12 +62,26 @@ export const expectSignInLanding = async (page: Page): Promise<void> => {
 };
 
 export const signInWithMagicLink = async (page: Page, email: string): Promise<string> => {
-  await page.goto(authEntryUrl());
+  const response = await page.request.post(`${BASE_URL}${TESTING_PATH}/login-links`, {
+    data: { email, returnTo: `${BASE_URL}/account` },
+  });
+  expect(response.status()).toBe(200);
+  const { loginUrl } = (await response.json()) as { loginUrl: string };
+  await page.goto(loginUrl);
+  return loginUrl;
+};
+
+export const sendMagicLinkFromForm = async (page: Page, email: string): Promise<string> => {
   await page.getByPlaceholder("you@example.com").fill(email);
-  const link = await sentLinkAfter(email, async () => {
+  return sentLinkAfter(email, async () => {
     await page.getByRole("button", { name: "Magic Link を送信" }).click();
     await expect(page.getByText("を送信しました")).toBeVisible();
   });
+};
+
+export const signInThroughMagicLinkForm = async (page: Page, email: string): Promise<string> => {
+  await page.goto(authEntryUrl());
+  const link = await sendMagicLinkFromForm(page, email);
   await page.goto(link);
   return link;
 };

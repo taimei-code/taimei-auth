@@ -3,6 +3,7 @@ import {
   authEntryUrl,
   BASE_URL,
   reseedFixture,
+  sendMagicLinkFromForm,
   sentLinkAfter,
   signInWithMagicLink,
 } from "./helpers";
@@ -24,11 +25,7 @@ test("SignIn 画面からの magic link でも招待を受諾でき /account に
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
   await expect(page.getByRole("button", { name: "GitHub でログイン" })).toHaveCount(0);
 
-  await page.getByPlaceholder("you@example.com").fill(INVITEE_EMAIL);
-  const link = await sentLinkAfter(INVITEE_EMAIL, async () => {
-    await page.getByRole("button", { name: "Magic Link を送信" }).click();
-    await expect(page.getByText("を送信しました")).toBeVisible();
-  });
+  const link = await sendMagicLinkFromForm(page, INVITEE_EMAIL);
 
   await page.goto(link);
 
