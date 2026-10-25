@@ -6,7 +6,7 @@ import {
   REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER,
 } from "./non-production-redirect-hosts-check";
 import { devHomeRoutes } from "./dev-home";
-import { testingApiAndAccountPickerRoutes } from "./routes";
+import { testingApiRoutes } from "./routes";
 import { recordingEmailSender } from "./sent-links";
 
 if (process.env.APP_ENV !== "test") {
@@ -26,7 +26,7 @@ export default startBunServer({
   emailSender: recordingEmailSender,
   ttlStore,
   extendBeforeStatic: (app) => {
-    app.route("/", testingApiAndAccountPickerRoutes());
+    app.route("/", testingApiRoutes());
     app.route("/", devHomeRoutes());
   },
 }).server;

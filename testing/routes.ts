@@ -2,7 +2,6 @@ import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
-import { accountPickerRoutes } from "./account-picker";
 import { createSignedInUser } from "./create-signed-in-user";
 import { decodeJsonBody } from "./decode-body";
 import { setCurrentCompany } from "./set-current-company";
@@ -28,6 +27,3 @@ export const testingApiRoutes = () =>
         }),
       ),
     );
-
-export const testingApiAndAccountPickerRoutes = () =>
-  testingApiRoutes().route("/", accountPickerRoutes());

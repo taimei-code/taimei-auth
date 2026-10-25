@@ -1,5 +1,19 @@
 # Changelog
 
+## 5.0.0 — 2026-10-25
+
+試験の環境のログイン画面を本番と同じ画面に戻した。利用者を選んでログインするのは開発者ホームだけになる。SDK の export と RPC の wire は変えていない。
+
+### Breaking changes
+
+- 試験の環境のログイン画面 (`buildAuthLoginUrl` の URL) は、利用者の一覧の代わりに本番と同じログイン画面を出す。一覧で利用者を押してログインしていた試験は落ちる
+- ログイン画面の一覧が送っていた `POST /testing/v1/account-picker` は 404 を返す
+
+### 移行
+
+- ログイン画面で利用者を選んでいた consumer は、`buildDevHomeUrl` の開発者ホームで選ぶ
+- 未ログインの利用者を `buildAuthLoginUrl` へ移す consumer の画面から入っても、試験の環境のログイン画面では利用者を選べない。試験の環境で画面から利用者を選ぶ時は、`buildDevHomeUrl` の URL を開く
+
 ## 4.0.0 — 2026-10-24
 
 試験の環境の auth ホストを、本番と同じ安全の設定で動かす。session cookie に `Secure` を付け、service key の無い RPC を通さず、ログインの試行回数の上限を本番と同じにした。SDK の cookie の helper は `__Secure-` の付いた session cookie だけを読む。SDK の export と wire は変えていない。
