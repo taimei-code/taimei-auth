@@ -92,6 +92,15 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
     expect(result.stdout.toString()).toBe("");
   });
 
+  test("AUTH_SERVICE_KEY が無ければ、APP_ENV=test でも 0 以外で終わり、鍵を求める", () => {
+    const env: Record<string, string | undefined> = testingServerEnv("test", unusedPort());
+    delete env.AUTH_SERVICE_KEY;
+    const result = Bun.spawnSync(testingServerCommand, { cwd: tmpdir(), env });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain("FATAL: AUTH_SERVICE_KEY is required");
+  });
+
   test("APP_ENV=test なら起動し、better-auth の疎通確認に 200 を返す", async () => {
     const status = await withTestingServer(
       async (baseUrl) => (await fetch(`${baseUrl}/api/auth/ok`)).status,
