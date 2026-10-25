@@ -6,7 +6,7 @@ const APP_ENVS_OUTSIDE_PRODUCTION: ReadonlySet<string | undefined> = new Set([
 export const OUTSIDE_PRODUCTION_ONLY_MESSAGE =
   "FATAL: testing/worker.ts serves requests only with APP_ENV=development or APP_ENV=test.";
 
-type FetchHandler<Env extends { APP_ENV?: string }, Ctx> = {
+export type FetchHandler<Env, Ctx> = {
   fetch: (req: Request, env: Env, ctx: Ctx) => Promise<Response>;
 };
 
