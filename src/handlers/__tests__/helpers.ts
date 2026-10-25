@@ -12,7 +12,7 @@ export type StubActor = { id: string; email: string } | null;
 
 type Session = NonNullable<Effect.Success<ReturnType<AuthApi["Service"]["getSession"]>>>;
 
-export const SESSION_COOKIE_HEADER = { cookie: "better-auth.session_token=stub-session" };
+export const SESSION_COOKIE_HEADER = { cookie: "__Secure-better-auth.session_token=stub-session" };
 
 export const stubAuthApi = (
   actor: StubActor,

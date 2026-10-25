@@ -102,7 +102,7 @@ describe("attemptBudgetMiddleware", () => {
 });
 
 describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () => {
-  const ENV = { APP_ENV: "production", AUTH_TRUSTED_PROXY_HOPS: "1" };
+  const ENV = { AUTH_TRUSTED_PROXY_HOPS: "1" };
   const previous = Object.keys(ENV).map((key) => [key, process.env[key]] as const);
   beforeAll(() => {
     Object.assign(process.env, ENV);
@@ -132,7 +132,7 @@ describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () =
 
 describe("MFA の試行枠の subject", () => {
   test("session 軸の subject は IP を変えても同じ枠で、cookie の値を鍵に含めない (鍵を認証情報にしない)", async () => {
-    const headers = new Headers({ cookie: "better-auth.session_token=tok.sig" });
+    const headers = new Headers({ cookie: "__Secure-better-auth.session_token=tok.sig" });
     const fromOneIp = await mfaAttemptSubject(headers, "203.0.113.1");
     const fromAnotherIp = await mfaAttemptSubject(headers, "198.51.100.2");
     expect(fromOneIp).toBe(fromAnotherIp);
