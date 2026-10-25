@@ -25,7 +25,7 @@ test("TanStack Router は遷移先を history に積んでから beforeLoad と 
     routeTree: rootRoute.addChildren([indexRoute, membersRoute]),
     history,
     isServer: false,
-    origin: "http://auth.taimei-code.local:3100",
+    origin: "http://auth.taimei-code.localhost:3100",
   });
   await router.load();
 

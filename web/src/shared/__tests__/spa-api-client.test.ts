@@ -6,7 +6,7 @@ import { ChallengeExpired } from "@core/mfa/errors";
 
 import { leaveForSignInOnUnauthorized } from "../spa-api-client";
 
-const ORIGIN = "http://auth.taimei-code.local:3100";
+const ORIGIN = "http://auth.taimei-code.localhost:3100";
 const originalWindow = globalThis.window;
 
 afterEach(() => {
