@@ -8,10 +8,13 @@ import { nonProductionShell } from "../non-production-shell";
 const shell = async () =>
   String(
     await nonProductionShell({
-      _tag: "AccountPicker",
-      accounts: [],
-      chooseAction: "/choose",
-      signUpHref: "/auth/signup",
+      _tag: "DevHome",
+      devAccounts: [],
+      browserAccounts: [],
+      viewer: { _tag: "SignedOut", notice: "None" },
+      destination: { _tag: "AccountPage" },
+      signInAction: "/sign-in",
+      signOutAction: "/sign-out",
     }),
   );
 
@@ -30,6 +33,6 @@ describe("本番以外の画面の HTML は、web の build が本番以外の�
     expect(body).toContain(
       '<meta name="viewport" content="width=device-width, initial-scale=1" />',
     );
-    expect(body).toContain("<title>アカウントを選んでログイン</title>");
+    expect(body).toContain("<title>開発者ホーム</title>");
   });
 });

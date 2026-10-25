@@ -47,21 +47,10 @@ const DevHomeProps = Schema.TaggedStruct("DevHome", {
 
 export type DevHomeProps = typeof DevHomeProps.Type;
 
-const AccountPickerProps = Schema.TaggedStruct("AccountPicker", {
-  accounts: Schema.Array(Account),
-  chooseAction: Schema.String,
-  signUpHref: Schema.String,
-});
+export type PageProps = DevHomeProps;
 
-export type AccountPickerProps = typeof AccountPickerProps.Type;
-
-const PageProps = Schema.Union([DevHomeProps, AccountPickerProps]);
-
-export type PageProps = typeof PageProps.Type;
-
-export const PagePropsFromJson = Schema.fromJsonString(PageProps);
+export const PagePropsFromJson = Schema.fromJsonString(DevHomeProps);
 
 export const PAGE_TITLES: Record<PageProps["_tag"], string> = {
   DevHome: "開発者ホーム",
-  AccountPicker: "アカウントを選んでログイン",
 };

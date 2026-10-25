@@ -10,7 +10,7 @@ import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
 import { REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER } from "../non-production-redirect-hosts-check";
 import { AUTH_HOST_ORIGIN } from "./origins";
-import { accountPickerPropsOf, devHomePropsOf } from "./page-props-of";
+import { devHomePropsOf, PAGE_PROPS_NOT_IN_PAGE } from "./page-props-of";
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -162,21 +162,39 @@ describe("試験の環境の server は、taimei-auth 自身の e2e だけが使
   }, 15_000);
 });
 
-describe("試験用の entry は、起動の前に開発用アカウントをそろえ、共通ログイン画面でアカウントを選ばせる", () => {
-  test("共通ログイン画面の URL は、SPA より先に、開発用アカウントの一覧を返す", async () => {
+describe("試験用の entry は、起動の前に開発用アカウントをそろえ、共通ログイン画面は本番と同じ画面を返す", () => {
+  test("共通ログイン画面の URL は、本番以外の画面を返さない", async () => {
     const body = await withTestingServer(async (baseUrl) =>
       (await fetch(`${baseUrl}${SIGN_IN_PATH}`)).text(),
     );
 
-    expect(accountPickerPropsOf(body).accounts.map(({ email }) => email)).toEqual(devEmails);
+    expect(() => devHomePropsOf(body)).toThrow(PAGE_PROPS_NOT_IN_PAGE);
   }, 15_000);
 
-  test("選んだアカウントの session は、entry を起動し直しても TTL store に残る (session の cookie cache を送らずに確かめる)", async () => {
+  test("以前の共通ログイン画面の一覧が送っていた、利用者を選ぶ POST は 404", async () => {
+    const [owner] = DEV_ACCOUNTS.users;
+    if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
+    const status = await withTestingServer(
+      async (baseUrl) =>
+        (
+          await fetch(`${baseUrl}${TESTING_PATH}/account-picker${SIGN_IN_QUERY}`, {
+            method: "POST",
+            headers: { origin: AUTH_HOST_ORIGIN },
+            body: new URLSearchParams({ userId: owner.id }),
+            redirect: "manual",
+          })
+        ).status,
+    );
+
+    expect(status).toBe(404);
+  }, 15_000);
+
+  test("開発者ホームで選んだアカウントの session は、entry を起動し直しても TTL store に残る (session の cookie cache を送らずに確かめる)", async () => {
     const [owner] = DEV_ACCOUNTS.users;
     if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
 
     const sessionCookie = await withTestingServer(async (baseUrl) => {
-      const picked = await fetch(`${baseUrl}${TESTING_PATH}/account-picker${SIGN_IN_QUERY}`, {
+      const picked = await fetch(`${baseUrl}${DEV_HOME_SIGN_IN_PATH}${SIGN_IN_QUERY}`, {
         method: "POST",
         headers: { origin: AUTH_HOST_ORIGIN },
         body: new URLSearchParams({ userId: owner.id }),
@@ -237,7 +255,6 @@ describe("本番の worker と同じ app", () => {
           [
             `${TESTING_PATH}/signed-in-users`,
             `${TESTING_PATH}/current-company`,
-            `${TESTING_PATH}/account-picker`,
             DEV_HOME_SIGN_IN_PATH,
             DEV_HOME_SIGN_OUT_PATH,
           ].map((path) =>
@@ -256,18 +273,10 @@ describe("本番の worker と同じ app", () => {
     }
 
     expect(statuses).toEqual({
-      "(unset)": [404, 404, 404, 404, 404],
-      production: [404, 404, 404, 404, 404],
-      prodution: [404, 404, 404, 404, 404],
-      test: [404, 404, 404, 404, 404],
+      "(unset)": [404, 404, 404, 404],
+      production: [404, 404, 404, 404],
+      prodution: [404, 404, 404, 404],
+      test: [404, 404, 404, 404],
     });
-  });
-
-  test("共通ログイン画面の URL に、開発用アカウントの一覧を返さない", async () => {
-    const app = buildApp({ mountStatic: () => {} });
-
-    const body = await (await app.request(SIGN_IN_PATH)).text();
-
-    for (const email of devEmails) expect(body).not.toContain(email);
   });
 });

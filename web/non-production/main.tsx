@@ -1,7 +1,6 @@
 import { Schema } from "effect";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { AccountPickerPage } from "./AccountPickerPage";
 import { DevHomePage } from "./DevHomePage";
 import { NonProductionLayout } from "./NonProductionLayout";
 import { PAGE_PROPS_ELEMENT_ID, PagePropsFromJson } from "./page-props";
@@ -18,7 +17,7 @@ const props = Schema.decodeUnknownSync(PagePropsFromJson)(
 createRoot(rootElement).render(
   <StrictMode>
     <NonProductionLayout>
-      {props._tag === "DevHome" ? <DevHomePage {...props} /> : <AccountPickerPage {...props} />}
+      <DevHomePage {...props} />
     </NonProductionLayout>
   </StrictMode>,
 );
