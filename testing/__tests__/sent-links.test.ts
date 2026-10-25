@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
 import type { InvitationEmailParams } from "../../src/email/send-invitation";
 import { EmailSender } from "../../src/email/ports";
+import { toDisplayText } from "../../src/email/sanitize";
+import { emailSenderLive } from "../../src/email/wiring";
 import { recordingEmailSender, takeSentLink } from "../sent-links";
 
 const EMAIL = "sent-links-test@example.com";
@@ -43,4 +45,28 @@ describe("試験の環境で送ったメールの URL を、宛先と戻り先�
     );
     expect(left).toBeUndefined();
   });
+});
+
+test("記録用の sender は本番のメールの送信を呼ばない", async () => {
+  const liveSends = (
+    ["sendWelcome", "sendMagicLink", "sendInvitation", "sendMfaEnabled", "sendMfaDisabled"] as const
+  ).map((method) => spyOn(emailSenderLive, method));
+  try {
+    await Effect.runPromise(
+      Effect.gen(function* () {
+        const sender = yield* EmailSender;
+        yield* sender.sendWelcome(EMAIL, toDisplayText("Someone"));
+        yield* sender.sendMagicLink(EMAIL, magicLinkTo(RETURN_TO));
+        yield* sender.sendInvitation({
+          inviteeEmail: EMAIL,
+          url: magicLinkTo(RETURN_TO),
+        } as InvitationEmailParams);
+        yield* sender.sendMfaEnabled(EMAIL);
+        yield* sender.sendMfaDisabled(EMAIL);
+      }).pipe(Effect.provide(recordingEmailSender)),
+    );
+    expect(liveSends.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0, 0, 0]);
+  } finally {
+    for (const spy of liveSends) spy.mockRestore();
+  }
 });

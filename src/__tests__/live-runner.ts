@@ -7,10 +7,11 @@ import { type AppServices, appLayer } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer } from "./test-db";
 import { testTtlStore } from "./test-ttl-store";
+import { recordingEmailSender } from "../../testing/sent-links";
 
 export type TestServices = AppServices | TestDb;
 
-const testAppLayer = appLayer(testTtlStore);
+const testAppLayer = appLayer(testTtlStore, recordingEmailSender);
 
 let reachabilityCheck: Promise<void> | undefined;
 

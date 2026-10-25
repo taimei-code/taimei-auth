@@ -14,7 +14,7 @@ import {
   TEST_CLIENT_IP,
   TEST_USER_AGENT,
 } from "../../__tests__/session-helpers";
-import { WELCOME_EMAIL_LOG } from "../../email/local-delivery-log";
+import { WELCOME_EMAIL_LOG } from "../../../testing/local-delivery-log";
 import { activate, completeLoginChallenge, enroll } from "../../mfa/totp";
 import { NEW_USER_THRESHOLD_MS } from "../sign-in-observer";
 import { dbTest, observing, auditRowsFor } from "../../__tests__/live-runner";

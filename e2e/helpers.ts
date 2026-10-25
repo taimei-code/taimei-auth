@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
-import { sentLinkIn } from "../src/email/local-delivery-log";
+import { sentLinkIn } from "../testing/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
 import type { ConsumableFixture } from "./fixture-names";
 

@@ -1,7 +1,12 @@
 import { Effect, Layer } from "effect";
 import { AuthApi } from "../src/auth-service";
 import { EmailSender } from "../src/email/ports";
-import { emailSenderLive } from "../src/email/wiring";
+import {
+  invitationLogLine,
+  magicLinkLogLine,
+  mfaNotificationLogLine,
+  WELCOME_EMAIL_LOG,
+} from "./local-delivery-log";
 
 const sentLinks = new Map<string, Map<string | null, string>>();
 
@@ -30,15 +35,21 @@ export const magicLinkUrlFor = Effect.fnUntraced(function* (email: string, callb
   return url;
 });
 
+const logLine = (line: string) => Effect.sync(() => console.log(line));
+
+export const recordingEmailSenderService = EmailSender.of({
+  sendWelcome: (email) => logLine(`${WELCOME_EMAIL_LOG} ${email}`),
+  sendMagicLink: (email, url) =>
+    record(email, url).pipe(Effect.andThen(logLine(magicLinkLogLine(email, url)))),
+  sendInvitation: (params) =>
+    record(params.inviteeEmail, params.url).pipe(
+      Effect.andThen(logLine(invitationLogLine(params.inviteeEmail, params.url))),
+    ),
+  sendMfaEnabled: (email) => logLine(mfaNotificationLogLine("enabled", email)),
+  sendMfaDisabled: (email) => logLine(mfaNotificationLogLine("disabled", email)),
+});
+
 export const recordingEmailSender: Layer.Layer<EmailSender> = Layer.succeed(
   EmailSender,
-  EmailSender.of({
-    ...emailSenderLive,
-    sendMagicLink: (email, url) =>
-      record(email, url).pipe(Effect.andThen(emailSenderLive.sendMagicLink(email, url))),
-    sendInvitation: (params) =>
-      record(params.inviteeEmail, params.url).pipe(
-        Effect.andThen(emailSenderLive.sendInvitation(params)),
-      ),
-  }),
+  recordingEmailSenderService,
 );

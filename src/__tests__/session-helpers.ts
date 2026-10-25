@@ -2,7 +2,7 @@ import { makeSignature } from "better-auth/crypto";
 import { Effect } from "effect";
 import { auth } from "../auth";
 import { AuthApi } from "../auth-service";
-import { sentLinkIn } from "../email/local-delivery-log";
+import { sentLinkIn } from "../../testing/local-delivery-log";
 import { TtlStore } from "../ttl-store-service";
 import type { Actor } from "../account/actor-contract";
 import { observing } from "./live-runner";
