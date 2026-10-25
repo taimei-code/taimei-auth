@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { signInWithMagicLink } from "./helpers";
+import { signInThroughMagicLinkForm, signInWithMagicLink } from "./helpers";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
 
 const signUpUntilCompanyForm = async (page: Page): Promise<void> => {
@@ -20,7 +20,7 @@ const expectAccountReached = async (page: Page): Promise<void> => {
 test("既存 user の magic link sign-in は /account に到達し、ログアウトで sign-in 画面へ戻る", async ({
   page,
 }) => {
-  await signInWithMagicLink(page, "e2e-signin@example.com");
+  await signInThroughMagicLinkForm(page, "e2e-signin@example.com");
 
   await expect(page).toHaveURL(/\/account/);
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
