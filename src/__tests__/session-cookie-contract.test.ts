@@ -7,6 +7,7 @@ import { Effect } from "effect";
 import { auth } from "../auth";
 import { AuthApi } from "../auth-service";
 import {
+  attributeSet,
   deleteSessionEntities,
   issuedSessionSetCookies,
   loginWithMagicLink,
@@ -45,15 +46,6 @@ const expectEncodedSignedValue = (value: string) => {
   expect(value).toBe(encodeURIComponent(decodeURIComponent(value)));
   expect(decodeURIComponent(value)).toMatch(SIGNED_COOKIE_VALUE);
 };
-
-const attributeSet = (setCookie: string) =>
-  new Set(
-    setCookie
-      .split(";")
-      .slice(1)
-      .map((part) => part.trim())
-      .map((part) => (part.startsWith("Max-Age=") ? "Max-Age" : part)),
-  );
 
 const issuedTokens: string[] = [];
 const rememberForCleanup = (setCookies: string[]) => {
@@ -168,3 +160,22 @@ describe("better-auth の cookie 属性 key は hono serialize が扱う key に
     );
   });
 });
+
+test("本番以外でも、Magic Link のログインの session cookie は __Secure- の付いた名前と Secure 属性を持つ", () =>
+  run(
+    Effect.gen(function* () {
+      const user = yield* (yield* TestDb).seedUser("secure-outside-production");
+      const login = yield* loginWithMagicLink({
+        email: user.email,
+        callbackURL: CONSUMER_CALLBACK,
+      });
+      const sessionCookies = login.response.headers
+        .getSetCookie()
+        .filter((cookie) => cookie.includes("session_token="));
+      rememberForCleanup(sessionCookies);
+      expect(sessionCookies.map((cookie) => cookie.split("=")[0])).toEqual([
+        "__Secure-better-auth.session_token",
+      ]);
+      expect(sessionCookies.map((cookie) => attributeSet(cookie).has("Secure"))).toEqual([true]);
+    }),
+  ));

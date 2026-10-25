@@ -9,7 +9,11 @@ import {
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
-import { requestHeaders, tamperCookieSignature } from "../../__tests__/session-helpers";
+import {
+  attributeSet,
+  requestHeaders,
+  tamperCookieSignature,
+} from "../../__tests__/session-helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
@@ -64,7 +68,16 @@ describe("MFA チャレンジ API", () => {
         expect(res.status).toBe(200);
         expect(yield* responseJson(res)).toEqual({ redirect_url: "/account/security" });
         const setCookieNames = res.headers.getSetCookie().map((c) => c.split("=")[0]);
-        expect(setCookieNames.sort()).toEqual(["better-auth.session_token", "mfa_login_challenge"]);
+        expect(setCookieNames.sort()).toEqual([
+          "__Secure-better-auth.session_token",
+          "mfa_login_challenge",
+        ]);
+        expect(
+          res.headers
+            .getSetCookie()
+            .filter((cookie) => cookie.startsWith("mfa_login_challenge="))
+            .map((cookie) => attributeSet(cookie).has("Secure")),
+        ).toEqual([true]);
       }),
     ));
 
