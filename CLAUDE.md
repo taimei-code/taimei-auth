@@ -7,7 +7,7 @@
 
 - consumer app が使うのは `@taimei-code/auth-client` の公開 API と、HTTP または Connect RPC の endpoint だけである。`db/` は import しない。
 - consumer 向けの機能は、先に SDK または公開 endpoint の interface を設計する。identity DB を分離する時に consumer 側で必要になる変更を、version の更新だけに収めるためである。
-- 試験 API (`/testing/v1`) と開発者ホーム (`/dev-home`) は本番の worker に入れない。`deploy.yml` は migrations と upload の前に本番の worker の bundle と web の build を `scripts/check-production-bundle.sh` で検査し、どちらかの path か、本番以外の画面の file (`web/non-production/assets.ts`) が含まれていれば deploy を止める (`src/__tests__/production-bundle-check.test.ts` と、検査の path と開発者ホームの path の一致を見る `testing/__tests__/dev-home.test.ts` が固定)。
+- 試験 API (`/testing/v1`) と開発者ホーム (`/dev-home`) は本番の worker に入れない。本番の worker と web は、本番以外の dir (`testing/`・`web/non-production/`・`db/testing/`) を外した tree から `scripts/build-production-tree.sh` で build する。PR の CI、`deploy.yml`、`deploy-durable-object-migration.yml` が同じ script を呼び、script は最後に `scripts/check-production-bundle.sh` で、試験 API と開発者ホームの path や、本番以外の画面の file (`web/non-production/assets.ts`) が入っていないかを探す (`src/__tests__/production-tree.test.ts`・`testing/__tests__/production-bundle-check.test.ts`、検査の path と開発者ホームの path の一致を見る `testing/__tests__/dev-home.test.ts` が固定)。
 
 ## リポジトリ共通規則
 
