@@ -7,7 +7,7 @@ OVERRIDE_ALWAYS=(
   APP_ENV APP_NAME AUTH_SERVICE_URL AUTH_COOKIE_DOMAIN AUTH_TRUSTED_ORIGINS
   AUTH_FROM_EMAIL_MAGIC_LINK AUTH_FROM_EMAIL_WELCOME AUTH_FROM_EMAIL_INVITATION AUTH_FROM_EMAIL_SECURITY
 )
-env_file=".wrangler/dev.env"
+env_file="$PWD/.wrangler/dev.env"
 mkdir -p .wrangler
 : > "$env_file"
 # single quote で囲まないと dotenv-expand が `$` を展開し、` #` 以降を落とす
