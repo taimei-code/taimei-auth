@@ -1,4 +1,4 @@
-import { isBunRuntime, isLocalEnvironment } from "./env";
+import { isBunRuntime } from "./env";
 
 export type ClientContext = { ip: string; userAgent: string };
 
@@ -11,8 +11,6 @@ export type ProxyTrust =
 
 const UNCONFIGURED: ProxyTrust = { _tag: "Unconfigured" };
 const DIRECT: ProxyTrust = { _tag: "Direct" };
-
-const LOCAL_DEFAULT_PROXY_TRUST: ProxyTrust = { _tag: "BehindProxy", hops: 1 };
 
 const NON_NEGATIVE_INTEGER = /^\d+$/;
 const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
@@ -91,9 +89,7 @@ export function resolveCloudflareClientIp(headers: Headers): string {
 }
 
 export function proxyTrustFromEnv(): ProxyTrust {
-  const trust = parseProxyTrust(process.env.AUTH_TRUSTED_PROXY_HOPS);
-  if (trust._tag !== "Unconfigured") return trust;
-  return isLocalEnvironment() ? LOCAL_DEFAULT_PROXY_TRUST : UNCONFIGURED;
+  return parseProxyTrust(process.env.AUTH_TRUSTED_PROXY_HOPS);
 }
 
 function resolveClientIp(headers: Headers): string {
