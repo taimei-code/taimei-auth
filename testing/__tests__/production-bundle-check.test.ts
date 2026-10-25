@@ -8,7 +8,7 @@ import {
   NON_PRODUCTION_SCRIPT_FILE,
   NON_PRODUCTION_STYLESHEET_FILE,
 } from "../../web/non-production/assets";
-import { REPO_ROOT } from "./config-invariant-helpers";
+import { REPO_ROOT } from "../../src/__tests__/config-invariant-helpers";
 
 const CHECK_SCRIPT = join(REPO_ROOT, "scripts/check-production-bundle.sh");
 const WORKER_WITH_TESTING_API = `app.post("${TESTING_PATH}/signed-in-users")`;
@@ -95,6 +95,28 @@ describe("本番の bundle の検査は、試験 API の path を含む bundle �
     });
 
     expect(runBundleCheck(dir, webDistDir()).exitCode).toBe(0);
+  });
+});
+
+describe("本番の bundle の検査は、本番以外の値と送ったメールの記録を含む bundle で deploy を止める", () => {
+  test.each([
+    [
+      "worker に本番以外の redirect 先の host",
+      { "worker.js": "/^auth\\.taimei-code\\.(com|localhost)$|^localhost$/" },
+      {},
+    ],
+    [
+      "web に本番以外の redirect 先の host",
+      { "worker.js": WORKER_WITHOUT_TESTING_API },
+      { "assets/index-abc.js": "auth.taimei-code.localhost" },
+    ],
+    [
+      "worker に送ったメールの記録の行",
+      { "worker.js": 'console.log("[TEST] Magic Link for " + email + ": " + url)' },
+      {},
+    ],
+  ] as const)("%s があると、0 以外で終わる", (_, worker, web) => {
+    expect(runBundleCheck(bundleDir(worker), webDistDir(web)).exitCode).not.toBe(0);
   });
 });
 
@@ -206,46 +228,43 @@ const deploySteps = (): WorkflowStep[] => {
   return workflow.jobs.deploy.steps;
 };
 
-const DRY_RUN_OUTDIR = /wrangler versions upload --dry-run --outdir (\S+)/;
-const CHECKED_DIR = /scripts\/check-production-bundle\.sh (\S+) (\S+)/;
+const PRODUCTION_TREE_SCRIPT = "scripts/build-production-tree.sh";
 
-const isBundleCheckStep = ({ run = "" }: WorkflowStep) => {
-  const outdir = run.match(DRY_RUN_OUTDIR)?.[1];
-  const checked = run.match(CHECKED_DIR);
-  return outdir !== undefined && checked?.[1] === outdir && checked[2] === "web/dist";
-};
+const isProductionTreeStep = ({ run = "" }: WorkflowStep) => run.includes(PRODUCTION_TREE_SCRIPT);
 
 const indexOfStepRunning = (steps: readonly WorkflowStep[], fragment: string) =>
   steps.findIndex(({ run = "" }) => run.includes(fragment));
 
 describe("deploy の workflow は、本番の状態を変える前に本番の bundle を検査する", () => {
-  test("dry-run で出した dir と web の build の出力 (web/dist) を検査する step がちょうど 1 つある", () => {
-    expect(deploySteps().filter(isBundleCheckStep)).toHaveLength(1);
+  test("除外した tree で本番を build する script は、dry-run で出した bundle と web の build の出力を検査して終わる", () => {
+    const script = readFileSync(join(REPO_ROOT, PRODUCTION_TREE_SCRIPT), "utf8").trimEnd();
+    expect(script).toContain("bunx wrangler versions upload --dry-run --outdir production-bundle");
+    expect(script.split("\n").at(-1)).toBe(
+      "bash scripts/check-production-bundle.sh production-bundle web/dist",
+    );
   });
 
-  test("検査の step は web の build の後、migrations と upload の前にある", () => {
+  test("その step は migrations と upload の前にある", () => {
     const steps = deploySteps();
-    const checkStep = steps.findIndex(isBundleCheckStep);
-    const webBuildStep = indexOfStepRunning(steps, "bun run build:web");
+    const checkStep = steps.findIndex(isProductionTreeStep);
 
-    expect(webBuildStep).toBeGreaterThanOrEqual(0);
-    expect(checkStep).toBeGreaterThan(webBuildStep);
+    expect(checkStep).toBeGreaterThanOrEqual(0);
     expect(checkStep).toBeLessThan(indexOfStepRunning(steps, "db:migrate"));
     expect(checkStep).toBeLessThan(indexOfStepRunning(steps, "wrangler versions upload --tag"));
   });
 
-  test("検査の step は name と run だけを持ち、失敗を無視する設定・実行の条件・env を持たない", () => {
+  test("その step は name と run だけを持ち、失敗を無視する設定・実行の条件・env を持たない", () => {
     expect(
       deploySteps()
-        .filter(isBundleCheckStep)
+        .filter(isProductionTreeStep)
         .map((step) => Object.keys(step).sort()),
     ).toEqual([["name", "run"]]);
   });
 
-  test("検査の step の run は secret を参照しない", () => {
+  test("その step の run は secret を参照しない", () => {
     expect(
       deploySteps()
-        .filter(isBundleCheckStep)
+        .filter(isProductionTreeStep)
         .map(({ run = "" }) => run.includes("secrets.")),
     ).toEqual([false]);
   });

@@ -32,19 +32,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      # wrangler の bundle が @taimei-code/auth-client を dist 経由で解決するため先に build する
-      - name: Build auth-client SDK
-        working-directory: packages/auth-client
-        run: bun run build
-
-      - name: Build web SPA
-        run: bun run build:web
-
-      - name: Check production bundle and web build have no testing API or developer home
-        run: |
-          set -euo pipefail
-          bunx wrangler versions upload --dry-run --outdir "$RUNNER_TEMP/production-bundle"
-          bash scripts/check-production-bundle.sh "$RUNNER_TEMP/production-bundle" web/dist
+      - name: Build production in a tree without non-production code
+        run: bash scripts/build-production-tree.sh "${{ runner.temp }}/production-tree"
 
       # DATABASE_URL は Neon の直接接続文字列 (Hyperdrive 経由でなく DDL 用)
       - name: Apply migrations (drizzle/*.sql があれば)
@@ -59,9 +48,10 @@ jobs:
             echo "no migration files under drizzle/ -> skip"
           fi
 
-      # DO の migrations を含む version は versions upload では上げられない。その時だけ手元で `wrangler deploy` する
+      # DO の migrations を含む version は versions upload では上げられないので、deploy-durable-object-migration.yml で出す
       - name: Upload Worker version (not yet deployed)
         id: upload
+        working-directory: ${{ runner.temp }}/production-tree
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
