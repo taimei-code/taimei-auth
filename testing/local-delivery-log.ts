@@ -4,6 +4,9 @@ const invitationLogPrefix = (email: string): string => `[TEST] Invitation email 
 
 export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
 
+export const mfaNotificationLogLine = (kind: "enabled" | "disabled", email: string): string =>
+  `[TEST] mfa ${kind} email for ${email}`;
+
 export const magicLinkLogLine = (email: string, url: string): string =>
   `${magicLinkLogPrefix(email)}${url}`;
 
