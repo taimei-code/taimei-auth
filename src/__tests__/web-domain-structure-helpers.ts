@@ -71,7 +71,6 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "account/pages/Profile.tsx",
       "account/pages/Security.tsx",
       "account/pages/Sessions.tsx",
-      "auth/AuthLayout.tsx",
       "auth/SignOutButton.tsx",
       "auth/auth-client.ts",
       "auth/auth-error-reason.ts",
