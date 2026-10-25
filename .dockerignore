@@ -3,7 +3,7 @@
 **/dist
 **/.env*
 **/.dev.vars
-.wrangler
+**/.wrangler
 .llm
 .claude
 test-results

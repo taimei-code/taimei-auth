@@ -16,6 +16,7 @@ forbidden_entries="
   .git||
   .claude|.claude/sentinel|sentinel
   .wrangler|.wrangler/sentinel|sentinel
+  testing/.wrangler/.leak-canary|testing/.wrangler/.leak-canary|canary
   test-results|test-results/sentinel|sentinel
   node_modules/.leak-canary|node_modules/.leak-canary|canary
   web/dist/.leak-canary|web/dist/.leak-canary|canary
@@ -141,6 +142,8 @@ done
 
 assert_in_image "dev image に 共通画面 SPA の build 成果物がある" \
   'test -f /app/web/dist/index.html'
+assert_in_image "dev image に本番以外の画面の build 成果物がある" \
+  'test -f /app/web/dist/assets/non-production-pages.js'
 # $1 はコンテナ内の sh の位置引数 (ホスト側で展開させない)
 # shellcheck disable=SC2016
 assert_in_image "dev image に drizzle の migration SQL がある" \
