@@ -186,7 +186,7 @@ user 自身の意思とは独立に、**session** を **TTL store** から消し
 _Avoid_: invalidate (より広義), terminate, kill
 
 **Service Key**:
-consumer app が **auth ホスト** の RPC を呼ぶ時に示す、サービス間の認証のための共有の秘密の値。end user の **session** とは独立で、consumer app の server 側だけが持つ。入れ替えのため、新旧の 2 本を同時に受け付ける。設定されていない時は、本番では **fail-closed** にし、本番以外ではサービス間の認証を止めて通す (これは **kill switch** と同種の運用上の無効化であり、判断材料が得られない時の **fail-open** ではない)。手順: `docs/runbook/service-key-rotation.md`。
+consumer app が **auth ホスト** の RPC を呼ぶ時に示す、サービス間の認証のための共有の秘密の値。end user の **session** とは独立で、consumer app の server 側だけが持つ。入れ替えのため、新旧の 2 本を同時に受け付ける。設定されていない時は **fail-closed** にする。**本番以外** でも同じで、値を渡して動かす。手順: `docs/runbook/service-key-rotation.md`。
 _Avoid_: API key (end user 向けの credential と紛らわしい), shared secret (認証全体の署名の鍵と紛らわしい), サービスキー (カタカナ表記の混在)
 
 **membership guard**:
@@ -209,6 +209,10 @@ _Avoid_: log entry, audit record
 記帳に失敗しても操作の成立を取り消さない、**audit event** の記帳。記帳を成立の条件にすると、audit の保存の障害がそのまま user の操作の失敗になるので、失敗は監視に集め、操作の応答は変えない。同じ transaction の中で書き、失敗すれば操作ごと取り消す「tx 内記帳」と対になる。ログイン、MFA の有効化と無効化、招待の受諾の拒否がこちらに当たる。
 _Avoid_: fire-and-forget (同期か非同期かは別の判断で、best-effort とは直交する), 非同期記帳
 
+**本番以外**:
+本番の **auth ホスト** 以外で taimei-auth を動かす環境の総称。開発環境、taimei-auth 自身の e2e、**試験の環境** がこれに当たる。本番以外のためだけの機能 (**試験 API**、**アカウント選択画面**、**開発者ホーム**、送ったメールの記録) は、本番の成果物に存在しない。詳細: ADR-0021。
+_Avoid_: ローカル・local (CI で走る e2e と、consumer の試験の環境が漏れる), 非本番, テスト環境 (**試験の環境** と紛らわしい)
+
 **試験の環境**:
 consumer app が e2e と手元の確認のために、自分の試験と一緒に taimei-auth を動かす環境。taimei-auth の版は consumer が固定する SDK の版と同じである。taimei-auth 自身の試験はこれに当たらない。詳細: ADR-0020。
 _Avoid_: e2e 環境 (手元の確認が漏れる), テスト環境 (taimei-auth 自身の試験と紛らわしい)
@@ -226,7 +230,7 @@ _Avoid_: テストユーザー (**試験 API** が作る試験の利用者と紛
 _Avoid_: dev login, ログインの抜け道 (第二要素を飛ばす経路と誤解される)
 
 **開発者ホーム**:
-本番以外の環境 (開発環境、taimei-auth 自身の e2e、**試験の環境**) にある、利用者を選んで本物の **Magic Link** でログインし直すための画面。ログイン中の利用者の確認とログアウトもここで行う。**service_name** と **redirect_url** を受けた時は、ログインの後に **redirect_url** へ移す。本番の **auth ホスト** には存在しない。
+**本番以外** にある、利用者を選んで本物の **Magic Link** でログインし直すための画面。ログイン中の利用者の確認とログアウトもここで行う。**service_name** と **redirect_url** を受けた時は、ログインの後に **redirect_url** へ移す。本番の **auth ホスト** には存在しない。
 _Avoid_: dev home, 開発者ページ, ログインの抜け道 (第二要素を飛ばす経路と誤解される)
 
 ## Relationships
