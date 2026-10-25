@@ -1,6 +1,7 @@
 import { databaseTarget } from "../../db/testing/local-database";
 import { boot } from "../../src/boot";
 import {
+  TEST_AUTH_SERVICE_KEY,
   TEST_AUTH_SERVICE_URL,
   TEST_AUTH_TRUSTED_ORIGINS,
   TEST_MFA_TOTP_ENCRYPTION_KEYS,
@@ -18,4 +19,5 @@ if (target._tag === "Remote") {
 process.env.MFA_TOTP_ENCRYPTION_KEYS ??= TEST_MFA_TOTP_ENCRYPTION_KEYS;
 process.env.AUTH_SERVICE_URL ??= TEST_AUTH_SERVICE_URL;
 process.env.AUTH_TRUSTED_ORIGINS ??= TEST_AUTH_TRUSTED_ORIGINS;
+process.env.AUTH_SERVICE_KEY ??= TEST_AUTH_SERVICE_KEY;
 boot(testTtlStore, recordingEmailSender);

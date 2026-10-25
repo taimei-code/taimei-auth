@@ -22,8 +22,8 @@ export const startBunServer = (
   if (options.ttlStore) boot(options.ttlStore, options.emailSender);
   else bootInMemory(options.emailSender);
 
-  if (process.env.APP_ENV === "production" && !process.env.AUTH_SERVICE_KEY) {
-    console.error("FATAL: AUTH_SERVICE_KEY is required in production.");
+  if (!process.env.AUTH_SERVICE_KEY) {
+    console.error("FATAL: AUTH_SERVICE_KEY is required.");
     process.exit(1);
   }
 

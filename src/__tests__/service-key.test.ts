@@ -57,9 +57,8 @@ describe("verifyServiceKey", () => {
     expect(Effect.runSync(verifyServiceKey("previous-key"))).toBeUndefined();
   });
 
-  test("previous のみ + production → 通す (503 にしない)", () => {
+  test("previous のみ → 通す (503 にしない)", () => {
     process.env.AUTH_SERVICE_KEY_PREVIOUS = "previous-key";
-    process.env.APP_ENV = "production";
     expect(Effect.runSync(verifyServiceKey("previous-key"))).toBeUndefined();
   });
 
@@ -73,31 +72,17 @@ describe("verifyServiceKey", () => {
     expect(failure).toBeInstanceOf(ServiceKeyRejected);
   });
 
-  test("未設定 + production → ServiceKeyMisconfigured (503)、warn なし (workerd には bun-server.ts の boot guard が無く、request 時のこの判定が唯一の防御)", () => {
-    process.env.APP_ENV = "production";
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const failure = rejected("any");
-      expect(failure).toBeInstanceOf(ServiceKeyMisconfigured);
-      expect(warn).toHaveBeenCalledTimes(0);
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
   test.each([
+    ["production の時", "production"],
     ["development の時", "development"],
     ["APP_ENV が無い時", undefined],
     ["staging の時", "staging"],
-  ])("%s は鍵が未設定でも通し、warn を 1 回出す (APP_ENV=%s)", (_, appEnv) => {
+  ])("%s も、鍵が未設定なら ServiceKeyMisconfigured (503) を返し、warn を出さない (APP_ENV=%s)", (_, appEnv) => {
     if (appEnv !== undefined) process.env.APP_ENV = appEnv;
     const warn = spyOn(console, "warn").mockImplementation(() => {});
     try {
-      expect(Effect.runSync(verifyServiceKey(undefined))).toBeUndefined();
-      expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn).toHaveBeenCalledWith(
-        "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
-      );
+      expect(rejected(undefined)).toBeInstanceOf(ServiceKeyMisconfigured);
+      expect(warn).toHaveBeenCalledTimes(0);
     } finally {
       warn.mockRestore();
     }

@@ -1,6 +1,5 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Effect, Schema } from "effect";
-import { isLocalEnvironment } from "./env";
 
 export function getValidServiceKeys(): string[] {
   const active = process.env.AUTH_SERVICE_KEY;
@@ -34,13 +33,7 @@ export const verifyServiceKey = (
 ): Effect.Effect<void, ServiceKeyError> =>
   Effect.suspend<void, ServiceKeyError, never>(() => {
     const accepted = getValidServiceKeys();
-    if (accepted.length === 0) {
-      if (!isLocalEnvironment()) return new ServiceKeyMisconfigured();
-      console.warn(
-        "AUTH_SERVICE_KEY is not configured. Skipping service auth (non-production only).",
-      );
-      return Effect.void;
-    }
+    if (accepted.length === 0) return new ServiceKeyMisconfigured();
     return presented && matchesInConstantTime(presented, accepted)
       ? Effect.void
       : new ServiceKeyRejected();

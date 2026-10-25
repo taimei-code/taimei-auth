@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { buildApp } from "../app";
 import { recordSentry } from "./sentry-recorder";
 
@@ -32,8 +32,11 @@ describe("/rpc/* の service key middleware (応答 byte 不変、Sentry 0 件)"
     expect(res.headers.get("content-type")).toBe("application/json");
   });
 
-  test("未設定 + production → 503 JSON", async () => {
-    process.env.APP_ENV = "production";
+  test.each([
+    "production",
+    "development",
+  ])("未設定なら APP_ENV=%s でも 503 JSON", async (appEnv) => {
+    process.env.APP_ENV = appEnv;
     const res = await request({ "X-Service-Key": "any" });
     expect(res.status).toBe(503);
     expect(await res.text()).toBe('{"_tag":"ServiceKeyMisconfigured"}');
@@ -45,17 +48,5 @@ describe("/rpc/* の service key middleware (応答 byte 不変、Sentry 0 件)"
     const res = await request({ "X-Service-Key": "k" });
     expect(res.status).toBe(404);
     expect(await res.text()).toBe('{"_tag":"NotFound"}');
-  });
-
-  test("未設定 + development → 未提示でも 404 (通す)", async () => {
-    process.env.APP_ENV = "development";
-    const warn = spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const res = await request();
-      expect(res.status).toBe(404);
-      expect(await res.text()).toBe('{"_tag":"NotFound"}');
-    } finally {
-      warn.mockRestore();
-    }
   });
 });
