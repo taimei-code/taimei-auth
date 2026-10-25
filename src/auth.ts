@@ -9,7 +9,7 @@ import { primaryAuth } from "./auth-plugins/primary-auth";
 import { getAppName } from "./email/client";
 import { dispatchMagicLink } from "./email/dispatch-magic-link";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
-import { getTrustedOrigins, isBunRuntime, isLocalEnvironment } from "./env";
+import { getTrustedOrigins } from "./env";
 import { captureThrown } from "./handlers/client-facing-error";
 import type { TtlStorage } from "./ttl-store";
 import type { AppRuntime } from "./runtime";
@@ -24,12 +24,8 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
     secondaryStorage: ttlStorage,
 
-    verification: {
-      storeInDatabase: isBunRuntime() && isLocalEnvironment(),
-    },
-
     advanced: {
-      useSecureCookies: !isLocalEnvironment(),
+      useSecureCookies: true,
       crossSubDomainCookies: resolveCrossSubDomainCookies(authCookieDomain),
     },
 

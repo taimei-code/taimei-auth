@@ -72,6 +72,15 @@ export const issuedSessionSetCookies = (forwarded: Headers): Effect.Effect<strin
       .filter((cookie) => setCookieValue(cookie).lastIndexOf(".") > 0),
   );
 
+export const attributeSet = (setCookie: string) =>
+  new Set(
+    setCookie
+      .split(";")
+      .slice(1)
+      .map((part) => part.trim())
+      .map((part) => (part.startsWith("Max-Age=") ? "Max-Age" : part)),
+  );
+
 export function setCookieValue(setCookie: string): string {
   const pair = setCookie.split(";")[0];
   return pair.slice(pair.indexOf("=") + 1);

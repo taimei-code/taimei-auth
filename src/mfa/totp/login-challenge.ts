@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import { parse as parseCookieHeader, serialize as serializeSetCookie } from "hono/utils/cookie";
 import { z } from "zod";
 import { AuthApi } from "../../auth-service";
-import { isLocalEnvironment } from "../../env";
 import { TtlStore } from "../../ttl-store-service";
 import { captureCause, SentryService } from "../../sentry";
 import {
@@ -39,7 +38,7 @@ const challengeCookieAttributes = (maxAge: number) =>
     path: "/",
     httpOnly: true,
     sameSite: "Lax",
-    secure: !isLocalEnvironment(),
+    secure: true,
   }) as const;
 
 export type LoginChallengeCookie = {
