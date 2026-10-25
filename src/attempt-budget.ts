@@ -1,5 +1,4 @@
 import { Data, Effect } from "effect";
-import { isLocalEnvironment } from "./env";
 import { RateLimited } from "./failures";
 import { TtlStore } from "./ttl-store-service";
 import { captureCauseAs } from "./sentry";
@@ -18,11 +17,6 @@ export type AttemptBudget<Policy extends WhenUncountable> = {
   readonly component: string;
 };
 
-const LOCAL_RELAXED_LIMIT = 1000;
-
-const relaxedLocally = (limit: number) => () =>
-  isLocalEnvironment() ? LOCAL_RELAXED_LIMIT : limit;
-
 const DEFAULT_INVITATIONS_PER_COMPANY_HOUR = 50;
 
 const invitationsPerCompanyHour = (): number => {
@@ -34,7 +28,7 @@ const perMinuteRouteBudget = (keyPrefix: string, limit: number) =>
   ({
     keyPrefix,
     windowSeconds: 60,
-    maxAttempts: relaxedLocally(limit),
+    maxAttempts: () => limit,
     whenUncountable: "allow",
     component: "rate-limit",
   }) as const;

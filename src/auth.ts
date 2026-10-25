@@ -77,7 +77,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
           await runtime.runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
-        rateLimit: isLocalEnvironment() ? { window: 1, max: 1000 } : { window: 60, max: 10 },
+        rateLimit: { window: 60, max: 10 },
       }),
       primaryAuth(runtime),
     ],

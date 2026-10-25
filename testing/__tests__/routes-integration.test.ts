@@ -43,6 +43,26 @@ describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の p
     ));
 });
 
+describe("本番以外でも Magic Link の試行枠は本番と同じ", () => {
+  test("同じ IP から 60 秒に 6 回送ると、6 回目は 429", () =>
+    run(
+      Effect.gen(function* () {
+        const ip = `2001:db8::${crypto.randomUUID().slice(0, 4)}`;
+        const statuses: number[] = [];
+        for (let i = 0; i < 6; i++) {
+          const res = yield* request("http://localhost/api/auth/sign-in/magic-link", {
+            method: "POST",
+            headers: { "content-type": "application/json", "x-forwarded-for": ip },
+            body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
+          });
+          statuses.push(res.status);
+        }
+
+        expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+      }),
+    ));
+});
+
 describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () => {
   const windowCount = (key: string) => Effect.sync(() => Number(testKvStore.get(key) ?? 0));
 
