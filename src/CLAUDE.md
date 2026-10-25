@@ -46,7 +46,7 @@
 - `__tests__/non-production-wrangler-config.test.ts`: 本番以外の worker の config (`testing/wrangler.jsonc`) が本番の name・route・Hyperdrive・vars を持たないこと
 - `__tests__/testing-server-dependencies.test.ts`: 本番以外の server の entry (`testing/worker.ts`・`testing/server.ts`) から辿れる外部 package が dependencies だけであること (画面は web の build で bundle する)
 - `__tests__/service-key.test.ts`: service key の検証が `verifyServiceKey` の 1 か所にあること
-- `__tests__/url-allowlist-production.test.ts`: production の redirect URL の許可が、production の値で読まれること
+- `__tests__/url-allowlist-production.test.ts`: 本番の redirect 先の定数 (`src/redirect-hosts.ts`) が https の本番の host だけを許すこと。`bun test` は preload で本番以外の値に差し替えるので、preload の無い子 process で読む
 - `__tests__/wrangler-dev-env.test.ts`: `scripts/wrangler-dev.sh` が上書きする env と、`wrangler.jsonc`・`testing/wrangler.jsonc` の vars の key が一致すること
 - `account/__tests__/containment.test.ts`: 退会の判定と、commit 後の session 削除の呼び手が 1 つであること
 - `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること
