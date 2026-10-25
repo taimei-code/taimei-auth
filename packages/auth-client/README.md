@@ -136,7 +136,7 @@ include:
 
 ### 開発用アカウントでログインする
 
-試験の環境で auth ホストのログイン画面 (`buildAuthLoginUrl` の URL) を開くと、メールの入力の代わりに利用者の一覧が出る。選ぶとその利用者でログインし、`returnTo` へ移る。一覧には次の開発用アカウントと、その browser の一覧に足された利用者が出る。利用者はログイン中にその browser で開発者ホームを開いた時に足される。試験 API で作った利用者は、その browser で `loginUrl` を開いてから開発者ホームを開く。ほかの browser でログインした利用者は出ず、選べない。
+試験の環境で利用者を選んでログインする時は、開発者ホーム (`buildDevHomeUrl` の URL) を開く。ログイン画面 (`buildAuthLoginUrl` の URL) は本番と同じ画面を出し、そこでは利用者を選べない。開発者ホームの一覧には次の開発用アカウントと、その browser の一覧に足された利用者が出る。利用者はログイン中にその browser で開発者ホームを開いた時に足される。試験 API で作った利用者は、その browser で `loginUrl` を開いてから開発者ホームを開く。ほかの browser でログインした利用者は出ず、選べない。
 
 | 利用者 | 事業所 1 | 事業所 2 |
 |---|---|---|
@@ -145,9 +145,7 @@ include:
 | `dev-member@example.com` | MEMBER | — |
 
 - auth ホストは起動するたびに、開発用アカウントのうち無いものだけを足す。利用者と事業所の id は何度起動しても変わらない。現在の事業所は事業所 1 である
-- 一覧、選んだ後のログイン、開発者ホームは試験用の image の中にだけあり、本番の auth ホストには無い
-
-ログインしたまま別の利用者に替える時とログアウトする時は、開発者ホーム (`buildDevHomeUrl` の URL) を開く。
+- 開発者ホームは試験用の image の中にだけあり、本番の auth ホストには無い
 
 ```ts
 import { buildDevHomeUrl } from "@taimei-code/auth-client/testing";
@@ -161,12 +159,12 @@ const devHomeUrl = buildDevHomeUrl({
 
 | 画面 | ログインしていない時 | ログイン中 |
 |---|---|---|
-| ログイン画面 (`buildAuthLoginUrl`) | 一覧を出し、選ぶと `returnTo` へ移る | 一覧を出さずに `returnTo` へ移る。ACTIVE な事業所に 1 つも所属していない利用者は、`returnTo` の代わりに事業所の新規登録の画面 (`buildCompanySignupUrl` の URL) へ移る |
+| ログイン画面 (`buildAuthLoginUrl`) | 本番と同じ画面を出す | 本番と同じく `returnTo` へ移る。ACTIVE な事業所に 1 つも所属していない利用者は、`returnTo` の代わりに事業所の新規登録の画面 (`buildCompanySignupUrl` の URL) へ移る |
 | 開発者ホーム (`buildDevHomeUrl`) | 一覧を出し、選ぶと `returnTo` へ移る | ログイン中の利用者の名前、メール、所属する事業所と role を出し、一覧で別の利用者を押すと切り替えて `returnTo` へ移る。候補が 8 人を超えると、一覧の上の欄に名前かメールの一部を入れて一覧を絞れる。「ログアウト」のボタンでログアウトすると開発者ホームに戻る |
 
 - 開発者ホームは、ログイン画面と同じく、`service` に許可されない `returnTo` を受けるとエラー画面へ移す。`returnTo` の origin は `TAIMEI_AUTH_CONSUMER_ORIGINS` に含める
 - 開発者ホームの「アプリケーションに戻る」は、ログインし直さずに `returnTo` へ戻る
-- ログイン画面の一覧と開発者ホームの form の POST は、Origin が `TAIMEI_AUTH_URL` の origin の時だけ受け付け、それ以外は 403 になる。browser ではログイン画面と開発者ホームを `TAIMEI_AUTH_URL` と同じ host で開く。browser を通さずに POST する時は `Origin: <TAIMEI_AUTH_URL の origin>` を付ける
+- 開発者ホームの form の POST は、Origin が `TAIMEI_AUTH_URL` の origin の時だけ受け付け、それ以外は 403 になる。browser では開発者ホームを `TAIMEI_AUTH_URL` と同じ host で開く。browser を通さずに POST する時は `Origin: <TAIMEI_AUTH_URL の origin>` を付ける
 
 ### 試験の利用者
 
