@@ -22,7 +22,6 @@ import { Connections } from "../account/pages/Connections";
 import { Profile } from "../account/pages/Profile";
 import { Security } from "../account/pages/Security";
 import { Sessions } from "../account/pages/Sessions";
-import { AuthLayout } from "../auth/AuthLayout";
 import { authErrorSearchSchema } from "../auth/auth-error-reason";
 import { ErrorPage } from "../auth/pages/Error";
 import { SignIn } from "../auth/pages/SignIn";
@@ -51,7 +50,7 @@ const rootRoute = createRootRouteWithContext<{ registry: AtomRegistry.AtomRegist
 const authRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/auth",
-  component: AuthLayout,
+  component: Outlet,
 });
 
 const toInvalidRedirectError = () => {
