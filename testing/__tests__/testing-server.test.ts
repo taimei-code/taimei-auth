@@ -22,7 +22,7 @@ const unusedPort = () => {
 };
 
 const testingServerEnv = (appEnv: string | undefined, port: number) => {
-  const env = { ...process.env, APP_ENV: appEnv, PORT: String(port) };
+  const env = { ...process.env, APP_ENV: appEnv, PORT: String(port), AUTH_TRUSTED_PROXY_HOPS: "0" };
   if (appEnv === undefined) delete env.APP_ENV;
   return env;
 };

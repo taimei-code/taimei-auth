@@ -165,7 +165,8 @@ describe("getClientContext (bun test = Bun runtime。process.env を丸ごと置
     }
   });
 
-  test("非 production の既定 (1 hop) で単一要素の X-Forwarded-For を採る", () => {
+  test("AUTH_TRUSTED_PROXY_HOPS=1 で単一要素の X-Forwarded-For を採る", () => {
+    process.env.AUTH_TRUSTED_PROXY_HOPS = "1";
     const headers = new Headers({ "x-forwarded-for": "203.0.113.9", "user-agent": "probe/1.0" });
     expect(getClientContext(headers)).toEqual({ ip: "203.0.113.9", userAgent: "probe/1.0" });
   });
@@ -176,13 +177,16 @@ describe("getClientContext (bun test = Bun runtime。process.env を丸ごと置
     expect(getClientContext(headers).ip).toBe("203.0.113.9");
   });
 
-  test("AUTH_TRUSTED_PROXY_HOPS=0 (直公開) は非 production でも既定 1 hop に落ちず unknown", () => {
+  test("AUTH_TRUSTED_PROXY_HOPS=0 (直公開) は unknown", () => {
     process.env.AUTH_TRUSTED_PROXY_HOPS = "0";
     expect(getClientContext(new Headers({ "x-forwarded-for": "203.0.113.9" })).ip).toBe("unknown");
   });
 
-  test("production で未設定なら既定に落ちず unknown", () => {
-    process.env.APP_ENV = "production";
+  test.each([
+    "production",
+    "development",
+  ])("未設定なら APP_ENV=%s でも既定に落ちず unknown", (appEnv) => {
+    process.env.APP_ENV = appEnv;
     expect(getClientContext(new Headers({ "x-forwarded-for": "203.0.113.9" })).ip).toBe("unknown");
   });
 

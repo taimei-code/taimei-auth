@@ -28,9 +28,7 @@ export const startBunServer = (
   }
 
   if (proxyTrustFromEnv()._tag === "Unconfigured") {
-    console.error(
-      "FATAL: AUTH_TRUSTED_PROXY_HOPS (non-negative integer) is required in production.",
-    );
+    console.error("FATAL: AUTH_TRUSTED_PROXY_HOPS (non-negative integer) is required.");
     process.exit(1);
   }
 
