@@ -43,7 +43,7 @@ const grep =
   (output: "files" | "lines") =>
   (
     pattern: string,
-    target: string,
+    target: string | readonly string[],
     { include = TS_SOURCES, tests = "include" }: ScanOptions = {},
   ) => {
     const flags = [
@@ -52,7 +52,10 @@ const grep =
       ...(tests === "exclude" ? ["--exclude-dir=__tests__"] : []),
     ];
     try {
-      return execFileSync("grep", [...flags, pattern, absolute(target)], { encoding: "utf8" })
+      const targets = typeof target === "string" ? [target] : target;
+      return execFileSync("grep", [...flags, "--", pattern, ...targets.map(absolute)], {
+        encoding: "utf8",
+      })
         .trim()
         .split("\n")
         .filter(Boolean)
@@ -79,14 +82,21 @@ export const valueImportsInSource = (file: string, source: string): string[] =>
 export const valueImportsOf = (file: string): string[] =>
   valueImportsInSource(file, readFileSync(absolute(file), "utf8"));
 
-const REPO_ROOT_ALIAS = "@/";
+const TSCONFIG_PATH_ALIASES = [
+  { prefix: "@core/", directory: "src" },
+  { prefix: "@/", directory: "" },
+] as const;
+
+const aliasOf = (specifier: string) =>
+  TSCONFIG_PATH_ALIASES.find(({ prefix }) => specifier.startsWith(prefix));
 
 const isSourceImport = (specifier: string) =>
-  specifier.startsWith(".") || specifier.startsWith(REPO_ROOT_ALIAS);
+  specifier.startsWith(".") || aliasOf(specifier) !== undefined;
 
 const resolveSourceImport = (fromFile: string, specifier: string): string | null => {
-  const base = specifier.startsWith(REPO_ROOT_ALIAS)
-    ? join(REPO_ROOT, specifier.slice(REPO_ROOT_ALIAS.length))
+  const alias = aliasOf(specifier);
+  const base = alias
+    ? join(REPO_ROOT, alias.directory, specifier.slice(alias.prefix.length))
     : join(dirname(absolute(fromFile)), specifier);
   for (const candidate of [`${base}.ts`, `${base}.tsx`, join(base, "index.ts")]) {
     if (existsSync(candidate)) return candidate;

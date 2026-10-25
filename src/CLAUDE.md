@@ -41,7 +41,7 @@
 - `__tests__/default-company-contract.test.ts`: 現在の事業所を書き換える経路のすべてに、契約の scenario があること
 - `__tests__/e2e-setup.test.ts`: e2e の起動 script の MFA の鍵と、test の既定の鍵が同じであること
 - `__tests__/request-context.test.ts`: `AUTH_TRUSTED_PROXY_HOPS` を読むのが request-context だけであること
-- `__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであること
+- `../testing/__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであること
 - `__tests__/testing-server-dependencies.test.ts`: 本番以外の server の entry (`testing/worker.ts`・`testing/server.ts`) から辿れる外部 package が dependencies だけであること (画面は web の build で bundle する)
 - `__tests__/service-key.test.ts`: service key の検証が `verifyServiceKey` の 1 か所にあること
 - `__tests__/url-allowlist-production.test.ts`: production の redirect URL の許可が、production の値で読まれること

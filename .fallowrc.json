@@ -1,7 +1,6 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
   "entry": [
-    "src/index.ts",
     "testing/server.ts",
     "testing/worker.ts",
     "web/index.html",

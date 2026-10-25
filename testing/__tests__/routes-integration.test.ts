@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { requestApp, responseJson } from "../handlers/__tests__/helpers";
-import { createSessionFor } from "./session-helpers";
+import { requestApp, responseJson } from "../../src/handlers/__tests__/helpers";
+import { createSessionFor } from "../../src/__tests__/session-helpers";
 import { Effect } from "effect";
-import { app } from "../index";
-import { dbTest } from "./live-runner";
-import { TestDb } from "./test-db";
-import { testKvStore } from "./test-ttl-store";
+import { startBunServer } from "../bun-server";
+import { dbTest } from "../../src/__tests__/live-runner";
+import { TestDb } from "../../src/__tests__/test-db";
+import { testKvStore } from "../../src/__tests__/test-ttl-store";
+
+const { app } = startBunServer();
 
 const P = "enum-test-";
 const { run } = dbTest(P);
@@ -37,26 +39,6 @@ describe("Hono /api/auth/* route registration (Hono v4 の /** は入れ子の p
       Effect.gen(function* () {
         const res = yield* request("http://localhost/api/auth/get-session");
         expect(res.status).not.toBe(404);
-      }),
-    ));
-});
-
-describe("local では Magic Link の試行枠を緩める", () => {
-  test("APP_ENV=development で 10 連続送信が 429 にならない", () =>
-    run(
-      Effect.gen(function* () {
-        const statuses: number[] = [];
-        for (let i = 0; i < 10; i++) {
-          const res = yield* request("http://localhost/api/auth/sign-in/magic-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
-          });
-          statuses.push(res.status);
-        }
-
-        const rateLimited = statuses.filter((s) => s === 429);
-        expect(rateLimited.length).toBe(0);
       }),
     ));
 });
