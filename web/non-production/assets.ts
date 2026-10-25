@@ -1,4 +1,4 @@
-export const WEB_BASE_PATH = "/auth/";
+import { WEB_BASE_PATH } from "../web-base-path";
 
 export const NON_PRODUCTION_ENTRY_NAME = "non-production-pages";
 

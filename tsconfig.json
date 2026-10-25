@@ -54,6 +54,7 @@
     "e2e/**/*.ts",
     "web/src/shared/leave-spa.ts",
     "web/non-production/assets.ts",
+    "web/web-base-path.ts",
     "testing/sent-links.ts",
     "testing/local-delivery-log.ts",
     "playwright.config.ts"

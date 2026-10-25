@@ -1,19 +1,19 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "tailwindcss";
-import { isProductionWebBuild } from "./build-app-env";
 import formsPlugin from "@tailwindcss/forms";
 import animatePlugin from "tailwindcss-animate";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
+export const PRODUCTION_CONTENT_GLOBS = [
+  path.join(dir, "index.html"),
+  path.join(dir, "src/**/*.{ts,tsx}"),
+];
+
 const config: Config = {
   darkMode: ["class"],
-  content: [
-    path.join(dir, "index.html"),
-    path.join(dir, "src/**/*.{ts,tsx}"),
-    ...(isProductionWebBuild ? [] : [path.join(dir, "non-production/**/*.tsx")]),
-  ],
+  content: PRODUCTION_CONTENT_GLOBS,
   theme: {
     extend: {
       fontFamily: {

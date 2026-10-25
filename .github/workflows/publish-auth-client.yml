@@ -58,7 +58,7 @@ jobs:
         env:
           IMAGE: ghcr.io/taimei-code/taimei-auth-testing:auth-client-v${{ steps.ver.outputs.version }}
         run: |
-          docker build --target dev --build-arg APP_ENV=test \
+          docker build --target dev \
             --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
             -t "$IMAGE" .
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"

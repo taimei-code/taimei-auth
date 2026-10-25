@@ -10,7 +10,7 @@ const P = "rec-test-";
 const { run, cleanup } = dbTest(P);
 
 const magicLinkUrl = (callbackURL: string) =>
-  `http://auth.taimei-code.local:3100/api/auth/magic-link/verify?token=tok-123&callbackURL=${encodeURIComponent(callbackURL)}`;
+  `http://auth.taimei-code.localhost:3100/api/auth/magic-link/verify?token=tok-123&callbackURL=${encodeURIComponent(callbackURL)}`;
 
 const inviteCallback = acceptInvitationPath;
 

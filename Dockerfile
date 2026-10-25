@@ -4,7 +4,6 @@ WORKDIR /app
 COPY certs/ /opt/certs/
 ENV NODE_EXTRA_CA_CERTS=/opt/certs/palo-root.pem
 EXPOSE 3100
-CMD ["bun", "run", "src/index.ts"]
 
 # workspace package を packages/ に増やしたら package.json の COPY をここに 1 行足す (glob では COPY できない)
 FROM base AS manifests
@@ -17,14 +16,14 @@ RUN --mount=type=cache,target=/root/.bun/install/cache,sharing=shared bun instal
 COPY packages ./packages
 RUN cd packages/auth-client && bun run build
 
-# src を COPY するのは web/vite.config.ts の "@core" alias が ../src を指すため。db/enums.ts は src の契約が読む
+# src を COPY するのは web/vite.config.ts の "@core" alias が ../src を指すため。db/enums.ts は src の契約が読む。testing/redirect-hosts.ts は web/non-production/vite.config.ts の alias が redirect 先の allowlist を差し替える先
 FROM deps AS web-build
-ARG APP_ENV=production
 COPY web ./web
 COPY src ./src
 COPY db/enums.ts ./db/enums.ts
+COPY testing/redirect-hosts.ts ./testing/redirect-hosts.ts
 COPY tsconfig.json ./
-RUN bun run build:web
+RUN bun run build:web:non-production
 
 # 既定の build target は dev (target を指定せずに build する consumer との位置契約)
 FROM web-build AS dev
