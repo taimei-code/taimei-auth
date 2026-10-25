@@ -1,5 +1,23 @@
 # Changelog
 
+## 4.0.0 — 2026-10-24
+
+試験の環境の auth ホストを、本番と同じ安全の設定で動かす。session cookie に `Secure` を付け、service key の無い RPC を通さず、ログインの試行回数の上限を本番と同じにした。SDK の cookie の helper は `__Secure-` の付いた session cookie だけを読む。SDK の export と wire は変えていない。
+
+### Breaking changes
+
+- 試験の環境の compose の断片は `TAIMEI_AUTH_SERVICE_KEY` を求める。無いと compose が起動しない
+- session cookie に `Secure` が付き、名前が `__Secure-better-auth.session_token` になる。browser は http の `Secure` cookie を `localhost` と `*.localhost` の host の時だけ受け取るので、`TAIMEI_AUTH_URL` が http でほかの host (例 `*.local`) だとログインできない
+- `getSessionToken`・`hasAuthCookie`・`extractSessionTokenFromCookieHeader` は `__Secure-better-auth.session_token` だけを読み、`__Secure-` の無い `better-auth.session_token` を読まない。`__Secure-` の無い名前の cookie は、`Secure` でない origin や同じ domain の別の subdomain からも書けるので、そこに置かれた他人の token を session として読まないためである。`buildSessionCookieHeader` も `__Secure-` の付いた名前だけを書く
+- redirect 先は、試験の環境では `localhost` と、auth ホストが決めた host 名だけを許す (http と https の両方)。任意の `*.localhost` は許さず、`*.local` の host も許さない
+
+### 移行
+
+- `taimei-auth.env` に `TAIMEI_AUTH_SERVICE_KEY` を足す。値は consumer が RPC に送る service key と同じにする
+- session cookie の header を自分で組む試験は、`buildSessionCookieHeader` で組む
+- `TAIMEI_AUTH_URL`・`TAIMEI_AUTH_HOSTNAME`・`TAIMEI_AUTH_COOKIE_DOMAIN`・`TAIMEI_AUTH_CONSUMER_ORIGINS` の host を `*.localhost` にする。redirect 先にする consumer の host は、auth ホストが決めた host 名か `localhost` にする。browser が container の中で動く時は、Chromium の起動引数に `--host-resolver-rules` を足す (README の「起動」)
+- ログインの試行回数の上限が本番と同じ (60 秒に、同じ IP から 5 通、同じ email に 3 通) になる。試験の環境の auth ホストは client の IP を区別しないので、IP ごとの上限 (Magic Link の送信と MFA チャレンジ) は、すべての browser で 1 つの枠を分け合う。試験の利用者は、ログイン画面から Magic Link を送らず、`createSignedInUser` の `loginUrl` でログインする
+
 ## 3.9.0 — 2026-10-24
 
 試験の環境で、開発者ホームとログイン画面の一覧の見た目を変え、候補に出す利用者を、開発用アカウントとその browser でログインした利用者に絞った。SDK の export と wire は変えていない。
