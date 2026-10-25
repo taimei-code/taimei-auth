@@ -31,4 +31,4 @@ FROM web-build AS dev
 # oven/bun の node は bun への shim で wrangler が Bun runtime を拒否するため、本物の Node.js で上書きする
 COPY --from=node:22.23-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY . .
-CMD ["bash", "scripts/wrangler-dev.sh"]
+CMD ["bash", "scripts/wrangler-dev.sh", "--config", "testing/wrangler.jsonc"]
