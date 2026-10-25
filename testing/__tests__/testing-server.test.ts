@@ -126,6 +126,25 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
   }, 15_000);
 });
 
+describe("試験の環境の server は、taimei-auth 自身の e2e だけが使うログイン URL の試験 API を載せない", () => {
+  test("既存の利用者の email でログイン URL を求める POST は 404", async () => {
+    const [owner] = DEV_ACCOUNTS.users;
+    if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
+    const status = await withTestingServer(
+      async (baseUrl) =>
+        (
+          await fetch(`${baseUrl}${TESTING_PATH}/login-links`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: owner.email, returnTo: `${getTrustedOrigins()[0]}/` }),
+          })
+        ).status,
+    );
+
+    expect(status).toBe(404);
+  }, 15_000);
+});
+
 describe("試験用の entry は、起動の前に開発用アカウントをそろえ、共通ログイン画面でアカウントを選ばせる", () => {
   test("共通ログイン画面の URL は、SPA より先に、開発用アカウントの一覧を返す", async () => {
     const body = await withTestingServer(async (baseUrl) =>
