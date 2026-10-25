@@ -11,15 +11,15 @@ freee-accounts の `lib/freee/url_validator.rb` は host の suffix matching だ
 `src/url-allowlist.ts` の `validateRedirectUrl(url, service)` で次を順に検証する。
 
 1. URL として parse できること (失敗したら reject する)
-2. protocol が `http:` または `https:` であること (`javascript:` / `data:` / `file:` / `ftp:` などは拒否する)
+2. protocol が許す protocol であること。本番は `https:` だけで、本番以外は `http:` も許す (`javascript:` / `data:` / `file:` / `ftp:` などは拒否する)
 3. userinfo が無いこと (`url.username === ""` かつ `url.password === ""`)。`https://app.taimei-code.com@evil.com/` のような混同攻撃を明示的に弾く
 4. `url.hostname` の末尾ドット (`app.taimei-code.com.`) を除去する
 5. その host が `TAIMEI_SERVICES[service].allowedHostPattern` (RegExp) に**完全一致**すること
 
-`allowedHostPattern` は service ごとに env で切り替える。
+許す protocol と `allowedHostPattern` は、本番の定数を `src/redirect-hosts.ts` に置き、本番以外の build と実行だけが `testing/redirect-hosts.ts` に差し替える (2026-10-24 追記 (#330)。以前は `APP_ENV` で切り替えていた。理由は [ADR-0021](./0021-production-code-knows-no-environment.md))。
 
-- `APP_ENV !== "production"`: `.taimei-code.com` / `.taimei-code.local` / `localhost` を完全一致で許可する
-- `APP_ENV === "production"`: `.taimei-code.com` のみ完全一致で許可する
+- 本番: `.taimei-code.com` の host を完全一致で許可する
+- 本番以外: 本番の host に加えて `.taimei-code.localhost` / `localhost` を完全一致で許可する
 
 `signInParamsSchema` (`src/sign-in-params.ts`) は `redirect_url` と `sign_up_url` に `min(1).max(2048)` の Zod 制約を加える。**共通画面 SPA** で parse に失敗した場合は `/auth/error?reason=invalid_redirect_url` に誘導する。
 
@@ -28,7 +28,7 @@ freee-accounts の `lib/freee/url_validator.rb` は host の suffix matching だ
 - **完全一致 regex**: `endsWith(".taimei-code.com")` のような suffix match は `evil-taimei-code.com` を通してしまう典型的なバグの原因になる。完全一致ならこの攻撃面は無い
 - **Punycode の正規化を URL parser に任せる**: JavaScript の `URL` は IDN を Punycode に自動で正規化する。Cyrillic の homograph (а: U+0430) を含む host は `xn--` で始まるため regex に一致せず弾かれる。大文字も小文字に変換される (URL spec)
 - **userinfo の明示的な拒否**: parser を通せば hostname は結局 `evil.com` に解決され allowlist で弾かれるが、意図しない解釈経路を予防的に塞ぐため明示的にも拒否する
-- **localhost の完全一致**: docker compose の単体起動 (auth-service:3100) で `redirect_url=http://localhost:3100/account` を通すため。完全一致なので `localhost.evil.com` は弾かれる
+- **localhost の完全一致 (本番以外だけ)**: e2e (`localhost:3110`) で `redirect_url=http://localhost:3110/account` を通すため。完全一致なので `localhost.evil.com` は弾かれる
 - **max(2048)**: 主要ブラウザや nginx の既定の URL 長制限は 2048〜8192 byte である。安全側の 2048 を採る
 
 ## Consequences
