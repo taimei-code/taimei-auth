@@ -10,7 +10,9 @@ consumer 側の上位 ADR (`plans/taimei/ADR-004-idp-encapsulation.md`) で SDK 
 
 ### Cookie 名は SDK 内に閉じる
 
-`packages/auth-client/src/cookie.ts` で `SESSION_COOKIE_NAMES` (`better-auth.session_token` / `__Secure-better-auth.session_token`) を const として定義し、**SDK の外部には export しない**。consumer は `getSessionTokenFromCookieStore` / `hasAuthCookie` / `extractSessionTokenFromCookieHeader` の helper 関数を通してだけ session token に触れる。
+`packages/auth-client/src/cookie.ts` で `SESSION_COOKIE_NAME` (`__Secure-better-auth.session_token`) を const として定義し、**SDK の外部には export しない**。consumer は `getSessionTokenFromCookieStore` / `hasAuthCookie` / `extractSessionTokenFromCookieHeader` の helper 関数を通してだけ session token に触れる。
+
+追記 2026-10-25 (#330): 名前は `__Secure-better-auth.session_token` の 1 つにした。#330 で試験と開発の環境も常に `Secure` の cookie を出すようになり、`__Secure-` の無い名前を出す server が無くなったためである。`__Secure-` の無い名前は `Secure` でない origin や同じ domain の別の subdomain からも書けるので、SDK はその名前を読まない (auth-client 4.0.0)。
 
 `cookie` パッケージなどの外部依存は持たず、手書きで parse する。SDK は peerDependencies を最小にする方針で (現状は ConnectRPC 関連のみ)、Cookie ヘッダの parse は RFC 6265 が単純で 30 行未満で書けるため、依存を追加するコストの方が自前実装のコストより大きい。
 
@@ -28,7 +30,7 @@ SDK の interface は consumer のロックイン面である。ここに漏れ�
 ## Consequences
 
 - consumer 側で「session token を直接見たい」という要求が出たら、helper 関数の追加で対応する (生の cookie 値を返す関数を増やすのはよいが、`SessionData` の構造は拡張しない)
-- `cookie.ts` のテストでは、公開 API だけで全シナリオを通すことで、`SESSION_COOKIE_NAMES` が export されていないことを間接的に確認する
+- `cookie.ts` のテストでは、公開 API だけで全シナリオを通すことで、`SESSION_COOKIE_NAME` が export されていないことを間接的に確認する
 - IdP を差し替える時に触るのは `packages/auth-client/src/cookie.ts` と **auth ホスト** の better-auth の接続部 (`src/auth.ts`) だけである。consumer のコードは変更しなくてよい
 
 ## 追記 (2026-10-04): `SessionData` に足してよいもの

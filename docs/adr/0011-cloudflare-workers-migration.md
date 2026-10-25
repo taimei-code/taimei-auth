@@ -95,6 +95,8 @@ Bun 専用 SDK の混入を防ぐ。Workers は `src/sentry-cloudflare.ts` が `
 3. **DB verification 消費の hang**: `verification.storeInDatabase: true` の DB token 消費が workerd
    では完走しない。`isBunRuntime() && isLocalEnvironment()` とし、Workers では false にする (本番と同じ
    secondaryStorage)。Bun-local の e2e は postgres からの token 抽出を維持する。
+   (2026-10-24 追記 (#330)) `storeInDatabase` の指定を消し、どの runtime でも既定の false にした。verification の
+   行を読む code は無く、本番以外の Bun の server は TTL store を DB に置く。理由は [ADR-0021](./0021-production-code-knows-no-environment.md)
 
 ### 本番デプロイで発見した workerd 固有 2 点
 
