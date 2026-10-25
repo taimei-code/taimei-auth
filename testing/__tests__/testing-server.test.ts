@@ -8,6 +8,7 @@ import { readUserIdsByEmails } from "../../db/testing/read";
 import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
+import { REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER } from "../non-production-redirect-hosts-check";
 import { AUTH_HOST_ORIGIN } from "./origins";
 import { accountPickerPropsOf, devHomePropsOf } from "./page-props-of";
 
@@ -105,6 +106,16 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
 
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain("FATAL: AUTH_SERVICE_KEY is required");
+  });
+
+  test("redirect 先の差し替えの preload が無ければ、APP_ENV=test でも 0 以外で終わり、preload を求める", () => {
+    const result = Bun.spawnSync([process.execPath, TESTING_ENTRY], {
+      cwd: tmpdir(),
+      env: testingServerEnv("test", unusedPort()),
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER);
   });
 
   test("APP_ENV=test なら起動し、better-auth の疎通確認に 200 を返す", async () => {
