@@ -7,8 +7,9 @@
   ],
   "trustedDependencies": [],
   "scripts": {
-    "dev:web": "vite --config web/vite.config.ts",
+    "dev:web": "vite --config web/non-production/vite.config.ts",
     "build:web": "vite build --config web/vite.config.ts",
+    "build:web:non-production": "vite build --config web/non-production/vite.config.ts",
     "generate": "buf generate",
     "generate:check": "diff -r src/gen packages/auth-client/src/gen",
     "db:generate": "drizzle-kit generate",

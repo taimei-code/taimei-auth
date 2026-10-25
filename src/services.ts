@@ -1,4 +1,4 @@
-import { isLocalEnvironment } from "./env";
+import { ALLOWED_REDIRECT_HOST_PATTERNS } from "@core/redirect-hosts";
 
 export const SERVICE_NAMES = ["taimei", "accounts"] as const;
 export type ServiceName = (typeof SERVICE_NAMES)[number];
@@ -9,21 +9,15 @@ export interface TaimeiServiceConfig {
   readonly noindex: boolean;
 }
 
-const isLocalEnv = isLocalEnvironment();
-
 export const TAIMEI_SERVICES: Record<ServiceName, TaimeiServiceConfig> = {
   taimei: {
     name: "taimei",
-    allowedHostPattern: isLocalEnv
-      ? /^app\.taimei-code\.(com|local)$|^localhost$/
-      : /^app\.taimei-code\.com$/,
+    allowedHostPattern: ALLOWED_REDIRECT_HOST_PATTERNS.taimei,
     noindex: false,
   },
   accounts: {
     name: "taimei-auth",
-    allowedHostPattern: isLocalEnv
-      ? /^auth\.taimei-code\.(com|local)$|^localhost$/
-      : /^auth\.taimei-code\.com$/,
+    allowedHostPattern: ALLOWED_REDIRECT_HOST_PATTERNS.accounts,
     noindex: true,
   },
 } as const;

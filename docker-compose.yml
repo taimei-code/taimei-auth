@@ -1,9 +1,6 @@
-# APP_ENV は web/vite.config.ts が define で bundle に埋め込むため build args で渡す (無いと "production" で build され、services.ts の isLocalEnv が false になって localhost と .local が allowlist で弾かれる)
 x-dev-build: &dev-build
   context: .
   target: dev
-  args:
-    APP_ENV: development
 
 # taimei 側の compose が external として参照する
 networks:
@@ -51,10 +48,10 @@ services:
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
-      # taimei (app.taimei-code.local:3001) とサブドメインをまたぐ Cookie を成立させるため localhost でなく .taimei-code.local の host を使う
-      AUTH_SERVICE_URL: http://auth.taimei-code.local:3100
-      AUTH_COOKIE_DOMAIN: taimei-code.local
-      AUTH_TRUSTED_ORIGINS: http://app.taimei-code.local:3001,http://auth.taimei-code.local:3100
+      # taimei (app.taimei-code.localhost:3001) とサブドメインをまたぐ Cookie を成立させるため localhost でなく .taimei-code.localhost の host を使う
+      AUTH_SERVICE_URL: http://auth.taimei-code.localhost:3100
+      AUTH_COOKIE_DOMAIN: taimei-code.localhost
+      AUTH_TRUSTED_ORIGINS: http://app.taimei-code.localhost:3001,http://auth.taimei-code.localhost:3100
       MFA_TOTP_ENCRYPTION_KEYS: ${MFA_TOTP_ENCRYPTION_KEYS}
       APP_ENV: development
       APP_NAME: taimei
@@ -87,7 +84,7 @@ services:
     networks:
       taimei-network:
         aliases:
-          - auth.taimei-code.local
+          - auth.taimei-code.localhost
 
 volumes:
   auth-postgres-data:

@@ -1,6 +1,5 @@
+import { ALLOWED_REDIRECT_PROTOCOLS } from "@core/redirect-hosts";
 import { TAIMEI_SERVICES, type ServiceName } from "./services";
-
-const ALLOWED_PROTOCOLS = ["http:", "https:"] as const;
 
 export const validateRedirectUrl = (redirectUrl: string, service: ServiceName): boolean => {
   let url: URL;
@@ -10,7 +9,7 @@ export const validateRedirectUrl = (redirectUrl: string, service: ServiceName): 
     return false;
   }
 
-  if (!ALLOWED_PROTOCOLS.includes(url.protocol as (typeof ALLOWED_PROTOCOLS)[number])) {
+  if (!ALLOWED_REDIRECT_PROTOCOLS.includes(url.protocol)) {
     return false;
   }
 

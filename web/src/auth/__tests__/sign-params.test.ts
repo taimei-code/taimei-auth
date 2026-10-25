@@ -10,11 +10,11 @@ describe("invitationAcceptCallbackUrl", () => {
 
   test("origin 起点の accept-invitation URL に token を encode して載せる (redirect_url へ直接戻すと受諾を飛ばして membership が作られない)", () => {
     globalThis.window = {
-      location: { origin: "http://auth.taimei-code.local:3100" },
+      location: { origin: "http://auth.taimei-code.localhost:3100" },
     } as unknown as typeof globalThis.window;
 
     expect(invitationAcceptCallbackUrl("inv/+abc")).toBe(
-      "http://auth.taimei-code.local:3100/auth/signup/accept-invitation?invitation_token=inv%2F%2Babc",
+      "http://auth.taimei-code.localhost:3100/auth/signup/accept-invitation?invitation_token=inv%2F%2Babc",
     );
   });
 });
@@ -23,13 +23,13 @@ describe("declaredSignInParams", () => {
   test("search に残る宣言していない key (error 等の古い状態) を相互リンクに引き継がない", () => {
     const search = {
       service_name: "accounts" as const,
-      redirect_url: "http://auth.taimei-code.local:3100/account",
+      redirect_url: "http://auth.taimei-code.localhost:3100/account",
       error: "signin_failed",
     };
 
     expect(declaredSignInParams(search)).toEqual({
       service_name: "accounts",
-      redirect_url: "http://auth.taimei-code.local:3100/account",
+      redirect_url: "http://auth.taimei-code.localhost:3100/account",
       sign_up_url: undefined,
       invitation_token: undefined,
     });

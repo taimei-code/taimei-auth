@@ -9,8 +9,7 @@ if [[ -f .env ]]; then
   set +a
 fi
 
-# vite の define が build 時の APP_ENV を埋め込む (未設定は production 扱いで localhost を拒否する)
-APP_ENV=development bun run build:web
+bun run build:web:non-production
 bun run e2e/seed.ts
 : > e2e/.server.log
 

@@ -17,7 +17,7 @@ const P = "aer-test-";
 const { run, cleanup } = dbTest(P);
 
 const FIXTURE_BODY = "spa-shell-fixture";
-const REDIRECT_URL = "http://auth.taimei-code.local:3100/account";
+const REDIRECT_URL = "http://auth.taimei-code.localhost:3100/account";
 const VALID_QUERY = `service_name=accounts&redirect_url=${encodeURIComponent(REDIRECT_URL)}`;
 
 const buildApp = (actor: StubActor) => {
@@ -113,7 +113,7 @@ describe("authEntryRedirect", () => {
         Effect.gen(function* () {
           const db = yield* TestDb;
           const actor = yield* db.seedUser("m0");
-          const signUpUrl = "http://auth.taimei-code.local:3100/welcome";
+          const signUpUrl = "http://auth.taimei-code.localhost:3100/welcome";
           const res = yield* request(
             actor,
             `/auth/?${VALID_QUERY}&sign_up_url=${encodeURIComponent(signUpUrl)}`,

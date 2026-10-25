@@ -20,13 +20,16 @@ describe("validateRedirectUrl", () => {
       expect(validateRedirectUrl("https://app.taimei-code.com/", "accounts")).toBe(false);
     });
 
-    test("http も許可 (e2e / dev 環境用)", () => {
-      expect(validateRedirectUrl("http://app.taimei-code.com/", "taimei")).toBe(true);
+    test("本番以外の差し替えでは、http の手元の host を許す", () => {
+      expect(validateRedirectUrl("http://localhost:3100/account", "accounts")).toBe(true);
+      expect(
+        validateRedirectUrl("http://auth.taimei-code.localhost:3100/account", "accounts"),
+      ).toBe(true);
+      expect(validateRedirectUrl("http://app.taimei-code.localhost:3001/", "taimei")).toBe(true);
     });
 
-    test("APP_ENV 未設定 (= local 扱い) では localhost も許可", () => {
-      expect(validateRedirectUrl("http://localhost:3100/account", "accounts")).toBe(true);
-      expect(validateRedirectUrl("http://localhost:3100/", "taimei")).toBe(true);
+    test("本番以外の差し替えでも、もう使わない .local の host は拒む", () => {
+      expect(validateRedirectUrl("http://auth.taimei-code.local:3100/", "accounts")).toBe(false);
     });
 
     test("localhost suffix attack は弾く", () => {

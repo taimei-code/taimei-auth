@@ -3,6 +3,7 @@
   "entry": [
     "testing/server.ts",
     "testing/worker.ts",
+    "testing/redirect-hosts.ts",
     "web/index.html",
     "web/non-production/main.tsx",
     "db/migrate.ts",
