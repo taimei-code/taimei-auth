@@ -104,7 +104,7 @@ describe("MFA の状態変更の試行枠 (session ごとに 60 秒で 10 回、
 
   const signedIn = Effect.gen(function* () {
     const user = yield* TestDb.use((db) => db.seedUser("budget"));
-    const cookie = `better-auth.session_token=${crypto.randomUUID()}`;
+    const cookie = `__Secure-better-auth.session_token=${crypto.randomUUID()}`;
     return { app: buildAppWith(signedInLayer(user.id, user.email)), cookie };
   });
   const post = (app: Hono, cookie: string, path: string, body: unknown) =>
