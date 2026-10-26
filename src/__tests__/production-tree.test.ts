@@ -1,14 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { REPO_ROOT } from "./config-invariant-helpers";
+import {
+  NON_PRODUCTION_DIRS,
+  REPO_ROOT,
+  readWorkflow as readWorkflowAs,
+} from "./config-invariant-helpers";
 import { grepFiles } from "./source-scan";
 
 const PRODUCTION_TREE_SCRIPT = "scripts/build-production-tree.sh";
 // biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま比べる
 const PRODUCTION_TREE_DIR = "${{ runner.temp }}/production-tree";
 const EXCLUSION_LIST_DECLARATION = "EXCLUDED_FROM_PRODUCTION=\\(";
-const NON_PRODUCTION_DIRS = ["db/testing", "testing", "web/non-production"];
 
 type Step = { name?: string; run?: string; "working-directory"?: string };
 type Workflow = {
@@ -17,8 +20,7 @@ type Workflow = {
   jobs?: Record<string, { if?: string; steps?: Step[] }>;
 };
 
-const readWorkflow = (name: string): Workflow =>
-  Bun.YAML.parse(readFileSync(join(REPO_ROOT, ".github/workflows", name), "utf8")) as Workflow;
+const readWorkflow = (name: string) => readWorkflowAs<Workflow>(name);
 
 const stepsOf = (workflow: Workflow): Step[] =>
   Object.values(workflow.jobs ?? {}).flatMap((job) => job.steps ?? []);

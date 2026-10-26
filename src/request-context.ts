@@ -1,4 +1,4 @@
-import { isBunRuntime } from "./env";
+import { CLIENT_IP_HEADER } from "./client-ip";
 
 export type ClientContext = { ip: string; userAgent: string };
 
@@ -67,37 +67,33 @@ export function parseProxyTrust(raw: string | undefined): ProxyTrust {
   return hops === 0 ? DIRECT : { _tag: "BehindProxy", hops };
 }
 
-export function resolveForwardedClientIp(headers: Headers, trust: ProxyTrust): string {
-  if (trust._tag !== "BehindProxy") return UNKNOWN;
+export function resolveForwardedClientIp(headers: Headers, trust: ProxyTrust): string | null {
+  if (trust._tag !== "BehindProxy") return null;
 
   const realIp = trust.hops === 1 ? parseIpLiteral(headers.get("x-real-ip")) : null;
 
   const forwardedHeader = headers.get("x-forwarded-for");
-  if (forwardedHeader === null) return realIp ?? UNKNOWN;
+  if (forwardedHeader === null) return realIp;
 
   const chain = forwardedHeader.split(",");
   const hopIndex = chain.length - trust.hops;
   const forwardedIp = hopIndex >= 0 ? parseIpLiteral(chain[hopIndex]) : null;
-  if (!forwardedIp) return UNKNOWN;
+  if (!forwardedIp) return null;
 
-  if (realIp && realIp !== forwardedIp) return UNKNOWN;
+  if (realIp && realIp !== forwardedIp) return null;
   return forwardedIp;
 }
 
-export function resolveCloudflareClientIp(headers: Headers): string {
-  return parseIpLiteral(headers.get("cf-connecting-ip")) ?? UNKNOWN;
+export function resolveCloudflareClientIp(headers: Headers): string | null {
+  return parseIpLiteral(headers.get("cf-connecting-ip"));
 }
 
 export function proxyTrustFromEnv(): ProxyTrust {
   return parseProxyTrust(process.env.AUTH_TRUSTED_PROXY_HOPS);
 }
 
-function resolveClientIp(headers: Headers): string {
-  if (isBunRuntime()) return resolveForwardedClientIp(headers, proxyTrustFromEnv());
-  return resolveCloudflareClientIp(headers);
-}
-
 export function getClientContext(headers: Headers | null | undefined): ClientContext {
   const userAgent = headers?.get("user-agent") || UNKNOWN;
-  return { ip: headers ? resolveClientIp(headers) : UNKNOWN, userAgent };
+  const ip = parseIpLiteral(headers?.get(CLIENT_IP_HEADER)) ?? UNKNOWN;
+  return { ip, userAgent };
 }

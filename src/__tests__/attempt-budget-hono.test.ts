@@ -1,4 +1,5 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../client-ip";
 import { Effect, Exit, Layer } from "effect";
 import { Hono } from "hono";
 import { buildApp as buildServerApp } from "../app";
@@ -19,7 +20,7 @@ attemptBudgetProgram satisfies (
   subject: string,
 ) => Effect.Effect<MiddlewareDecision, RateLimited, TtlStore | SentryService>;
 
-const TEST_KEY_PREFIX = "attempt-budget-test";
+const TEST_KEY_PREFIX = ATTEMPT_BUDGETS.canaryTokenPerIp.keyPrefix;
 
 const budgetOf = (limit: number): AttemptBudget<"allow"> => ({
   keyPrefix: TEST_KEY_PREFIX,
@@ -102,18 +103,6 @@ describe("attemptBudgetMiddleware", () => {
 });
 
 describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () => {
-  const ENV = { AUTH_TRUSTED_PROXY_HOPS: "1" };
-  const previous = Object.keys(ENV).map((key) => [key, process.env[key]] as const);
-  beforeAll(() => {
-    Object.assign(process.env, ENV);
-  });
-  afterAll(() => {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
-
   test("同じ IP で 5 回数えた後の 6 回目は、メールを送る前に 429 の RateLimited を返し、Retry-After を付けない", async () => {
     const ip = `2001:db8::${crypto.randomUUID().slice(0, 4)}`;
     testKvStore.set(attemptBudgetKey(ATTEMPT_BUDGETS.magicLinkPerIp, ip), "5", 60);
@@ -121,7 +110,7 @@ describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () =
       "/api/auth/sign-in/magic-link",
       {
         method: "POST",
-        headers: { "content-type": "application/json", "x-forwarded-for": ip },
+        headers: { "content-type": "application/json", [CLIENT_IP_HEADER]: ip },
         body: JSON.stringify({ email: "rate-limit@example.com" }),
       },
     );

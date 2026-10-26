@@ -4,7 +4,7 @@ import {
   deleteInvitationByToken,
   deleteUsersByIds,
 } from "@/db/testing/cleanup";
-import { databaseTarget, LOCAL_DATABASE_HOSTNAMES } from "@/db/testing/local-database";
+import { requireLocalDatabase } from "@/db/testing/local-database";
 import {
   readCompanyIdsByName,
   readUser,
@@ -15,17 +15,6 @@ import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
 import type { ConsumableFixture } from "./fixture-names";
 
 type Role = SeedInvitationOptions["role"];
-
-function assertLocalDatabase(): void {
-  const target = databaseTarget(process.env.DATABASE_URL);
-  if (target._tag !== "Local") {
-    const hostname = target._tag === "Remote" ? target.hostname : null;
-    console.error(
-      `[e2e-seed] abort: DATABASE_URL の host "${hostname ?? "(unset or unparsable)"}" はローカル DB (${[...LOCAL_DATABASE_HOSTNAMES].join(" / ")}) ではない。e2e seed は e2e- prefix の user / company を削除するため実行しない`,
-    );
-    process.exit(1);
-  }
-}
 
 const E2E_PREFIX = "e2e-";
 const fixtureIds = ids(E2E_PREFIX);
@@ -61,7 +50,7 @@ type FixtureSpec = {
 };
 
 async function ensureFixture(spec: FixtureSpec): Promise<void> {
-  assertLocalDatabase();
+  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: spec.members.map((m) => m.suffix),
     companySuffixes: [spec.company],
@@ -112,7 +101,7 @@ const DELETE_MULTI_CURRENT_COMPANY = "delete-multi-current";
 const DELETE_MULTI_OTHER_COMPANY = "delete-multi-other";
 
 async function ensureDeleteMultiFixture(): Promise<void> {
-  assertLocalDatabase();
+  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: [DELETE_MULTI_USER],
     companySuffixes: [DELETE_MULTI_CURRENT_COMPANY, DELETE_MULTI_OTHER_COMPANY],
@@ -130,7 +119,7 @@ const SWITCH_COMPANY_B = "switch-b";
 const COMPANIES_CREATED_BY_SPECS = ["switch-added", "switch-b-renamed"];
 
 async function ensureSwitchFixture(): Promise<void> {
-  assertLocalDatabase();
+  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: [SWITCH_USER, "switch-a-mate", "switch-b-mate"],
     companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, ...COMPANIES_CREATED_BY_SPECS],
@@ -161,7 +150,7 @@ const MFA_FIXTURE: FixtureSpec = {
 const INVITATION_TOKEN = "e2e-invitation-token";
 
 async function ensureInvitationFixture(): Promise<void> {
-  assertLocalDatabase();
+  requireLocalDatabase(process.env.DATABASE_URL);
   const main = await findTheMainCompany();
   await removeFixtureRows({ userSuffixes: ["invitee"] });
   await deleteInvitationByToken(INVITATION_TOKEN);
@@ -199,7 +188,7 @@ export const consumableFixtures: Record<ConsumableFixture, () => Promise<void>> 
 };
 
 export async function resetAllFixtures(): Promise<void> {
-  assertLocalDatabase();
+  requireLocalDatabase(process.env.DATABASE_URL);
   const staleIds = await readUserIdsByEmailPrefix(E2E_PREFIX);
   await deleteAuditByUserIds(staleIds);
   await deleteUsersByIds(staleIds);

@@ -1,5 +1,5 @@
 import { buildCompanySignupUrl } from "@taimei-code/auth-client";
-import { getSessionCookie } from "better-auth/cookies";
+import { sessionCookieOf } from "../session-cookie";
 import { Effect } from "effect";
 import type { Context, Next } from "hono";
 
@@ -14,7 +14,7 @@ const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
 
 export const authEntryRedirect = (c: Context, next: Next) => {
   const headers = c.req.raw.headers;
-  if (!AUTH_ENTRY_PATHS.has(c.req.path) || !getSessionCookie(headers)) return next();
+  if (!AUTH_ENTRY_PATHS.has(c.req.path) || !sessionCookieOf(headers)) return next();
   return runMiddleware(c, next, authEntryRedirectProgram(c));
 };
 

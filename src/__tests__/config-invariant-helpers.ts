@@ -339,3 +339,8 @@ export function workspacePackageNames(): string[] {
     existsSync(join(packagesDir, name, "package.json")),
   );
 }
+
+export const NON_PRODUCTION_DIRS = ["db/testing", "testing", "web/non-production"];
+
+export const readWorkflow = <Workflow>(name: string): Workflow =>
+  Bun.YAML.parse(readFileSync(join(REPO_ROOT, ".github/workflows", name), "utf8")) as Workflow;

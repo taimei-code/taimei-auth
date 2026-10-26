@@ -9,6 +9,7 @@ import { tryAuthApi } from "../../errors";
 import { JSON_HEADERS } from "../client-facing-error";
 import { TestDb } from "../../__tests__/test-db";
 import { testKvStore } from "../../__tests__/test-ttl-store";
+import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import {
   buildTestApp,
   normalizeResponse,
@@ -377,7 +378,11 @@ describe("account routes migration snapshot", () => {
           const co = yield* db.seedCompany("inv-quota");
           yield* db.seedMembership(owner.id, co, "OWNER");
           const hour = new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length);
-          testKvStore.set(`invitation_rate:${co}:${hour}`, "50", 3600);
+          testKvStore.set(
+            attemptBudgetKey(ATTEMPT_BUDGETS.invitationsPerCompanyHour, `${co}:${hour}`),
+            "50",
+            3600,
+          );
           const actual = yield* invoke(
             buildTestApp(owner),
             "POST",

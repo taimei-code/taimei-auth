@@ -1,5 +1,5 @@
 import { buildAccountUrl, buildAuthLoginUrl } from "@taimei-code/auth-client";
-import { getSessionCookie } from "better-auth/cookies";
+import { sessionCookieOf } from "../session-cookie";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import type { Context } from "hono";
@@ -31,7 +31,7 @@ const buildLoginRedirect = (url: URL): URL => {
 
 export const loginShortcutProgram = Effect.fnUntraced(function* (c: Context) {
   const headers = c.req.raw.headers;
-  const authenticated = getSessionCookie(headers)
+  const authenticated = sessionCookieOf(headers)
     ? yield* checkSession(headers).pipe(
         Effect.map((status) => status._tag === "Active"),
         Effect.catchTag(

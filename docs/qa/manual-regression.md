@@ -3,7 +3,7 @@
 自動化できない回帰ケース (実ブラウザと実ドメイン、外部サービスとの実連携、実 workerd、別 repo の build context のいずれかが必要なもの) の台帳である。
 
 - **ID 体系**: `QA-MR-*` はこの文書専用の体系である。自動テストの名前に書いてよい番号は、root の `CLAUDE.md` の test 名の規則が決める
-- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
+- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。「契機の path」は、変えた file がその glob に当たれば契機に当たることを示す。本番以外の file がどれかの glob に当たることと、どの glob も実在の file に当たることは `src/__tests__/manual-regression-triggers.test.ts` が固定する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
 - **担当**: 該当 PR の作者 (デプロイ後のスモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
 
@@ -14,6 +14,7 @@
 ## QA-MR-01: cross-subdomain Cookie の実ドメイン共有 (#30 / #89 家系)
 
 - **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` の周辺を触る PR、および本番デプロイ後
+- **契機の path**: `src/cookie-domain.ts`、`src/auth.ts`、`src/env.ts`、`wrangler.jsonc`
 - **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済みで、ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有である。session cookie の発行者は 2 つあり ([GLOSSARY.md「session cookie」](../../GLOSSARY.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済みである。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
 - **手順**:
   1. ブラウザで `https://auth.taimei-code.com` に **MFA 無効の user で** ログインする
@@ -24,6 +25,7 @@
 ## QA-MR-02: GitHub OAuth 実連携 (第 2 の認証経路)
 
 - **契機**: better-auth `socialProviders` / OAuth callback / account linking / **MFA チャレンジ** の matcher (`/callback/:id`) を触る PR
+- **契機の path**: `src/auth.ts`、`src/auth-plugins/**`
 - **前提**: `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` を設定した環境 (local でもよい。未設定だと GitHub ボタン自体が機能しない)
 - **手順**:
   1. `/auth/?service_name=accounts&redirect_url=<有効 URL>` を開き「GitHub でログイン」を押す
@@ -36,6 +38,7 @@
 ## QA-MR-03: workerd 固有挙動 (Worker hung 非再発、#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
+- **契機の path**: `db/client.ts`、`src/worker.ts`、`wrangler.jsonc`
 - **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。src/CLAUDE.md「gotcha」を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
@@ -47,6 +50,7 @@
 ## QA-MR-04: Resend 実メールのレンダリング
 
 - **契機**: `src/email/` (テンプレート / sanitize / 差出人) を触る PR
+- **契機の path**: `src/email/**`
 - **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
   1. magic link ログインを実行し、受信メールの件名、本文、リンクを実メールクライアントで確認する。リンクを開いてログインする
@@ -56,6 +60,7 @@
 ## QA-MR-05: magic link の期限切れ (5 分)
 
 - **契機**: better-auth `magicLink.expiresIn` / verification の保存方式を触る PR
+- **契機の path**: `src/auth.ts`、`src/ttl-store-better-auth.ts`、`src/kv-store.do.ts`
 - **前提**: local でよい (使用済み link の拒否は `e2e/auth-flow.e2e.ts` が自動化済み。実時間の経過が必要な期限切れのみ手動で見る)
 - **手順**:
   1. magic link を発行し、クリックせず 5 分以上待つ
@@ -66,6 +71,7 @@
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 
 - **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` を触る PR
+- **契機の path**: `src/mfa/totp/**`、`src/auth-plugins/mfa-challenge.ts`、`web/src/mfa/MfaEnrollDialog.tsx`
 - **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済みで、ここで見るのは実アプリが QR コードと URI を解釈できるかである
 - **手順**:
   1. `/account/security` の「多要素認証 (MFA)」を有効化し、表示された QR コードを認証アプリのカメラで読み取る
@@ -78,6 +84,7 @@
 ## QA-MR-07: MFA 有効化 / 無効化の実 Resend メール
 
 - **契機**: 多要素認証 (MFA) の有効化 / 無効化の通知メールテンプレート (`src/email/`) を触る PR (QA-MR-04 の MFA 版。同じ前提、同じ観点で見る)
+- **契機の path**: `src/email/**`
 - **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
   1. 多要素認証 (MFA) を有効化し、受信メールを実メールクライアントで確認する
@@ -87,6 +94,7 @@
 ## QA-MR-08: 実機スマートフォンでのコード入力 (数字キーボード / OTP 自動入力)
 
 - **契機**: `use-mfa-code-entry` / `MfaChallenge` / 有効化・無効化ダイアログのコード入力欄を触る PR
+- **契機の path**: `web/src/mfa/use-mfa-code-entry.ts`、`web/src/mfa/pages/MfaChallenge.tsx`、`web/src/mfa/MfaChallengeView.tsx`、`web/src/mfa/MfaEnrollDialog.tsx`
 - **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済みで、ここで見るのは実 OS がその属性にどう反応するかである
 - **手順**:
   1. 実機で `/auth/mfa` を開き、コード入力欄をタップする
@@ -94,26 +102,25 @@
   3. リカバリーコード入力に切り替え、同様に貼り付けて送信する
 - **期待結果**: 6 桁入力欄で数字キーボードが開く。OS が OTP 自動入力の候補を出した場合はタップだけで 6 桁が入る。貼り付け時に全角数字や空白が混ざっても半角詰めに正規化されて通り、`invalid_code` にならない。リカバリーコード入力に切り替えると 6 桁前提の入力制限が外れ、コードをそのまま入力・貼り付けできる
 
-## QA-MR-09: consumer が受け取る試験用の image の起動と試験 API のログイン
+## QA-MR-09: consumer が受け取る試験用の image の画面と版上げ
 
-- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式を変える PR、`testing/server.ts`・`testing/routes.ts`・`testing/dev-home.ts`・`testing/auth-host-origin.ts`・`testing/decode-body.ts`・`testing/chosen-account.ts`・`testing/browser-key.ts`・`testing/non-production-shell.ts`・`testing/bun-server.ts`・`testing/redirect-hosts.ts`・`testing/redirect-hosts-plugin.ts`・`testing/non-production-redirect-hosts-check.ts`・`web/non-production/`・`web/vite.config.ts`・`db/testing/ttl-store.ts`・`db/testing/dev-accounts.ts`・`packages/auth-client/testing/compose.template.yml` を変える PR
-- **前提**: consumer は試験用の image を build せず、SDK に同梱した compose の断片が、publish の workflow が出した image を digest で参照する (ADR-0020 の Decision 1・2)。このケースは同じ image をローカルで build し、断片の template に image と port の override を重ねて単体で起動し、migrate から SDK の client でのログインまでを通して確かめる。本 repo の CI の docker job と `scripts/docker-smoke.sh` は build と単発の probe までで、この経路を通して流さない。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。SDK を build しておく (`cd packages/auth-client && bun run build`)。`qa` を使う手順は、次で試験の値と断片を起動する関数を入れた同じ shell で (session cookie の署名の鍵 `TAIMEI_AUTH_SECRET` を手順 6 の前後で変えないため)、repo の root から実行する: `export TAIMEI_AUTH_URL=http://localhost:3100 TAIMEI_AUTH_HOSTNAME=localhost TAIMEI_AUTH_COOKIE_DOMAIN= TAIMEI_AUTH_CONSUMER_ORIGINS=http://localhost:3000 TAIMEI_AUTH_SECRET="$(openssl rand -hex 32)" TAIMEI_AUTH_SERVICE_KEY=qa-mr-09-service-key TAIMEI_AUTH_APP_NAME=qa-mr-09; qa() { printf 'services:\n  taimei-auth:\n    image: taimei-auth-testing:local\n    ports: ["127.0.0.1:3100:3100"]\n' | docker compose -p qa-mr-09 -f packages/auth-client/testing/compose.template.yml -f - "$@"; }`
+- **契機**: Dockerfile の stage 構成 / `packages` の COPY 方式、試験の環境 (`testing/`・`db/testing/`)、本番以外の画面、SDK の試験の環境の面、断片と publish の手順を変える PR
+- **契機の path**: `Dockerfile`、`testing/**`、`db/testing/**`、`packages/auth-client/testing/**`、`packages/auth-client/src/testing.ts`、`web/non-production/**`、`web/vite.config.ts`、`scripts/generate-testing-fragment.sh`、`scripts/testing-image-smoke.sh`、`.github/workflows/publish-auth-client.yml`
+- **前提**: consumer は試験用の image を build せず、SDK に同梱した compose の断片が、publish の workflow が出した image を digest で参照する (ADR-0020 の Decision 1・2)。断片のとおりに起動して `/health`・試験 API の利用者のログイン・開発者ホーム・`APP_ENV=production` で止まることは `scripts/testing-image-smoke.sh` が確かめ、PR の CI の docker job と publish の workflow が同じ script を流す。このケースは browser でしか見られない画面と、版上げで volume を引き継ぐことを見る。port 3100 が競合するため、本 repo の compose を先に落とす (`docker compose down`)。SDK を build しておく (`cd packages/auth-client && bun run build`)。`qa` を使う手順は、次で試験の値と断片を起動する関数を入れた同じ shell で (session cookie の署名の鍵 `TAIMEI_AUTH_SECRET` を手順 4 の前後で変えないため)、repo の root から実行する: `export TAIMEI_AUTH_URL=http://localhost:3100 TAIMEI_AUTH_HOSTNAME=localhost TAIMEI_AUTH_COOKIE_DOMAIN= TAIMEI_AUTH_CONSUMER_ORIGINS=http://localhost:3000 TAIMEI_AUTH_SECRET="$(openssl rand -hex 32)" TAIMEI_AUTH_SERVICE_KEY=qa-mr-09-service-key TAIMEI_AUTH_APP_NAME=qa-mr-09; qa() { printf 'services:\n  taimei-auth:\n    image: taimei-auth-testing:local\n    ports: ["127.0.0.1:3100:3100"]\n' | docker compose -p qa-mr-09 -f packages/auth-client/testing/compose.template.yml -f - "$@"; }`
 - **手順**:
   1. `docker build --target dev -t taimei-auth-testing:local .`
-  2. `qa up --wait`
-  3. `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:3100/health`
-  4. repo の root から `bun -e 'import { createTestingClient } from "@taimei-code/auth-client/testing"; const user = await createTestingClient("http://localhost:3100").createSignedInUser({ companies: [{ role: "OWNER" }], returnTo: "http://localhost:3100/account" }); console.log(user.loginUrl)'` を実行し、出た `loginUrl` を host の browser で開く
-  5. Chrome で、別の browser の profile (または private window) から `http://localhost:3100/auth/?service_name=accounts&redirect_url=http://localhost:3100/account` と `http://localhost:3100/auth/signup?service_name=accounts&redirect_url=http://localhost:3100/account` を開き、続けて同じ browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http://localhost:3100/account` を開いて `dev-owner@example.com` を選ぶ
-  6. `qa down` → `qa up --wait` の後、手順 5 の browser で `http://localhost:3100/account` を開き直す
-  7. `qa run --rm --no-deps -e APP_ENV=production taimei-auth bun --preload=./testing/redirect-hosts-plugin.ts testing/server.ts; echo "exit=$?"` と、preload を外した `qa run --rm --no-deps taimei-auth bun testing/server.ts; echo "exit=$?"`
-  8. 版上げの確認: `git worktree add /tmp/qa-mr-09-main main && docker build --target dev -t taimei-auth-testing:main /tmp/qa-mr-09-main` で main の image を build し、`qa down -v` の後に image を `taimei-auth-testing:main` に替えた override で `up --wait` → `down` し、手順 2 の `qa up --wait` で branch の image を同じ volume で起動し、`http://localhost:3100/dev-home` を開く。`git worktree remove /tmp/qa-mr-09-main` で後片付けする
-  9. 手順 5 の browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http%3A%2F%2Flocalhost%3A3100%2Faccount%3Fa%3D1%26b%3D2` を開いて `dev-admin@example.com` を選び、戻った開発者ホームの「アプリケーションに戻る」を押す。次に `http://localhost:3100/dev-home?service_name=accounts&redirect_url=https://evil.example/` を開く
-  10. 後片付け: `qa down -v`
-- **期待結果**: 手順 2 は `taimei-auth` が healthy になって終わり (migrate と開発用アカウントの seed の後に healthy になる)、手順 3 が 200、手順 4 で `/account` に移ってログインした状態になる。手順 5 の `/auth/` と `/auth/signup` は本番と同じ共通ログイン画面と共通サインアップ画面 (メールの入力欄。サインアップは名前の欄も) を出し、利用者の一覧と「本番以外の環境」の帯を出さない。開発者ホームは開発用アカウントの一覧を出し、手順 4 で別の browser の profile からログインした利用者は出さない。`dev-owner@example.com` を選ぶと、同じ query の開発者ホームに戻って「… でログインしました」とその利用者を出し、「アプリケーションに戻る」を押すと、`/account` に移ってその利用者でログインした状態になる。手順 6 はログインしたまま `/account` を表示する。手順 7 の 1 つ目は `FATAL: testing/server.ts starts only with APP_ENV=test.` を、2 つ目は `FATAL: testing/server.ts must start with --preload=./testing/redirect-hosts-plugin.ts` で始まる文言を出し、どちらも 0 以外で終わる。手順 8 は branch の image が healthy になり、開発者ホームの一覧に開発用アカウントが出る。手順 9 の開発者ホームは上端に「本番以外の環境」の帯、ログイン中の利用者の名前とメール、利用者の一覧 (候補が 8 人を超えた時は「利用者を絞り込む」欄も)、戻り先の URL と「アプリケーションに戻る」を出し、一覧で `dev-admin@example.com` を押すと、同じ query の開発者ホームに戻って「… でログインしました」と `dev-admin@example.com` を出し、「アプリケーションに戻る」を押すと、`/account?a=1&b=2` (query が `&` で 2 つに分かれたまま) に移って `dev-admin@example.com` でログインした状態になる。許可されない `redirect_url` を付けた開発者ホームを開くと `/auth/error?reason=invalid_redirect_url` に移る
+  2. `bash scripts/testing-image-smoke.sh taimei-auth-testing:local`
+  3. `qa up --wait` の後、Chrome で `http://localhost:3100/auth/?service_name=accounts&redirect_url=http://localhost:3100/account` と `http://localhost:3100/auth/signup?service_name=accounts&redirect_url=http://localhost:3100/account` を開き、続けて同じ browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http://localhost:3100/account` を開いて `dev-owner@example.com` を選ぶ
+  4. `qa down` → `qa up --wait` の後、手順 3 の browser で `http://localhost:3100/account` を開き直す
+  5. 版上げの確認: `git worktree add /tmp/qa-mr-09-main main && docker build --target dev -t taimei-auth-testing:main /tmp/qa-mr-09-main` で main の image を build し、`qa down -v` の後に image を `taimei-auth-testing:main` に替えた override で `up --wait` → `down` し、`qa up --wait` で branch の image を同じ volume で起動し、`http://localhost:3100/dev-home` を開く。`git worktree remove /tmp/qa-mr-09-main` で後片付けする
+  6. 手順 3 の browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http%3A%2F%2Flocalhost%3A3100%2Faccount%3Fa%3D1%26b%3D2` を開いて `dev-admin@example.com` を選び、戻った開発者ホームの「アプリケーションに戻る」を押す。次に `http://localhost:3100/dev-home?service_name=accounts&redirect_url=https://evil.example/` を開く
+  7. 後片付け: `qa down -v`
+- **期待結果**: 手順 2 は `ok:` の行を 4 つ出して 0 で終わる。手順 3 の `/auth/` と `/auth/signup` は本番と同じ共通ログイン画面と共通サインアップ画面 (メールの入力欄。サインアップは名前の欄も) を出し、利用者の一覧と「本番以外の環境」の帯を出さない。開発者ホームは開発用アカウントの一覧を出す。`dev-owner@example.com` を選ぶと、同じ query の開発者ホームに戻って「… でログインしました」とその利用者を出し、「アプリケーションに戻る」を押すと、`/account` に移ってその利用者でログインした状態になる。手順 4 はログインしたまま `/account` を表示する。手順 5 は branch の image が healthy になり、開発者ホームの一覧に開発用アカウントが出る。手順 6 の開発者ホームは上端に「本番以外の環境」の帯、ログイン中の利用者の名前とメール、利用者の一覧 (候補が 8 人を超えた時は「利用者を絞り込む」欄も)、戻り先の URL と「アプリケーションに戻る」を出し、一覧で `dev-admin@example.com` を押すと、同じ query の開発者ホームに戻って「… でログインしました」と `dev-admin@example.com` を出し、「アプリケーションに戻る」を押すと、`/account?a=1&b=2` (query が `&` で 2 つに分かれたまま) に移って `dev-admin@example.com` でログインした状態になる。許可されない `redirect_url` を付けた開発者ホームを開くと `/auth/error?reason=invalid_redirect_url` に移る
 
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
 
 - **契機**: 本番 Hyperdrive config の作り直し / `wrangler.jsonc` の `hyperdrive` を触る PR、`db/client.ts` / `db/repositories/membership.ts` の読み取り経路を触る PR、および本番デプロイ後
+- **契機の path**: `wrangler.jsonc`、`db/client.ts`、`db/repositories/membership.ts`
 - **前提**: production。Hyperdrive の query cache (既定 max_age 60s) が有効だと、作成前に cache された空の membership 一覧が作成直後の読み取りに返り、`/account` が `/auth/signup/company` へ戻す (2026-09-03 に本番で再現。ADR-0011 Consequences 参照)。local の Hyperdrive local mode は cache しないため再現せず、実 Hyperdrive でしか確認できない
 - **手順**:
   1. `bunx wrangler hyperdrive get <hyperdrive.id>` で `caching.disabled` が `true` であることを確認する
@@ -125,6 +132,7 @@
 ## QA-MR-11: Effect runtime と ALS の共存 (remote workerd、ADR-0017)
 
 - **契機**: `effect` の version 変更、ADR-0017 の Stage 完了 PR (runtime / adapter / ports / Guard / Use-case を Effect 様式へ切り替える PR)、および本番デプロイ後
+- **契機の path**: `package.json`、`src/runtime.ts`
 - **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd と実 binding で動くことと、guard の failure が client への応答の形に変換されることは、`deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` を 20 回連続で呼ぶことと、未認証の `GET /api/account/memberships` が 401 `{"_tag":"Unauthorized"}` を返すこと)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime の機構は `/health` と同じである。残るリスクには、adapter と SPA の API の ErrorReporter が Sentry に送る 500 で気づき、`wrangler rollback` で戻す)
 - **手順**:
   1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"_tag":"Unauthorized"}` が出ていることを確認する

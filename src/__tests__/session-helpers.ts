@@ -1,4 +1,5 @@
 import { makeSignature } from "better-auth/crypto";
+import { CLIENT_IP_HEADER } from "../client-ip";
 import { Effect } from "effect";
 import { auth } from "../auth";
 import { AuthApi } from "../auth-service";
@@ -6,6 +7,7 @@ import { sentLinkIn } from "../../testing/local-delivery-log";
 import { TtlStore } from "../ttl-store-service";
 import type { Actor } from "../account/actor-contract";
 import { observing } from "./live-runner";
+import { betterAuthKeyOf } from "./test-ttl-store";
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
@@ -26,7 +28,7 @@ export function tamperCookieSignature(signed: string): string {
 export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   const headers = new Headers({
     "user-agent": TEST_USER_AGENT,
-    "x-forwarded-for": TEST_CLIENT_IP,
+    [CLIENT_IP_HEADER]: TEST_CLIENT_IP,
   });
   const cookie = Object.entries(cookies)
     .map(([name, value]) => `${name}=${value}`)
@@ -93,16 +95,22 @@ export function actorOf(user: { id: string; email: string }): Pick<Actor, "id" |
 export const countLiveSessions = (tokens: string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
-    const entities = yield* Effect.forEach(tokens, (token) => ttlStore.get(token), {
-      concurrency: "unbounded",
-    });
+    const entities = yield* Effect.forEach(
+      tokens,
+      (token) => ttlStore.get(betterAuthKeyOf(token)),
+      {
+        concurrency: "unbounded",
+      },
+    );
     return entities.filter((entity) => entity !== null).length;
   });
 
 export const deleteSessionEntities = (tokens: string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
-    yield* Effect.forEach(tokens, (token) => ttlStore.delete(token), { concurrency: "unbounded" });
+    yield* Effect.forEach(tokens, (token) => ttlStore.delete(betterAuthKeyOf(token)), {
+      concurrency: "unbounded",
+    });
   });
 
 const AUTH_ORIGIN = "http://localhost:3100";
@@ -128,13 +136,14 @@ export const requestMagicLink = (input: { email: string; callbackURL: string }) 
     return link;
   });
 
-export const followMagicLink = (link: string) =>
-  handleWithBackgroundTasks(
-    new Request(link, {
-      headers: { "user-agent": TEST_USER_AGENT, "x-forwarded-for": TEST_CLIENT_IP },
-      redirect: "manual",
-    }),
-  ).pipe(
+export const followMagicLink = (
+  link: string,
+  headers: Record<string, string> = {
+    "user-agent": TEST_USER_AGENT,
+    [CLIENT_IP_HEADER]: TEST_CLIENT_IP,
+  },
+) =>
+  handleWithBackgroundTasks(new Request(link, { headers, redirect: "manual" })).pipe(
     Effect.map(({ response, logs }): PrimaryAuthLogin => {
       const location = response.headers.get("location");
       return { response, location: location ? new URL(location) : null, logs };

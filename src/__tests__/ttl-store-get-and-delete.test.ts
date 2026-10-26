@@ -2,15 +2,18 @@ import { describe, expect, test } from "bun:test";
 import { auth } from "../auth";
 import { MemoryKvStore } from "../kv-store.memory";
 import { memoryBackend } from "../ttl-store";
+import { betterAuthKeyOf } from "./test-ttl-store";
+
+const VERIFICATION_KEY = betterAuthKeyOf("verification:token");
 
 describe("TTL store の getAndDelete は値を 1 回だけ渡す", () => {
   test("同じ鍵に同時に 2 回呼ぶと、値を返すのは 1 回だけ (DO の adapter は input gate に頼るので、本番の実装は QA-MR-05 で確かめる)", async () => {
     const backend = memoryBackend(new MemoryKvStore());
-    await backend.set("verification:token", "value", 60);
+    await backend.set(VERIFICATION_KEY, "value", 60);
 
     const results = await Promise.all([
-      backend.getAndDelete("verification:token"),
-      backend.getAndDelete("verification:token"),
+      backend.getAndDelete(VERIFICATION_KEY),
+      backend.getAndDelete(VERIFICATION_KEY),
     ]);
 
     expect(results.filter((value) => value === "value")).toHaveLength(1);

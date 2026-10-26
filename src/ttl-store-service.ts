@@ -1,16 +1,18 @@
 import { Context, Effect, Layer, Schedule } from "effect";
 import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "./errors";
 import type { RateWindowResult, TtlStoreBackend } from "./ttl-store";
+import type { TtlKey } from "./ttl-key";
 
 export class TtlStore extends Context.Service<
   TtlStore,
   {
-    get(key: string): Effect.Effect<string | null, TtlStoreError>;
-    set(key: string, value: string, ttl?: number): Effect.Effect<void, TtlStoreError>;
-    delete(key: string): Effect.Effect<void, TtlStoreError>;
-    getAndDelete(key: string): Effect.Effect<string | null, TtlStoreError>;
+    get(key: TtlKey): Effect.Effect<string | null, TtlStoreError>;
+    set(key: TtlKey, value: string, ttl?: number): Effect.Effect<void, TtlStoreError>;
+    delete(key: TtlKey): Effect.Effect<void, TtlStoreError>;
+    getAndDelete(key: TtlKey): Effect.Effect<string | null, TtlStoreError>;
+    mergeSessionIndex(key: TtlKey, value: string): Effect.Effect<void, TtlStoreError>;
     incrementRateWindow(
-      key: string,
+      key: TtlKey,
       windowSec: number,
     ): Effect.Effect<RateWindowResult, TtlStoreError>;
     ping(): Effect.Effect<void, TtlStoreError>;
@@ -42,6 +44,7 @@ export const ttlStoreLayer = (backend: TtlStoreBackend) =>
       set: (key, value, ttl) => attemptOnce(() => backend.set(key, value, ttl)),
       delete: (key) => attemptOnce(() => backend.delete(key)),
       getAndDelete: (key) => attemptOnce(() => backend.getAndDelete(key)),
+      mergeSessionIndex: (key, value) => attemptOnce(() => backend.mergeSessionIndex(key, value)),
       incrementRateWindow: (key, windowSec) =>
         attemptOnce(() => backend.incrementRateWindow(key, windowSec)),
       ping: () => attemptOnce(backend.ping),

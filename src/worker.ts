@@ -5,13 +5,15 @@ import type { EmailSender } from "./email/ports";
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
 import { KvStore as KvStoreBase } from "./kv-store.do";
-import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
+import { durableObjectBackend, type KvStoreNamespace, type TtlStoreBackend } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
 import { SENTRY_REQUEST_PRIVACY } from "./sentry";
 import { onceUntilSucceeded } from "./once-until-succeeded";
+import { withClientIp } from "./client-ip";
+import { resolveCloudflareClientIp } from "./request-context";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
@@ -42,11 +44,13 @@ function copyEnvToProcess(env: Env): void {
 
 const bootstrapOnce = (options: WorkerOptions) => {
   let bootstrappedApp: Hono | null = null;
+  let ttlStore: TtlStoreBackend | null = null;
   return (env: Env): Hono => {
     if (bootstrappedApp) return bootstrappedApp;
     copyEnvToProcess(env);
     initCloudflareSentry(env.SENTRY_DSN);
-    boot(durableObjectBackend(env.KV_STORE), options.emailSender);
+    ttlStore ??= durableObjectBackend(env.KV_STORE);
+    boot(ttlStore, options.emailSender);
     bootstrappedApp = buildApp({
       mountStatic: (app) => {
         options.extendBeforeStatic?.(app);
@@ -88,7 +92,12 @@ export const createWorker = (options: WorkerOptions = {}) => {
             (promise) => {
               backgroundPromises.push(promise);
             },
-            () => app.fetch(req, env, ctx as never),
+            () =>
+              app.fetch(
+                withClientIp(req, resolveCloudflareClientIp(req.headers)),
+                env,
+                ctx as never,
+              ),
           );
         } finally {
           ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));

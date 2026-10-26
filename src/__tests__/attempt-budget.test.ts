@@ -10,7 +10,6 @@ import {
   spendAttemptBudgetFailOpen,
   type WhenUncountable,
 } from "../attempt-budget";
-import { auth } from "../auth";
 import type { TtlStore } from "../ttl-store-service";
 import { SentryLive, type SentryService } from "../sentry";
 import { recordSentry } from "./sentry-recorder";
@@ -30,7 +29,7 @@ spendAttemptBudgetFailClosed satisfies (
 >;
 
 const budgetOf = <Policy extends WhenUncountable>(whenUncountable: Policy) => ({
-  keyPrefix: "attempt-budget-test",
+  keyPrefix: ATTEMPT_BUDGETS.canaryTokenPerIp.keyPrefix,
   windowSeconds: 60,
   maxAttempts: () => 5,
   whenUncountable,
@@ -125,7 +124,7 @@ test.each([
   [ATTEMPT_BUDGETS.mfaDisablePerUser, "user-1", "mfa:disable-attempts:user-1"],
   [ATTEMPT_BUDGETS.mfaLoginChallenge, "challenge-1", "mfa:login-challenge-attempts:challenge-1"],
 ] as const)("試行枠の鍵は宣言の前の文字列と同じになる (deploy で計数が消えない): %#", (budget, subject, key) => {
-  expect(attemptBudgetKey(budget, subject)).toBe(key);
+  expect(String(attemptBudgetKey(budget, subject))).toBe(key);
 });
 
 const maxAttemptsWith = (appEnv: string) => {
@@ -144,12 +143,5 @@ const maxAttemptsWith = (appEnv: string) => {
 describe("試行回数の上限は、本番以外でも本番と同じ値", () => {
   test("試行枠の maxAttempts は APP_ENV=development でも APP_ENV=production と同じ", () => {
     expect(maxAttemptsWith("development")).toEqual(maxAttemptsWith("production"));
-  });
-
-  test("better-auth の magic link の rate limit は 60 秒に 10 回", () => {
-    const magicLink = auth.options.plugins?.find((plugin) => plugin.id === "magic-link");
-    expect(magicLink?.rateLimit?.map(({ window, max }) => ({ window, max }))).toEqual([
-      { window: 60, max: 10 },
-    ]);
   });
 });

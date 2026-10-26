@@ -1,5 +1,6 @@
 import { type SQL, sql } from "drizzle-orm";
 import { db } from "../client";
+import type { LocalDatabase } from "./local-database";
 
 const firstValue = async (query: SQL): Promise<string | null> =>
   (await db.execute<{ value: string }>(query)).rows[0]?.value ?? null;
@@ -9,13 +10,16 @@ const expiresAtOrNever = (ttlSec: number | undefined) =>
 
 const isLive = sql`(expires_at IS NULL OR expires_at > now())`;
 
-export const postgresTtlStore = async () => {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS testing_ttl_store (
-      key text PRIMARY KEY,
-      value text NOT NULL,
-      expires_at timestamptz
-    )`);
+type MergeSessionIndex = (
+  stored: string | null,
+  incoming: string,
+  now: number,
+) => { readonly value: string; readonly ttlSeconds: number };
+
+export const postgresTtlStore = async (
+  _database: LocalDatabase,
+  mergeSessionIndex: MergeSessionIndex,
+) => {
   await db.execute(sql`DELETE FROM testing_ttl_store WHERE NOT ${isLive}`);
 
   return {
@@ -34,6 +38,22 @@ export const postgresTtlStore = async () => {
       firstValue(sql`
         WITH deleted AS (DELETE FROM testing_ttl_store WHERE key = ${key} RETURNING value, expires_at)
         SELECT value FROM deleted WHERE ${isLive}`),
+    mergeSessionIndex: async (key: string, value: string): Promise<void> => {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO testing_ttl_store (key, value, expires_at) VALUES (${key}, '[]', now())
+          ON CONFLICT (key) DO NOTHING`);
+        const stored = (
+          await tx.execute<{ value: string; live: boolean }>(sql`
+            SELECT value, ${isLive} AS live FROM testing_ttl_store WHERE key = ${key} FOR UPDATE`)
+        ).rows[0];
+        const merged = mergeSessionIndex(stored?.live ? stored.value : null, value, Date.now());
+        await tx.execute(sql`
+          UPDATE testing_ttl_store
+          SET value = ${merged.value}, expires_at = ${expiresAtOrNever(merged.ttlSeconds)}
+          WHERE key = ${key}`);
+      });
+    },
     incrementRateWindow: async (key: string, windowSec: number) => {
       const count = Number(
         await firstValue(sql`

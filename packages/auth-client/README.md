@@ -84,6 +84,7 @@ taimei-auth が変えた時に SDK の版上げで届くよう、次の値を co
 | メンバー画面の URL | `buildMembersUrl({ authBaseUrl, service, returnTo })` |
 | アカウント管理画面の URL | `buildAccountUrl({ authBaseUrl })` |
 | 試験の環境の開発者ホームの URL (`/dev-home`) | `@taimei-code/auth-client/testing` の `buildDevHomeUrl({ authBaseUrl, service, returnTo })` |
+| 試験の環境の開発者ホームと試験 API の path | `@taimei-code/auth-client/testing` の `DEV_HOME_PATH`、`TESTING_PATH` (試験 API の呼び出しは `createTestingClient` を使う) |
 | Magic Link の有効期限 (秒) | `MAGIC_LINK_EXPIRES_IN_SECONDS` |
 | 新規登録の直後か (`user.createdAt` と Magic Link の有効期限の比較) | `isJustSignedUp(sessionData, now?)` |
 | 事業所 id の形 | `COMPANY_ID_PATTERN` |

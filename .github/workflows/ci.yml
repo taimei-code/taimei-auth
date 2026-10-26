@@ -54,9 +54,8 @@ jobs:
       - name: Lint (shellcheck)
         run: shellcheck scripts/*.sh e2e/*.sh
 
-      # shallow clone に main の ref が無いため remote URL 経由で参照する。意図的に breaking にする時は SDK の major を上げ、一時的に --against を外す
-      - name: Buf breaking check
-        run: bunx @bufbuild/buf breaking --against "https://github.com/${{ github.repository }}.git#branch=main"
+      - name: Buf breaking check (破壊的変更なら SDK の major が上がっていること)
+        run: bash scripts/check-sdk-breaking.sh origin/main
 
       - name: Apply migrations
         run: bun run db:migrate && bun run db:migrate-manual
@@ -201,3 +200,6 @@ jobs:
             echo "::error::docker-smoke.sh dev の実行 assert 件数が期待値と不一致 (実行=${count:-none} / 期待=$EXPECTED_DEV_ASSERTS)。script の assert 増減に合わせて本 job の EXPECTED_DEV_ASSERTS を更新する。"
             exit 1
           fi
+
+      - name: Start the dev image with the compose fragment and sign in with the testing client
+        run: bash scripts/testing-image-smoke.sh smoke-dev

@@ -1,4 +1,4 @@
-import { getSessionCookie } from "better-auth/cookies";
+import { sessionCookieOf } from "../session-cookie";
 import { Effect, Layer } from "effect";
 import { HttpServerRequest } from "effect/http";
 import {
@@ -13,7 +13,7 @@ import type { TtlStore } from "../ttl-store-service";
 import { headersOf } from "./request-http-api";
 
 export async function mfaAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
-  const sessionToken = getSessionCookie(headers);
+  const sessionToken = sessionCookieOf(headers);
   if (!sessionToken) return `ip:${fallbackIp}`;
   return `session:${await sha256Hex(sessionToken)}`;
 }

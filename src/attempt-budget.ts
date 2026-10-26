@@ -2,6 +2,7 @@ import { Data, Effect } from "effect";
 import { RateLimited } from "./failures";
 import { TtlStore } from "./ttl-store-service";
 import { captureCauseAs } from "./sentry";
+import { type OwnKeyPrefix, ownKey, type TtlKey } from "./ttl-key";
 
 export class AttemptBudgetExhausted extends Data.TaggedError("AttemptBudgetExhausted") {}
 
@@ -10,7 +11,7 @@ export class AttemptBudgetUnavailable extends Data.TaggedError("AttemptBudgetUna
 export type WhenUncountable = "allow" | "deny";
 
 export type AttemptBudget<Policy extends WhenUncountable> = {
-  readonly keyPrefix: string;
+  readonly keyPrefix: OwnKeyPrefix;
   readonly windowSeconds: number;
   readonly maxAttempts: () => number;
   readonly whenUncountable: Policy;
@@ -24,7 +25,7 @@ const invitationsPerCompanyHour = (): number => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_INVITATIONS_PER_COMPANY_HOUR;
 };
 
-const perMinuteRouteBudget = (keyPrefix: string, limit: number) =>
+const perMinuteRouteBudget = (keyPrefix: OwnKeyPrefix, limit: number) =>
   ({
     keyPrefix,
     windowSeconds: 60,
@@ -63,8 +64,8 @@ export const ATTEMPT_BUDGETS = {
   },
 } as const satisfies Record<string, AttemptBudget<WhenUncountable>>;
 
-export const attemptBudgetKey = (budget: AttemptBudget<WhenUncountable>, subject: string): string =>
-  `${budget.keyPrefix}:${subject}`;
+export const attemptBudgetKey = (budget: AttemptBudget<WhenUncountable>, subject: string): TtlKey =>
+  ownKey(budget.keyPrefix, subject);
 
 const spend = Effect.fnUntraced(function* (
   budget: AttemptBudget<WhenUncountable>,

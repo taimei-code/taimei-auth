@@ -1,14 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DEV_HOME_PATH, type SignedInUser, TESTING_PATH } from "@taimei-code/auth-client/testing";
+import {
+  createTestingClient,
+  DEV_HOME_PATH,
+  type SignedInUser,
+  TESTING_PATH,
+} from "@taimei-code/auth-client/testing";
 import { deleteCompaniesByNames, deleteUsersByIds } from "../../db/testing/cleanup";
 import { DEV_ACCOUNTS } from "../../db/testing/dev-accounts";
 import { readUserIdsByEmails } from "../../db/testing/read";
 import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
-import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH } from "../dev-home";
+import { DEV_HOME_SIGN_IN_PATH } from "../dev-home";
 import { REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER } from "../non-production-redirect-hosts-check";
+import { nonProductionRoutes } from "../non-production-routes";
+import { OUTSIDE_PRODUCTION_ONLY_MESSAGE } from "../serve-only-outside-production";
 import { AUTH_HOST_ORIGIN } from "./origins";
 import { devHomePropsOf, PAGE_PROPS_NOT_IN_PAGE } from "./page-props-of";
 
@@ -52,11 +59,14 @@ const removeDevAccounts = async () => {
   await deleteCompaniesByNames(DEV_ACCOUNTS.companies.map((devCompany) => devCompany.name));
 };
 
-const withTestingServer = async <A>(run: (baseUrl: string) => Promise<A>): Promise<A> => {
+const withTestingServer = async <A>(
+  run: (baseUrl: string) => Promise<A>,
+  env: Record<string, string> = {},
+): Promise<A> => {
   const port = unusedPort();
   const child = Bun.spawn(testingServerCommand, {
     cwd: tmpdir(),
-    env: testingServerEnv("test", port),
+    env: { ...testingServerEnv("test", port), ...env },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -81,22 +91,33 @@ const waitForResponse = async (
   throw new Error(`exit ${child.exitCode}: ${await new Response(child.stderr).text()}`);
 };
 
-describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
+describe("試験用の entry は本番以外の APP_ENV の時だけ起動する", () => {
   test.each([
     ["APP_ENV が未設定", undefined],
     ["APP_ENV=production", "production"],
     ["APP_ENV が誤記", "prodution"],
-  ])("%s なら、boot の前に APP_ENV=test を求めて 0 以外で終わる", (_, appEnv) => {
+  ])("%s なら、boot の前に本番以外の APP_ENV を求めて 0 以外で終わる (worker の入口と同じ文言)", (_, appEnv) => {
     const result = Bun.spawnSync(testingServerCommand, {
       cwd: tmpdir(),
       env: testingServerEnv(appEnv, unusedPort()),
     });
 
     expect(result.exitCode).not.toBe(0);
-    expect(result.stderr.toString()).toBe(
-      "FATAL: testing/server.ts starts only with APP_ENV=test.\n",
-    );
+    expect(result.stderr.toString()).toBe(`${OUTSIDE_PRODUCTION_ONLY_MESSAGE}\n`);
     expect(result.stdout.toString()).toBe("");
+  });
+
+  test("DATABASE_URL が local の DB でなければ、本番以外の表を書く前に 0 以外で終わり、host を出す", () => {
+    const result = Bun.spawnSync(testingServerCommand, {
+      cwd: tmpdir(),
+      env: {
+        ...testingServerEnv("test", unusedPort()),
+        DATABASE_URL: "postgres://postgres@db.example.com:5432/auth",
+      },
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain('DB の host "db.example.com" は local の DB');
   });
 
   test("AUTH_SERVICE_KEY が無ければ、APP_ENV=test でも 0 以外で終わり、鍵を求める", () => {
@@ -117,6 +138,15 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER);
   });
+
+  test("APP_ENV=development でも、worker の入口と同じく起動して /health に 200 を返す", async () => {
+    const status = await withTestingServer(
+      async (baseUrl) => (await fetch(`${baseUrl}/health`)).status,
+      { APP_ENV: "development" },
+    );
+
+    expect(status).toBe(200);
+  }, 15_000);
 
   test("APP_ENV=test なら起動し、better-auth の疎通確認に 200 を返す", async () => {
     const status = await withTestingServer(
@@ -140,6 +170,31 @@ describe("試験用の entry は APP_ENV=test の時だけ起動する", () => {
     expect(loginUrl).toStartWith(
       `${process.env.AUTH_SERVICE_URL}/api/auth/magic-link/verify?token=`,
     );
+  }, 15_000);
+});
+
+describe("試験の環境の server は、client の IP を proxy の段数と x-forwarded-for から決める", () => {
+  test("AUTH_TRUSTED_PROXY_HOPS=1 で x-forwarded-for を付けて loginUrl を開くと、session の IP はその IP になる", async () => {
+    const ipAddress = await withTestingServer(
+      async (baseUrl) => {
+        const { loginUrl } = await createTestingClient(baseUrl).createSignedInUser({
+          companies: [],
+          returnTo: `${getTrustedOrigins()[0]}/`,
+        });
+        const { pathname, search } = new URL(loginUrl);
+        const login = await fetch(`${baseUrl}${pathname}${search}`, {
+          headers: { "x-forwarded-for": "203.0.113.5" },
+          redirect: "manual",
+        });
+        const session = await fetch(`${baseUrl}/api/auth/get-session`, {
+          headers: { cookie: sessionTokenCookieWithoutCookieCache(login) },
+        });
+        return ((await session.json()) as { session: { ipAddress: string } }).session.ipAddress;
+      },
+      { AUTH_TRUSTED_PROXY_HOPS: "1" },
+    );
+
+    expect(ipAddress).toBe("203.0.113.5");
   }, 15_000);
 });
 
@@ -243,7 +298,15 @@ describe("試験用の entry は、開発環境と同じ開発者ホームを載
 });
 
 describe("本番の worker と同じ app", () => {
-  test("APP_ENV が未設定・production・誤記・test のどれでも、試験用の route と開発者ホームの POST が無い", async () => {
+  test("APP_ENV が未設定・production・誤記・test のどれでも、本番以外の route の POST が無い", async () => {
+    const postPaths = [
+      ...new Set(
+        nonProductionRoutes({ e2eLoginLinks: true })
+          .flatMap((routes) => routes.routes)
+          .filter((route) => route.method === "POST")
+          .map((route) => route.path),
+      ),
+    ];
     const previous = process.env.APP_ENV;
     const statuses: Record<string, number[]> = {};
     try {
@@ -252,12 +315,7 @@ describe("本番の worker と同じ app", () => {
         else process.env.APP_ENV = value;
         const app = buildApp({ mountStatic: () => {} });
         const responses = await Promise.all(
-          [
-            `${TESTING_PATH}/signed-in-users`,
-            `${TESTING_PATH}/current-company`,
-            DEV_HOME_SIGN_IN_PATH,
-            DEV_HOME_SIGN_OUT_PATH,
-          ].map((path) =>
+          postPaths.map((path) =>
             app.request(path, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -272,11 +330,13 @@ describe("本番の worker と同じ app", () => {
       else process.env.APP_ENV = previous;
     }
 
+    expect(postPaths.length).toBeGreaterThan(3);
+    const allNotFound = postPaths.map(() => 404);
     expect(statuses).toEqual({
-      "(unset)": [404, 404, 404, 404],
-      production: [404, 404, 404, 404],
-      prodution: [404, 404, 404, 404],
-      test: [404, 404, 404, 404],
+      "(unset)": allNotFound,
+      production: allNotFound,
+      prodution: allNotFound,
+      test: allNotFound,
     });
   });
 });

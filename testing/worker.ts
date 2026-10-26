@@ -1,8 +1,7 @@
-import { prepareChoosableAccounts } from "../db/testing/dev-accounts";
+import { requireLocalDatabase } from "../db/testing/local-database";
+import { prepareNonProductionTables } from "../db/testing/non-production-tables";
 import { createWorker } from "../src/worker";
-import { devHomeRoutes } from "./dev-home";
-import { e2eLoginLinkRoutes, e2eLoginLinksEnabled } from "./e2e-login-links";
-import { testingApiRoutes } from "./routes";
+import { mountNonProductionRoutes } from "./non-production-routes";
 import {
   usesNonProductionRedirectHosts,
   serveOnlyWithNonProductionRedirectHosts,
@@ -17,12 +16,9 @@ export default serveOnlyOutsideProduction(
     usesNonProductionRedirectHosts,
     createWorker({
       emailSender: recordingEmailSender,
-      extendBeforeStatic: (app) => {
-        app.route("/", testingApiRoutes());
-        app.route("/", devHomeRoutes());
-        if (e2eLoginLinksEnabled()) app.route("/", e2eLoginLinkRoutes());
-      },
-      beforeFirstRequest: prepareChoosableAccounts,
+      extendBeforeStatic: mountNonProductionRoutes,
+      beforeFirstRequest: () =>
+        prepareNonProductionTables(requireLocalDatabase(process.env.NON_PRODUCTION_DATABASE_URL)),
     }),
   ),
 );

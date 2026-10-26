@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../../src/client-ip";
 import { requestApp, responseJson } from "../../src/handlers/__tests__/helpers";
 import { createSessionFor } from "../../src/__tests__/session-helpers";
 import { Effect } from "effect";
 import { startBunServer } from "../bun-server";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
-import { testKvStore } from "../../src/__tests__/test-ttl-store";
+import { testKvStore, testTtlStore } from "../../src/__tests__/test-ttl-store";
+import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../../src/attempt-budget";
 
-const { app } = startBunServer();
+const { app } = startBunServer({ ttlStore: testTtlStore, proxyTrust: { _tag: "Direct" } });
 
 const P = "enum-test-";
 const { run } = dbTest(P);
@@ -52,7 +54,7 @@ describe("本番以外でも Magic Link の試行枠は本番と同じ", () => {
         for (let i = 0; i < 6; i++) {
           const res = yield* request("http://localhost/api/auth/sign-in/magic-link", {
             method: "POST",
-            headers: { "content-type": "application/json", "x-forwarded-for": ip },
+            headers: { "content-type": "application/json", [CLIENT_IP_HEADER]: ip },
             body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
           });
           statuses.push(res.status);
@@ -64,7 +66,8 @@ describe("本番以外でも Magic Link の試行枠は本番と同じ", () => {
 });
 
 describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () => {
-  const windowCount = (key: string) => Effect.sync(() => Number(testKvStore.get(key) ?? 0));
+  const windowCount = (budget: AttemptBudget<"allow">, ip: string) =>
+    Effect.sync(() => Number(testKvStore.get(attemptBudgetKey(budget, ip)) ?? 0));
 
   const isolatedClientIp = (): string =>
     `203.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
@@ -75,11 +78,11 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
         const ip = isolatedClientIp();
 
         const res = yield* request("http://localhost/api/mfa/challenge", {
-          headers: { "x-forwarded-for": ip },
+          headers: { [CLIENT_IP_HEADER]: ip },
         });
 
         expect(res.status).toBe(200);
-        expect(yield* windowCount(`rate-limit:mfa-challenge-status:ip:${ip}`)).toBe(1);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, ip)).toBe(1);
       }),
     ));
 
@@ -90,12 +93,12 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
 
         for (let i = 0; i < 3; i++) {
           yield* request("http://localhost/api/mfa/challenge", {
-            headers: { "x-forwarded-for": ip },
+            headers: { [CLIENT_IP_HEADER]: ip },
           });
         }
 
-        expect(yield* windowCount(`rate-limit:mfa-challenge-status:ip:${ip}`)).toBe(3);
-        expect(yield* windowCount(`rate-limit:mfa-challenge:ip:${ip}`)).toBe(0);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, ip)).toBe(3);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, ip)).toBe(0);
       }),
     ));
 });
@@ -159,4 +162,18 @@ describe("better-auth の退会 endpoint", () => {
         yield* db.cleanup();
       }),
     ));
+});
+
+describe("Bun の server の SPA の fallback は、worker の single-page-application と同じく、どの GET にも掛かる", () => {
+  test("/auth と /account 以外の SPA の path も、/auth の下の path と同じ応答の種類になる", async () => {
+    const [underAuth, elsewhere] = await Promise.all([
+      app.request("http://localhost/auth/somewhere"),
+      app.request("http://localhost/somewhere-new"),
+    ]);
+
+    expect([elsewhere.status, elsewhere.headers.get("content-type")]).toEqual([
+      underAuth.status,
+      underAuth.headers.get("content-type"),
+    ]);
+  });
 });

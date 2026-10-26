@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../client-ip";
 import { grepFiles } from "./source-scan";
 import {
   getClientContext,
@@ -44,6 +45,18 @@ describe("AUTH_TRUSTED_PROXY_HOPS の封じ込め (静的 tripwire)", () => {
   });
 });
 
+describe("client の IP の header の封じ込め (静的 tripwire)", () => {
+  test("app に request を渡すのは、IP の header を入口で置き直す 2 つの入口だけ (ほかの入口から渡すと client が書いた header を信じる)", () => {
+    const scan = (pattern: string) =>
+      grepFiles(pattern, ["src", "testing"], { tests: "exclude" })
+        .filter((file) => file !== "src/client-ip.ts")
+        .sort();
+
+    expect(scan("app\\.fetch\\(")).toEqual(["src/worker.ts", "testing/bun-server.ts"]);
+    expect(scan("withClientIp\\(")).toEqual(scan("app\\.fetch\\("));
+  });
+});
+
 describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数える)", () => {
   test("proxy 1 段が付け足した単一要素をそのまま採る", () => {
     expect(
@@ -62,10 +75,10 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
     expect(resolveForwardedClientIp(headers, BEHIND_1)).toBe("198.51.100.7");
   });
 
-  test("列が hop 数より短ければ unknown (client が削った / proxy 構成不一致)", () => {
+  test("列が hop 数より短ければ IP を決めない (client が削った / proxy 構成不一致)", () => {
     expect(
       resolveForwardedClientIp(new Headers({ "x-forwarded-for": "203.0.113.9" }), BEHIND_2),
-    ).toBe("unknown");
+    ).toBeNull();
   });
 
   test.each([
@@ -73,26 +86,26 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
     UNCONFIGURED,
   ])("BehindProxy 以外 ($_tag) はヘッダを一切信用しない", (trust) => {
     const headers = new Headers({ "x-forwarded-for": "203.0.113.9", "x-real-ip": "203.0.113.9" });
-    expect(resolveForwardedClientIp(headers, trust)).toBe("unknown");
+    expect(resolveForwardedClientIp(headers, trust)).toBeNull();
   });
 
   test("X-Forwarded-For 不在なら X-Real-IP (最も近い proxy が見た peer) へ落とすのは 1 hop の時だけ", () => {
     const headers = new Headers({ "x-real-ip": "203.0.113.9" });
     expect(resolveForwardedClientIp(headers, BEHIND_1)).toBe("203.0.113.9");
-    expect(resolveForwardedClientIp(headers, BEHIND_2)).toBe("unknown");
+    expect(resolveForwardedClientIp(headers, BEHIND_2)).toBeNull();
   });
 
-  test("X-Real-IP と食い違う X-Forwarded-For は client の注入で伸びた疑いがあるので採らず unknown", () => {
+  test("X-Real-IP と食い違う X-Forwarded-For は client の注入で伸びた疑いがあるので採らず、IP を決めない", () => {
     const headers = new Headers({
       "x-forwarded-for": "203.0.113.9, 10.0.0.5",
       "x-real-ip": "203.0.113.9",
     });
-    expect(resolveForwardedClientIp(headers, BEHIND_1)).toBe("unknown");
+    expect(resolveForwardedClientIp(headers, BEHIND_1)).toBeNull();
   });
 
   test("cf-connecting-ip は Bun では client が送れるため読まない", () => {
     const headers = new Headers({ "cf-connecting-ip": "203.0.113.9" });
-    expect(resolveForwardedClientIp(headers, BEHIND_1)).toBe("unknown");
+    expect(resolveForwardedClientIp(headers, BEHIND_1)).toBeNull();
   });
 
   test("bracket + port 付き IPv6 は literal 部分を採る", () => {
@@ -116,10 +129,10 @@ describe("resolveForwardedClientIp (Bun: X-Forwarded-For を末尾から数え�
     { name: "'::' で省略したのに明示 group が 8 個の IPv6", value: "1:2:3:4::5:6:7:8" },
     { name: "SQL 断片", value: "203.0.113.9' OR 1=1--" },
   ];
-  test.each(MALFORMED)("IP literal として読めない値は unknown: $name", ({ value }) => {
-    expect(resolveForwardedClientIp(new Headers({ "x-forwarded-for": value }), BEHIND_1)).toBe(
-      "unknown",
-    );
+  test.each(MALFORMED)("IP literal として読めない値なら IP を決めない: $name", ({ value }) => {
+    expect(
+      resolveForwardedClientIp(new Headers({ "x-forwarded-for": value }), BEHIND_1),
+    ).toBeNull();
   });
 
   const VALID_LITERALS = ["203.0.113.9", "0.0.0.0", "255.255.255.255", "2001:db8::1", "::1"];
@@ -137,61 +150,31 @@ describe("resolveCloudflareClientIp (Workers: cf-connecting-ip のみ)", () => {
     );
   });
 
-  test("cf-connecting-ip 不在なら X-Forwarded-For / X-Real-IP があっても unknown", () => {
+  test("cf-connecting-ip 不在なら X-Forwarded-For / X-Real-IP があっても IP を決めない", () => {
     const headers = new Headers({ "x-forwarded-for": "10.0.0.5", "x-real-ip": "10.0.0.5" });
-    expect(resolveCloudflareClientIp(headers)).toBe("unknown");
+    expect(resolveCloudflareClientIp(headers)).toBeNull();
   });
 
-  test("IP literal でない cf-connecting-ip は unknown", () => {
-    expect(resolveCloudflareClientIp(new Headers({ "cf-connecting-ip": "forged" }))).toBe(
-      "unknown",
-    );
+  test("IP literal でない cf-connecting-ip なら IP を決めない", () => {
+    expect(resolveCloudflareClientIp(new Headers({ "cf-connecting-ip": "forged" }))).toBeNull();
   });
 });
 
-describe("getClientContext (bun test = Bun runtime。process.env を丸ごと置き換えると Bun.env と食い違うので、env は key ごとに戻す)", () => {
-  const ENV_KEYS = ["AUTH_TRUSTED_PROXY_HOPS", "APP_ENV"] as const;
-  const originalEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
-
-  beforeEach(() => {
-    delete process.env.AUTH_TRUSTED_PROXY_HOPS;
-  });
-
-  afterEach(() => {
-    for (const key of ENV_KEYS) {
-      const value = originalEnv[key];
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
-
-  test("AUTH_TRUSTED_PROXY_HOPS=1 で単一要素の X-Forwarded-For を採る", () => {
-    process.env.AUTH_TRUSTED_PROXY_HOPS = "1";
-    const headers = new Headers({ "x-forwarded-for": "203.0.113.9", "user-agent": "probe/1.0" });
+describe("getClientContext は、入口が決めて置いた IP の header だけを読む", () => {
+  test("入口が置いた IP と user-agent を返す", () => {
+    const headers = new Headers({ [CLIENT_IP_HEADER]: "203.0.113.9", "user-agent": "probe/1.0" });
     expect(getClientContext(headers)).toEqual({ ip: "203.0.113.9", userAgent: "probe/1.0" });
   });
 
-  test("AUTH_TRUSTED_PROXY_HOPS を設定すると数える位置が変わる", () => {
-    process.env.AUTH_TRUSTED_PROXY_HOPS = "2";
-    const headers = new Headers({ "x-forwarded-for": "10.0.0.5, 203.0.113.9, 198.51.100.7" });
-    expect(getClientContext(headers).ip).toBe("203.0.113.9");
-  });
-
-  test("AUTH_TRUSTED_PROXY_HOPS=0 (直公開) は unknown", () => {
-    process.env.AUTH_TRUSTED_PROXY_HOPS = "0";
-    expect(getClientContext(new Headers({ "x-forwarded-for": "203.0.113.9" })).ip).toBe("unknown");
-  });
-
   test.each([
-    "production",
-    "development",
-  ])("未設定なら APP_ENV=%s でも既定に落ちず unknown", (appEnv) => {
-    process.env.APP_ENV = appEnv;
-    expect(getClientContext(new Headers({ "x-forwarded-for": "203.0.113.9" })).ip).toBe("unknown");
+    ["x-forwarded-for", { "x-forwarded-for": "203.0.113.9" }],
+    ["cf-connecting-ip", { "cf-connecting-ip": "203.0.113.9" }],
+  ])("client が書ける %s だけでは unknown", (_, headers) => {
+    expect(getClientContext(new Headers(headers)).ip).toBe("unknown");
   });
 
-  test("Bun では cf-connecting-ip を詐称しても採られない", () => {
-    expect(getClientContext(new Headers({ "cf-connecting-ip": "203.0.113.9" })).ip).toBe("unknown");
+  test("IP として読めない値は unknown", () => {
+    expect(getClientContext(new Headers({ [CLIENT_IP_HEADER]: "forged" })).ip).toBe("unknown");
   });
 
   test("headers 不在 / ヘッダ無しは unknown", () => {

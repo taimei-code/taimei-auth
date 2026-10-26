@@ -10,7 +10,7 @@ export function boot(
   emailSender?: Layer.Layer<EmailSender>,
 ): AppRuntime {
   const runtime = initRuntime(ttlStore, emailSender);
-  initAuth(runtime, ttlStore);
+  initAuth(runtime);
   return runtime;
 }
 

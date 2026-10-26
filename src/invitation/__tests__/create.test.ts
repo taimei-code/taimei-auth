@@ -23,6 +23,7 @@ import { acceptInvitationPath } from "../accept-path";
 import { createInvitation } from "../create";
 import { RateLimited } from "../../failures";
 import { testKvStore } from "../../__tests__/test-ttl-store";
+import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { inviteGrantForTest } from "../../membership/__tests__/verified-for-test";
 
 const { run, cleanup } = dbTest(TEST_PREFIX);
@@ -46,7 +47,10 @@ const clearRateKey = (companyId: string) =>
 const presetRate = (companyId: string, value: string) =>
   Effect.sync(() =>
     testKvStore.set(
-      `invitation_rate:${companyId}:${new Date().toISOString().slice(0, 13)}`,
+      attemptBudgetKey(
+        ATTEMPT_BUDGETS.invitationsPerCompanyHour,
+        `${companyId}:${new Date().toISOString().slice(0, 13)}`,
+      ),
       value,
       3600,
     ),

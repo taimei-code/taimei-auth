@@ -9,6 +9,7 @@ type WranglerConfig = {
   workers_dev?: boolean;
   hyperdrive?: { id: string }[];
   vars?: Record<string, string>;
+  [key: string]: unknown;
 };
 
 const readWranglerConfig = (path: string): WranglerConfig =>
@@ -48,5 +49,52 @@ describe("本番以外の worker の config は、誤って deploy しても本�
     ["vars.APP_ENV", { vars: { ...nonProduction.vars, APP_ENV: "production" } }],
   ] as const)("%s を本番の値にすると違反になる", (violation, override) => {
     expect(productionValuesIn({ ...nonProduction, ...override }, production)).toContain(violation);
+  });
+});
+
+const KEYS_ALLOWED_TO_DIFFER = ["name", "main", "routes", "workers_dev", "alias"] as const;
+
+const sharedPartOf = (config: WranglerConfig) => {
+  const shared: Record<string, unknown> = { ...config };
+  for (const key of KEYS_ALLOWED_TO_DIFFER) delete shared[key];
+  const assets = config.assets as Record<string, unknown> | undefined;
+  return {
+    ...shared,
+    assets: assets && { ...assets, directory: undefined },
+    hyperdrive: config.hyperdrive?.map((binding) => ({ ...binding, id: undefined })),
+    vars: Object.keys(config.vars ?? {}).sort(),
+  };
+};
+
+const keysDifferingFromProduction = (nonProductionConfig: WranglerConfig): string[] => {
+  const expected = sharedPartOf(production);
+  const actual = sharedPartOf(nonProductionConfig);
+  return [...new Set([...Object.keys(expected), ...Object.keys(actual)])]
+    .filter(
+      (key) =>
+        JSON.stringify(actual[key as keyof typeof actual]) !==
+        JSON.stringify(expected[key as keyof typeof expected]),
+    )
+    .sort();
+};
+
+describe("本番以外の worker の config は、違ってよい key のほかは本番と同じ (互換の日付と DO の migration を写し忘れると、dev と e2e だけが古いまま通る)", () => {
+  test("testing/wrangler.jsonc は、name・main・assets の directory・Hyperdrive の id・vars の値・routes・workers_dev・alias のほかは本番と一致する", () => {
+    expect(keysDifferingFromProduction(nonProduction)).toEqual([]);
+  });
+
+  test.each([
+    ["compatibility_date", { compatibility_date: "2099-01-01" }],
+    [
+      "migrations",
+      {
+        migrations: [
+          { tag: "v1", new_sqlite_classes: ["KvStore"] },
+          { tag: "v2", new_sqlite_classes: ["Other"] },
+        ],
+      },
+    ],
+  ] as const)("本番以外の %s だけを変えると、食い違いとして報告される", (key, override) => {
+    expect(keysDifferingFromProduction({ ...nonProduction, ...override })).toEqual([key]);
   });
 });

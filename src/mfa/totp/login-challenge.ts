@@ -11,14 +11,16 @@ import {
   spendAttemptBudgetFailClosed,
 } from "../../attempt-budget";
 import { ChallengeExpired, type InvalidCode, Locked } from "../errors";
+import { ownKey, type TtlKey } from "../../ttl-key";
 
 const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
 
 const ATTEMPT_BUDGET = ATTEMPT_BUDGETS.mfaLoginChallenge;
 const CHALLENGE_TTL_SECONDS = ATTEMPT_BUDGET.windowSeconds;
 
-export const challengeKey = (challengeId: string): string => `mfa:login-challenge:${challengeId}`;
-export const attemptsKey = (challengeId: string): string =>
+export const challengeKey = (challengeId: string): TtlKey =>
+  ownKey("mfa:login-challenge", challengeId);
+export const attemptsKey = (challengeId: string): TtlKey =>
   attemptBudgetKey(ATTEMPT_BUDGET, challengeId);
 
 const CHALLENGE_METHODS = ["magic_link", "github"] as const;

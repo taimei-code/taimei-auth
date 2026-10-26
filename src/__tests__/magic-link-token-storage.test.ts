@@ -4,7 +4,7 @@ import { magicLinkUrlFor } from "../../testing/sent-links";
 import { followMagicLink } from "./session-helpers";
 import { dbTest } from "./live-runner";
 import { TestDb } from "./test-db";
-import { testKvStore } from "./test-ttl-store";
+import { betterAuthKeyOf, testKvStore } from "./test-ttl-store";
 
 const P = "magic-link-token-storage-";
 const { run } = dbTest(P);
@@ -25,7 +25,7 @@ describe("Magic Link の token は hash した key で TTL store に置く", () 
         const token = new URL(link).searchParams.get("token");
 
         expect(token).not.toBeNull();
-        expect(testKvStore.get(`verification:${token}`)).toBeNull();
+        expect(testKvStore.get(betterAuthKeyOf(`verification:${token}`))).toBeNull();
 
         const login = yield* followMagicLink(link);
         expect(login.location?.toString()).toBe(CALLBACK);
