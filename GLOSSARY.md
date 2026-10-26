@@ -226,7 +226,7 @@ _Avoid_: test API, testing endpoint (英語の混在), backdoor (意図を誤っ
 _Avoid_: テストユーザー (**試験 API** が作る試験の利用者と紛らわしい), seed ユーザー, dev user
 
 **開発者ホーム**:
-**本番以外** にある、利用者を選んで本物の **Magic Link** でログインし直すための画面。ログイン中の利用者の確認とログアウトもここで行う。**service_name** と **redirect_url** を受けた時は、ログインの後に **redirect_url** へ移す。本番の **auth ホスト** には存在しない。
+**本番以外** にある、利用者を選んで本物の **Magic Link** でログインし直すための画面。ログイン中の利用者の確認とログアウトもここで行う。利用者を選んだ後とログアウトした後は開発者ホームに戻る。**service_name** と **redirect_url** を受けた時は、ログインしたまま **redirect_url** へ戻る link を出す。本番の **auth ホスト** には存在しない。
 _Avoid_: dev home, 開発者ページ, ログインの抜け道 (第二要素を飛ばす経路と誤解される)
 
 ## Relationships

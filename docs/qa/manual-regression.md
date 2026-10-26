@@ -49,9 +49,9 @@
 - **契機**: `src/email/` (テンプレート / sanitize / 差出人) を触る PR
 - **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
-  1. magic link ログインを実行し、受信メールの件名、本文、リンクを実メールクライアントで確認する
+  1. magic link ログインを実行し、受信メールの件名、本文、リンクを実メールクライアントで確認する。リンクを開いてログインする
   2. 招待メール (事業所名と招待者名入り) を送信し、表示名に日本語や記号を含むケースで崩れないことを確認する
-- **期待結果**: リンクが正しい環境の URL を指す。表示名は `toDisplayText` 適用後の内容で、ヘッダ崩れや方向制御文字による偽装表示がない
+- **期待結果**: リンクが正しい環境の URL を指す。リンクを開くとログインでき、ログインを始めた画面が渡した戻り先 (query を含む) へ移る。表示名は `toDisplayText` 適用後の内容で、ヘッダ崩れや方向制御文字による偽装表示がない
 
 ## QA-MR-05: magic link の期限切れ (5 分)
 
@@ -107,9 +107,9 @@
   6. `qa down` → `qa up --wait` の後、手順 5 の browser で `http://localhost:3100/account` を開き直す
   7. `qa run --rm --no-deps -e APP_ENV=production taimei-auth bun --preload=./testing/redirect-hosts-plugin.ts testing/server.ts; echo "exit=$?"` と、preload を外した `qa run --rm --no-deps taimei-auth bun testing/server.ts; echo "exit=$?"`
   8. 版上げの確認: `git worktree add /tmp/qa-mr-09-main main && docker build --target dev -t taimei-auth-testing:main /tmp/qa-mr-09-main` で main の image を build し、`qa down -v` の後に image を `taimei-auth-testing:main` に替えた override で `up --wait` → `down` し、手順 2 の `qa up --wait` で branch の image を同じ volume で起動し、`http://localhost:3100/dev-home` を開く。`git worktree remove /tmp/qa-mr-09-main` で後片付けする
-  9. 手順 5 の browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http://localhost:3100/account` を開いて `dev-admin@example.com` を選び、次に `http://localhost:3100/dev-home?service_name=accounts&redirect_url=https://evil.example/` を開く
+  9. 手順 5 の browser で `http://localhost:3100/dev-home?service_name=accounts&redirect_url=http%3A%2F%2Flocalhost%3A3100%2Faccount%3Fa%3D1%26b%3D2` を開いて `dev-admin@example.com` を選び、戻った開発者ホームの「アプリケーションに戻る」を押す。次に `http://localhost:3100/dev-home?service_name=accounts&redirect_url=https://evil.example/` を開く
   10. 後片付け: `qa down -v`
-- **期待結果**: 手順 2 は `taimei-auth` が healthy になって終わり (migrate と開発用アカウントの seed の後に healthy になる)、手順 3 が 200、手順 4 で `/account` に移ってログインした状態になる。手順 5 の `/auth/` と `/auth/signup` は本番と同じ共通ログイン画面と共通サインアップ画面 (メールの入力欄。サインアップは名前の欄も) を出し、利用者の一覧と「本番以外の環境」の帯を出さない。開発者ホームは開発用アカウントの一覧を出し、手順 4 で別の browser の profile からログインした利用者は出さない。`dev-owner@example.com` を選ぶと `/account` に移ってその利用者でログインした状態になる。手順 6 はログインしたまま `/account` を表示する。手順 7 の 1 つ目は `FATAL: testing/server.ts starts only with APP_ENV=test.` を、2 つ目は `FATAL: testing/server.ts must start with --preload=./testing/redirect-hosts-plugin.ts` で始まる文言を出し、どちらも 0 以外で終わる。手順 8 は branch の image が healthy になり、開発者ホームの一覧に開発用アカウントが出る。手順 9 の開発者ホームは上端に「本番以外の環境」の帯、ログイン中の利用者の名前とメール、利用者の一覧 (候補が 8 人を超えた時は「利用者を絞り込む」欄も)、戻り先の URL と「アプリケーションに戻る」を出し、一覧で `dev-admin@example.com` を押すと `/account` に移って `dev-admin@example.com` でログインした状態になる。許可されない `redirect_url` を付けた開発者ホームを開くと `/auth/error?reason=invalid_redirect_url` に移る
+- **期待結果**: 手順 2 は `taimei-auth` が healthy になって終わり (migrate と開発用アカウントの seed の後に healthy になる)、手順 3 が 200、手順 4 で `/account` に移ってログインした状態になる。手順 5 の `/auth/` と `/auth/signup` は本番と同じ共通ログイン画面と共通サインアップ画面 (メールの入力欄。サインアップは名前の欄も) を出し、利用者の一覧と「本番以外の環境」の帯を出さない。開発者ホームは開発用アカウントの一覧を出し、手順 4 で別の browser の profile からログインした利用者は出さない。`dev-owner@example.com` を選ぶと、同じ query の開発者ホームに戻って「… でログインしました」とその利用者を出し、「アプリケーションに戻る」を押すと、`/account` に移ってその利用者でログインした状態になる。手順 6 はログインしたまま `/account` を表示する。手順 7 の 1 つ目は `FATAL: testing/server.ts starts only with APP_ENV=test.` を、2 つ目は `FATAL: testing/server.ts must start with --preload=./testing/redirect-hosts-plugin.ts` で始まる文言を出し、どちらも 0 以外で終わる。手順 8 は branch の image が healthy になり、開発者ホームの一覧に開発用アカウントが出る。手順 9 の開発者ホームは上端に「本番以外の環境」の帯、ログイン中の利用者の名前とメール、利用者の一覧 (候補が 8 人を超えた時は「利用者を絞り込む」欄も)、戻り先の URL と「アプリケーションに戻る」を出し、一覧で `dev-admin@example.com` を押すと、同じ query の開発者ホームに戻って「… でログインしました」と `dev-admin@example.com` を出し、「アプリケーションに戻る」を押すと、`/account?a=1&b=2` (query が `&` で 2 つに分かれたまま) に移って `dev-admin@example.com` でログインした状態になる。許可されない `redirect_url` を付けた開発者ホームを開くと `/auth/error?reason=invalid_redirect_url` に移る
 
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
 

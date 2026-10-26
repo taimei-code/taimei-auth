@@ -1,5 +1,18 @@
 # Changelog
 
+## 5.1.0 — 2026-10-26
+
+試験の環境の開発者ホームで利用者を選んだ後の戻り方を、`returnTo` の有無によらずそろえた。SDK の export と RPC の wire は変えていない。
+
+### Features
+
+- `buildDevHomeUrl` の URL で開いた開発者ホームで利用者を選ぶと、`returnTo` へ移らずに同じ `returnTo` を持つ開発者ホームに戻り、「○○ でログインしました」を出す。ログアウトした後と同じ戻り方になる。`returnTo` へは「アプリケーションに戻る」で、ログインしたまま移る
+
+### Fixes
+
+- Magic Link でログインした後の行き先の URL は、query の値の `%26`・`%3D`・`%23`・`%25` などが `&`・`=`・`#`・`%` に戻らず、渡した URL と同じ文字列になる。`createSignedInUser` の `returnTo`、開発者ホームの `returnTo`、招待の後の行き先のどれにも当たる。この修正のために、Magic Link の URL (`createSignedInUser` の `loginUrl` を含む) の `callbackURL` の値を 2 回 encode した文字列にした。`searchParams.get("callbackURL")` で読んだ値は `returnTo` と一致しないので、行き先は link を開いた後の URL で確かめる
+- 試験の環境で、同じ利用者を同時に 2 回ログインさせても 500 にならない
+
 ## 5.0.0 — 2026-10-25
 
 試験の環境のログイン画面を本番と同じ画面に戻した。利用者を選んでログインするのは開発者ホームだけになる。SDK の export と RPC の wire は変えていない。
