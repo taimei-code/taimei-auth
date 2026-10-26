@@ -41,7 +41,7 @@
 - `__tests__/default-company-contract.test.ts`: 現在の事業所を書き換える経路のすべてに、契約の scenario があること
 - `__tests__/e2e-setup.test.ts`: e2e の起動 script の MFA の鍵と、test の既定の鍵が同じであること
 - `__tests__/request-context.test.ts`: `AUTH_TRUSTED_PROXY_HOPS` を読むのが request-context だけであること
-- `../testing/__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであること
+- `../testing/__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであることと、SDK を初期化するすべての file が、送る前に request の secret を落とす設定 (`SENTRY_REQUEST_PRIVACY`) を渡すこと
 - `__tests__/no-environment-branch.test.ts`: `src/` で `APP_ENV` を読むのが、Sentry の環境名を決める `src/worker.ts` だけであることと、`web/src` が vite の build の mode (`import.meta.env.MODE` など) を読まないこと (本番の code は自分が本番かどうかを知らない)
 - `__tests__/non-production-wrangler-config.test.ts`: 本番以外の worker の config (`testing/wrangler.jsonc`) が本番の name・route・Hyperdrive・vars を持たないこと
 - `__tests__/testing-server-dependencies.test.ts`: 本番以外の server の entry (`testing/worker.ts`・`testing/server.ts`) から辿れる外部 package が dependencies だけであること (画面は web の build で bundle する)

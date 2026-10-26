@@ -1,5 +1,5 @@
 import * as SentryBun from "@sentry/bun";
-import { setSentryBackend, type CaptureContext } from "../src/sentry";
+import { SENTRY_REQUEST_PRIVACY, setSentryBackend, type CaptureContext } from "../src/sentry";
 
 export function initBunSentry(): void {
   const dsn = process.env.SENTRY_DSN;
@@ -8,6 +8,7 @@ export function initBunSentry(): void {
     return;
   }
   SentryBun.init({
+    ...SENTRY_REQUEST_PRIVACY,
     dsn,
     environment: process.env.NODE_ENV ?? "development",
     tracesSampleRate: 0.1,

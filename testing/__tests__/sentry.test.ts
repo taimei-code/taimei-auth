@@ -5,7 +5,9 @@ import {
   consoleSentryBackend,
   SentryLive,
   SentryService,
+  type SentryEvent,
   setSentryBackend,
+  withoutRequestSecrets,
 } from "../../src/sentry";
 import { captureThrown } from "../../src/handlers/client-facing-error";
 import { initBunSentry } from "../sentry-bun";
@@ -120,5 +122,52 @@ describe("initBunSentry", () => {
       warn.mockRestore();
       if (originalDsn !== undefined) process.env.SENTRY_DSN = originalDsn;
     }
+  });
+});
+
+describe("Sentry の SDK は既定で request の header・本文・query を event に載せるので、送る前に secret になりうる部分を落とす", () => {
+  test("service key・cookie・本文・query を落とし、method・path・user-agent は残す", () => {
+    const event: SentryEvent = {
+      message: "m",
+      request: {
+        method: "POST",
+        url: "https://auth.example.com/api/auth/magic-link/verify?token=t1#h",
+        headers: {
+          "X-Service-Key": "k1",
+          cookie: "c1",
+          authorization: "a1",
+          "user-agent": "ua",
+        },
+        data: '{"sessionToken":"s1","code":"123456"}',
+        cookies: { c: "c1" },
+        query_string: "token=t1",
+      },
+    };
+
+    expect(withoutRequestSecrets(event)).toEqual({
+      message: "m",
+      request: {
+        method: "POST",
+        url: "https://auth.example.com/api/auth/magic-link/verify",
+        headers: { "user-agent": "ua" },
+      },
+    });
+  });
+
+  test("request を持たない event はそのまま返す", () => {
+    const event: SentryEvent = { message: "m" };
+    expect(withoutRequestSecrets(event)).toBe(event);
+  });
+
+  test("Sentry の SDK を初期化する file はすべて、送る前に request の secret を落とす設定を渡す", () => {
+    const initializers = grepFiles(
+      "Sentry[A-Za-z]*\\.(init|withSentry|instrumentDurableObjectWithSentry)\\(",
+      ["src", "testing"],
+      { tests: "exclude" },
+    ).sort();
+    expect(initializers).toEqual(["src/worker.ts", "testing/sentry-bun.ts"]);
+    expect(
+      grepFiles("\\.\\.\\.SENTRY_REQUEST_PRIVACY", ["src", "testing"], { tests: "exclude" }).sort(),
+    ).toEqual(initializers);
   });
 });
