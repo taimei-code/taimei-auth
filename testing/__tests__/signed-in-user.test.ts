@@ -10,6 +10,7 @@ import { buildApp } from "../../src/app";
 import { companySeenByConsumer } from "../../src/__tests__/consumer-company-view";
 import { Role as ProtoRole } from "../../src/gen/auth/v1/auth_pb";
 import { getTrustedOrigins } from "../../src/env";
+import { callbackURLAfterVerify } from "../../src/email/dispatch-magic-link";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testingApiRoutes } from "../routes";
@@ -226,6 +227,18 @@ describe("試験 API で作る利用者と事業所", () => {
       }),
     ));
 
+  test("returnTo の query の値が %26 を含んでも、ログイン URL を開くと同じ文字列の returnTo へ移る", () =>
+    run(
+      Effect.gen(function* () {
+        const returnTo = `${trustedOrigin}/after-sign-in?next=%2Fx%3Fa%3D1%26b%3D2`;
+        const signedIn = yield* createSignedInUser({ companies: [], returnTo });
+
+        const opened = yield* openLoginUrl(signedIn.loginUrl);
+
+        expect(opened.headers.get("location")).toBe(returnTo);
+      }),
+    ));
+
   test("returnTo に実在する招待の token があり招待のメールが送られても、利用者を作り、loginUrl の callbackURL は returnTo になる", () =>
     run(
       Effect.gen(function* () {
@@ -241,7 +254,7 @@ describe("試験 API で作る利用者と事業所", () => {
         });
         const returnTo = `${trustedOrigin}/auth/signup/accept-invitation?invitation_token=${invitation.token}`;
         const signedIn = yield* createSignedInUser({ companies: [], returnTo });
-        expect(new URL(signedIn.loginUrl).searchParams.get("callbackURL")).toBe(returnTo);
+        expect(callbackURLAfterVerify(signedIn.loginUrl)).toBe(returnTo);
       }),
     ));
 

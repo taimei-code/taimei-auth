@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import { AuthApi } from "../src/auth-service";
+import { callbackURLAfterVerify } from "../src/email/dispatch-magic-link";
 import { EmailSender } from "../src/email/ports";
 import {
   invitationLogLine,
@@ -13,7 +14,7 @@ const sentLinks = new Map<string, Map<string | null, string>>();
 const record = (email: string, url: string) =>
   Effect.sync(() => {
     const byCallbackURL = sentLinks.get(email) ?? new Map<string | null, string>();
-    byCallbackURL.set(new URL(url).searchParams.get("callbackURL"), url);
+    byCallbackURL.set(callbackURLAfterVerify(url), url);
     sentLinks.set(email, byCallbackURL);
   });
 

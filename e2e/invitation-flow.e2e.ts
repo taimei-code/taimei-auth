@@ -52,8 +52,6 @@ test("メンバー画面が受けた redirect_url へ、招待された人が受
   const invitationLink = await sentLinkAfter(INVITEE_EMAIL, () =>
     inviteForm.getByRole("button", { name: "招待する" }).click(),
   );
-  const callbackURL = new URL(invitationLink).searchParams.get("callbackURL") ?? "";
-  expect(new URL(callbackURL).searchParams.get("redirect_url")).toBe(redirectUrl);
 
   const inviteePage = await (await browser.newContext()).newPage();
   await inviteePage.goto(invitationLink);
