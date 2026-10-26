@@ -3,7 +3,7 @@
 自動化できない回帰ケース (実ブラウザと実ドメイン、外部サービスとの実連携、実 workerd、別 repo の build context のいずれかが必要なもの) の台帳である。
 
 - **ID 体系**: `QA-MR-*` はこの文書専用の体系である。自動テストの名前に書いてよい番号は、root の `CLAUDE.md` の test 名の規則が決める
-- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
+- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。「契機の path」は、変えた file がその glob に当たれば契機に当たることを示す。本番以外の file がどれかの glob に当たることと、どの glob も実在の file に当たることは `src/__tests__/manual-regression-triggers.test.ts` が固定する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
 - **担当**: 該当 PR の作者 (デプロイ後のスモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
 
@@ -14,6 +14,7 @@
 ## QA-MR-01: cross-subdomain Cookie の実ドメイン共有 (#30 / #89 家系)
 
 - **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` の周辺を触る PR、および本番デプロイ後
+- **契機の path**: `src/cookie-domain.ts`、`src/auth.ts`、`src/env.ts`、`wrangler.jsonc`
 - **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済みで、ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有である。session cookie の発行者は 2 つあり ([GLOSSARY.md「session cookie」](../../GLOSSARY.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済みである。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
 - **手順**:
   1. ブラウザで `https://auth.taimei-code.com` に **MFA 無効の user で** ログインする
@@ -24,6 +25,7 @@
 ## QA-MR-02: GitHub OAuth 実連携 (第 2 の認証経路)
 
 - **契機**: better-auth `socialProviders` / OAuth callback / account linking / **MFA チャレンジ** の matcher (`/callback/:id`) を触る PR
+- **契機の path**: `src/auth.ts`、`src/auth-plugins/**`
 - **前提**: `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` を設定した環境 (local でもよい。未設定だと GitHub ボタン自体が機能しない)
 - **手順**:
   1. `/auth/?service_name=accounts&redirect_url=<有効 URL>` を開き「GitHub でログイン」を押す
@@ -36,6 +38,7 @@
 ## QA-MR-03: workerd 固有挙動 (Worker hung 非再発、#91)
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
+- **契機の path**: `db/client.ts`、`src/worker.ts`、`wrangler.jsonc`
 - **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。src/CLAUDE.md「gotcha」を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
@@ -47,6 +50,7 @@
 ## QA-MR-04: Resend 実メールのレンダリング
 
 - **契機**: `src/email/` (テンプレート / sanitize / 差出人) を触る PR
+- **契機の path**: `src/email/**`
 - **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
   1. magic link ログインを実行し、受信メールの件名、本文、リンクを実メールクライアントで確認する。リンクを開いてログインする
@@ -56,6 +60,7 @@
 ## QA-MR-05: magic link の期限切れ (5 分)
 
 - **契機**: better-auth `magicLink.expiresIn` / verification の保存方式を触る PR
+- **契機の path**: `src/auth.ts`、`src/ttl-store-better-auth.ts`、`src/kv-store.do.ts`
 - **前提**: local でよい (使用済み link の拒否は `e2e/auth-flow.e2e.ts` が自動化済み。実時間の経過が必要な期限切れのみ手動で見る)
 - **手順**:
   1. magic link を発行し、クリックせず 5 分以上待つ
@@ -66,6 +71,7 @@
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 
 - **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` を触る PR
+- **契機の path**: `src/mfa/totp/**`、`src/auth-plugins/mfa-challenge.ts`、`web/src/mfa/MfaEnrollDialog.tsx`
 - **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済みで、ここで見るのは実アプリが QR コードと URI を解釈できるかである
 - **手順**:
   1. `/account/security` の「多要素認証 (MFA)」を有効化し、表示された QR コードを認証アプリのカメラで読み取る
@@ -78,6 +84,7 @@
 ## QA-MR-07: MFA 有効化 / 無効化の実 Resend メール
 
 - **契機**: 多要素認証 (MFA) の有効化 / 無効化の通知メールテンプレート (`src/email/`) を触る PR (QA-MR-04 の MFA 版。同じ前提、同じ観点で見る)
+- **契機の path**: `src/email/**`
 - **前提**: `RESEND_API_KEY` を設定した環境 (local は console 出力のみで実メールが飛ばない)。受信できるテスト用アドレス
 - **手順**:
   1. 多要素認証 (MFA) を有効化し、受信メールを実メールクライアントで確認する
@@ -87,6 +94,7 @@
 ## QA-MR-08: 実機スマートフォンでのコード入力 (数字キーボード / OTP 自動入力)
 
 - **契機**: `use-mfa-code-entry` / `MfaChallenge` / 有効化・無効化ダイアログのコード入力欄を触る PR
+- **契機の path**: `web/src/mfa/use-mfa-code-entry.ts`、`web/src/mfa/pages/MfaChallenge.tsx`、`web/src/mfa/MfaChallengeView.tsx`、`web/src/mfa/MfaEnrollDialog.tsx`
 - **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済みで、ここで見るのは実 OS がその属性にどう反応するかである
 - **手順**:
   1. 実機で `/auth/mfa` を開き、コード入力欄をタップする
@@ -112,6 +120,7 @@
 ## QA-MR-10: 事業所作成直後の `/account` 即表示 (Hyperdrive query cache 非再発)
 
 - **契機**: 本番 Hyperdrive config の作り直し / `wrangler.jsonc` の `hyperdrive` を触る PR、`db/client.ts` / `db/repositories/membership.ts` の読み取り経路を触る PR、および本番デプロイ後
+- **契機の path**: `wrangler.jsonc`、`db/client.ts`、`db/repositories/membership.ts`
 - **前提**: production。Hyperdrive の query cache (既定 max_age 60s) が有効だと、作成前に cache された空の membership 一覧が作成直後の読み取りに返り、`/account` が `/auth/signup/company` へ戻す (2026-09-03 に本番で再現。ADR-0011 Consequences 参照)。local の Hyperdrive local mode は cache しないため再現せず、実 Hyperdrive でしか確認できない
 - **手順**:
   1. `bunx wrangler hyperdrive get <hyperdrive.id>` で `caching.disabled` が `true` であることを確認する
@@ -123,6 +132,7 @@
 ## QA-MR-11: Effect runtime と ALS の共存 (remote workerd、ADR-0017)
 
 - **契機**: `effect` の version 変更、ADR-0017 の Stage 完了 PR (runtime / adapter / ports / Guard / Use-case を Effect 様式へ切り替える PR)、および本番デプロイ後
+- **契機の path**: `package.json`、`src/runtime.ts`
 - **前提**: ALS と Effect scheduler の組み合わせは実 workerd でしか観測できない (local の miniflare では再現しない)。runtime が実 workerd と実 binding で動くことと、guard の failure が client への応答の形に変換されることは、`deploy.yml` の preview smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で確認する (`/health` を 20 回連続で呼ぶことと、未認証の `GET /api/account/memberships` が 401 `{"_tag":"Unauthorized"}` を返すこと)。認証付き経路は session cookie が要るため自動化せず、デプロイ後のブラウザ確認に留める (runtime の機構は `/health` と同じである。残るリスクには、adapter と SPA の API の ErrorReporter が Sentry に送る 500 で気づき、`wrangler rollback` で戻す)
 - **手順**:
   1. Deploy workflow の "Preview smoke (gate)" step が緑で、ログに `/api/account/memberships (no cookie): 401 {"_tag":"Unauthorized"}` が出ていることを確認する
