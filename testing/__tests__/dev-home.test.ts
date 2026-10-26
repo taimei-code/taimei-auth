@@ -85,14 +85,6 @@ const signInAs = async (userId: string, headers?: HeadersInit) =>
 
 const signedInUserIdOf = (headers: Headers) => run(sessionUserIdOf(headers));
 
-const withoutCookieCache = (headers: Headers) =>
-  new Headers({
-    cookie: (headers.get("cookie") ?? "")
-      .split("; ")
-      .filter((pair) => pair.includes("session_token="))
-      .join("; "),
-  });
-
 const cleanupAll = () =>
   run(
     Effect.gen(function* () {
@@ -286,14 +278,14 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
 });
 
 describe("開発者ホームでログアウトすると、session を消して開発者ホームに戻る", () => {
-  test("ログアウトすると、開発者ホームへ 303 で移し、server の session が無くなる (session の cookie cache を送らずに確かめる)", async () => {
+  test("ログアウトすると、開発者ホームへ 303 で移し、server の session が無くなる", async () => {
     const signedIn = await signInAs(owner.id);
 
     const signedOut = await signOut(signedIn);
 
     expect(signedOut.status).toBe(303);
     expect(signedOut.headers.get("location")).toBe(DEV_HOME_PATH);
-    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBeUndefined();
+    expect(await signedInUserIdOf(signedIn)).toBeUndefined();
   });
 
   test("ログアウトの応答は、browser の session の cookie を消す Set-Cookie を返す", async () => {
@@ -351,7 +343,7 @@ describe("開発者ホームは service_name と redirect_url を受けると、
 
     expect(signedOut.status).toBe(303);
     expect(signedOut.headers.get("location")).toBe(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
-    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBeUndefined();
+    expect(await signedInUserIdOf(signedIn)).toBeUndefined();
   });
 });
 
@@ -384,7 +376,7 @@ describe("開発者ホームは、許可されない redirect_url を共通ロ�
     const signedOut = await signOut(signedIn, query);
 
     expect(signedOut.status).toBe(400);
-    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBe(owner.id);
+    expect(await signedInUserIdOf(signedIn)).toBe(owner.id);
   });
 });
 
@@ -428,7 +420,7 @@ describe("開発者ホームのログアウトの POST は、auth ホスト以�
     });
 
     expect(signedOut.status).toBe(403);
-    expect(await signedInUserIdOf(withoutCookieCache(signedIn))).toBe(owner.id);
+    expect(await signedInUserIdOf(signedIn)).toBe(owner.id);
   });
 });
 

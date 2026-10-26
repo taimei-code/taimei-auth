@@ -413,6 +413,10 @@ MFA チャレンジを消費し、新 session を発行して response の `Set-
   トリガーの対象列ではないため、フラグ更新でも失効しない)。退会・事業所削除など既存の revoke 経路と
   同じ platform 挙動 (db/CLAUDE.md「認証ドメインのモデルは repository 経由で触る」の例外規定) であり、ログインの hot path を変えてまで
   詰める価値は無いと判断し、既知の bound として記録するに留める。
+  (2026-10-26 追記) revoke を即時に効かせるため、この判断を改め、cookieCache を無効にした。
+  session の判定は毎回 TTL store を見る (`src/auth.ts`、
+  `src/__tests__/session-revocation.test.ts`)。revoke は即時に効き、代わりに session の判定ごとに
+  TTL store の読み出しが 1 回増える。
 
 ## 検討した代替案 (不採用)
 

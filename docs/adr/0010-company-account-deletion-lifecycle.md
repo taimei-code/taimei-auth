@@ -136,6 +136,8 @@ orphan 削除は本人がいない経路 (DeleteCompany / member remove / batch)
 
 better-auth の cookieCache (`src/auth.ts` の `maxAge: 5*60`) は即時には無効化されず、**最大 5 分間、stale な session が valid に見える**。退会 (`POST /api/account/delete`) は本人の request なので、SPA が退会の後に sign-out して cookie を消す。orphan 削除にはその request が無いため、**この 5 分の窓を受容する** (詳細: `db/CLAUDE.md`「認証ドメインのモデルは repository 経由で触る」)。tx 内には DB 操作だけを置き、`auth.api.*` (HTTP / TTL store の IO) を tx 内で呼ばない。
 
+(2026-10-26 追記) cookieCache は無効にした (ADR-0013 の Consequences の 2026-10-26 追記)。TTL store から消した session は直後から拒否されるので、上の 5 分の窓は無くなった。残るのは、commit 後の session 削除が失敗した場合で、そのときも user 行が無いので `requireActor` と `VerifySession` が拒否する。
+
 ### 既存の soft-delete セマンティクスとの統合
 
 既存の `account-company.ts` にある「membership / invitation は残す」というコメント (ADR-009 由来) はこの ADR で **更新する** (membership は物理削除、invitation は REVOKED にする)。company 行だけ soft delete を維持する点は変わらない。

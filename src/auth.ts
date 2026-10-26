@@ -81,8 +81,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 5 * 60,
+        enabled: false,
       },
       freshAge: 0,
     },
