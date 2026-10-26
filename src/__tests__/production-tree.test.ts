@@ -36,7 +36,15 @@ const runsOnlyInProductionTree = (workflow: Workflow, command: string): boolean 
   );
 };
 
+const ONLY_PUSHES_TO_MAIN_OF_THIS_REPOSITORY =
+  "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)";
+
 const deployViolations = (workflow: Workflow): string[] => [
+  ...(Object.values(workflow.jobs ?? {}).every(
+    (job) => job.if === ONLY_PUSHES_TO_MAIN_OF_THIS_REPOSITORY,
+  )
+    ? []
+    : ["can deploy a commit that was not pushed to main of this repository"]),
   ...(buildsProductionTree(workflow) ? [] : ["does not build the production tree"]),
   ...(runsOnlyInProductionTree(workflow, "wrangler versions upload --tag")
     ? []
@@ -86,6 +94,12 @@ describe("本番は本番以外の code が無い tree からだけ build する
     expect(buildsProductionTree(ci)).toBe(true);
   });
 
+  test("deploy は、この repository の main への push の CI と、main からの手動の起動だけで走る", () => {
+    expect(deployViolations(deploy)).not.toContain(
+      "can deploy a commit that was not pushed to main of this repository",
+    );
+  });
+
   test("deploy は除外した tree で build して upload し、checkout では web を build しない", () => {
     expect(deployViolations(deploy)).toEqual([]);
   });
@@ -109,6 +123,11 @@ describe("本番は本番以外の code が無い tree からだけ build する
         },
       },
       "uploads outside the production tree",
+    ],
+    [
+      "CI の成功だけを条件にする",
+      { jobs: { deploy: { if: "github.event.workflow_run.conclusion == 'success'", steps: [] } } },
+      "can deploy a commit that was not pushed to main of this repository",
     ],
     [
       "checkout で web を build する",

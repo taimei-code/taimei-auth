@@ -56,6 +56,55 @@ const bestEffort = (send: () => void): Effect.Effect<void> =>
     ),
   );
 
+type SentryEventRequest = {
+  method?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  data?: unknown;
+  cookies?: unknown;
+  query_string?: unknown;
+};
+
+export type SentryEvent = { message?: string; request?: SentryEventRequest };
+
+const FORWARDED_REQUEST_HEADERS = new Set([
+  "accept",
+  "content-length",
+  "content-type",
+  "user-agent",
+]);
+
+const urlWithoutQuery = (url: string): string => {
+  if (!URL.canParse(url)) return "[unparsable url]";
+  const parsed = new URL(url);
+  parsed.search = "";
+  parsed.hash = "";
+  return parsed.toString();
+};
+
+export const withoutRequestSecrets = <E extends SentryEvent>(event: E): E => {
+  const { request } = event;
+  if (!request) return event;
+  return {
+    ...event,
+    request: {
+      method: request.method,
+      url: request.url === undefined ? undefined : urlWithoutQuery(request.url),
+      headers: Object.fromEntries(
+        Object.entries(request.headers ?? {}).filter(([name]) =>
+          FORWARDED_REQUEST_HEADERS.has(name.toLowerCase()),
+        ),
+      ),
+    },
+  };
+};
+
+export const SENTRY_REQUEST_PRIVACY = {
+  sendDefaultPii: false,
+  beforeSend: withoutRequestSecrets,
+  beforeSendTransaction: withoutRequestSecrets,
+} as const;
+
 export const SentryLive = Layer.succeed(
   SentryService,
   SentryService.of({

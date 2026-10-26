@@ -30,7 +30,7 @@ describe("requireActor", () => {
     expect(actor).toEqual({ id: "u1", email: "a@x.jp", lastUsedCompanyId: null });
   });
 
-  test("session はあるが user 行が無い (cookieCache 残留) → Unauthorized (fail-closed)", async () => {
+  test("session はあるが user 行が無い (TTL store に session が残った) → Unauthorized (fail-closed)", async () => {
     const layer = Layer.mergeAll(
       authLayer(() => sessionOf("gone")),
       userRepoLayer([]),

@@ -73,6 +73,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
           await runtime.runPromise(dispatchMagicLink(email, url));
         },
         expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
+        storeToken: "hashed",
         rateLimit: { window: 60, max: 10 },
       }),
       primaryAuth(runtime),
@@ -80,8 +81,7 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
     session: {
       cookieCache: {
-        enabled: true,
-        maxAge: 5 * 60,
+        enabled: false,
       },
       freshAge: 0,
     },

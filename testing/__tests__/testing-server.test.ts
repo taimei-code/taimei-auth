@@ -189,7 +189,7 @@ describe("試験用の entry は、起動の前に開発用アカウントをそ
     expect(status).toBe(404);
   }, 15_000);
 
-  test("開発者ホームで選んだアカウントの session は、entry を起動し直しても TTL store に残る (session の cookie cache を送らずに確かめる)", async () => {
+  test("開発者ホームで選んだアカウントの session は、entry を起動し直しても TTL store に残る", async () => {
     const [owner] = DEV_ACCOUNTS.users;
     if (!owner) throw new Error("DEV_ACCOUNTS has no owner");
 

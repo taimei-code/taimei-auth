@@ -79,7 +79,7 @@ describe("authEntryRedirect", () => {
         }),
       ));
 
-    test("削除済み user の stale session (cookieCache の窓) は session が無いとみなし、redirect せず SPA を返す", () =>
+    test("削除済み user の session (退会の commit 後の session 削除が失敗して TTL store に残ったもの) は session が無いとみなし、redirect せず SPA を返す", () =>
       run(
         Effect.gen(function* () {
           const ghost = { id: `${P}u-ghost`, email: `${P}ghost@example.com` };

@@ -10,6 +10,7 @@ import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
+import { SENTRY_REQUEST_PRIVACY } from "./sentry";
 import { onceUntilSucceeded } from "./once-until-succeeded";
 
 type Env = {
@@ -65,6 +66,7 @@ const bootstrapOnce = (options: WorkerOptions) => {
 };
 
 const sentryOptions = (env: Env) => ({
+  ...SENTRY_REQUEST_PRIVACY,
   dsn: env.SENTRY_DSN,
   environment: env.APP_ENV ?? "production",
   tracesSampleRate: 0.1,
