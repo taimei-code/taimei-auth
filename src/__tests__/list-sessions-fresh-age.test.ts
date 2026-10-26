@@ -4,7 +4,7 @@ import { auth } from "../auth";
 import { dbTest } from "./live-runner";
 import { createSessionFor } from "./session-helpers";
 import { TestDb } from "./test-db";
-import { testKvStore } from "./test-ttl-store";
+import { betterAuthKeyOf, testKvStore } from "./test-ttl-store";
 
 const P = "fresh-age-test-";
 const { run, cleanup } = dbTest(P);
@@ -12,9 +12,10 @@ const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
 
 const backdateSession = (token: string) =>
   Effect.sync(() => {
-    const stored = JSON.parse(testKvStore.get(token) ?? "null");
+    const key = betterAuthKeyOf(token);
+    const stored = JSON.parse(testKvStore.get(key) ?? "null");
     stored.session.createdAt = new Date(Date.now() - TWO_DAYS_MS).toISOString();
-    testKvStore.set(token, JSON.stringify(stored), 60 * 60);
+    testKvStore.set(key, JSON.stringify(stored), 60 * 60);
   });
 
 describe("セッションの一覧は、古い session でも再認証を求めない", () => {

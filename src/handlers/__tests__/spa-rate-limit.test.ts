@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type { Hono } from "hono";
 import { buildApp } from "../../app";
 import { testKvStore, testTtlStore } from "../../__tests__/test-ttl-store";
+import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { ttlStoreLayer } from "../../ttl-store-service";
 import { JSON_HEADERS } from "../client-facing-error";
 import { signedIn as signedInLayer } from "../../membership/__tests__/test-layers";
@@ -60,7 +61,9 @@ describe("MFA チャレンジの verify の試行枠 (別アカウントへの�
   test("1 回送ると、IP の key の計数が 1 になる", async () => {
     const ip = uniqueIp();
     await verifyFrom(buildApp({ mountStatic: () => {} }), ip);
-    expect(testKvStore.get(`rate-limit:mfa-challenge:ip:${ip}`)).toBe("1");
+    expect(testKvStore.get(attemptBudgetKey(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, ip))).toBe(
+      "1",
+    );
   });
 
   test("TTL store で数えられない時は通す (fail-open)", async () => {
@@ -93,7 +96,7 @@ describe("MFA チャレンジの状態の試行枠 (表示 1 回と verify 10 �
   test("1 回送ると、IP の key の計数が 1 になる", async () => {
     const ip = uniqueIp();
     await stateFrom(buildApp({ mountStatic: () => {} }), ip);
-    expect(testKvStore.get(`rate-limit:mfa-challenge-status:ip:${ip}`)).toBe("1");
+    expect(testKvStore.get(attemptBudgetKey(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, ip))).toBe("1");
   });
 });
 

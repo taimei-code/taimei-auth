@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import { Hono } from "hono";
+import { ATTEMPT_BUDGETS } from "../../attempt-budget";
 import { attemptBudgetMiddleware } from "../attempt-budget-hono";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { canaryToken } from "../canary-token";
@@ -71,7 +72,7 @@ describe("canary token の rate limit 合成 (app.ts と同構成)", () => {
       "/auth/canary-token/*",
       attemptBudgetMiddleware(
         {
-          keyPrefix: "canary-test",
+          keyPrefix: ATTEMPT_BUDGETS.canaryTokenPerIp.keyPrefix,
           windowSeconds: 60,
           maxAttempts: () => 2,
           whenUncountable: "allow",

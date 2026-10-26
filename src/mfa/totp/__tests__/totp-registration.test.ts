@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../../../client-ip";
 import { Effect, Exit, Layer } from "effect";
 import { auditRowsFor, dbTest, drained, expectFailure } from "../../../__tests__/live-runner";
 import { TestDb } from "../../../__tests__/test-db";
@@ -80,7 +81,7 @@ const seedUserWithMfaEnabled = (ops: ReturnType<typeof buildOps>, seedName: stri
     return { user, actor, enrolled, secret };
   });
 
-const headers = new Headers({ "user-agent": "totp-reg-test", "x-forwarded-for": "203.0.113.9" });
+const headers = new Headers({ "user-agent": "totp-reg-test", [CLIENT_IP_HEADER]: "203.0.113.9" });
 
 const sentryAuditFailureEvents = () =>
   sentry.exceptions

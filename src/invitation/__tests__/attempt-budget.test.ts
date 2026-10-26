@@ -7,11 +7,15 @@ import type { TtlStore } from "../../ttl-store-service";
 import { SentryLive, type SentryService } from "../../sentry";
 import { RateLimited } from "../../failures";
 import { spendInvitationAttempt } from "../attempt-budget";
+import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { testKvStore, testTtlStoreLayer } from "../../__tests__/test-ttl-store";
 
 const COMPANY = "invitation-rate-limit-test";
 const bucketKey = () =>
-  `invitation_rate:${COMPANY}:${new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length)}`;
+  attemptBudgetKey(
+    ATTEMPT_BUDGETS.invitationsPerCompanyHour,
+    `${COMPANY}:${new Date().toISOString().slice(0, "YYYY-MM-DDTHH".length)}`,
+  );
 
 const clearBucket = async () => {
   for (const key of testKvStore.keys(`invitation_rate:${COMPANY}:`)) testKvStore.delete(key);
@@ -48,7 +52,7 @@ describe("spendInvitationAttempt (in-memory TTL store)", () => {
     const keys = testKvStore.keys(`invitation_rate:${COMPANY}:`);
     expect(keys).toHaveLength(1);
     expect(keys[0]).toMatch(/^invitation_rate:invitation-rate-limit-test:\d{4}-\d{2}-\d{2}T\d{2}$/);
-    const ttl = testKvStore.ttl(keys[0] as string);
+    const ttl = testKvStore.ttl(keys[0] as (typeof keys)[number]);
     expect(ttl).toBeGreaterThanOrEqual(1);
     expect(ttl).toBeLessThanOrEqual(3600);
   });

@@ -34,6 +34,22 @@ export const postgresTtlStore = async () => {
       firstValue(sql`
         WITH deleted AS (DELETE FROM testing_ttl_store WHERE key = ${key} RETURNING value, expires_at)
         SELECT value FROM deleted WHERE ${isLive}`),
+    mergeSessionIndex: async (key: string, value: string): Promise<void> => {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO testing_ttl_store (key, value, expires_at) VALUES (${key}, '[]', now())
+          ON CONFLICT (key) DO NOTHING`);
+        const stored = (
+          await tx.execute<{ value: string; live: boolean }>(sql`
+            SELECT value, ${isLive} AS live FROM testing_ttl_store WHERE key = ${key} FOR UPDATE`)
+        ).rows[0];
+        const merged = mergeSessionIndex(stored?.live ? stored.value : null, value, Date.now());
+        await tx.execute(sql`
+          UPDATE testing_ttl_store
+          SET value = ${merged.value}, expires_at = ${expiresAtOrNever(merged.ttlSeconds)}
+          WHERE key = ${key}`);
+      });
+    },
     incrementRateWindow: async (key: string, windowSec: number) => {
       const count = Number(
         await firstValue(sql`

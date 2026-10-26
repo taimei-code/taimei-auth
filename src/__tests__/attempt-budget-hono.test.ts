@@ -19,7 +19,7 @@ attemptBudgetProgram satisfies (
   subject: string,
 ) => Effect.Effect<MiddlewareDecision, RateLimited, TtlStore | SentryService>;
 
-const TEST_KEY_PREFIX = "attempt-budget-test";
+const TEST_KEY_PREFIX = ATTEMPT_BUDGETS.canaryTokenPerIp.keyPrefix;
 
 const budgetOf = (limit: number): AttemptBudget<"allow"> => ({
   keyPrefix: TEST_KEY_PREFIX,

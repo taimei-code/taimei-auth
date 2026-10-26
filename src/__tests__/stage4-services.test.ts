@@ -5,12 +5,14 @@ import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
 import { TtlStore } from "../ttl-store-service";
+import { ownKey } from "../ttl-key";
 import { testKvStore, testTtlStore, testTtlStoreLayer } from "./test-ttl-store";
 
 describe("TtlStore service (live)", () => {
   const run = <A, E>(p: Effect.Effect<A, E, TtlStore>) =>
     Effect.runPromise(Effect.provide(p, testTtlStoreLayer));
-  const key = `stage4-test:${Date.now()}`;
+  const key = ownKey("health", `stage4-test:${Date.now()}`);
+  const windowKey = ownKey("health", `stage4-test:${Date.now()}:w`);
 
   test("set → get → delete が Effect で往復する", async () => {
     const value = await run(
@@ -32,12 +34,12 @@ describe("TtlStore service (live)", () => {
   });
 
   test("incrementRateWindow は count を返し EXPIRE を付ける (再試行しない書き込み系)", async () => {
-    const r = await run(TtlStore.use((ttlStore) => ttlStore.incrementRateWindow(`${key}:w`, 5)));
+    const r = await run(TtlStore.use((ttlStore) => ttlStore.incrementRateWindow(windowKey, 5)));
     expect(r.count).toBe(1);
-    const rawTtl = testKvStore.ttl(`${key}:w`);
+    const rawTtl = testKvStore.ttl(windowKey);
     expect(rawTtl).toBeGreaterThanOrEqual(1);
     expect(rawTtl).toBeLessThanOrEqual(5);
-    await run(TtlStore.use((ttlStore) => ttlStore.delete(`${key}:w`)));
+    await run(TtlStore.use((ttlStore) => ttlStore.delete(windowKey)));
   });
 });
 

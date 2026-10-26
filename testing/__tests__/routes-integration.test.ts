@@ -5,9 +5,10 @@ import { Effect } from "effect";
 import { startBunServer } from "../bun-server";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
-import { testKvStore } from "../../src/__tests__/test-ttl-store";
+import { testKvStore, testTtlStore } from "../../src/__tests__/test-ttl-store";
+import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../../src/attempt-budget";
 
-const { app } = startBunServer();
+const { app } = startBunServer({ ttlStore: testTtlStore, proxyTrust: { _tag: "Direct" } });
 
 const P = "enum-test-";
 const { run } = dbTest(P);
@@ -64,7 +65,8 @@ describe("本番以外でも Magic Link の試行枠は本番と同じ", () => {
 });
 
 describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () => {
-  const windowCount = (key: string) => Effect.sync(() => Number(testKvStore.get(key) ?? 0));
+  const windowCount = (budget: AttemptBudget<"allow">, ip: string) =>
+    Effect.sync(() => Number(testKvStore.get(attemptBudgetKey(budget, ip)) ?? 0));
 
   const isolatedClientIp = (): string =>
     `203.0.${Math.floor(Math.random() * 256)}.${Math.floor(Math.random() * 256)}`;
@@ -79,7 +81,7 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
         });
 
         expect(res.status).toBe(200);
-        expect(yield* windowCount(`rate-limit:mfa-challenge-status:ip:${ip}`)).toBe(1);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, ip)).toBe(1);
       }),
     ));
 
@@ -94,8 +96,8 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
           });
         }
 
-        expect(yield* windowCount(`rate-limit:mfa-challenge-status:ip:${ip}`)).toBe(3);
-        expect(yield* windowCount(`rate-limit:mfa-challenge:ip:${ip}`)).toBe(0);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, ip)).toBe(3);
+        expect(yield* windowCount(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, ip)).toBe(0);
       }),
     ));
 });

@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import { mergeSessionIndex } from "./session-index";
 
 type Entry = { value: string; expiresAt: number | null };
 
@@ -33,6 +34,12 @@ export class KvStore<Env = unknown> extends DurableObject<Env> {
     const value = await this.get();
     if (value !== null) await this.delete();
     return value;
+  }
+
+  async mergeSessionIndex(value: string): Promise<void> {
+    const now = Date.now();
+    const merged = mergeSessionIndex(await this.get(), value, now);
+    await this.write(merged.value, now + merged.ttlSeconds * 1000);
   }
 
   async incrementWindow(windowSec: number): Promise<number> {

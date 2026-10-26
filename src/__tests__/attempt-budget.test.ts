@@ -30,7 +30,7 @@ spendAttemptBudgetFailClosed satisfies (
 >;
 
 const budgetOf = <Policy extends WhenUncountable>(whenUncountable: Policy) => ({
-  keyPrefix: "attempt-budget-test",
+  keyPrefix: ATTEMPT_BUDGETS.canaryTokenPerIp.keyPrefix,
   windowSeconds: 60,
   maxAttempts: () => 5,
   whenUncountable,
@@ -125,7 +125,7 @@ test.each([
   [ATTEMPT_BUDGETS.mfaDisablePerUser, "user-1", "mfa:disable-attempts:user-1"],
   [ATTEMPT_BUDGETS.mfaLoginChallenge, "challenge-1", "mfa:login-challenge-attempts:challenge-1"],
 ] as const)("試行枠の鍵は宣言の前の文字列と同じになる (deploy で計数が消えない): %#", (budget, subject, key) => {
-  expect(attemptBudgetKey(budget, subject)).toBe(key);
+  expect(String(attemptBudgetKey(budget, subject))).toBe(key);
 });
 
 const maxAttemptsWith = (appEnv: string) => {

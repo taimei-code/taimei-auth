@@ -6,6 +6,7 @@ import { sentLinkIn } from "../../testing/local-delivery-log";
 import { TtlStore } from "../ttl-store-service";
 import type { Actor } from "../account/actor-contract";
 import { observing } from "./live-runner";
+import { betterAuthKeyOf } from "./test-ttl-store";
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
@@ -93,16 +94,22 @@ export function actorOf(user: { id: string; email: string }): Pick<Actor, "id" |
 export const countLiveSessions = (tokens: string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
-    const entities = yield* Effect.forEach(tokens, (token) => ttlStore.get(token), {
-      concurrency: "unbounded",
-    });
+    const entities = yield* Effect.forEach(
+      tokens,
+      (token) => ttlStore.get(betterAuthKeyOf(token)),
+      {
+        concurrency: "unbounded",
+      },
+    );
     return entities.filter((entity) => entity !== null).length;
   });
 
 export const deleteSessionEntities = (tokens: string[]) =>
   Effect.gen(function* () {
     const ttlStore = yield* TtlStore;
-    yield* Effect.forEach(tokens, (token) => ttlStore.delete(token), { concurrency: "unbounded" });
+    yield* Effect.forEach(tokens, (token) => ttlStore.delete(betterAuthKeyOf(token)), {
+      concurrency: "unbounded",
+    });
   });
 
 const AUTH_ORIGIN = "http://localhost:3100";
