@@ -6,28 +6,31 @@ import { magicLink } from "better-auth/plugins";
 import { db } from "@/db/client";
 import * as schema from "@/db/schema";
 import { primaryAuth } from "./auth-plugins/primary-auth";
+import { revokeOnlySessionTokens } from "./auth-plugins/revoke-only-session-tokens";
 import { getAppName } from "./email/client";
 import { dispatchMagicLink } from "./email/dispatch-magic-link";
+import { CLIENT_IP_HEADER } from "./client-ip";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins } from "./env";
 import { captureThrown } from "./handlers/client-facing-error";
-import type { TtlStorage } from "./ttl-store";
+import { betterAuthStorage } from "./ttl-store-better-auth";
 import type { AppRuntime } from "./runtime";
 
-const authCookieDomain = process.env.AUTH_COOKIE_DOMAIN;
-
-function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
+function buildAuth(runtime: AppRuntime) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
 
     appName: getAppName(),
 
-    secondaryStorage: ttlStorage,
+    secondaryStorage: betterAuthStorage(runtime),
 
     advanced: {
       useSecureCookies: true,
-      crossSubDomainCookies: resolveCrossSubDomainCookies(authCookieDomain),
+      crossSubDomainCookies: resolveCrossSubDomainCookies(process.env.AUTH_COOKIE_DOMAIN),
+      ipAddress: { ipAddressHeaders: [CLIENT_IP_HEADER] },
     },
+
+    rateLimit: { enabled: false },
 
     trustedOrigins: getTrustedOrigins(),
 
@@ -74,9 +77,9 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
         },
         expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
         storeToken: "hashed",
-        rateLimit: { window: 60, max: 10 },
       }),
       primaryAuth(runtime),
+      revokeOnlySessionTokens(),
     ],
 
     session: {
@@ -97,9 +100,9 @@ function buildAuth(runtime: AppRuntime, ttlStorage: TtlStorage) {
 
 export let auth: ReturnType<typeof buildAuth>;
 
-export function initAuth(runtime: AppRuntime, ttlStorage: TtlStorage): void {
+export function initAuth(runtime: AppRuntime): void {
   if (auth) return;
-  auth = buildAuth(runtime, ttlStorage);
+  auth = buildAuth(runtime);
 }
 
 export type Session = ReturnType<typeof buildAuth>["$Infer"]["Session"];

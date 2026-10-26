@@ -23,7 +23,7 @@
 - transaction は `Transaction.run` で取る。tx 内の failure と defect は常に rollback され、tx 後の副作用は `tapError` / `catchTag` で tx の外に置くか、tx の中から `afterCommit` で commit 後に登録する (例: `account/delete-account.ts` の session 削除)。
 - 時刻は `Clock.currentTimeMillis`、ID は `IdGenerator`、better-auth API は `AuthApi`、TTL store は `TtlStore`、Sentry は `SentryService`、メールは `EmailSender`、fire-and-forget は `Background.run` を使う (渡す effect の失敗は渡す前に catch する)。
 - サードパーティ境界の失敗は `errors.ts` の `DbError` / `AuthApiError` / `TtlStoreError` / `EmailError` (`cause: unknown`) で表し、producer は `tryDb` / `tryAuthApi` / `tryTtlStore` / `tryEmail` だけを使う。better-auth が session を受け付けなかった結果は境界の失敗ではないので、`AuthApi` が `SessionRejected` で返し、呼び手が写像する (activate / disable は `Unauthorized`)。
-- `auth.ts` から辿れる module は `runtime.ts` を import せず、`initAuth(runtime, ttlStorage)` で受け取った runtime を使う (import の循環は fallow の `circular-dependency` が止める)。
+- `auth.ts` から辿れる module は `runtime.ts` を import せず、`initAuth(runtime)` で受け取った runtime を使う (import の循環は fallow の `circular-dependency` が止める)。
 - 副作用の置き場は「Layer で差し替えられるか」で決める。差し替えられる副作用 (`AuthApi` / `TtlStore` などの service) は program に置く。runtime が所有しない object (`ctx`、`Response`、`process.env`、`throw`) への副作用は、`runPromise` を呼ぶ adapter (`runRoute` / `runMiddleware` / `runRpc`、better-auth の hook) が行う。program はそれを closure で受け取らず、「何をすべきか」を直和型の値で返す (例: `src/auth-plugins/mfa-challenge.ts` の `ChallengeDecision`)。program の入力に `() => void` が混ざり、テストが呼び出し順を recorder で assert し始めたら、この境界が崩れている。HttpApi では handler の外で応答が作られるので、better-auth の Set-Cookie は `HttpEffect.appendPreResponseHandler` で足してよい (`request-http-api.ts` の `forwardSetCookies`)。`HttpApiSchema.WithHeaders` は複数の Set-Cookie を 1 本に連結するので使わない。
 - 以上の境界は `src/__tests__/effect-boundary.test.ts` と `src/handlers/__tests__/no-transport-tx.test.ts` が固定する。
 
@@ -40,7 +40,7 @@
 - `__tests__/source-scan.test.ts`: 走査の module が、実行時に読み込まれる import だけを返すこと
 - `__tests__/default-company-contract.test.ts`: 現在の事業所を書き換える経路のすべてに、契約の scenario があること
 - `__tests__/e2e-setup.test.ts`: e2e の起動 script の MFA の鍵と、test の既定の鍵が同じであること
-- `__tests__/request-context.test.ts`: `AUTH_TRUSTED_PROXY_HOPS` を読むのが request-context だけであること
+- `__tests__/request-context.test.ts`: `AUTH_TRUSTED_PROXY_HOPS` を読むのが request-context だけであることと、app に request を渡すのが client の IP の header を置き直す 2 つの入口 (`src/worker.ts`・`testing/bun-server.ts`) だけであること
 - `../testing/__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであることと、SDK を初期化するすべての file が、送る前に request の secret を落とす設定 (`SENTRY_REQUEST_PRIVACY`) を渡すこと
 - `__tests__/no-environment-branch.test.ts`: `src/` で `APP_ENV` を読むのが、Sentry の環境名を決める `src/worker.ts` だけであることと、`web/src` が vite の build の mode (`import.meta.env.MODE` など) を読まないこと (本番の code は自分が本番かどうかを知らない)
 - `__tests__/non-production-wrangler-config.test.ts`: 本番以外の worker の config (`testing/wrangler.jsonc`) が本番の name・route・Hyperdrive・vars を持たないことと、違ってよい key (name・main・assets の directory・Hyperdrive の id・vars の値・routes・workers_dev・alias) のほかは本番と同じであること

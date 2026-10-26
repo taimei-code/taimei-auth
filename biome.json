@@ -125,7 +125,11 @@
                 "paths": {
                   "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
                   "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "better-auth/cookies": {
+                    "importNames": ["getSessionCookie"],
+                    "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+                  }
                 },
                 "patterns": [
                   {
@@ -170,6 +174,10 @@
                   "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
                   "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
                   "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "better-auth/cookies": {
+                    "importNames": ["getSessionCookie"],
+                    "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+                  },
                   "effect/http-api": {
                     "importNames": ["HttpApiBuilder", "HttpApiTest"],
                     "message": "契約の module は web と共有するため、server の実装 (HttpApiBuilder) を import しない。実装は src/handlers/*-http-api.ts に置く"
@@ -217,7 +225,11 @@
                 "paths": {
                   "drizzle-orm": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)",
                   "@/db/schema": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ",
-                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可"
+                  "@/db/client": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は biome-ignore で個別に許可",
+                  "better-auth/cookies": {
+                    "importNames": ["getSessionCookie"],
+                    "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+                  }
                 },
                 "patterns": [
                   {

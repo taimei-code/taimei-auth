@@ -10,7 +10,6 @@ import {
   spendAttemptBudgetFailOpen,
   type WhenUncountable,
 } from "../attempt-budget";
-import { auth } from "../auth";
 import type { TtlStore } from "../ttl-store-service";
 import { SentryLive, type SentryService } from "../sentry";
 import { recordSentry } from "./sentry-recorder";
@@ -144,12 +143,5 @@ const maxAttemptsWith = (appEnv: string) => {
 describe("試行回数の上限は、本番以外でも本番と同じ値", () => {
   test("試行枠の maxAttempts は APP_ENV=development でも APP_ENV=production と同じ", () => {
     expect(maxAttemptsWith("development")).toEqual(maxAttemptsWith("production"));
-  });
-
-  test("better-auth の magic link の rate limit は 60 秒に 10 回", () => {
-    const magicLink = auth.options.plugins?.find((plugin) => plugin.id === "magic-link");
-    expect(magicLink?.rateLimit?.map(({ window, max }) => ({ window, max }))).toEqual([
-      { window: 60, max: 10 },
-    ]);
   });
 });

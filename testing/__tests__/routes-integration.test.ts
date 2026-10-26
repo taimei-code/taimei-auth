@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../../src/client-ip";
 import { requestApp, responseJson } from "../../src/handlers/__tests__/helpers";
 import { createSessionFor } from "../../src/__tests__/session-helpers";
 import { Effect } from "effect";
@@ -53,7 +54,7 @@ describe("本番以外でも Magic Link の試行枠は本番と同じ", () => {
         for (let i = 0; i < 6; i++) {
           const res = yield* request("http://localhost/api/auth/sign-in/magic-link", {
             method: "POST",
-            headers: { "content-type": "application/json", "x-forwarded-for": ip },
+            headers: { "content-type": "application/json", [CLIENT_IP_HEADER]: ip },
             body: JSON.stringify({ email: `regression-rate-${i}@example.com` }),
           });
           statuses.push(res.status);
@@ -77,7 +78,7 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
         const ip = isolatedClientIp();
 
         const res = yield* request("http://localhost/api/mfa/challenge", {
-          headers: { "x-forwarded-for": ip },
+          headers: { [CLIENT_IP_HEADER]: ip },
         });
 
         expect(res.status).toBe(200);
@@ -92,7 +93,7 @@ describe("MFA チャレンジ状態取得の rate limit 登録 (ADR-0013)", () =
 
         for (let i = 0; i < 3; i++) {
           yield* request("http://localhost/api/mfa/challenge", {
-            headers: { "x-forwarded-for": ip },
+            headers: { [CLIENT_IP_HEADER]: ip },
           });
         }
 

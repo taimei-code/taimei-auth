@@ -18,6 +18,7 @@ Accepted (2026-10-24)。判断主体は maintainer。実装は taimei-code/taime
    - 安全の設定 (session の cookie の `Secure`、試行回数の上限、service key の必須、proxy の段数の必須) は本番の値の定数にし、本番以外も同じ値で動く。本番以外は値を渡す
    - 安全に関わらない設定は環境変数の値で渡す
    - 違う振る舞い (送ったメールの記録など) は、本番以外の入口が別の実装を渡す
+   - (2026-10-26 追記) 依存先が読む環境変数と runtime の判定にも同じ規則を当てる。better-auth は `NODE_ENV=production` の時だけ rateLimit を既定で有効にするので、`src/auth.ts` が無効を明示する (`src/__tests__/better-auth-assumptions.test.ts`)。client の IP は入口 (`src/worker.ts` と `testing/bun-server.ts`) が決めて header に置き、`src/` は runtime を判定しない
 2. **redirect 先の allowlist だけは、本番の定数の module を本番以外の build と実行が差し替える**。本番の code は `src/redirect-hosts.ts` (`https:` と本番の host) を `@core/redirect-hosts` で import するだけで、差し替えの口を持たない。本番以外は `testing/redirect-hosts.ts` に替える (許す protocol と host は [ADR-0003](./0003-redirect-url-allowlist-policy.md) の Decision)。worker は `testing/wrangler.jsonc` の `alias`、web は `web/non-production/vite.config.ts` の `resolve.alias`、Bun の server と `bun test` は `testing/redirect-hosts-plugin.ts` の `onLoad` (preload) で替える。付け忘れると本番の定数で動き (安全な側)、本番以外の入口は起動の時にそれを見つけて止まる
 3. **本番の worker と web は `testing/`・`web/non-production/`・`db/testing/` を外した tree から build する**。`scripts/build-production-tree.sh` が `HEAD` を `git archive` で展開し (root を起点にした pathspec で外す)、その中で build と既知の文字列の検査を行う。PR の CI、`deploy.yml`、`deploy-durable-object-migration.yml` が同じ script を呼ぶ。本番の code が除外した dir を import すると build が止まり、`// @ts-ignore` を付けても止まる
 4. **本番以外の worker は `testing/wrangler.jsonc` で動く**。本番の name・route・Hyperdrive の id・vars を持たないので、誤って deploy しても本番に載らない

@@ -12,6 +12,8 @@ import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
 import { SENTRY_REQUEST_PRIVACY } from "./sentry";
 import { onceUntilSucceeded } from "./once-until-succeeded";
+import { withClientIp } from "./client-ip";
+import { resolveCloudflareClientIp } from "./request-context";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
@@ -90,7 +92,12 @@ export const createWorker = (options: WorkerOptions = {}) => {
             (promise) => {
               backgroundPromises.push(promise);
             },
-            () => app.fetch(req, env, ctx as never),
+            () =>
+              app.fetch(
+                withClientIp(req, resolveCloudflareClientIp(req.headers)),
+                env,
+                ctx as never,
+              ),
           );
         } finally {
           ctx.waitUntil(Promise.allSettled(backgroundPromises).then(() => pool.end()));

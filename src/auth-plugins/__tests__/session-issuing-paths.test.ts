@@ -94,6 +94,10 @@ describe("MFA チャレンジ介入点の allowlist", () => {
 
   test("一次認証の後の判定と観測は 1 つの plugin の 1 つの hook にあり、plugin の登録順に頼らない", () => {
     const plugins = (auth.options.plugins ?? []) as unknown as RegisteredPlugin[];
-    expect(plugins.map((plugin) => plugin.id)).toEqual(["magic-link", "primary-auth"]);
+    expect(plugins.map((plugin) => plugin.id)).toEqual([
+      "magic-link",
+      "primary-auth",
+      "revoke-only-session-tokens",
+    ]);
   });
 });

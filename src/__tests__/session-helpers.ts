@@ -1,4 +1,5 @@
 import { makeSignature } from "better-auth/crypto";
+import { CLIENT_IP_HEADER } from "../client-ip";
 import { Effect } from "effect";
 import { auth } from "../auth";
 import { AuthApi } from "../auth-service";
@@ -27,7 +28,7 @@ export function tamperCookieSignature(signed: string): string {
 export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   const headers = new Headers({
     "user-agent": TEST_USER_AGENT,
-    "x-forwarded-for": TEST_CLIENT_IP,
+    [CLIENT_IP_HEADER]: TEST_CLIENT_IP,
   });
   const cookie = Object.entries(cookies)
     .map(([name, value]) => `${name}=${value}`)
@@ -135,13 +136,14 @@ export const requestMagicLink = (input: { email: string; callbackURL: string }) 
     return link;
   });
 
-export const followMagicLink = (link: string) =>
-  handleWithBackgroundTasks(
-    new Request(link, {
-      headers: { "user-agent": TEST_USER_AGENT, "x-forwarded-for": TEST_CLIENT_IP },
-      redirect: "manual",
-    }),
-  ).pipe(
+export const followMagicLink = (
+  link: string,
+  headers: Record<string, string> = {
+    "user-agent": TEST_USER_AGENT,
+    [CLIENT_IP_HEADER]: TEST_CLIENT_IP,
+  },
+) =>
+  handleWithBackgroundTasks(new Request(link, { headers, redirect: "manual" })).pipe(
     Effect.map(({ response, logs }): PrimaryAuthLogin => {
       const location = response.headers.get("location");
       return { response, location: location ? new URL(location) : null, logs };

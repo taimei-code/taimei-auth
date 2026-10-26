@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { CLIENT_IP_HEADER } from "../../client-ip";
 import { Effect } from "effect";
 import type { Hono } from "hono";
 import { buildApp } from "../../app";
@@ -11,7 +12,7 @@ import { buildAppWith } from "./helpers";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
-const ENV = { APP_ENV: "production", AUTH_TRUSTED_PROXY_HOPS: "1" };
+const ENV = { APP_ENV: "production" };
 const previous = Object.entries(ENV).map(([key]) => [key, process.env[key]] as const);
 beforeAll(() => {
   Object.assign(process.env, ENV);
@@ -29,7 +30,7 @@ const uniqueIp = () =>
 const verifyFrom = (app: Hono, ip: string) =>
   app.request("/api/mfa/challenge/verify", {
     method: "POST",
-    headers: { ...JSON_HEADERS, "x-forwarded-for": ip },
+    headers: { ...JSON_HEADERS, [CLIENT_IP_HEADER]: ip },
     body: JSON.stringify({ code: "000000", kind: "totp" }),
   });
 
@@ -78,7 +79,7 @@ describe("MFA チャレンジの verify の試行枠 (別アカウントへの�
 
 describe("MFA チャレンジの状態の試行枠 (表示 1 回と verify 10 回を NAT の後ろの数人分見込み、IP ごとに 60 秒で 30 回)", () => {
   const stateFrom = (app: Hono, ip: string) =>
-    app.request("/api/mfa/challenge", { headers: { "x-forwarded-for": ip } });
+    app.request("/api/mfa/challenge", { headers: { [CLIENT_IP_HEADER]: ip } });
 
   test("30 回目までは 429 にならない", async () => {
     const app = buildApp({ mountStatic: () => {} });
