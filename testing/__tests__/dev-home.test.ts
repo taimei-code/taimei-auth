@@ -18,6 +18,7 @@ import {
   setCookieValue,
 } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
+import { callbackURLAfterVerify } from "../../src/email/dispatch-magic-link";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
 import { BROWSER_KEY_COOKIE } from "../browser-key";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
@@ -209,9 +210,9 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
     const chosen = await choose(owner.id);
 
     expect(chosen.status).toBe(303);
-    const magicLink = new URL(chosen.headers.get("location") ?? "");
-    expect(magicLink.pathname).toBe("/api/auth/magic-link/verify");
-    expect(magicLink.searchParams.get("callbackURL")).toBe(DEV_HOME_PATH);
+    const location = chosen.headers.get("location") ?? "";
+    expect(new URL(location).pathname).toBe("/api/auth/magic-link/verify");
+    expect(callbackURLAfterVerify(location)).toBe(DEV_HOME_PATH);
   });
 
   test("Magic Link を開くと、選んだ利用者の session ができ、開発者ホームはその利用者を出す", async () => {
@@ -256,6 +257,19 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
       }),
     ));
 
+  test("同じ利用者を同じ query で 2 回同時に選んでも、どちらも Magic Link へ 303 で移し、どちらの link でもその利用者にログインできる", async () => {
+    const chosen = await Promise.all([
+      choose(owner.id, undefined, REDIRECT_QUERY),
+      choose(owner.id, undefined, REDIRECT_QUERY),
+    ]);
+
+    expect(chosen.map(({ status }) => status)).toEqual([303, 303]);
+    const opened = await Promise.all(chosen.map((response) => openMagicLink(response)));
+    expect(
+      await Promise.all(opened.map((response) => signedInUserIdOf(browserCookieHeaders(response)))),
+    ).toEqual([owner.id, owner.id]);
+  });
+
   test("いない利用者を選ぶと 404", async () => {
     expect((await choose("no-such-user")).status).toBe(404);
   });
@@ -295,7 +309,7 @@ describe("開発者ホームでログアウトすると、session を消して�
   });
 });
 
-describe("開発者ホームは service_name と redirect_url を受けると、ログインの後に redirect_url へ移す", () => {
+describe("開発者ホームは service_name と redirect_url を受けると、選んだ後に同じ query の開発者ホームへ戻り、redirect_url へ戻る link を出す", () => {
   test("redirect_url を戻り先にし、ログインとログアウトの送り先に同じ query を付ける", async () => {
     const response = await request(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
     const props = devHomePropsOf(await response.text());
@@ -306,17 +320,28 @@ describe("開発者ホームは service_name と redirect_url を受けると、
     expect(props.signOutAction).toBe(`${DEV_HOME_SIGN_OUT_PATH}${REDIRECT_QUERY}`);
   });
 
-  test("選ぶと redirect_url を callbackURL にした Magic Link へ移し、開くと session ができて query ごと同じ redirect_url へ移る", async () => {
+  test("選ぶと、同じ query の開発者ホームを戻り先にした Magic Link へ 303 で移し、開くと session ができて、& を含む redirect_url を保った開発者ホームへ移り、ログインしたことと redirect_url へ戻る link の行き先を出す", async () => {
     const chosen = await choose(owner.id, undefined, REDIRECT_QUERY);
 
     expect(chosen.status).toBe(303);
-    expect(new URL(chosen.headers.get("location") ?? "").searchParams.get("callbackURL")).toBe(
-      REDIRECT_URL,
+    expect(callbackURLAfterVerify(chosen.headers.get("location") ?? "")).toBe(
+      `${DEV_HOME_PATH}${REDIRECT_QUERY}`,
     );
     const opened = await openMagicLink(chosen);
+    const returned = new URL(opened.headers.get("location") ?? "");
     expect(opened.status).toBe(302);
-    expect(opened.headers.get("location")).toBe(REDIRECT_URL);
-    expect(await signedInUserIdOf(browserCookieHeaders(opened))).toBe(owner.id);
+    expect(returned.pathname).toBe(DEV_HOME_PATH);
+    expect(returned.searchParams.get("redirect_url")).toBe(REDIRECT_URL);
+    const signedIn = browserCookieHeaders(opened);
+    expect(await signedInUserIdOf(signedIn)).toBe(owner.id);
+
+    const props = await openHome(
+      withCookies(signedIn, { dev_home_chosen_user: owner.id }),
+      returned.search,
+    );
+    expect(signedInEmailOf(props)).toBe(owner.email);
+    expect(noticeOf(props)).toBe("JustSignedIn");
+    expect(props.destination).toEqual({ _tag: "Application", redirectUrl: REDIRECT_URL });
   });
 
   test("ログアウトすると、同じ query を付けて開発者ホームへ 303 で移し、server の session が無くなる", async () => {
@@ -431,10 +456,14 @@ describe("開発者ホームは、利用者を選んだ直後とログアウト�
     for (const attribute of noticeCookieAttributes) expect(cookie).toContain(attribute);
   });
 
-  test("redirect_url を受けて選ぶと、開発者ホームに戻らないので cookie を置かない", async () => {
-    expect(
-      setCookieOf(await choose(owner.id, undefined, REDIRECT_QUERY), "dev_home_chosen_user"),
-    ).toBeUndefined();
+  test("redirect_url を受けて選んでも、選んだ利用者の id を開発者ホームの path に限った cookie に置く", async () => {
+    const cookie = setCookieOf(
+      await choose(owner.id, undefined, REDIRECT_QUERY),
+      "dev_home_chosen_user",
+    );
+
+    expect(setCookieValue(cookie ?? "")).toBe(owner.id);
+    for (const attribute of noticeCookieAttributes) expect(cookie).toContain(attribute);
   });
 
   test("Magic Link を作れずに選ぶのが失敗すると、選んだ利用者の cookie を置かない", () =>

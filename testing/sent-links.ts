@@ -1,5 +1,6 @@
 import { Effect, Layer } from "effect";
 import { AuthApi } from "../src/auth-service";
+import { callbackURLAfterVerify } from "../src/email/dispatch-magic-link";
 import { EmailSender } from "../src/email/ports";
 import {
   invitationLogLine,
@@ -8,19 +9,25 @@ import {
   WELCOME_EMAIL_LOG,
 } from "./local-delivery-log";
 
-const sentLinks = new Map<string, Map<string | null, string>>();
+const sentLinks = new Map<string, string[]>();
+
+const sentLinksKey = (email: string, callbackURL: string | null) =>
+  JSON.stringify([email, callbackURL]);
 
 const record = (email: string, url: string) =>
   Effect.sync(() => {
-    const byCallbackURL = sentLinks.get(email) ?? new Map<string | null, string>();
-    byCallbackURL.set(new URL(url).searchParams.get("callbackURL"), url);
-    sentLinks.set(email, byCallbackURL);
+    const key = sentLinksKey(email, callbackURLAfterVerify(url));
+    const urls = sentLinks.get(key);
+    if (urls) urls.push(url);
+    else sentLinks.set(key, [url]);
   });
 
 export const takeSentLink = (email: string, callbackURL: string) =>
   Effect.sync(() => {
-    const url = sentLinks.get(email)?.get(callbackURL);
-    sentLinks.delete(email);
+    const key = sentLinksKey(email, callbackURL);
+    const urls = sentLinks.get(key);
+    const url = urls?.pop();
+    if (urls?.length === 0) sentLinks.delete(key);
     return url;
   });
 

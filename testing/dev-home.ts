@@ -35,6 +35,11 @@ const redirectTargetOf = (
   return parsed.success ? Effect.succeedSome(parsed.data) : Effect.fail(new InvalidArgument({}));
 };
 
+const devHomeCallbackURLOf = (url: URL) => {
+  const query = new URLSearchParams(url.search).toString().replaceAll("*", "%2A");
+  return query === "" ? DEV_HOME_PATH : `${DEV_HOME_PATH}?${query}`;
+};
+
 const CHOSEN_USER_COOKIE = "dev_home_chosen_user";
 const SIGNED_OUT_COOKIE = "dev_home_signed_out";
 const NOTICE_COOKIE_OPTIONS = {
@@ -104,15 +109,11 @@ export const devHomeRoutes = () =>
       runRoute(
         c,
         Effect.gen(function* () {
-          const redirectTarget = yield* redirectTargetOf(new URL(c.req.url));
+          const url = new URL(c.req.url);
+          yield* redirectTargetOf(url);
           const user = yield* chosenAccountOf(c);
-          const callbackUrl = redirectTarget.pipe(
-            Option.map(({ redirect_url }) => redirect_url),
-            Option.getOrElse(() => DEV_HOME_PATH),
-          );
-          const magicLinkUrl = yield* magicLinkUrlFor(user.email, callbackUrl);
-          if (Option.isNone(redirectTarget))
-            setCookie(c, CHOSEN_USER_COOKIE, user.id, NOTICE_COOKIE_OPTIONS);
+          const magicLinkUrl = yield* magicLinkUrlFor(user.email, devHomeCallbackURLOf(url));
+          setCookie(c, CHOSEN_USER_COOKIE, user.id, NOTICE_COOKIE_OPTIONS);
           return c.redirect(magicLinkUrl, 303);
         }),
       ),

@@ -125,6 +125,22 @@ test("利用者を選んだ直後は、ログインしたことを出す", async
   await expect(page.getByRole("status")).toHaveText("開発用 ADMIN でログインしました");
 });
 
+test("better-auth の magic-link の verify は相対の callbackURL の query に : や * があると拒むが、encode していない redirect_url の query で開いた開発者ホームでも、選ぶと開発者ホームに戻ってログインしたことを出す", async ({
+  page,
+}) => {
+  const redirectUrl = `${BASE_URL}/account?q=a*b`;
+  await page.goto(`${DEV_HOME_PATH}?service_name=accounts&redirect_url=${redirectUrl}`);
+
+  await accountButton(page, ADMIN_EMAIL).click();
+
+  await expect(page.getByRole("status")).toHaveText("開発用 ADMIN でログインしました");
+  await expect(signedInEmail(page, ADMIN_EMAIL)).toBeVisible();
+  await expect(page.getByRole("link", { name: "アプリケーションに戻る" })).toHaveAttribute(
+    "href",
+    redirectUrl,
+  );
+});
+
 test("既存の画面と同じ CSS が当たり、書体は Inter で、上端の帯は primary の色である", async ({
   page,
 }) => {
