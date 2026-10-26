@@ -257,6 +257,19 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
       }),
     ));
 
+  test("同じ利用者を同じ query で 2 回同時に選んでも、どちらも Magic Link へ 303 で移し、どちらの link でもその利用者にログインできる", async () => {
+    const chosen = await Promise.all([
+      choose(owner.id, undefined, REDIRECT_QUERY),
+      choose(owner.id, undefined, REDIRECT_QUERY),
+    ]);
+
+    expect(chosen.map(({ status }) => status)).toEqual([303, 303]);
+    const opened = await Promise.all(chosen.map((response) => openMagicLink(response)));
+    expect(
+      await Promise.all(opened.map((response) => signedInUserIdOf(browserCookieHeaders(response)))),
+    ).toEqual([owner.id, owner.id]);
+  });
+
   test("いない利用者を選ぶと 404", async () => {
     expect((await choose("no-such-user")).status).toBe(404);
   });
