@@ -5,7 +5,7 @@ import type { EmailSender } from "./email/ports";
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
 import { KvStore as KvStoreBase } from "./kv-store.do";
-import { durableObjectBackend, type KvStoreNamespace } from "./ttl-store";
+import { durableObjectBackend, type KvStoreNamespace, type TtlStoreBackend } from "./ttl-store";
 import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
@@ -42,11 +42,13 @@ function copyEnvToProcess(env: Env): void {
 
 const bootstrapOnce = (options: WorkerOptions) => {
   let bootstrappedApp: Hono | null = null;
+  let ttlStore: TtlStoreBackend | null = null;
   return (env: Env): Hono => {
     if (bootstrappedApp) return bootstrappedApp;
     copyEnvToProcess(env);
     initCloudflareSentry(env.SENTRY_DSN);
-    boot(durableObjectBackend(env.KV_STORE), options.emailSender);
+    ttlStore ??= durableObjectBackend(env.KV_STORE);
+    boot(ttlStore, options.emailSender);
     bootstrappedApp = buildApp({
       mountStatic: (app) => {
         options.extendBeforeStatic?.(app);

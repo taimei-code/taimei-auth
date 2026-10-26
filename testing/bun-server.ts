@@ -44,8 +44,7 @@ export const startBunServer = (
           rewriteRequestPath: (path) => path.replace(/^\/auth/, ""),
         }),
       );
-      honoApp.get("/auth/*", spaFallback);
-      honoApp.get("/account/*", spaFallback);
+      honoApp.get("*", spaFallback);
     },
   });
 

@@ -8,10 +8,11 @@ import {
   addBrowserAccount,
   DEV_ACCOUNTS,
   listChoosableAccounts,
-  prepareChoosableAccounts,
   seedDevAccounts,
 } from "../testing/dev-accounts";
 import { readCompany, readMemberships, readUser } from "../testing/read";
+import { requireLocalDatabase } from "../testing/local-database";
+import { prepareNonProductionTables } from "../testing/non-production-tables";
 
 const devUserIds = DEV_ACCOUNTS.users.map((devUser) => devUser.id);
 const devCompanyIds = DEV_ACCOUNTS.companies.map((devCompany) => devCompany.id);
@@ -41,7 +42,7 @@ if (!owner || !admin || !member || !firstCompany) {
   throw new Error("DEV_ACCOUNTS lacks the owner, admin, member or the first company");
 }
 
-beforeAll(prepareChoosableAccounts);
+beforeAll(() => prepareNonProductionTables(requireLocalDatabase(process.env.DATABASE_URL)));
 
 describe("開発用アカウントは、何度起動しても重複せず、利用者と事業所の id が変わらない", () => {
   test("seed をもう一度走らせても、開発用の利用者・事業所・所属の id の集合は変わらない", async () => {

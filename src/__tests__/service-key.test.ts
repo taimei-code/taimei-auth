@@ -90,12 +90,12 @@ describe("verifyServiceKey", () => {
 });
 
 describe("service key の封じ込め (静的 tripwire)", () => {
-  test("AUTH_SERVICE_KEY の読み手は service-key.ts と bun-server.ts の boot guard だけ", () => {
+  test("AUTH_SERVICE_KEY の読み手は service-key.ts と Bun の入口 (testing/server.ts) の boot guard だけ", () => {
     expect(
       grepFiles("process\\.env\\.AUTH_SERVICE_KEY", ["src", "testing"], {
         tests: "exclude",
       }).sort(),
-    ).toEqual(["src/service-key.ts", "testing/bun-server.ts"]);
+    ).toEqual(["src/service-key.ts", "testing/server.ts"]);
   });
 
   test("鍵の比較は timingSafeEqual (digest 経由) だけで、includes / === を使わない", () => {

@@ -42,11 +42,18 @@ export type AppServices = Layer.Success<ReturnType<typeof appLayer>>;
 export type AppRuntime = ManagedRuntime.ManagedRuntime<AppServices, never>;
 
 let runtime: AppRuntime | undefined;
+let runtimeTtlStore: TtlStoreBackend | undefined;
 
 export function initRuntime(
   ttlStore: TtlStoreBackend,
   emailSender?: Layer.Layer<EmailSender>,
 ): AppRuntime {
+  if (runtimeTtlStore !== undefined && runtimeTtlStore !== ttlStore) {
+    throw new Error(
+      "initRuntime: 別の TTL store で 2 回目を呼んだ (最初の結線のまま動くので止める)",
+    );
+  }
+  runtimeTtlStore = ttlStore;
   runtime ??= ManagedRuntime.make(appLayer(ttlStore, emailSender));
   return runtime;
 }

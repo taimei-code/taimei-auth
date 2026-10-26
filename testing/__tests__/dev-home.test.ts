@@ -3,11 +3,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
-import {
-  addBrowserAccount,
-  DEV_ACCOUNTS,
-  prepareChoosableAccounts,
-} from "../../db/testing/dev-accounts";
+import { addBrowserAccount, DEV_ACCOUNTS } from "../../db/testing/dev-accounts";
+import { requireLocalDatabase } from "../../db/testing/local-database";
+import { prepareNonProductionTables } from "../../db/testing/non-production-tables";
 import { buildApp } from "../../src/app";
 import { REPO_ROOT } from "../../src/__tests__/config-invariant-helpers";
 import { dbTest } from "../../src/__tests__/live-runner";
@@ -93,7 +91,7 @@ const cleanupAll = () =>
     }),
   );
 
-beforeAll(prepareChoosableAccounts);
+beforeAll(() => prepareNonProductionTables(requireLocalDatabase(process.env.DATABASE_URL)));
 beforeEach(cleanupAll);
 afterAll(cleanupAll);
 

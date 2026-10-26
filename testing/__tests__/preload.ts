@@ -1,4 +1,4 @@
-import { databaseTarget } from "../../db/testing/local-database";
+import { requireLocalDatabase } from "../../db/testing/local-database";
 import { boot } from "../../src/boot";
 import {
   TEST_AUTH_SERVICE_KEY,
@@ -10,12 +10,7 @@ import {
 import { testTtlStore } from "../../src/__tests__/test-ttl-store";
 import { recordingEmailSender } from "../sent-links";
 
-const target = databaseTarget(process.env.DATABASE_URL);
-if (target._tag === "Remote") {
-  throw new Error(
-    `DATABASE_URL の host "${target.hostname ?? "(URL として読めない)"}" は local の DB ではない。bun test は試験の行を作って消すので、local の Postgres に向ける`,
-  );
-}
+if (process.env.DATABASE_URL) requireLocalDatabase(process.env.DATABASE_URL);
 
 process.env.MFA_TOTP_ENCRYPTION_KEYS ??= TEST_MFA_TOTP_ENCRYPTION_KEYS;
 process.env.AUTH_SERVICE_URL ??= TEST_AUTH_SERVICE_URL;

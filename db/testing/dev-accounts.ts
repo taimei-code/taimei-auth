@@ -94,20 +94,6 @@ export const seedDevAccounts = () =>
 
 export const DEV_ACCOUNT_IDS: readonly string[] = DEV_ACCOUNTS.users.map(({ id }) => id);
 
-const createBrowserAccountTable = () =>
-  db.execute(sql`
-    CREATE TABLE IF NOT EXISTS testing_browser_account (
-      browser_key text NOT NULL,
-      user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
-      created_at timestamptz NOT NULL DEFAULT now(),
-      PRIMARY KEY (browser_key, user_id)
-    )`);
-
-export const prepareChoosableAccounts = async () => {
-  await createBrowserAccountTable();
-  await seedDevAccounts();
-};
-
 export const addBrowserAccount = async (browserKey: string, userId: string) => {
   await db.execute(sql`
     INSERT INTO testing_browser_account (browser_key, user_id)

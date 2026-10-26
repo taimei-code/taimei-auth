@@ -162,3 +162,17 @@ describe("better-auth の退会 endpoint", () => {
       }),
     ));
 });
+
+describe("Bun の server の SPA の fallback は、worker の single-page-application と同じく、どの GET にも掛かる", () => {
+  test("/auth と /account 以外の SPA の path も、/auth の下の path と同じ応答の種類になる", async () => {
+    const [underAuth, elsewhere] = await Promise.all([
+      app.request("http://localhost/auth/somewhere"),
+      app.request("http://localhost/somewhere-new"),
+    ]);
+
+    expect([elsewhere.status, elsewhere.headers.get("content-type")]).toEqual([
+      underAuth.status,
+      underAuth.headers.get("content-type"),
+    ]);
+  });
+});

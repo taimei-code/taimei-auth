@@ -1,16 +1,22 @@
-import { prepareChoosableAccounts } from "../db/testing/dev-accounts";
+import { requireLocalDatabase } from "../db/testing/local-database";
+import { prepareNonProductionTables } from "../db/testing/non-production-tables";
 import { postgresTtlStore } from "../db/testing/ttl-store";
+import { proxyTrustFromEnv } from "../src/request-context";
+import { mergeSessionIndex } from "../src/session-index";
 import { startBunServer } from "./bun-server";
 import {
   usesNonProductionRedirectHosts,
   REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER,
 } from "./non-production-redirect-hosts-check";
-import { devHomeRoutes } from "./dev-home";
-import { testingApiRoutes } from "./routes";
+import { mountNonProductionRoutes } from "./non-production-routes";
+import {
+  isOutsideProduction,
+  OUTSIDE_PRODUCTION_ONLY_MESSAGE,
+} from "./serve-only-outside-production";
 import { recordingEmailSender } from "./sent-links";
 
-if (process.env.APP_ENV !== "test") {
-  console.error("FATAL: testing/server.ts starts only with APP_ENV=test.");
+if (!isOutsideProduction(process.env.APP_ENV)) {
+  console.error(OUTSIDE_PRODUCTION_ONLY_MESSAGE);
   process.exit(1);
 }
 
@@ -19,14 +25,24 @@ if (!usesNonProductionRedirectHosts()) {
   process.exit(1);
 }
 
-const ttlStore = await postgresTtlStore();
-await prepareChoosableAccounts();
+if (!process.env.AUTH_SERVICE_KEY) {
+  console.error("FATAL: AUTH_SERVICE_KEY is required.");
+  process.exit(1);
+}
+
+const proxyTrust = proxyTrustFromEnv();
+if (proxyTrust._tag === "Unconfigured") {
+  console.error("FATAL: AUTH_TRUSTED_PROXY_HOPS (non-negative integer) is required.");
+  process.exit(1);
+}
+
+const database = requireLocalDatabase(process.env.DATABASE_URL);
+await prepareNonProductionTables(database);
+const ttlStore = await postgresTtlStore(database, mergeSessionIndex);
 
 export default startBunServer({
   emailSender: recordingEmailSender,
   ttlStore,
-  extendBeforeStatic: (app) => {
-    app.route("/", testingApiRoutes());
-    app.route("/", devHomeRoutes());
-  },
+  proxyTrust,
+  extendBeforeStatic: mountNonProductionRoutes,
 }).server;
