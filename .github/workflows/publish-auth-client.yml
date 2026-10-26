@@ -1,15 +1,19 @@
 name: Publish auth-client to GitHub Packages
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "packages/auth-client/package.json"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: publish-auth-client
+  cancel-in-progress: false
 
 jobs:
   publish:
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: write # tag の push に要る
@@ -18,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
           fetch-depth: 0 # 既存の tag で再 publish を guard する
 
       - name: Resolve version and guard against re-publish
@@ -66,6 +71,10 @@ jobs:
       - name: Assert no proxy CA in /opt/certs or /app/certs of the testing image
         if: steps.ver.outputs.published == 'false'
         run: docker run --rm --entrypoint sh "$IMAGE" -c 'test -z "$(find /opt/certs /app/certs -type f ! -name .gitkeep)"'
+
+      - name: Start the testing image with the compose fragment and sign in with the testing client
+        if: steps.ver.outputs.published == 'false'
+        run: bash scripts/testing-image-smoke.sh "$IMAGE"
 
       - name: Push the testing image and read its digest
         if: steps.ver.outputs.published == 'false'

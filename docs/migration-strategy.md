@@ -45,13 +45,15 @@ freee の authenticator gem `PekozRunner` パターンの縮小版を採用す�
 
 ## proto 互換性ルール (v1.0 凍結後の運用)
 
-CI の `buf breaking --against '.git#branch=main'` が機械的に検証する項目:
+CI の `scripts/check-sdk-breaking.sh` が `buf breaking --against <main>` を `FILE` の規則 (`buf.yaml`) で走らせ、次の変更を見つける。見つけた時は、`packages/auth-client/package.json` の major が main より上がっていなければ CI を落とす。`WIRE` の規則は rpc と service の削除を見ないので使わない。生成した TypeScript は rpc・service・field の名前をそのまま型と property の名前にするので、送受信するデータの形が同じでも名前の変更は SDK の破壊的変更になる:
 
 - field 番号の再利用禁止 (`reserved` で保護)
 - enum 値の削除禁止 (`reserved` で保護)
-- message 名 / service 名 / rpc 名の変更禁止
+- message・service・rpc・field の削除と名前の変更禁止
 - field の型変更禁止 (int32 → string 等)
 - oneof からの field の抜き出し禁止
+
+TypeScript の型だけの破壊的変更は buf に出ないので、buf が何も見つけない変更で major を上げるのも正しい。
 
 許容される変更:
 
@@ -72,6 +74,10 @@ CI の `buf breaking --against '.git#branch=main'` が機械的に検証する�
 | 公開 API の deprecation marker の追加 | minor |
 | JSDoc / proto のコメントだけの変更 | patch |
 | 内部実装の refactor で外部 API 不変 | patch (v1.0.1) |
+| 試験の環境の断片に必須の変数を足す、または任意の変数を必須にする | major (consumer の `taimei-auth.env` の変更が要る) |
+| 試験の環境の断片に任意の変数を足す | minor |
+| session cookie の名前を変える | major |
+| 開発者ホームと試験 API の、README の表に書いた振る舞いを変える | minor 以上 (consumer の試験が落ちる変更は major) |
 
 ## 関連
 
