@@ -1,5 +1,25 @@
 # Changelog
 
+## 5.2.0 — 2026-10-27
+
+`checkMemberships` が、削除済みの事業所と auth ホストに記録の無い事業所を分けて返す。既存の field の値は変えていない。
+
+### Features
+
+- `CheckMembershipsResponse` に `companyActivationStatus` を足した。値は `CompanyActivationStatus` の `ACTIVE` (使える事業所)・`DELETED` (削除済みの事業所)・`NOT_FOUND` (auth ホストに記録の無い事業所) である
+- SDK の root から `CompanyActivationStatus` を値で export した
+- `companyActive` を deprecated にした。値は今までと同じ (`ACTIVE` の時だけ true) で、削除済みと記録の無い事業所はどちらも false になる
+
+### 移行
+
+- `companyActive` の代わりに `companyActivationStatus` を読み、`CompanyActivationStatus` と比べる
+- 事業所のデータを消す処理は `DELETED` の時だけ動かす。`NOT_FOUND` と `UNSPECIFIED` (0) を消す根拠にしない理由は、`CompanyActivationStatus` の JSDoc に書いてある
+- `memberUserIds` は今までと同じく `ACTIVE` の時だけ値を持つ
+
+### Breaking changes
+
+なし。
+
 ## 5.1.0 — 2026-10-26
 
 試験の環境の開発者ホームで利用者を選んだ後の戻り方を、`returnTo` の有無によらずそろえた。SDK の export と RPC の wire は変えていない。
