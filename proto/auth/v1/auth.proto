@@ -37,6 +37,17 @@ enum Role {
   ROLE_MEMBER = 3;
 }
 
+// CheckMemberships で照合した事業所の答え。ACTIVE と DELETED は auth ホストが記録している事業所の状態と同じ値。
+// NOT_FOUND は事業所の状態ではなく、auth ホストに事業所の記録が無いという答えで、
+// consumer の向き先が違う auth ホストや、バックアップから記録を戻した auth ホストでも返る。事業所が削除された根拠にしない。
+// UNSPECIFIED はこの値を返さない (SDK 5.2.0 より前の) auth ホストの答え。事業所が削除された根拠にしない。
+enum CompanyActivationStatus {
+  COMPANY_ACTIVATION_STATUS_UNSPECIFIED = 0;
+  COMPANY_ACTIVATION_STATUS_ACTIVE = 1;
+  COMPANY_ACTIVATION_STATUS_DELETED = 2;
+  COMPANY_ACTIVATION_STATUS_NOT_FOUND = 3;
+}
+
 // 共通メッセージ
 message User {
   string id = 1;
@@ -190,8 +201,11 @@ message CheckMembershipsRequest {
 
 // 名前・メールアドレスを返さない。consumer が既に知る id についての答えだけを返す。
 message CheckMembershipsResponse {
-  // company_id の事業所が ACTIVE の時 true。削除済みの事業所と存在しない事業所は false で、member_user_ids は空。
-  bool company_active = 1;
+  // company_activation_status が ACTIVE の時 true。削除済みと記録の無い事業所を区別しないので、company_activation_status を読む。
+  bool company_active = 1 [deprecated = true];
   // user_ids のうち、company_id の事業所に今所属している人。順序は決めない。
+  // company_activation_status が ACTIVE の時だけ値を持ち、それ以外は空。
   repeated string member_user_ids = 2;
+  // company_id の事業所の答え。値の意味は CompanyActivationStatus に書く。
+  CompanyActivationStatus company_activation_status = 3;
 }
