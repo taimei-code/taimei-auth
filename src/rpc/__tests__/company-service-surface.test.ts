@@ -42,7 +42,33 @@ describe("CompanyService.CheckMemberships は service key で呼び、入力の�
 
         const res = yield* checkMemberships({ companyId: co, userIds: [] });
 
-        expect(res).toEqual({ status: 200, body: { companyActive: true } });
+        expect(res).toEqual({
+          status: 200,
+          body: {
+            companyActive: true,
+            companyActivationStatus: "COMPANY_ACTIVATION_STATUS_ACTIVE",
+          },
+        });
+      }),
+    ));
+
+  test("削除済みの事業所には DELETED、記録の無い事業所には NOT_FOUND を名前で答え、companyActive と所属する人を出さない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const co = yield* db.seedCompany("deleted");
+        const a = yield* db.seedUser("deleted-a");
+        yield* db.seedMembership(a.id, co, "OWNER");
+        yield* db.markCompanyDeleted(co);
+
+        expect(yield* checkMemberships({ companyId: co, userIds: [a.id] })).toEqual({
+          status: 200,
+          body: { companyActivationStatus: "COMPANY_ACTIVATION_STATUS_DELETED" },
+        });
+        expect(yield* checkMemberships({ companyId: `${P}missing`, userIds: [a.id] })).toEqual({
+          status: 200,
+          body: { companyActivationStatus: "COMPANY_ACTIVATION_STATUS_NOT_FOUND" },
+        });
       }),
     ));
 

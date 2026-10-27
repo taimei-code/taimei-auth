@@ -1,9 +1,14 @@
+import type { CompanyRow } from "@/db/repositories/company";
 import type { MemberRow, Role } from "@/db/repositories/membership";
 import type { UserRow } from "@/db/repositories/user";
 import type { Session } from "../auth";
-import { Role as ProtoRole } from "../gen/auth/v1/auth_pb";
+import { CompanyActivationStatus, Role as ProtoRole } from "../gen/auth/v1/auth_pb";
 
 export const toProtoRole = (role: Role): ProtoRole => ProtoRole[role];
+
+export const toProtoCompanyActivationStatus = (
+  status: CompanyRow["activationStatus"],
+): CompanyActivationStatus => CompanyActivationStatus[status];
 
 export function toProtoCompanyMember(row: MemberRow) {
   return {

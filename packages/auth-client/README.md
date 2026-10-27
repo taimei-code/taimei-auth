@@ -96,7 +96,11 @@ taimei-auth が変えた時に SDK の版上げで届くよう、次の値を co
 
 `createAuthClient` の戻り値から、session を持たない処理 (batch など) で呼ぶ。
 
-- `companyService.checkMemberships({ companyId, userIds })`: 事業所が ACTIVE か (`companyActive`) と、`userIds` のうち今所属している人 (`memberUserIds`) を返す。consumer の DB に残る、抜けた人や削除された事業所のデータを見つけるために使う。RPC の失敗を「事業所が無い」と扱わない。
+- `companyService.checkMemberships({ companyId, userIds })`: 事業所の答え (`companyActivationStatus`) と、`userIds` のうち今所属している人 (`memberUserIds`) を返す。consumer の DB に残る、抜けた人や削除された事業所のデータを見つけるために使う。答えは `CompanyActivationStatus` の `ACTIVE` (使える)・`DELETED` (削除済み)・`NOT_FOUND` (auth ホストに記録が無い) である。
+  - `memberUserIds` は `ACTIVE` の時だけ値を持つ。
+  - 事業所のデータを消すのは `DELETED` の時だけにする。`NOT_FOUND` と `UNSPECIFIED` を消す根拠にしない理由は、`CompanyActivationStatus` の JSDoc に書いてある。
+  - `companyActive` (`ACTIVE` の時だけ true) は deprecated で、削除済みと記録の無い事業所を区別しない。
+  - RPC の失敗を「事業所が無い」と扱わない。
 - `userService.findUserByEmail({ email })`: メールアドレスで user を引く。いなければ `user` は `undefined` である。
 
 ## 試験の環境 (e2e と手元の確認)
