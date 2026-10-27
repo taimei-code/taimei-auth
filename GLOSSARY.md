@@ -27,7 +27,7 @@ _Avoid_: status (より広義), state (将来、招待中など別の軸の状�
 _Avoid_: company_type (より広義), business_type (業種と紛らわしい)
 
 **メンバー (member)**:
-ある **事業所** の **membership** を持つ user を、その事業所の文脈で呼ぶ UI 上の呼称。「メンバーを事業所から削除」は membership を消すことを意味し、user 本体は残る。動詞句で範囲を明示して、user 本体の削除と読み違えないようにする。consumer app は auth-client を通じて **現在の事業所** のメンバー一覧を受け取る。また **Service Key** を使って、自分が知る user が今もその事業所のメンバーか、その事業所が使えるかを確かめられる。
+ある **事業所** の **membership** を持つ user を、その事業所の文脈で呼ぶ UI 上の呼称。「メンバーを事業所から削除」は membership を消すことを意味し、user 本体は残る。動詞句で範囲を明示して、user 本体の削除と読み違えないようにする。consumer app は auth-client を通じて **現在の事業所** のメンバー一覧を受け取る。また **Service Key** を使って、自分が知る user が今もその事業所のメンバーか、その事業所が使えるか、削除されたか、taimei-auth に無いかを確かめられる。
 _Avoid_: ユーザー (より広義で、事業所をまたぐ user を指す時に使う), メンバーシップ (関係の方を指す時は **membership**)
 
 **role**:
