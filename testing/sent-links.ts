@@ -1,6 +1,5 @@
 import { Effect, Layer } from "effect";
 import { AuthApi } from "../src/auth-service";
-import { callbackURLAfterVerify } from "../src/email/dispatch-magic-link";
 import { EmailSender } from "../src/email/ports";
 import {
   invitationLogLine,
@@ -16,7 +15,7 @@ const sentLinksKey = (email: string, callbackURL: string | null) =>
 
 const record = (email: string, url: string) =>
   Effect.sync(() => {
-    const key = sentLinksKey(email, callbackURLAfterVerify(url));
+    const key = sentLinksKey(email, new URL(url).searchParams.get("callbackURL"));
     const urls = sentLinks.get(key);
     if (urls) urls.push(url);
     else sentLinks.set(key, [url]);

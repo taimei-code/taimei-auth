@@ -16,7 +16,6 @@ import {
   setCookieValue,
 } from "../../src/__tests__/session-helpers";
 import { TestDb } from "../../src/__tests__/test-db";
-import { callbackURLAfterVerify } from "../../src/email/dispatch-magic-link";
 import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/helpers";
 import { BROWSER_KEY_COOKIE } from "../browser-key";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
@@ -200,9 +199,9 @@ describe("開発者ホームで利用者を選ぶと、Magic Link でその利�
     const chosen = await choose(owner.id);
 
     expect(chosen.status).toBe(303);
-    const location = chosen.headers.get("location") ?? "";
-    expect(new URL(location).pathname).toBe("/api/auth/magic-link/verify");
-    expect(callbackURLAfterVerify(location)).toBe(DEV_HOME_PATH);
+    const location = new URL(chosen.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/api/auth/magic-link/verify");
+    expect(location.searchParams.get("callbackURL")).toBe(DEV_HOME_PATH);
   });
 
   test("Magic Link を開くと、選んだ利用者の session ができ、開発者ホームはその利用者を出す", async () => {
@@ -314,9 +313,8 @@ describe("開発者ホームは service_name と redirect_url を受けると、
     const chosen = await choose(owner.id, undefined, REDIRECT_QUERY);
 
     expect(chosen.status).toBe(303);
-    expect(callbackURLAfterVerify(chosen.headers.get("location") ?? "")).toBe(
-      `${DEV_HOME_PATH}${REDIRECT_QUERY}`,
-    );
+    const location = new URL(chosen.headers.get("location") ?? "");
+    expect(location.searchParams.get("callbackURL")).toBe(`${DEV_HOME_PATH}${REDIRECT_QUERY}`);
     const opened = await openMagicLink(chosen);
     const returned = new URL(opened.headers.get("location") ?? "");
     expect(opened.status).toBe(302);

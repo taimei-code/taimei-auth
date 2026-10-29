@@ -4,15 +4,12 @@ import type { InvitationEmailParams } from "../../src/email/send-invitation";
 import { EmailSender } from "../../src/email/ports";
 import { toDisplayText } from "../../src/email/sanitize";
 import { emailSenderLive } from "../../src/email/wiring";
-import { encodeCallbackURLForVerify } from "../../src/email/dispatch-magic-link";
 import { recordingEmailSender, takeSentLink } from "../sent-links";
 
 const EMAIL = "sent-links-test@example.com";
 const RETURN_TO = "http://localhost:3000/after-sign-in";
 const magicLinkTo = (callbackURL: string, token = "t") =>
-  encodeCallbackURLForVerify(
-    `http://localhost:3100/api/auth/magic-link/verify?${new URLSearchParams({ token, callbackURL })}`,
-  );
+  `http://localhost:3100/api/auth/magic-link/verify?${new URLSearchParams({ token, callbackURL })}`;
 
 describe("試験の環境で送ったメールの URL を、宛先と戻り先で取り出す", () => {
   test("ログインの Magic Link の後に同じ宛先へ招待のメールを送っても、戻り先が一致するログインの URL を返す", async () => {
