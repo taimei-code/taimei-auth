@@ -60,4 +60,22 @@ describe("runRpc", () => {
     expect([e.code, e.rawMessage]).toEqual([Code.Unknown, "boom"]);
     expect(captured.map(([e]) => e)).toEqual([boom]);
   });
+
+  test("effect は Die と同じ Cause にある Fail も defect に変えるので、宣言した失敗と finalizer の defect が同じ Cause に入ると宣言した失敗の Code にせず Code.Unknown を返し、2 つとも Sentry に送る", async () => {
+    captured.length = 0;
+    const boom = new Error("boom");
+    const e = await rejectsWith(
+      runRpc(
+        Effect.fail(new NotFound()).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              throw boom;
+            }),
+          ),
+        ),
+      ),
+    );
+    expect(e.code).toBe(Code.Unknown);
+    expect(captured.map(([e]) => e)).toEqual([new NotFound(), boom]);
+  });
 });

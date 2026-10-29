@@ -30,7 +30,7 @@
         "diagnosticSeverity": {
           // runtime や配列を呼んだ時点で読むため、Layer・Effect を関数で返す
           "lazyEffect": "off",
-          // 失敗の class は Schema.TaggedError だけで、_tag の literal ですでに区別できる。brand を足しても区別は増えない
+          // 止める理由は docs/adr/0017-effect-v4-full-adoption.md「Stable 移行手順」
           "schemaClassMissingBrand": "off"
         },
         "overrides": [
