@@ -24,11 +24,14 @@
           "effect/http-api",
           "effect/http",
           "effect/reactivity",
+          "effect/ErrorReporter",
           "@effect/atom-react"
         ],
         "diagnosticSeverity": {
           // runtime や配列を呼んだ時点で読むため、Layer・Effect を関数で返す
-          "lazyEffect": "off"
+          "lazyEffect": "off",
+          // 失敗の class は Schema.TaggedError だけで、_tag の literal ですでに区別できる。brand を足しても区別は増えない
+          "schemaClassMissingBrand": "off"
         },
         "overrides": [
           {

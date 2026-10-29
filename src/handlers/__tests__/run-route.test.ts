@@ -84,7 +84,7 @@ describe("runRoute", () => {
     expect((captured[0]?.[0] as Error).message).toMatch(/[Ii]nterrupt/);
   });
 
-  test("Fail(client-facing) と Die が同居する Cause は defect を Sentry に送りつつ client-facing の 4xx を返す", async () => {
+  test("effect は Die と同じ Cause にある Fail も defect に変えるので、client-facing の失敗と finalizer の defect が同じ Cause に入ると 500 を返し、2 つとも Sentry に送る", async () => {
     captured.length = 0;
     const app = new Hono();
     app.get("/both", (c) =>
@@ -100,8 +100,8 @@ describe("runRoute", () => {
       ),
     );
     const res = await app.request("/both");
-    expect([res.status, await res.text()]).toEqual([404, '{"_tag":"NotFound"}']);
-    expect(captured.map(([e]) => e)).toEqual([boom]);
+    expect([res.status, await res.text()]).toEqual([500, "Internal Server Error"]);
+    expect(captured.map(([e]) => e)).toEqual([new NotFound(), boom]);
   });
 
   test("catalog 外の形の failure は fail-open (200) にせず 500 + Sentry", async () => {
