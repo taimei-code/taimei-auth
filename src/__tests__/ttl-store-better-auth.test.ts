@@ -26,6 +26,7 @@ const recordingBackend = (overrides: Partial<TtlStoreBackend> = {}) => {
     delete: record("delete", memory.delete),
     getAndDelete: record("getAndDelete", memory.getAndDelete),
     mergeSessionIndex: record("mergeSessionIndex", memory.mergeSessionIndex),
+    incrementRateWindow: record("incrementRateWindow", memory.incrementRateWindow),
     ...overrides,
   };
   return { backend, calls };
@@ -41,6 +42,15 @@ describe("better-auth の TTL store の入口", () => {
     const { backend, calls } = recordingBackend();
 
     await expect(storageOver(backend).set("rate-limit:x", "1")).rejects.toThrow();
+    expect(calls).toEqual([]);
+  });
+
+  test("better-auth の rate limit は使わないので、increment は backend に触れずに拒む", async () => {
+    const { backend, calls } = recordingBackend();
+
+    await expect(
+      Promise.resolve(storageOver(backend).increment(SESSION_TOKEN, 60)),
+    ).rejects.toThrow();
     expect(calls).toEqual([]);
   });
 

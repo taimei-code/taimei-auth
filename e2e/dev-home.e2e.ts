@@ -125,7 +125,7 @@ test("利用者を選んだ直後は、ログインしたことを出す", async
   await expect(page.getByRole("status")).toHaveText("開発用 ADMIN でログインしました");
 });
 
-test("better-auth の magic-link の verify は相対の callbackURL の query に : や * があると拒むが、encode していない redirect_url の query で開いた開発者ホームでも、選ぶと開発者ホームに戻ってログインしたことを出す", async ({
+test("encode していない redirect_url の query で開いた開発者ホームでも、選ぶと開発者ホームに戻ってログインしたことを出す", async ({
   page,
 }) => {
   const redirectUrl = `${BASE_URL}/account?q=a*b`;

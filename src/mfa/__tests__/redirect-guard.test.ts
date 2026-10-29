@@ -95,23 +95,23 @@ describe("validateChallengeRedirect", () => {
   });
 });
 
-describe("相対 path の判定は better-auth の callbackURL の判定と同じ", () => {
-  test("fixture の相対 path のそれぞれで、guard と better-auth の isTrustedOrigin の判定が一致する (better-auth は判定の関数を公開しないので、写した正規表現がずれていないことをここで確かめる)", async () => {
-    const parity = betterAuth({
+describe("guard が通す相対 path は、better-auth の callbackURL の判定も通す", () => {
+  test("fixture のどの相対 path でも成り立つ (better-auth は判定の関数を公開しないので、guard は better-auth より狭い判定を自分で持つ)", async () => {
+    const reference = betterAuth({
       baseURL: "https://auth.taimei-code.com",
-      secret: "redirect-guard-parity-secret-0123456789",
+      secret: "redirect-guard-reference-secret-0123456789",
       trustedOrigins: TRUSTED_ORIGINS.split(","),
     });
-    const context = await parity.$context;
+    const context = await reference.$context;
     const relativeCases = callbackUrlCases.filter(({ url }) => url.startsWith("/"));
     expect(relativeCases.length).toBeGreaterThan(5);
 
-    const mismatches = relativeCases.filter(
+    const passedOnlyByGuard = relativeCases.filter(
       ({ url }) =>
-        (validateChallengeRedirect(url) === url) !==
-        context.isTrustedOrigin(url, { allowRelativePaths: true }),
+        validateChallengeRedirect(url) === url &&
+        !context.isTrustedOrigin(url, { allowRelativePaths: true }),
     );
 
-    expect(mismatches.map(({ name }) => name)).toEqual([]);
+    expect(passedOnlyByGuard.map(({ name }) => name)).toEqual([]);
   });
 });

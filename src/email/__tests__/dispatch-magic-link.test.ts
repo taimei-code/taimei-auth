@@ -3,11 +3,7 @@ import { Effect } from "effect";
 import { invitationLogLine } from "../../../testing/local-delivery-log";
 import { magicLinkUrlFor } from "../../../testing/sent-links";
 import { acceptInvitationPath } from "../../invitation/accept-path";
-import {
-  followMagicLink,
-  loginWithMagicLink,
-  requestMagicLink,
-} from "../../__tests__/session-helpers";
+import { followMagicLink, loginWithMagicLink } from "../../__tests__/session-helpers";
 import { dbTest, observing } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { getAppUrl } from "../client";
@@ -20,7 +16,7 @@ const CALLBACK_WITH_ENCODED_QUERY =
 
 const cleanup = () => run(TestDb.use((db) => db.cleanup()));
 
-describe("better-auth の magic-link の verify は callbackURL を 1 回余分に decode するので、送る Magic Link の callbackURL を 1 回余分に encode する", () => {
+describe("送った Magic Link を開くと、callbackURL へそのまま移る", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
@@ -75,20 +71,6 @@ describe("better-auth の magic-link の verify は callbackURL を 1 回余分�
 
         expect(logs).toContain(invitationLogLine(inviteeEmail, link));
         expect(login.location?.searchParams.get("redirect_url")).toBe(redirectUrl);
-      }),
-    ));
-
-  test("callbackURL を 1 回だけ encode した Magic Link も、% を含まない callbackURL へ移る", () =>
-    run(
-      Effect.gen(function* () {
-        const user = yield* (yield* TestDb).seedUser("before-change");
-        const callbackURL = "https://app.example.com/dashboard";
-        const link = new URL(yield* requestMagicLink({ email: user.email, callbackURL }));
-        link.searchParams.set("callbackURL", callbackURL);
-
-        const login = yield* followMagicLink(link.toString());
-
-        expect(login.location?.toString()).toBe(callbackURL);
       }),
     ));
 });

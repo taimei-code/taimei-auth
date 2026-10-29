@@ -46,7 +46,7 @@
     "@sentry/cloudflare": "^10.57.0",
     "@taimei-code/auth-client": "workspace:*",
     "@vercel/blob": "^2.3.3",
-    "better-auth": "^1.6.23",
+    "better-auth": "^1.7.12",
     "drizzle-orm": "^0.45.2",
     "effect": "4.0.6",
     "hono": "^4.12.25",
@@ -59,7 +59,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@better-auth/utils": "0.4.2",
+    "@better-auth/utils": "0.5.0",
     "@biomejs/biome": "^2.4.14",
     "@bufbuild/buf": "^1.66.1",
     "@bufbuild/protoc-gen-es": "^2.11.0",
@@ -97,6 +97,7 @@
     "wrangler": "^4.147.0"
   },
   "overrides": {
+    "source-map-js": "^1.2.2",
     "defu": "^6.1.7",
     "kysely": "^0.28.17",
     "esbuild": "0.28.1",

@@ -47,9 +47,8 @@ jobs:
         run: bun install --frozen-lockfile --ignore-scripts
 
       # GHSA-vfj7-8cjw-p6xm (braces の DoS) は修正版が無く、braces は tailwindcss 経由の dev 依存で Worker に入らない。braces の修正版が出たら外す
-      # GHSA-68fv-2mgg-jv7q (source-map-js の DoS) の修正版 1.2.2 は minimumReleaseAge の窓を 2026-10-07 23:08 JST に抜ける。overrides で 1.2.2 に上げたら外す
       - name: Audit dependencies
-        run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-68fv-2mgg-jv7q
+        run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
 
       - name: Lint (shellcheck)
         run: shellcheck scripts/*.sh e2e/*.sh
