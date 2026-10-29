@@ -97,6 +97,7 @@
     "wrangler": "^4.147.0"
   },
   "overrides": {
+    "source-map-js": "^1.2.2",
     "defu": "^6.1.7",
     "kysely": "^0.28.17",
     "esbuild": "0.28.1",
