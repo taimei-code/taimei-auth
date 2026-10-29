@@ -60,7 +60,8 @@ const grep =
         .split("\n")
         .filter(Boolean)
         .map(fromRepoRoot)
-        .filter((hit) => keepsPath(tests, hit));
+        .filter((hit) => keepsPath(tests, hit))
+        .sort();
     } catch (error) {
       if (Predicate.hasProperty(error, "status") && error.status === GREP_FOUND_NOTHING) return [];
       throw error;
