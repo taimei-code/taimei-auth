@@ -1,6 +1,6 @@
 import { Cause, Context, Effect, ErrorReporter, Layer } from "effect";
 import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
-import { HttpApiBuilder, HttpApiError } from "effect/http-api";
+import { HttpApiBuilder } from "effect/http-api";
 import type { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { Authenticated, CurrentActor } from "../account/actor-contract";
@@ -34,17 +34,13 @@ const AuthenticatedLive = Layer.effect(
   }),
 );
 
-const isClientInputError = (e: unknown) =>
-  HttpApiError.HttpApiSchemaError.is(e) && e.kind !== "Body" && e.kind !== "ResponseHeaders";
-
 const reported = new WeakSet<object>();
 
 const markReportable = (reason: Cause.Reason<unknown>) => {
   if (reason._tag === "Interrupt") return false;
   const value = reason._tag === "Fail" ? reason.error : reason.defect;
   if (typeof value !== "object" || value === null) return true;
-  if (reported.has(value) || isClientInputError(value) || ErrorReporter.isIgnored(value))
-    return false;
+  if (reported.has(value) || ErrorReporter.isIgnored(value)) return false;
   reported.add(value);
   return true;
 };

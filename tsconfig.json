@@ -24,11 +24,14 @@
           "effect/http-api",
           "effect/http",
           "effect/reactivity",
+          "effect/ErrorReporter",
           "@effect/atom-react"
         ],
         "diagnosticSeverity": {
           // runtime や配列を呼んだ時点で読むため、Layer・Effect を関数で返す
-          "lazyEffect": "off"
+          "lazyEffect": "off",
+          // 止める理由は docs/adr/0017-effect-v4-full-adoption.md「Stable 移行手順」
+          "schemaClassMissingBrand": "off"
         },
         "overrides": [
           {
