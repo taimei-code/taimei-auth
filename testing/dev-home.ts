@@ -36,7 +36,7 @@ const redirectTargetOf = (
 };
 
 const devHomeCallbackURLOf = (url: URL) => {
-  const query = new URLSearchParams(url.search).toString().replaceAll("*", "%2A");
+  const query = new URLSearchParams(url.search).toString();
   return query === "" ? DEV_HOME_PATH : `${DEV_HOME_PATH}?${query}`;
 };
 

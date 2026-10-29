@@ -29,6 +29,10 @@ export const betterAuthStorage = (
     getAndDelete: (key) =>
       unlessUnknownKey(key, null, (store, parsed) => store.getAndDelete(parsed)),
     delete: (key) => unlessUnknownKey(key, undefined, (store, parsed) => store.delete(parsed)),
+    increment: () =>
+      Promise.reject(
+        new Error("TTL store: better-auth の rate limit は使わないので increment は書かない"),
+      ),
     set: (key, value, ttl) => {
       const parsed = betterAuthKey(key);
       if (parsed === null) {

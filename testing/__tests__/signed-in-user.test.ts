@@ -10,7 +10,6 @@ import { buildApp } from "../../src/app";
 import { companySeenByConsumer } from "../../src/__tests__/consumer-company-view";
 import { Role as ProtoRole } from "../../src/gen/auth/v1/auth_pb";
 import { getTrustedOrigins } from "../../src/env";
-import { callbackURLAfterVerify } from "../../src/email/dispatch-magic-link";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testingApiRoutes } from "../routes";
@@ -254,7 +253,7 @@ describe("試験 API で作る利用者と事業所", () => {
         });
         const returnTo = `${trustedOrigin}/auth/signup/accept-invitation?invitation_token=${invitation.token}`;
         const signedIn = yield* createSignedInUser({ companies: [], returnTo });
-        expect(callbackURLAfterVerify(signedIn.loginUrl)).toBe(returnTo);
+        expect(new URL(signedIn.loginUrl).searchParams.get("callbackURL")).toBe(returnTo);
       }),
     ));
 

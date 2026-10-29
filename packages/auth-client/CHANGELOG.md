@@ -1,5 +1,13 @@
 # Changelog
 
+## 5.2.1 — 2026-10-29
+
+試験の環境の auth ホストが返す Magic Link の URL で、`callbackURL` の値を 1 回だけ encode するようにした。SDK の export と wire は変えていない。
+
+### Fixes
+
+- `createSignedInUser` の `loginUrl` と、開発者ホームと試験の環境で送るメールの Magic Link は、`callbackURL` の値を 1 回だけ encode した文字列になった。5.1.0 から 5.2.0 までは 2 回 encode していたので、`searchParams.get("callbackURL")` で読んだ値は `returnTo` と一致しなかった。5.2.1 からは一致する。link を開いた後の行き先は変わらない
+
 ## 5.2.0 — 2026-10-27
 
 `checkMemberships` が、削除済みの事業所と auth ホストに記録の無い事業所を分けて返す。既存の field の値は変えていない。
