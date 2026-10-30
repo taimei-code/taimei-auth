@@ -1,0 +1,17 @@
+{
+  "name": "poc-staging-iac-alchemy",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@effect/platform-bun": "4.0.6",
+    "@effect/platform-node": "4.0.6",
+    "alchemy": "2.0.0-beta.83",
+    "effect": "4.0.6",
+    "pg": "^8.22.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "@cloudflare/workers-types": "^4.20251001.0",
+    "@types/bun": "latest"
+  }
+}

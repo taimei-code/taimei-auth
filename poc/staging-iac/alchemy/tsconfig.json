@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "strict": true,
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "target": "ESNext",
+    "allowImportingTsExtensions": true,
+    "skipLibCheck": true,
+    "types": ["bun", "@cloudflare/workers-types"]
+  },
+  "include": ["auth/**/*.ts", "app/**/*.ts", "legacy/**/*.ts", "m6/**/*.ts"]
+}
