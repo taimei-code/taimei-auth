@@ -24,7 +24,9 @@
 
 ## 3. DB の SQL (Worker の role と本番以外の DB の印)
 
-2 の project の DB に owner で接続し、次の SQL を流す。`<owner>` は project の owner の role、`<password>` は手元で生成した値に置き換える。
+Worker の role の password を手元で生成する (`openssl rand -hex 24`)。4 節の Hyperdrive でも使う。
+
+2 の project の Neon の SQL Editor (branch `main`、owner の database) で、次の SQL を流す。`<owner>` は project の owner の role (Neon の既定は `neondb_owner`)、`<password>` は生成した値に置き換える。
 
 ```sql
 CREATE ROLE taimei_auth_worker LOGIN PASSWORD '<password>';
@@ -38,6 +40,8 @@ SELECT pg_has_role('taimei_auth_worker', 'neon_superuser', 'MEMBER') AS must_be_
 ```
 
 - 最後の `SELECT` が `false` を返すことを確かめる。`true` なら role を消し、Neon の画面や API ではなく SQL で作り直す (Neon の API で作る role は `neon_superuser` に入る)
+- password は平文で渡す。Neon は hash した password を受け付けない (`Neon only supports being given plaintext passwords`)。psql の `\password` も手元で hash してから送るので使えない。SQL Editor の履歴に password が残るが、履歴を読めるのは project に入れる人で、その人は owner として DB を操作できるので、この role の password で増える権限は無い
+- psql は、TLS を復号する proxy の内側からは Neon につながらない (proxy が Postgres の TLS の開始を通さない)。SQL Editor は HTTPS なので通る
 - `non_production_database` は本番以外の DB の印である。staging の Worker と表の準備の script は、この表が無い DB では動かない。migration には入れない
 - 載せない理由: 印の表を migration に入れないため。role の password を repo にも CI にも置かないため
 
