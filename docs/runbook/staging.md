@@ -8,7 +8,7 @@
 - 本番の資源と本番の credential には、この手順のどこでも触れない
 - 値 (password・token・secret) は手元の端末で生成し、この文書・repo・issue・チャットに書かない
 - wrangler を使う shell では、staging のアカウントの `CLOUDFLARE_ACCOUNT_ID` と `CLOUDFLARE_API_TOKEN` を設定し、`bunx wrangler whoami` が staging のアカウントだけを出すことを確かめてから始める。手元の wrangler が本番にログインしていても、環境変数の token が使われる
-- Free のアカウントで作れない資源 (支払い手段の登録を求められるもの) があれば、そこで止め、費用と代わりの案を示して判断を仰ぐ (ADR-0022 の Consequences)
+- 0 ドルで作れない資源があれば、そこで止め、費用と代わりの案を示して判断を仰ぐ (ADR-0022 の Consequences)
 
 ## 1. Cloudflare のアカウント
 
@@ -72,7 +72,7 @@ staging のアカウントに Secrets Store を作り、次の 4 つを `src/sec
 
 Worker への適用は、Worker ができた後に 8 節で行う。ここでは Worker が無くてもできることだけを行う。
 
-1. Zero Trust の組織を作る
+1. Zero Trust の組織を作り、Free プランを選ぶ。Free でも支払い手段の登録を求められる。表示が Free・0 ドルであることを確かめてから登録する
 2. CI の smoke と consumer の e2e のために service token を発行する。7 節で GitHub の Environment `staging` に入れる
 
 - 載せない理由: ADR-0022 の Decision 21

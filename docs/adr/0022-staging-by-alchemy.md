@@ -167,7 +167,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 - staging は **本番以外** の環境で、本番と同じ成果物ではない。本番の成果物そのものは、本番の gate の smoke で確かめる。
 - staging の障害の間は、本番にも deploy できない。
 - Access の設定が staging の守りの要になる。外れると試験 API が公開されるので、smoke が毎回、token の無い request が止まることを確かめる。
-- **費用**: staging のアカウントは Free のままにする。Workers、workers.dev、Secrets Store、alchemy の state の置き場は、Free のアカウントで課金の表示なしに作れた (PoC で観測)。Neon は Free の project を 1 つ増やす (Free は 100 project まで)。Hyperdrive と Zero Trust (Access) の Free での作成は観測していない。作れないか支払い手段の登録が要るなら、費用と代わりの案を #308 に示して判断を仰ぐ。
+- **費用**: staging のアカウントは Free のままにする。Workers、workers.dev、Secrets Store、alchemy の state の置き場は、Free のアカウントで課金の表示なしに作れた (PoC で観測)。Neon は Free の project を 1 つ増やす (Free は 100 project まで)。Zero Trust (Access) は、Free プラン (0 ドル) でも支払い手段の登録を求められた。maintainer が 0 ドルであることを確かめて登録した (2026-10-31)。Hyperdrive の Free での作成は観測していない。作れないか課金が要るなら、費用と代わりの案を #308 に示して判断を仰ぐ。
 - 本番のメールの送信枠を staging と共有する。staging は Access で閉じるので、外からの濫用で枠が減ることはない。
 - DO の変更 (追加・改名・削除) は、#309 の後は alchemy だけで行う。wrangler の migration と併用できない (取り込んだ後に wrangler の `renamed_classes` が拒まれた)。#309 で `deploy-durable-object-migration.yml` を置き換える。
 - alchemy は beta なので、上げるたびに破壊的変更を確かめる。state の置き場は repo ごとなので、2 repo で版を同時に上げる必要は無い。
@@ -181,4 +181,4 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
   - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作るか
   - 権限を最小にした token (Decision 18) で deploy が通るか
   - Worker の role で、app と試験 API のすべての query が通るか (staging の smoke と e2e で見る)
-  - Free のアカウントで、Hyperdrive と Zero Trust を作れるか
+  - Free のアカウントで、Hyperdrive を作れるか
