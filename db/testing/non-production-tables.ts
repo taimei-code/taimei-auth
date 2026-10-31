@@ -1,9 +1,9 @@
 import { sql } from "drizzle-orm";
 import { db } from "../client";
 import { seedDevAccounts } from "./dev-accounts";
-import type { LocalDatabase } from "./local-database";
+import { type NonProductionDatabase, requireMarkedDatabase } from "./non-production-database";
 
-export const prepareNonProductionTables = async (_database: LocalDatabase) => {
+export const prepareNonProductionTables = async (_database: NonProductionDatabase) => {
   await db.execute(sql`
     CREATE TABLE IF NOT EXISTS testing_browser_account (
       browser_key text NOT NULL,
@@ -19,3 +19,6 @@ export const prepareNonProductionTables = async (_database: LocalDatabase) => {
     )`);
   await seedDevAccounts();
 };
+
+export const prepareMarkedNonProductionTables = async () =>
+  prepareNonProductionTables(await requireMarkedDatabase());

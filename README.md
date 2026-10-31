@@ -25,7 +25,7 @@ GitHub OAuth、Resend、Vercel Blob の設定は省略できる。
 
 ## 運用
 
-- 管理スクリプトは `management/` に置く (`docker compose run --rm auth-service bun run management/<script>.ts`)。MFA ロックアウトの救済は `disable-user-mfa.ts <userId>` が唯一の出口である ([ADR-0016](./docs/adr/0016-mfa-self-owned-totp.md))。管理スクリプトは本番と同じく本物のメールを送るので、手元で走らせると、`AUTH_RESEND_KEY` が無ければ通知を送れず `notified: false` を返し、本物の鍵があれば本当に送る
+- 管理スクリプトは `management/` に置く (`docker compose run --rm auth-service bun run management/<script>.ts`)。MFA ロックアウトの救済は `disable-user-mfa.ts <userId>` が唯一の出口である ([ADR-0016](./docs/adr/0016-mfa-self-owned-totp.md))。管理スクリプトは起動の時に `AUTH_SECRET` を求める (`docker compose` の `auth-service` は開発用の値を渡す。`bun` で直接走らせる時は自分で渡す)。管理スクリプトは本番と同じく本物のメールを送るので、手元で走らせると、`AUTH_RESEND_KEY` が無ければ通知を送れず `notified: false` を返し、本物の鍵があれば本当に送る
 - `MFA_CHALLENGE_ENABLED=false` で MFA チャレンジを緊急停止できる。明示的な `false` 以外の値では有効のまま。停止中は Sentry に 6 時間おきに warning が出る
 - `AUTH_TRUSTED_PROXY_HOPS`: 本番以外の Bun の server (`testing/server.ts`) が client IP の導出に使う proxy の段数。必須で、未設定なら起動を拒否する。Workers は `cf-connecting-ip` を見るので不要 (`src/request-context.ts`)
 - `MFA_TOTP_ENCRYPTION_KEYS`: `v1:<base64 32byte>[,v2:...]` の形式の鍵 ring で、最大の version が現行。ローテーションは新しい version を追記して deploy し、旧 version は該当する行が 0 になるまで残す ([ADR-0016](./docs/adr/0016-mfa-self-owned-totp.md))

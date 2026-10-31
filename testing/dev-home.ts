@@ -20,7 +20,7 @@ import { browserKeyIssuedIfMissing } from "./browser-key";
 import type { Destination, PageAccount, Viewer } from "../web/non-production/page-props";
 import { chosenAccountOf, pageAccountOf } from "./chosen-account";
 import { nonProductionShell } from "./non-production-shell";
-import { magicLinkUrlFor } from "./sent-links";
+import { magicLinkUrlFor, type NonProductionEmail } from "./sent-links";
 
 export const DEV_HOME_SIGN_IN_PATH = `${DEV_HOME_PATH}/sign-in`;
 export const DEV_HOME_SIGN_OUT_PATH = `${DEV_HOME_PATH}/sign-out`;
@@ -67,7 +67,7 @@ const viewerOf = (c: Context, signedIn: PageAccount | undefined): Viewer =>
         notice: getCookie(c, SIGNED_OUT_COOKIE) === undefined ? "None" : "JustSignedOut",
       };
 
-export const devHomeRoutes = () =>
+export const devHomeRoutes = ({ recordsEmailTo }: Pick<NonProductionEmail, "recordsEmailTo">) =>
   new Hono()
     .get(DEV_HOME_PATH, (c) =>
       runRoute(
@@ -77,7 +77,8 @@ export const devHomeRoutes = () =>
           const redirectTarget = yield* redirectTargetOf(url);
           const browserKey = browserKeyIssuedIfMissing(c);
           const session = yield* AuthApi.use((authApi) => authApi.getSession(c.req.raw.headers));
-          if (session) yield* Effect.promise(() => addBrowserAccount(browserKey, session.user.id));
+          if (session && recordsEmailTo(session.user.email))
+            yield* Effect.promise(() => addBrowserAccount(browserKey, session.user.id));
           const accounts = (yield* Effect.promise(() => listChoosableAccounts(browserKey))).map(
             pageAccountOf,
           );

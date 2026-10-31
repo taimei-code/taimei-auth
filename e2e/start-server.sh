@@ -19,4 +19,5 @@ export MFA_TOTP_ENCRYPTION_KEYS="${MFA_TOTP_ENCRYPTION_KEYS:-v1:MDEyMzQ1Njc4OWFi
 export APP_ENV=development APP_NAME="${APP_NAME:-taimei}" PORT=3110
 export AUTH_SERVICE_URL=http://localhost:3110 AUTH_TRUSTED_ORIGINS=http://localhost:3110 AUTH_COOKIE_DOMAIN=
 export AUTH_SERVICE_KEY="${AUTH_SERVICE_KEY:-e2e-service-key}"
+export AUTH_SECRET="${AUTH_SECRET:-test-auth-secret-for-bun-test-and-e2e-32chars}"
 bash scripts/wrangler-dev.sh --config testing/wrangler.jsonc --define TAIMEI_AUTH_E2E_LOGIN_LINKS:true 2>&1 | tee -a e2e/.server.log

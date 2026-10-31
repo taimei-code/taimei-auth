@@ -4,6 +4,8 @@ import { company, membership, type Role, user } from "../schema";
 
 const GENERATED_ID_BODY_LENGTH = 24;
 
+export const UNDELIVERABLE_EMAIL_DOMAIN = "@example.com";
+
 const fixedId = (prefix: "cmp" | "mbr", name: string) =>
   `${prefix}_${name.padEnd(GENERATED_ID_BODY_LENGTH, "0")}`;
 
@@ -23,7 +25,7 @@ type DevCompany = typeof FIRST_COMPANY;
 const devUser = (key: string, memberships: readonly { company: DevCompany; role: Role }[]) => ({
   id: `dev-account-${key}`,
   name: `開発用 ${key.toUpperCase()}`,
-  email: `dev-${key}@example.com`,
+  email: `dev-${key}${UNDELIVERABLE_EMAIL_DOMAIN}`,
   memberships: memberships.map(({ company, role }) => ({
     id: fixedId("mbr", `dev_${key}_${company.key}`),
     companyId: company.id,

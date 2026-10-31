@@ -43,7 +43,7 @@
 - **手順**:
   1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する
-  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com <id>` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
+  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com taimei-auth <id> public` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
 - **確認項目**: `src/worker.ts` で pool を閉じる (`pool.end()`) のは、`waitUntil` に渡した background の処理がすべて終わった後であること。先に閉じると、background の書き込みが閉じた接続で止まる (bun の test は `cloudflare:workers` を読めず、この順序を観測できない)
 - **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 

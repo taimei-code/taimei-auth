@@ -44,10 +44,12 @@
 - `../testing/__tests__/sentry.test.ts`: Sentry の SDK を import するのが runtime ごとの初期化 file と worker.ts だけであることと、SDK を初期化するすべての file が、送る前に request の secret を落とす設定 (`SENTRY_REQUEST_PRIVACY`) を渡すこと
 - `__tests__/no-environment-branch.test.ts`: `src/` で `APP_ENV` を読むのが、Sentry の環境名を決める `src/worker.ts` だけであることと、`web/src` が vite の build の mode (`import.meta.env.MODE` など) を読まないこと (本番の code は自分が本番かどうかを知らない)
 - `__tests__/non-production-wrangler-config.test.ts`: 本番以外の worker の config (`testing/wrangler.jsonc`) が本番の name・route・Hyperdrive・vars を持たないことと、違ってよい key (name・main・assets の directory・Hyperdrive の id・vars の値・routes・workers_dev・alias) のほかは本番と同じであること
-- `__tests__/testing-server-dependencies.test.ts`: 本番以外の server の entry (`testing/worker.ts`・`testing/server.ts`) から辿れる外部 package が dependencies だけであること (画面は web の build で bundle する)
+- `__tests__/testing-server-dependencies.test.ts`: 本番以外の server の entry (`testing/worker.ts`・`testing/staging-worker.ts`・`testing/server.ts`) から辿れる外部 package が dependencies だけであること (画面は web の build で bundle する)
 - `__tests__/service-key.test.ts`: service key の検証が `verifyServiceKey` の 1 か所にあること
 - `__tests__/url-allowlist-production.test.ts`: 本番の redirect 先の定数 (`src/redirect-hosts.ts`) が https の本番の host だけを許すこと。`bun test` は preload で本番以外の値に差し替えるので、preload の無い子 process で読む
 - `__tests__/wrangler-dev-env.test.ts`: `scripts/wrangler-dev.sh` が上書きする env と、`wrangler.jsonc`・`testing/wrangler.jsonc` の vars の key が一致することと、src・testing・db が読む env の名前が、script が worker に渡す名前の一覧か、渡さない名前の一覧にあること
+- `__tests__/infra-stages.test.ts`: IaC の stage の表 (`infra/stages.ts`) の vars の key と Durable Object の binding が `wrangler.jsonc` と同じで、Worker の名前が本番と違い、host が本番以外の redirect 先に許されること (ADR-0022)
+- `__tests__/deploy-environments.test.ts`: GitHub の Environment `production` を持つ job が本番の deploy と DO の migration だけで、deploy の workflow で secret を読む job がすべて Environment を持つこと (ADR-0022)
 - `__tests__/manual-regression-triggers.test.ts`: 手動回帰 (`docs/qa/manual-regression.md`) のどの QA-MR も契機の path を持ち、本番以外の file がどれかに当たり、どの path も実在の file に当たること
 - `account/__tests__/containment.test.ts`: 退会の判定と、commit 後の session 削除の呼び手が 1 つであること
 - `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること

@@ -20,6 +20,7 @@ import { cleanupIssuedChallenges, enableMfaFor } from "../../src/mfa/__tests__/h
 import { BROWSER_KEY_COOKIE } from "../browser-key";
 import { DEV_HOME_SIGN_IN_PATH, DEV_HOME_SIGN_OUT_PATH, devHomeRoutes } from "../dev-home";
 import { inBrowser, requestInBrowser, seedBrowserAccount, withCookies } from "./in-browser";
+import { recordingEmail } from "../sent-links";
 import { magicLinksSentWhile } from "./magic-links-sent";
 import { devHomePropsOf } from "./page-props-of";
 import { AUTH_HOST_ORIGIN, HEADERS_WITHOUT_AUTH_HOST_ORIGIN } from "./origins";
@@ -30,7 +31,9 @@ const REDIRECT_QUERY = `?${new URLSearchParams({ service_name: "accounts", redir
 const P = "dev-home-test-";
 const { run } = dbTest(P);
 
-const app = buildApp({ mountStatic: (honoApp) => honoApp.route("/", devHomeRoutes()) });
+const app = buildApp({
+  mountStatic: (honoApp) => honoApp.route("/", devHomeRoutes(recordingEmail)),
+});
 
 const TEST_BROWSER_KEY = crypto.randomUUID();
 
@@ -190,6 +193,37 @@ describe("開発者ホームは、開発用アカウントと、この browser �
 
         expect(emailsOf(props.browserAccounts)).toContain(user.email);
         expect(chosen.status).toBe(303);
+      }),
+    ));
+
+  test("記録しない宛先の利用者は、ログイン中に開発者ホームを開いても候補に足さず、選んでも 404 で、Magic Link を送らない (選べると本物のメールを送り、記録から link を取り出せない)", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* seedChoosableUser("unrecorded");
+        const signedIn = yield* Effect.promise(() => signInAs(user.id));
+        const appRecordingNoOne = buildApp({
+          mountStatic: (honoApp) =>
+            honoApp.route("/", devHomeRoutes({ recordsEmailTo: () => false })),
+        });
+        const newBrowserKey = crypto.randomUUID();
+        const requestInNewBrowser = requestInBrowser(appRecordingNoOne, newBrowserKey);
+
+        const props = devHomePropsOf(
+          yield* Effect.promise(async () =>
+            (await requestInNewBrowser(DEV_HOME_PATH, { headers: signedIn })).text(),
+          ),
+        );
+        const { response, magicLinksSent } = yield* magicLinksSentWhile(() =>
+          requestInNewBrowser(DEV_HOME_SIGN_IN_PATH, {
+            method: "POST",
+            headers: withAuthHostOrigin(),
+            body: new URLSearchParams({ userId: user.id }),
+          }),
+        );
+
+        expect(emailsOf(props.browserAccounts)).not.toContain(user.email);
+        expect(response.status).toBe(404);
+        expect(magicLinksSent).toBe(0);
       }),
     ));
 });

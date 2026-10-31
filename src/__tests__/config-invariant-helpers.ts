@@ -344,3 +344,6 @@ export const NON_PRODUCTION_DIRS = ["db/testing", "testing", "web/non-production
 
 export const readWorkflow = <Workflow>(name: string): Workflow =>
   Bun.YAML.parse(readFileSync(join(REPO_ROOT, ".github/workflows", name), "utf8")) as Workflow;
+
+export const indexOfStepRunning = (steps: readonly { run?: string }[], fragment: string): number =>
+  steps.findIndex(({ run = "" }) => run.includes(fragment));

@@ -59,3 +59,13 @@ export const recordingEmailSender: Layer.Layer<EmailSender> = Layer.succeed(
   EmailSender,
   recordingEmailSenderService,
 );
+
+export type NonProductionEmail = {
+  sender: Layer.Layer<EmailSender>;
+  recordsEmailTo: (email: string) => boolean;
+};
+
+export const recordingEmail: NonProductionEmail = {
+  sender: recordingEmailSender,
+  recordsEmailTo: () => true,
+};

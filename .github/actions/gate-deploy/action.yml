@@ -1,0 +1,101 @@
+name: Gate deploy
+description: Upload a version with alchemy at 0%, smoke it through the version override header, then promote it to 100% or restore the previous version.
+
+inputs:
+  stage:
+    description: alchemy stage (a key of infra/stages.ts)
+    required: true
+  worker-name:
+    description: Worker script name of the stage
+    required: true
+  base-url:
+    description: URL the smoke calls
+    required: true
+  cloudflare-api-token:
+    required: true
+  cloudflare-account-id:
+    required: true
+  access-client-id:
+    required: true
+  access-client-secret:
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Upload a version at 0% traffic with alchemy
+      shell: bash
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        DEPLOY_MODE: gate
+        ALCHEMY_TELEMETRY_DISABLED: "1"
+        STAGE: ${{ inputs.stage }}
+      run: bunx alchemy deploy infra/alchemy.run.ts --stage "$STAGE" --yes --no-input
+
+    - name: Find the uploaded version and the version at 100%
+      id: versions
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        WORKER: ${{ inputs.worker-name }}
+      run: |
+        set -euo pipefail
+        uploaded=$("$GITHUB_WORKSPACE/node_modules/.bin/wrangler" versions list --name "$WORKER" --json | jq -r '.[-1].id')
+        current=$(bash "$GITHUB_WORKSPACE/scripts/current-version-id.sh" "$WORKER")
+        [ -n "$uploaded" ] && [ "$uploaded" != "null" ] || { echo "uploaded version not found" >&2; exit 1; }
+        echo "uploaded_id=$uploaded" >> "$GITHUB_OUTPUT"
+        echo "current_id=$current" >> "$GITHUB_OUTPUT"
+
+    - name: Stage the version at 0% traffic
+      id: stage
+      if: steps.versions.outputs.uploaded_id != steps.versions.outputs.current_id
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        WORKER: ${{ inputs.worker-name }}
+        UPLOADED_ID: ${{ steps.versions.outputs.uploaded_id }}
+        CURRENT_ID: ${{ steps.versions.outputs.current_id }}
+      run: |
+        "$GITHUB_WORKSPACE/node_modules/.bin/wrangler" versions deploy "${UPLOADED_ID}@0%" "${CURRENT_ID}@100%" \
+          --name "$WORKER" --yes --message "gate-deploy ${GITHUB_RUN_ID} stage (${GITHUB_SHA::7})"
+
+    - name: Smoke the version through the override header and the Access service token
+      shell: bash
+      env:
+        ACCESS_CLIENT_ID: ${{ inputs.access-client-id }}
+        ACCESS_CLIENT_SECRET: ${{ inputs.access-client-secret }}
+        BASE_URL: ${{ inputs.base-url }}
+        WORKER: ${{ inputs.worker-name }}
+        UPLOADED_ID: ${{ steps.versions.outputs.uploaded_id }}
+      run: bash scripts/preview-smoke.sh "$BASE_URL" "$WORKER" "$UPLOADED_ID" access
+
+    - name: Restore the previous version on smoke failure
+      if: failure() && steps.stage.outcome == 'success'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        WORKER: ${{ inputs.worker-name }}
+        CURRENT_ID: ${{ steps.versions.outputs.current_id }}
+      run: |
+        "$GITHUB_WORKSPACE/node_modules/.bin/wrangler" versions deploy "${CURRENT_ID}@100%" \
+          --name "$WORKER" --yes --message "gate-deploy ${GITHUB_RUN_ID} restore after smoke failure"
+
+    - name: Promote the version to 100% traffic
+      if: steps.stage.outcome == 'success'
+      shell: bash
+      working-directory: ${{ runner.temp }}
+      env:
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        WORKER: ${{ inputs.worker-name }}
+        UPLOADED_ID: ${{ steps.versions.outputs.uploaded_id }}
+      run: |
+        "$GITHUB_WORKSPACE/node_modules/.bin/wrangler" versions deploy "${UPLOADED_ID}@100%" \
+          --name "$WORKER" --yes --message "gate-deploy ${GITHUB_RUN_ID} (${GITHUB_SHA::7})"
