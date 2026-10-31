@@ -13,12 +13,15 @@ import { CLIENT_IP_HEADER } from "./client-ip";
 import { resolveCrossSubDomainCookies } from "./cookie-domain";
 import { getTrustedOrigins } from "./env";
 import { captureThrown } from "./handlers/client-facing-error";
+import { requireAuthSecret } from "./auth-secret";
 import { betterAuthStorage } from "./ttl-store-better-auth";
 import type { AppRuntime } from "./runtime";
 
 function buildAuth(runtime: AppRuntime) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
+
+    secret: requireAuthSecret(process.env.AUTH_SECRET),
 
     appName: getAppName(),
 
