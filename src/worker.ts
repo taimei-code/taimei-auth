@@ -14,6 +14,7 @@ import { SENTRY_REQUEST_PRIVACY } from "./sentry";
 import { onceUntilSucceeded } from "./once-until-succeeded";
 import { withClientIp } from "./client-ip";
 import { resolveCloudflareClientIp } from "./request-context";
+import { resolveSecretBindings } from "./secret-bindings";
 
 type Env = {
   HYPERDRIVE: { connectionString: string };
@@ -81,8 +82,11 @@ export const createWorker = (options: WorkerOptions = {}) => {
   const beforeFirstRequest = onceUntilSucceeded(
     options.beforeFirstRequest ?? (() => Promise.resolve()),
   );
+  let resolveSecrets: (() => Promise<void>) | null = null;
   return Sentry.withSentry(sentryOptions, {
     async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
+      resolveSecrets ??= onceUntilSucceeded(() => resolveSecretBindings(env));
+      await resolveSecrets();
       const app = bootstrap(env);
       const backgroundPromises: Promise<unknown>[] = [];
       return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {

@@ -3,6 +3,7 @@ import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseJsonc, REPO_ROOT, symmetricDifference } from "./config-invariant-helpers";
 import { grepLines, repoFiles } from "./source-scan";
+import { SECRET_BINDING_NAMES } from "../secret-bindings";
 
 const WRANGLER_DEV_SCRIPT = "scripts/wrangler-dev.sh";
 
@@ -85,5 +86,18 @@ describe("scripts/wrangler-dev.sh は worker が読む env を名前で渡す (�
     expect(
       namesInScript("PASS_THROUGH").filter((name) => !new RegExp(`\\b${name}\\b`).test(elsewhere)),
     ).toEqual([]);
+  });
+});
+
+const notPassedThrough = (names: readonly string[]) =>
+  names.filter((name) => !namesInScript("PASS_THROUGH").includes(name));
+
+describe("Secrets Store の binding にする secret は、local でも scripts/wrangler-dev.sh が worker に渡す (渡さないと local だけ secret が空で動く)", () => {
+  test("binding にする secret の名前は、どれも PASS_THROUGH にある", () => {
+    expect(notPassedThrough(SECRET_BINDING_NAMES)).toEqual([]);
+  });
+
+  test("PASS_THROUGH に無い名前は報告される", () => {
+    expect(notPassedThrough([...SECRET_BINDING_NAMES, "NEW_SECRET"])).toEqual(["NEW_SECRET"]);
   });
 });
