@@ -1,0 +1,50 @@
+name: Deploy staging at 100%
+run-name: "Staging at 100% (${{ github.ref_name }}): no smoke gate, for the first deploy and Durable Object changes"
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: staging
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Prepare staging
+        uses: ./.github/actions/prepare-staging
+        with:
+          database-url: ${{ secrets.DATABASE_URL }}
+
+      - name: Deploy staging at 100% with alchemy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_MODE: full
+          ALCHEMY_TELEMETRY_DISABLED: "1"
+        run: bunx alchemy deploy infra/alchemy.run.ts --stage staging --yes --no-input
+
+      - name: Find the version at 100%
+        id: version
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          version_id=$(bash scripts/current-version-id.sh taimei-auth-staging)
+          echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke staging through the Access service token
+        env:
+          ACCESS_CLIENT_ID: ${{ secrets.ACCESS_CLIENT_ID }}
+          ACCESS_CLIENT_SECRET: ${{ secrets.ACCESS_CLIENT_SECRET }}
+          VERSION_ID: ${{ steps.version.outputs.version_id }}
+        run: bash scripts/preview-smoke.sh https://taimei-auth-staging.taimei-staging.workers.dev taimei-auth-staging "$VERSION_ID" access

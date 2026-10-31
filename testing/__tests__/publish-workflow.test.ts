@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { readWorkflow as readWorkflowAs } from "../../src/__tests__/config-invariant-helpers";
+import {
+  indexOfStepRunning,
+  readWorkflow as readWorkflowAs,
+} from "../../src/__tests__/config-invariant-helpers";
 
 type WorkflowStep = { run?: string };
 type Workflow = {
@@ -8,9 +11,6 @@ type Workflow = {
 };
 
 const readWorkflow = (name: string) => readWorkflowAs<Workflow>(name);
-
-const indexOfStepRunning = (steps: readonly WorkflowStep[], fragment: string) =>
-  steps.findIndex(({ run = "" }) => run.includes(fragment));
 
 const SMOKE = "scripts/testing-image-smoke.sh";
 

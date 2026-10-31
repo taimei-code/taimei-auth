@@ -49,6 +49,7 @@
 - `__tests__/url-allowlist-production.test.ts`: 本番の redirect 先の定数 (`src/redirect-hosts.ts`) が https の本番の host だけを許すこと。`bun test` は preload で本番以外の値に差し替えるので、preload の無い子 process で読む
 - `__tests__/wrangler-dev-env.test.ts`: `scripts/wrangler-dev.sh` が上書きする env と、`wrangler.jsonc`・`testing/wrangler.jsonc` の vars の key が一致することと、src・testing・db が読む env の名前が、script が worker に渡す名前の一覧か、渡さない名前の一覧にあること
 - `__tests__/infra-stages.test.ts`: IaC の stage の表 (`infra/stages.ts`) の vars の key と Durable Object の binding が `wrangler.jsonc` と同じで、Worker の名前が本番と違い、host が本番以外の redirect 先に許されること (ADR-0022)
+- `__tests__/deploy-environments.test.ts`: GitHub の Environment `production` を持つ job が本番の deploy と DO の migration だけで、deploy の workflow で secret を読む job がすべて Environment を持つこと (ADR-0022)
 - `__tests__/manual-regression-triggers.test.ts`: 手動回帰 (`docs/qa/manual-regression.md`) のどの QA-MR も契機の path を持ち、本番以外の file がどれかに当たり、どの path も実在の file に当たること
 - `account/__tests__/containment.test.ts`: 退会の判定と、commit 後の session 削除の呼び手が 1 つであること
 - `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること
