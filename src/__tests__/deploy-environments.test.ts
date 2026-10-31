@@ -84,7 +84,10 @@ describe("本番の secret を読める job は、本番の deploy の job に�
   });
 
   test("Environment staging を持つ job は、staging の deploy だけ", () => {
-    expect(jobsWithEnvironment(workflows(), "staging")).toEqual(["deploy-staging-full.yml#deploy"]);
+    expect(jobsWithEnvironment(workflows(), "staging")).toEqual([
+      "deploy-staging-full.yml#deploy",
+      "deploy.yml#staging",
+    ]);
   });
 
   test("deploy の workflow で secret を参照する job は、どれも Environment を持つ (repo 全体の secret を読まない)", () => {
@@ -110,9 +113,21 @@ describe("本番の secret を読める job は、本番の deploy の job に�
   });
 });
 
-describe("本番の deploy は、DO の migration と同時に走らない", () => {
-  test("本番の job は、DO の migration と同じ concurrency の group を持つ", () => {
-    expect(deploy().jobs?.deploy?.concurrency?.group).toBe("deploy-production");
+describe("本番の deploy は、staging の deploy が通った時だけ進む", () => {
+  test("本番の job は staging の job を待ち、同時に走らない", () => {
+    const { staging, deploy: production } = deploy().jobs ?? {};
+    expect(production?.needs).toBe("staging");
+    expect(production?.concurrency?.group).toBe("deploy-production");
+    expect(staging?.concurrency?.group).toBe("deploy-staging");
+  });
+
+  test("staging の job は、本番の job と同じ起動の条件を持つ", () => {
+    const { staging, deploy: production } = deploy().jobs ?? {};
+    expect(staging?.if).toBe(production?.if);
+  });
+
+  test("手動の起動に入力欄が無い (staging を飛ばす経路を作らない)", () => {
+    expect(deploy().on?.workflow_dispatch?.inputs).toBeUndefined();
   });
 });
 
@@ -147,5 +162,12 @@ describe("staging の準備は、2 つの deploy の経路が同じ手順を使�
     ].map((fragment) => indexOfStepRunning(steps, fragment));
     expect(order.every((index) => index >= 0)).toBe(true);
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  test("main の push の staging の job も、0% で出して確かめる deploy の前に同じ準備を使う", () => {
+    const steps = deploy().jobs?.staging?.steps ?? [];
+    const prepare = indexOfStepUsing(steps, PREPARE_STAGING);
+    expect(prepare).toBeGreaterThanOrEqual(0);
+    expect(prepare).toBeLessThan(indexOfStepUsing(steps, "./.github/actions/gate-deploy"));
   });
 });
