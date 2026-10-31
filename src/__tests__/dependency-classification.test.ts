@@ -25,12 +25,17 @@ import {
 } from "./config-invariant-helpers";
 
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
+  "@alchemy.run/cloudflare":
+    "build-tool: infra/alchemy.run.ts が import する alchemy の Cloudflare の資源",
   "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",
   "@bufbuild/protoc-gen-es": "build-tool: buf generate の plugin (生成物のみ ship する)",
+  "@effect/platform-bun":
+    "build-tool: bunx alchemy が起動時に読む peer 依存 (Bun の入口では platform-node でなくこちらを読む)",
   "@effect/tsgo": "build-tool: Effect の診断入りの tsc (bun run typecheck)",
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
+  alchemy: "build-tool: infra/alchemy.run.ts が宣言する IaC の CLI (staging の deploy)",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
   "drizzle-kit": "build-tool: migration 生成 CLI (host の bun run db:generate)",
   fallow: "build-tool: dead code / 循環依存の静的解析 CLI (CI の fallow audit と MCP server)",
