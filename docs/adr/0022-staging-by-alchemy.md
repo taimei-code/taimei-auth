@@ -4,7 +4,7 @@
 
 Accepted (2026-10-31)。判断主体は maintainer。実装は taimei-code/taimei-auth#308。本番の資源の取り込みは #309 で行い、この ADR の定義に本番の stage を足す。taimei (consumer app) も同じ道具と同じ形に従う。#308 の受け入れ基準のうち「アカウント選択画面を staging に出さない」は、この ADR の Decision 7 (staging に開発者ホームと試験 API を載せる) に置き換わる。
 
-関連: ADR-0004 (cookie)、ADR-0011 (Workers 移行)、ADR-0017 (Effect。`@effect/platform-bun` の扱いを #308 の実装の PR で改訂する)、ADR-0021 (本番の成果物に本番以外の code を入れない)、GLOSSARY.md の **staging** と **本番以外**。
+関連: ADR-0004 (cookie)、ADR-0011 (Workers 移行)、ADR-0017 (Effect。`@effect/platform-bun`・`@effect/platform-node` の扱いを #308 の実装の PR で改訂する)、ADR-0021 (本番の成果物に本番以外の code を入れない)、GLOSSARY.md の **staging** と **本番以外**。
 
 ## Context
 
@@ -23,7 +23,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 
 ### 道具と置き場所
 
-1. **alchemy は root の devDependency にし、版を `2.0.0-beta.84` に固定する**。入れるのは `alchemy`、`@alchemy.run/cloudflare`、CLI が Bun で読む peer の `@effect/platform-bun` の 3 つ。
+1. **alchemy は root の devDependency にし、版を `2.0.0-beta.84` に固定する**。入れるのは `alchemy`、`@alchemy.run/cloudflare`、CLI が Bun で読む peer の `@effect/platform-bun`、`@alchemy.run/cloudflare` の Worker の資源が静的に import する peer の `@effect/platform-node` の 4 つ。platform-node は optional の peer と書かれているが、無いと定義を読めない (2026-10-31 の最初の deploy で観測)。
    - overrides は要らない (beta.84 で `bun audit` の high 以上が 0 件)。`minimumReleaseAge` は外さない。
    - 定義は `infra/` に置く。`infra/` にも src などと同じ規則を当てる (コメント禁止、tsconfig、fallow の entry、依存の許可リスト。prototype の変更と同じ)。
 2. **定義は `infra/alchemy.run.ts` の 1 本にし、stage ごとの差は `infra/stages.ts` の表に集める**。

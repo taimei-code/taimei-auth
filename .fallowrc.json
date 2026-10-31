@@ -20,7 +20,12 @@
     "web/tailwind.config.ts"
   ],
   "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
-  "ignoreDependencies": ["@bufbuild/protoc-gen-es", "@effect/tsgo", "@effect/platform-bun"],
+  "ignoreDependencies": [
+    "@bufbuild/protoc-gen-es",
+    "@effect/tsgo",
+    "@effect/platform-bun",
+    "@effect/platform-node"
+  ],
   "usedClassMembers": [
     {
       "extends": "DurableObject",

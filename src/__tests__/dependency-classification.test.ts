@@ -32,6 +32,8 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@bufbuild/protoc-gen-es": "build-tool: buf generate の plugin (生成物のみ ship する)",
   "@effect/platform-bun":
     "build-tool: bunx alchemy が起動時に読む peer 依存 (Bun の入口では platform-node でなくこちらを読む)",
+  "@effect/platform-node":
+    "build-tool: @alchemy.run/cloudflare の Worker の資源が静的に import する peer 依存 (optional と書かれているが、無いと定義を読めない)",
   "@effect/tsgo": "build-tool: Effect の診断入りの tsc (bun run typecheck)",
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
