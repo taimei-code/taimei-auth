@@ -3,12 +3,16 @@
   "entry": [
     "testing/server.ts",
     "testing/worker.ts",
+    "testing/staging-worker.ts",
+    "testing/prepare-staging-database.ts",
+    "testing/check-staging-database.ts",
     "testing/redirect-hosts.ts",
     "web/index.html",
     "web/non-production/main.tsx",
     "db/migrate.ts",
     "db/migrate-manual.ts",
     "management/*.ts",
+    "infra/*.ts",
     "e2e/*.ts",
     "drizzle.config.ts",
     "playwright.config.ts",
@@ -16,7 +20,7 @@
     "web/tailwind.config.ts"
   ],
   "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
-  "ignoreDependencies": ["@bufbuild/protoc-gen-es", "@effect/tsgo"],
+  "ignoreDependencies": ["@bufbuild/protoc-gen-es", "@effect/tsgo", "@effect/platform-bun"],
   "usedClassMembers": [
     {
       "extends": "DurableObject",

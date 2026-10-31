@@ -54,10 +54,12 @@
     "src/**/*.tsx",
     "db/**/*.ts",
     "management/**/*.ts",
+    "infra/**/*.ts",
     "e2e/**/*.ts",
     "web/src/shared/leave-spa.ts",
     "testing/sent-links.ts",
     "testing/local-delivery-log.ts",
+    "testing/redirect-hosts.ts",
     "playwright.config.ts"
   ],
   "exclude": ["node_modules", "dist", "packages"]
