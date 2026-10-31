@@ -5,6 +5,8 @@ export const ALLOWED_REDIRECT_PROTOCOLS: typeof ProductionRedirectHosts.ALLOWED_
 
 export const ALLOWED_REDIRECT_HOST_PATTERNS: typeof ProductionRedirectHosts.ALLOWED_REDIRECT_HOST_PATTERNS =
   {
-    taimei: /^app\.taimei-code\.(com|localhost)$|^localhost$/,
-    accounts: /^auth\.taimei-code\.(com|localhost)$|^localhost$/,
+    taimei:
+      /^app\.taimei-code\.(com|localhost)$|^localhost$|^taimei-staging\.taimei-staging\.workers\.dev$/,
+    accounts:
+      /^auth\.taimei-code\.(com|localhost)$|^localhost$|^taimei-auth-staging\.taimei-staging\.workers\.dev$/,
   };

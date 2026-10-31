@@ -15,6 +15,7 @@ drizzle の client、schema、query は `db/` に置き、`src/` `web/` `package
 - `e2e/fixtures.ts`: spec からは `e2e/seed.ts` の子プロセス経由でだけ呼ぶ。
 - `testing/server.ts` と、そこから辿る `testing/*` (consumer の試験の環境の entry): 開発用アカウントの seed と一覧、browser ごとの候補の表 (`testing_browser_account`)、session を置く TTL store の表を `db/testing/*` で読み書きする (理由: ADR-0020 の Decision 6・7)。
 - `testing/worker.ts` (開発環境と taimei-auth 自身の e2e の entry): 開発用アカウントの行と browser ごとの候補の表を `db/testing/*` で足し、開発者ホームから読み書きする (理由: ADR-0020 の Decision 7)。
+- `testing/staging-worker.ts` (staging の entry) と、staging の deploy の job が owner で走らせる `testing/check-staging-database.ts` (migrate の前の印の確認)・`testing/prepare-staging-database.ts` (準備): 本番以外の DB の印の表を確かめ、開発者ホームから読み書きする。表の準備と開発用アカウントの行は deploy の job が足す (理由: ADR-0022 の Decision 9・15)。
 
 試験が `DATABASE_URL` の向き先を判定するのは `db/testing/local-database.ts` の `databaseTarget` だけである (`db/__tests__/containment.test.ts` が固定)。
 

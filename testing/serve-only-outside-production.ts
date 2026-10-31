@@ -1,10 +1,11 @@
 const APP_ENVS_OUTSIDE_PRODUCTION: ReadonlySet<string | undefined> = new Set([
   "development",
   "test",
+  "staging",
 ]);
 
 export const OUTSIDE_PRODUCTION_ONLY_MESSAGE =
-  "FATAL: the non-production entries serve requests only with APP_ENV=development or APP_ENV=test.";
+  "FATAL: the non-production entries serve requests only with APP_ENV=development, APP_ENV=test, or APP_ENV=staging.";
 
 export const isOutsideProduction = (appEnv: string | undefined): boolean =>
   APP_ENVS_OUTSIDE_PRODUCTION.has(appEnv);

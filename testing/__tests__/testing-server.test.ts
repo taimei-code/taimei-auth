@@ -15,6 +15,7 @@ import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH } from "../dev-home";
 import { REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER } from "../non-production-redirect-hosts-check";
 import { nonProductionRoutes } from "../non-production-routes";
+import { recordingEmail } from "../sent-links";
 import { OUTSIDE_PRODUCTION_ONLY_MESSAGE } from "../serve-only-outside-production";
 import { AUTH_HOST_ORIGIN } from "./origins";
 import { devHomePropsOf, PAGE_PROPS_NOT_IN_PAGE } from "./page-props-of";
@@ -301,7 +302,7 @@ describe("本番の worker と同じ app", () => {
   test("APP_ENV が未設定・production・誤記・test のどれでも、本番以外の route の POST が無い", async () => {
     const postPaths = [
       ...new Set(
-        nonProductionRoutes({ e2eLoginLinks: true })
+        nonProductionRoutes({ e2eLoginLinks: true, recordsEmailTo: recordingEmail.recordsEmailTo })
           .flatMap((routes) => routes.routes)
           .filter((route) => route.method === "POST")
           .map((route) => route.path),

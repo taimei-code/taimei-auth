@@ -18,7 +18,7 @@ const fetchWith = (appEnv: string | undefined) => {
   return entry.fetch(new Request("http://localhost/health"), { APP_ENV: appEnv }, undefined);
 };
 
-describe("本番以外の entry は、APP_ENV が development か test の時だけ app に request を渡す", () => {
+describe("本番以外の entry は、APP_ENV が development・test・staging の時だけ app に request を渡す", () => {
   test.each([
     ["production", "production"],
     ["誤記", "prodution"],
@@ -34,6 +34,7 @@ describe("本番以外の entry は、APP_ENV が development か test の時だ
   test.each([
     ["development", "development"],
     ["test", "test"],
+    ["staging", "staging"],
   ])("APP_ENV が %s なら、app に渡す", async (_, appEnv) => {
     const response = await fetchWith(appEnv);
 

@@ -13,7 +13,7 @@ import {
   isOutsideProduction,
   OUTSIDE_PRODUCTION_ONLY_MESSAGE,
 } from "./serve-only-outside-production";
-import { recordingEmailSender } from "./sent-links";
+import { recordingEmail } from "./sent-links";
 
 if (!isOutsideProduction(process.env.APP_ENV)) {
   console.error(OUTSIDE_PRODUCTION_ONLY_MESSAGE);
@@ -41,8 +41,8 @@ await prepareNonProductionTables(database);
 const ttlStore = await postgresTtlStore(database, mergeSessionIndex);
 
 export default startBunServer({
-  emailSender: recordingEmailSender,
+  emailSender: recordingEmail.sender,
   ttlStore,
   proxyTrust,
-  extendBeforeStatic: mountNonProductionRoutes,
+  extendBeforeStatic: mountNonProductionRoutes(recordingEmail),
 }).server;

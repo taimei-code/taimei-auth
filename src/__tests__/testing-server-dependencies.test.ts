@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { disallowedImportsReachableFrom } from "./source-scan";
 import { readPackageJson } from "./config-invariant-helpers";
 
-const TESTING_SERVER_ENTRIES = ["testing/worker.ts", "testing/server.ts"];
+const TESTING_SERVER_ENTRIES = [
+  "testing/worker.ts",
+  "testing/staging-worker.ts",
+  "testing/server.ts",
+];
 
 const packageNameOf = (specifier: string) =>
   specifier

@@ -3,6 +3,7 @@ import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { grepFiles, grepLines, SOURCE_ROOTS } from "../../src/__tests__/source-scan";
 import { requireAuthHostOrigin } from "../auth-host-origin";
 import { nonProductionRoutes } from "../non-production-routes";
+import { recordingEmail } from "../sent-links";
 
 describe("資格情報なしに user を作る経路は試験の use-case に閉じる", () => {
   test("AuthApi.createUser を呼ぶのは、試験の利用者を作る use-case だけ", () => {
@@ -19,7 +20,10 @@ describe("資格情報なしに user を作る経路は試験の use-case に閉
 
 describe("本番以外の route の POST は、auth ホストの Origin を確かめる", () => {
   test("Origin を確かめない POST は、server から JSON で呼ぶ試験 API だけ", () => {
-    const routes = nonProductionRoutes({ e2eLoginLinks: true })
+    const routes = nonProductionRoutes({
+      e2eLoginLinks: true,
+      recordsEmailTo: recordingEmail.recordsEmailTo,
+    })
       .flatMap((app) => app.routes)
       .filter((route) => route.method !== "GET");
     const routeKey = (route: (typeof routes)[number]) => `${route.method} ${route.path}`;
