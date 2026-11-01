@@ -192,9 +192,12 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - Worker の Access タブで作った application は、application 自体は残ったが、作り直した Worker には効かず、token の無い request に 200 が返った。smoke が最後の確認で止めた
     - workers.dev の hostname を守る Self-hosted の application は、destroy して作り直した後も効いた。Worker が無い間は Access で止まらず 404 が返るが、返す中身は無い
     - この 2 つを受けて、application を定義で宣言する形に替えた (Decision 10)
+  - application を定義で宣言した後 (2026-11-01) に確かめたこと
+    - Self-hosted の application が残っている間は、定義の application を作れない (`AccessDestinationConflict: destination belongs to another application`)。Self-hosted を消してから `Deploy staging at 100%` で作った
+    - `cloudflareAccountMember` で開発者が通り、`non_identity` と `anyValidServiceToken` で CI の token が通る。token の無い request は 302 で止まる
+    - gate (0%) の deploy では、application は変わらずに保たれる (`noop`)
+    - destroy で application も消え、`Deploy staging at 100%` で作り直すと新しい Worker に付き、smoke が通る
   - まだ確かめていないこと
     - `type: "service"` の binding が、名前で別の Worker を指せるか。名前を誤ったときに deploy が止まるか
     - service token で consumer の e2e が通るか
-    - 定義で宣言した application が、gate (0%) の deploy でも作られて効くか。`cloudflareAccountMember` で開発者が通り、`non_identity` と `anyValidServiceToken` で CI の token が通るか
-    - 定義で宣言した application が、destroy と作り直しの後に新しい Worker に付け直されるか
     - Worker の role で、app と試験 API のすべての query が通るか (staging の e2e で見る)
