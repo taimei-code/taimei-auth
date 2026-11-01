@@ -7,6 +7,8 @@
 - staging は本番と別の Cloudflare アカウントと、本番と別の Neon project に置く
 - 本番の資源と本番の credential には、この手順のどこでも触れない
 - 値 (password・token・secret) は手元の端末で生成し、この文書・repo・issue・チャットに書かない
+- wrangler を使う shell では、staging のアカウントの `CLOUDFLARE_ACCOUNT_ID` と `CLOUDFLARE_API_TOKEN` を設定し、`bunx wrangler whoami` が staging のアカウントだけを出すことを確かめてから始める。手元の wrangler が本番にログインしていても、環境変数の token が使われる
+- 0 ドルで作れない資源があれば、そこで止め、費用と代わりの案を示して判断を仰ぐ (ADR-0022 の Consequences)
 
 ## 1. Cloudflare のアカウント
 
@@ -22,7 +24,9 @@
 
 ## 3. DB の SQL (Worker の role と本番以外の DB の印)
 
-2 の project の DB に owner で接続し、次の SQL を流す。`<owner>` は project の owner の role、`<password>` は手元で生成した値に置き換える。
+Worker の role の password を手元で生成する (`openssl rand -hex 24`)。4 節の Hyperdrive でも使う。
+
+2 の project の Neon の SQL Editor (branch `main`、owner の database) で、次の SQL を流す。`<owner>` は project の owner の role (Neon の既定は `neondb_owner`)、`<password>` は生成した値に置き換える。
 
 ```sql
 CREATE ROLE taimei_auth_worker LOGIN PASSWORD '<password>';
@@ -36,6 +40,8 @@ SELECT pg_has_role('taimei_auth_worker', 'neon_superuser', 'MEMBER') AS must_be_
 ```
 
 - 最後の `SELECT` が `false` を返すことを確かめる。`true` なら role を消し、Neon の画面や API ではなく SQL で作り直す (Neon の API で作る role は `neon_superuser` に入る)
+- password は平文で渡す。Neon は hash した password を受け付けない (`Neon only supports being given plaintext passwords`)。psql の `\password` も手元で hash してから送るので使えない。SQL Editor の履歴に password が残るが、履歴を読めるのは project に入れる人で、その人は owner として DB を操作できるので、この role の password で増える権限は無い
+- psql は、TLS を復号する proxy の内側からは Neon につながらない (proxy が Postgres の TLS の開始を通さない)。SQL Editor は HTTPS なので通る
 - `non_production_database` は本番以外の DB の印である。staging の Worker と表の準備の script は、この表が無い DB では動かない。migration には入れない
 - 載せない理由: 印の表を migration に入れないため。role の password を repo にも CI にも置かないため
 
@@ -66,14 +72,13 @@ staging のアカウントに Secrets Store を作り、次の 4 つを `src/sec
 - 名前を `SECRET_BINDING_NAMES` に足した時は、ここにも同じ名前で登録してから deploy する
 - 載せない理由: 値を IaC の定義と state に通さないため
 
-## 6. Access
+## 6. Access の準備
 
-1. Zero Trust の組織を作る
-2. staging の Worker (`taimei-auth-staging`) の workers.dev に Access を適用し、開発者だけを許可する
-3. CI の smoke と consumer の e2e のために service token を発行し、application の policy で service token を許可する (Service Auth)
-4. token の無い request が止まることを確かめる: `curl -i https://taimei-auth-staging.taimei-staging.workers.dev/health` が 302 (`*.cloudflareaccess.com` へ) か 403 を返す
+Worker への適用は、Worker ができた後に 8 節で行う。ここでは Worker が無くてもできることだけを行う。
 
-- smoke は毎回 4 と同じことを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
+1. Zero Trust の組織を作り、Free プランを選ぶ。Free でも支払い手段の登録を求められる。表示が Free・0 ドルであることを確かめてから登録する
+2. CI の smoke と consumer の e2e のために service token を発行する。7 節で GitHub の Environment `staging` に入れる
+
 - 載せない理由: ADR-0022 の Decision 21
 
 ## 7. GitHub の Environment と secret
@@ -85,20 +90,28 @@ staging のアカウントに Secrets Store を作り、次の 4 つを `src/sec
    - `CLOUDFLARE_ACCOUNT_ID`: staging のアカウントの ID
    - `DATABASE_URL`: 2 の owner の接続文字列
    - `ACCESS_CLIENT_ID`・`ACCESS_CLIENT_SECRET`: 6 の service token
-2. Environment `production` を作り、使える branch を `main` に絞る。repo 全体の secret と同じ 3 つ (`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`DATABASE_URL`) を入れる
+2. Environment `production` を作り (本番の job が参照した時に GitHub が作っていれば、それを開き)、使える branch を `main` に絞る。repo 全体の secret と同じ 3 つ (`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`DATABASE_URL`) を入れる
 3. main で本番の deploy が Environment `production` の secret で通ることを確かめてから、repo 全体の secret を消す
 
 - Environment の secret が無い間は、repo 全体の secret が使われる。そのため 1 と 2 の前に `environment:` を workflow に書いても本番の deploy は落ちない
 - `environment: production` を書いてよい job は `src/__tests__/deploy-environments.test.ts` が固定する
 
-## 8. 最初の deploy
+## 8. 最初の deploy と Access の適用
 
-gate の経路 (0% で upload して smoke する) は、100% の version が無いと動かない。次の順で出す。
+gate の経路 (0% で upload して smoke する) は、100% の version が無いと動かない。workers.dev への Access の適用は、Worker ができた後に行う。次の順で出す。
 
 1. staging の job を持たない PR を merge する
 2. 1〜7 を終える
-3. main から `Deploy staging at 100%` (`.github/workflows/deploy-staging-full.yml`) を手動で起動し、成功を確かめる
-4. `deploy.yml` に staging の job と `needs: staging` を足す PR を merge する。以後は main の push ごとに staging、本番の順に進む
+3. main から `Deploy staging at 100%` (`.github/workflows/deploy-staging-full.yml`) を手動で起動する
+4. staging の Worker に Access を適用する
+   1. Workers & Pages で `taimei-auth-staging` を開き、Access タブで Protect this Worker behind Access を選ぶ。範囲は All traffic にする (Previews only では workers.dev が開いたままになる)
+   2. Authentication policy は Cloudflare account (staging のアカウントのメンバー) にし、Apply Access を押す
+   3. Zero Trust の Access の Applications で、できた application に policy を足す。Action は Service Auth、Include は Service Token で、6 の service token を選ぶ
+5. token の無い request が止まることを確かめる: `curl -i https://taimei-auth-staging.taimei-staging.workers.dev/health` が 302 (`*.cloudflareaccess.com` へ) か 403 を返す
+6. 3 の smoke が最後の token の無い request の確認だけで落ちていたら (4 の前は Access が無いため)、`Deploy staging at 100%` をもう一度起動し、成功を確かめる。3 で Worker は 100% に出ている。policy を足した直後は service token の request も数十秒 Access に止められるが、smoke の再試行の間に通る
+7. `deploy.yml` に staging の job と `needs: staging` を足す PR を merge する。以後は main の push ごとに staging、本番の順に進む
+
+- smoke は毎回 5 と同じことを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
 
 Durable Object の追加・改名・削除も 0% では出せないので、3 の workflow で出す。
 
@@ -110,5 +123,5 @@ Durable Object の追加・改名・削除も 0% では出せないので、3 �
 2. main から `Deploy staging at 100%` を起動する
 3. 開発者ホーム (`/dev-home`) から開発用アカウントでログインできることを確かめる
 
-- 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Access) は消えずに残る。6 の Access の適用が残っていることを、6 の 4 で確かめる
+- 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Access) は消えずに残る。8 の 4 の Access の適用が残っていることを、8 の 5 で確かめる
 - taimei の staging があるときは、消すのは app が先、作るのは auth が先にする。auth を先に消すと、app の service binding が消えた script を指したまま残り (HTTP 1101)、auth を作り直しても alchemy の plan が `no changes` を返す。その場合は app を deploy し直す
