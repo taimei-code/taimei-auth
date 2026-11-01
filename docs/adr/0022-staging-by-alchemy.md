@@ -140,7 +140,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - **DB**: Worker の role と印の表を作る SQL を流す (Decision 9・13)。印の表を migration に入れないためと、role の password を repo にも CI にも置かないためである。
     - **Hyperdrive**: `wrangler hyperdrive create` で作る。password を state に入れないためである。
     - **Secrets Store**: 作成し、4 つの secret を登録する。値を IaC に通さないためである。
-    - **Access**: Zero Trust の組織の作成と、staging の Worker の workers.dev への Access の適用、開発者の許可、service token の発行。
+    - **Access**: Zero Trust の組織の作成と、staging の Worker の workers.dev の hostname を守る Self-hosted の application の作成、開発者の許可、service token の発行。
     - **GitHub**: Environment の作成と、secret の移動。
     - **最初の deploy**: gate の経路は Worker が無いと動かないので、`deploy.yml` に staging の job を入れる前に、手動の 100% の workflow (Decision 16) を一度流す。`destroy` の後も同じ。
 22. 完了の確認として、staging を一度 `alchemy destroy --stage staging` で消し、手動の 100% の workflow で作り直す。
@@ -177,12 +177,17 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - `2.0.0-beta.84` の `Hyperdrive.lookup` が名前で引ける
     - 人が作った Secrets Store を、`SecretsStore.Store` が取り込む。Worker は secret を読んで起動した
     - 空のアカウントで、CI の `deploy --yes` が state の置き場を作る
-    - Worker の Access タブで All traffic を守ると、workers.dev の token の無い request は Access のログインへ 302 で送られる。service token を付けた smoke は通る
+    - Access を置くと、workers.dev の token の無い request は Access のログインへ 302 で送られる。service token を付けた smoke は通る
     - 権限を最小にした token (Decision 18) で、100% の deploy が通る
     - Worker の role で、smoke の query (`/health` の DB の確認) が通る
+  - staging の job が初めて動いた main の push (2026-11-01) で確かめたこと
+    - 権限を最小にした token で、gate の経路 (0% の upload と 100% への切り替え) が通る
+    - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作る (staging の gate が通った)
+  - `alchemy destroy --stage staging` と作り直し (2026-11-01) で確かめたこと
+    - Secrets Store と中の secret は残り、作り直した Worker が読んで起動した
+    - Worker の Access タブで作った application は、application 自体は残ったが、作り直した Worker には効かず、token の無い request に 200 が返った。smoke が最後の確認で止めた。workers.dev の hostname を守る Self-hosted の application に替えた
+    - Self-hosted の application は、もう一度 destroy して作り直した後も効き、smoke が通った。Worker が無い間は Access で止まらず 404 が返るが、返す中身は無い
   - まだ確かめていないこと
     - `type: "service"` の binding が、名前で別の Worker を指せるか。名前を誤ったときに deploy が止まるか
-    - service token で consumer の e2e が通るか。Worker を消して作り直しても Access の適用が残るか
-    - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作るか
-    - 権限を最小にした token で、gate の経路 (0% の upload と 100% への切り替え) が通るか。staging の job が初めて動く main の push で確かめる
+    - service token で consumer の e2e が通るか
     - Worker の role で、app と試験 API のすべての query が通るか (staging の e2e で見る)
