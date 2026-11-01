@@ -173,11 +173,16 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 - alchemy は beta なので、上げるたびに破壊的変更を確かめる。state の置き場は repo ごとなので、2 repo で版を同時に上げる必要は無い。
 - Workers Scripts Edit と Secrets Store の権限を持つ token は、そのアカウントの secret の値を読める (alchemy は preview の Worker を上げて読む)。staging の token は、staging の secret をすべて読めるものと考える。
 - 実装の最初に確かめること (prototype で観測していない)。どれかが通らなければ、そこで戻って判断を仰ぐ。
-  - `2.0.0-beta.84` の `Hyperdrive.lookup` が名前で引けるか
-  - 人が作った Secrets Store を、`SecretsStore.Store` が取り込むか
-  - 空のアカウントで、CI の `deploy --yes` が state の置き場を作るか
-  - `type: "service"` の binding が、名前で別の Worker を指せるか。名前を誤ったときに deploy が止まるか
-  - workers.dev の Worker の前に Access を置けるか。service token で smoke と e2e が通るか。Worker を消して作り直しても Access の適用が残るか
-  - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作るか
-  - 権限を最小にした token (Decision 18) で deploy が通るか
-  - Worker の role で、app と試験 API のすべての query が通るか (staging の smoke と e2e で見る)
+  - 最初の `Deploy staging at 100%` (2026-11-01) で確かめたこと
+    - `2.0.0-beta.84` の `Hyperdrive.lookup` が名前で引ける
+    - 人が作った Secrets Store を、`SecretsStore.Store` が取り込む。Worker は secret を読んで起動した
+    - 空のアカウントで、CI の `deploy --yes` が state の置き場を作る
+    - Worker の Access タブで All traffic を守ると、workers.dev の token の無い request は Access のログインへ 302 で送られる。service token を付けた smoke は通る
+    - 権限を最小にした token (Decision 18) で、100% の deploy が通る
+    - Worker の role で、smoke の query (`/health` の DB の確認) が通る
+  - まだ確かめていないこと
+    - `type: "service"` の binding が、名前で別の Worker を指せるか。名前を誤ったときに deploy が止まるか
+    - service token で consumer の e2e が通るか。Worker を消して作り直しても Access の適用が残るか
+    - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作るか
+    - 権限を最小にした token で、gate の経路 (0% の upload と 100% への切り替え) が通るか。staging の job が初めて動く main の push で確かめる
+    - Worker の role で、app と試験 API のすべての query が通るか (staging の e2e で見る)

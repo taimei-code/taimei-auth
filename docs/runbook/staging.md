@@ -103,9 +103,12 @@ gate の経路 (0% で upload して smoke する) は、100% の version が無
 1. staging の job を持たない PR を merge する
 2. 1〜7 を終える
 3. main から `Deploy staging at 100%` (`.github/workflows/deploy-staging-full.yml`) を手動で起動する
-4. staging の Worker (`taimei-auth-staging`) の workers.dev に Access を適用し、開発者と、6 の service token (Service Auth) を許可する
+4. staging の Worker に Access を適用する
+   1. Workers & Pages で `taimei-auth-staging` を開き、Access タブで Protect this Worker behind Access を選ぶ。範囲は All traffic にする (Previews only では workers.dev が開いたままになる)
+   2. Authentication policy は Cloudflare account (staging のアカウントのメンバー) にし、Apply Access を押す
+   3. Zero Trust の Access の Applications で、できた application に policy を足す。Action は Service Auth、Include は Service Token で、6 の service token を選ぶ
 5. token の無い request が止まることを確かめる: `curl -i https://taimei-auth-staging.taimei-staging.workers.dev/health` が 302 (`*.cloudflareaccess.com` へ) か 403 を返す
-6. 3 の smoke が最後の token の無い request の確認だけで落ちていたら (4 の前は Access が無いため)、`Deploy staging at 100%` をもう一度起動し、成功を確かめる。3 で Worker は 100% に出ている
+6. 3 の smoke が最後の token の無い request の確認だけで落ちていたら (4 の前は Access が無いため)、`Deploy staging at 100%` をもう一度起動し、成功を確かめる。3 で Worker は 100% に出ている。policy を足した直後は service token の request も数十秒 Access に止められるが、smoke の再試行の間に通る
 7. `deploy.yml` に staging の job と `needs: staging` を足す PR を merge する。以後は main の push ごとに staging、本番の順に進む
 
 - smoke は毎回 5 と同じことを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
