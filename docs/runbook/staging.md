@@ -81,7 +81,7 @@ Access の application と policy は定義 (`infra/alchemy.run.ts` の `access`
 
 - smoke は毎回、token の無い request が 302 (`*.cloudflareaccess.com` へ) か 403 で止まることを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
 - application を作った直後は、service token の request も数十秒 Access に止められる。smoke の再試行の間に通る
-- Worker の Access タブや Self-hosted の application を手で作らない。Worker の Access タブの application は Worker を作り直すと効かなくなり、hostname を守る application は定義の application より優先されて、定義の policy が効いているかを smoke で確かめられなくなる
+- Worker の Access タブや Self-hosted の application を手で作らない。Worker の Access タブの application は Worker を作り直すと効かなくなり、hostname を守る application があると、同じ宛先を持てないので、定義の application を作る deploy が `AccessDestinationConflict` で落ちる
 - 載せない理由: ADR-0022 の Decision 21
 
 ## 7. GitHub の Environment と secret
