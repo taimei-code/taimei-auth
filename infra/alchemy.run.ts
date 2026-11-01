@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { SECRET_BINDING_NAMES } from "../src/secret-bindings";
 import {
   DURABLE_OBJECT_BINDINGS,
+  parseAccountId,
   parseDeployMode,
   parseStage,
   STAGES,
@@ -34,6 +35,19 @@ const Auth = Cloudflare.Worker(
         flags: [...WORKER_RUNTIME.compatibility.flags],
       },
       workersDev: { enabled: true, previewsEnabled: false },
+      access: {
+        name: stage.workerName,
+        previews: false,
+        policies: [
+          {
+            decision: "allow",
+            include: [
+              { cloudflareAccountMember: parseAccountId(process.env.CLOUDFLARE_ACCOUNT_ID) },
+            ],
+          },
+          { decision: "non_identity", include: ["anyValidServiceToken"] },
+        ],
+      },
       ...(deployMode === "gate" ? { version: { traffic: 0 } } : {}),
       env: {
         ...durableObjects,
