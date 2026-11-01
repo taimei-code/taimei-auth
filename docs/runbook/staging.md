@@ -72,13 +72,16 @@ staging のアカウントに Secrets Store を作り、次の 4 つを `src/sec
 - 名前を `SECRET_BINDING_NAMES` に足した時は、ここにも同じ名前で登録してから deploy する
 - 載せない理由: 値を IaC の定義と state に通さないため
 
-## 6. Access の準備
+## 6. Access
 
-Worker への適用は、Worker ができた後に 8 節で行う。ここでは Worker が無くてもできることだけを行う。
+Access の application と policy は定義 (`infra/alchemy.run.ts` の `access`) が Worker と一緒に作る。ここでは定義に載せないものだけを作る。
 
 1. Zero Trust の組織を作り、Free プランを選ぶ。Free でも支払い手段の登録を求められる。表示が Free・0 ドルであることを確かめてから登録する
-2. CI の smoke と consumer の e2e のために service token を発行する。7 節で GitHub の Environment `staging` に入れる
+2. CI の smoke と consumer の e2e のために service token を 1 本発行する。7 節で GitHub の Environment `staging` に入れる。定義の policy はこの組織の service token をどれでも通すので (ADR-0022 の Decision 10)、ほかの service token は作らない
 
+- smoke は毎回、token の無い request が 302 (`*.cloudflareaccess.com` へ) か 403 で止まることを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
+- application を作った直後は、service token の request も数十秒 Access に止められる。smoke の再試行の間に通る
+- Worker の Access タブや Self-hosted の application を手で作らない。Worker の Access タブの application は Worker を作り直すと効かなくなり、hostname を守る application は定義の application より優先されて、定義の policy が効いているかを smoke で確かめられなくなる
 - 載せない理由: ADR-0022 の Decision 21
 
 ## 7. GitHub の Environment と secret
@@ -86,7 +89,7 @@ Worker への適用は、Worker ができた後に 8 節で行う。ここでは
 次の順で行う。順を守れば本番の deploy は止まらない。
 
 1. Environment `staging` を作り、使える branch を `main` に絞る。次の secret を入れる
-   - `CLOUDFLARE_API_TOKEN`: staging のアカウントの token (Workers Scripts と Secrets Store の Edit、Hyperdrive と Account Settings の Read)
+   - `CLOUDFLARE_API_TOKEN`: staging のアカウントの token (Workers Scripts・Secrets Store・Access の apps と policies の Edit、Hyperdrive と Account Settings の Read)
    - `CLOUDFLARE_ACCOUNT_ID`: staging のアカウントの ID
    - `DATABASE_URL`: 2 の owner の接続文字列
    - `ACCESS_CLIENT_ID`・`ACCESS_CLIENT_SECRET`: 6 の service token
@@ -96,22 +99,14 @@ Worker への適用は、Worker ができた後に 8 節で行う。ここでは
 - Environment の secret が無い間は、repo 全体の secret が使われる。そのため 1 と 2 の前に `environment:` を workflow に書いても本番の deploy は落ちない
 - `environment: production` を書いてよい job は `src/__tests__/deploy-environments.test.ts` が固定する
 
-## 8. 最初の deploy と Access の適用
+## 8. 最初の deploy
 
-gate の経路 (0% で upload して smoke する) は、100% の version が無いと動かない。workers.dev への Access の適用は、Worker ができた後に行う。次の順で出す。
+gate の経路 (0% で upload して smoke する) は、100% の version が無いと動かない。次の順で出す。
 
 1. staging の job を持たない PR を merge する
 2. 1〜7 を終える
-3. main から `Deploy staging at 100%` (`.github/workflows/deploy-staging-full.yml`) を手動で起動する
-4. staging の Worker に Access を適用する
-   1. Workers & Pages で `taimei-auth-staging` を開き、Access タブで Protect this Worker behind Access を選ぶ。範囲は All traffic にする (Previews only では workers.dev が開いたままになる)
-   2. Authentication policy は Cloudflare account (staging のアカウントのメンバー) にし、Apply Access を押す
-   3. Zero Trust の Access の Applications で、できた application に policy を足す。Action は Service Auth、Include は Service Token で、6 の service token を選ぶ
-5. token の無い request が止まることを確かめる: `curl -i https://taimei-auth-staging.taimei-staging.workers.dev/health` が 302 (`*.cloudflareaccess.com` へ) か 403 を返す
-6. 3 の smoke が最後の token の無い request の確認だけで落ちていたら (4 の前は Access が無いため)、`Deploy staging at 100%` をもう一度起動し、成功を確かめる。3 で Worker は 100% に出ている。policy を足した直後は service token の request も数十秒 Access に止められるが、smoke の再試行の間に通る
-7. `deploy.yml` に staging の job と `needs: staging` を足す PR を merge する。以後は main の push ごとに staging、本番の順に進む
-
-- smoke は毎回 5 と同じことを確かめる (`scripts/preview-smoke.sh` の `access`)。Access を staging の守りにする理由は ADR-0022 の Decision 10 にある
+3. main から `Deploy staging at 100%` (`.github/workflows/deploy-staging-full.yml`) を手動で起動し、成功を確かめる
+4. `deploy.yml` に staging の job と `needs: staging` を足す PR を merge する。以後は main の push ごとに staging、本番の順に進む
 
 Durable Object の追加・改名・削除も 0% では出せないので、3 の workflow で出す。
 
@@ -123,5 +118,6 @@ Durable Object の追加・改名・削除も 0% では出せないので、3 �
 2. main から `Deploy staging at 100%` を起動する
 3. 開発者ホーム (`/dev-home`) から開発用アカウントでログインできることを確かめる
 
-- 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Access) は消えずに残る。8 の 4 の Access の適用が残っていることを、8 の 5 で確かめる
+- 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Zero Trust の組織と service token) は消えずに残る。Access の application は Worker と一緒に消え、2 で作り直される。2 の smoke が、作り直した application が効いていることを確かめる。1 と 2 の間は Worker が無いので 404 が返る
+- 1 の出力に `Secrets (Cloudflare.SecretsStore) deleted` と出るが、alchemy の state から外しただけで、Secrets Store と中の secret は消えない (alchemy の `SecretsStore` の delete は何もしない)
 - taimei の staging があるときは、消すのは app が先、作るのは auth が先にする。auth を先に消すと、app の service binding が消えた script を指したまま残り (HTTP 1101)、auth を作り直しても alchemy の plan が `no changes` を返す。その場合は app を deploy し直す

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DURABLE_OBJECT_BINDINGS,
+  parseAccountId,
   parseDeployMode,
   parseStage,
   STAGES,
@@ -99,5 +100,18 @@ describe("IaC の CLI の入力は、表に無い値で何も作らずに止ま�
 
   test.each(["gate", "full"])("deploy の方式 %s は通る", (value) => {
     expect(parseDeployMode(value)).toBe(value);
+  });
+
+  test.each([
+    undefined,
+    "",
+  ])("アカウントの ID %p は失敗する (Access の開発者の policy をどのアカウントのメンバーにも絞れない)", (value) => {
+    expect(() => parseAccountId(value)).toThrow();
+  });
+
+  test("アカウントの ID は渡した値のまま通る", () => {
+    expect(parseAccountId("0123456789abcdef0123456789abcdef")).toBe(
+      "0123456789abcdef0123456789abcdef",
+    );
   });
 });

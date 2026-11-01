@@ -66,6 +66,9 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - 試験 API で誰にでもなれるので、Access が staging の入口の守りになる。staging には本物の個人の情報を置かない。
     - CI の smoke と consumer の e2e は、Access の service token で通る。
     - smoke は、token の無い request が Access に止められることも確かめる。Access の設定が外れると、smoke が落ちる。
+    - Access の application は定義で宣言する (`Cloudflare.Worker` の `access`)。application は Worker の ID に結び付き、Worker と一緒に作られて消える。作り直すたびに新しい Worker に付け直されるので、手作業が残らない。
+    - 開発者は `cloudflareAccountMember` で staging のアカウントのメンバーに絞る。アカウントの ID は CI と手元の `CLOUDFLARE_ACCOUNT_ID` から読み、メールアドレスを repo に書かない。
+    - CI は `anyValidServiceToken` と `non_identity` (Service Auth) で通す。token の ID を repo にも secret にも置かずに済む代わりに、staging の Zero Trust の組織の service token はどれでも通る。service token は CI の 1 本だけにする。
 
 ### secret とメール
 
@@ -115,7 +118,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - staging が壊れると、本番の deploy も止まる。staging の修正の deploy で直す。
 18. **GitHub の secret は Environment で job ごとに分け、repo 全体の secret は空にする**。
     - Environment `production`: 今の 3 つ (`CLOUDFLARE_API_TOKEN`・`CLOUDFLARE_ACCOUNT_ID`・`DATABASE_URL`) を移し、使える branch を main に絞る。`deploy.yml` の本番の job と `deploy-durable-object-migration.yml` が使う。
-    - Environment `staging`: staging のアカウントの `CLOUDFLARE_API_TOKEN` (Workers Scripts・Secrets Store の Edit、Hyperdrive の Read、Account Settings の Read) と `CLOUDFLARE_ACCOUNT_ID`、staging の owner の `DATABASE_URL`、Access の service token (`ACCESS_CLIENT_ID`・`ACCESS_CLIENT_SECRET`) を置く。使える branch は main に絞る。
+    - Environment `staging`: staging のアカウントの `CLOUDFLARE_API_TOKEN` (Workers Scripts・Secrets Store・Access の apps と policies の Edit、Hyperdrive の Read、Account Settings の Read) と `CLOUDFLARE_ACCOUNT_ID`、staging の owner の `DATABASE_URL`、Access の service token (`ACCESS_CLIENT_ID`・`ACCESS_CLIENT_SECRET`) を置く。使える branch は main に絞る。
     - 1 つの job が持てる Environment は 1 つなので、staging の job から本番の secret は読めない。
     - `environment: production` を書いてよい job を `src/__tests__/deploy-environments.test.ts` が固定する。collaborator が 1 人なので、CODEOWNERS や必須の review は関門にならず、試験で止める。管理者の権限で CI を迂回する merge までは止めない。
 19. **taimei から auth への service binding は名前で書く** (`worker.bind` に `type: "service"` と `taimei-auth-staging`)。アカウントが分かれているので、staging の app は staging の auth しか指せない。名前を誤ると、Cloudflare が deploy の時に拒む。
@@ -140,11 +143,11 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - **DB**: Worker の role と印の表を作る SQL を流す (Decision 9・13)。印の表を migration に入れないためと、role の password を repo にも CI にも置かないためである。
     - **Hyperdrive**: `wrangler hyperdrive create` で作る。password を state に入れないためである。
     - **Secrets Store**: 作成し、4 つの secret を登録する。値を IaC に通さないためである。
-    - **Access**: Zero Trust の組織の作成と、staging の Worker の workers.dev への Access の適用、開発者の許可、service token の発行。
+    - **Access**: Zero Trust の組織の作成と、service token の発行。service token の client secret を state に入れないためである。application と policy は定義で宣言する (Decision 10)。
     - **GitHub**: Environment の作成と、secret の移動。
     - **最初の deploy**: gate の経路は Worker が無いと動かないので、`deploy.yml` に staging の job を入れる前に、手動の 100% の workflow (Decision 16) を一度流す。`destroy` の後も同じ。
 22. 完了の確認として、staging を一度 `alchemy destroy --stage staging` で消し、手動の 100% の workflow で作り直す。
-    - 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Access) は残る。ほかはすべて定義から作り直せることを確かめる。
+    - 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Zero Trust の組織と service token) は残る。ほかはすべて定義から作り直せることを確かめる。
     - taimei の staging があるときは、app を先に消して auth を後に消し、作るときは auth を先にする。auth を先に消すと、app の service binding が消えた script を指したまま残り (HTTP 1101)、auth を作り直しても alchemy の plan は `no changes` を返して気づかない (PoC で観測)。その場合は app を deploy し直す。
 
 ## Considered Options
@@ -160,6 +163,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 - **secret を alchemy の `Secret` か `wrangler secret put` で入れる**: `Secret` は値が state に入る。`wrangler secret put` の値は、gate の経路 (version の upload) のたびに消える (prototype で観測)。
 - **staging と本番を独立した workflow にする、または任意の branch を staging に出せるようにする**: 壊れた migrate や deploy が本番まで進みうる。branch を出せると、staging の DB が main より先に進む。
 - **本番の secret を使える job を、CODEOWNERS か必須の承認者で限る**: collaborator が 1 人なので、CODEOWNERS は管理者の迂回でしか merge できなくなり、関門にならない。必須の承認者は、本番の deploy が毎回手作業になる。
+- **Access の application を手作業で作る**: Worker の Access タブで作る application は Worker の ID に結び付き、Worker を作り直すと効かなくなった (2026-11-01 に観測)。workers.dev の hostname を守る Self-hosted の application は作り直しても効いたが、設定が repo に無く、手作業が残る。
 - **Neon project を alchemy で作る**: 作り直せる範囲は広がるが、本番の project にも届く Neon の key が staging の job に入る。
 
 ## Consequences
@@ -177,12 +181,20 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
     - `2.0.0-beta.84` の `Hyperdrive.lookup` が名前で引ける
     - 人が作った Secrets Store を、`SecretsStore.Store` が取り込む。Worker は secret を読んで起動した
     - 空のアカウントで、CI の `deploy --yes` が state の置き場を作る
-    - Worker の Access タブで All traffic を守ると、workers.dev の token の無い request は Access のログインへ 302 で送られる。service token を付けた smoke は通る
+    - Access を置くと、workers.dev の token の無い request は Access のログインへ 302 で送られる。service token を付けた smoke は通る
     - 権限を最小にした token (Decision 18) で、100% の deploy が通る
     - Worker の role で、smoke の query (`/health` の DB の確認) が通る
+  - staging の job が初めて動いた main の push (2026-11-01) で確かめたこと
+    - 権限を最小にした token で、gate の経路 (0% の upload と 100% への切り替え) が通る
+    - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作る (staging の gate が通った)
+  - `alchemy destroy --stage staging` と作り直し (2026-11-01) で確かめたこと
+    - Secrets Store と中の secret は残り、作り直した Worker が読んで起動した
+    - Worker の Access タブで作った application は、application 自体は残ったが、作り直した Worker には効かず、token の無い request に 200 が返った。smoke が最後の確認で止めた
+    - workers.dev の hostname を守る Self-hosted の application は、destroy して作り直した後も効いた。Worker が無い間は Access で止まらず 404 が返るが、返す中身は無い
+    - この 2 つを受けて、application を定義で宣言する形に替えた (Decision 10)
   - まだ確かめていないこと
     - `type: "service"` の binding が、名前で別の Worker を指せるか。名前を誤ったときに deploy が止まるか
-    - service token で consumer の e2e が通るか。Worker を消して作り直しても Access の適用が残るか
-    - `wrangler versions upload <entry> --config testing/wrangler.jsonc --dry-run` が、`alias` を当てた bundle を作るか
-    - 権限を最小にした token で、gate の経路 (0% の upload と 100% への切り替え) が通るか。staging の job が初めて動く main の push で確かめる
+    - service token で consumer の e2e が通るか
+    - 定義で宣言した application が、gate (0%) の deploy でも作られて効くか。`cloudflareAccountMember` で開発者が通り、`non_identity` と `anyValidServiceToken` で CI の token が通るか
+    - 定義で宣言した application が、destroy と作り直しの後に新しい Worker に付け直されるか
     - Worker の role で、app と試験 API のすべての query が通るか (staging の e2e で見る)

@@ -65,3 +65,10 @@ export const parseDeployMode = (value: string | undefined): DeployMode => {
   if (isDeployMode(value)) return value;
   throw new Error(`DEPLOY_MODE "${value ?? ""}" は ${DEPLOY_MODES.join(" か ")} にする`);
 };
+
+export const parseAccountId = (value: string | undefined): string => {
+  if (value) return value;
+  throw new Error(
+    "CLOUDFLARE_ACCOUNT_ID が無い (Access の開発者の policy はこのアカウントのメンバーに絞る)",
+  );
+};
