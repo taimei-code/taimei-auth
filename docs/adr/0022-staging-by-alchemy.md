@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (2026-10-31)。判断主体は maintainer。実装は taimei-code/taimei-auth#308。本番の資源の取り込みは #309 で行い、この ADR の定義に本番の stage を足す。taimei (consumer app) も同じ道具と同じ形に従う。#308 の受け入れ基準のうち「アカウント選択画面を staging に出さない」は、この ADR の Decision 7 (staging に開発者ホームと試験 API を載せる) に置き換わる。
+Accepted (2026-10-31)。判断主体は maintainer。実装は taimei-code/taimei-auth#308。本番の資源の取り込みは #309 で行い、この ADR の定義に本番の stage を足す (2026-11-02 追記: 足した。「#309 で足したこと」の節)。taimei (consumer app) も同じ道具と同じ形に従う。#308 の受け入れ基準のうち「アカウント選択画面を staging に出さない」は、この ADR の Decision 7 (staging に開発者ホームと試験 API を載せる) に置き換わる。
 
 関連: ADR-0004 (cookie)、ADR-0011 (Workers 移行)、ADR-0017 (Effect。`@effect/platform-bun`・`@effect/platform-node` の扱いを #308 の実装の PR で改訂する)、ADR-0021 (本番の成果物に本番以外の code を入れない)、GLOSSARY.md の **staging** と **本番以外**。
 
@@ -28,7 +28,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
    - 定義は `infra/` に置く。`infra/` にも src などと同じ規則を当てる (コメント禁止、tsconfig、fallow の entry、依存の許可リスト。prototype の変更と同じ)。
 2. **定義は `infra/alchemy.run.ts` の 1 本にし、stage ごとの差は `infra/stages.ts` の表に集める**。
    - 表の key は stage 名で、#308 では `staging` だけを置き、#309 で `production` を足す。stack は CLI の `--stage` を表の key として parse し、表に無い stage では何も作らずに止まる。
-   - 表の値に置くのは、Worker の名前、vars の値、入口 (Decision 7)、Hyperdrive の名前だけである。資源の種類と binding の数は、stage で変えない。例外は custom domain で、本番だけが持つ。#309 で表に足す。
+   - 表の値に置くのは、Worker の名前、vars の値、入口 (Decision 7)、Hyperdrive の名前だけである。資源の種類と binding の数は、stage で変えない。例外は custom domain で、本番だけが持つ。#309 で表に足す。(2026-11-02 追記) 例外はほかに 2 つある。Access は staging だけが持つ (Decision 10)。secret の名前の一覧は stage ごとの値で、staging は本番の部分である (Decision 11)。どちらも表の値で表し、定義に stage の名前の分岐を書かない。
 3. **state の置き場は repo ごとに分ける** (`Cloudflare.state({ name: "taimei-auth" })`。taimei は `{ name: "taimei" }`)。
    - 一方の repo が alchemy の版を上げ下げしても、もう一方の置き場は書き換わらない。`deploy --yes` は置き場の版が client と違うと、その client の版で置き場を作り直すからである。
    - 置き場は、最初の CI の deploy (`--yes`) が作る。
@@ -149,6 +149,31 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 22. 完了の確認として、staging を一度 `alchemy destroy --stage staging` で消し、手動の 100% の workflow で作り直す。
     - 手作業の資源 (Neon project、Hyperdrive、Secrets Store、Zero Trust の組織と service token) は残る。ほかはすべて定義から作り直せることを確かめる。
     - taimei の staging があるときは、app を先に消して auth を後に消し、作るときは auth を先にする。auth を先に消すと、app の service binding が消えた script を指したまま残り (HTTP 1101)、auth を作り直しても alchemy の plan は `no changes` を返して気づかない (PoC で観測)。その場合は app を deploy し直す。
+
+## #309 で足したこと (2026-11-02)
+
+- **本番の stage**: 表の `production` は今の Worker `taimei-auth`・Hyperdrive `taimei-auth-prod`・custom domain `auth.taimei-code.com` を名前で指す。vars は `wrangler.jsonc` と値まで同じで、試験が固定する
+- **本番の deploy は本番の tree の中で alchemy を起動する**。`deploy.yml` の本番の job は `scripts/build-production-tree.sh` で作った tree を `gate-deploy` の `directory` に渡す。定義を読む dir に本番以外の dir が無い (ADR-0021)。bundle の入口は表の値 (`entry`) である
+- **secret**: 本番の 8 つの secret を Secrets Store に移し、`SECRET_BINDING_NAMES` を 8 つにした。`SENTRY_DSN` も Secrets Store に置く (DSN を commit すると、public の repo から誰でも Sentry に event を送れる)。Worker の入口は secret を解いてから Sentry の handler を呼ぶ
+- **取り込みは `DEPLOY_MODE=adopt` で 1 回だけ人が行う**。full deploy で、Secrets Store の binding を宣言しない。script の PUT は `secret_text` を引き継ぐので、取り込みで secret は消えない。CLI の `--adopt` は runbook の手順だけが付け、workflow には書かない (試験が固定)。定義に書き忘れた binding は取り込みで黙って消えるので、直前に `infra/check-worker.ts` で今の設定と表を比べる
+- **secret の切り替えは人が 0% で確かめる**。CI の smoke は session を持たないので、`AUTH_SECRET` や `MFA_TOTP_ENCRYPTION_KEYS` の値の違いを見逃す。人が override header を付けて、ログインが続くことと MFA でログインできることを見てから 100% にする
+- **drift の検出**: `iac-drift.yml` が毎日、本番の tree の中で `alchemy plan`・`alchemy drift` と、Worker の binding の比較を行う。`noop`・`unchanged` 以外の操作か、binding の差があれば失敗する。binding は、今の deployment に入っている version ごとに比べる。script の settings は 0% で上げただけの最新の version を返し、100% の version の差を見落とした (予行演習で観測)
+- **DO の変更**: `deploy-durable-object-migration.yml` を消し、`deploy-production-full.yml` (alchemy の 100% の deploy) に置き換えた
+- **Durable Object の中の Sentry**: Secrets Store の DSN は Worker の `fetch` が解く。Worker と別の isolate で動く DO は DSN を持たず、そこでの例外は Sentry に送られない (例外は呼び手の Worker に返り、Worker の Sentry が拾う)。切り替えの前、DSN が `secret_text` の間は、DO も今までどおり env の DSN を使う
+- **本番の DB の role**: 本番の Hyperdrive は今も owner で接続する。Decision 13 の本番への適用は、取り込みと別の issue で行う
+- 手順と、IaC の外に残るものとその理由は `docs/runbook/production.md` にある
+- 予行演習 (2026-11-03、本番のアカウントの使い捨ての Worker と hostname、alchemy 2.0.0-beta.84) の結果
+  - R1 通った。`adopt` の full deploy の後も、`secret_text` の値、DO のデータ、migration tag (`v1`) が残った
+  - R2 通った。`infra/check-worker.ts` は取り込みの前後と gate の deploy の後に通り、cloud で var を外すと落ちた
+  - R3 通った。gate の deploy で Secrets Store の binding の version を 0% で上げ、override header で同じ値を読めた。前の version に戻すと `secret_text` で動いた。ただし `wrangler versions deploy <current>@100%` は「secret が変わった」(code 10220) と拒まれ、`wrangler rollback <current>` で戻せた (runbook の手順 7 に反映)
+  - R4 通った。取り込みと gate の deploy の間、custom domain への毎秒の request はすべて 200 だった
+  - R5 通った。runbook の権限の token で R1〜R4・R6・R7 が通った。Secrets Store の secret の作成と削除も同じ token で行えた
+  - R6 通った。ただし、拾う検査は差ごとに違う。`iac-drift.yml` は両方を流すので、3 つとも拾う
+    - dashboard で足した var (settings の PATCH): `infra/check-worker.ts` だけが拾う。`alchemy plan`・`alchemy drift` は `no changes` で、alchemy の deploy でも消えない
+    - `wrangler secret put` の secret: `infra/check-worker.ts` だけが拾う。alchemy の 100% の deploy (script の PUT) では残り、gate の version (version の upload) には引き継がれない
+    - 外した custom domain: `alchemy drift` だけが拾い、alchemy の deploy で付け直された
+  - R7 通った。`alchemy destroy` で Worker、DO の namespace (データごと)、custom domain が消えた。Secrets Store は消えない (alchemy の `SecretsStore` は store をアカウントに 1 つの共有の資源として扱い、destroy で消さない)。store の中の secret も残る
+  - 定義の `Cloudflare.SecretsStore.Store` は、`--adopt` を付けない gate の deploy でも、アカウントの既存の store を取り込んだ。store には alchemy の state の置き場の鍵と token も入っている
 
 ## Considered Options
 

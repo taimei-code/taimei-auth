@@ -22,6 +22,8 @@ openssl rand -hex 32
 
 ### 2. taimei-auth の env を更新 + redeploy
 
+本番と staging の secret は Secrets Store に置き、`wrangler secret put` は使わない (理由は `docs/runbook/production.md` の「日々の変更」)。`AUTH_SERVICE_KEY_PREVIOUS` は今の stage の表に無いので、先に `infra/stages.ts` の stage の `secrets` と `src/secret-bindings.ts` の `SECRET_BINDING_NAMES` に名前を足す PR を merge し、Secrets Store に値を入れてから deploy する。
+
 - `AUTH_SERVICE_KEY_PREVIOUS` に現在の `AUTH_SERVICE_KEY` の値を設定する
 - `AUTH_SERVICE_KEY` に 1 で生成した新 key を設定する
 

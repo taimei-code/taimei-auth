@@ -39,11 +39,11 @@
 
 - **契機**: `db/client.ts` (RoutingPool) / `src/worker.ts` / 常駐リソースのライフサイクル / wrangler.jsonc を触る PR、および本番デプロイ後
 - **契機の path**: `db/client.ts`、`src/worker.ts`、`wrangler.jsonc`
-- **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。src/CLAUDE.md「gotcha」を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。`wrangler versions upload` した version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
+- **前提**: 実 workerd と実バインディングでしか再現しない (local の miniflare では出ない。src/CLAUDE.md「gotcha」を参照)。このため確認は手動でなく `deploy.yml` の smoke (`scripts/preview-smoke.sh`) が毎デプロイ自動で行う。gate の action (`.github/actions/gate-deploy`) が alchemy で上げた version を 0% で deployment に加え、`Cloudflare-Workers-Version-Overrides` header で指名して本番 URL の `/health` を 20 回連続で呼び、全部 200 でなければ 100% に切り替えない (Preview URL は DO を持つ Worker では生成されないため header 方式にしている。ADR-0019)
 - **手順**:
-  1. PR を main にマージし、Deploy workflow の "Preview smoke (gate)" step が緑であることを確認する
+  1. PR を main にマージし、Deploy workflow の本番の job の "Smoke the version through the override header" step が緑であることを確認する
   2. step のログで `/health: 20 / 20 returned 200` を確認する
-  3. 手で見たい場合だけ: `bunx wrangler versions upload` して出た version ID を `bunx wrangler versions deploy <id>@0% <現在の id>@100% --yes` で deployment に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com taimei-auth <id> public` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
+  3. 手で見たい場合だけ: `docs/runbook/production.md` の「0% の version を手で確かめる」の手順で version を 0% に加え、`bash scripts/preview-smoke.sh https://auth.taimei-code.com taimei-auth <id> public` を実行し、終わったら `<現在の id>@100%` に戻す (例外が起きていないことは、応答が 1101 の 500 でないことで判定する)
 - **確認項目**: `src/worker.ts` で pool を閉じる (`pool.end()`) のは、`waitUntil` に渡した background の処理がすべて終わった後であること。先に閉じると、background の書き込みが閉じた接続で止まる (bun の test は `cloudflare:workers` を読めず、この順序を観測できない)
 - **期待結果**: smoke が exit 0 で、`/health` が 20 回すべて 200。"Worker hung" による 500 が発生しない
 

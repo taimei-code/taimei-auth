@@ -60,7 +60,7 @@ bunx wrangler hyperdrive create taimei-auth-staging \
 
 ## 5. Secrets Store
 
-staging のアカウントに Secrets Store を作り、次の 4 つを `src/secret-bindings.ts` の `SECRET_BINDING_NAMES` と同じ名前で登録する。scope は Workers にする。
+staging のアカウントに Secrets Store を作り、次の 4 つを `infra/stages.ts` の `STAGES.staging.secrets` と同じ名前で登録する。scope は Workers にする。
 
 | 名前 | 値 |
 |---|---|
@@ -69,7 +69,7 @@ staging のアカウントに Secrets Store を作り、次の 4 つを `src/sec
 | `AUTH_RESEND_KEY` | 本番と同じ Resend のアカウントで staging 用に作った、送信だけの権限の key |
 | `MFA_TOTP_ENCRYPTION_KEYS` | `v1:` に続けて 32 byte の base64 (本番と別の値) |
 
-- 名前を `SECRET_BINDING_NAMES` に足した時は、ここにも同じ名前で登録してから deploy する
+- 名前を `STAGES.staging.secrets` に足した時は、ここにも同じ名前で登録してから deploy する
 - 載せない理由: 値を IaC の定義と state に通さないため
 
 ## 6. Access
