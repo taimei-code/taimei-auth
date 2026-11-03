@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { STAGES } from "../../infra/stages";
 import { parseJsonc, REPO_ROOT } from "./config-invariant-helpers";
 
 type WranglerConfig = {
   name?: string;
-  routes?: unknown[];
+  routes?: readonly unknown[];
   workers_dev?: boolean;
   hyperdrive?: { id: string }[];
   vars?: Record<string, string>;
@@ -43,7 +44,7 @@ describe("本番以外の worker の config は、誤って deploy しても本�
 
   test.each([
     ["name", { name: production.name }],
-    ["routes", { routes: production.routes ?? [] }],
+    ["routes", { routes: [{ pattern: STAGES.production.servedAt.domain, custom_domain: true }] }],
     ["workers_dev", { workers_dev: true }],
     ["hyperdrive", { hyperdrive: production.hyperdrive }],
     ["vars.APP_ENV", { vars: { ...nonProduction.vars, APP_ENV: "production" } }],
