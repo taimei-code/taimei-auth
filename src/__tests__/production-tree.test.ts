@@ -13,12 +13,21 @@ const PRODUCTION_TREE_SCRIPT = "scripts/build-production-tree.sh";
 const PRODUCTION_TREE_DIR = "${{ runner.temp }}/production-tree";
 const EXCLUSION_LIST_DECLARATION = "EXCLUDED_FROM_PRODUCTION=\\(";
 
-type Step = { name?: string; run?: string; "working-directory"?: string };
+type Step = {
+  name?: string;
+  run?: string;
+  uses?: string;
+  with?: Record<string, string>;
+  env?: Record<string, string>;
+  "working-directory"?: string;
+};
 type Workflow = {
   on?: Record<string, unknown>;
   concurrency?: { group?: string };
   jobs?: Record<string, { if?: string; steps?: Step[] }>;
 };
+
+const GATE_DEPLOY = "./.github/actions/gate-deploy";
 
 const readWorkflow = (name: string) => readWorkflowAs<Workflow>(name);
 
@@ -38,6 +47,19 @@ const runsOnlyInProductionTree = (workflow: Workflow, command: string): boolean 
   );
 };
 
+const gatesProductionFromTree = (workflow: Workflow): boolean => {
+  const gates = (workflow.jobs?.deploy?.steps ?? []).filter(({ uses }) => uses === GATE_DEPLOY);
+  return (
+    gates.length === 1 &&
+    gates.every(
+      (step) =>
+        step.with?.stage === "production" &&
+        step.with?.directory === PRODUCTION_TREE_DIR &&
+        step.with?.smoke === "public",
+    )
+  );
+};
+
 const ONLY_PUSHES_TO_MAIN_OF_THIS_REPOSITORY =
   "(github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)";
 
@@ -48,9 +70,9 @@ const deployViolations = (workflow: Workflow): string[] => [
     ? []
     : ["can deploy a commit that was not pushed to main of this repository"]),
   ...(buildsProductionTree(workflow) ? [] : ["does not build the production tree"]),
-  ...(runsOnlyInProductionTree(workflow, "wrangler versions upload --tag")
+  ...(gatesProductionFromTree(workflow)
     ? []
-    : ["uploads outside the production tree"]),
+    : ["does not gate production from the production tree"]),
   ...(stepsRunning(workflow, "bun run build:web").length === 0
     ? []
     : ["builds the web in the checkout"]),
@@ -58,21 +80,31 @@ const deployViolations = (workflow: Workflow): string[] => [
 
 const ONLY_ON_MAIN = "github.ref == 'refs/heads/main'";
 
-const migrationViolations = (workflow: Workflow): string[] => [
-  ...(Object.values(workflow.jobs ?? {}).every((job) => job.if === ONLY_ON_MAIN)
-    ? []
-    : ["can deploy a branch other than main"]),
-  ...(buildsProductionTree(workflow) ? [] : ["does not build the production tree"]),
-  ...(runsOnlyInProductionTree(workflow, "wrangler deploy")
-    ? []
-    : ["deploys outside the production tree"]),
-  ...(Object.keys(workflow.on ?? {}).join() === "workflow_dispatch"
-    ? []
-    : ["starts without a person"]),
-  ...(workflow.concurrency?.group === "deploy-production"
-    ? []
-    : ["can interleave with deploy.yml"]),
-];
+const PRODUCTION_ALCHEMY_DEPLOY = "alchemy deploy infra/alchemy.run.ts --stage production";
+
+const deploysAtFull = (workflow: Workflow): boolean =>
+  stepsRunning(workflow, PRODUCTION_ALCHEMY_DEPLOY).every(
+    (step) => step.env?.DEPLOY_MODE === "full",
+  );
+
+const failedChecks = (checks: readonly (readonly [boolean, string])[]): string[] =>
+  checks.filter(([passes]) => !passes).map(([, violation]) => violation);
+
+const fullDeployViolations = (workflow: Workflow): string[] =>
+  failedChecks([
+    [
+      Object.values(workflow.jobs ?? {}).every((job) => job.if === ONLY_ON_MAIN),
+      "can deploy a branch other than main",
+    ],
+    [buildsProductionTree(workflow), "does not build the production tree"],
+    [
+      runsOnlyInProductionTree(workflow, PRODUCTION_ALCHEMY_DEPLOY),
+      "deploys outside the production tree",
+    ],
+    [deploysAtFull(workflow), "does not deploy at 100%"],
+    [Object.keys(workflow.on ?? {}).join() === "workflow_dispatch", "starts without a person"],
+    [workflow.concurrency?.group === "deploy-production", "can interleave with deploy.yml"],
+  ]);
 
 const exclusionList = (): string[] => {
   const script = readFileSync(join(REPO_ROOT, PRODUCTION_TREE_SCRIPT), "utf8");
@@ -82,7 +114,8 @@ const exclusionList = (): string[] => {
 
 const ci = readWorkflow("ci.yml");
 const deploy = readWorkflow("deploy.yml");
-const migration = readWorkflow("deploy-durable-object-migration.yml");
+const full = readWorkflow("deploy-production-full.yml");
+const drift = readWorkflow("iac-drift.yml");
 
 describe("本番は本番以外の code が無い tree からだけ build する", () => {
   test("除外する dir の一覧は 1 つの script にだけあり、本番以外の dir を 3 つとも含む", () => {
@@ -106,25 +139,41 @@ describe("本番は本番以外の code が無い tree からだけ build する
     expect(deployViolations(deploy)).toEqual([]);
   });
 
-  test("DO の migration は人が起動し、deploy と交互に走らず、除外した tree から deploy する", () => {
-    expect(migrationViolations(migration)).toEqual([]);
+  test("本番を 100% で出す workflow (DO の追加・改名・削除) は人が main から起動し、deploy と交互に走らず、除外した tree の中で alchemy を起動する", () => {
+    expect(fullDeployViolations(full)).toEqual([]);
+  });
+
+  test("drift の検出は、毎日の schedule と人の起動で main から走り、除外した tree の中で alchemy と Worker の設定の比較を起動する", () => {
+    expect({
+      triggers: Object.keys(drift.on ?? {}).sort(),
+      onlyOnMain: Object.values(drift.jobs ?? {}).every((job) => job.if === ONLY_ON_MAIN),
+      buildsTree: buildsProductionTree(drift),
+      driftInTree: runsOnlyInProductionTree(drift, "infra/check-drift.ts production"),
+      workerInTree: runsOnlyInProductionTree(drift, "infra/check-worker.ts production gate"),
+    }).toEqual({
+      triggers: ["schedule", "workflow_dispatch"],
+      onlyOnMain: true,
+      buildsTree: true,
+      driftInTree: true,
+      workerInTree: true,
+    });
   });
 
   test.each([
     ["script を呼ばない", { jobs: {} }, "does not build the production tree"],
     [
-      "checkout で upload する",
+      "checkout から gate する",
       {
         jobs: {
           deploy: {
             steps: [
               { run: `bash ${PRODUCTION_TREE_SCRIPT} "${PRODUCTION_TREE_DIR}"` },
-              { run: 'bunx wrangler versions upload --tag "ci"' },
+              { uses: GATE_DEPLOY, with: { stage: "production", directory: ".", smoke: "public" } },
             ],
           },
         },
       },
-      "uploads outside the production tree",
+      "does not gate production from the production tree",
     ],
     [
       "CI の成功だけを条件にする",
@@ -143,20 +192,20 @@ describe("本番は本番以外の code が無い tree からだけ build する
   test.each([
     [
       "push でも起動する",
-      { ...migration, on: { workflow_dispatch: null, push: null } },
+      { ...full, on: { workflow_dispatch: null, push: null } },
       "starts without a person",
     ],
     [
       "deploy.yml と別の group で走る",
-      { ...migration, concurrency: { group: "migration" } },
+      { ...full, concurrency: { group: "full" } },
       "can interleave with deploy.yml",
     ],
     [
       "main 以外の branch でも走る",
-      { ...migration, jobs: { migrate: { steps: [] } } },
+      { ...full, jobs: { deploy: { steps: [] } } },
       "can deploy a branch other than main",
     ],
-  ] as const)("migration の workflow が%sと違反になる", (_, workflow, violation) => {
-    expect(migrationViolations(workflow as Workflow)).toContain(violation);
+  ] as const)("100% の deploy の workflow が%sと違反になる", (_, workflow, violation) => {
+    expect(fullDeployViolations(workflow as Workflow)).toContain(violation);
   });
 });

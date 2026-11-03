@@ -219,7 +219,7 @@ describe("本番の bundle の検査は、検査できない時に通さない",
   });
 });
 
-type WorkflowStep = { readonly run?: string };
+type WorkflowStep = { readonly run?: string; readonly uses?: string };
 
 const deploySteps = (): WorkflowStep[] => {
   const workflow = Bun.YAML.parse(
@@ -244,13 +244,14 @@ describe("deploy の workflow は、本番の状態を変える前に本番の b
     );
   });
 
-  test("その step は migrations と upload の前にある", () => {
+  test("その step は migrations と、0% で出して確かめる deploy の前にある", () => {
     const steps = deploySteps();
     const checkStep = steps.findIndex(isProductionTreeStep);
+    const gateStep = steps.findIndex(({ uses }) => uses === "./.github/actions/gate-deploy");
 
     expect(checkStep).toBeGreaterThanOrEqual(0);
     expect(checkStep).toBeLessThan(indexOfStepRunning(steps, "db:migrate"));
-    expect(checkStep).toBeLessThan(indexOfStepRunning(steps, "wrangler versions upload --tag"));
+    expect(checkStep).toBeLessThan(gateStep);
   });
 
   test("その step は name と run だけを持ち、失敗を無視する設定・実行の条件・env を持たない", () => {
