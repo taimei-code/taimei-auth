@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { grepFiles } from "./source-scan";
 
 const READS_APP_ENV = "\\bAPP_ENV\\b";
-const SENTRY_ENVIRONMENT_ENTRY = "src/worker.ts";
+const SENTRY_ENVIRONMENT_ENTRY = "src/sentry-options.ts";
 const READS_BUILD_MODE = "import\\.meta\\.env\\.(MODE|PROD|DEV)\\b";
 
 describe("本番の code は自分が本番かどうかを知らない", () => {
