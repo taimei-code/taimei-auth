@@ -30,7 +30,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: bun infra/check-worker.ts production gate
+        run: bun infra/check-worker.ts production
 
       - name: Compare the definition, the state, and the cloud with alchemy plan and drift
         if: ${{ !cancelled() }}

@@ -149,7 +149,7 @@ describe("本番は本番以外の code が無い tree からだけ build する
       onlyOnMain: Object.values(drift.jobs ?? {}).every((job) => job.if === ONLY_ON_MAIN),
       buildsTree: buildsProductionTree(drift),
       driftInTree: runsOnlyInProductionTree(drift, "infra/check-drift.ts production"),
-      workerInTree: runsOnlyInProductionTree(drift, "infra/check-worker.ts production gate"),
+      workerInTree: runsOnlyInProductionTree(drift, "infra/check-worker.ts production"),
     }).toEqual({
       triggers: ["schedule", "workflow_dispatch"],
       onlyOnMain: true,

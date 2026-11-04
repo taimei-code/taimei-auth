@@ -1,8 +1,6 @@
 import {
-  type DeployMode,
   expectedBindings,
   parseAccountId,
-  parseDeployMode,
   parseStage,
   type StageName,
   STAGES,
@@ -40,8 +38,8 @@ export const workerMismatches = (live: WorkerSettings, expected: WorkerSettings)
   ];
 };
 
-const expectedSettings = (stage: StageName, mode: DeployMode): WorkerSettings => ({
-  bindings: expectedBindings(stage, mode),
+const expectedSettings = (stage: StageName): WorkerSettings => ({
+  bindings: expectedBindings(stage),
   workersDev: STAGES[stage].servedAt.kind === "workersDevBehindAccess",
   observability: WORKER_RUNTIME.observability.enabled,
 });
@@ -93,14 +91,13 @@ const readLiveSettings = async (workerName: string): Promise<Map<string, WorkerS
 };
 
 if (import.meta.main) {
-  const [stageArg = "", modeArg] = process.argv.slice(2);
-  const stage = parseStage(stageArg);
-  const expected = expectedSettings(stage, parseDeployMode(modeArg));
+  const stage = parseStage(process.argv[2] ?? "");
+  const expected = expectedSettings(stage);
   const mismatches = [...(await readLiveSettings(STAGES[stage].workerName))].flatMap(
     ([versionId, live]) =>
       workerMismatches(live, expected).map((mismatch) => `${versionId}: ${mismatch}`),
   );
   for (const mismatch of mismatches) console.error(mismatch);
   if (mismatches.length > 0) process.exit(1);
-  console.log(`${STAGES[stage].workerName} matches the ${stage} stage (${modeArg})`);
+  console.log(`${STAGES[stage].workerName} matches the ${stage} stage`);
 }

@@ -9,19 +9,18 @@
 
 ## 1 回だけの手順
 
+2026-11-04 に済んだ。記録として残す。
+
 taimei の本番は Worker の名前 `taimei-auth`、`AUTH_SERVICE_KEY` の値、custom domain に依存している。どれも変えない。取り込みから merge まで、main に他の PR を merge しない (main の deploy はまだ wrangler の経路で、Secrets Store の binding を落とす)。
 
 1. 予行演習: 本番のアカウントに、wrangler で使い捨ての Worker (custom domain・SQLite の DO・`secret_text`・vars つき) を作り、repo の外に写した定義で ADR-0022 の R1〜R7 を確かめる。終わったら Worker・custom domain・Secrets Store の secret を消す。どれかが通らなければ止める
 2. 棚卸し: 本番の 8 つの secret の値を持っているか確かめる。`AUTH_SECRET` と `MFA_TOTP_ENCRYPTION_KEYS` は今の本番と同じ値でなければならない (`AUTH_SECRET` が違うと全員がログアウトし、`MFA_TOTP_ENCRYPTION_KEYS` が違うと MFA の利用者がログインできなくなる)。この 2 つと `AUTH_SERVICE_KEY` の値が無ければ、下の「今の値の無い secret を作り直す」で作り直すか、止める (`service-key-rotation.md` は今の値を `AUTH_SERVICE_KEY_PREVIOUS` に入れるので、値が無いと使えない)。`AUTH_RESEND_KEY`・`AUTH_GITHUB_SECRET`・`BLOB_READ_WRITE_TOKEN` は発行し直してよい。`AUTH_GITHUB_ID` と `SENTRY_DSN` は各サービスの画面で読める
 3. 本番の Secrets Store (無ければ作る) に 8 つの secret を、`src/secret-bindings.ts` の名前で入れる
 4. 本番の tree を作る: `bash scripts/build-production-tree.sh <空の dir>`。tree は HEAD から作るので、先に PR の branch の変更を commit する。以下は tree の中で行う
-5. `bun infra/check-worker.ts production adopt` が通ることを確かめる。差があれば `infra/stages.ts` を直してから進む (定義に無い binding は取り込みで消える)
-   - workers.dev が有効と出たら、dashboard で無効にしてから進む。表で本番の配信先は custom domain (`servedAt` の `customDomain`) だけで、workers.dev を持たない。taimei は service binding と custom domain で auth を呼ぶので、workers.dev の URL に依存するものは無い
-   - observability の差が出たら、`infra/stages.ts` の `WORKER_RUNTIME.observability` を本番の今の値に直す。この値は staging にも当たり、staging の次の 100% の deploy で staging の設定も変わる
-6. 取り込み: `DEPLOY_MODE=adopt bunx alchemy deploy infra/alchemy.run.ts --stage production --adopt`。plan に binding の削除 (`unbind`・`delete`) が無いことを見てから承認する。途中で止まったら、同じ command を流し直す (state には取り込んだと記録されるので、2 回目の plan は `adopted` ではなく `update` と出る)。後で `bun infra/check-worker.ts production adopt` と、今の 100% の version への smoke を流す
+5. 取り込みの前の確かめ (済み。取り込みの方式 `adopt` は消した)
+6. 取り込み (済み。2026-11-04 に version `7a3016eb` で行った)
 7. secret の切り替え: 下の「0% の version を手で確かめる」で Secrets Store の binding を持つ version を 0% に加え、override header を付けたブラウザで、今のログインが続くこと、MFA の利用者がログインできること (QA-MR-06) を確かめる。通れば `<new>@100%`、だめなら `bunx wrangler rollback <current> --name taimei-auth --yes` で戻して止める。`versions deploy <current>@100%` は、secret が変わったとして拒まれる (code 10220)。rollback は同じ確認を出して進め、前の version は自分の `secret_text` で動き続ける
-8. `bun infra/check-worker.ts production gate` が通る → PR を merge → Deploy の staging と本番の job が通る → `IaC drift` を手動で起動して差が無い
-9. merge の後、`adopt` を消す PR を出す。取り込みの後に `adopt` の deploy を流すと、Secrets Store の binding の無い version が 100% になり、本番が secret を読めなくなるためである。消すのは `infra/stages.ts` の `DEPLOY_MODES` と `expectedBindings` の `mode`、`infra/alchemy.run.ts` の `adopt` の分岐、`infra/check-worker.ts` の方式の引数 (`iac-drift.yml` の `gate` も)、`src/__tests__/infra-stages.test.ts` と `src/__tests__/deploy-environments.test.ts` の `adopt` の試験、この runbook の 5〜6 の手順
+8. `bun infra/check-worker.ts production` が通る → PR を merge → Deploy の staging と本番の job が通る → `IaC drift` を手動で起動して差が無い
 
 ## 今の値の無い secret を作り直す
 

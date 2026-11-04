@@ -30,8 +30,8 @@ const production = parseJsonc(
 
 const stages: [string, StageConfig][] = Object.entries(STAGES);
 
-const secretTypes = (mode: "adopt" | "gate" | "full") =>
-  expectedBindings("production", mode)
+const secretTypes = () =>
+  expectedBindings("production")
     .filter(({ name }) => (SECRET_BINDING_NAMES as readonly string[]).includes(name))
     .map(({ type }) => type);
 
@@ -84,16 +84,8 @@ describe("IaC の stage の表は、本番の wrangler.jsonc とずれない", (
     );
   });
 
-  test("取り込みの前の期待では secret は wrangler secret put の secret_text、取り込みの後は Secrets Store の binding", () => {
-    expect({
-      adopt: [...new Set(secretTypes("adopt"))],
-      gate: [...new Set(secretTypes("gate"))],
-      full: [...new Set(secretTypes("full"))],
-    }).toEqual({
-      adopt: ["secret_text"],
-      gate: ["secrets_store_secret"],
-      full: ["secrets_store_secret"],
-    });
+  test("本番の secret は、すべて Secrets Store の binding で期待する", () => {
+    expect([...new Set(secretTypes())]).toEqual(["secrets_store_secret"]);
   });
 
   test("vars の key を 1 つ外すと、ずれとして報告される", () => {
@@ -139,11 +131,11 @@ describe("IaC の CLI の入力は、表に無い値で何も作らずに止ま�
     expect(parseStage(name)).toBe(name);
   });
 
-  test.each([undefined, "", "canary", "FULL"])("deploy の方式 %p は失敗する", (value) => {
+  test.each([undefined, "", "canary", "FULL", "adopt"])("deploy の方式 %p は失敗する", (value) => {
     expect(() => parseDeployMode(value)).toThrow();
   });
 
-  test.each(["gate", "full", "adopt"])("deploy の方式 %s は通る", (value) => {
+  test.each(["gate", "full"])("deploy の方式 %s は通る", (value) => {
     expect(parseDeployMode(value)).toBe(value);
   });
 

@@ -85,7 +85,7 @@ export const parseStage = (name: string): StageName => {
   );
 };
 
-const DEPLOY_MODES = ["gate", "full", "adopt"] as const;
+const DEPLOY_MODES = ["gate", "full"] as const;
 
 export type DeployMode = (typeof DEPLOY_MODES)[number];
 
@@ -106,9 +106,8 @@ export const parseAccountId = (value: string | undefined): string => {
 
 export type WorkerBinding = { readonly name: string; readonly type: string };
 
-export const expectedBindings = (stageName: StageName, mode: DeployMode): WorkerBinding[] => {
+export const expectedBindings = (stageName: StageName): WorkerBinding[] => {
   const stage: StageConfig = STAGES[stageName];
-  const secretType = mode === "adopt" ? "secret_text" : "secrets_store_secret";
   return [
     { name: "ASSETS", type: "assets" },
     { name: "CF_VERSION_METADATA", type: "version_metadata" },
@@ -118,6 +117,6 @@ export const expectedBindings = (stageName: StageName, mode: DeployMode): Worker
       type: "durable_object_namespace",
     })),
     ...Object.keys(stage.vars).map((name) => ({ name, type: "plain_text" })),
-    ...stage.secrets.map((name) => ({ name, type: secretType })),
+    ...stage.secrets.map((name) => ({ name, type: "secrets_store_secret" })),
   ];
 };
