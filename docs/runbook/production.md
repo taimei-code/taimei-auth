@@ -64,8 +64,23 @@ SELECT
 ```
 
 最後の `SELECT` が 3 つとも `false` であることを確かめる。`pg_has_role` が `true` なら、Hyperdrive が指す前なので role を消し、SQL で作り直す (staging の runbook の 3 節と同じ)。CREATE の 2 つが `true` なら止めて判断を仰ぐ (`REVOKE CREATE ON SCHEMA public FROM PUBLIC` は当てない。Postgres 14 以前は schema `public` の owner が `postgres` で、owner の migrate まで止めうる)
-3. Hyperdrive を替えると 100% の Worker にすぐ効くので、先に `taimei_auth_worker` の接続で次を流す。どれかが期待と違えば替えない。接続文字列は owner の `DATABASE_URL` の user と password を `taimei_auth_worker` と生成した値に替えたもので、手元から bun と `pg` で接続する (Neon の SQL Editor は owner で動くので使えない)
-   - `company`・`user`・`session`・`account`・`verification`・`mfa_totp`・`mfa_recovery_code`・`audit_log`・`membership`・`invitation` のそれぞれに `SELECT 1 FROM "<table>" LIMIT 1` が通る
+3. Hyperdrive を替えると 100% の Worker にすぐ効くので、先に権限を確かめる。どれかが期待と違えば替えない。まず owner で次の SQL を流し、0 行であることを確かめる。`public` のすべての table と sequence について、Worker の role に足りない権限を 1 行ずつ返す (table の名前を書かないので、migration で table が増えても漏れない)。`has_table_privilege` に権限をカンマで並べると、どれか 1 つを持つだけで true になるので、権限ごとに確かめる
+
+```sql
+SELECT c.relname, p.privilege
+FROM pg_class c
+CROSS JOIN unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE']) AS p(privilege)
+WHERE c.relnamespace = 'public'::regnamespace AND c.relkind IN ('r', 'p')
+  AND NOT has_table_privilege('taimei_auth_worker', c.oid, p.privilege)
+UNION ALL
+SELECT c.relname, p.privilege
+FROM pg_class c
+CROSS JOIN unnest(ARRAY['USAGE', 'SELECT']) AS p(privilege)
+WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
+  AND NOT has_sequence_privilege('taimei_auth_worker', c.oid, p.privilege);
+```
+
+続けて、`taimei_auth_worker` の接続で次を流す。接続文字列は owner の `DATABASE_URL` の user と password を `taimei_auth_worker` と生成した値に替えたもので、手元から bun と `pg` で接続する (Neon の SQL Editor は owner で動くので使えない)
    - `BEGIN` の後に `UPDATE "user" SET name = name || 'x' WHERE id = (SELECT id FROM "user" LIMIT 1)` と `UPDATE account SET password = coalesce(password, '') || 'x' WHERE id = (SELECT id FROM account LIMIT 1)` が通り、`ROLLBACK` する (値を変えて trigger を発火させる。`"user"` を更新する trigger は呼び手の権限で動く)
    - `SELECT pg_advisory_xact_lock(0)` が通る
    - `BEGIN` の後の `CREATE TABLE ddl_probe (x int)` が SQLSTATE `42501` (permission denied) で失敗し、`ROLLBACK` する (成功してしまった時も table を残さない)
