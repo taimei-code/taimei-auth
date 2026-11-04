@@ -26,7 +26,9 @@
 
 Worker の role の password を手元で生成する (`openssl rand -hex 24`)。4 節の Hyperdrive でも使う。
 
-2 の project の Neon の SQL Editor (branch `main`、owner の database) で、次の SQL を流す。`<owner>` は project の owner の role (Neon の既定は `neondb_owner`)、`<password>` は生成した値に置き換える。
+2 の project の Neon の SQL Editor (branch `main`、owner の database) で、次の 2 つの SQL を流す。`<owner>` は project の owner の role (Neon の既定は `neondb_owner`)、`<password>` は生成した値に置き換える。
+
+Worker の role の SQL (本番の runbook の「Worker の DB の role」と同じ)。
 
 ```sql
 CREATE ROLE taimei_auth_worker LOGIN PASSWORD '<password>';
@@ -35,11 +37,19 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO taimei_au
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO taimei_auth_worker;
 ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO taimei_auth_worker;
 ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO taimei_auth_worker;
-CREATE TABLE non_production_database (marked_at timestamptz NOT NULL DEFAULT now());
-SELECT pg_has_role('taimei_auth_worker', 'neon_superuser', 'MEMBER') AS must_be_false;
+SELECT
+  pg_has_role('taimei_auth_worker', 'neon_superuser', 'MEMBER') AS must_be_false,
+  has_schema_privilege('taimei_auth_worker', 'public', 'CREATE') AS must_be_false_too,
+  has_database_privilege('taimei_auth_worker', current_database(), 'CREATE') AS must_be_false_as_well;
 ```
 
-- 最後の `SELECT` が `false` を返すことを確かめる。`true` なら role を消し、Neon の画面や API ではなく SQL で作り直す (Neon の API で作る role は `neon_superuser` に入る)
+本番以外の DB の印の SQL。staging だけで流し、本番では流さない。
+
+```sql
+CREATE TABLE non_production_database (marked_at timestamptz NOT NULL DEFAULT now());
+```
+
+- role の SQL の最後の `SELECT` が 3 つとも `false` を返すことを確かめる。`pg_has_role` が `true` なら role を消し、Neon の画面や API ではなく SQL で作り直す (Neon の API で作る role は `neon_superuser` に入る)。CREATE の 2 つが `true` なら止める (Postgres 14 以前は `PUBLIC` が schema `public` に CREATE を持ち、Worker の role で table を作れてしまう)
 - password は平文で渡す。Neon は hash した password を受け付けない (`Neon only supports being given plaintext passwords`)。psql の `\password` も手元で hash してから送るので使えない。SQL Editor の履歴に password が残るが、履歴を読めるのは project に入れる人で、その人は owner として DB を操作できるので、この role の password で増える権限は無い
 - psql は、TLS を復号する proxy の内側からは Neon につながらない (proxy が Postgres の TLS の開始を通さない)。SQL Editor は HTTPS なので通る
 - `non_production_database` は本番以外の DB の印である。staging の Worker と表の準備の script は、この表が無い DB では動かない。migration には入れない

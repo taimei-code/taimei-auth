@@ -39,6 +39,42 @@ taimei の本番は Worker の名前 `taimei-auth`、`AUTH_SERVICE_KEY` の値�
 3. `bash scripts/preview-smoke.sh https://auth.taimei-code.com taimei-auth <new> public`。ブラウザで確かめる時は、拡張で `Cloudflare-Workers-Version-Overrides: taimei-auth="<new>"` を付ける
 4. `<new>@100%` か `<current>@100%` で終える (手順 7 で `<current>` に戻す時は、手順 7 の rollback を使う)
 
+## Worker の DB の role
+
+Worker は権限を絞った role `taimei_auth_worker` で DB に接続し、owner は migrate だけに使う (ADR-0022 の Decision 13)。role を作り、Hyperdrive `taimei-auth-prod` の接続先をこの role に替える手順である。role を作り直す時も同じ手順を使う。
+
+接続先の database と VPN の注意は「今の値の無い secret を作り直す」と同じである。password は会話にも shell の履歴にも出さず、確かめが終わったら手元から消す (password は Hyperdrive の中にだけ残る。ADR-0022 の Decision 14)。
+
+1. role を作る前に、owner (Environment `production` の `DATABASE_URL`) で次を確かめる。どれかが違えば止める
+   - `SELECT current_user` と `SELECT DISTINCT tableowner FROM pg_tables WHERE schemaname = 'public'` が同じ 1 つの role (以下 `<owner>`、今は `neondb_owner`)。違うと `ALTER DEFAULT PRIVILEGES` が migrate の作る table に効かず、次の migration の後に Worker が新しい table を読めない
+   - `SELECT to_regclass('public.non_production_database') IS NULL` が `true` (本番の DB に本番以外の DB の印が無い)
+2. password を手元で生成し (`openssl rand -hex 24`)、owner で次の SQL を流す。role が既にあり、Hyperdrive がまだ指していない時は、`CREATE ROLE` の代わりに `ALTER ROLE taimei_auth_worker PASSWORD '<password>'` を流す。Hyperdrive が指した後は、password を替えると本番が止まるので、Hyperdrive の update と続けて行う (`DROP ROLE` もしない)。password を平文で渡す理由は staging の runbook の 3 節にある。staging の印の SQL は流さない
+
+```sql
+CREATE ROLE taimei_auth_worker LOGIN PASSWORD '<password>';
+GRANT USAGE ON SCHEMA public TO taimei_auth_worker;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO taimei_auth_worker;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO taimei_auth_worker;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO taimei_auth_worker;
+ALTER DEFAULT PRIVILEGES FOR ROLE <owner> IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO taimei_auth_worker;
+SELECT
+  pg_has_role('taimei_auth_worker', 'neon_superuser', 'MEMBER') AS must_be_false,
+  has_schema_privilege('taimei_auth_worker', 'public', 'CREATE') AS must_be_false_too,
+  has_database_privilege('taimei_auth_worker', current_database(), 'CREATE') AS must_be_false_as_well;
+```
+
+最後の `SELECT` が 3 つとも `false` であることを確かめる。`pg_has_role` が `true` なら、Hyperdrive が指す前なので role を消し、SQL で作り直す (staging の runbook の 3 節と同じ)。CREATE の 2 つが `true` なら止めて判断を仰ぐ (`REVOKE CREATE ON SCHEMA public FROM PUBLIC` は当てない。Postgres 14 以前は schema `public` の owner が `postgres` で、owner の migrate まで止めうる)
+3. Hyperdrive を替えると 100% の Worker にすぐ効くので、先に `taimei_auth_worker` の接続で次を流す。どれかが期待と違えば替えない。接続文字列は owner の `DATABASE_URL` の user と password を `taimei_auth_worker` と生成した値に替えたもので、手元から bun と `pg` で接続する (Neon の SQL Editor は owner で動くので使えない)
+   - `company`・`user`・`session`・`account`・`verification`・`mfa_totp`・`mfa_recovery_code`・`audit_log`・`membership`・`invitation` のそれぞれに `SELECT 1 FROM "<table>" LIMIT 1` が通る
+   - `BEGIN` の後に `UPDATE "user" SET name = name || 'x' WHERE id = (SELECT id FROM "user" LIMIT 1)` と `UPDATE account SET password = coalesce(password, '') || 'x' WHERE id = (SELECT id FROM account LIMIT 1)` が通り、`ROLLBACK` する (値を変えて trigger を発火させる。`"user"` を更新する trigger は呼び手の権限で動く)
+   - `SELECT pg_advisory_xact_lock(0)` が通る
+   - `BEGIN` の後の `CREATE TABLE ddl_probe (x int)` が SQLSTATE `42501` (permission denied) で失敗し、`ROLLBACK` する (成功してしまった時も table を残さない)
+4. Hyperdrive の update は Environment `production` の token (Hyperdrive Read) ではできないので、手元の wrangler の OAuth で行う。shell に `CLOUDFLARE_API_TOKEN` を置かず (OAuth より優先される)、本番のアカウントにログインしていることを `bunx wrangler whoami` で確かめ、`bunx wrangler hyperdrive get <id>` で今の origin (host・port・database・user) と `caching.disabled` を控える。`<id>` は `wrangler.jsonc` の hyperdrive の id である。次のコマンドで切り替える。接続文字列をまるごと渡す形は使わない (host まで上書きする)。caching の flag を渡さなければ caching の設定は変わらない
+   - `bunx wrangler hyperdrive update <id> --origin-user taimei_auth_worker --origin-password "$WORKER_PASSWORD"` (先に `read -rs WORKER_PASSWORD` で生成した値を読む。コマンドの行に password を書くと shell の履歴に残る)
+   - もう一度 `hyperdrive get` で、user が `taimei_auth_worker`、host・port・database が控えと同じ、`caching.disabled` が `true` であることを確かめる
+5. `https://auth.taimei-code.com/health` の DB が ok であることを確かめ、10 分以内に、owner で `SELECT usename, count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() GROUP BY 1` が `taimei_auth_worker` を含み、`<owner>` を含まないことを見る。`<owner>` の行が残る時は、`client_addr`・`application_name`・`backend_start` で接続元 (CI の migrate、Neon の画面、切り替え前の Hyperdrive の接続) を見て判断する。接続の一覧だけを理由に戻さない (`/health` は `SELECT 1` しか流さないので、権限は手順 3 と QA で確かめる)。続けて QA-MR-01・QA-MR-06・QA-MR-10 を行う (QA-MR-10 は事業所の作成の書き込みと、その直後の読み取りを確かめる)
+6. `/health` の DB が error か、QA-MR-01・QA-MR-06・QA-MR-10 のどれかが通らなければ、すぐ owner に戻す: `bunx wrangler hyperdrive update <id> --origin-user neondb_owner --origin-password "$OWNER_PASSWORD"` (`read -rs OWNER_PASSWORD` で owner の password を読む。GitHub の secret は読み返せないので、Neon の画面の接続情報から取る)
+
 ## 日々の変更
 
 - 資源と binding の変更は `infra/` の定義を変える PR で行い、main の push の Deploy が staging、本番の順に出す
@@ -55,7 +91,7 @@ taimei の本番は Worker の名前 `taimei-auth`、`AUTH_SERVICE_KEY` の値�
 | Secrets Store の値 | 値を定義・state・CI に通さない (ADR-0022 の Decision 11) |
 | Hyperdrive `taimei-auth-prod` | 接続の password を state に入れない。定義は名前で引く (Decision 14) |
 | Neon の project・DB・role | project を作れる key は本番の DB にも届くので CI に置かない (Decision 21) |
-| Worker が DB に接続する role | 今は owner で接続している。権限を絞るのは別の issue で行う |
+| Worker が DB に接続する role (`taimei_auth_worker`) | role の password を repo にも state にも置かない (Decision 14)。作り方は「Worker の DB の role」 |
 | zone `taimei-code.com` の custom domain 以外の DNS と、Resend の送信 domain | Worker の資源ではなく、taimei と共有している |
 | GitHub の Environment と Cloudflare の token | token を作る権限を CI に渡さない |
 | `wrangler.jsonc` | local の開発 (`wrangler dev`) と、本番の bundle の build (`wrangler versions upload --dry-run`) に使う。本番の token は Environment `production` にだけあり、手元に置かないので、この設定で本番に出す経路は人の手作業だけになる |
