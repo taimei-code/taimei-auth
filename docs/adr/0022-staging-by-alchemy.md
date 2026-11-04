@@ -84,7 +84,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 ### DB
 
 13. **Worker は権限を絞った role `taimei_auth_worker` で DB に接続し、owner は migrate と本番以外の表の準備だけに使う**。
-    - role は staging の runbook の SQL で一度だけ作る。`public` の table と sequence に読み書きの権限を与え、`ALTER DEFAULT PRIVILEGES` で後から migrate が作る table にも同じ権限を付ける。
+    - role は staging と本番の各 runbook (`docs/runbook/staging.md` の 3 節、`docs/runbook/production.md` の「Worker の DB の role」) の同じ SQL で、環境ごとに一度だけ作る。`public` の table と sequence に読み書きの権限を与え、`ALTER DEFAULT PRIVILEGES` で後から migrate が作る table にも同じ権限を付ける。
     - role が `neon_superuser` の member でないことも、その SQL で確かめる。Neon の API で作る role は `neon_superuser` に入るので使わない。
 14. **Hyperdrive は人が一度だけ `wrangler hyperdrive create` で作り、定義は `Cloudflare.Hyperdrive.lookup` で名前から引く**。
     - role の password は Hyperdrive の中にしか残らず、state にも GitHub にも置かない。
@@ -160,7 +160,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 - **drift の検出**: `iac-drift.yml` が毎日、本番の tree の中で `alchemy plan`・`alchemy drift` と、Worker の binding の比較を行う。`noop`・`unchanged` 以外の操作か、binding の差があれば失敗する。binding は、今の deployment に入っている version ごとに比べる。script の settings は 0% で上げただけの最新の version を返し、100% の version の差を見落とした (予行演習で観測)
 - **DO の変更**: `deploy-durable-object-migration.yml` を消し、`deploy-production-full.yml` (alchemy の 100% の deploy) に置き換えた
 - **Durable Object の中の Sentry**: Secrets Store の DSN は Worker の `fetch` が解く。Worker と別の isolate で動く DO は DSN を持たず、そこでの例外は Sentry に送られない (例外は呼び手の Worker に返り、Worker の Sentry が拾う)。切り替えの前、DSN が `secret_text` の間は、DO も今までどおり env の DSN を使う
-- **本番の DB の role**: 本番の Hyperdrive は今も owner で接続する。Decision 13 の本番への適用は、取り込みと別の issue で行う
+- **本番の DB の role**: Decision 13 を本番に当てた (2026-11-04、#377)。取り込みと分けて、別の issue で行った。本番の DB に `taimei_auth_worker` を作り、Hyperdrive `taimei-auth-prod` の接続の user と password をその role に替えた (Hyperdrive の名前は変えない)
 - 手順と、IaC の外に残るものとその理由は `docs/runbook/production.md` にある
 - 予行演習 (2026-11-03、本番のアカウントの使い捨ての Worker と hostname、alchemy 2.0.0-beta.84) の結果
   - R1 通った。`adopt` の full deploy の後も、`secret_text` の値、DO のデータ、migration tag (`v1`) が残った
