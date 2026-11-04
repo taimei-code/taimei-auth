@@ -25,7 +25,7 @@ taimei の本番は Worker の名前 `taimei-auth`、`AUTH_SERVICE_KEY` の値�
 
 ## 今の値の無い secret を作り直す
 
-切り替えで全員が一度ログアウトし、MFA の利用者は認証アプリを登録し直す。先に `select count(*) from mfa_totp where verified_at is not null` で MFA の利用者の数を見て、この手間で捌けるかを決める。
+切り替えで全員が一度ログアウトし、MFA の利用者は認証アプリを登録し直す。先に `select user_id from mfa_totp where verified_at is not null` で MFA の利用者を見て、この手間で捌けるかを決める。本番の DB は Hyperdrive `taimei-auth-prod` の接続先の database `auth` で、Neon の既定の `neondb` ではない (別の database を見ると、行が無いと誤って読み、下の `<N>` を前の鍵と同じ version にしてしまう)。VPN を付けたままでは、手元からの接続が時間切れになることがある。
 
 1. 新しい値を作る。`AUTH_SECRET` と `AUTH_SERVICE_KEY` は `openssl rand -hex 32`。`MFA_TOTP_ENCRYPTION_KEYS` は `v<N>:` に続けて `openssl rand -base64 32` の値で、`<N>` は `select max(key_version) from mfa_totp` より大きい数にする。消し忘れた MFA の行は、鍵の version が無いとはっきり失敗する
 2. 手順 7 で 0% に加えたら、MFA の利用者ごとに `DATABASE_URL=<本番の接続文字列> AUTH_SECRET=<新しい値> bun run management/disable-user-mfa.ts <userId>` を流す (本人に通知のメールが届く。`AUTH_RESEND_KEY` が無いと `notified: false` になる)
