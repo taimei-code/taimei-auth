@@ -74,9 +74,6 @@ export default Alchemy.Stack(
   Effect.gen(function* () {
     const stage: StageConfig = STAGES[parseStage(yield* Alchemy.Stage)];
     const worker = yield* Auth;
-    if (parseDeployMode(process.env.DEPLOY_MODE) === "adopt") {
-      return { url: worker.url.as<string>() };
-    }
     const store = yield* Cloudflare.SecretsStore.Store("Secrets");
     for (const name of stage.secrets) {
       yield* worker.bind(name, {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   indexOfStepRunning,
@@ -77,24 +77,6 @@ const stagingFull = () => readWorkflow<Workflow>("deploy-staging-full.yml");
 
 const PREPARE_STAGING = "./.github/actions/prepare-staging";
 const GATE_DEPLOY = "./.github/actions/gate-deploy";
-
-const workflowAndActionTexts = (): [string, string][] => [
-  ...workflowFileNames().map((name): [string, string] => [
-    name,
-    readFileSync(join(REPO_ROOT, ".github/workflows", name), "utf8"),
-  ]),
-  ...readdirSync(join(REPO_ROOT, ".github/actions")).map((name): [string, string] => [
-    `actions/${name}`,
-    readFileSync(join(REPO_ROOT, ".github/actions", name, "action.yml"), "utf8"),
-  ]),
-];
-
-const ADOPTION_MARKERS = [/DEPLOY_MODE:\s*adopt\b/, /--adopt\b/];
-
-const workflowsThatAdopt = (texts: readonly [string, string][]) =>
-  texts
-    .filter(([, text]) => ADOPTION_MARKERS.some((marker) => marker.test(text)))
-    .map(([name]) => name);
 
 type ActionInput = { required?: boolean; default?: string };
 
@@ -248,22 +230,6 @@ describe("staging の準備は、2 つの deploy の経路が同じ手順を使�
     const prepare = indexOfStepUsing(steps, PREPARE_STAGING);
     expect(prepare).toBeGreaterThanOrEqual(0);
     expect(prepare).toBeLessThan(indexOfStepUsing(steps, "./.github/actions/gate-deploy"));
-  });
-});
-
-describe("本番の取り込み (alchemy の adopt) は、人が runbook の手順で 1 回だけ行う", () => {
-  test("どの workflow と action も adopt の deploy を走らせない", () => {
-    expect(workflowsThatAdopt(workflowAndActionTexts())).toEqual([]);
-  });
-
-  test("adopt を書いた workflow を足すと、報告される", () => {
-    expect(
-      workflowsThatAdopt([
-        ...workflowAndActionTexts(),
-        ["adopt.yml", "env:\n  DEPLOY_MODE: adopt\n"],
-        ["flag.yml", "run: bunx alchemy deploy --adopt\n"],
-      ]),
-    ).toEqual(["adopt.yml", "flag.yml"]);
   });
 });
 
