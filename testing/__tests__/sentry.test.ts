@@ -11,8 +11,18 @@ import {
 } from "../../src/sentry";
 import { captureThrown } from "../../src/handlers/client-facing-error";
 import { initBunSentry } from "../sentry-bun";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { REPO_ROOT } from "../../src/__tests__/config-invariant-helpers";
 import { grepFiles } from "../../src/__tests__/source-scan";
 import { recordSentry } from "../../src/__tests__/sentry-recorder";
+
+const optionsPassedToWorkerSentry = () =>
+  [
+    ...readFileSync(join(REPO_ROOT, "src/worker.ts"), "utf8").matchAll(
+      /Sentry\.(?:withSentry|instrumentDurableObjectWithSentry)(?:<[^>]*>)?\(\s*(\w+)/g,
+    ),
+  ].map(([, options]) => options);
 
 describe("captureCauseAs", () => {
   const { exceptions: captured } = recordSentry();
@@ -168,6 +178,7 @@ describe("Sentry の SDK は既定で request の header・本文・query を ev
     expect(initializers).toEqual(["src/worker.ts", "testing/sentry-bun.ts"]);
     expect(
       grepFiles("\\.\\.\\.SENTRY_REQUEST_PRIVACY", ["src", "testing"], { tests: "exclude" }).sort(),
-    ).toEqual(initializers);
+    ).toEqual(["src/sentry-options.ts", "testing/sentry-bun.ts"]);
+    expect(optionsPassedToWorkerSentry()).toEqual(["sentryOptions", "sentryOptions"]);
   });
 });

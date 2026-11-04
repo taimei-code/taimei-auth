@@ -1,6 +1,6 @@
 # infra/ の書き方
 
-`infra/` は staging の資源を alchemy v2 で宣言する。何を定義に載せ、何を載せないかの判断は [ADR-0022](../docs/adr/0022-staging-by-alchemy.md) にある。
+`infra/` は staging と本番の資源を alchemy v2 で宣言する。stage の差は `infra/stages.ts` の表の値だけで表し、定義に stage の名前の分岐を書かない。本番の取り込みと IaC の外に残るものは [`docs/runbook/production.md`](../docs/runbook/production.md) にある。何を定義に載せ、何を載せないかの判断は [ADR-0022](../docs/adr/0022-staging-by-alchemy.md) にある。
 
 ## alchemy の API の確かめ方
 

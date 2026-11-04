@@ -1,17 +1,15 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import { Effect } from "effect";
-import { SECRET_BINDING_NAMES } from "../src/secret-bindings";
 import {
   DURABLE_OBJECT_BINDINGS,
   parseAccountId,
   parseDeployMode,
   parseStage,
   STAGES,
+  type StageConfig,
   WORKER_RUNTIME,
 } from "./stages";
-
-const STAGING_BUNDLE_ENTRY = "./staging-bundle/staging-worker.js";
 
 const durableObjects = Object.fromEntries(
   Object.entries(DURABLE_OBJECT_BINDINGS).map(([binding, className]) => [
@@ -20,34 +18,42 @@ const durableObjects = Object.fromEntries(
   ]),
 );
 
+const servedAtProps = ({ workerName, servedAt }: StageConfig) =>
+  servedAt.kind === "customDomain"
+    ? { domain: servedAt.domain, workersDev: { enabled: false, previewsEnabled: false } }
+    : {
+        workersDev: { enabled: true, previewsEnabled: false },
+        access: {
+          name: workerName,
+          previews: false,
+          policies: [
+            {
+              decision: "allow" as const,
+              include: [
+                { cloudflareAccountMember: parseAccountId(process.env.CLOUDFLARE_ACCOUNT_ID) },
+              ],
+            },
+            { decision: "non_identity" as const, include: ["anyValidServiceToken" as const] },
+          ],
+        },
+      };
+
 const Auth = Cloudflare.Worker(
   "Auth",
   Effect.gen(function* () {
-    const stage = STAGES[parseStage(yield* Alchemy.Stage)];
+    const stage: StageConfig = STAGES[parseStage(yield* Alchemy.Stage)];
     const deployMode = parseDeployMode(process.env.DEPLOY_MODE);
     return {
       name: stage.workerName,
-      main: STAGING_BUNDLE_ENTRY,
+      main: stage.entry,
       bundle: false,
       assets: { directory: "./web/dist", ...WORKER_RUNTIME.assets },
       compatibility: {
         date: WORKER_RUNTIME.compatibility.date,
         flags: [...WORKER_RUNTIME.compatibility.flags],
       },
-      workersDev: { enabled: true, previewsEnabled: false },
-      access: {
-        name: stage.workerName,
-        previews: false,
-        policies: [
-          {
-            decision: "allow",
-            include: [
-              { cloudflareAccountMember: parseAccountId(process.env.CLOUDFLARE_ACCOUNT_ID) },
-            ],
-          },
-          { decision: "non_identity", include: ["anyValidServiceToken"] },
-        ],
-      },
+      observability: { ...WORKER_RUNTIME.observability },
+      ...servedAtProps(stage),
       ...(deployMode === "gate" ? { version: { traffic: 0 } } : {}),
       env: {
         ...durableObjects,
@@ -66,9 +72,13 @@ export default Alchemy.Stack(
     state: Cloudflare.state({ name: "taimei-auth" }),
   },
   Effect.gen(function* () {
+    const stage: StageConfig = STAGES[parseStage(yield* Alchemy.Stage)];
     const worker = yield* Auth;
+    if (parseDeployMode(process.env.DEPLOY_MODE) === "adopt") {
+      return { url: worker.url.as<string>() };
+    }
     const store = yield* Cloudflare.SecretsStore.Store("Secrets");
-    for (const name of SECRET_BINDING_NAMES) {
+    for (const name of stage.secrets) {
       yield* worker.bind(name, {
         bindings: [
           { type: "secrets_store_secret", name, secretName: name, storeId: store.storeId },

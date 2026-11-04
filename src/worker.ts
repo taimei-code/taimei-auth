@@ -10,20 +10,17 @@ import { buildApp } from "./app";
 import { withWaitUntil } from "./background";
 import * as Sentry from "@sentry/cloudflare";
 import { initCloudflareSentry } from "./sentry-cloudflare";
-import { SENTRY_REQUEST_PRIVACY } from "./sentry";
+import { type SentryEnv, sentryOptions } from "./sentry-options";
 import { onceUntilSucceeded } from "./once-until-succeeded";
 import { withClientIp } from "./client-ip";
 import { resolveCloudflareClientIp } from "./request-context";
-import { resolveSecretBindings } from "./secret-bindings";
+import { resolveSecretsBeforeHandler } from "./secret-bindings";
 
-type Env = {
+type Env = SentryEnv & {
   HYPERDRIVE: { connectionString: string };
   KV_STORE: KvStoreNamespace;
   CF_VERSION_METADATA: WorkerVersionMetadata;
   ASSETS: { fetch: (req: Request) => Promise<Response> };
-  SENTRY_DSN?: string;
-  APP_ENV?: string;
-  [key: string]: unknown;
 };
 
 type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
@@ -49,7 +46,7 @@ const bootstrapOnce = (options: WorkerOptions) => {
   return (env: Env): Hono => {
     if (bootstrappedApp) return bootstrappedApp;
     copyEnvToProcess(env);
-    initCloudflareSentry(env.SENTRY_DSN);
+    initCloudflareSentry(process.env.SENTRY_DSN);
     ttlStore ??= durableObjectBackend(env.KV_STORE);
     boot(ttlStore, options.emailSender);
     bootstrappedApp = buildApp({
@@ -70,23 +67,13 @@ const bootstrapOnce = (options: WorkerOptions) => {
   };
 };
 
-const sentryOptions = (env: Env) => ({
-  ...SENTRY_REQUEST_PRIVACY,
-  dsn: env.SENTRY_DSN,
-  environment: env.APP_ENV ?? "production",
-  tracesSampleRate: 0.1,
-});
-
 export const createWorker = (options: WorkerOptions = {}) => {
   const bootstrap = bootstrapOnce(options);
   const beforeFirstRequest = onceUntilSucceeded(
     options.beforeFirstRequest ?? (() => Promise.resolve()),
   );
-  let resolveSecrets: (() => Promise<void>) | null = null;
-  return Sentry.withSentry(sentryOptions, {
+  const handler = {
     async fetch(req: Request, env: Env, ctx: ExecutionCtx): Promise<Response> {
-      resolveSecrets ??= onceUntilSucceeded(() => resolveSecretBindings(env));
-      await resolveSecrets();
       const app = bootstrap(env);
       const backgroundPromises: Promise<unknown>[] = [];
       return runWithRequestPool(env.HYPERDRIVE.connectionString, async (pool) => {
@@ -108,7 +95,10 @@ export const createWorker = (options: WorkerOptions = {}) => {
         }
       });
     },
-  });
+  };
+  return resolveSecretsBeforeHandler(
+    Sentry.withSentry<Env, unknown, unknown, typeof handler>(sentryOptions, handler),
+  );
 };
 
 export default createWorker();

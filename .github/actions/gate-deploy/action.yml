@@ -15,16 +15,24 @@ inputs:
     required: true
   cloudflare-account-id:
     required: true
+  directory:
+    description: Directory to run alchemy in (production runs it in the tree without non-production code)
+    required: false
+    default: "."
+  smoke:
+    description: public, or access to send the Access service token with every smoke request
+    required: true
   access-client-id:
-    required: true
+    required: false
   access-client-secret:
-    required: true
+    required: false
 
 runs:
   using: composite
   steps:
     - name: Upload a version at 0% traffic with alchemy
       shell: bash
+      working-directory: ${{ inputs.directory }}
       env:
         CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
         CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
@@ -64,7 +72,7 @@ runs:
         "$GITHUB_WORKSPACE/node_modules/.bin/wrangler" versions deploy "${UPLOADED_ID}@0%" "${CURRENT_ID}@100%" \
           --name "$WORKER" --yes --message "gate-deploy ${GITHUB_RUN_ID} stage (${GITHUB_SHA::7})"
 
-    - name: Smoke the version through the override header and the Access service token
+    - name: Smoke the version through the override header
       shell: bash
       env:
         ACCESS_CLIENT_ID: ${{ inputs.access-client-id }}
@@ -72,7 +80,8 @@ runs:
         BASE_URL: ${{ inputs.base-url }}
         WORKER: ${{ inputs.worker-name }}
         UPLOADED_ID: ${{ steps.versions.outputs.uploaded_id }}
-      run: bash scripts/preview-smoke.sh "$BASE_URL" "$WORKER" "$UPLOADED_ID" access
+        SMOKE: ${{ inputs.smoke }}
+      run: bash scripts/preview-smoke.sh "$BASE_URL" "$WORKER" "$UPLOADED_ID" "$SMOKE"
 
     - name: Restore the previous version on smoke failure
       if: failure() && steps.stage.outcome == 'success'

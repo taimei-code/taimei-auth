@@ -36,6 +36,7 @@ jobs:
           stage: staging
           worker-name: taimei-auth-staging
           base-url: https://taimei-auth-staging.taimei-staging.workers.dev
+          smoke: access
           cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           access-client-id: ${{ secrets.ACCESS_CLIENT_ID }}
@@ -45,7 +46,7 @@ jobs:
     needs: staging
     if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     environment: production
     concurrency:
       group: deploy-production
@@ -79,50 +80,13 @@ jobs:
             echo "no migration files under drizzle/ -> skip"
           fi
 
-      # DO の migrations を含む version は versions upload では上げられないので、deploy-durable-object-migration.yml で出す
-      - name: Upload Worker version (not yet deployed)
-        id: upload
-        working-directory: ${{ runner.temp }}/production-tree
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          bunx wrangler versions upload --tag "ci-${GITHUB_SHA::7}" --message "deploy.yml ${GITHUB_RUN_ID}" | tee upload.log
-          version_id=$(sed -n 's/^Worker Version ID: *//p' upload.log | tr -d '[:space:]')
-          [ -n "$version_id" ] || { echo "version id not found in wrangler output" >&2; exit 1; }
-          echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
-
-      # override header は deployment に含まれる version にしか効かないため、0% で加えておく
-      - name: Stage version at 0% traffic
-        id: stage
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          VERSION_ID: ${{ steps.upload.outputs.version_id }}
-        run: |
-          set -euo pipefail
-          current=$(bunx wrangler deployments status | sed -n 's/.*(100%) *//p' | tr -d '[:space:]')
-          [ -n "$current" ] || { echo "current 100% version not found in deployments status" >&2; exit 1; }
-          echo "current_id=$current" >> "$GITHUB_OUTPUT"
-          bunx wrangler versions deploy "${VERSION_ID}@0%" "${current}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} stage (${GITHUB_SHA::7})"
-
-      - name: Smoke new version via override header (gate)
-        env:
-          VERSION_ID: ${{ steps.upload.outputs.version_id }}
-        run: bash scripts/preview-smoke.sh https://auth.taimei-code.com taimei-auth "$VERSION_ID" public
-
-      - name: Restore previous version on smoke failure
-        if: failure() && steps.stage.outcome == 'success'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CURRENT_ID: ${{ steps.stage.outputs.current_id }}
-        run: bunx wrangler versions deploy "${CURRENT_ID}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} restore after smoke failure"
-
-      - name: Deploy version to production traffic
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          VERSION_ID: ${{ steps.upload.outputs.version_id }}
-        run: bunx wrangler versions deploy "${VERSION_ID}@100%" --yes --message "deploy.yml ${GITHUB_RUN_ID} (${GITHUB_SHA::7})"
+      - name: Gate deploy to production
+        uses: ./.github/actions/gate-deploy
+        with:
+          stage: production
+          worker-name: taimei-auth
+          base-url: https://auth.taimei-code.com
+          directory: ${{ runner.temp }}/production-tree
+          smoke: public
+          cloudflare-api-token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          cloudflare-account-id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

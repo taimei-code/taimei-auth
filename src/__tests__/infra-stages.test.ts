@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { SECRET_BINDING_NAMES } from "../secret-bindings";
 import {
   DURABLE_OBJECT_BINDINGS,
+  expectedBindings,
   parseAccountId,
   parseDeployMode,
   parseStage,
@@ -28,6 +30,11 @@ const production = parseJsonc(
 
 const stages: [string, StageConfig][] = Object.entries(STAGES);
 
+const secretTypes = (mode: "adopt" | "gate" | "full") =>
+  expectedBindings("production", mode)
+    .filter(({ name }) => (SECRET_BINDING_NAMES as readonly string[]).includes(name))
+    .map(({ type }) => type);
+
 const varKeysMissingOrExtra = (vars: Record<string, string>) =>
   symmetricDifference(Object.keys(vars), Object.keys(production.vars));
 
@@ -41,12 +48,52 @@ const allowedAsRedirect = (host: string) =>
   Object.values(ALLOWED_REDIRECT_HOST_PATTERNS).some((pattern) => pattern.test(host));
 
 describe("IaC の stage の表は、本番の wrangler.jsonc とずれない", () => {
-  test("stage は staging だけ", () => {
-    expect(Object.keys(STAGES)).toEqual(["staging"]);
+  test("stage は staging と production", () => {
+    expect(Object.keys(STAGES)).toEqual(["staging", "production"]);
   });
 
-  test.each(stages)("%s の vars の key は wrangler.jsonc の vars の key と同じ", (_, stage) => {
-    expect(varKeysMissingOrExtra(stage.vars)).toEqual([]);
+  test("staging の vars の key は wrangler.jsonc の vars の key と同じ", () => {
+    expect(varKeysMissingOrExtra(STAGES.staging.vars)).toEqual([]);
+  });
+
+  test("production の vars は wrangler.jsonc の vars と key も値も同じ (local の開発と本番の定義がずれない)", () => {
+    expect(production.vars).toEqual({ ...STAGES.production.vars });
+  });
+
+  test("production は今の本番の Worker と Hyperdrive を名前で指す (作り直さずに取り込む)", () => {
+    expect({
+      workerName: STAGES.production.workerName,
+      hyperdriveName: STAGES.production.hyperdriveName,
+    }).toEqual({ workerName: "taimei-auth", hyperdriveName: "taimei-auth-prod" });
+  });
+
+  test("production は custom domain で配り、staging は workers.dev を Access の後ろで配る", () => {
+    expect([STAGES.production.servedAt, STAGES.staging.servedAt]).toEqual([
+      { kind: "customDomain", domain: "auth.taimei-code.com" },
+      { kind: "workersDevBehindAccess" },
+    ]);
+  });
+
+  test.each(stages)("%s の secret の名前は、Worker が解く名前の一覧にある", (_, stage) => {
+    expect(stage.secrets.filter((name) => !SECRET_BINDING_NAMES.includes(name))).toEqual([]);
+  });
+
+  test("production は、Worker が解く secret をすべて持つ", () => {
+    expect(symmetricDifference([...STAGES.production.secrets], [...SECRET_BINDING_NAMES])).toEqual(
+      [],
+    );
+  });
+
+  test("取り込みの前の期待では secret は wrangler secret put の secret_text、取り込みの後は Secrets Store の binding", () => {
+    expect({
+      adopt: [...new Set(secretTypes("adopt"))],
+      gate: [...new Set(secretTypes("gate"))],
+      full: [...new Set(secretTypes("full"))],
+    }).toEqual({
+      adopt: ["secret_text"],
+      gate: ["secrets_store_secret"],
+      full: ["secrets_store_secret"],
+    });
   });
 
   test("vars の key を 1 つ外すと、ずれとして報告される", () => {
@@ -74,31 +121,29 @@ describe("IaC の stage の表は、本番の wrangler.jsonc とずれない", (
     });
   });
 
-  test.each(stages)("%s の Worker の名前は本番の Worker の名前と違う", (_, stage) => {
-    expect(stage.workerName).not.toBe(production.name);
+  test("staging の Worker の名前は本番の Worker の名前と違う", () => {
+    expect(STAGES.staging.workerName).not.toBe(production.name);
   });
 
-  test.each(
-    stages,
-  )("%s の auth と app の host は、本番以外の redirect 先に許される", (_, stage) => {
-    expect(hostsIn(stage).filter((host) => !allowedAsRedirect(host))).toEqual([]);
+  test("staging の auth と app の host は、本番以外の redirect 先に許される", () => {
+    expect(hostsIn(STAGES.staging).filter((host) => !allowedAsRedirect(host))).toEqual([]);
   });
 });
 
 describe("IaC の CLI の入力は、表に無い値で何も作らずに止まる", () => {
-  test.each(["production", "", "Staging"])("stage %p は表に無いので失敗する", (name) => {
+  test.each(["Production", "", "Staging"])("stage %p は表に無いので失敗する", (name) => {
     expect(() => parseStage(name)).toThrow();
   });
 
-  test("stage staging は通る", () => {
-    expect(parseStage("staging")).toBe("staging");
+  test.each(["staging", "production"])("stage %s は通る", (name) => {
+    expect(parseStage(name)).toBe(name);
   });
 
   test.each([undefined, "", "canary", "FULL"])("deploy の方式 %p は失敗する", (value) => {
     expect(() => parseDeployMode(value)).toThrow();
   });
 
-  test.each(["gate", "full"])("deploy の方式 %s は通る", (value) => {
+  test.each(["gate", "full", "adopt"])("deploy の方式 %s は通る", (value) => {
     expect(parseDeployMode(value)).toBe(value);
   });
 

@@ -24,7 +24,7 @@ printf "NON_PRODUCTION_DATABASE_URL='%s'\n" "$database_url" >> "$env_file"
 export WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$database_url"
 export WRANGLER_SEND_METRICS=false
 
-# --local-upstream が無いと routes の host (auth.taimei-code.com) が Origin に書き換わり、cookie 付きの POST が 403 になる
+# --local-upstream で worker が見る host を AUTH_SERVICE_URL の host にそろえる (Origin と食い違うと cookie 付きの POST が 403 になる)
 [[ -n "${AUTH_SERVICE_URL:-}" ]] || { echo "AUTH_SERVICE_URL が未設定 (--local-upstream の host に使う)" >&2; exit 2; }
 upstream="${AUTH_SERVICE_URL#http://}"
 upstream="${upstream#https://}"
