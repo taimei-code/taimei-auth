@@ -16,7 +16,7 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 
 ## testing の subpath の相対 import は `.js` まで書く
 
-consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読む。Node の ESM は拡張子の無い相対 import を解決できない。そのため `src/testing.ts` の相対 import は `./url-builder.js` のように `.js` まで書く。ほかの entry は consumer の bundler が読むので、拡張子を書かない。root `.oxlintrc.json` の `import/extensions` は `src/testing.ts` だけで効く。この repo の試験は Bun で走り、拡張子が無くても解決するので、この誤りを捕まえるのは lint だけである。
+consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読む。Node の ESM は拡張子の無い相対 import を解決できない。そのため `src/testing.ts` の相対 import は `./url-builder.js` のように `.js` まで書く。ほかの entry は consumer の bundler が読むので、拡張子を書かない。この repo の試験は Bun で走り、拡張子が無くても解決するので、この誤りは試験では見つからない。静的な import と re-export の拡張子は、root `.oxlintrc.json` の `import/extensions` が `src/testing.ts` だけで検査する。動的な `import()` の拡張子と `.ts` の拡張子は、`tsconfig.testing-node.json` (Node の解決規則 `nodenext`) の typecheck が検査する。この package は `"type": "module"` を書いていないので、TS は静的な import の拡張子を求めない。そのため lint と typecheck の両方が要る。
 
 ## SDK は taimei-auth の決めごとだけを持ち、consumer の知識を持たない
 

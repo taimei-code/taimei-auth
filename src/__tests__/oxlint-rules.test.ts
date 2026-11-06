@@ -23,6 +23,11 @@ const TARGET_BLANK_WITHOUT_NOOPENER = "react(jsx-no-target-blank)";
 const EVAL = "eslint(no-eval)";
 const EMPTY_HEADING = "jsx-a11y(heading-has-content)";
 const ARIA_HIDDEN_ON_FOCUSABLE = "jsx-a11y(no-aria-hidden-on-focusable)";
+const BUTTON_WITHOUT_TYPE = "react(button-has-type)";
+const LOOSE_EQUALITY = "eslint(eqeqeq)";
+const SWITCH_FALLTHROUGH = "eslint(no-fallthrough)";
+const PARSE_INT_WITHOUT_RADIX = "eslint(radix)";
+const COMMONJS = "import(no-commonjs)";
 
 const CASES: readonly Case[] = [
   {
@@ -302,6 +307,37 @@ const CASES: readonly Case[] = [
     path: "web/src/account/hidden-button.tsx",
     source: 'export const View = () => <button type="button" aria-hidden="true">x</button>;',
     expectedRules: [ARIA_HIDDEN_ON_FOCUSABLE],
+  },
+  {
+    name: "画面は type の無い button を書けない",
+    path: "web/src/account/untyped-button.tsx",
+    source: "export const View = () => <button>x</button>;",
+    expectedRules: [BUTTON_WITHOUT_TYPE],
+  },
+  {
+    name: "== で比べられない",
+    path: "src/loose-equality.ts",
+    source: "export const same = (a: number, b: number) => a == b;",
+    expectedRules: [LOOSE_EQUALITY],
+  },
+  {
+    name: "switch の case から次の case へ break なしに進めない",
+    path: "src/fallthrough.ts",
+    source:
+      "export const label = (n: number) => { let text = ''; switch (n) { case 1: text = 'one'; case 2: text += 'two'; break; } return text; };",
+    expectedRules: [SWITCH_FALLTHROUGH],
+  },
+  {
+    name: "parseInt に基数を渡さずに呼べない",
+    path: "src/parse-int.ts",
+    source: "export const parse = (text: string) => parseInt(text);",
+    expectedRules: [PARSE_INT_WITHOUT_RADIX],
+  },
+  {
+    name: "require で module を読めない",
+    path: "src/commonjs.ts",
+    source: 'export const orm = require("drizzle-orm");',
+    expectedRules: [COMMONJS],
   },
   {
     name: "eval を書けない",

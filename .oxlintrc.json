@@ -27,7 +27,12 @@
     "react/purity": "off",
     "react/globals": "off",
     "react/no-danger": "error",
-    "react/jsx-no-target-blank": "error"
+    "react/jsx-no-target-blank": "error",
+    "react/button-has-type": "error",
+    "eqeqeq": "error",
+    "no-fallthrough": "error",
+    "radix": "error",
+    "import/no-commonjs": "error"
   },
   "overrides": [
     {
