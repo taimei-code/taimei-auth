@@ -3,3 +3,28 @@ preload = ["./testing/redirect-hosts-plugin.ts", "./testing/__tests__/preload.ts
 
 [install]
 minimumReleaseAge = 604800
+minimumReleaseAgeExcludes = [
+  # security fix ではない例外 (security fix 以外で初めて。ADR-0009 の 4 回目の bypass)。Foldkit 0.170.0 の peer (effect ~4.1.0) を満たすため、effect 4.1.2 と alchemy beta.85 を 7 日齢より前に入れる (#383)。
+  # 外せる日時: 2026-11-09 21:08 UTC (2026-11-10 06:08 JST、最も遅い @alchemy.run/sql の公開 + 7 日)。外すのは #385
+  # 公開日時 (UTC): effect 4.1.2 11-02 04:27、@effect/atom-react 4.1.2 11-02 04:03、@effect/platform-bun 4.1.2 11-02 04:04、@effect/platform-node 4.1.2 11-02 04:05、@effect/platform-node-shared 4.1.2 11-02 04:04
+  # 公開日時 (UTC): alchemy 2.0.0-beta.85 11-02 21:05、@alchemy.run/cloudflare 21:07、@alchemy.run/acme 21:05、@alchemy.run/cloudflare-runtime 21:06、@alchemy.run/docker 21:04、@alchemy.run/node-utils 21:08、@alchemy.run/sql 21:08 (いずれも 2.0.0-beta.85)
+  # 公開日時 (UTC): @distilled.cloud/acme 11-02 20:03、aws 20:09、aws4signer 20:03、cloudflare 20:08、core 20:05、iceberg 20:07 (いずれも 1.0.0-rc.18)
+  "effect",
+  "@effect/atom-react",
+  "@effect/platform-bun",
+  "@effect/platform-node",
+  "@effect/platform-node-shared",
+  "alchemy",
+  "@alchemy.run/cloudflare",
+  "@alchemy.run/acme",
+  "@alchemy.run/cloudflare-runtime",
+  "@alchemy.run/docker",
+  "@alchemy.run/node-utils",
+  "@alchemy.run/sql",
+  "@distilled.cloud/acme",
+  "@distilled.cloud/aws",
+  "@distilled.cloud/aws4signer",
+  "@distilled.cloud/cloudflare",
+  "@distilled.cloud/core",
+  "@distilled.cloud/iceberg",
+]

@@ -29,7 +29,7 @@ IaC の道具は PoC (#367) で alchemy v2 と OpenTofu を比べ、alchemy v2 �
 2. **定義は `infra/alchemy.run.ts` の 1 本にし、stage ごとの差は `infra/stages.ts` の表に集める**。
    - 表の key は stage 名で、#308 では `staging` だけを置き、#309 で `production` を足す。stack は CLI の `--stage` を表の key として parse し、表に無い stage では何も作らずに止まる。
    - 表の値に置くのは、Worker の名前、vars の値、入口 (Decision 7)、Hyperdrive の名前だけである。資源の種類と binding の数は、stage で変えない。例外は custom domain で、本番だけが持つ。#309 で表に足す。(2026-11-02 追記) 例外はほかに 2 つある。Access は staging だけが持つ (Decision 10)。secret の名前の一覧は stage ごとの値で、staging は本番の部分である (Decision 11)。どちらも表の値で表し、定義に stage の名前の分岐を書かない。
-3. **state の置き場は repo ごとに分ける** (`Cloudflare.state({ name: "taimei-auth" })`。taimei は `{ name: "taimei" }`)。
+3. **state の置き場は repo ごとに分ける** (`Cloudflare.state({ name: "taimei-auth" })`。taimei は `{ name: "taimei" }`)。(2026-11-05 改訂) alchemy beta.85 は `name` を廃し、置き場の Worker 名をそのまま `workerName` で受ける。beta.84 は `name` から `alchemy-state-store-<name>` という Worker 名を作っていたので、同じ置き場を使い続けるには接頭辞を付けた名前を渡す (taimei-auth は `workerName: "alchemy-state-store-taimei-auth"` で、`src/__tests__/infra-stages.test.ts` が固定する。taimei は `"alchemy-state-store-taimei"`)。接頭辞を落とすと空の置き場が新しく作られ、次の deploy が全資源を作り直そうとする。
    - 一方の repo が alchemy の版を上げ下げしても、もう一方の置き場は書き換わらない。`deploy --yes` は置き場の版が client と違うと、その client の版で置き場を作り直すからである。
    - 置き場は、最初の CI の deploy (`--yes`) が作る。
 

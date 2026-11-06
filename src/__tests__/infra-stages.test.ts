@@ -9,6 +9,7 @@ import {
   parseDeployMode,
   parseStage,
   STAGES,
+  STATE_STORE_WORKER_NAME,
   type StageConfig,
   WORKER_RUNTIME,
 } from "../../infra/stages";
@@ -151,4 +152,8 @@ describe("IaC の CLI の入力は、表に無い値で何も作らずに止ま�
       "0123456789abcdef0123456789abcdef",
     );
   });
+});
+
+test("state の置き場の Worker 名は、alchemy beta.84 が name の taimei-auth から作った名前のままにする (変えると既存の state を見失い、全資源を作り直そうとする)", () => {
+  expect(STATE_STORE_WORKER_NAME).toBe("alchemy-state-store-taimei-auth");
 });
