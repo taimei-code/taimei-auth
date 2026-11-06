@@ -83,7 +83,7 @@ image から何も消えないため見送った。根本には 2 つの問題�
   ban (`.oxlintrc.json`) が import を止めるので、advisory は package.json の dependencies セクションと `ALLOWED_DEV_DEPENDENCIES`
   (`src/__tests__/dependency-classification.test.ts`) だけを見ればよい
 - 位置契約 (既定 target が dev であること) の検証は機械化した。CI の `docker` job
-  (既定 build と `--target dev` build の image ID が一致することの assert と、`scripts/docker-smoke.sh` の dev モード)
+  (既定 build と `--target dev` build の manifest の digest が一致することの assert と、`scripts/docker-smoke.sh` の dev モード)
   と config-invariant テスト (`src/__tests__/dependency-classification.test.ts`
   の依存分類の同期と、`src/__tests__/dockerfile-contract.test.ts` の Dockerfile 静的 invariant。
   最後の `FROM ... AS <name>` が dev であること等) で検証する。

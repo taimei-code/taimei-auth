@@ -145,7 +145,7 @@ jobs:
 
       # load: true は buildx の docker-container driver が image を local store に入れないため要る (後続の docker run と inspect が見つけられない)
       # context: . を省くと Git context になり、gitignore された sentinel が build に入らず不在 assert が中身の無い成功になる
-      # provenance / sbom が付くと image ID が分かれ、位置契約 (既定 == --target dev) の assert が壊れる
+      # provenance / sbom が付くと manifest の digest が分かれ、位置契約 (既定 == --target dev) の assert が壊れる
       - name: Build (既定 target)
         id: build-default
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -157,7 +157,7 @@ jobs:
           sbom: false
           cache-from: type=gha,scope=dev
 
-      # この image は imageid の出力しか使わないため load を省く (1GB 級の export / import が消える)
+      # この image は digest の出力しか使わないため load を省く (1GB 級の export / import が消える)
       - name: Build (--target dev)
         id: build-dev
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -171,18 +171,19 @@ jobs:
           cache-from: type=gha,scope=dev
           cache-to: type=gha,scope=dev,mode=min
 
+      # imageid は load した image では manifest の digest を、load しない image では config の digest を返し、同じ image でも一致しない。どちらの build でも同じ値を返す manifest の digest で比べる
       - name: Assert 既定 target == dev stage
         run: |
-          default_id='${{ steps.build-default.outputs.imageid }}'
-          dev_id='${{ steps.build-dev.outputs.imageid }}'
+          default_id='${{ steps.build-default.outputs.digest }}'
+          dev_id='${{ steps.build-dev.outputs.digest }}'
           echo "既定 build: $default_id"
           echo "--target dev: $dev_id"
           if [ -z "$default_id" ] || [ -z "$dev_id" ]; then
-            echo "::error::image ID を取得できなかった (既定=${default_id:-none} / --target dev=${dev_id:-none})。build step の outputs.imageid を確認する。"
+            echo "::error::manifest の digest を取得できなかった (既定=${default_id:-none} / --target dev=${dev_id:-none})。build step の outputs.digest を確認する。"
             exit 1
           fi
           if [ "$default_id" != "$dev_id" ]; then
-            echo "::error::位置契約違反: dev must be the final stage. 既定 build と --target dev の image ID が一致しない。Dockerfile 末尾の stage が dev 以外になっていないか確認する (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
+            echo "::error::位置契約違反: dev must be the final stage. 既定 build と --target dev の manifest の digest が一致しない。Dockerfile 末尾の stage が dev 以外になっていないか確認する (詳細: docs/adr/0014-docker-runner-dev-stage-separation.md)。"
             exit 1
           fi
 
