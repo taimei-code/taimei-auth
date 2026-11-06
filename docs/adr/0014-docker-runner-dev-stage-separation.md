@@ -79,8 +79,8 @@ image から何も消えないため見送った。根本には 2 つの問題�
 
 ## Consequences
 
-- advisory 対応時の影響判定は「server コードが import しうる package か」で行う。web 専用の 13 件は biome の
-  ban が import を止めるので、advisory は package.json の dependencies セクションと `ALLOWED_DEV_DEPENDENCIES`
+- advisory 対応時の影響判定は「server コードが import しうる package か」で行う。web 専用の 13 件は lint の
+  ban (`.oxlintrc.json`) が import を止めるので、advisory は package.json の dependencies セクションと `ALLOWED_DEV_DEPENDENCIES`
   (`src/__tests__/dependency-classification.test.ts`) だけを見ればよい
 - 位置契約 (既定 target が dev であること) の検証は機械化した。CI の `docker` job
   (既定 build と `--target dev` build の image ID が一致することの assert と、`scripts/docker-smoke.sh` の dev モード)
@@ -99,7 +99,7 @@ image から何も消えないため見送った。根本には 2 つの問題�
   docker job は deploy の前提条件であって供給元ではない
 - 当初案 (packages/ を deps から取る) は、2 つの install の bun store が混ざることと dangling symlink
   (auth-client の devDependency `typescript`) を生んだため棄却した (Decision 2 の形にした)
-- 誤分類は biome の `noRestrictedImports` が CI の lint で検出する
+- 誤分類は oxlint の `no-restricted-imports` (`.oxlintrc.json`) が CI の lint で検出する
 - codegen (`db:generate` / `generate`) は host の bun で実行する運用に確定した。コンテナ内で実行すると
   生成物が `--rm` で消え、読む schema も image 焼き込み時点のものになるためである (実測)。「原則 compose で
   完結」(README「compose での環境操作」) に対する明示的な例外で、working tree へ書き出す作業のみが対象である

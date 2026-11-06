@@ -1,0 +1,408 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "jsx-a11y", "react"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "src/gen/**",
+    "packages/auth-client/src/gen/**",
+    "packages/auth-client/dist/**",
+    "web/dist/**",
+    "drizzle/**",
+    "worker-configuration.d.ts"
+  ],
+  "rules": {
+    "no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_"
+      }
+    ],
+    "no-template-curly-in-string": "error",
+    "unicorn/no-useless-spread": "off",
+    "jsx-a11y/prefer-tag-over-role": "off",
+    "react/purity": "off",
+    "react/globals": "off",
+    "react/no-danger": "error",
+    "react/jsx-no-target-blank": "error"
+  },
+  "overrides": [
+    {
+      "files": ["src/**", "db/**", "management/**", "testing/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "@effect/atom-react",
+                  "@radix-ui/*",
+                  "@tanstack/react-router",
+                  "class-variance-authority",
+                  "clsx",
+                  "lucide-react",
+                  "qrcode",
+                  "sonner",
+                  "tailwind-merge",
+                  "tailwindcss-animate"
+                ],
+                "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+              },
+              {
+                "group": ["@connectrpc/connect-node"],
+                "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+              },
+              {
+                "group": ["effect/*", "effect/**"],
+                "message": "effect は root から import する。effect/http や effect/sql などの area module は @stability unstable で、minor で breaking し得る (docs/adr/0017-effect-v4-full-adoption.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/**", "testing/**"],
+      "excludeFiles": ["src/**/__tests__/**", "src/auth.ts", "testing/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "drizzle-orm",
+                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
+              },
+              {
+                "name": "@/db/schema",
+                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
+              },
+              {
+                "name": "@/db/client",
+                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
+              },
+              {
+                "name": "better-auth/cookies",
+                "importNames": ["getSessionCookie"],
+                "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@effect/atom-react",
+                  "@radix-ui/*",
+                  "@tanstack/react-router",
+                  "class-variance-authority",
+                  "clsx",
+                  "lucide-react",
+                  "qrcode",
+                  "sonner",
+                  "tailwind-merge",
+                  "tailwindcss-animate"
+                ],
+                "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+              },
+              {
+                "group": ["@connectrpc/connect-node"],
+                "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+              },
+              {
+                "group": ["effect/*", "effect/**"],
+                "message": "effect は root から import する。effect/http や effect/sql などの area module は @stability unstable で、minor で breaking し得る (docs/adr/0017-effect-v4-full-adoption.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/**/*-contract.ts", "src/spa-contract-table.ts"],
+      "excludeFiles": ["src/**/__tests__/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "drizzle-orm",
+                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
+              },
+              {
+                "name": "@/db/schema",
+                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
+              },
+              {
+                "name": "@/db/client",
+                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
+              },
+              {
+                "name": "better-auth/cookies",
+                "importNames": ["getSessionCookie"],
+                "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+              },
+              {
+                "name": "effect/http-api",
+                "importNames": ["HttpApiBuilder", "HttpApiTest"],
+                "message": "契約の module は web と共有するため、server の実装 (HttpApiBuilder) を import しない。実装は src/handlers/*-http-api.ts に置く"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@effect/atom-react",
+                  "@radix-ui/*",
+                  "@tanstack/react-router",
+                  "class-variance-authority",
+                  "clsx",
+                  "lucide-react",
+                  "qrcode",
+                  "sonner",
+                  "tailwind-merge",
+                  "tailwindcss-animate"
+                ],
+                "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+              },
+              {
+                "group": ["@connectrpc/connect-node"],
+                "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+              },
+              {
+                "group": ["effect/*", "effect/**", "!effect/http-api"],
+                "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/handlers/*-http-api.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "drizzle-orm",
+                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
+              },
+              {
+                "name": "@/db/schema",
+                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
+              },
+              {
+                "name": "@/db/client",
+                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
+              },
+              {
+                "name": "better-auth/cookies",
+                "importNames": ["getSessionCookie"],
+                "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "@effect/atom-react",
+                  "@radix-ui/*",
+                  "@tanstack/react-router",
+                  "class-variance-authority",
+                  "clsx",
+                  "lucide-react",
+                  "qrcode",
+                  "sonner",
+                  "tailwind-merge",
+                  "tailwindcss-animate"
+                ],
+                "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
+              },
+              {
+                "group": ["@connectrpc/connect-node"],
+                "message": "削除済み依存。再導入しない (ADR-0011 / ADR-0014)"
+              },
+              {
+                "group": ["effect/*", "effect/**", "!effect/http-api", "!effect/http"],
+                "message": "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["e2e/**"],
+      "excludeFiles": ["e2e/fixtures.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["@/db/**", "**/db/**", "drizzle-orm", "drizzle-orm/**", "pg"],
+                "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md「例外 path (正本)」)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
+              },
+              {
+                "group": ["effect", "effect/*", "effect/**"],
+                "message": "e2e は effect を直接 import しない。モックの path と失敗の応答は e2e/contract-mock.ts で契約から作る (docs/adr/0017-effect-v4-full-adoption.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["web/**"],
+      "excludeFiles": ["web/src/shared/notify.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "sonner",
+                "message": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+              },
+              {
+                "name": "drizzle-orm",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "pg",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["effect/*", "effect/**", "!effect/reactivity", "!effect/http"],
+                "message": "web で使える effect の subpath は effect/reactivity と effect/http だけ (docs/adr/0017-effect-v4-full-adoption.md)"
+              },
+              {
+                "group": ["drizzle-orm/**"],
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["web/src/shared/notify.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "drizzle-orm",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "pg",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["drizzle-orm/**"],
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["web/src/**"],
+      "excludeFiles": ["web/src/**/__tests__/**", "web/src/app/search-params.ts"],
+      "rules": {
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "URLSearchParams",
+            "message": "search は route の validateSearch で parse する (web/src/CLAUDE.md)"
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/auth-client/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "next",
+                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "next/headers",
+                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "next/navigation",
+                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "next/server",
+                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "next/cache",
+                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "react",
+                "message": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "react-dom",
+                "message": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "@connectrpc/connect-node",
+                "message": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "@connectrpc/connect-web",
+                "message": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
+              },
+              {
+                "name": "drizzle-orm",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "pg",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["drizzle-orm/**"],
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/auth-client/src/testing.ts"],
+      "rules": {
+        "import/extensions": [
+          "error",
+          "always",
+          {
+            "ignorePackages": true,
+            "checkTypeImports": true
+          }
+        ]
+      }
+    }
+  ]
+}

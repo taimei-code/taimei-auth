@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import {
-  type BiomeConfig,
-  type BiomeOverride,
   CONNECT_NODE,
   classificationDiff,
   classificationViolations,
@@ -10,9 +8,11 @@ import {
   EXPECTED_CONNECT_NODE_COPY_COUNT,
   EXPECTED_WEB_ONLY_COPY_COUNT,
   hasConnectNodeBan,
+  type OxlintConfig,
+  type OxlintOverride,
   overrideMatches,
   parseJsonc,
-  readBiomeConfig,
+  readOxlintConfig,
   readPackageJson,
   REPRESENTATIVE_DB_FILE,
   REPRESENTATIVE_MANAGEMENT_FILE,
@@ -27,7 +27,7 @@ import {
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@alchemy.run/cloudflare":
     "build-tool: infra/alchemy.run.ts が import する alchemy の Cloudflare の資源",
-  "@biomejs/biome": "build-tool: lint / format CLI。server コードから import しない",
+  "@biomejs/biome": "build-tool: format CLI。server コードから import しない",
   "@bufbuild/buf": "build-tool: proto codegen CLI (host 実行)",
   "@bufbuild/protoc-gen-es": "build-tool: buf generate の plugin (生成物のみ ship する)",
   "@effect/platform-bun":
@@ -40,6 +40,7 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   alchemy: "build-tool: infra/alchemy.run.ts が宣言する IaC の CLI (staging の deploy)",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
   "drizzle-kit": "build-tool: migration 生成 CLI (host の bun run db:generate)",
+  oxlint: "build-tool: lint CLI。server コードから import しない",
   fallow: "build-tool: dead code / 循環依存の静的解析 CLI (CI の fallow audit と MCP server)",
   postcss: "build-tool: web の CSS build pipeline",
   tailwindcss: "build-tool: web の CSS build pipeline",
@@ -58,13 +59,13 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
     "test-only-runtime: e2e runner。ship される server コードからは import しない",
 };
 
-describe("依存分類 (biome ban ↔ package.json) の config invariant", () => {
+describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", () => {
   test("web 専用 ban の全 copy で group 集合が一致する", () => {
-    expect(webOnlyBanViolations(readBiomeConfig())).toEqual([]);
+    expect(webOnlyBanViolations(readOxlintConfig())).toEqual([]);
   });
 
   test("devDependencies − 許可リスト == web 専用 group (両方向)", () => {
-    const config = readBiomeConfig();
+    const config = readOxlintConfig();
     const pkg = readPackageJson();
     const devDeps = Object.keys(pkg.devDependencies ?? {});
     const group = webOnlyGroups(config)[0] as string[];
@@ -84,7 +85,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
   });
 
   test("@connectrpc/connect-node は依存から不在かつ全 copy で ban 済み", () => {
-    const config = readBiomeConfig();
+    const config = readOxlintConfig();
     const pkg = readPackageJson();
 
     expect(Object.keys(pkg.dependencies ?? {}).includes(CONNECT_NODE)).toBe(false);
@@ -95,12 +96,12 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
 
     const effective = effectiveOverride(config, REPRESENTATIVE_SERVER_FILE);
     expect(effective).not.toBeNull();
-    expect(hasConnectNodeBan(effective as BiomeOverride)).toBe(true);
+    expect(hasConnectNodeBan(effective as OxlintOverride)).toBe(true);
   });
 
   test("片方の override だけに追記すると group 集合の不一致で落ちる", () => {
-    const config = readBiomeConfig();
-    const patched = readBiomeConfig();
+    const config = readOxlintConfig();
+    const patched = readOxlintConfig();
     const firstGroup = webOnlyGroups(patched)[0] as string[];
     firstGroup.push("react-day-picker");
 
@@ -113,7 +114,7 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
   });
 
   test("web 専用 devDependency を足して ban 未追記だと差分が列挙される", () => {
-    const config = readBiomeConfig();
+    const config = readOxlintConfig();
     const pkg = readPackageJson();
     const devDeps = [...Object.keys(pkg.devDependencies ?? {}), "react-day-picker"];
     const group = webOnlyGroups(config)[0] as string[];
@@ -124,22 +125,19 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     const violations = classificationViolations(diff);
     expect(violations.length).toBe(1);
     expect(violations[0]).toContain("react-day-picker");
-    expect(violations[0]).toContain("biome.json の 2 つの override group");
+    expect(violations[0]).toContain(".oxlintrc.json の override の group");
     expect(violations[0]).toContain("ALLOWED_DEV_DEPENDENCIES");
   });
 
   test("selector の出現回数 0 / 1 / 3 と後置 override は loud fail する", () => {
-    const withCopies = (count: number): BiomeConfig => ({
+    const withCopies = (count: number): OxlintConfig => ({
       overrides: Array.from({ length: count }, () => ({
-        includes: ["src/**", "db/**", "management/**"],
-        linter: {
-          rules: {
-            style: {
-              noRestrictedImports: {
-                options: { patterns: [{ group: ["lucide-react"], message: WEB_ONLY_DEP_MESSAGE }] },
-              },
-            },
-          },
+        files: ["src/**", "db/**", "management/**"],
+        rules: {
+          "no-restricted-imports": [
+            "error",
+            { patterns: [{ group: ["lucide-react"], message: WEB_ONLY_DEP_MESSAGE }] },
+          ],
         },
       })),
     });
@@ -165,8 +163,8 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     ] as const) {
       const shadowed = withCopies(EXPECTED_WEB_ONLY_COPY_COUNT);
       (shadowed.overrides ?? []).push({
-        includes: [scope],
-        linter: { rules: { style: { noRestrictedImports: { options: { patterns: [] } } } } },
+        files: [scope],
+        rules: { "no-restricted-imports": ["error", { patterns: [] }] },
       });
       expect(webOnlyGroups(shadowed).length).toBe(EXPECTED_WEB_ONLY_COPY_COUNT);
       expect(effectiveWebOnlyGroup(shadowed, path)).toBeNull();
@@ -174,14 +172,20 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
     }
   });
 
-  test("overrideMatches は includes の後勝ち semantics に従う", () => {
-    const matches = (includes: string[], path: string) => overrideMatches({ includes }, path);
+  test("overrideMatches は files のどれかに当たり excludeFiles のどれにも当たらない path を対象にする", () => {
+    const matches = (files: string[], excludeFiles: string[], path: string) =>
+      overrideMatches({ files, excludeFiles }, path);
 
-    expect(matches(["!src/handlers/**", "src/**"], "src/handlers/account-company.ts")).toBe(true);
-    expect(matches(["!src/auth.ts", "src/**"], "src/auth.ts")).toBe(true);
-    expect(matches(["src/**", "!src/auth.ts"], "src/auth.ts")).toBe(false);
-    expect(matches(["db/**"], "src/auth.ts")).toBe(false);
-    expect(matches([], "src/auth.ts")).toBe(false);
+    expect(matches(["src/**"], [], "src/handlers/account-company.ts")).toBe(true);
+    expect(matches(["src/**"], ["src/auth.ts"], "src/auth.ts")).toBe(false);
+    expect(matches(["src/**", "db/**"], ["src/auth.ts"], "db/schema.ts")).toBe(true);
+    expect(matches(["db/**"], [], "src/auth.ts")).toBe(false);
+    expect(matches([], [], "src/auth.ts")).toBe(false);
+  });
+
+  test("oxlint は files の否定の glob を黙って無視するので、override の files に ! で始まる glob を書かない (除外は excludeFiles に書く)", () => {
+    const files = (readOxlintConfig().overrides ?? []).flatMap((override) => override.files);
+    expect(files.filter((pattern) => pattern.startsWith("!"))).toEqual([]);
   });
 
   test("parseJsonc は行コメント / ブロックコメント / 末尾カンマを許容する", () => {
@@ -192,11 +196,9 @@ describe("依存分類 (biome ban ↔ package.json) の config invariant", () =>
         { "includes": ["src/**"] },
       ],
     }`;
-    expect(parseJsonc(jsonc).overrides?.length).toBe(1);
-    expect(
-      parseJsonc('{ "overrides": [{ "includes": ["https://x//y"] }] }').overrides?.[0],
-    ).toEqual({
-      includes: ["https://x//y"],
+    expect(parseJsonc(jsonc)).toEqual({ overrides: [{ includes: ["src/**"] }] });
+    expect(parseJsonc('{ "overrides": [{ "includes": ["https://x//y"] }] }')).toEqual({
+      overrides: [{ includes: ["https://x//y"] }],
     });
   });
 });

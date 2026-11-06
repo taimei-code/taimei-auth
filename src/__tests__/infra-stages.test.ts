@@ -27,7 +27,7 @@ type WranglerConfig = {
 
 const production = parseJsonc(
   readFileSync(join(REPO_ROOT, "wrangler.jsonc"), "utf8"),
-) as unknown as WranglerConfig;
+) as WranglerConfig;
 
 const stages: [string, StageConfig][] = Object.entries(STAGES);
 

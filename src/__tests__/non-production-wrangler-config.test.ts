@@ -14,7 +14,7 @@ type WranglerConfig = {
 };
 
 const readWranglerConfig = (path: string): WranglerConfig =>
-  parseJsonc(readFileSync(join(REPO_ROOT, path), "utf8")) as unknown as WranglerConfig;
+  parseJsonc(readFileSync(join(REPO_ROOT, path), "utf8")) as WranglerConfig;
 
 const hyperdriveIds = (config: WranglerConfig): string[] =>
   (config.hyperdrive ?? []).map((binding) => binding.id);

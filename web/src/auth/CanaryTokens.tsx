@@ -19,7 +19,6 @@ export const CanaryTokens = () => {
 
   return (
     <>
-      {/* biome-ignore lint/a11y/useAnchorContent: scraper 検知用のおとりリンクで、利用者からは隠す (ADR-0005) */}
       <a
         href={`/auth/canary-token/${tokenId}`}
         aria-hidden="true"
@@ -28,6 +27,7 @@ export const CanaryTokens = () => {
       >
         canary
       </a>
+      {/* oxlint-disable-next-line jsx-a11y/no-aria-hidden-on-focusable -- type=hidden の input は focus を受けない */}
       <input type="hidden" name="canary_token" value={tokenId} aria-hidden="true" />
     </>
   );

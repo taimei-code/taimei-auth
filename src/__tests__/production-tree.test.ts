@@ -9,7 +9,7 @@ import {
 import { grepFiles } from "./source-scan";
 
 const PRODUCTION_TREE_SCRIPT = "scripts/build-production-tree.sh";
-// biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま比べる
+// oxlint-disable-next-line no-template-curly-in-string -- workflow の GitHub Actions の式を文字列のまま比べる
 const PRODUCTION_TREE_DIR = "${{ runner.temp }}/production-tree";
 const EXCLUSION_LIST_DECLARATION = "EXCLUDED_FROM_PRODUCTION=\\(";
 

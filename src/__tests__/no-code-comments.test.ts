@@ -6,7 +6,7 @@ import { REPO_ROOT } from "./source-scan";
 
 const DIRS = ["src", "db", "web", "e2e", "management", "infra", "testing"];
 const DIRECTIVE =
-  /^(\/\/\/\s*<reference|\/\/\s*@ts-expect-error|\/[/*]\s*biome-ignore|\/\*\s*@vite-ignore)/;
+  /^(\/\/\/\s*<reference|\/\/\s*@ts-expect-error|\/[/*]\s*oxlint-disable-next-line\s|\/\*\s*@vite-ignore)/;
 const REGEX_CAN_START =
   /(^|[(,=:[!&|?{};+\-*%<>~^]|\b(return|typeof|case|in|of|void|yield|await))$/;
 
@@ -140,7 +140,10 @@ describe("コードにコメントを書かない (理由は名前・型・テ�
       "<div>{/* jsx */}</div>",
       "<a>https://example.com</a>",
       "// @ts-expect-error 型エラーを確かめる",
-      "// biome-ignore lint/x: 理由",
+      "// oxlint-disable-next-line no-restricted-imports -- 理由",
+      "{/* oxlint-disable-next-line jsx-a11y/x -- 理由 */}",
+      `// biome${"-"}ignore lint/x: 理由`,
+      "// eslint-disable-next-line no-restricted-imports -- 理由",
     ].join("\n");
     expect(findComments(source)).toEqual([
       "/* inner */",
@@ -148,6 +151,8 @@ describe("コードにコメントを書かない (理由は名前・型・テ�
       "// line",
       "/* block */",
       "/* jsx */",
+      `// biome${"-"}ignore lint/x: 理由`,
+      "// eslint-disable-next-line no-restricted-imports -- 理由",
     ]);
   });
 });

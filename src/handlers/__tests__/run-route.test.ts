@@ -81,7 +81,7 @@ describe("runRoute", () => {
     expect([res.status, await res.text()]).toEqual([500, "Internal Server Error"]);
     expect(captured.length).toBe(1);
     expect(captured[0]?.[0]).toBeInstanceOf(Error);
-    expect((captured[0]?.[0] as Error).message).toMatch(/[Ii]nterrupt/);
+    expect(captured[0]?.[0]).toHaveProperty("message", expect.stringMatching(/[Ii]nterrupt/));
   });
 
   test("effect は Die と同じ Cause にある Fail も defect に変えるので、client-facing の失敗と finalizer の defect が同じ Cause に入ると 500 を返し、2 つとも Sentry に送る", async () => {
