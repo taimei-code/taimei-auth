@@ -159,6 +159,10 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 
 共通画面 SPA の router を TanStack Router に替え、`react-router-dom` を依存から外した (ADR-0002)。「audit gate 対応 3 回目」で accept した react-router の advisory は対象の package が無くなったので、CI の audit step から `--ignore=GHSA-qwww-vcr4-c8h2` を外した。
 
+### 1〜3 回目の security fix の除外の撤去 (2026-11-06)
+
+1〜3 回目で足した `esbuild` (と `@esbuild/*` の 26 platform)・`undici`・`nanoid` の除外を外した。lockfile が固定している版 (esbuild 0.28.1、undici 6.29.1、nanoid 5.1.16 / 3.3.18 / 3.3.20) は、いずれも公開から 7 日を超えている。advisory の修正版の下限は `package.json` の `overrides` (`esbuild`・`undici`) と lockfile が引き続き守る。
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
