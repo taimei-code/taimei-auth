@@ -11,7 +11,7 @@ const effectImports = (dir: string): string[] => grepFiles(EFFECT_IMPORT, dir);
 const srcFiles = (pattern: string): string[] => grepFiles(pattern, "src", { tests: "exclude" });
 
 describe("effect の import 境界 (ADR-0017)", () => {
-  test("db/ は effect を import しない (Repository 境界。biome に db 専用の override を足すと web の ban の複製が崩れるので grep で固定する)", () => {
+  test("db/ は effect を import しない (Repository 境界。oxlint に db 専用の override を足すと web の ban の複製が崩れるので grep で固定する)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 

@@ -1,7 +1,7 @@
 import type { Layer } from "effect";
 import type { Hono } from "hono";
 import type { EmailSender } from "./email/ports";
-// biome-ignore lint/style/noRestrictedImports: Workers では request ごとに実際の Pool を供給する経路だけを許可する
+// oxlint-disable-next-line no-restricted-imports -- Workers では request ごとに実際の Pool を供給する経路だけを許可する
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
 import { KvStore as KvStoreBase } from "./kv-store.do";

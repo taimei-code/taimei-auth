@@ -41,7 +41,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 ## 採らなかった案
 
 - **submodule に置いた断片を `include:` する**: 起動の手順は consumer から消えるが、版の固定が SDK と submodule に分かれたまま残り、taimei-auth の更新に consumer の手順が 2 つ要る
-- **本番のコードからの import を lint (biome の `noRestrictedImports`) で禁じる**: 呼び出し箇所に `biome-ignore` を 1 行書けば越えられ、その directive は repo で許されている。型の境界は `tsconfig.json` そのものを書き換えないと越えられない
+- **本番のコードからの import を lint (oxlint の `no-restricted-imports`、採用時は biome の `noRestrictedImports`) で禁じる**: 呼び出し箇所に `oxlint-disable-next-line` を 1 行書けば越えられ、その directive は repo で許されている。型の境界は `tsconfig.json` そのものを書き換えないと越えられない
 - **現在の事業所の切り替えに、本番の `/api/account/current-company` を consumer の試験から呼ぶ**: SPA のための endpoint が consumer の依存する公開の契約になり、SPA の都合で変えられなくなる。切り替えを試験 API に置けば、本番の公開面は増えない
 - **試験用の鍵や opt-in の環境変数で、本番の app の中の試験 API を開く**: 鍵は `APP_ENV=production` でも鍵があれば開く。環境変数は設定を誤ると開き、試験のコードが本番の bundle に入る。entry を分ければ、本番の artifact に試験のコードが入らない
 

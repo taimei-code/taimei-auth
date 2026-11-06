@@ -132,7 +132,7 @@ describe("本番の secret を読める job は、本番の deploy の job に�
   test("Environment を持たずに secret を参照する deploy の job は、報告される", () => {
     const leaking: [string, Workflow] = [
       "deploy.yml",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま置く
+      // oxlint-disable-next-line no-template-curly-in-string -- workflow の GitHub Actions の式を文字列のまま置く
       { jobs: { leak: { steps: [{ run: "echo ${{ secrets.DATABASE_URL }}" }] } } },
     ];
     expect(jobsUsingSecretsWithoutEnvironment([leaking])).toEqual(["deploy.yml#leak"]);
@@ -141,7 +141,7 @@ describe("本番の secret を読める job は、本番の deploy の job に�
   test("Environment を持たずに job の env で secret を参照する deploy の job も、報告される", () => {
     const leaking: [string, Workflow] = [
       "deploy.yml",
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま置く
+      // oxlint-disable-next-line no-template-curly-in-string -- workflow の GitHub Actions の式を文字列のまま置く
       { jobs: { leak: { env: { TOKEN: "${{ secrets.CLOUDFLARE_API_TOKEN }}" }, steps: [] } } },
     ];
     expect(jobsUsingSecretsWithoutEnvironment([leaking])).toEqual(["deploy.yml#leak"]);
@@ -154,7 +154,7 @@ describe("本番の token は、使う step にだけ渡す (依存の install �
   });
 
   test("job の env に secret を置いた deploy の job は、報告される", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま置く
+    // oxlint-disable-next-line no-template-curly-in-string -- workflow の GitHub Actions の式を文字列のまま置く
     const tokenFromSecrets = "${{ secrets.CLOUDFLARE_API_TOKEN }}";
     const leaking: [string, Workflow] = [
       "iac-drift.yml",
@@ -164,7 +164,7 @@ describe("本番の token は、使う step にだけ渡す (依存の install �
   });
 
   test("workflow の env に secret を置いた deploy の workflow は、報告される", () => {
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: workflow の GitHub Actions の式を文字列のまま置く
+    // oxlint-disable-next-line no-template-curly-in-string -- workflow の GitHub Actions の式を文字列のまま置く
     const tokenFromSecrets = "${{ secrets.CLOUDFLARE_API_TOKEN }}";
     const leaking: [string, Workflow] = [
       "iac-drift.yml",
@@ -252,10 +252,10 @@ describe("0% で出して確かめる deploy は、staging と本番で同じ ac
       ],
     }).toEqual({
       directory: { required: false, default: "." },
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: action の GitHub Actions の式を文字列のまま比べる
+      // oxlint-disable-next-line no-template-curly-in-string -- action の GitHub Actions の式を文字列のまま比べる
       alchemyDirectory: "${{ inputs.directory }}",
       smokeArgument: true,
-      // biome-ignore lint/suspicious/noTemplateCurlyInString: action の GitHub Actions の式を文字列のまま比べる
+      // oxlint-disable-next-line no-template-curly-in-string -- action の GitHub Actions の式を文字列のまま比べる
       smokeEnv: "${{ inputs.smoke }}",
       accessRequired: [false, false],
     });

@@ -159,6 +159,18 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 
 共通画面 SPA の router を TanStack Router に替え、`react-router-dom` を依存から外した (ADR-0002)。「audit gate 対応 3 回目」で accept した react-router の advisory は対象の package が無くなったので、CI の audit step から `--ignore=GHSA-qwww-vcr4-c8h2` を外した。
 
+### `minimumReleaseAgeExcludes` 4 回目 bypass (2026-11-05, effect / alchemy。security fix 以外で初めて)
+
+§H の「7 日待てない場合にだけ ADR の改訂と PR で明示的に追加する」運用に基づくが、security fix ではない初めての除外である。
+
+- 理由: web を Foldkit へ移す案件 (#381) の前提として、Foldkit 0.170.0 の peer (`effect ~4.1.0`) を満たす `effect` 4.1.2 と、effect 4.1 で動く `alchemy` 2.0.0-beta.85 を入れる (#383)。7 日齢を待つ (2026-11-10 06:08 JST) か例外にするかを運用者が比べ、例外にすると決めた (2026-11-05)
+- 対象: `bun install` が止めた 18 個。`effect`・`@effect/atom-react`・`@effect/platform-bun`・`@effect/platform-node`・`@effect/platform-node-shared` (4.1.2)、`alchemy`・`@alchemy.run/cloudflare`・`acme`・`cloudflare-runtime`・`docker`・`node-utils`・`sql` (2.0.0-beta.85)、`@distilled.cloud/acme`・`aws`・`aws4signer`・`cloudflare`・`core`・`iceberg` (1.0.0-rc.18)。各 package の公開日時は `bunfig.toml` の同じ場所に書いた
+- 期限: 最も遅く公開された `@alchemy.run/sql` (2026-11-02 21:08 UTC) の 7 日後、2026-11-09 21:08 UTC 以降に外す (#385)。外すまでの間はこれらの package の新しい版も 7 日を待たずに入り得る
+
+### 1〜3 回目の security fix の除外の撤去 (2026-11-06)
+
+1〜3 回目で足した `esbuild` (と `@esbuild/*` の 26 platform)・`undici`・`nanoid` の除外を外した。lockfile が固定している版 (esbuild 0.28.1、undici 6.29.1、nanoid 5.1.16 / 3.3.18 / 3.3.20) は、いずれも公開から 7 日を超えている。advisory の修正版の下限は `package.json` の `overrides` (`esbuild`・`undici`) と lockfile が引き続き守る。
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers

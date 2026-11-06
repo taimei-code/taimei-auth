@@ -7,6 +7,7 @@ import {
   parseDeployMode,
   parseStage,
   STAGES,
+  STATE_STORE_WORKER_NAME,
   type StageConfig,
   WORKER_RUNTIME,
 } from "./stages";
@@ -69,7 +70,7 @@ export default Alchemy.Stack(
   "TaimeiAuth",
   {
     providers: Cloudflare.providers(),
-    state: Cloudflare.state({ name: "taimei-auth" }),
+    state: Cloudflare.state({ workerName: STATE_STORE_WORKER_NAME }),
   },
   Effect.gen(function* () {
     const stage: StageConfig = STAGES[parseStage(yield* Alchemy.Stage)];

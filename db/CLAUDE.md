@@ -3,14 +3,14 @@
 ## DB アクセスは `db/` に閉じる
 
 drizzle の client、schema、query は `db/` に置き、`src/` `web/` `packages/` から `drizzle-orm` や `pg` を直接 import しない。将来 `db/` を別 process に切り出して RPC 越しに呼ぶためである。
-`biome.json` の `noRestrictedImports` が、`src/**` からの `drizzle-orm`・`@/db/schema`・`@/db/client` と、`web/**`・`packages/auth-client/**` からの `drizzle-orm`・`pg` の import を止める。
+`.oxlintrc.json` の `no-restricted-imports` が、`src/**` からの `drizzle-orm`・`@/db/schema`・`@/db/client` と、`web/**`・`packages/auth-client/**` からの `drizzle-orm`・`pg` の import を止める。
 
 ### 例外 path (正本)
 
-例外の追加は DB 境界の設計変更として review し、`biome.json` も同時に更新する。
+例外の追加は DB 境界の設計変更として review し、`.oxlintrc.json` も同時に更新する。
 
 - `src/auth.ts`: better-auth が DB adapter と schema を結線する。
-- `src/worker.ts`: per-request の pool を供給する `@/db/client` の import だけを許す (`biome-ignore` で個別に許可)。
+- `src/worker.ts`: per-request の pool を供給する `@/db/client` の import だけを許す (`oxlint-disable-next-line` で個別に許可)。
 - テストの seed、観測、cleanup: 実体は `db/testing/*` (Promise) に閉じる。src のテストは `TestDb` service (`src/__tests__/test-db.ts`) を経由し、`e2e/fixtures.ts` は直接使う (理由: ADR-0017 の依存注入の項)。
 - `e2e/fixtures.ts`: spec からは `e2e/seed.ts` の子プロセス経由でだけ呼ぶ。
 - `testing/server.ts` と、そこから辿る `testing/*` (consumer の試験の環境の entry): 開発用アカウントの seed と一覧、browser ごとの候補の表 (`testing_browser_account`)、session を置く TTL store の表を `db/testing/*` で読み書きする (理由: ADR-0020 の Decision 6・7)。

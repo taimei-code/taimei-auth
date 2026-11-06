@@ -17,7 +17,7 @@ const namesInScript = (arrayName: string): string[] => {
 const overrideAlways = () => namesInScript("OVERRIDE_ALWAYS");
 
 function wranglerVarKeys(configPath: string): string[] {
-  const config = parseJsonc(readFileSync(join(REPO_ROOT, configPath), "utf8")) as unknown as {
+  const config = parseJsonc(readFileSync(join(REPO_ROOT, configPath), "utf8")) as {
     vars?: Record<string, unknown>;
   };
   return Object.keys(config.vars ?? {});

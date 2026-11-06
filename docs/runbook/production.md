@@ -110,4 +110,4 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 | zone `taimei-code.com` の custom domain 以外の DNS と、Resend の送信 domain | Worker の資源ではなく、taimei と共有している |
 | GitHub の Environment と Cloudflare の token | token を作る権限を CI に渡さない |
 | `wrangler.jsonc` | local の開発 (`wrangler dev`) と、本番の bundle の build (`wrangler versions upload --dry-run`) に使う。本番の token は Environment `production` にだけあり、手元に置かないので、この設定で本番に出す経路は人の手作業だけになる |
-| alchemy の state の置き場 (`alchemy-state-store`) | 最初の deploy が作る。消すと state を失う |
+| alchemy の state の置き場 (Worker `alchemy-state-store-taimei-auth`) | 最初の deploy が作る。消すと state を失う |

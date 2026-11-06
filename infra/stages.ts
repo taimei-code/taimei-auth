@@ -68,6 +68,8 @@ export const STAGES = {
 
 export type StageName = keyof typeof STAGES;
 
+export const STATE_STORE_WORKER_NAME = "alchemy-state-store-taimei-auth";
+
 export const DURABLE_OBJECT_BINDINGS = { KV_STORE: "KvStore" } as const;
 
 export const WORKER_RUNTIME = {

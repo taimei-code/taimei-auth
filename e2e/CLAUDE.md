@@ -9,7 +9,7 @@
 
 ## fixture
 
-- spec は DB を import しない。行を作り直すのは `helpers.ts` の `reseedFixture` (子プロセスの `e2e/seed.ts`) だけである。spec の process に pg の Pool を開くと閉じる手段が無く、runner が止まらない。`fixture-names.ts` を `fixtures.ts` から分けているのはこのためである (spec からの DB の import は `biome.json` の e2e の override が止める)。
+- spec は DB を import しない。行を作り直すのは `helpers.ts` の `reseedFixture` (子プロセスの `e2e/seed.ts`) だけである。spec の process に pg の Pool を開くと閉じる手段が無く、runner が止まらない。`fixture-names.ts` を `fixtures.ts` から分けているのはこのためである (spec からの DB の import は `.oxlintrc.json` の e2e の override が止める)。
 - 行を壊す spec は `fixture-names.ts` の `ConsumableFixture` に名前を足し、`beforeEach` で `reseedFixture` を呼ぶ。壊さない spec は全体の seed の行を使う。
 - `fixtures.ts` は `DATABASE_URL` の host が local でなければ止まる (`db/testing/local-database.ts`)。
 

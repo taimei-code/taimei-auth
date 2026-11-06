@@ -12,11 +12,11 @@ root の「共通境界」は consumer から SDK への方向を制限する。
 | 4. runtime API | `@connectrpc/connect-node` の hardcode と peerDeps | transport は `createAuthClient({ transport })` で注入する |
 | 5. URL / path | consumer の login の入口など、consumer 固有の path のハードコード | consumer が持つ path は consumer 側の helper が組む。taimei-auth が持つ画面の URL (`buildAuthLoginUrl`・`buildAuthErrorUrl` など) は SDK が組む |
 
-層 4 だけは root `biome.json` の `packages/auth-client/**` override が禁止し、root の `src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。
+層 4 だけは root `.oxlintrc.json` の `packages/auth-client/**` override が禁止し、root の `src/__tests__/sdk-boundary-ban.test.ts` が禁止対象の集合を固定する。
 
 ## testing の subpath の相対 import は `.js` まで書く
 
-consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読む。Node の ESM は拡張子の無い相対 import を解決できない。そのため `src/testing.ts` の相対 import は `./url-builder.js` のように `.js` まで書く。ほかの entry は consumer の bundler が読むので、拡張子を書かない。root `biome.json` の `useImportExtensions` は `src/testing.ts` だけで効く。この repo の試験は Bun で走り、拡張子が無くても解決するので、この誤りを捕まえるのは lint だけである。
+consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読む。Node の ESM は拡張子の無い相対 import を解決できない。そのため `src/testing.ts` の相対 import は `./url-builder.js` のように `.js` まで書く。ほかの entry は consumer の bundler が読むので、拡張子を書かない。この repo の試験は Bun で走り、拡張子が無くても解決するので、この誤りは試験では見つからない。静的な import と re-export の拡張子は、root `.oxlintrc.json` の `import/extensions` が `src/testing.ts` だけで検査する。動的な `import()` の拡張子と `.ts` の拡張子は、`tsconfig.testing-node.json` (Node の解決規則 `nodenext`) の typecheck が検査する。この package は `"type": "module"` を書いていないので、TS は静的な import の拡張子を求めない。そのため lint と typecheck の両方が要る。
 
 ## SDK は taimei-auth の決めごとだけを持ち、consumer の知識を持たない
 
