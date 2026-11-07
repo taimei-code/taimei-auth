@@ -19,79 +19,11 @@ import {
 } from "typescript/unstable/ast/is";
 
 import { REPO_ROOT } from "./config-invariant-helpers";
+import { ALLOWED_CROSS_DOMAIN, BOOTSTRAP_FILES, DOMAIN_ROOTS } from "./web-domain-allowlist";
 
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
-const DOMAIN_ROOTS = new Set(["account", "auth", "company", "invitation", "membership", "mfa"]);
 const MODULE_ROOTS = new Set([...DOMAIN_ROOTS, "app", "shared"]);
-const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
-
-const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
-  ["auth", new Set()],
-  ["invitation", new Set(["auth/auth-client.ts"])],
-  ["mfa", new Set(["auth/AuthPageCard.tsx"])],
-  [
-    "account",
-    new Set([
-      "auth/auth-client.ts",
-      "auth/sign-out.ts",
-      "auth/provider-label.ts",
-      "mfa/mfa-atom.ts",
-      "mfa/MfaSettingsItem.tsx",
-    ]),
-  ],
-  [
-    "membership",
-    new Set([
-      "account/account-atom.ts",
-      "account/current-company.tsx",
-      "auth/auth-client.ts",
-      "invitation/InviteMemberForm.tsx",
-      "invitation/PendingInvitations.tsx",
-    ]),
-  ],
-  [
-    "company",
-    new Set([
-      "account/account-atom.ts",
-      "account/current-company.tsx",
-      "auth/auth-client.ts",
-      "auth/sign-out.ts",
-      "membership/membership-atom.ts",
-      "membership/TransferOwnershipModal.tsx",
-    ]),
-  ],
-  [
-    "app",
-    new Set([
-      "account/account-atom.ts",
-      "account/account-entry.ts",
-      "account/current-company.tsx",
-      "account/pages/Connections.tsx",
-      "account/pages/Profile.tsx",
-      "account/pages/Security.tsx",
-      "account/pages/Sessions.tsx",
-      "auth/SignOutButton.tsx",
-      "auth/auth-client.ts",
-      "auth/auth-error-reason.ts",
-      "auth/pages/Error.tsx",
-      "auth/pages/SignIn.tsx",
-      "auth/pages/SignUp.tsx",
-      "company/CompanySwitcher.tsx",
-      "company/company-signup-entry.ts",
-      "company/pages/Companies.tsx",
-      "company/pages/CompanySettings.tsx",
-      "company/pages/SignUpCompany.tsx",
-      "invitation/accept-invitation.ts",
-      "invitation/pages/SignUpAcceptInvitation.tsx",
-      "invitation/redirect-target.ts",
-      "membership/pages/Members.tsx",
-      "mfa/MfaChallengeView.tsx",
-      "mfa/mfa-atom.ts",
-      "mfa/pages/MfaChallenge.tsx",
-    ]),
-  ],
-]);
 
 type AnalyzeOptions = {
   enforceTargetTree?: boolean;
@@ -254,6 +186,132 @@ const findCycle = (edges: ReadonlyMap<string, ReadonlySet<string>>): string[] | 
   return null;
 };
 
+type Scan = {
+  readonly sources: ReadonlyMap<string, string>;
+  readonly violations: string[];
+  readonly edges: Set<string>;
+  readonly graph: Map<string, Set<string>>;
+  readonly roots: Set<string>;
+  readonly pageFiles: Set<string>;
+  readonly appTargets: Set<string>;
+};
+
+const isDomainPageSegments = (segments: readonly string[]): boolean =>
+  segments.indexOf("pages") === 1 && DOMAIN_ROOTS.has(segments[0] ?? "");
+
+const PLACEMENT_RULES: readonly {
+  readonly violates: (segments: readonly string[], root: string | null) => boolean;
+  readonly message: string;
+}[] = [
+  { violates: (segments) => segments[0] === "pages", message: "legacy root pages directory" },
+  {
+    violates: (segments) => segments.includes("lib") || segments.includes("components"),
+    message: "forbidden technical directory",
+  },
+  {
+    violates: (segments) => segments.includes("pages") && !isDomainPageSegments(segments),
+    message: "invalid pages placement",
+  },
+  {
+    violates: (segments, root) => root !== null && /^index\.tsx?$/.test(segments.at(-1) ?? ""),
+    message: "domain barrel file",
+  },
+];
+
+const placementViolations = (path: string, root: string | null): string[] => {
+  const relativePath = webRelative(path);
+  const segments = relativePath.split("/");
+  return PLACEMENT_RULES.filter(({ violates }) => violates(segments, root)).map(
+    ({ message }) => `${message}: ${relativePath}`,
+  );
+};
+
+const isDomainPage = (path: string): boolean => isDomainPageSegments(webRelative(path).split("/"));
+
+const crossRootViolation = (
+  root: string,
+  relativePath: string,
+  targetRoot: string,
+  targetRelative: string,
+): string | null => {
+  if (targetRelative.includes("/pages/") && root !== "app") {
+    return `domain page import is app-only: ${relativePath} -> ${targetRelative}`;
+  }
+  if (root === "shared" && targetRoot !== "shared") {
+    return `shared reverse dependency: ${relativePath} -> ${targetRelative}`;
+  }
+  if (targetRoot === "shared" || ALLOWED_CROSS_DOMAIN.get(root)?.has(targetRelative)) {
+    return null;
+  }
+  return `cross-domain path not allowed: ${relativePath} -> ${targetRelative}`;
+};
+
+const recordCrossRootEdge = (scan: Scan, root: string, targetRoot: string): void => {
+  scan.edges.add(`${root}->${targetRoot}`);
+  if (DOMAIN_ROOTS.has(root) && DOMAIN_ROOTS.has(targetRoot)) {
+    const next = scan.graph.get(root) ?? new Set<string>();
+    next.add(targetRoot);
+    scan.graph.set(root, next);
+  }
+};
+
+const scanCoreSpecifier = (scan: Scan, path: string, specifier: string): void => {
+  const shadow = withExtension(`web/src/${specifier.slice("@core/".length)}`, scan.sources);
+  if (shadow) {
+    scan.violations.push(
+      `@core specifier shadowed by web file: ${webRelative(path)} -> ${webRelative(shadow)}`,
+    );
+  }
+};
+
+const scanSpecifier = (scan: Scan, path: string, root: string | null, specifier: string): void => {
+  if (specifier.startsWith("@core/")) {
+    scanCoreSpecifier(scan, path, specifier);
+    return;
+  }
+  const target = resolveWebSpecifier(path, specifier, scan.sources);
+  if (target === undefined) {
+    scan.violations.push(`unresolved web import: ${webRelative(path)} -> ${specifier}`);
+    return;
+  }
+  if (target === null) {
+    return;
+  }
+  const targetRoot = moduleRoot(target);
+  if (root === "app") {
+    scan.appTargets.add(target);
+  }
+  if (!root || !targetRoot || root === targetRoot) {
+    return;
+  }
+  recordCrossRootEdge(scan, root, targetRoot);
+  const violation = crossRootViolation(root, webRelative(path), targetRoot, webRelative(target));
+  if (violation) {
+    scan.violations.push(violation);
+  }
+};
+
+const targetTreeViolations = (scan: Scan): string[] => {
+  const firstLevelFiles = [...scan.sources.keys()]
+    .map(webRelative)
+    .filter((path) => !path.includes("/"));
+  const actualRoots = [...scan.roots].sort();
+  return [
+    ...firstLevelFiles
+      .filter((file) => !BOOTSTRAP_FILES.has(file))
+      .map((file) => `unexpected bootstrap file: ${file}`),
+    ...[...BOOTSTRAP_FILES]
+      .filter((expected) => !scan.sources.has(`web/src/${expected}`))
+      .map((expected) => `missing bootstrap file: ${expected}`),
+    ...(actualRoots.join("\n") === [...MODULE_ROOTS].sort().join("\n")
+      ? []
+      : [`module roots differ: ${actualRoots.join(",")}`]),
+    ...[...scan.pageFiles]
+      .filter((page) => !scan.appTargets.has(page))
+      .map((page) => `page is not an app route entry: ${webRelative(page)}`),
+  ];
+};
+
 export async function analyzeWebStructure(
   input: Record<string, string>,
   options: AnalyzeOptions = {},
@@ -262,106 +320,43 @@ export async function analyzeWebStructure(
     Object.entries(input).map(([path, source]) => [path.replaceAll("\\", "/"), source]),
   );
   const parsed = await parseSources(sources);
-  const violations: string[] = [];
-  const edges = new Set<string>();
-  const graph = new Map<string, Set<string>>();
-  const roots = new Set<string>();
-  const pageFiles = new Set<string>();
-  const appTargets = new Set<string>();
+  const scan: Scan = {
+    sources,
+    violations: [],
+    edges: new Set(),
+    graph: new Map(),
+    roots: new Set(),
+    pageFiles: new Set(),
+    appTargets: new Set(),
+  };
 
   for (const path of [...sources.keys()].sort()) {
-    const relativePath = webRelative(path);
-    const segments = relativePath.split("/");
     const root = moduleRoot(path);
-    if (root) roots.add(root);
-
-    if (segments[0] === "pages") violations.push(`legacy root pages directory: ${relativePath}`);
-    if (segments.includes("lib") || segments.includes("components")) {
-      violations.push(`forbidden technical directory: ${relativePath}`);
+    if (root) {
+      scan.roots.add(root);
     }
-    const pagesIndex = segments.indexOf("pages");
-    if (pagesIndex >= 0) {
-      if (pagesIndex !== 1 || !DOMAIN_ROOTS.has(segments[0])) {
-        violations.push(`invalid pages placement: ${relativePath}`);
-      } else {
-        pageFiles.add(path);
-      }
+    scan.violations.push(...placementViolations(path, root));
+    if (isDomainPage(path)) {
+      scan.pageFiles.add(path);
     }
-    if (root && /^index\.tsx?$/.test(segments.at(-1) ?? "")) {
-      violations.push(`domain barrel file: ${relativePath}`);
-    }
-
     for (const specifier of parsed.get(path) ?? []) {
-      if (specifier.startsWith("@core/")) {
-        const shadow = withExtension(`web/src/${specifier.slice("@core/".length)}`, sources);
-        if (shadow) {
-          violations.push(
-            `@core specifier shadowed by web file: ${relativePath} -> ${webRelative(shadow)}`,
-          );
-        }
-        continue;
-      }
-      const target = resolveWebSpecifier(path, specifier, sources);
-      if (target === undefined) {
-        violations.push(`unresolved web import: ${relativePath} -> ${specifier}`);
-        continue;
-      }
-      if (target === null) continue;
-      const targetRelative = webRelative(target);
-      const targetRoot = moduleRoot(target);
-      if (root === "app") appTargets.add(target);
-      if (!root || !targetRoot || root === targetRoot) continue;
-
-      edges.add(`${root}->${targetRoot}`);
-      if (DOMAIN_ROOTS.has(root) && DOMAIN_ROOTS.has(targetRoot)) {
-        const next = graph.get(root) ?? new Set<string>();
-        next.add(targetRoot);
-        graph.set(root, next);
-      }
-      if (targetRelative.includes("/pages/") && root !== "app") {
-        violations.push(`domain page import is app-only: ${relativePath} -> ${targetRelative}`);
-        continue;
-      }
-      if (root === "shared" && targetRoot !== "shared") {
-        violations.push(`shared reverse dependency: ${relativePath} -> ${targetRelative}`);
-        continue;
-      }
-      if (targetRoot === "shared") continue;
-      if (!ALLOWED_CROSS_DOMAIN.get(root)?.has(targetRelative)) {
-        violations.push(`cross-domain path not allowed: ${relativePath} -> ${targetRelative}`);
-      }
+      scanSpecifier(scan, path, root, specifier);
     }
   }
 
   if (options.enforceTargetTree) {
-    const firstLevelFiles = [...sources.keys()]
-      .map(webRelative)
-      .filter((path) => !path.includes("/"));
-    for (const file of firstLevelFiles) {
-      if (!BOOTSTRAP_FILES.has(file)) violations.push(`unexpected bootstrap file: ${file}`);
-    }
-    for (const expected of BOOTSTRAP_FILES) {
-      if (!sources.has(`web/src/${expected}`))
-        violations.push(`missing bootstrap file: ${expected}`);
-    }
-    const expectedRoots = [...MODULE_ROOTS].sort();
-    const actualRoots = [...roots].sort();
-    if (actualRoots.join("\n") !== expectedRoots.join("\n")) {
-      violations.push(`module roots differ: ${actualRoots.join(",")}`);
-    }
-    for (const page of pageFiles) {
-      if (!appTargets.has(page))
-        violations.push(`page is not an app route entry: ${webRelative(page)}`);
-    }
+    scan.violations.push(...targetTreeViolations(scan));
   }
 
-  const cycle = findCycle(graph);
-  if (cycle) violations.push(`domain dependency cycle: ${cycle.join(" -> ")}`);
+  const cycle = findCycle(scan.graph);
+  if (cycle) {
+    scan.violations.push(`domain dependency cycle: ${cycle.join(" -> ")}`);
+  }
 
   return {
-    violations: [...new Set(violations)].sort(),
-    edges: [...edges].sort(),
-    roots: [...roots].sort(),
+    violations: [...new Set(scan.violations)].sort(),
+    edges: [...scan.edges].sort(),
+    roots: [...scan.roots].sort(),
     fileCount: sources.size,
   };
 }
