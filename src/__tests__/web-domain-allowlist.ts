@@ -6,7 +6,7 @@ export const DOMAIN_ROOTS = new Set([
   "membership",
   "mfa",
 ]);
-export const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
+export const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]);
 
 export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
@@ -56,6 +56,7 @@ export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "auth/SignOutButton.tsx",
       "auth/auth-client.ts",
       "auth/auth-error-reason.ts",
+      "auth/pages/AuthError.ts",
       "auth/pages/Error.tsx",
       "auth/pages/SignIn.tsx",
       "auth/pages/SignUp.tsx",

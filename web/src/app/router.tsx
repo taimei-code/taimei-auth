@@ -13,7 +13,7 @@ import {
   acceptInvitationSearchSchema,
   redirectTargetSearchSchema,
 } from "@core/invitation/accept-path";
-import { signInParamsSchema } from "@core/sign-in-params";
+import { INVALID_REDIRECT_URL_PAGE, signInParamsSchema } from "@core/sign-in-params";
 
 import { companyStateAtom } from "../account/account-atom";
 import { accountEntryOf } from "../account/account-entry";
@@ -22,7 +22,6 @@ import { Connections } from "../account/pages/Connections";
 import { Profile } from "../account/pages/Profile";
 import { Security } from "../account/pages/Security";
 import { Sessions } from "../account/pages/Sessions";
-import { authErrorSearchSchema } from "../auth/auth-error-reason";
 import { ErrorPage } from "../auth/pages/Error";
 import { SignIn } from "../auth/pages/SignIn";
 import { SignUp } from "../auth/pages/SignUp";
@@ -54,7 +53,7 @@ const authRoute = createRoute({
 });
 
 const toInvalidRedirectError = () => {
-  throw redirect({ to: "/auth/error", search: { reason: "invalid_redirect_url" }, replace: true });
+  throw redirect({ href: INVALID_REDIRECT_URL_PAGE, reloadDocument: true, replace: true });
 };
 
 const signInRoute = createRoute({
@@ -119,15 +118,6 @@ const mfaChallengeRoute = createRoute({
   component: MfaChallenge,
 });
 
-const errorRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: "/error",
-  validateSearch: authErrorSearchSchema,
-  component: function AuthError() {
-    return <ErrorPage reason={errorRoute.useSearch().reason} />;
-  },
-});
-
 const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/account",
@@ -165,7 +155,6 @@ const routeTree = rootRoute.addChildren([
     companySignupRoute,
     acceptInvitationRoute,
     mfaChallengeRoute,
-    errorRoute,
   ]),
   accountRoute.addChildren([
     accountPageRoute("/", Profile),

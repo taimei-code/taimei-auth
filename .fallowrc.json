@@ -51,6 +51,10 @@
     {
       "file": "src/gen/auth/v1/auth_pb.ts",
       "exports": ["Session"]
+    },
+    {
+      "file": "web/src/app/*/main.ts",
+      "exports": ["Model", "Message", "init", "update", "view"]
     }
   ]
 }

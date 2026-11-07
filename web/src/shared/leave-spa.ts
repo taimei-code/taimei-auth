@@ -17,6 +17,8 @@ export const leaveSpaTo = (url: string) => {
   window.location.replace(url);
 };
 
+export const loadDocument = (href: string) => window.location.assign(href);
+
 type SignInPath = "/auth/" | "/auth";
 
 const signInUrl = (path: SignInPath, returnToHref: string) => {

@@ -54,13 +54,17 @@ const RULES: readonly Rule[] = [
   {
     name: "SPA を離れる遷移",
     violates: (path, source) =>
-      /\blocation\.(replace|assign)\(|\blocation\.href\s*=(?!=)/.test(source) &&
+      (/\blocation\.(replace|assign)\(|\blocation\.href\s*=(?!=)|\bNavigation\.load\(/.test(
+        source,
+      ) ||
+        /import\s*\{[^}]*\bload\b[^}]*\}\s*from\s*["']foldkit\/navigation["']/.test(source)) &&
       path !== "shared/leave-spa.ts",
   },
   {
     name: "cause を捨てる onFailure",
     violates: (path, source) =>
-      /\bonFailure:\s*\(\s*(_\w*)?\s*\)\s*=>/.test(source) && !path.endsWith("-atom.ts"),
+      (/\bonFailure:\s*\(\s*(_\w*)?\s*\)\s*=>/.test(source) && !path.endsWith("-atom.ts")) ||
+      /\bEffect\.catch\(\s*\(\s*(_\w*)?\s*\)\s*=>|\borElseSucceed\b/.test(source),
   },
   {
     name: "sign-out",
