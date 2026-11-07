@@ -15,9 +15,11 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
-  test("web/src の effect の subpath は effect/reactivity と effect/http だけ", () => {
+  test("web/src の effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (ADR-0023)", () => {
     const subpaths = grepLines(String.raw`(from|import)\s*["']effect/`, "web/src", {});
-    expect(subpaths.filter((line) => !/["']effect\/(reactivity|http)["']/.test(line))).toEqual([]);
+    expect(
+      subpaths.filter((line) => !/["']effect\/(reactivity|http|crypto|persistence)["']/.test(line)),
+    ).toEqual([]);
   });
 });
 
