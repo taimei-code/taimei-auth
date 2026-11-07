@@ -13,7 +13,7 @@ const PackageJson = Schema.fromJsonString(
 );
 
 const installedFoldkitVersion = () =>
-  Schema.decodeUnknownSync(PackageJson)(readRepoFile("package.json")).devDependencies.foldkit;
+  Schema.decodeSync(PackageJson)(readRepoFile("package.json")).devDependencies.foldkit;
 
 const referencedFoldkitVersions = (claudeMd: string) =>
   [...claudeMd.matchAll(FOLDKIT_REFERENCE)].map(([, version]) => version);
