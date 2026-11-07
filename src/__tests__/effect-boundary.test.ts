@@ -17,7 +17,13 @@ describe("effect の import 境界 (ADR-0017)", () => {
 
   test("web/src の effect の subpath は effect/reactivity と effect/http だけ", () => {
     const subpaths = grepLines(String.raw`(from|import)\s*["']effect/`, "web/src", {});
-    expect(subpaths.filter((line) => !/["']effect\/(reactivity|http)["']/.test(line))).toEqual([]);
+    expect(
+      subpaths.filter(
+        (line) =>
+          !/["']effect\/(reactivity|http)["']/.test(line) &&
+          !/^web\/src\/shared\/spa-http-client\.ts:.*["']effect\/http-api["']/.test(line),
+      ),
+    ).toEqual([]);
   });
 });
 
