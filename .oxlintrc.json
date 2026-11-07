@@ -513,11 +513,7 @@
       }
     },
     {
-      "files": [
-        "web/src/**/*-program.ts",
-        "web/src/mfa/MfaEnrollDialog.tsx",
-        "web/src/**/__tests__/foldkit-*.test.ts"
-      ],
+      "files": ["web/src/**/*.ts"],
       "rules": {
         "foldkit/acquire-release-constructs-in-acquire-body": "error",
         "foldkit/command-binding-matches-name": "error",
@@ -556,7 +552,8 @@
         "foldkit/require-rel-for-external-link": "error",
         "foldkit/selection-submodel-factory-at-module-scope": "error",
         "foldkit/wrap-child-output-in-got-message": "error"
-      }
+      },
+      "excludeFiles": ["web/src/**/__tests__/**"]
     },
     {
       "files": ["web/src/shared/atom-runtime.ts"],
