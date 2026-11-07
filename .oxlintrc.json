@@ -387,7 +387,9 @@
             "name": "URLSearchParams",
             "message": "search は route の validateSearch で parse する (web/src/CLAUDE.md)"
           }
-        ]
+        ],
+        "taimei/no-effect-run-in-web": "error",
+        "taimei/no-browser-global-outside-command": "error"
       }
     },
     {
@@ -510,12 +512,22 @@
         "foldkit/selection-submodel-factory-at-module-scope": "error",
         "foldkit/wrap-child-output-in-got-message": "error"
       }
+    },
+    {
+      "files": ["web/src/shared/atom-runtime.ts"],
+      "rules": {
+        "taimei/no-effect-run-in-web": "off"
+      }
     }
   ],
   "jsPlugins": [
     {
       "name": "foldkit",
       "specifier": "@foldkit/oxlint-plugin"
+    },
+    {
+      "name": "taimei",
+      "specifier": "./lint/oxlint-plugin.mts"
     }
   ]
 }

@@ -55,6 +55,7 @@
     "db/**/*.ts",
     "management/**/*.ts",
     "infra/**/*.ts",
+    "lint/**/*.mts",
     "e2e/**/*.ts",
     "web/src/shared/leave-spa.ts",
     "testing/sent-links.ts",
