@@ -9,7 +9,9 @@ export const SignOutButton = () => {
   const [signingOut, setSigningOut] = useState(false);
 
   const signOutAndRedirect = () => {
-    if (signingOut) return;
+    if (signingOut) {
+      return;
+    }
     setSigningOut(true);
     void signOut().then((result) => {
       if (result === "failed") {

@@ -86,7 +86,9 @@ const companySignupRoute = createRoute({
       abortController.signal,
       search.redirect_url,
     );
-    if (entry.kind !== "show") throw redirectFor(entry, location.href);
+    if (entry.kind !== "show") {
+      throw redirectFor(entry, location.href);
+    }
   },
   component: SignUpCompany,
 });
@@ -98,7 +100,9 @@ const acceptInvitationRoute = createRoute({
   loaderDeps: ({ search }) => acceptInvitationSearchSchema.parse(search),
   loader: async ({ context, deps, location }) => {
     const entry = await acceptInvitation(context.registry, deps);
-    if (entry.kind !== "failed") throw redirectFor(entry, location.href);
+    if (entry.kind !== "failed") {
+      throw redirectFor(entry, location.href);
+    }
     return { message: entry.message };
   },
   component: SignUpAcceptInvitation,
@@ -131,7 +135,9 @@ const accountRoute = createRoute({
     const entry = accountEntryOf(
       await readResult(context.registry, companyStateAtom, abortController.signal),
     );
-    if (entry.kind !== "show") throw redirectFor(entry, location.href);
+    if (entry.kind !== "show") {
+      throw redirectFor(entry, location.href);
+    }
   },
   component: function Account() {
     return (

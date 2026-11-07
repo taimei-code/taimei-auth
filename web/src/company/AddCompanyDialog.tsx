@@ -43,8 +43,12 @@ export const AddCompanyDialog = ({ trigger }: Props) => {
   };
 
   const handleOpenChange = (next: boolean) => {
-    if (submitting) return;
-    if (!next) reset();
+    if (submitting) {
+      return;
+    }
+    if (!next) {
+      reset();
+    }
     setOpen(next);
   };
 

@@ -37,7 +37,9 @@ export const MemberList = ({ companyId, canManage, assignableRoles }: Props) => 
   const removeMember = useRemoveMember();
   const [busyUserId, setBusyUserId] = useState<string | null>(null);
 
-  if (AsyncResult.isInitial(result)) return <LoadingRow />;
+  if (AsyncResult.isInitial(result)) {
+    return <LoadingRow />;
+  }
 
   const members = result.pipe(
     AsyncResult.map((list) => list.members),
@@ -45,7 +47,9 @@ export const MemberList = ({ companyId, canManage, assignableRoles }: Props) => 
   );
 
   const handleRoleChange = (target: Member, role: Role) => {
-    if (busyUserId) return;
+    if (busyUserId) {
+      return;
+    }
     setBusyUserId(target.user_id);
     changeRole(companyId, target.user_id, role)
       .then(
@@ -73,7 +77,9 @@ export const MemberList = ({ companyId, canManage, assignableRoles }: Props) => 
   };
 
   const handleRemove = (targetUserId: string): Promise<void> => {
-    if (busyUserId) return Promise.resolve();
+    if (busyUserId) {
+      return Promise.resolve();
+    }
     setBusyUserId(targetUserId);
     return removeMember(companyId, targetUserId)
       .then(
@@ -184,7 +190,9 @@ const MemberOperations = ({
       disabled={busy}
       onChange={(e) => {
         const next = assignableRoles.find((role) => role === e.target.value);
-        if (next) onRoleChange(next);
+        if (next) {
+          onRoleChange(next);
+        }
       }}
       className="h-9 w-28 text-sm"
     >

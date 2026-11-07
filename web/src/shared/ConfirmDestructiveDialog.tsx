@@ -44,7 +44,9 @@ export const ConfirmDestructiveDialog = ({
   };
 
   const handleOpenChange = (next: boolean) => {
-    if (busy) return;
+    if (busy) {
+      return;
+    }
     setOpen(next);
   };
 

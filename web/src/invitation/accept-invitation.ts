@@ -28,8 +28,9 @@ const outcomeOfAccepted = (
   search: AcceptInvitationSearch,
   exit: Awaited<ReturnType<AcceptDeps["accept"]>>,
 ): AcceptOutcome => {
-  if (Exit.isSuccess(exit))
+  if (Exit.isSuccess(exit)) {
     return { kind: "goToRedirectUrl", redirectUrl: redirectUrlAfterAccept(search) };
+  }
   return failed(
     failureMessage(
       exit.cause,
@@ -49,9 +50,13 @@ export const acceptInvitationOutcome = async (
   deps: AcceptDeps,
 ): Promise<AcceptOutcome> => {
   const invitationToken = search.invitation_token;
-  if (!invitationToken) return failed("招待トークンが見つかりません。");
+  if (!invitationToken) {
+    return failed("招待トークンが見つかりません。");
+  }
   try {
-    if (!(await deps.hasSession())) return { kind: "signIn" };
+    if (!(await deps.hasSession())) {
+      return { kind: "signIn" };
+    }
     return outcomeOfAccepted(search, await deps.accept(invitationToken));
   } catch {
     return failed(ACCEPT_FAILED);

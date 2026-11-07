@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 
-const tokenId = import.meta.env.VITE_CANARY_TOKEN_ID as string | undefined;
+const tokenId: string | undefined = import.meta.env.VITE_CANARY_TOKEN_ID;
 
 export const CanaryTokens = () => {
   useEffect(() => {
-    if (!tokenId) return;
+    if (!tokenId) {
+      return;
+    }
     const link = document.createElement("link");
     link.rel = "icon";
     link.href = `/auth/canary-token/${tokenId}.ico`;
@@ -15,7 +17,9 @@ export const CanaryTokens = () => {
     };
   }, []);
 
-  if (!tokenId) return null;
+  if (!tokenId) {
+    return null;
+  }
 
   return (
     <>
