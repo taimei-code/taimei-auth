@@ -12,6 +12,10 @@ const startRuntime: Record<RuntimeForPath, () => Promise<unknown>> = {
     import("./app/auth-application").then(({ startAuthApplication }) =>
       startAuthApplication(rootElement),
     ),
+  FoldkitAccount: () =>
+    import("./app/account-application").then(({ startAccountApplication }) =>
+      startAccountApplication(rootElement),
+    ),
   React: () => import("./app/react-root").then(({ startReactRoot }) => startReactRoot(rootElement)),
 };
 
