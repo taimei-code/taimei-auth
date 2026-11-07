@@ -78,7 +78,7 @@ const CheckAccountEntry = Command.define("CheckAccountEntry", {
       const state = yield* declaredFailuresOnly(client.account.memberships());
       if (state.memberships.length === 0) yield* load(companySignupHref(returnTo));
       return Message.CompletedCheckAccountEntry();
-    }).pipe(Effect.catch(() => Effect.succeed(Message.CompletedCheckAccountEntry()))),
+    }).pipe(Effect.orElseSucceed(() => Message.CompletedCheckAccountEntry())),
 });
 
 const toSessionsMessage = (message: Sessions.Message) => Message.GotSessionsMessage({ message });
