@@ -352,6 +352,18 @@ const CASES: readonly Case[] = [
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
+    name: "画面は @foldkit/ui の Dialog を直接使えない",
+    path: "web/src/mfa/raw-dialog.ts",
+    source: 'import { Dialog } from "@foldkit/ui"; export { Dialog };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "house の dialog の部品だけが @foldkit/ui の Dialog を使える",
+    path: "web/src/shared/ui/dialog-view.ts",
+    source: 'import { Dialog } from "@foldkit/ui"; export { Dialog };',
+    expectedRules: [],
+  },
+  {
     name: "== で比べられない",
     path: "src/loose-equality.ts",
     source: "export const same = (a: number, b: number) => a == b;",
