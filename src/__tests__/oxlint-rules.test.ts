@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -357,6 +357,17 @@ const groupsWithDistinctPaths = (cases: readonly Case[]): Case[][] =>
     return groups;
   }, []);
 
+const configWithJsPluginsFromRepo = (): string => {
+  const config = JSON.parse(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8")) as {
+    jsPlugins?: { name: string; specifier: string }[];
+  };
+  const jsPlugins = (config.jsPlugins ?? []).map((plugin) => ({
+    ...plugin,
+    specifier: join(REPO_ROOT, "node_modules", plugin.specifier),
+  }));
+  return JSON.stringify({ ...config, jsPlugins });
+};
+
 const fixtureDirs: string[] = [];
 const lintedFileCounts: { readonly written: number; readonly linted: number }[] = [];
 const rulesByCase = new Map<Case, string[]>();
@@ -364,7 +375,7 @@ const rulesByCase = new Map<Case, string[]>();
 const lintGroup = (group: readonly Case[]): void => {
   const fixtureDir = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
   fixtureDirs.push(fixtureDir);
-  copyFileSync(join(REPO_ROOT, ".oxlintrc.json"), join(fixtureDir, ".oxlintrc.json"));
+  writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
   mkdirSync(join(fixtureDir, "packages/auth-client/src"), { recursive: true });
   writeFileSync(join(fixtureDir, "packages/auth-client/src/types.ts"), "export type Types = 1;\n");
   for (const { path, source } of group) {

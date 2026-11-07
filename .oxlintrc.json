@@ -53,7 +53,10 @@
                   "qrcode",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "foldkit",
+                  "@foldkit/ui",
+                  "@effect/platform-browser"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -108,7 +111,10 @@
                   "qrcode",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "foldkit",
+                  "@foldkit/ui",
+                  "@effect/platform-browser"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -168,7 +174,10 @@
                   "qrcode",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "foldkit",
+                  "@foldkit/ui",
+                  "@effect/platform-browser"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -222,7 +231,10 @@
                   "qrcode",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "foldkit",
+                  "@foldkit/ui",
+                  "@effect/platform-browser"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -408,6 +420,58 @@
           }
         ]
       }
+    },
+    {
+      "files": [
+        "web/src/**/*-program.ts",
+        "web/src/mfa/MfaEnrollDialog.tsx",
+        "web/src/**/__tests__/foldkit-*.test.ts"
+      ],
+      "rules": {
+        "foldkit/acquire-release-constructs-in-acquire-body": "error",
+        "foldkit/command-binding-matches-name": "error",
+        "foldkit/command-define-pascal-const": "error",
+        "foldkit/got-prefix-requires-submodel-payload": "error",
+        "foldkit/got-submodel-message-name": "error",
+        "foldkit/got-wrapper-carries-only-routing": "error",
+        "foldkit/keyed-required-for-mapped-rows": "error",
+        "foldkit/lazy-view-stable-references": "error",
+        "foldkit/mount-factory-must-use-element": "error",
+        "foldkit/no-array-index-view-keys": "error",
+        "foldkit/no-child-message-construction-in-root": "error",
+        "foldkit/no-direct-submodel-state-update": "error",
+        "foldkit/no-disabling-dev-guardrails": "error",
+        "foldkit/no-duplicate-onmount-per-element": "error",
+        "foldkit/no-empty-children-array": "error",
+        "foldkit/no-empty-commands-array": "error",
+        "foldkit/no-empty-to-parent-out-message": "error",
+        "foldkit/no-empty-object-tagged-call": "error",
+        "foldkit/no-hand-rolled-command-struct": "error",
+        "foldkit/no-hardcoded-route-strings": "error",
+        "foldkit/no-impure-call-at-decision-time": "error",
+        "foldkit/no-module-level-mutable-state": "error",
+        "foldkit/no-nonportable-server-globals": "off",
+        "foldkit/no-noop-message": "error",
+        "foldkit/no-prevent-default-in-stream-operator": "error",
+        "foldkit/no-raw-dom-event-attributes": "error",
+        "foldkit/no-route-query-constructor-default": "error",
+        "foldkit/no-spread-in-modify-fields": "error",
+        "foldkit/no-switch-on-message-tag": "error",
+        "foldkit/prefer-callable-message-constructor": "error",
+        "foldkit/prefer-command-mapmessage": "error",
+        "foldkit/prefer-effect-module-names": "error",
+        "foldkit/prefer-option-over-nullable-in-model": "error",
+        "foldkit/require-fold-for-child-update-result": "error",
+        "foldkit/require-rel-for-external-link": "error",
+        "foldkit/selection-submodel-factory-at-module-scope": "error",
+        "foldkit/wrap-child-output-in-got-message": "error"
+      }
+    }
+  ],
+  "jsPlugins": [
+    {
+      "name": "foldkit",
+      "specifier": "@foldkit/oxlint-plugin"
     }
   ]
 }
