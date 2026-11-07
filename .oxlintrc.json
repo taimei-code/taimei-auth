@@ -56,7 +56,8 @@
                   "tailwindcss-animate",
                   "foldkit",
                   "@foldkit/ui",
-                  "@effect/platform-browser"
+                  "@effect/platform-browser",
+                  "lucide"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -114,7 +115,8 @@
                   "tailwindcss-animate",
                   "foldkit",
                   "@foldkit/ui",
-                  "@effect/platform-browser"
+                  "@effect/platform-browser",
+                  "lucide"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -177,7 +179,8 @@
                   "tailwindcss-animate",
                   "foldkit",
                   "@foldkit/ui",
-                  "@effect/platform-browser"
+                  "@effect/platform-browser",
+                  "lucide"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -234,7 +237,8 @@
                   "tailwindcss-animate",
                   "foldkit",
                   "@foldkit/ui",
-                  "@effect/platform-browser"
+                  "@effect/platform-browser",
+                  "lucide"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },

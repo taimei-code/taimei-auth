@@ -24,7 +24,7 @@ const WEB_SRC = join(REPO_ROOT, "web/src");
 
 const DOMAIN_ROOTS = new Set(["account", "auth", "company", "invitation", "membership", "mfa"]);
 const MODULE_ROOTS = new Set([...DOMAIN_ROOTS, "app", "shared"]);
-const BOOTSTRAP_FILES = new Set(["index.css", "main.tsx", "vite-env.d.ts"]);
+const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]);
 
 const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
@@ -74,6 +74,7 @@ const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "auth/SignOutButton.tsx",
       "auth/auth-client.ts",
       "auth/auth-error-reason.ts",
+      "auth/pages/AuthError.ts",
       "auth/pages/Error.tsx",
       "auth/pages/SignIn.tsx",
       "auth/pages/SignUp.tsx",

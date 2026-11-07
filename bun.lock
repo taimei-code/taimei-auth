@@ -72,6 +72,7 @@
         "drizzle-kit": "^0.31.4",
         "fallow": "^3.25.0",
         "foldkit": "0.170.0",
+        "lucide": "0.482.0",
         "lucide-react": "^0.482.0",
         "oxlint": "^1.90.0",
         "postcss": "^8.5.23",
@@ -961,6 +962,8 @@
     "lines-and-columns": ["lines-and-columns@1.2.4", "", {}, "sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg=="],
 
     "locate-path": ["locate-path@5.0.0", "", { "dependencies": { "p-locate": "^4.1.0" } }, "sha512-t7hw9pI+WvuwNJXwk5zVHpyhIqzg2qTlklJOf0mVxGSbe3Fp2VieZcduNYjaLDoy6p9uGpQEGWG87WpMKlNq8g=="],
+
+    "lucide": ["lucide@0.482.0", "", {}, "sha512-drJOzPud1QGiCgnkhUBuSKvShaD6LJovgKtHDJfvqKrzA0osfU284rymlXxjVWlp5A+S8JiCcIfgENvXlKsO7Q=="],
 
     "lucide-react": ["lucide-react@0.482.0", "", { "peerDependencies": { "react": "^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0" } }, "sha512-XM8PzHzSrg8ATmmO+fzf+JyYlVVdQnJjuyLDj2p4V2zEtcKeBNAqAoJIGFv1x2HSBa7kT8gpYUxwdQ0g7nypfw=="],
 
