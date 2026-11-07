@@ -78,14 +78,18 @@ describe("MFA の API の応答の status と body から、画面に出す結�
     const exit = await runMutation(AtomRegistry.make(), disableAtom, {
       payload: { code: "123456", kind: "totp" },
     });
-    if (Exit.isSuccess(exit)) throw new Error("disable unexpectedly succeeded");
+    if (Exit.isSuccess(exit)) {
+      throw new Error("disable unexpectedly succeeded");
+    }
     expect(mfaFailureMessage(exit.cause)).toBe(MFA_FAILURE_MESSAGES.RateLimited);
   });
 
   test("登録が 409 の AlreadyEnabled を返すと、再読み込みの案内の文言を出す", async () => {
     answerWith(409, { _tag: "AlreadyEnabled" });
     const exit = await runMutation(AtomRegistry.make(), enrollAtom, {});
-    if (Exit.isSuccess(exit)) throw new Error("enroll unexpectedly succeeded");
+    if (Exit.isSuccess(exit)) {
+      throw new Error("enroll unexpectedly succeeded");
+    }
     expect(mfaFailureMessage(exit.cause)).toBe(MFA_FAILURE_MESSAGES.AlreadyEnabled);
   });
 });

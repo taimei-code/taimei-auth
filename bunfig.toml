@@ -27,4 +27,6 @@ minimumReleaseAgeExcludes = [
   "@distilled.cloud/cloudflare",
   "@distilled.cloud/core",
   "@distilled.cloud/iceberg",
+  # foldkit 0.170.0 の peer (#388)。公開日時 (UTC): @effect/platform-browser 4.1.2 11-02 04:04。外せる日時: 2026-11-09 04:04 UTC (2026-11-09 13:04 JST)
+  "@effect/platform-browser",
 ]

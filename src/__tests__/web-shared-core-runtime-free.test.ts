@@ -9,7 +9,7 @@ function coreFilesImportedFromWeb(): string[] {
   const modules = new Set<string>();
   for (const file of sourceFiles("web/src").map((path) => join(REPO_ROOT, path))) {
     const content = readFileSync(file, "utf8");
-    for (const m of content.matchAll(/from\s+["']@core\/([^"']+)["']/g)) {
+    for (const m of content.matchAll(/(?:from\s+|import\(\s*)["']@core\/([^"']+)["']/g)) {
       modules.add(m[1] as string);
     }
   }

@@ -92,7 +92,9 @@ export const notifyAfterRefresh = (
   Promise.resolve()
     .then(refresh)
     .then(() => {
-      if (text.done) notifySuccess(text.done);
+      if (text.done) {
+        notifySuccess(text.done);
+      }
     })
     .catch(() =>
       notifyError(

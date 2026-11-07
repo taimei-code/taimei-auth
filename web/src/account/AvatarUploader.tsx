@@ -20,7 +20,9 @@ export const AvatarUploader = ({ initialImageUrl, fallbackName }: Props) => {
 
   const uploadAvatar = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      return;
+    }
     setUploading(true);
     setErrorMessage(null);
     upload(file.name, file, {

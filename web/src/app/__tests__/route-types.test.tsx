@@ -10,10 +10,6 @@ const _missingPathNavigate = (navigate: ReturnType<typeof useNavigate>) =>
   // @ts-expect-error 存在しない path
   navigate({ to: "/account/membrs" });
 
-const _undefinedReason = () =>
-  // @ts-expect-error 定義外の reason
-  redirect({ to: "/auth/error", search: { reason: "bogus" } });
-
 const _missingRedirectUrl = () =>
   // @ts-expect-error 必須の redirect_url が無い
   redirect({ to: "/auth", search: { service_name: "accounts" } });

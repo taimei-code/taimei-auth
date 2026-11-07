@@ -10,10 +10,14 @@ export const signInLandingSearch = () => searchReturningTo("/account");
 const documentsBeingLeft = new WeakSet<Location>();
 
 export const leaveSpaTo = (url: string) => {
-  if (documentsBeingLeft.has(window.location)) return;
+  if (documentsBeingLeft.has(window.location)) {
+    return;
+  }
   documentsBeingLeft.add(window.location);
   window.location.replace(url);
 };
+
+export const loadDocument = (href: string) => window.location.assign(href);
 
 type SignInPath = "/auth/" | "/auth";
 

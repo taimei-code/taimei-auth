@@ -18,7 +18,9 @@ type CompanySignupInput =
   | { hasSession: true; companyState: Exit.Exit<CompanyState, unknown>; redirectUrl: string };
 
 export const companySignupEntryOf = (input: CompanySignupInput): CompanySignupEntry => {
-  if (!input.hasSession) return { kind: "signIn" };
+  if (!input.hasSession) {
+    return { kind: "signIn" };
+  }
   const { companyState, redirectUrl } = input;
   return Exit.isSuccess(companyState) && companyState.value.memberships.length > 0
     ? { kind: "goToRedirectUrl", redirectUrl }
@@ -36,8 +38,12 @@ export const readCompanySignupEntry = async (
     ({ data }) => (data?.session ? "present" : "absent"),
     () => "unknown" as const,
   );
-  if (session === "unknown") return { kind: "show" };
-  if (session === "absent") return companySignupEntryOf({ hasSession: false });
+  if (session === "unknown") {
+    return { kind: "show" };
+  }
+  if (session === "absent") {
+    return companySignupEntryOf({ hasSession: false });
+  }
   const companyState = await readResult(registry, companyStateAtom, signal);
   return companySignupEntryOf({ hasSession: true, companyState, redirectUrl });
 };

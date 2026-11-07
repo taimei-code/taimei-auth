@@ -32,7 +32,9 @@ export const Companies = () => {
   const removeMember = useRemoveMember();
 
   const handleSwitch = (companyId: string) => {
-    if (busyCompanyId) return;
+    if (busyCompanyId) {
+      return;
+    }
     setBusyCompanyId(companyId);
     switchCompany(companyId).finally(() => setBusyCompanyId(null));
   };
@@ -40,7 +42,9 @@ export const Companies = () => {
   const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
 
   const handleLeave = (m: Membership) => {
-    if (!selfUserId || busyCompanyId) return;
+    if (!selfUserId || busyCompanyId) {
+      return;
+    }
     setBusyCompanyId(m.company_id);
     setSoleOwnerCompanyId(null);
     let redirecting = false;
@@ -69,7 +73,9 @@ export const Companies = () => {
         }),
       )
       .finally(() => {
-        if (!redirecting) setBusyCompanyId(null);
+        if (!redirecting) {
+          setBusyCompanyId(null);
+        }
       });
   };
 

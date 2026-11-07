@@ -87,6 +87,8 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 
 ## web への拡大 (2026-10-11 追記)
 
+(2026-11-07 追記) この節のうち、取得したデータを Atom と `@effect/atom-react` で持つ部分は [ADR-0023](./0023-web-foldkit.md) が置き換える。React の画面が残る間 (#396 まで) は、この節のまま読む。
+
 共通画面 SPA (`web/src`) も Effect の対象にする。
 
 - 範囲: `web/src` は root の `effect` を使ってよい。サーバーから取得するデータは `effect/reactivity` の Atom と `@effect/atom-react` で持ち、component と page は atom を読む。`effect/reactivity` は Decision の依存項の「root 以外の `effect/*` は禁止」の例外で、`web/src` に限る。`@core` 共有 module は今回は変えない。(2026-10-11 再改訂) SPA の API の契約に限って変える (「SPA の API 契約」節)

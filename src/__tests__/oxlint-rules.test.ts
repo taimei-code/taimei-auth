@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -28,6 +28,15 @@ const LOOSE_EQUALITY = "eslint(eqeqeq)";
 const SWITCH_FALLTHROUGH = "eslint(no-fallthrough)";
 const PARSE_INT_WITHOUT_RADIX = "eslint(radix)";
 const COMMONJS = "import(no-commonjs)";
+const EFFECT_RUN_IN_WEB = "taimei(no-effect-run-in-web)";
+const BROWSER_GLOBAL_OUTSIDE_COMMAND = "taimei(no-browser-global-outside-command)";
+const TIMER_CLOCK_RANDOM_IN_FOLDKIT = "taimei(no-timer-clock-random-in-foldkit)";
+const ATOM_IMPORT_IN_FOLDKIT = "taimei(no-atom-import-in-foldkit)";
+const RAW_FORM_ELEMENT = "taimei(no-raw-form-element)";
+const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
+const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
+const BRACES_REQUIRED = "eslint(curly)";
+const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
 
 const CASES: readonly Case[] = [
   {
@@ -315,6 +324,132 @@ const CASES: readonly Case[] = [
     expectedRules: [BUTTON_WITHOUT_TYPE],
   },
   {
+    name: "Foldkit の画面の view は Command の外で window を読めない",
+    path: "web/src/mfa/window-in-view.ts",
+    source:
+      'import { Command } from "foldkit"; export const view = () => [window.location.href, Command];',
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "Foldkit の Command の execute は、Effect.sync の中で window を使える",
+    path: "web/src/mfa/window-in-command.ts",
+    source:
+      'import { Effect } from "effect"; import { Command } from "foldkit"; export const ScrollToTop = Command.define("ScrollToTop", { messages: [], execute: Effect.sync(() => window.scrollTo(0, 0)) });',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の file は timer を使えない",
+    path: "web/src/mfa/timer.ts",
+    source:
+      'import { Command } from "foldkit"; export const later = () => [setTimeout(() => undefined, 1), Command];',
+    expectedRules: [TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "Foldkit の file は Date.now を使えない",
+    path: "web/src/mfa/date-now.ts",
+    source: 'import { Command } from "foldkit"; export const read = () => [Date.now(), Command];',
+    expectedRules: ["foldkit(no-impure-call-at-decision-time)", TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "Foldkit の file は *-atom.ts を import できない",
+    path: "web/src/mfa/atom-import.ts",
+    source:
+      'import { Command } from "foldkit"; import { mfaStatusAtom } from "./mfa-atom"; export { Command, mfaStatusAtom };',
+    expectedRules: [ATOM_IMPORT_IN_FOLDKIT],
+  },
+  {
+    name: "web の画面は Effect を自分で走らせない",
+    path: "web/src/mfa/run-effect.ts",
+    source:
+      'import { Effect } from "effect"; export const run = () => Effect.runPromise(Effect.void);',
+    expectedRules: [EFFECT_RUN_IN_WEB],
+  },
+  {
+    name: "画面は shared/ui の部品を使い、h.button を直に書けない",
+    path: "web/src/mfa/raw-button.ts",
+    source:
+      "type Builder = { readonly button: (attributes: unknown[], children: unknown[]) => unknown }; export const view = (h: Builder) => h.button([], []);",
+    expectedRules: [RAW_FORM_ELEMENT],
+  },
+  {
+    name: "shared/ui の部品は h.button を書ける",
+    path: "web/src/shared/ui/form-button.ts",
+    source:
+      "type Builder = { readonly button: (attributes: unknown[], children: unknown[]) => unknown }; export const view = (h: Builder) => h.button([], []);",
+    expectedRules: [],
+  },
+  {
+    name: "application は起動の関数の外で起動できない",
+    path: "web/src/app/auth/entry.ts",
+    source:
+      'import { Runtime } from "foldkit"; export const start = (program: Parameters<typeof Runtime.run>[0]) => Runtime.run(program);',
+    expectedRules: [DIRECT_APPLICATION_START],
+  },
+  {
+    name: "起動の関数だけが makeApplication と run を呼べる",
+    path: "web/src/app/start-application.ts",
+    source:
+      'import { Runtime } from "foldkit"; export const start = (config: Parameters<typeof Runtime.makeApplication>[0]) => Runtime.run(Runtime.makeApplication(config));',
+    expectedRules: [],
+  },
+  {
+    name: "web は @/ で import できない",
+    path: "web/src/shared/at-alias.ts",
+    source: 'import { cn } from "@/shared/utils"; export { cn };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "route は app/*/route.ts の外で import できない",
+    path: "web/src/mfa/route-in-domain.ts",
+    source: 'import { literal } from "foldkit/route"; export { literal };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "app/*/route.ts は route を import できる",
+    path: "web/src/app/auth/route.ts",
+    source:
+      'import { Route } from "foldkit"; import { literal } from "foldkit/route"; export { literal, Route };',
+    expectedRules: [],
+  },
+  {
+    name: "app/*/route.ts も web の import の禁止を失わない",
+    path: "web/src/app/account/route.ts",
+    source: 'import { toast } from "sonner"; export { toast };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "Foldkit の画面の file も、web の import の禁止を失わない",
+    path: "web/src/mfa/notify-program.ts",
+    source:
+      'import { Command } from "foldkit"; import { toast } from "sonner"; export { Command, toast };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "web は effect/crypto と effect/persistence を import できる",
+    path: "web/src/shared/secure-random.ts",
+    source:
+      'import { SecureRandom } from "effect/crypto"; import { KeyValueStore } from "effect/persistence"; export { KeyValueStore, SecureRandom };',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の file は module の階層に let を置けない (Foldkit の recommended)",
+    path: "web/src/mfa/module-let.ts",
+    source: 'import { Command } from "foldkit"; export let counter = 0; export { Command };',
+    expectedRules: [MODULE_LEVEL_MUTABLE_STATE],
+  },
+  {
+    name: "web の if は braces を省けない",
+    path: "web/src/shared/if-without-braces.ts",
+    source: "export const sign = (value: number) => { if (value > 0) return 1; return -1; };",
+    expectedRules: [BRACES_REQUIRED],
+  },
+  {
+    name: "web の test 以外は型の cast を書けない",
+    path: "web/src/shared/cast.ts",
+    source: "export const asText = (value: unknown) => value as string;",
+    expectedRules: [TYPE_ASSERTION],
+  },
+  {
     name: "== で比べられない",
     path: "src/loose-equality.ts",
     source: "export const same = (a: number, b: number) => a == b;",
@@ -357,6 +492,19 @@ const groupsWithDistinctPaths = (cases: readonly Case[]): Case[][] =>
     return groups;
   }, []);
 
+const configWithJsPluginsFromRepo = (): string => {
+  const config: { jsPlugins?: { name: string; specifier: string }[] } = JSON.parse(
+    readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8"),
+  );
+  const jsPlugins = (config.jsPlugins ?? []).map((plugin) => ({
+    ...plugin,
+    specifier: plugin.specifier.startsWith("./")
+      ? join(REPO_ROOT, plugin.specifier)
+      : join(REPO_ROOT, "node_modules", plugin.specifier),
+  }));
+  return JSON.stringify({ ...config, jsPlugins });
+};
+
 const fixtureDirs: string[] = [];
 const lintedFileCounts: { readonly written: number; readonly linted: number }[] = [];
 const rulesByCase = new Map<Case, string[]>();
@@ -364,7 +512,7 @@ const rulesByCase = new Map<Case, string[]>();
 const lintGroup = (group: readonly Case[]): void => {
   const fixtureDir = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
   fixtureDirs.push(fixtureDir);
-  copyFileSync(join(REPO_ROOT, ".oxlintrc.json"), join(fixtureDir, ".oxlintrc.json"));
+  writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
   mkdirSync(join(fixtureDir, "packages/auth-client/src"), { recursive: true });
   writeFileSync(join(fixtureDir, "packages/auth-client/src/types.ts"), "export type Types = 1;\n");
   for (const { path, source } of group) {
@@ -397,7 +545,7 @@ afterAll(() => {
   for (const fixtureDir of fixtureDirs) rmSync(fixtureDir, { recursive: true, force: true });
 });
 
-describe("Biome から写した lint の rule は、oxlint で同じ path に効く", () => {
+describe("lint の rule は、oxlint で決めた path に効く", () => {
   test.each([...CASES])("$name", (testCase: Case) => {
     expect(rulesByCase.get(testCase)).toEqual([...testCase.expectedRules]);
   });

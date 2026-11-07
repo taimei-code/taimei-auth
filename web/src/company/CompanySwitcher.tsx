@@ -10,7 +10,9 @@ export const CompanySwitcher = () => {
   const { memberships, currentMembership } = useCurrentCompany();
   const { switchCompany, switchPending } = useSwitchCompany();
 
-  if (!currentMembership) return null;
+  if (!currentMembership) {
+    return null;
+  }
 
   const orgLabel = orgCodeLabelJa(currentMembership.company_org_code);
 
@@ -29,7 +31,9 @@ export const CompanySwitcher = () => {
             disabled={switchPending}
             onChange={(e) => {
               const next = e.target.value;
-              if (next === currentMembership.company_id) return;
+              if (next === currentMembership.company_id) {
+                return;
+              }
               void switchCompany(next);
             }}
             className="h-8 py-1 pl-2 font-medium"

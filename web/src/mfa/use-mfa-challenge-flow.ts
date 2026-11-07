@@ -78,7 +78,9 @@ export function useMfaChallengeFlow(observation: MfaChallengeObservation): MfaCh
   const [runOneAtATime] = useState(oneAtATime);
 
   const submit = (input: { code: string; kind: MfaCodeKind }) => {
-    if (state.phase !== "ready") return;
+    if (state.phase !== "ready") {
+      return;
+    }
     runOneAtATime(() => submitVerification(input, { verify, dispatch }));
   };
 

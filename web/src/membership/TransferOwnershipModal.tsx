@@ -107,7 +107,9 @@ const TransferPicker = ({
   const [transferError, setTransferError] = useState<string | null>(null);
 
   const handleTransfer = (to: Member) => {
-    if (busyUserId) return;
+    if (busyUserId) {
+      return;
+    }
     setBusyUserId(to.user_id);
     setTransferError(null);
     transferOwnership(companyId, to.user_id)

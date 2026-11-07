@@ -87,7 +87,9 @@ export const InviteMemberForm = ({ companyId, assignableRoles, redirectSearch }:
             value={effectiveInviteRole}
             onChange={(e) => {
               const next = assignableRoles.find((role) => role === e.target.value);
-              if (next) setInviteRole(next);
+              if (next) {
+                setInviteRole(next);
+              }
             }}
             disabled={submitting}
             className="sm:w-36"

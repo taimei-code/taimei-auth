@@ -1,6 +1,16 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript", "unicorn", "oxc", "import", "jsx-a11y", "react"],
+  "jsPlugins": [
+    {
+      "name": "taimei",
+      "specifier": "./lint/oxlint-plugin.mts"
+    },
+    {
+      "name": "foldkit",
+      "specifier": "@foldkit/oxlint-plugin"
+    }
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -44,16 +54,19 @@
             "patterns": [
               {
                 "group": [
-                  "@effect/atom-react",
-                  "@radix-ui/*",
-                  "@tanstack/react-router",
                   "class-variance-authority",
                   "clsx",
+                  "@effect/atom-react",
+                  "@effect/platform-browser",
+                  "foldkit",
+                  "lucide",
                   "lucide-react",
                   "qrcode",
+                  "@radix-ui/*",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "@tanstack/react-router"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -99,16 +112,19 @@
             "patterns": [
               {
                 "group": [
-                  "@effect/atom-react",
-                  "@radix-ui/*",
-                  "@tanstack/react-router",
                   "class-variance-authority",
                   "clsx",
+                  "@effect/atom-react",
+                  "@effect/platform-browser",
+                  "foldkit",
+                  "lucide",
                   "lucide-react",
                   "qrcode",
+                  "@radix-ui/*",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "@tanstack/react-router"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -159,16 +175,19 @@
             "patterns": [
               {
                 "group": [
-                  "@effect/atom-react",
-                  "@radix-ui/*",
-                  "@tanstack/react-router",
                   "class-variance-authority",
                   "clsx",
+                  "@effect/atom-react",
+                  "@effect/platform-browser",
+                  "foldkit",
+                  "lucide",
                   "lucide-react",
                   "qrcode",
+                  "@radix-ui/*",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "@tanstack/react-router"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -213,16 +232,19 @@
             "patterns": [
               {
                 "group": [
-                  "@effect/atom-react",
-                  "@radix-ui/*",
-                  "@tanstack/react-router",
                   "class-variance-authority",
                   "clsx",
+                  "@effect/atom-react",
+                  "@effect/platform-browser",
+                  "foldkit",
+                  "lucide",
                   "lucide-react",
                   "qrcode",
+                  "@radix-ui/*",
                   "sonner",
                   "tailwind-merge",
-                  "tailwindcss-animate"
+                  "tailwindcss-animate",
+                  "@tanstack/react-router"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -279,16 +301,81 @@
               {
                 "name": "pg",
                 "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "foldkit/route",
+                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
+              },
+              {
+                "name": "foldkit",
+                "importNames": ["Route"],
+                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
               }
             ],
             "patterns": [
               {
-                "group": ["effect/*", "effect/**", "!effect/reactivity", "!effect/http"],
-                "message": "web で使える effect の subpath は effect/reactivity と effect/http だけ (docs/adr/0017-effect-v4-full-adoption.md)"
+                "group": [
+                  "effect/*",
+                  "effect/**",
+                  "!effect/reactivity",
+                  "!effect/http",
+                  "!effect/crypto",
+                  "!effect/persistence"
+                ],
+                "message": "web で使える effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
               },
               {
                 "group": ["drizzle-orm/**"],
                 "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "group": ["@/*", "@/**"],
+                "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["web/src/app/*/route.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "sonner",
+                "message": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+              },
+              {
+                "name": "drizzle-orm",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "pg",
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "effect/*",
+                  "effect/**",
+                  "!effect/reactivity",
+                  "!effect/http",
+                  "!effect/crypto",
+                  "!effect/persistence"
+                ],
+                "message": "web で使える effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
+              },
+              {
+                "group": ["drizzle-orm/**"],
+                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "group": ["@/*", "@/**"],
+                "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -309,12 +396,25 @@
               {
                 "name": "pg",
                 "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "name": "foldkit/route",
+                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
+              },
+              {
+                "name": "foldkit",
+                "importNames": ["Route"],
+                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
               }
             ],
             "patterns": [
               {
                 "group": ["drizzle-orm/**"],
                 "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
+              },
+              {
+                "group": ["@/*", "@/**"],
+                "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -332,6 +432,103 @@
             "message": "search は route の validateSearch で parse する (web/src/CLAUDE.md)"
           }
         ]
+      }
+    },
+    {
+      "files": ["web/src/**"],
+      "excludeFiles": ["web/src/**/__tests__/**"],
+      "rules": {
+        "taimei/no-effect-run-in-web": "error",
+        "taimei/no-browser-global-outside-command": "error",
+        "taimei/no-timer-clock-random-in-foldkit": "error",
+        "taimei/no-atom-import-in-foldkit": "error",
+        "taimei/no-raw-form-element": "error",
+        "taimei/no-direct-application-start": "error",
+        "typescript/consistent-type-assertions": [
+          "error",
+          {
+            "assertionStyle": "never"
+          }
+        ],
+        "foldkit/acquire-release-constructs-in-acquire-body": "error",
+        "foldkit/command-binding-matches-name": "error",
+        "foldkit/command-define-pascal-const": "error",
+        "foldkit/got-prefix-requires-submodel-payload": "error",
+        "foldkit/got-submodel-message-name": "error",
+        "foldkit/got-wrapper-carries-only-routing": "error",
+        "foldkit/keyed-required-for-mapped-rows": "error",
+        "foldkit/lazy-view-stable-references": "error",
+        "foldkit/mount-factory-must-use-element": "error",
+        "foldkit/no-array-index-view-keys": "error",
+        "foldkit/no-child-message-construction-in-root": "error",
+        "foldkit/no-direct-submodel-state-update": "error",
+        "foldkit/no-disabling-dev-guardrails": "error",
+        "foldkit/no-duplicate-onmount-per-element": "error",
+        "foldkit/no-empty-children-array": "error",
+        "foldkit/no-empty-commands-array": "error",
+        "foldkit/no-empty-to-parent-out-message": "error",
+        "foldkit/no-empty-object-tagged-call": "error",
+        "foldkit/no-hand-rolled-command-struct": "error",
+        "foldkit/no-hardcoded-route-strings": "error",
+        "foldkit/no-impure-call-at-decision-time": "error",
+        "foldkit/no-module-level-mutable-state": "error",
+        "foldkit/no-nonportable-server-globals": "off",
+        "foldkit/no-noop-message": "error",
+        "foldkit/no-prevent-default-in-stream-operator": "error",
+        "foldkit/no-raw-dom-event-attributes": "error",
+        "foldkit/no-route-query-constructor-default": "error",
+        "foldkit/no-spread-in-modify-fields": "error",
+        "foldkit/no-switch-on-message-tag": "error",
+        "foldkit/prefer-callable-message-constructor": "error",
+        "foldkit/prefer-command-mapmessage": "error",
+        "foldkit/prefer-effect-module-names": "error",
+        "foldkit/prefer-option-over-nullable-in-model": "error",
+        "foldkit/require-fold-for-child-update-result": "error",
+        "foldkit/require-rel-for-external-link": "error",
+        "foldkit/selection-submodel-factory-at-module-scope": "error",
+        "foldkit/wrap-child-output-in-got-message": "error"
+      }
+    },
+    {
+      "files": ["web/src/**"],
+      "rules": {
+        "curly": ["error", "all"]
+      },
+      "excludeFiles": [
+        "web/src/mfa/MfaDisableDialog.tsx",
+        "web/src/mfa/MfaEnrollDialog.tsx",
+        "web/src/mfa/use-mfa-code-entry.ts"
+      ]
+    },
+    {
+      "files": ["web/src/shared/atom-runtime.ts"],
+      "rules": {
+        "taimei/no-effect-run-in-web": "off"
+      }
+    },
+    {
+      "files": ["web/src/shared/notify.tsx"],
+      "rules": {
+        "foldkit/no-module-level-mutable-state": "off"
+      }
+    },
+    {
+      "files": ["web/src/shared/ui/**"],
+      "rules": {
+        "taimei/no-raw-form-element": "off"
+      }
+    },
+    {
+      "files": ["web/src/app/start-application.ts"],
+      "rules": {
+        "taimei/no-direct-application-start": "off"
+      }
+    },
+    {
+      "files": ["web/src/app/*/entry.ts"],
+      "rules": {
+        "taimei/no-browser-global-outside-command": "off",
+        "foldkit/no-impure-call-at-decision-time": "off"
       }
     },
     {

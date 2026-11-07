@@ -1,0 +1,86 @@
+import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { Schema } from "effect";
+
+import { readPackageJson, REPO_ROOT } from "./config-invariant-helpers";
+
+const FOLDKIT_REFERENCE = /https:\/\/github\.com\/foldkit\/foldkit\/tree\/foldkit@([^\s)`]+)/g;
+const SKILL_VERSION = /^---\n(?:.*\n)*?  foldkit-version: (\S+)\n(?:.*\n)*?---\n/;
+const FOLDKIT_SKILLS = ["foldkit", "generate-program", "audit-program"] as const;
+
+const readRepoFile = (file: string) => readFileSync(path.join(REPO_ROOT, file), "utf8");
+
+const installedFoldkitVersion = readPackageJson().devDependencies?.foldkit ?? "";
+
+const SkillsLock = Schema.fromJsonString(
+  Schema.Struct({ version: Schema.String, sha256: Schema.String }),
+);
+
+const skillsLock = Schema.decodeSync(SkillsLock)(
+  readRepoFile(".claude/skills/foldkit-skills.lock.json"),
+);
+
+const sha256 = (content: string) => createHash("sha256").update(content).digest("hex");
+
+const skillFiles = () =>
+  FOLDKIT_SKILLS.flatMap((skill) =>
+    readdirSync(path.join(REPO_ROOT, ".claude/skills", skill), {
+      recursive: true,
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isFile())
+      .map((entry) =>
+        path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)).replaceAll("\\", "/"),
+      ),
+  ).sort();
+
+const skillsSha256 = () =>
+  sha256(
+    skillFiles()
+      .map((file) => `${sha256(readRepoFile(file))}  ${file}\n`)
+      .join(""),
+  );
+
+describe("agent が読む Foldkit の参照は、入れた版と一致する", () => {
+  test("package.json の foldkit は範囲を持たない版で固定する", () => {
+    expect(installedFoldkitVersion).toMatch(/^\d+\.\d+\.\d+$/);
+  });
+
+  test("web/src/CLAUDE.md の Foldkit の参照は、入れた版の tag だけを指す", () => {
+    expect(
+      [...readRepoFile("web/src/CLAUDE.md").matchAll(FOLDKIT_REFERENCE)].map(
+        ([, version]) => version,
+      ),
+    ).toEqual([installedFoldkitVersion]);
+  });
+
+  test.each([
+    ...FOLDKIT_SKILLS,
+  ])(".claude/skills/%s は入れた版の tag から写した skill である", (skill) => {
+    expect(readRepoFile(`.claude/skills/${skill}/SKILL.md`).match(SKILL_VERSION)?.[1]).toBe(
+      installedFoldkitVersion,
+    );
+  });
+
+  test("skill を取り直した版は、入れた版と一致する", () => {
+    expect(skillsLock.version).toBe(installedFoldkitVersion);
+  });
+
+  test("skill の中身は scripts/update-foldkit-skills.sh が取り直したときの hash と一致する (手で写したり書き換えたりすると落ちる)", () => {
+    expect(skillsSha256()).toBe(skillsLock.sha256);
+  });
+
+  test.each([
+    "FOLDKIT.md",
+    "web/FOLDKIT.md",
+    "web/.mcp.json",
+  ])("Foldkit の scaffold が置く %s を repo に持ち込まない", (file) => {
+    expect(existsSync(path.join(REPO_ROOT, file))).toBe(false);
+  });
+
+  test("repo の .mcp.json に Foldkit の DevTools の MCP server を足さない", () => {
+    expect(readRepoFile(".mcp.json")).not.toMatch(/foldkit/i);
+  });
+});

@@ -46,10 +46,14 @@ export const PendingInvitations = ({ companyId }: { companyId: string }) => {
       </>
     );
   }
-  if (invitations.length === 0) return null;
+  if (invitations.length === 0) {
+    return null;
+  }
 
   const handleRevoke = (invitationId: string) => {
-    if (busyInvitationId) return;
+    if (busyInvitationId) {
+      return;
+    }
     setBusyInvitationId(invitationId);
     revokeInvitation(companyId, invitationId)
       .then(

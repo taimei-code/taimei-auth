@@ -23,15 +23,19 @@ export const AsyncSection = <A, E>({
   empty?: { readonly when: (value: A) => boolean; readonly text: string };
   children: (value: A) => ReactNode;
 }) => {
-  if (failedBeforeAnyValue(result))
+  if (failedBeforeAnyValue(result)) {
     return (
       <p role="alert" className="text-sm text-destructive">
         {failedText}
       </p>
     );
+  }
   const value = AsyncResult.value(result);
-  if (Option.isNone(value)) return <LoadingRow />;
-  if (empty?.when(value.value))
+  if (Option.isNone(value)) {
+    return <LoadingRow />;
+  }
+  if (empty?.when(value.value)) {
     return <p className="text-sm text-muted-foreground">{empty.text}</p>;
+  }
   return <>{children(value.value)}</>;
 };
