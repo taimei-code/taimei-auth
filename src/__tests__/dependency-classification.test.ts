@@ -35,6 +35,8 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@effect/platform-node":
     "build-tool: @alchemy.run/cloudflare の Worker の資源が静的に import する peer 依存 (optional と書かれているが、無いと定義を読めない)",
   "@effect/tsgo": "build-tool: Effect の診断入りの tsc (bun run typecheck)",
+  "@foldkit/oxlint-plugin": "build-tool: oxlint が読む Foldkit の lint の plugin",
+  "@foldkit/vite-plugin": "build-tool: web の vite の設定が読む Foldkit の build plugin",
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
   "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
   alchemy: "build-tool: infra/alchemy.run.ts が宣言する IaC の CLI (staging の deploy)",
