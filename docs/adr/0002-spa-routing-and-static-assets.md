@@ -23,6 +23,8 @@
 
 ### router は TanStack Router (2026-10-11 追記)
 
+(2026-11-07 追記) この節は [ADR-0023](./0023-web-foldkit.md) が置き換える。React の画面が残る間 (#396 まで) は、この節のまま読む。document を読み直す理由は ADR-0023 も同じである。
+
 - 選んだ理由: 遷移先の path と search が型検査され、存在しない path、定義していない search の値、必須の search の欠落への遷移が tsc で落ちる。search は route の `validateSearch` で 1 か所で parse し、遷移を起点とする処理 (`/account` を開く前の session と所属の確認、事業所登録の画面を開く前の確認、招待の受諾、MFA チャレンジの状態の取得) は route の `beforeLoad` / `loader` に置ける。React Router 8 は search の値と、`href()` を通さない path の誤りが型エラーにならなかった (draft PR #257 の PoC)
 - `trailingSlash` は `preserve` にする。既定の `never` は `/auth/` を `/auth` に替え、上の session に応じた redirect (`/auth/` と `/auth/signup` だけが対象) を通らなくなる。逆に、ログアウトや退会の後に開くログイン画面は、意図して `/auth` (スラッシュ無し) にする。2 つの入口 (`leaveSpaToSignIn` と `signInUrlAfterSignOut`) は `web/src/shared/leave-spa.ts` が定義する
 - `/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は、client 側の遷移ではなく document を読み直す (`reloadDocument`)。理由は 2 つある。session に応じた redirect は、document の要求でしか動かない。もう 1 つは cache の鮮度で、Effect Atom の registry (取得したデータの cache) に古い所属の一覧が残ったまま `/account` を開く前の確認がそれを読むと、事業所の作成や招待の受諾の直後でも事業所登録へ戻してしまう
