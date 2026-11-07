@@ -27,4 +27,7 @@ minimumReleaseAgeExcludes = [
   "@distilled.cloud/cloudflare",
   "@distilled.cloud/core",
   "@distilled.cloud/iceberg",
+  # PoC の branch (#386) だけの例外。main に持ち込まない。@effect/platform-browser 4.1.2 は 11-02 04:04 UTC 公開
+  # 外せる日時: 2026-11-09 04:04 UTC (2026-11-09 13:04 JST、公開 + 7 日)
+  "@effect/platform-browser",
 ]
