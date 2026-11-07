@@ -4,13 +4,33 @@ import type { MfaCodeKind } from "./mfa-atom";
 import { oneAtATime } from "./one-at-a-time";
 
 const WHITESPACE = /\s+/g;
-const PASTE_TOLERANT_MAX_LENGTH = 32;
+export const PASTE_TOLERANT_MAX_LENGTH = 32;
 const HYPHEN_LIKE = /[-‐-―−ー]/g;
 
 export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
   const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
   return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
 }
+
+export const mfaCodeEntryText = (kind: MfaCodeKind) =>
+  kind === "totp"
+    ? {
+        labelText: "確認コード",
+        hint: "認証アプリに表示されている 6 桁の数字を入力してください。",
+        placeholder: "123456",
+        inputMode: "numeric" as const,
+      }
+    : {
+        labelText: "リカバリーコード",
+        hint: "有効化時に控えたリカバリーコードを 1 つ入力してください (1 つにつき 1 回だけ使えます)。",
+        placeholder: "xxxxx-xxxxx",
+        inputMode: "text" as const,
+      };
+
+export const mfaCodeEntryIds = (inputId: string) => ({
+  hintId: `${inputId}-hint`,
+  errorId: `${inputId}-error`,
+});
 
 export type MfaCodeInput = {
   kind: MfaCodeKind;
@@ -40,8 +60,8 @@ export function useMfaCodeInput(options: {
 
   const normalizedCode = normalizeMfaCode(code, kind);
   const isTotp = kind === "totp";
-  const hintId = `${options.inputId}-hint`;
-  const errorId = `${options.inputId}-error`;
+  const { hintId, errorId } = mfaCodeEntryIds(options.inputId);
+  const text = mfaCodeEntryText(kind);
 
   const toggleKind = () => {
     setKind(isTotp ? "recovery_code" : "totp");
@@ -64,10 +84,8 @@ export function useMfaCodeInput(options: {
     kind,
     toggleKind,
     toggleLabel: isTotp ? "リカバリーコードを使う" : "認証アプリの確認コードを使う",
-    labelText: isTotp ? "確認コード" : "リカバリーコード",
-    hint: isTotp
-      ? "認証アプリに表示されている 6 桁の数字を入力してください。"
-      : "有効化時に控えたリカバリーコードを 1 つ入力してください (1 つにつき 1 回だけ使えます)。",
+    labelText: text.labelText,
+    hint: text.hint,
     hintId,
     errorId,
     errorMessage: options.errorMessage,
@@ -80,13 +98,13 @@ export function useMfaCodeInput(options: {
       disabled: options.submitting,
       required: true,
       autoComplete: "one-time-code",
-      inputMode: isTotp ? "numeric" : "text",
+      inputMode: text.inputMode,
       autoCapitalize: "off",
       autoCorrect: "off",
       spellCheck: false,
       maxLength: PASTE_TOLERANT_MAX_LENGTH,
-      placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
-      "aria-label": isTotp ? "確認コード" : "リカバリーコード",
+      placeholder: text.placeholder,
+      "aria-label": text.labelText,
       "aria-invalid": options.errorMessage !== null,
       "aria-describedby": options.errorMessage === null ? hintId : `${hintId} ${errorId}`,
     },

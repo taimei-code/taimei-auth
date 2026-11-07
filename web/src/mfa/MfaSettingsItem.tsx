@@ -45,7 +45,7 @@ export const MfaSettingsItem = ({ status }: { status: MfaStatus }) => (
           }
         />
       ) : (
-        <MfaEnrollDialog trigger={<Button size="sm">有効にする</Button>} />
+        <MfaEnrollDialog />
       )}
     </div>
   </li>
