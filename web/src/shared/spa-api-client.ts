@@ -13,9 +13,13 @@ export const leaveForSignInOnUnauthorized = <A, E, R>(
     Schema.is(Unauthorized)(failure) ? Effect.sync(leaveSpaToSignIn) : Effect.void,
   );
 
+export const SPA_CLIENT_OPTIONS = {
+  baseUrl: globalThis.location?.origin,
+  transformResponse: leaveForSignInOnUnauthorized,
+};
+
 export class SpaApiClient extends AtomHttpApi.Service<SpaApiClient>()("SpaApiClient", {
   api: SpaApi,
   httpClient: FetchHttpClient.layer,
-  baseUrl: globalThis.location?.origin,
-  transformResponse: leaveForSignInOnUnauthorized,
+  ...SPA_CLIENT_OPTIONS,
 }) {}

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -28,6 +28,8 @@ const LOOSE_EQUALITY = "eslint(eqeqeq)";
 const SWITCH_FALLTHROUGH = "eslint(no-fallthrough)";
 const PARSE_INT_WITHOUT_RADIX = "eslint(radix)";
 const COMMONJS = "import(no-commonjs)";
+const EFFECT_RUN_IN_WEB = "taimei(no-effect-run-in-web)";
+const BROWSER_GLOBAL_OUTSIDE_COMMAND = "taimei(no-browser-global-outside-command)";
 
 const CASES: readonly Case[] = [
   {
@@ -315,6 +317,53 @@ const CASES: readonly Case[] = [
     expectedRules: [BUTTON_WITHOUT_TYPE],
   },
   {
+    name: "Foldkit の画面の update は timer を始められない",
+    path: "web/src/mfa/timer-in-update.ts",
+    source:
+      'import { Command } from "foldkit"; export const update = (ms: number) => { setTimeout(() => undefined, ms); return Command; };',
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "Foldkit の画面の view は window を読めない",
+    path: "web/src/mfa/window-in-view.ts",
+    source:
+      'import { Command } from "foldkit"; export const view = () => [window.location.href, Command];',
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "Foldkit の Command の execute は、Effect の中で window を使える",
+    path: "web/src/mfa/window-in-command.ts",
+    source:
+      'import { Effect } from "effect"; import { Command } from "foldkit"; export const ScrollToTop = Command.define("ScrollToTop", { messages: [], execute: Effect.sync(() => window.scrollTo(0, 0)) });',
+    expectedRules: [],
+  },
+  {
+    name: "web の画面は Effect を自分で走らせない",
+    path: "web/src/mfa/run-effect.ts",
+    source:
+      'import { Effect } from "effect"; export const run = () => Effect.runPromise(Effect.void);',
+    expectedRules: [EFFECT_RUN_IN_WEB],
+  },
+  {
+    name: "Foldkit の画面の file も、web の import の禁止を失わない",
+    path: "web/src/mfa/notify-program.ts",
+    source:
+      'import { Command } from "foldkit"; import { toast } from "sonner"; export { Command, toast };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "画面は @foldkit/ui の Dialog を直接使えない",
+    path: "web/src/mfa/raw-dialog.ts",
+    source: 'import { Dialog } from "@foldkit/ui"; export { Dialog };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "house の dialog の部品だけが @foldkit/ui の Dialog を使える",
+    path: "web/src/shared/ui/dialog-view.ts",
+    source: 'import { Dialog } from "@foldkit/ui"; export { Dialog };',
+    expectedRules: [],
+  },
+  {
     name: "== で比べられない",
     path: "src/loose-equality.ts",
     source: "export const same = (a: number, b: number) => a == b;",
@@ -357,6 +406,19 @@ const groupsWithDistinctPaths = (cases: readonly Case[]): Case[][] =>
     return groups;
   }, []);
 
+const configWithJsPluginsFromRepo = (): string => {
+  const config = JSON.parse(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8")) as {
+    jsPlugins?: { name: string; specifier: string }[];
+  };
+  const jsPlugins = (config.jsPlugins ?? []).map((plugin) => ({
+    ...plugin,
+    specifier: plugin.specifier.startsWith("./")
+      ? join(REPO_ROOT, plugin.specifier)
+      : join(REPO_ROOT, "node_modules", plugin.specifier),
+  }));
+  return JSON.stringify({ ...config, jsPlugins });
+};
+
 const fixtureDirs: string[] = [];
 const lintedFileCounts: { readonly written: number; readonly linted: number }[] = [];
 const rulesByCase = new Map<Case, string[]>();
@@ -364,7 +426,7 @@ const rulesByCase = new Map<Case, string[]>();
 const lintGroup = (group: readonly Case[]): void => {
   const fixtureDir = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
   fixtureDirs.push(fixtureDir);
-  copyFileSync(join(REPO_ROOT, ".oxlintrc.json"), join(fixtureDir, ".oxlintrc.json"));
+  writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
   mkdirSync(join(fixtureDir, "packages/auth-client/src"), { recursive: true });
   writeFileSync(join(fixtureDir, "packages/auth-client/src/types.ts"), "export type Types = 1;\n");
   for (const { path, source } of group) {

@@ -13,7 +13,9 @@ const runtimeImports = (path: string, source: string): string[] =>
   );
 
 const mayUseHttpClient = (path: string) =>
-  path.endsWith("-atom.ts") || path === "shared/spa-api-client.ts";
+  path.endsWith("-atom.ts") ||
+  path === "shared/spa-api-client.ts" ||
+  path === "shared/spa-http-client.ts";
 
 const usesEffectHook = (source: string) => /\buse(Layout)?Effect\b/.test(source);
 
@@ -31,7 +33,14 @@ const RULES: readonly Rule[] = [
     name: "SpaApiClient",
     violates: (path, _source, imports) =>
       imports.some((target) => target.endsWith("shared/spa-api-client")) &&
-      !path.endsWith("-atom.ts"),
+      !path.endsWith("-atom.ts") &&
+      path !== "shared/spa-http-client.ts",
+  },
+  {
+    name: "SpaHttpClient",
+    violates: (path, _source, imports) =>
+      imports.some((target) => target.endsWith("shared/spa-http-client")) &&
+      !path.endsWith("-program.ts"),
   },
   {
     name: "effect/http",

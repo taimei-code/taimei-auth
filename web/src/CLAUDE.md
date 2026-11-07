@@ -1,5 +1,7 @@
 # web/src/ 共通画面SPA実装規則
 
+Foldkit の参照: https://github.com/foldkit/foldkit/tree/foldkit@0.170.0
+
 配置の判断は [`ADR-0015`](../../docs/adr/0015-web-domain-first-directory-structure.md) が定義元である。cross-domain import の allowlist は `src/__tests__/web-domain-structure.test.ts` が固定し、path の追加は新しい cross-domain interface を設ける設計変更として review する。
 
 ## 所有 domain

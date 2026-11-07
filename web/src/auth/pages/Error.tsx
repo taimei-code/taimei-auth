@@ -1,31 +1,10 @@
 import { AlertCircle } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "../../shared/ui/alert";
-import type { ErrorPageReason } from "../auth-error-reason";
-
-const ERROR_MESSAGES: Record<ErrorPageReason, { title: string; description: string }> = {
-  invalid_redirect_url: {
-    title: "不正なリダイレクト URL",
-    description:
-      "リダイレクト先が許可されていません。ログインリクエストを発行したサービスから再度ログインしてください。",
-  },
-  signup_already_completed: {
-    title: "サインアップ済みです",
-    description: "既に登録済みのアカウントです。ログイン画面からログインしてください。",
-  },
-  signin_failed: {
-    title: "ログインに失敗しました",
-    description: "ログイン処理中にエラーが発生しました。再度お試しください。",
-  },
-};
-
-const DEFAULT_MESSAGE = {
-  title: "エラーが発生しました",
-  description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
-};
+import { errorPageMessage, type ErrorPageReason } from "../auth-error-reason";
 
 export const ErrorPage = ({ reason }: { reason?: ErrorPageReason }) => {
-  const message = reason === undefined ? DEFAULT_MESSAGE : ERROR_MESSAGES[reason];
+  const message = errorPageMessage(reason);
 
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10">
