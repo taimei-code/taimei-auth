@@ -293,6 +293,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
       description: Phase.guards.Expired(model.phase)
         ? "ログインをやり直してください"
         : NEEDS_CHALLENGE_DESCRIPTION,
+      width: "sm",
       content: Phase.match(model.phase, {
         Observing: () => [loadingStatusView("読み込み中…", h)],
         Entering: (entering) => enteringView(model, entering, h),

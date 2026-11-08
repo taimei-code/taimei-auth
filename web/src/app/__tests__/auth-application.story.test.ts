@@ -5,9 +5,11 @@ import { Command, given, message, model, story } from "foldkit/story";
 import { fromString, type Url } from "foldkit/url";
 
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
+import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
 import {
   init,
+  LeaveToSignIn,
   LoadDocument,
   Message,
   type Model,
@@ -189,6 +191,116 @@ describe("MFA チャレンジの画面への入り方と出方", () => {
             model: { visit: next.pageVisit, phase: { _tag: "Observing" } },
           }),
         );
+      }),
+    );
+  });
+});
+
+const signUpCompanyOf = (current: Model): SignUpCompany.Model => {
+  const page = Option.getOrThrowWith(current.maybePage, () => new Error("画面が無い"));
+  if (page._tag !== "SignUpCompany") {
+    throw new Error(`事業所の登録の画面でない: ${page._tag}`);
+  }
+  return page.model;
+};
+
+const signUpCompanyMessage = (message: SignUpCompany.Message) =>
+  Message.GotSignUpCompanyMessage({ message });
+
+describe("事業所の登録の画面への入り方と出方", () => {
+  test("/auth/signup/company を開くと session を確かめに行く", () => {
+    expect(commandNamesAt(`/auth/signup/company?${SEARCH}`)).toEqual([
+      SignUpCompany.CheckSession.name,
+    ]);
+  });
+
+  test.each([
+    ["許可された redirect_url", "https://app.taimei-code.com/", `?${SEARCH}`],
+    [
+      "許可されない redirect_url",
+      "/account",
+      `?service_name=taimei&redirect_url=${encodeURIComponent("https://evil.example.com/")}`,
+    ],
+    ["search の無い URL", "/account", ""],
+  ])("%s で開くと、戻り先は %s になる", (_, redirectUrl, search) => {
+    expect(signUpCompanyOf(modelAt(`/auth/signup/company${search}`)).redirectUrl).toBe(redirectUrl);
+  });
+
+  test("session が無ければ、今の URL を戻り先にしてログイン画面へ移る", () => {
+    const opened = modelAt(`/auth/signup/company?${SEARCH}`);
+    story(
+      update,
+      given(opened),
+      message(
+        signUpCompanyMessage(
+          SignUpCompany.Message.SucceededCheckSession({
+            visit: opened.pageVisit,
+            isSignedIn: false,
+          }),
+        ),
+      ),
+      Command.expectExact(LeaveToSignIn()),
+      Command.resolve(LeaveToSignIn, Message.CompletedLeaveToSignIn()),
+    );
+  });
+
+  test("所属があれば、戻り先へ document を置き換える", () => {
+    const opened = modelAt(`/auth/signup/company?${SEARCH}`);
+    story(
+      update,
+      given(opened),
+      message(
+        signUpCompanyMessage(
+          SignUpCompany.Message.SucceededLoadMemberships({
+            visit: opened.pageVisit,
+            isCompanyMember: true,
+          }),
+        ),
+      ),
+      Command.expectExact(ReplaceDocument({ href: "https://app.taimei-code.com/" })),
+      Command.resolve(ReplaceDocument, Message.CompletedReplaceDocument()),
+    );
+  });
+
+  test("ログアウトの後は、末尾に / の無いログイン画面を読み直す", () => {
+    const opened = modelAt(`/auth/signup/company?${SEARCH}`);
+    story(
+      update,
+      given(opened),
+      message(
+        signUpCompanyMessage(SignUpCompany.Message.FailedCheckSession({ visit: opened.pageVisit })),
+      ),
+      message(signUpCompanyMessage(SignUpCompany.Message.ClickedSignOut())),
+      Command.resolve(
+        SignUpCompany.SignOut,
+        SignUpCompany.Message.SucceededSignOut({ visit: opened.pageVisit }),
+      ),
+      Command.expectExact(
+        LoadDocument({
+          href: `/auth?service_name=accounts&redirect_url=${encodeURIComponent(`${ORIGIN}/account`)}`,
+        }),
+      ),
+      Command.resolve(LoadDocument, Message.CompletedLoadDocument()),
+    );
+  });
+
+  test("別の画面へ移った後に届いた古い応答は、捨てる", () => {
+    const opened = modelAt(`/auth/signup/company?${SEARCH}`);
+    story(
+      update,
+      given(opened),
+      message(Message.ChangedUrl({ url: urlOf(`${ORIGIN}/auth/error`) })),
+      message(
+        signUpCompanyMessage(
+          SignUpCompany.Message.SucceededCheckSession({
+            visit: opened.pageVisit,
+            isSignedIn: false,
+          }),
+        ),
+      ),
+      Command.expectNone(),
+      model((next) => {
+        expect(next.maybePage).toEqual(Option.none());
       }),
     );
   });

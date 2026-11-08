@@ -397,6 +397,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
     {
       title: TEXTS[model.kind].title(TAIMEI_SERVICES[model.params.service_name].name),
       description: TEXTS[model.kind].description,
+      width: "sm",
       hidden: canaryTokensView(h),
       content: [
         ...Form.match(model.form, {

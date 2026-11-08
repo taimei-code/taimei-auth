@@ -2,11 +2,20 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { cardClassNames } from "../shared/ui/class-names";
 
+type AuthPageCardWidth = "sm" | "md";
+
+const CARD_WIDTH_CLASS: Record<AuthPageCardWidth, string> = {
+  sm: "max-w-sm",
+  md: "max-w-md",
+};
+
 type AuthPageCardContent = Readonly<{
   title: string;
   description: string;
+  width: AuthPageCardWidth;
   content: ReadonlyArray<Html>;
   hidden?: ReadonlyArray<Html>;
+  outside?: ReadonlyArray<Html>;
 }>;
 
 export const authPageCardView = <Message>(
@@ -22,7 +31,7 @@ export const authPageCardView = <Message>(
     [
       ...(card.hidden ?? []),
       h.div(
-        [h.Class(`${cardClassNames.root} w-full max-w-sm`)],
+        [h.Class(`${cardClassNames.root} w-full ${CARD_WIDTH_CLASS[card.width]}`)],
         [
           h.div(
             [h.Class(cardClassNames.header)],
@@ -38,5 +47,6 @@ export const authPageCardView = <Message>(
           ),
         ],
       ),
+      ...(card.outside ?? []),
     ],
   );

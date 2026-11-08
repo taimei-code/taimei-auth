@@ -11,6 +11,7 @@ import { fromZodSearch } from "../zod-search";
 export const AuthRoute = defineRouteUnion({
   SignIn: SignInOrSignUp.Params.fields,
   SignUp: SignInOrSignUp.Params.fields,
+  SignUpCompany: SignInOrSignUp.Params.fields,
   RejectedSignInParams: {},
   MfaChallenge: {},
   Error: { reason: Schema.Option(ErrorPageReason) },
@@ -41,6 +42,18 @@ const signUpRejectedRouter = pipe(
   Route.mapTo(AuthRoute.RejectedSignInParams),
 );
 
+const signUpCompanyRouter = pipe(
+  literal("auth"),
+  slash(literal("signup")),
+  slash(literal("company")),
+  Route.query(
+    fromZodSearch<SignInParams>(
+      signInParamsSchema.catch({ service_name: "accounts", redirect_url: "/account" }),
+    ),
+  ),
+  Route.mapTo(AuthRoute.SignUpCompany),
+);
+
 const mfaChallengeRouter = pipe(
   literal("auth"),
   slash(literal("mfa")),
@@ -64,6 +77,7 @@ export const urlToAuthRoute = Route.parseUrlWithFallback(
     signInRejectedRouter,
     signUpRouter,
     signUpRejectedRouter,
+    signUpCompanyRouter,
     mfaChallengeRouter,
     errorRouter,
   ),

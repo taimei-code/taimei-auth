@@ -12,7 +12,6 @@ import { AtomRegistry } from "effect/reactivity";
 import { fromString } from "foldkit/url";
 
 import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
-import { signInParamsSchema } from "@core/sign-in-params";
 
 import { AuthRoute, urlToAuthRoute } from "../auth/route";
 import { makeRouter } from "../router";
@@ -40,7 +39,6 @@ const authRouteOf = (url: string) =>
 
 describe("auth-client が組む画面の URL は共通画面 SPA の route に当たる", () => {
   test.each([
-    ["事業所作成画面", buildCompanySignupUrl(fromTaimei), "/auth/signup/company"],
     ["メンバー画面", buildMembersUrl(fromTaimei), "/account/members"],
     [
       "アカウント管理画面 (/account の下の最初の画面)",
@@ -61,6 +59,10 @@ test.each([
 
 test("auth-client が組む共通ログイン画面の URL は、Foldkit の application が描く", () => {
   expect(runtimeForPath(new URL(buildAuthLoginUrl(fromTaimei)).pathname)).toBe("FoldkitAuth");
+});
+
+test("auth-client が組む事業所作成画面の URL は、Foldkit の application が描く", () => {
+  expect(runtimeForPath(new URL(buildCompanySignupUrl(fromTaimei)).pathname)).toBe("FoldkitAuth");
 });
 
 test("auth-client が組むエラー画面の URL は、Foldkit の application が描く", () => {
@@ -94,11 +96,10 @@ describe("auth-client が組む画面の URL の query は、その画面の sea
     );
   });
 
-  test("事業所作成画面は service_name と redirect_url を読む", () => {
-    expect(signInParamsSchema.parse(searchOf(buildCompanySignupUrl(fromTaimei)))).toEqual({
-      service_name: "taimei",
-      redirect_url: fromTaimei.returnTo,
-    });
+  test("事業所作成画面は service_name と redirect_url を Foldkit の route に読む", () => {
+    expect(authRouteOf(buildCompanySignupUrl(fromTaimei))).toEqual(
+      AuthRoute.SignUpCompany({ service_name: "taimei", redirect_url: fromTaimei.returnTo }),
+    );
   });
 
   test("メンバー画面は service_name と redirect_url を読む", () => {

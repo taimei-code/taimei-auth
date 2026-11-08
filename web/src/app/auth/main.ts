@@ -9,8 +9,14 @@ import { toString as urlToString, Url } from "foldkit/url";
 
 import * as AuthError from "../../auth/pages/AuthError";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
+import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
-import { accountSignInUrlFrom, leaveSpaTo, loadDocument } from "../../shared/leave-spa";
+import {
+  accountSignInUrlFrom,
+  leaveSpaTo,
+  leaveSpaToSignIn,
+  loadDocument,
+} from "../../shared/leave-spa";
 import type { SpaHttpClient } from "../../shared/spa-http-client";
 import {
   AuthRoute,
@@ -23,6 +29,7 @@ import {
 
 const AuthPage = defineTaggedUnion({
   SignInOrSignUp: { model: SignInOrSignUp.Model },
+  SignUpCompany: { model: SignUpCompany.Model },
   MfaChallenge: { model: MfaChallenge.Model },
 });
 type AuthPage = typeof AuthPage.Type;
@@ -38,11 +45,13 @@ export type Model = typeof Model.Type;
 export const Message = defineMessageUnion({
   ClickedLink: { request: UrlRequest },
   ChangedUrl: { url: Url },
+  CompletedLeaveToSignIn: {},
   CompletedLoadDocument: {},
   CompletedPushUrl: {},
   CompletedRedirectToInvalidRedirectUrlError: {},
   CompletedReplaceDocument: {},
   GotSignInOrSignUpMessage: { message: SignInOrSignUp.Message },
+  GotSignUpCompanyMessage: { message: SignUpCompany.Message },
   GotMfaChallengeMessage: { message: MfaChallenge.Message },
 });
 export type Message = typeof Message.Type;
@@ -54,6 +63,11 @@ export const LoadDocument = Command.define("LoadDocument", {
   messages: [Message.CompletedLoadDocument],
   execute: ({ href }) =>
     Effect.sync(() => loadDocument(href)).pipe(Effect.as(Message.CompletedLoadDocument())),
+});
+
+export const LeaveToSignIn = Command.define("LeaveToSignIn", {
+  messages: [Message.CompletedLeaveToSignIn],
+  execute: Effect.sync(leaveSpaToSignIn).pipe(Effect.as(Message.CompletedLeaveToSignIn())),
 });
 
 export const PushUrl = Command.define("PushUrl", {
@@ -119,6 +133,16 @@ const enterSignInOrSignUp = (
   };
 };
 
+const enterSignUpCompany = (model: Model, redirectUrl: string): UpdateReturn => {
+  const init_ = SignUpCompany.init({ visit: model.pageVisit, redirectUrl });
+  return {
+    model: withPage(model, AuthPage.SignUpCompany({ model: init_.model })),
+    commands: Command.mapMessages(init_.commands, (message) =>
+      Message.GotSignUpCompanyMessage({ message }),
+    ),
+  };
+};
+
 const enterMfaChallenge = (model: Model): UpdateReturn => {
   const init_ = MfaChallenge.init({
     visit: model.pageVisit,
@@ -151,6 +175,13 @@ const enterRoute = (model: Model, route: AuthRoute): UpdateReturn => {
       model: entered,
       commands: [...canaryIconRemovals, RedirectToInvalidRedirectUrlError()],
     }),
+    SignUpCompany: ({ redirect_url }) => {
+      const signUpCompany = enterSignUpCompany(entered, redirect_url);
+      return {
+        model: signUpCompany.model,
+        commands: [...canaryIconRemovals, ...(signUpCompany.commands ?? [])],
+      };
+    },
     MfaChallenge: () => {
       const mfaChallenge = enterMfaChallenge(entered);
       return {
@@ -197,6 +228,31 @@ const foldSignInOrSignUp = Update.foldChild({
   toParentMessage: (message) => Message.GotSignInOrSignUpMessage({ message }),
 });
 
+const foldSignUpCompanyOutMessage = SignUpCompany.OutMessage.match<Update.Step<Model, Message>>({
+  ConfirmedCompanyMembership:
+    ({ redirectUrl }) =>
+    (model) => ({ model, commands: [ReplaceDocument({ href: redirectUrl })] }),
+  RequiredSignIn: () => (model) => ({ model, commands: [LeaveToSignIn()] }),
+  SignedOut: () => (model) => ({
+    model,
+    commands: [LoadDocument({ href: accountSignInUrlFrom(model.origin) })],
+  }),
+});
+
+const foldSignUpCompany = Update.foldChild({
+  update: SignUpCompany.update,
+  read: (model: Model) =>
+    Option.flatMap(model.maybePage, (page) =>
+      AuthPage.matchOrElse(page, { SignUpCompany: ({ model }) => Option.some(model) }, () =>
+        Option.none(),
+      ),
+    ),
+  write: (model: Model, nextSignUpCompany: SignUpCompany.Model) =>
+    withPage(model, AuthPage.SignUpCompany({ model: nextSignUpCompany })),
+  toParentMessage: (message) => Message.GotSignUpCompanyMessage({ message }),
+  foldOutMessage: foldSignUpCompanyOutMessage,
+});
+
 const foldMfaChallenge = Update.foldChild({
   update: MfaChallenge.update,
   read: (model: Model) =>
@@ -227,11 +283,13 @@ export const update = (model: Model, message: Message) =>
         modifyFields(model, { route: () => urlToAuthRoute(url) }),
         Option.some(model.route),
       ),
+    CompletedLeaveToSignIn: () => ({ model }),
     CompletedLoadDocument: () => ({ model }),
     CompletedPushUrl: () => ({ model }),
     CompletedRedirectToInvalidRedirectUrlError: () => ({ model }),
     CompletedReplaceDocument: () => ({ model }),
     GotSignInOrSignUpMessage: ({ message: pageMessage }) => foldSignInOrSignUp(model, pageMessage),
+    GotSignUpCompanyMessage: ({ message: pageMessage }) => foldSignUpCompany(model, pageMessage),
     GotMfaChallengeMessage: ({ message: pageMessage }) => foldMfaChallenge(model, pageMessage),
   });
 
@@ -245,6 +303,13 @@ const pageView = (model: Model, h: HtmlBuilder<Message>) =>
             view: SignInOrSignUp.view,
             model: pageModel,
             toParentMessage: (message) => Message.GotSignInOrSignUpMessage({ message }),
+          }),
+        SignUpCompany: ({ model: pageModel }) =>
+          h.submodel({
+            slotId: "sign-up-company",
+            view: SignUpCompany.view,
+            model: pageModel,
+            toParentMessage: (message) => Message.GotSignUpCompanyMessage({ message }),
           }),
         MfaChallenge: ({ model: pageModel }) =>
           h.submodel({

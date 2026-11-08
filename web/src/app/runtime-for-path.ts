@@ -1,6 +1,7 @@
 const FOLDKIT_AUTH_PATHS: ReadonlyArray<string> = [
   "/auth",
   "/auth/signup",
+  "/auth/signup/company",
   "/auth/mfa",
   "/auth/error",
 ];
