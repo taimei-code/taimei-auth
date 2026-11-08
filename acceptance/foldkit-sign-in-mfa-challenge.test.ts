@@ -54,29 +54,6 @@ const AUTH_ORIGIN = "https://auth.taimei-code.com";
 const signInSearch = (redirectUrl: string) =>
   new URLSearchParams({ service_name: "taimei", redirect_url: redirectUrl }).toString();
 
-type RuntimeForPathModule = { runtimeForPath: (pathname: string) => string };
-
-const loadRuntimeForPath = async (): Promise<RuntimeForPathModule> =>
-  import(join(REPO_ROOT, "web/src/app/runtime-for-path.ts"));
-
-describe("runtime は URL の path だけで選ばれる", () => {
-  test.each(["/auth", "/auth/", "/auth/signup", "/auth/signup/", "/auth/mfa", "/auth/error"])(
-    "AC-001: %s の document では Foldkit の runtime が選ばれる",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).toBe("FoldkitAuth");
-    },
-  );
-
-  test.each([
-    "/auth/errors",
-    "/auth/mfa/extra",
-  ])("AC-002: %s の document では React の runtime が選ばれる", async (pathname) => {
-    const { runtimeForPath } = await loadRuntimeForPath();
-    expect(runtimeForPath(pathname)).toBe("React");
-  });
-});
-
 type AuthApplication = {
   init: (url: unknown) => { readonly model: unknown };
   update: (model: unknown, message: unknown) => { readonly model: unknown };

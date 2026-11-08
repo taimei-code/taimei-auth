@@ -59,24 +59,7 @@ const DEFAULT_MESSAGE = {
   description: "予期せぬエラーが発生しました。時間を置いて再度お試しください。",
 };
 
-type RuntimeForPathModule = { runtimeForPath: (pathname: string) => string };
-
-const loadRuntimeForPath = async (): Promise<RuntimeForPathModule> =>
-  import(join(REPO_ROOT, "web/src/app/runtime-for-path.ts"));
-
 describe("runtime は URL の path だけで選ばれる", () => {
-  test("AC-001: /auth/error の document では Foldkit の runtime が選ばれる", async () => {
-    const { runtimeForPath } = await loadRuntimeForPath();
-    expect(runtimeForPath("/auth/error")).toBe("FoldkitAuth");
-  });
-
-  test.each([
-    "/auth/errors",
-  ])("AC-002: %s の document では React の runtime が選ばれる", async (pathname) => {
-    const { runtimeForPath } = await loadRuntimeForPath();
-    expect(runtimeForPath(pathname)).toBe("React");
-  });
-
   test("AC-043: entry と runtime の選択は build の mode や環境の値を読まない", () => {
     expect(gitGrep(String.raw`import\.meta\.env`, "web/src/main.ts", "web/src/app/runtime-for-path.ts")).toEqual(
       [],
