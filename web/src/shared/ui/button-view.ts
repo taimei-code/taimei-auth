@@ -3,15 +3,16 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import type { IconNode } from "lucide";
 
 import { Submission } from "../submission";
-import { buttonVariants, subtleLinkButtonClassName } from "./class-names";
+import { buttonVariants, smallLinkButtonClassName, subtleLinkButtonClassName } from "./class-names";
 import { iconView, spinnerView } from "./icon-view";
 
-type ButtonLook = "primary" | "outline" | "subtleLink";
+type ButtonLook = "primary" | "outline" | "subtleLink" | "smallLink";
 
 const CLASS_BY_LOOK: Record<ButtonLook, string> = {
   primary: `${buttonVariants({ variant: "default" })} w-full`,
   outline: `${buttonVariants({ variant: "outline" })} w-full`,
   subtleLink: subtleLinkButtonClassName,
+  smallLink: smallLinkButtonClassName,
 };
 
 export type ButtonViewConfig<Message> = Readonly<{

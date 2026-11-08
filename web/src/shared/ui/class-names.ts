@@ -50,6 +50,9 @@ export const buttonVariants = cva(
 export const subtleLinkButtonClassName =
   "rounded-sm text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50";
 
+export const smallLinkButtonClassName =
+  "text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground";
+
 export const textLinkClassName =
   "rounded-sm font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 

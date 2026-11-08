@@ -45,9 +45,9 @@ describe("入口の判定から redirect への写しは redirectFor の 1 つ�
     const { options } = redirectFor({ kind: "companySignup" }, "/account");
 
     expect(options).toMatchObject({
-      to: "/auth/signup/company",
-      search: { redirect_url: `${ORIGIN}/account` },
+      href: `/auth/signup/company?service_name=accounts&redirect_url=${encodeURIComponent(`${ORIGIN}/account`)}`,
       reloadDocument: true,
+      replace: true,
     });
   });
 

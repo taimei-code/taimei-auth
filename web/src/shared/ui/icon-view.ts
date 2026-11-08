@@ -55,11 +55,21 @@ export const iconView = <Message>(icon: IconNode, h: HtmlBuilder<Message>): Html
 export const spinnerView = <Message>(h: HtmlBuilder<Message>): Html =>
   svgView(LoaderCircle, [h.Class("animate-spin")], h);
 
-export const loadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+const statusView = <Message>(
+  label: string,
+  classNames: Readonly<{ wrapper: string; icon: string }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
-    [h.Class("flex justify-center py-6"), h.Role("status"), h.AriaLive("polite")],
+    [h.Class(classNames.wrapper), h.Role("status"), h.AriaLive("polite")],
     [
-      svgView(LoaderCircle, [h.Class("size-5 animate-spin text-muted-foreground")], h),
+      svgView(LoaderCircle, [h.Class(`${classNames.icon} animate-spin text-muted-foreground`)], h),
       h.span([h.Class("sr-only")], [label]),
     ],
   );
+
+export const loadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+  statusView(label, { wrapper: "flex justify-center py-6", icon: "size-5" }, h);
+
+export const fullScreenStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+  statusView(label, { wrapper: "flex min-h-svh items-center justify-center", icon: "size-6" }, h);

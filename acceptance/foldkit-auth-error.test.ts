@@ -71,7 +71,6 @@ describe("runtime は URL の path だけで選ばれる", () => {
   });
 
   test.each([
-    "/auth/signup/company",
     "/account",
     "/account/sessions",
     "/auth/errors",

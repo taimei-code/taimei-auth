@@ -79,8 +79,7 @@ const RULES: readonly Rule[] = [
   },
   {
     name: "sign-out",
-    violates: (path, source) =>
-      /\bauthClient\.signOut\(/.test(source) && path !== "auth/sign-out.ts",
+    violates: (path, source) => /\.signOut\(/.test(source) && path !== "auth/sign-out.ts",
   },
 ];
 

@@ -12,7 +12,6 @@ import {
   acceptInvitationSearchSchema,
   redirectTargetSearchSchema,
 } from "@core/invitation/accept-path";
-import { signInParamsSchema } from "@core/sign-in-params";
 
 import { companyStateAtom } from "../account/account-atom";
 import { accountEntryOf } from "../account/account-entry";
@@ -22,10 +21,8 @@ import { Profile } from "../account/pages/Profile";
 import { Security } from "../account/pages/Security";
 import { Sessions } from "../account/pages/Sessions";
 import { ErrorPage } from "../auth/pages/Error";
-import { readCompanySignupEntry } from "../company/company-signup-entry";
 import { Companies } from "../company/pages/Companies";
 import { CompanySettings } from "../company/pages/CompanySettings";
-import { SignUpCompany } from "../company/pages/SignUpCompany";
 import { acceptInvitation } from "../invitation/accept-invitation";
 import { SignUpAcceptInvitation } from "../invitation/pages/SignUpAcceptInvitation";
 import { Members } from "../membership/pages/Members";
@@ -44,26 +41,6 @@ const authRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/auth",
   component: Outlet,
-});
-
-const companySignupRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: "/signup/company",
-  validateSearch: signInParamsSchema.catch({
-    service_name: "accounts",
-    redirect_url: "/account",
-  }),
-  beforeLoad: async ({ context, location, search, abortController }) => {
-    const entry = await readCompanySignupEntry(
-      context.registry,
-      abortController.signal,
-      search.redirect_url,
-    );
-    if (entry.kind !== "show") {
-      throw redirectFor(entry, location.href);
-    }
-  },
-  component: SignUpCompany,
 });
 
 const acceptInvitationRoute = createRoute({
@@ -112,7 +89,7 @@ const membersRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  authRoute.addChildren([companySignupRoute, acceptInvitationRoute]),
+  authRoute.addChildren([acceptInvitationRoute]),
   accountRoute.addChildren([
     accountPageRoute("/", Profile),
     accountPageRoute("/companies", Companies),
