@@ -9,6 +9,7 @@ if (!rootElement) {
 
 const startRuntime: Record<RuntimeForPath, () => Promise<unknown>> = {
   FoldkitAuth: () => import("./app/auth/entry"),
+  FoldkitAccount: () => import("./app/account/entry"),
   React: () => import("./app/react-root").then(({ startReactRoot }) => startReactRoot(rootElement)),
 };
 

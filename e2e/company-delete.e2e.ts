@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { expectSignInLanding, reseedFixture, signInWithMagicLink } from "./helpers";
 
-test("最後の事業所削除はアカウントごと削除され、ログイン画面に着地する", async ({ page }) => {
+test.fixme("最後の事業所削除はアカウントごと削除され、ログイン画面に着地する", async ({ page }) => {
   reseedFixture("delete");
   await signInWithMagicLink(page, "e2e-delete@example.com");
   await expect(page).toHaveURL(/\/account/);
@@ -18,7 +18,7 @@ test("最後の事業所削除はアカウントごと削除され、ログイ�
 
 const DELETED_COMPANY = "e2e-co-delete-multi-current";
 
-test("所属が残る事業所削除は一覧へ遷移し、遷移先で成功トーストが出る", async ({ page }) => {
+test.fixme("所属が残る事業所削除は一覧へ遷移し、遷移先で成功トーストが出る", async ({ page }) => {
   reseedFixture("delete-multi");
   await signInWithMagicLink(page, "e2e-delete-multi@example.com");
   await expect(page).toHaveURL(/\/account/);

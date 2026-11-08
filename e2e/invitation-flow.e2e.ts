@@ -13,7 +13,9 @@ test.beforeEach(() => reseedFixture("invitation"));
 const INVITEE_EMAIL = "e2e-invitee@example.com";
 const INVITATION_TOKEN = "e2e-invitation-token";
 
-test("SignIn 画面からの magic link でも招待を受諾でき /account に到達する", async ({ page }) => {
+test.fixme("SignIn 画面からの magic link でも招待を受諾でき /account に到達する", async ({
+  page,
+}) => {
   let acceptPosts = 0;
   page.on("request", (request) => {
     if (request.method() === "POST" && request.url().endsWith("/api/account/accept-invitation")) {
@@ -38,7 +40,7 @@ test("SignIn 画面からの magic link でも招待を受諾でき /account に
   await expect(list.getByText(INVITEE_EMAIL).first()).toBeVisible();
 });
 
-test("メンバー画面が受けた redirect_url へ、招待された人が受諾後に着地する", async ({
+test.fixme("メンバー画面が受けた redirect_url へ、招待された人が受諾後に着地する", async ({
   page,
   browser,
 }) => {

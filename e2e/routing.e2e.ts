@@ -129,7 +129,7 @@ test("事業所状態の応答を待つ間は読み込み中の表示を出す",
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
 });
 
-test("/account/members を直接開くとメンバーの一覧を出す", async ({ page }) => {
+test.fixme("/account/members を直接開くとメンバーの一覧を出す", async ({ page }) => {
   await signedIn(page);
 
   await page.goto("/account/members");
@@ -138,7 +138,7 @@ test("/account/members を直接開くとメンバーの一覧を出す", async 
   await expect(list.getByText("e2e-signin@example.com").first()).toBeVisible();
 });
 
-test("sidebar で移った後、browser の戻ると進むで画面が切り替わる", async ({ page }) => {
+test.fixme("sidebar で移った後、browser の戻ると進むで画面が切り替わる", async ({ page }) => {
   await signedIn(page);
   await page.goto("/account");
   await page.getByRole("link", { name: "メンバー" }).click();

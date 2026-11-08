@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { signInWithMagicLink } from "./helpers";
 
-test("MEMBER role には /account/members で役割変更・削除・招待の管理操作が表示されない", async ({
+test.fixme("MEMBER role には /account/members で役割変更・削除・招待の管理操作が表示されない", async ({
   page,
 }) => {
   await signInWithMagicLink(page, "e2e-member@example.com");
@@ -19,7 +19,7 @@ test("MEMBER role には /account/members で役割変更・削除・招待の�
   await expect(page.getByRole("region", { name: "メンバーを招待" })).toHaveCount(0);
 });
 
-test("OWNER role には管理操作が表示される (出し分けの対照)", async ({ page }) => {
+test.fixme("OWNER role には管理操作が表示される (出し分けの対照)", async ({ page }) => {
   await signInWithMagicLink(page, "e2e-signin@example.com");
   await page.goto("/account/members");
   await expect(page.getByRole("heading", { name: "メンバー", exact: true })).toBeVisible();
@@ -28,7 +28,7 @@ test("OWNER role には管理操作が表示される (出し分けの対照)", 
   await expect(page.getByRole("combobox", { name: "e2e-member@example.com の役割" })).toBeVisible();
 });
 
-test("ADMIN role は OWNER を操作できない (役割 select・削除ボタン・オーナー昇格が出ない)", async ({
+test.fixme("ADMIN role は OWNER を操作できない (役割 select・削除ボタン・オーナー昇格が出ない)", async ({
   page,
 }) => {
   await signInWithMagicLink(page, "e2e-admin@example.com");

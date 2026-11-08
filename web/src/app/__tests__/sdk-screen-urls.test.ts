@@ -8,13 +8,12 @@ import {
   buildMembersUrl,
 } from "@taimei-code/auth-client";
 import { Option } from "effect";
-import { AtomRegistry } from "effect/reactivity";
 import { fromString } from "foldkit/url";
 
 import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
 
+import { AccountRoute, urlToAccountRoute } from "../account/route";
 import { AuthRoute, urlToAuthRoute } from "../auth/route";
-import { makeRouter } from "../router";
 import { runtimeForPath } from "../runtime-for-path";
 
 const authBaseUrl = "https://auth.taimei-code.com";
@@ -24,11 +23,6 @@ const fromTaimei = {
   returnTo: "https://app.taimei-code.com/",
 };
 
-const router = makeRouter(AtomRegistry.make());
-
-const deepestMatchedRouteIdOf = (url: string) =>
-  router.matchRoutes(new URL(url).pathname, {}).at(-1)?.routeId;
-
 const searchOf = (url: string) => Object.fromEntries(new URL(url).searchParams);
 
 const authRouteOf = (url: string) =>
@@ -37,16 +31,23 @@ const authRouteOf = (url: string) =>
     onSome: urlToAuthRoute,
   });
 
-describe("auth-client が組む画面の URL は共通画面 SPA の route に当たる", () => {
+const accountRouteTagOf = (url: string) =>
+  Option.match(fromString(url), {
+    onNone: () => "NotFound",
+    onSome: (parsed) => urlToAccountRoute(parsed)._tag,
+  });
+
+describe("auth-client が組むアカウント管理画面の URL は、Foldkit の application の route に当たる", () => {
   test.each([
-    ["メンバー画面", buildMembersUrl(fromTaimei), "/account/members"],
+    ["メンバー画面", buildMembersUrl(fromTaimei), AccountRoute.Members()._tag],
     [
       "アカウント管理画面 (/account の下の最初の画面)",
       buildAccountUrl({ authBaseUrl }),
-      "/account/",
+      AccountRoute.Profile()._tag,
     ],
-  ] as const)("%s", (_, url, routeId) => {
-    expect(deepestMatchedRouteIdOf(url)).toBe(routeId);
+  ] as const)("%s", (_, url, routeTag) => {
+    expect(runtimeForPath(new URL(url).pathname)).toBe("FoldkitAccount");
+    expect(accountRouteTagOf(url)).toBe(routeTag);
   });
 });
 

@@ -40,6 +40,18 @@ const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
 
 const CASES: readonly Case[] = [
   {
+    name: "web の画面は @foldkit/ui の Dialog を直接 import できない",
+    path: "web/src/account/pages/DialogProbe.ts",
+    source: 'import { Dialog } from "@foldkit/ui";\nexport { Dialog };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "house の dialog の file は @foldkit/ui の Dialog を import できる",
+    path: "web/src/shared/ui/dialog-view.ts",
+    source: 'import { Dialog } from "@foldkit/ui";\nexport { Dialog };',
+    expectedRules: [],
+  },
+  {
     name: "server は web 専用の依存を import できない",
     path: "src/handlers/web-only.ts",
     source: 'import "lucide-react";',

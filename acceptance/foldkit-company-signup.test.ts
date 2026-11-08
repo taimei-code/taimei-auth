@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -116,7 +116,7 @@ describe("事業所の登録の画面は Foldkit の runtime で出る", () => {
     },
   );
 
-  test.each(["/account", "/auth/signup/company/extra"])(
+  test.each(["/auth/signup/company/extra"])(
     "AC-002: %s の document では React の runtime が選ばれる",
     async (pathname) => {
       const { runtimeForPath } = await loadRuntimeForPath();
@@ -158,34 +158,6 @@ describe("事業所の登録の画面は Foldkit の runtime で出る", () => {
     expect(runtimeForPath(new URL(url).pathname)).toBe("FoldkitAuth");
     const { sceneAt } = await loadApplication();
     sceneAt(url, checkingBeforeForm);
-  });
-});
-
-describe("React の /account から事業所の登録への遷移", () => {
-  const ORIGIN = "http://auth.taimei-code.localhost:3100";
-  const originalWindow = globalThis.window;
-
-  afterEach(() => {
-    globalThis.window = originalWindow;
-  });
-
-  test("AC-006: 事業所の登録へ移す redirect は document を読み直して履歴を置き換え、今の URL を戻り先にする", async () => {
-    globalThis.window = { location: { origin: ORIGIN } } as unknown as typeof globalThis.window;
-    const { redirectFor }: {
-      redirectFor: (
-        entry: { kind: "companySignup" },
-        href: string,
-      ) => { options: Record<string, unknown> };
-    } = await import(join(REPO_ROOT, "web/src/app/route-redirect.ts"));
-
-    const { options } = redirectFor({ kind: "companySignup" }, "/account");
-
-    expect(options.reloadDocument).toBe(true);
-    expect(options.replace).toBe(true);
-    const target = new URL(String(options.href), ORIGIN);
-    expect(target.pathname).toBe("/auth/signup/company");
-    expect(target.searchParams.get("service_name")).toBe("accounts");
-    expect(target.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account`);
   });
 });
 
