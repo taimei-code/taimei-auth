@@ -36,7 +36,7 @@ export const Companies = () => {
       return;
     }
     setBusyCompanyId(companyId);
-    switchCompany(companyId).finally(() => setBusyCompanyId(null));
+    void switchCompany(companyId).finally(() => setBusyCompanyId(null));
   };
 
   const [soleOwnerCompanyId, setSoleOwnerCompanyId] = useState<string | null>(null);
@@ -48,7 +48,7 @@ export const Companies = () => {
     setBusyCompanyId(m.company_id);
     setSoleOwnerCompanyId(null);
     let redirecting = false;
-    removeMember(m.company_id, selfUserId)
+    void removeMember(m.company_id, selfUserId)
       .then(
         Exit.match({
           onSuccess: ({ account_deleted }) => {

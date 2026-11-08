@@ -25,7 +25,7 @@ const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 const unusedPort = () => {
   const probe = Bun.serve({ port: 0, fetch: () => new Response() });
   const { port } = probe;
-  probe.stop(true);
+  void probe.stop(true);
   if (port === undefined) throw new Error("Bun.serve did not bind a TCP port");
   return port;
 };

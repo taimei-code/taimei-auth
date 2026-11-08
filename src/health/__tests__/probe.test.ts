@@ -80,7 +80,11 @@ describe("probeHealth", () => {
       status: "degraded",
       checks: { db: "error", ttlStore: "error" },
     });
-    expect(captured.map(([, ctx]) => ctx?.tags?.check).sort()).toEqual(["db", "ttlStore"]);
+    expect(
+      captured
+        .map(([, ctx]) => String(ctx?.tags?.check))
+        .sort((left, right) => left.localeCompare(right)),
+    ).toEqual(["db", "ttlStore"]);
   });
 
   test("defect は畳まず Exit failure のまま、Sentry は probe 内で呼ばれない", async () => {

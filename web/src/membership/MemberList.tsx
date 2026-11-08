@@ -51,7 +51,7 @@ export const MemberList = ({ companyId, canManage, assignableRoles }: Props) => 
       return;
     }
     setBusyUserId(target.user_id);
-    changeRole(companyId, target.user_id, role)
+    void changeRole(companyId, target.user_id, role)
       .then(
         Exit.match({
           onSuccess: () =>

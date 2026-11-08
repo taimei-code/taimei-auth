@@ -12,7 +12,7 @@ export type InputViewConfig<Message> = Readonly<{
   label: string;
   type: "text" | "email";
   value: string;
-  onInput: (value: string) => Message;
+  onInput?: (value: string) => Message;
   submission: Submission;
   placeholder: string;
   autocomplete?: string;
@@ -21,6 +21,7 @@ export type InputViewConfig<Message> = Readonly<{
   maxLength?: number;
   isAutoCorrectionOff?: boolean;
   hint?: InputHint;
+  isDisabled?: boolean;
 }>;
 
 const inputHintId = (id: string): string => `${id}-hint`;
@@ -63,7 +64,7 @@ export const inputView = <Message>(
       value: config.value,
       placeholder: config.placeholder,
       onInput: config.onInput,
-      isDisabled: Submission.guards.Submitting(config.submission),
+      isDisabled: config.isDisabled === true || Submission.guards.Submitting(config.submission),
       toView: (attributes) =>
         h.div(
           [h.Class("space-y-2")],
@@ -112,6 +113,41 @@ export const hiddenInputView = <Message>(
       name: config.name,
       value: config.value,
       toView: (attributes) => h.input([...attributes.input, h.AriaHidden(true)]),
+    },
+    h,
+  );
+
+export const searchInputView = <Message>(
+  config: Readonly<{
+    id: string;
+    label: string;
+    placeholder: string;
+    value: string;
+    onInput: (value: string) => Message;
+    controls: string;
+  }>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  Input.view(
+    {
+      id: config.id,
+      type: "search",
+      value: config.value,
+      placeholder: config.placeholder,
+      onInput: config.onInput,
+      toView: (attributes) =>
+        h.search(
+          [],
+          [
+            h.label([...attributes.label, h.Class("sr-only")], [config.label]),
+            h.input([
+              ...attributes.input,
+              h.Class(inputClassName),
+              h.Autocomplete("off"),
+              h.AriaControls(config.controls),
+            ]),
+          ],
+        ),
     },
     h,
   );

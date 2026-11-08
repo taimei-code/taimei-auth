@@ -57,7 +57,7 @@ export const AddCompanyDialog = ({ trigger }: Props) => {
     const trimmedName = name.trim();
     setSubmitting(true);
     setErrorMessage(null);
-    addCompany({ name: trimmedName, org_code: orgCode })
+    void addCompany({ name: trimmedName, org_code: orgCode })
       .then(
         Exit.match({
           onSuccess: () => {

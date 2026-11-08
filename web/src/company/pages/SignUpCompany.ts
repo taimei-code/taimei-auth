@@ -9,10 +9,11 @@ import { OrgCodeSchema } from "@core/company/company-contract";
 import { orgCodeLabelJa } from "@core/company/org-code";
 
 import { authPageCardView } from "../../auth/auth-page-card-view";
-import { signInClient } from "../../auth/sign-in-client";
+import { checkSession } from "../../auth/sign-in-client";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../../shared/submission";
+import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { buttonView } from "../../shared/ui/button-view";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";
 import { inputView } from "../../shared/ui/input-view";
@@ -75,10 +76,8 @@ export const CheckSession = Command.define("CheckSession", {
   args: { visit: Schema.Int },
   messages: [Message.SucceededCheckSession, Message.FailedCheckSession],
   execute: ({ visit }) =>
-    Effect.tryPromise(() => signInClient.getSession()).pipe(
-      Effect.map(({ data }) =>
-        Message.SucceededCheckSession({ visit, isSignedIn: Boolean(data?.session) }),
-      ),
+    checkSession.pipe(
+      Effect.map((isSignedIn) => Message.SucceededCheckSession({ visit, isSignedIn })),
       Effect.catchTag("UnknownError", () => Effect.succeed(Message.FailedCheckSession({ visit }))),
     ),
 });
@@ -362,12 +361,7 @@ const companyFormView = (editing: Editing, h: HtmlBuilder<Message>): Html =>
         },
         h,
       ),
-      ...Option.match(maybeFailureMessageOf(editing), {
-        onNone: () => [],
-        onSome: (failureMessage) => [
-          h.p([h.Role("alert"), h.Class("text-sm text-destructive")], [failureMessage]),
-        ],
-      }),
+      ...maybeAlertTextView(maybeFailureMessageOf(editing), h),
     ],
   );
 

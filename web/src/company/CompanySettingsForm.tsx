@@ -38,7 +38,7 @@ export const CompanySettingsForm = ({ membership, isLastCompany }: Props) => {
   const handleSave = (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    updateCompany(companyId, { name: name.trim(), org_code: orgCode })
+    void updateCompany(companyId, { name: name.trim(), org_code: orgCode })
       .then(
         Exit.match({
           onSuccess: () =>

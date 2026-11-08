@@ -112,7 +112,7 @@ const TransferPicker = ({
     }
     setBusyUserId(to.user_id);
     setTransferError(null);
-    transferOwnership(companyId, to.user_id)
+    void transferOwnership(companyId, to.user_id)
       .then(
         Exit.match({
           onSuccess: () => onTransferred(to),

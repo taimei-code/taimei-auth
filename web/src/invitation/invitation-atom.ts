@@ -15,7 +15,6 @@ export const pendingInvitationsOf = (companyId: string) =>
 
 const createInvitationAtom = SpaApiClient.mutation("invitation", "create");
 const revokeInvitationAtom = SpaApiClient.mutation("invitation", "revoke");
-export const acceptInvitationAtom = SpaApiClient.mutation("invitation", "accept");
 
 type NewInvitation = { email: string; role: Role; redirect_target?: RedirectTarget };
 

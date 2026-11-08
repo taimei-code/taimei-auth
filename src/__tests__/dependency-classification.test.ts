@@ -43,6 +43,8 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
   "drizzle-kit": "build-tool: migration 生成 CLI (host の bun run db:generate)",
   oxlint: "build-tool: lint CLI。server コードから import しない",
+  "oxlint-tsgolint":
+    "build-tool: oxlint の --type-aware が呼ぶ型の検査の CLI。server コードから import しない",
   fallow: "build-tool: dead code / 循環依存の静的解析 CLI (CI の fallow audit と MCP server)",
   postcss: "build-tool: web の CSS build pipeline",
   tailwindcss: "build-tool: web の CSS build pipeline",

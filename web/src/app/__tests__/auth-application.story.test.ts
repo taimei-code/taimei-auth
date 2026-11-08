@@ -7,17 +7,14 @@ import { fromString, type Url } from "foldkit/url";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
+import { init, Message, type Model, RedirectToInvalidRedirectUrlError, update } from "../auth/main";
 import {
-  init,
   LeaveToSignIn,
   LoadDocument,
-  Message,
-  type Model,
   PushUrl,
-  RedirectToInvalidRedirectUrlError,
   ReplaceDocument,
-  update,
-} from "../auth/main";
+  Message as NavigationMessage,
+} from "../document-navigation";
 
 const ORIGIN = "https://auth.taimei-code.com";
 const SEARCH = new URLSearchParams({
@@ -155,7 +152,7 @@ describe("MFA チャレンジの画面への入り方と出方", () => {
         }),
       ),
       Command.expectExact(ReplaceDocument({ href: "https://app.taimei-code.com/" })),
-      Command.resolve(ReplaceDocument, Message.CompletedReplaceDocument()),
+      Command.resolve(ReplaceDocument, NavigationMessage.CompletedReplaceDocument()),
     );
   });
 
@@ -240,7 +237,7 @@ describe("事業所の登録の画面への入り方と出方", () => {
         ),
       ),
       Command.expectExact(LeaveToSignIn()),
-      Command.resolve(LeaveToSignIn, Message.CompletedLeaveToSignIn()),
+      Command.resolve(LeaveToSignIn, NavigationMessage.CompletedLeaveToSignIn()),
     );
   });
 
@@ -258,7 +255,7 @@ describe("事業所の登録の画面への入り方と出方", () => {
         ),
       ),
       Command.expectExact(ReplaceDocument({ href: "https://app.taimei-code.com/" })),
-      Command.resolve(ReplaceDocument, Message.CompletedReplaceDocument()),
+      Command.resolve(ReplaceDocument, NavigationMessage.CompletedReplaceDocument()),
     );
   });
 
@@ -280,7 +277,7 @@ describe("事業所の登録の画面への入り方と出方", () => {
           href: `/auth?service_name=accounts&redirect_url=${encodeURIComponent(`${ORIGIN}/account`)}`,
         }),
       ),
-      Command.resolve(LoadDocument, Message.CompletedLoadDocument()),
+      Command.resolve(LoadDocument, NavigationMessage.CompletedLoadDocument()),
     );
   });
 
@@ -317,7 +314,7 @@ describe("application の中の link", () => {
         }),
       ),
       Command.expectExact(PushUrl({ href: `${ORIGIN}/auth/signup?${SEARCH}` })),
-      Command.resolve(PushUrl, Message.CompletedPushUrl()),
+      Command.resolve(PushUrl, NavigationMessage.CompletedPushUrl()),
     );
   });
 
@@ -329,7 +326,7 @@ describe("application の中の link", () => {
         Message.ClickedLink({ request: UrlRequest.Internal({ url: urlOf(`${ORIGIN}/account`) }) }),
       ),
       Command.expectExact(LoadDocument({ href: `${ORIGIN}/account` })),
-      Command.resolve(LoadDocument, Message.CompletedLoadDocument()),
+      Command.resolve(LoadDocument, NavigationMessage.CompletedLoadDocument()),
     );
   });
 });
