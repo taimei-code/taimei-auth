@@ -6,6 +6,7 @@ import {
   companySignupUrlReturningTo,
   leaveSpaAfterAccountDeleted,
   leaveSpaTo,
+  leaveSpaToCompanySignup,
   leaveSpaToSignIn,
   signInUrlAfterSignOut,
 } from "../leave-spa";
@@ -110,5 +111,19 @@ describe("companySignupUrlReturningTo", () => {
       service_name: "taimei",
       redirect_url: "https://app.taimei-code.com/dashboard",
     });
+  });
+});
+
+describe("leaveSpaToCompanySignup", () => {
+  test("履歴を置き換えて事業所の登録へ移り、戻り先は今の path・search・hash", () => {
+    const replaced = stubWindow({ pathname: "/account/sessions", search: "?a=1", hash: "#top" });
+
+    leaveSpaToCompanySignup();
+
+    expect(replaced).toHaveLength(1);
+    const url = new URL(replaced[0] ?? "", ORIGIN);
+    expect(url.pathname).toBe("/auth/signup/company");
+    expect(url.searchParams.get("service_name")).toBe("accounts");
+    expect(url.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account/sessions?a=1#top`);
   });
 });

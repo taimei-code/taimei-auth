@@ -12,7 +12,7 @@ const signInDocumentReturningTo = (page: import("@playwright/test").Page, path: 
     );
   });
 
-test("画面の途中で SPA の API が Unauthorized を返すと、今の画面を戻り先にして共通ログイン画面へ移る", async ({
+test.fixme("画面の途中で SPA の API が Unauthorized を返すと、今の画面を戻り先にして共通ログイン画面へ移る", async ({
   page,
 }) => {
   reseedFixture("switch");

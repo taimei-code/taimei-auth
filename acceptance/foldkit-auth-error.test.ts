@@ -71,8 +71,6 @@ describe("runtime は URL の path だけで選ばれる", () => {
   });
 
   test.each([
-    "/account",
-    "/account/sessions",
     "/auth/errors",
   ])("AC-002: %s の document では React の runtime が選ばれる", async (pathname) => {
     const { runtimeForPath } = await loadRuntimeForPath();

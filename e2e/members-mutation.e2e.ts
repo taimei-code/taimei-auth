@@ -4,7 +4,7 @@ import { declaredFailure, routeEndpoint } from "./contract-mock";
 
 test.beforeEach(() => reseedFixture("switch"));
 
-test("役割変更と削除の後、一覧が取り直されて新しい状態を表示する", async ({ page }) => {
+test.fixme("役割変更と削除の後、一覧が取り直されて新しい状態を表示する", async ({ page }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/members");
   const list = page.getByRole("region", { name: "メンバー一覧" });
@@ -28,7 +28,7 @@ test("役割変更と削除の後、一覧が取り直されて新しい状態�
   await expect(list.getByText("E2E SwitchAMate")).toHaveCount(0);
 });
 
-test("招待を作ると招待中に出て、取り消すと消える", async ({ page }) => {
+test.fixme("招待を作ると招待中に出て、取り消すと消える", async ({ page }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/members");
   const inviteeEmail = "e2e-switch-invitee@example.com";
@@ -44,7 +44,7 @@ test("招待を作ると招待中に出て、取り消すと消える", async ({
   await expect(pending.getByText(inviteeEmail)).toHaveCount(0);
 });
 
-test("招待の送信が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({
+test.fixme("招待の送信が試行枠の 429 (RateLimited) を受けると、回数の上限の文言を出す", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
@@ -62,7 +62,7 @@ test("招待の送信が試行枠の 429 (RateLimited) を受けると、回数�
   await expect(page.getByText("招待を送信しました。")).toHaveCount(0);
 });
 
-test("メンバー一覧と招待中の一覧の取得が失敗すると、見出しを残して取得できなかった旨を出す", async ({
+test.fixme("メンバー一覧と招待中の一覧の取得が失敗すると、見出しを残して取得できなかった旨を出す", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);

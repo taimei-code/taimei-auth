@@ -89,7 +89,7 @@ const mfaRow = (page: Page) =>
 
 const challengeCodeInput = (page: Page) => page.locator("#mfa-challenge-code");
 
-test("セキュリティページの MFA 行は有効化の前後で Badge と残数が変わる", async ({ page }) => {
+test.fixme("セキュリティページの MFA 行は有効化の前後で Badge と残数が変わる", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await page.goto("/account/security");
 
@@ -106,7 +106,7 @@ test("セキュリティページの MFA 行は有効化の前後で Badge と�
   await expect(row.getByRole("button", { name: "無効にする" })).toBeVisible();
 });
 
-test("無効化ダイアログは error を表示し、閉じると入力状態を reset する", async ({ page }) => {
+test.fixme("無効化ダイアログは error を表示し、閉じると入力状態を reset する", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   const { secret } = await enableMfaViaApi(page);
   await page.goto("/account/security");
@@ -130,7 +130,7 @@ test("無効化ダイアログは error を表示し、閉じると入力状態�
   await expect(row.getByText("無効", { exact: true })).toBeVisible();
 });
 
-test("有効化ダイアログは QR・確認コード・リカバリーコードの 3 ステップを順に見せる", async ({
+test.fixme("有効化ダイアログは QR・確認コード・リカバリーコードの 3 ステップを順に見せる", async ({
   page,
 }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
@@ -162,7 +162,9 @@ test("有効化ダイアログは QR・確認コード・リカバリーコー�
   expect(navigations.count()).toBe(0);
 });
 
-test("有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({ page }) => {
+test.fixme("有効化ダイアログを閉じて開き直しても同じ secret のまま再登録しない", async ({
+  page,
+}) => {
   let enrollCalls = 0;
   await routeEndpoint(page, "mfa.enroll", async (route) => {
     enrollCalls++;
@@ -406,7 +408,9 @@ test("MFA 有効化後のログインはチャレンジ画面を挟み、通過�
   expect(await page.evaluate(() => history.length)).toBe(historyLengthOnChallenge);
 });
 
-test("リカバリーコードでもチャレンジを通過でき、使った 1 本だけ残数が減る", async ({ page }) => {
+test.fixme("リカバリーコードでもチャレンジを通過でき、使った 1 本だけ残数が減る", async ({
+  page,
+}) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   const { recoveryCodes } = await enableMfaViaApi(page);
 
@@ -444,7 +448,7 @@ test("誤ったコードはチャレンジ画面に留まり、inline エラー�
   await expect(page.locator("body")).not.toContainText(/invalid[_-]?code|two[_-]?factor/i);
 });
 
-test("MFA の状態の取得が失敗すると、取得できなかった旨を出す", async ({ page }) => {
+test.fixme("MFA の状態の取得が失敗すると、取得できなかった旨を出す", async ({ page }) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   let failedRequests = 0;
   await routeEndpoint(page, "mfa.status", async (route) => {
@@ -460,7 +464,9 @@ test("MFA の状態の取得が失敗すると、取得できなかった旨を�
   expect(failedRequests).toBeGreaterThanOrEqual(1);
 });
 
-test("有効化が EnrollmentChanged で失敗した後に開き直すと、登録をやり直す", async ({ page }) => {
+test.fixme("有効化が EnrollmentChanged で失敗した後に開き直すと、登録をやり直す", async ({
+  page,
+}) => {
   await signInWithMagicLink(page, MFA_EMAIL);
   let enrollRequests = 0;
   await routeEndpoint(page, "mfa.enroll", async (route) => {

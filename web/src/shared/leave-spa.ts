@@ -40,3 +40,5 @@ const currentHref = () => {
 };
 
 export const leaveSpaToSignIn = () => leaveSpaTo(signInUrlReturningTo(currentHref()));
+
+export const leaveSpaToCompanySignup = () => leaveSpaTo(companySignupUrlReturningTo(currentHref()));

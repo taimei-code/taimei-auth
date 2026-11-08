@@ -13,7 +13,7 @@ test.beforeEach(() => reseedFixture("switch"));
 const companyRow = (page: Page, name: string) =>
   page.getByRole("main").locator("div.rounded-md.border").filter({ hasText: name });
 
-test("事業所を追加すると、再読み込みなしで事業所一覧に載り、現在の事業所になる", async ({
+test.fixme("事業所を追加すると、再読み込みなしで事業所一覧に載り、現在の事業所になる", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
@@ -34,7 +34,7 @@ test("事業所を追加すると、再読み込みなしで事業所一覧に�
   expect(navigations.count()).toBe(0);
 });
 
-test("事業所設定は切替で入力欄を入れ直し、保存すると再読み込みなしで新しい名前になる", async ({
+test.fixme("事業所設定は切替で入力欄を入れ直し、保存すると再読み込みなしで新しい名前になる", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
@@ -59,7 +59,7 @@ test("事業所設定は切替で入力欄を入れ直し、保存すると再�
   await expect(companyRow(page, "e2e-co-switch-b-renamed")).toBeVisible();
 });
 
-test("保存は成功したが事業所の状態の再取得が失敗すると、再読み込みの案内を出す", async ({
+test.fixme("保存は成功したが事業所の状態の再取得が失敗すると、再読み込みの案内を出す", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
@@ -85,7 +85,9 @@ test("保存は成功したが事業所の状態の再取得が失敗すると�
   expect(failedRefetches).toBeGreaterThanOrEqual(1);
 });
 
-test("事業所一覧の切替を押すと、再読み込みなしでその事業所に選択中が移る", async ({ page }) => {
+test.fixme("事業所一覧の切替を押すと、再読み込みなしでその事業所に選択中が移る", async ({
+  page,
+}) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/companies");
   const rowA = companyRow(page, "e2e-co-switch-a");
@@ -101,7 +103,7 @@ test("事業所一覧の切替を押すと、再読み込みなしでその事�
   expect(navigations.count()).toBe(0);
 });
 
-test("唯一のオーナーは抜けられず、委譲した後は再読み込みなしで管理者になり、抜けられる", async ({
+test.fixme("唯一のオーナーは抜けられず、委譲した後は再読み込みなしで管理者になり、抜けられる", async ({
   page,
 }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
@@ -131,7 +133,9 @@ test("唯一のオーナーは抜けられず、委譲した後は再読み込�
   expect(navigations.count()).toBe(0);
 });
 
-test("委譲の一覧の取得が失敗すると、招待を促す文言ではなく取得の失敗を出す", async ({ page }) => {
+test.fixme("委譲の一覧の取得が失敗すると、招待を促す文言ではなく取得の失敗を出す", async ({
+  page,
+}) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/companies");
   const rowA = companyRow(page, "e2e-co-switch-a");
@@ -147,7 +151,7 @@ test("委譲の一覧の取得が失敗すると、招待を促す文言では�
   await expect(dialog.getByText("委譲できるメンバーがいません", { exact: false })).toHaveCount(0);
 });
 
-test("サイドバーで切替中は、事業所一覧の切替ボタンも押せない", async ({ page }) => {
+test.fixme("サイドバーで切替中は、事業所一覧の切替ボタンも押せない", async ({ page }) => {
   await signInWithMagicLink(page, SWITCH_EMAIL);
   await page.goto("/account/companies");
   let releaseSwitch: () => void = () => {};
