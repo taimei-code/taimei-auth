@@ -10,6 +10,8 @@ import { iconView, spinnerView } from "./icon-view";
 type ButtonLook =
   | "primary"
   | "primaryInline"
+  | "primarySmall"
+  | "ghostSmall"
   | "outline"
   | "outlineInline"
   | "outlineSmall"
@@ -22,6 +24,8 @@ type ButtonLook =
 const CLASS_BY_LOOK: Record<ButtonLook, string> = {
   primary: `${buttonVariants({ variant: "default" })} w-full`,
   primaryInline: buttonVariants({ variant: "default" }),
+  primarySmall: buttonVariants({ variant: "default", size: "sm" }),
+  ghostSmall: buttonVariants({ variant: "ghost", size: "sm" }),
   outline: `${buttonVariants({ variant: "outline" })} w-full`,
   outlineInline: buttonVariants({ variant: "outline" }),
   destructive: buttonVariants({ variant: "destructive" }),

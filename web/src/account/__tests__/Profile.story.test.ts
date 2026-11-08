@@ -25,7 +25,7 @@ import {
 
 const VISIT = 3;
 
-const opened = () => init({ visit: VISIT, maybeCurrentCompany: Option.none() });
+const opened = () => init(VISIT);
 
 const USER = { name: "山田", email: "yamada@example.com", maybeImageUrl: Option.none() };
 

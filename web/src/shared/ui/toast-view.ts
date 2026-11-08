@@ -23,6 +23,9 @@ export const noticeOf = (tone: NoticeTone, text: string) => ({
   duration: DURATION_BY_TONE[tone],
 });
 
+export const staleNoticeOf = (actionText: string): string =>
+  `${actionText}が、表示の更新に失敗しました。ページを再読み込みしてください。`;
+
 const ENTRY_CLASS_BY_TONE: Record<NoticeTone, string> = {
   Success: "",
   Error: "border-destructive/40 bg-destructive/10 text-destructive",

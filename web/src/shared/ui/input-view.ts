@@ -95,12 +95,18 @@ export const inputView = <Message>(
     h,
   );
 
-export const inputErrorView = <Message>(
-  id: string,
-  message: string,
-  h: HtmlBuilder<Message>,
-): Html =>
+const inputErrorView = <Message>(id: string, message: string, h: HtmlBuilder<Message>): Html =>
   h.p([h.Id(inputErrorId(id)), h.Role("alert"), h.Class("text-sm text-destructive")], [message]);
+
+export const maybeInputErrorView = <Message>(
+  id: string,
+  maybeMessage: Option.Option<string>,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
+  Option.match(maybeMessage, {
+    onNone: () => [],
+    onSome: (message) => [inputErrorView(id, message, h)],
+  });
 
 export const hiddenInputView = <Message>(
   config: Readonly<{ name: string; value: string }>,

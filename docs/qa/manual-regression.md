@@ -70,8 +70,8 @@
 
 ## QA-MR-06: 実機の認証アプリでの TOTP 登録・検証 (QR スキャン)
 
-- **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / `MfaEnrollDialog` を触る PR
-- **契機の path**: `src/mfa/totp/**`、`src/auth-plugins/mfa-challenge.ts`、`web/src/mfa/MfaEnrollDialog.tsx`
+- **契機**: TOTP / QR / `otpauth://` URI の生成 (MFA 登録の経路) / `src/auth-plugins/mfa-challenge.ts` / MFA の有効化の dialog (`mfa-enrollment`) を触る PR
+- **契機の path**: `src/mfa/totp/**`、`src/auth-plugins/mfa-challenge.ts`、`web/src/mfa/mfa-enrollment.ts`
 - **前提**: 実機のスマートフォンと認証アプリ (できれば 2 種類以上)。TOTP の計算そのものは `e2e/mfa-flow.e2e.ts` が自動化済みで、ここで見るのは実アプリが QR コードと URI を解釈できるかである
 - **手順**:
   1. `/account/security` の「多要素認証 (MFA)」を有効化し、表示された QR コードを認証アプリのカメラで読み取る
@@ -93,8 +93,8 @@
 
 ## QA-MR-08: 実機スマートフォンでのコード入力 (数字キーボード / OTP 自動入力)
 
-- **契機**: `use-mfa-code-entry` / `MfaChallenge` / 有効化・無効化ダイアログのコード入力欄を触る PR
-- **契機の path**: `web/src/mfa/use-mfa-code-entry.ts`、`web/src/mfa/pages/MfaChallenge.ts`、`web/src/mfa/mfa-code.ts`、`web/src/mfa/MfaEnrollDialog.tsx`
+- **契機**: `MfaChallenge` / 有効化・無効化ダイアログ (`mfa-enrollment`・`mfa-disabling`) のコード入力欄を触る PR
+- **契機の path**: `web/src/mfa/mfa-disabling.ts`、`web/src/mfa/pages/MfaChallenge.ts`、`web/src/mfa/mfa-code.ts`、`web/src/mfa/mfa-enrollment.ts`
 - **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済みで、ここで見るのは実 OS がその属性にどう反応するかである
 - **手順**:
   1. 実機で `/auth/mfa` を開き、コード入力欄をタップする

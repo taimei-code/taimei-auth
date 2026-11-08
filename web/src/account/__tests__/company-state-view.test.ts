@@ -9,7 +9,7 @@ import type { CompanyState } from "@core/account/account-contract";
 import { Unauthorized } from "@core/failures";
 
 import { companyStateAtom } from "../account-atom";
-import { CurrentCompanyProvider, useCurrentCompany } from "../current-company";
+import { CurrentCompanyProvider, useCurrentCompany } from "../current-company-context";
 
 const state: CompanyState = {
   current_company_id: "company-1",

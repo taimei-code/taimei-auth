@@ -1,4 +1,6 @@
 import { Dialog as FoldkitDialog } from "@foldkit/ui";
+import { Option } from "effect";
+import { Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { X } from "lucide";
 
@@ -8,11 +10,9 @@ import { iconView } from "./icon-view";
 export const Dialog = {
   Model: FoldkitDialog.Model,
   Message: FoldkitDialog.Message,
-  OutMessage: FoldkitDialog.OutMessage,
   init: FoldkitDialog.init,
-  update: FoldkitDialog.update,
-  open: FoldkitDialog.open,
-  close: FoldkitDialog.close,
+  ShowDialog: FoldkitDialog.ShowDialog,
+  CloseDialog: FoldkitDialog.CloseDialog,
 };
 export type DialogModel = FoldkitDialog.Model;
 export type DialogMessage = FoldkitDialog.Message;
@@ -72,3 +72,47 @@ export const dialogView = <Message>(
     },
     toParentMessage,
   });
+
+export const dialogFooterView = <Message>(
+  children: ReadonlyArray<Html>,
+  h: HtmlBuilder<Message>,
+): Html => h.div([h.Class(dialogClassNames.footer)], children);
+
+type ModelWithDialog = Readonly<{ dialog: DialogModel }>;
+
+export type DialogFoldsConfig<Model, Message, OutMessage, R> = Readonly<{
+  toParentMessage: (message: DialogMessage) => Message;
+  write: (model: Model, nextDialog: DialogModel) => Model;
+  whenClosed?: Update.StepWithOutMessage<Model, Message, OutMessage, R>;
+  isClosingBlocked: (model: Model) => boolean;
+}>;
+
+export const dialogFoldsOf = <
+  Model extends ModelWithDialog,
+  Message,
+  OutMessage = never,
+  R = never,
+>(
+  config: DialogFoldsConfig<Model, Message, OutMessage, R>,
+) => {
+  const child = {
+    read: (model: Model) => Option.some(model.dialog),
+    write: config.write,
+    toParentMessage: config.toParentMessage,
+    foldOutMessage: FoldkitDialog.OutMessage.match<
+      Update.StepWithOutMessage<Model, Message, OutMessage, R>
+    >({
+      Opened: () => (model) => ({ model }),
+      Closed: () => config.whenClosed ?? ((model) => ({ model })),
+    }),
+  };
+  const foldDialog = Update.foldChild({ ...child, update: FoldkitDialog.update });
+  return {
+    fold: (model: Model, message: DialogMessage) =>
+      config.isClosingBlocked(model) && message._tag === "RequestedClose"
+        ? { model }
+        : foldDialog(model, message),
+    open: Update.foldChildStep({ ...child, update: FoldkitDialog.open }),
+    close: Update.foldChildStep({ ...child, update: FoldkitDialog.close }),
+  };
+};

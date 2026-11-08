@@ -5,15 +5,11 @@ import {
   Outlet,
 } from "@tanstack/react-router";
 import type { AtomRegistry } from "effect/reactivity";
-import type { ReactNode } from "react";
 
 import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
 
-import { CurrentCompanyProvider } from "../account/current-company";
-import { Security } from "../account/pages/Security";
+import { CurrentCompanyProvider } from "../account/current-company-context";
 import { ErrorPage } from "../auth/pages/Error";
-import { Companies } from "../company/pages/Companies";
-import { CompanySettings } from "../company/pages/CompanySettings";
 import { Members } from "../membership/pages/Members";
 import { FullScreenLoader } from "../shared/FullScreenLoader";
 import { Toaster } from "../shared/notify";
@@ -37,9 +33,6 @@ const accountRoute = createRoute({
   },
 });
 
-const accountPageRoute = <TPath extends string>(path: TPath, component: () => ReactNode) =>
-  createRoute({ getParentRoute: () => accountRoute, path, component });
-
 const membersRoute = createRoute({
   getParentRoute: () => accountRoute,
   path: "/members",
@@ -47,14 +40,7 @@ const membersRoute = createRoute({
   component: Members,
 });
 
-const routeTree = rootRoute.addChildren([
-  accountRoute.addChildren([
-    accountPageRoute("/companies", Companies),
-    accountPageRoute("/company-settings", CompanySettings),
-    membersRoute,
-    accountPageRoute("/security", Security),
-  ]),
-]);
+const routeTree = rootRoute.addChildren([accountRoute.addChildren([membersRoute])]);
 
 export const makeRouter = (registry: AtomRegistry.AtomRegistry) =>
   createRouter({

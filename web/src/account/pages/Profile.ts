@@ -6,12 +6,10 @@ import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 
 import { AccountGroup } from "@core/account/account-contract";
-import { OrgCodeSchema } from "@core/company/company-contract";
 import { orgCodeLabelJa } from "@core/company/org-code";
-import { RoleSchema } from "@core/membership/membership-contract";
 import { roleLabelJa } from "@core/membership/role-label";
 
-import { signInClient } from "../../auth/sign-in-client";
+import { readSession, signInClient } from "../../auth/sign-in-client";
 import type { SpaHttpClient } from "../../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../../shared/submission";
 import { avatarClassNames } from "../../shared/ui/class-names";
@@ -21,14 +19,8 @@ import { fileInputView } from "../../shared/ui/file-input-view";
 import { inputView } from "../../shared/ui/input-view";
 import { NoticeTone } from "../../shared/ui/toast-view";
 import * as AccountDeletion from "../account-deletion";
+import * as CurrentCompany from "../current-company";
 import { accountPageHeaderView, separatorView } from "../account-page-header-view";
-
-export const CurrentCompany = Schema.Struct({
-  companyName: Schema.String,
-  role: RoleSchema,
-  orgCode: OrgCodeSchema,
-});
-export type CurrentCompany = typeof CurrentCompany.Type;
 
 const SignedInUser = Schema.Struct({
   name: Schema.String,
@@ -53,7 +45,6 @@ type Present = typeof Profile.Present.Type;
 
 export const Model = Schema.Struct({
   visit: Schema.Int,
-  maybeCurrentCompany: Schema.Option(CurrentCompany),
   profile: Profile,
   deletion: AccountDeletion.Model,
 });
@@ -93,7 +84,7 @@ export const LoadSession = Command.define("LoadSession", {
   args: { visit: Schema.Int },
   messages: [Message.SucceededLoadSession, Message.FailedLoadSession],
   execute: ({ visit }) =>
-    Effect.tryPromise(() => signInClient.getSession()).pipe(
+    readSession.pipe(
       Effect.map(({ data }) =>
         Message.SucceededLoadSession({
           visit,
@@ -165,18 +156,11 @@ export const UploadAvatar = Command.define("UploadAvatar", {
     }).pipe(Effect.catch(Effect.succeed)),
 });
 
-type InitInput = Readonly<{
-  visit: number;
-  maybeCurrentCompany: Option.Option<CurrentCompany>;
-}>;
+type ViewInputs = Readonly<{ currentCompany: CurrentCompany.Model }>;
 
-export const init = ({
-  visit,
-  maybeCurrentCompany,
-}: InitInput): Update.Return<Model, Message, SpaHttpClient> => ({
+export const init = (visit: number): Update.Return<Model, Message, SpaHttpClient> => ({
   model: {
     visit,
-    maybeCurrentCompany,
     profile: Profile.Loading(),
     deletion: AccountDeletion.init(visit),
   },
@@ -323,7 +307,7 @@ export const update = (model: Model, message: Message) =>
       foldAccountDeletion(model, deletionMessage),
   });
 
-const currentCompanyView = (company: CurrentCompany, h: HtmlBuilder<Message>): Html =>
+const currentCompanyView = (company: CurrentCompany.Membership, h: HtmlBuilder<Message>): Html =>
   h.div(
     [h.Class("mb-8 rounded-md border border-border bg-muted/40 p-4 text-sm")],
     [
@@ -425,12 +409,17 @@ const avatarView = (present: Present, h: HtmlBuilder<Message>): Html =>
     ],
   );
 
-const presentView = (model: Model, present: Present, h: HtmlBuilder<Message>): Html =>
+const presentView = (
+  model: Model,
+  currentCompany: CurrentCompany.Model,
+  present: Present,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
     [],
     [
       ...accountPageHeaderView("プロフィール", "アカウント情報の表示と編集", h),
-      ...Option.match(model.maybeCurrentCompany, {
+      ...Option.match(CurrentCompany.maybeCurrentMembership(currentCompany.state), {
         onNone: () => [],
         onSome: (company) => [currentCompanyView(company, h)],
       }),
@@ -448,8 +437,11 @@ const presentView = (model: Model, present: Present, h: HtmlBuilder<Message>): H
     ],
   );
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
-  Profile.matchOrElse(model.profile, { Present: (present) => presentView(model, present, h) }, () =>
-    h.div([]),
-  ),
+export const view = Submodel.defineView<Model, Message, ViewInputs>(
+  (model, { currentCompany }, h) =>
+    Profile.matchOrElse(
+      model.profile,
+      { Present: (present) => presentView(model, currentCompany, present, h) },
+      () => h.div([]),
+    ),
 );

@@ -76,3 +76,6 @@ export const fullScreenStatusView = <Message>(label: string, h: HtmlBuilder<Mess
 
 export const listLoadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
   statusView(label, { wrapper: "flex justify-center py-12", icon: "size-6" }, h);
+
+export const dialogLoadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+  statusView(label, { wrapper: "flex justify-center py-8", icon: "size-5" }, h);
