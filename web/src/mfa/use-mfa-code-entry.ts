@@ -1,16 +1,13 @@
 import { useState, type ChangeEvent, type ComponentPropsWithoutRef, type FormEvent } from "react";
 
 import type { MfaCodeKind } from "./mfa-atom";
+import {
+  MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+  MFA_CODE_TEXTS,
+  normalizeMfaCode,
+  otherMfaCodeKind,
+} from "./mfa-code";
 import { oneAtATime } from "./one-at-a-time";
-
-const WHITESPACE = /\s+/g;
-const PASTE_TOLERANT_MAX_LENGTH = 32;
-const HYPHEN_LIKE = /[-‐-―−ー]/g;
-
-export function normalizeMfaCode(raw: string, kind: MfaCodeKind): string {
-  const halfWidth = raw.normalize("NFKC").replace(WHITESPACE, "");
-  return kind === "totp" ? halfWidth.replace(HYPHEN_LIKE, "") : halfWidth.replace(HYPHEN_LIKE, "-");
-}
 
 export type MfaCodeInput = {
   kind: MfaCodeKind;
@@ -39,12 +36,12 @@ export function useMfaCodeInput(options: {
   const [code, setCode] = useState("");
 
   const normalizedCode = normalizeMfaCode(code, kind);
-  const isTotp = kind === "totp";
+  const texts = MFA_CODE_TEXTS[kind];
   const hintId = `${options.inputId}-hint`;
   const errorId = `${options.inputId}-error`;
 
   const toggleKind = () => {
-    setKind(isTotp ? "recovery_code" : "totp");
+    setKind(otherMfaCodeKind);
     setCode("");
     options.onKindChange?.();
   };
@@ -63,11 +60,9 @@ export function useMfaCodeInput(options: {
   return {
     kind,
     toggleKind,
-    toggleLabel: isTotp ? "リカバリーコードを使う" : "認証アプリの確認コードを使う",
-    labelText: isTotp ? "確認コード" : "リカバリーコード",
-    hint: isTotp
-      ? "認証アプリに表示されている 6 桁の数字を入力してください。"
-      : "有効化時に控えたリカバリーコードを 1 つ入力してください (1 つにつき 1 回だけ使えます)。",
+    toggleLabel: texts.toggleLabel,
+    labelText: texts.label,
+    hint: texts.hint,
     hintId,
     errorId,
     errorMessage: options.errorMessage,
@@ -80,13 +75,13 @@ export function useMfaCodeInput(options: {
       disabled: options.submitting,
       required: true,
       autoComplete: "one-time-code",
-      inputMode: isTotp ? "numeric" : "text",
+      inputMode: texts.inputMode,
       autoCapitalize: "off",
       autoCorrect: "off",
       spellCheck: false,
-      maxLength: PASTE_TOLERANT_MAX_LENGTH,
-      placeholder: isTotp ? "123456" : "xxxxx-xxxxx",
-      "aria-label": isTotp ? "確認コード" : "リカバリーコード",
+      maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+      placeholder: texts.placeholder,
+      "aria-label": texts.label,
       "aria-invalid": options.errorMessage !== null,
       "aria-describedby": options.errorMessage === null ? hintId : `${hintId} ${errorId}`,
     },

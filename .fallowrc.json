@@ -19,6 +19,7 @@
     "web/vite.config.ts",
     "web/tailwind.config.ts"
   ],
+  "ignorePatterns": ["repos/**"],
   "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
   "ignoreDependencies": [
     "@bufbuild/protoc-gen-es",
@@ -55,6 +56,10 @@
     {
       "file": "web/src/app/*/main.ts",
       "exports": ["Model", "Message", "init", "update", "view"]
+    },
+    {
+      "file": "web/src/*/pages/*.ts",
+      "exports": ["Model", "Message", "OutMessage", "init", "update", "view"]
     }
   ]
 }

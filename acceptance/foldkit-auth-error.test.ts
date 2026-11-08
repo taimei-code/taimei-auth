@@ -71,11 +71,7 @@ describe("runtime は URL の path だけで選ばれる", () => {
   });
 
   test.each([
-    "/auth/",
-    "/auth",
-    "/auth/signup",
     "/auth/signup/company",
-    "/auth/mfa",
     "/account",
     "/account/sessions",
     "/auth/errors",
@@ -219,10 +215,6 @@ describe("application の起動の設定", () => {
     const entries = gitFiles(":(glob)web/src/app/*/entry.ts");
     expect(entries.length).toBeGreaterThan(0);
     expect(entries.filter((path) => !/\bresources\b/.test(read(path)))).toEqual([]);
-  });
-
-  test("AC-042: web/src で @foldkit/ui を import しない", () => {
-    expect(gitGrep(`from "@foldkit/ui`, "web/src")).toEqual([]);
   });
 });
 
@@ -509,14 +501,14 @@ describe("oxlint は Foldkit の書き方から外れる code を止める", () 
 const FOLDKIT_SKILLS = ["foldkit", "generate-program", "audit-program"] as const;
 
 describe("agent が読む Foldkit の参照と版", () => {
-  test("AC-023: package.json の foldkit は範囲を持たない版で、CLAUDE.md の tag と 3 つの skill が同じ版を示す", () => {
+  test("AC-023: package.json の foldkit は範囲を持たない版で、repos/foldkit の subtree と 3 つの skill が同じ版を示す", () => {
     const packageJson: { devDependencies?: Record<string, string> } = JSON.parse(read("package.json"));
     const version = packageJson.devDependencies?.foldkit ?? "";
     expect(version).toMatch(/^\d+\.\d+\.\d+$/);
-    const claudeMdVersions = [
-      ...read("web/src/CLAUDE.md").matchAll(/github\.com\/foldkit\/foldkit\/tree\/foldkit@([^\s)`]+)/g),
-    ].map(([, tagged]) => tagged);
-    expect(claudeMdVersions).toEqual([version]);
+    const subtreePackageJson: { version?: string } = JSON.parse(
+      read("repos/foldkit/packages/foldkit/package.json"),
+    );
+    expect(subtreePackageJson.version).toBe(version);
     for (const skill of FOLDKIT_SKILLS) {
       const skillVersions = [
         ...read(`.claude/skills/${skill}/SKILL.md`).matchAll(/\b\d+\.\d+\.\d+\b/g),
@@ -532,10 +524,8 @@ describe("agent が読む Foldkit の参照と版", () => {
     expect(read(".mcp.json")).not.toMatch(/foldkit/i);
   });
 
-  test("AC-025: web/src/CLAUDE.md が Foldkit の tag の URL を持ち、.claude/skills に 3 つの skill がある", () => {
-    expect(read("web/src/CLAUDE.md")).toMatch(
-      /https:\/\/github\.com\/foldkit\/foldkit\/tree\/foldkit@\d+\.\d+\.\d+/,
-    );
+  test("AC-025: web/src/CLAUDE.md が repos/foldkit を読む指示を持ち、.claude/skills に 3 つの skill がある", () => {
+    expect(read("web/src/CLAUDE.md")).toContain("`repos/foldkit/` を読む");
     for (const skill of FOLDKIT_SKILLS) {
       const path = `.claude/skills/${skill}/SKILL.md`;
       expect({ path, exists: existsSync(join(REPO_ROOT, path)) }).toEqual({ path, exists: true });

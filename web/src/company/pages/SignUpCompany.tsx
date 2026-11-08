@@ -1,5 +1,5 @@
 import { Exit } from "effect";
-import { getRouteApi, useNavigate } from "@tanstack/react-router";
+import { getRouteApi } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -7,7 +7,7 @@ import type { OrgCode } from "@core/company/org-code";
 
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { failureOutcome } from "../../shared/failure-message";
-import { leaveSpaTo, signInLandingSearch } from "../../shared/leave-spa";
+import { leaveSpaTo, loadDocument, signInUrlAfterSignOut } from "../../shared/leave-spa";
 import { Button } from "../../shared/ui/button";
 import {
   Card,
@@ -26,7 +26,6 @@ const route = getRouteApi("/auth/signup/company");
 
 export const SignUpCompany = () => {
   const redirectUrl = route.useSearch().redirect_url;
-  const navigate = useNavigate();
   const createCompany = useCreateCompany();
   const [name, setName] = useState("");
   const [orgCode, setOrgCode] = useState<OrgCode>("PERSONAL");
@@ -106,7 +105,7 @@ export const SignUpCompany = () => {
             setErrorMessage(SIGN_OUT_FAILED);
             return;
           }
-          await navigate({ to: "/auth", search: signInLandingSearch(), reloadDocument: true });
+          loadDocument(signInUrlAfterSignOut());
         }}
         className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
       >

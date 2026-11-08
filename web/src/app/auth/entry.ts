@@ -1,6 +1,5 @@
-import { Layer } from "effect";
-
 import { crashView } from "../../shared/crash-view";
+import { SpaHttpClient } from "../../shared/spa-http-client";
 import { startApplication } from "../start-application";
 import { init, Message, Model, update, view } from "./main";
 
@@ -15,5 +14,5 @@ startApplication({
     onUrlChange: (url) => Message.ChangedUrl({ url }),
   },
   crash: { view: crashView },
-  resources: Layer.empty,
+  resources: SpaHttpClient.layer(window.location.origin),
 });

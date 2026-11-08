@@ -6,13 +6,19 @@ import { Schema } from "effect";
 
 import { readPackageJson, REPO_ROOT } from "./config-invariant-helpers";
 
-const FOLDKIT_REFERENCE = /https:\/\/github\.com\/foldkit\/foldkit\/tree\/foldkit@([^\s)`]+)/g;
 const SKILL_VERSION = /^---\n(?:.*\n)*?  foldkit-version: (\S+)\n(?:.*\n)*?---\n/;
 const FOLDKIT_SKILLS = ["foldkit", "generate-program", "audit-program"] as const;
 
 const readRepoFile = (file: string) => readFileSync(path.join(REPO_ROOT, file), "utf8");
 
-const installedFoldkitVersion = readPackageJson().devDependencies?.foldkit ?? "";
+const devDependencies = readPackageJson().devDependencies ?? {};
+const installedFoldkitVersion = devDependencies.foldkit ?? "";
+
+const PackageVersion = Schema.fromJsonString(Schema.Struct({ version: Schema.String }));
+const subtreePackageVersion = (packageDir: string) =>
+  Schema.decodeSync(PackageVersion)(
+    readRepoFile(`repos/foldkit/packages/${packageDir}/package.json`),
+  ).version;
 
 const SkillsLock = Schema.fromJsonString(
   Schema.Struct({ version: Schema.String, sha256: Schema.String }),
@@ -48,12 +54,15 @@ describe("agent が読む Foldkit の参照は、入れた版と一致する", (
     expect(installedFoldkitVersion).toMatch(/^\d+\.\d+\.\d+$/);
   });
 
-  test("web/src/CLAUDE.md の Foldkit の参照は、入れた版の tag だけを指す", () => {
-    expect(
-      [...readRepoFile("web/src/CLAUDE.md").matchAll(FOLDKIT_REFERENCE)].map(
-        ([, version]) => version,
-      ),
-    ).toEqual([installedFoldkitVersion]);
+  test.each([
+    ["foldkit", "foldkit"],
+    ["@foldkit/ui", "ui"],
+  ])("repos/foldkit の subtree の %s は、入れた版と一致する", (packageName, packageDir) => {
+    expect(subtreePackageVersion(packageDir)).toBe(devDependencies[packageName] ?? "");
+  });
+
+  test("web/src/CLAUDE.md は Foldkit の版を書かない (版は package.json と subtree だけが持つ)", () => {
+    expect(readRepoFile("web/src/CLAUDE.md")).not.toMatch(/foldkit@\d/);
   });
 
   test.each([
@@ -68,7 +77,7 @@ describe("agent が読む Foldkit の参照は、入れた版と一致する", (
     expect(skillsLock.version).toBe(installedFoldkitVersion);
   });
 
-  test("skill の中身は scripts/update-foldkit-skills.sh が取り直したときの hash と一致する (手で写したり書き換えたりすると落ちる)", () => {
+  test("skill の中身は scripts/update-foldkit-reference.sh が取り直したときの hash と一致する (手で写したり書き換えたりすると落ちる)", () => {
     expect(skillsSha256()).toBe(skillsLock.sha256);
   });
 

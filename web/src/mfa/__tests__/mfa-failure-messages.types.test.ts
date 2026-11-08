@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { MFA_FAILURE_MESSAGES } from "../mfa-atom";
+import { MFA_FAILURE_MESSAGES } from "../mfa-failure-messages";
 
 const { RateLimited: _dropped, ...withoutRateLimited } = MFA_FAILURE_MESSAGES;
 // @ts-expect-error 契約が宣言する失敗の _tag が 1 つでも欠けた表は型エラー

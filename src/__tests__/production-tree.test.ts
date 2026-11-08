@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  DEVELOPMENT_REFERENCE_DIRS,
   NON_PRODUCTION_DIRS,
   REPO_ROOT,
   readWorkflow as readWorkflowAs,
@@ -118,11 +119,11 @@ const full = readWorkflow("deploy-production-full.yml");
 const drift = readWorkflow("iac-drift.yml");
 
 describe("本番は本番以外の code が無い tree からだけ build する", () => {
-  test("除外する dir の一覧は 1 つの script にだけあり、本番以外の dir を 3 つとも含む", () => {
+  test("除外する dir の一覧は 1 つの script にだけあり、本番以外の dir 3 つと、開発で読むだけの写しの dir を含む", () => {
     expect(
       grepFiles(EXCLUSION_LIST_DECLARATION, ["scripts", ".github"], { include: ["*.sh", "*.yml"] }),
     ).toEqual([PRODUCTION_TREE_SCRIPT]);
-    expect(exclusionList()).toEqual(NON_PRODUCTION_DIRS);
+    expect(exclusionList()).toEqual([...NON_PRODUCTION_DIRS, ...DEVELOPMENT_REFERENCE_DIRS].sort());
   });
 
   test("PR の CI は除外した tree で本番を build する", () => {

@@ -94,7 +94,7 @@
 ## QA-MR-08: 実機スマートフォンでのコード入力 (数字キーボード / OTP 自動入力)
 
 - **契機**: `use-mfa-code-entry` / `MfaChallenge` / 有効化・無効化ダイアログのコード入力欄を触る PR
-- **契機の path**: `web/src/mfa/use-mfa-code-entry.ts`、`web/src/mfa/pages/MfaChallenge.tsx`、`web/src/mfa/MfaChallengeView.tsx`、`web/src/mfa/MfaEnrollDialog.tsx`
+- **契機の path**: `web/src/mfa/use-mfa-code-entry.ts`、`web/src/mfa/pages/MfaChallenge.ts`、`web/src/mfa/mfa-code.ts`、`web/src/mfa/MfaEnrollDialog.tsx`
 - **前提**: 実機スマートフォン (iOS Safari / Android Chrome)。入力支援属性の付与自体は自動テストで確認済みで、ここで見るのは実 OS がその属性にどう反応するかである
 - **手順**:
   1. 実機で `/auth/mfa` を開き、コード入力欄をタップする
