@@ -15,6 +15,7 @@
     "correctness": "error"
   },
   "ignorePatterns": [
+    "repos/**",
     "src/gen/**",
     "packages/auth-client/src/gen/**",
     "packages/auth-client/dist/**",

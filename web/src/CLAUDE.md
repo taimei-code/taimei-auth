@@ -1,6 +1,6 @@
 # web/src/ 共通画面SPA実装規則
 
-Foldkit の参照: https://github.com/foldkit/foldkit/tree/foldkit@0.170.0
+Foldkit のコードを書く前に、`.claude/skills/` の `foldkit` と `generate-program` の skill を読み込み、その手順に従う。書いたコードの review には `audit-program` の skill を使う。skill が指す `repos/foldkit/` は入れた版の Foldkit の repo の写しである (置き方と版の上げ方は [`ADR-0023`](../../docs/adr/0023-web-foldkit.md))。Foldkit の書き方や API を調べるときは、サブエージェントを起動せず、自分で skill を読み込み、`repos/foldkit/` を読む。
 
 配置の判断は [`ADR-0015`](../../docs/adr/0015-web-domain-first-directory-structure.md) が定義元である。cross-domain import の allowlist は `src/__tests__/web-domain-structure.test.ts` が固定し、path の追加は新しい cross-domain interface を設ける設計変更として review する。
 

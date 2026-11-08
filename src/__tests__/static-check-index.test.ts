@@ -89,7 +89,7 @@ describe("規則から静的な検査へ 1 hop で着く", () => {
   });
 
   test("CLAUDE.md と同じ dir に、CLAUDE.md を指す相対 symlink の AGENTS.md がある", () => {
-    const withoutAgents = repoFiles(":(glob)**/CLAUDE.md").filter((path) => {
+    const withoutAgents = repoFiles(":(glob)**/CLAUDE.md", ":(exclude)repos/**").filter((path) => {
       const agents = join(REPO_ROOT, dirname(path), "AGENTS.md");
       return !(
         lstatSync(agents, { throwIfNoEntry: false })?.isSymbolicLink() &&

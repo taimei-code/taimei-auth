@@ -18,7 +18,8 @@
       "!packages/auth-client/src/gen",
       "!bun.lock",
       "!web/src/index.css",
-      "!acceptance"
+      "!acceptance",
+      "!repos"
     ]
   },
   "formatter": {

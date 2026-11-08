@@ -8,7 +8,7 @@ tree_dir="$(cd "$tree_dir" && pwd)"
 
 cd "$(dirname "$0")/.."
 
-EXCLUDED_FROM_PRODUCTION=(testing web/non-production db/testing)
+EXCLUDED_FROM_PRODUCTION=(testing web/non-production db/testing repos)
 
 commit="$(git rev-parse HEAD)"
 echo "Building production from HEAD ($commit) without ${EXCLUDED_FROM_PRODUCTION[*]}. Uncommitted changes are not included."
