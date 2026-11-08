@@ -8,7 +8,7 @@
     "testing/check-staging-database.ts",
     "testing/redirect-hosts.ts",
     "web/index.html",
-    "web/non-production/main.tsx",
+    "web/non-production/main.ts",
     "db/migrate.ts",
     "db/migrate-manual.ts",
     "management/*.ts",

@@ -35,10 +35,14 @@ const recommendedEntryRules = () =>
     recommended.overrides.find((override) => override.files.includes("**/entry.ts"))?.rules,
   );
 
-test("web/src の Foldkit の lint は、入れた版の recommended の rule と値をそのまま写す", () => {
-  expect(repoOverrideRules(["web/src/**"])).toEqual(foldkitRulesOf(recommended.rules));
+test("web/src と web/non-production の Foldkit の lint は、入れた版の recommended の rule と値をそのまま写す", () => {
+  expect(repoOverrideRules(["web/src/**", "web/non-production/**"])).toEqual(
+    foldkitRulesOf(recommended.rules),
+  );
 });
 
 test("application の entry では、recommended が entry に許す rule を同じく緩める", () => {
-  expect(repoOverrideRules(["web/src/app/*/entry.ts"])).toEqual(recommendedEntryRules());
+  expect(repoOverrideRules(["web/src/app/*/entry.ts", "web/non-production/main.ts"])).toEqual(
+    recommendedEntryRules(),
+  );
 });

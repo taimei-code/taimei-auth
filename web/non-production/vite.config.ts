@@ -44,7 +44,7 @@ export default mergeConfig(
       rollupOptions: {
         input: {
           index: path.join(nonProductionDir, "../index.html"),
-          [NON_PRODUCTION_ENTRY_NAME]: path.join(nonProductionDir, "main.tsx"),
+          [NON_PRODUCTION_ENTRY_NAME]: path.join(nonProductionDir, "main.ts"),
         },
         output: nonProductionBuildOutput(),
       },

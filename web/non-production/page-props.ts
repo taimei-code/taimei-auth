@@ -36,7 +36,7 @@ const Destination = Schema.Union([
 
 export type Destination = typeof Destination.Type;
 
-const DevHomeProps = Schema.TaggedStruct("DevHome", {
+export const DevHomeProps = Schema.TaggedStruct("DevHome", {
   devAccounts: Schema.Array(Account),
   browserAccounts: Schema.Array(Account),
   viewer: Viewer,

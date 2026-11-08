@@ -447,8 +447,8 @@
       }
     },
     {
-      "files": ["web/src/**"],
-      "excludeFiles": ["web/src/**/__tests__/**"],
+      "files": ["web/src/**", "web/non-production/**"],
+      "excludeFiles": ["web/src/**/__tests__/**", "web/non-production/**/__tests__/**"],
       "rules": {
         "taimei/no-effect-run-in-web": "error",
         "taimei/no-browser-global-outside-command": "error",
@@ -502,7 +502,7 @@
       }
     },
     {
-      "files": ["web/src/**"],
+      "files": ["web/src/**", "web/non-production/**"],
       "rules": {
         "curly": ["error", "all"]
       },
@@ -537,7 +537,7 @@
       }
     },
     {
-      "files": ["web/src/app/*/entry.ts"],
+      "files": ["web/src/app/*/entry.ts", "web/non-production/main.ts"],
       "rules": {
         "taimei/no-browser-global-outside-command": "off",
         "foldkit/no-impure-call-at-decision-time": "off"

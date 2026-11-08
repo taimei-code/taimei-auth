@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-const alertTextView = <Message>(text: string, h: HtmlBuilder<Message>): Html =>
+export const alertTextView = <Message>(text: string, h: HtmlBuilder<Message>): Html =>
   h.p([h.Role("alert"), h.Class("text-sm text-destructive")], [text]);
 
 export const maybeAlertTextView = <Message>(

@@ -7,6 +7,6 @@ const nonProductionDir = path.dirname(fileURLToPath(import.meta.url));
 
 const config: Config = {
   ...productionConfig,
-  content: [...PRODUCTION_CONTENT_GLOBS, path.join(nonProductionDir, "**/*.tsx")],
+  content: [...PRODUCTION_CONTENT_GLOBS, path.join(nonProductionDir, "**/*.ts")],
 };
 export default config;
