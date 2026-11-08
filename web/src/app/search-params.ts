@@ -3,7 +3,7 @@ export const parseSearch = (searchStr: string): Record<string, string> =>
 
 export const stringifySearch = (search: Record<string, unknown>): string => {
   const entries = Object.entries(search).flatMap(([key, value]) =>
-    value === undefined ? [] : [[key, String(value)]],
+    value === undefined ? [] : [[key, typeof value === "string" ? value : JSON.stringify(value)]],
   );
   const searchStr = new URLSearchParams(entries).toString();
   return searchStr ? `?${searchStr}` : "";

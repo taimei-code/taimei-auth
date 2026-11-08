@@ -43,7 +43,14 @@
     "eqeqeq": "error",
     "no-fallthrough": "error",
     "radix": "error",
-    "import/no-commonjs": "error"
+    "import/no-commonjs": "error",
+    "typescript/no-misused-promises": "error",
+    "typescript/return-await": "error",
+    "typescript/no-unsafe-enum-comparison": "error",
+    "typescript/no-mixed-enums": "error",
+    "typescript/restrict-plus-operands": "error",
+    "typescript/unbound-method": "off",
+    "typescript/no-useless-default-assignment": "off"
   },
   "overrides": [
     {
@@ -609,6 +616,12 @@
             "checkTypeImports": true
           }
         ]
+      }
+    },
+    {
+      "files": ["**/__tests__/**"],
+      "rules": {
+        "typescript/await-thenable": "off"
       }
     }
   ]

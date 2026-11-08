@@ -33,8 +33,8 @@ beforeAll(() => {
   testing = createTestingClient(`http://localhost:${server.port}`);
 });
 
-afterAll(() => {
-  server.stop(true);
+afterAll(async () => {
+  await server.stop(true);
 });
 
 const createSignedInUser = (request: SignedInUserRequest) =>

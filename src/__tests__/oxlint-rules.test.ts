@@ -501,6 +501,125 @@ const CASES: readonly Case[] = [
   },
 ];
 
+const TYPE_AWARE_CASES: readonly Case[] = [
+  {
+    name: "型を使う lint: Promise でない値を await できない (await-thenable)",
+    path: "src/type-aware/await-thenable.ts",
+    source: "export const waitFor = async (value: number) => {\n  await value;\n};",
+    expectedRules: ["typescript(await-thenable)"],
+  },
+  {
+    name: "型を使う lint: 配列の要素を delete できない (no-array-delete)",
+    path: "src/type-aware/no-array-delete.ts",
+    source: "export const dropFirst = (values: number[]) => {\n  delete values[0];\n};",
+    expectedRules: ["typescript(no-array-delete)"],
+  },
+  {
+    name: "型を使う lint: toString を持たない object を文字列にできない (no-base-to-string)",
+    path: "src/type-aware/no-base-to-string.ts",
+    source: "export const describe = (value: { count: number }) => String(value);",
+    expectedRules: ["typescript(no-base-to-string)"],
+  },
+  {
+    name: "型を使う lint: union に同じ型を重ねられない (no-duplicate-type-constituents)",
+    path: "src/type-aware/no-duplicate-type-constituents.ts",
+    source: "export type Name = string | string;",
+    expectedRules: ["typescript(no-duplicate-type-constituents)"],
+  },
+  {
+    name: "型を使う lint: Promise を待たずに捨てられない (no-floating-promises)",
+    path: "src/type-aware/no-floating-promises.ts",
+    source: "export const start = () => {\n  Promise.resolve(1);\n};",
+    expectedRules: ["typescript(no-floating-promises)"],
+  },
+  {
+    name: "型を使う lint: 配列を for-in で回せない (no-for-in-array)",
+    path: "src/type-aware/no-for-in-array.ts",
+    source:
+      "export const count = (values: number[]) => {\n  let total = 0;\n  for (const index in values) {\n    total += index.length;\n  }\n  return total;\n};",
+    expectedRules: ["typescript(no-for-in-array)"],
+  },
+  {
+    name: "型を使う lint: 文字列を timer に渡して評価させられない (no-implied-eval)",
+    path: "src/type-aware/no-implied-eval.ts",
+    source: 'export const schedule = () => setTimeout("globalThis.x = 1", 0);',
+    expectedRules: ["typescript(no-implied-eval)"],
+  },
+  {
+    name: "型を使う lint: void を返す式に void を付けられない (no-meaningless-void-operator)",
+    path: "src/type-aware/no-meaningless-void-operator.ts",
+    source: "const run = (): void => {};\nexport const runAgain = () => void run();",
+    expectedRules: ["typescript(no-meaningless-void-operator)"],
+  },
+  {
+    name: "型を使う lint: 文字列を配列に spread できない (no-misused-spread)",
+    path: "src/type-aware/no-misused-spread.ts",
+    source: "export const letters = (text: string) => [...text];",
+    expectedRules: ["typescript(no-misused-spread)"],
+  },
+  {
+    name: "型を使う lint: union を unknown で潰せない (no-redundant-type-constituents)",
+    path: "src/type-aware/no-redundant-type-constituents.ts",
+    source: "export type Value = unknown | string;",
+    expectedRules: ["typescript(no-redundant-type-constituents)"],
+  },
+  {
+    name: "型を使う lint: 数でない値に単項の - を付けられない (no-unsafe-unary-minus)",
+    path: "src/type-aware/no-unsafe-unary-minus.ts",
+    source: "export const negate = (text: string) => -text;",
+    expectedRules: ["typescript(no-unsafe-unary-minus)"],
+  },
+  {
+    name: "型を使う lint: 比べる関数無しで数の配列を sort できない (require-array-sort-compare)",
+    path: "src/type-aware/require-array-sort-compare.ts",
+    source: "export const ordered = (values: number[]) => values.sort();",
+    expectedRules: ["typescript(require-array-sort-compare)"],
+  },
+  {
+    name: "型を使う lint: object を template に埋め込めない (restrict-template-expressions)",
+    path: "src/type-aware/restrict-template-expressions.ts",
+    source: `export const label = (value: { count: number }) => \`\${value}\`;`,
+    expectedRules: ["typescript(no-base-to-string)", "typescript(restrict-template-expressions)"],
+  },
+  {
+    name: "型を使う lint: Promise を条件に使えない (no-misused-promises)",
+    path: "src/type-aware/no-misused-promises.ts",
+    source: "export const ready = (pending: Promise<void>) => (pending ? 1 : 0);",
+    expectedRules: ["typescript(no-misused-promises)"],
+  },
+  {
+    name: "型を使う lint: try の中の Promise を待たずに返せない (return-await)",
+    path: "src/type-aware/return-await.ts",
+    source:
+      "export const load = async () => {\n  try {\n    return Promise.resolve(1);\n  } catch {\n    return 0;\n  }\n};",
+    expectedRules: ["typescript(return-await)"],
+  },
+  {
+    name: "型を使う lint: enum を文字列の literal と比べられない (no-unsafe-enum-comparison)",
+    path: "src/type-aware/no-unsafe-enum-comparison.ts",
+    source: 'enum Kind {\n  A = "a",\n}\nexport const isA = (kind: Kind) => kind === "a";',
+    expectedRules: ["typescript(no-unsafe-enum-comparison)"],
+  },
+  {
+    name: "型を使う lint: enum に数と文字列を混ぜられない (no-mixed-enums)",
+    path: "src/type-aware/no-mixed-enums.ts",
+    source: 'export enum Mixed {\n  A = 0,\n  B = "b",\n}',
+    expectedRules: ["typescript(no-mixed-enums)"],
+  },
+  {
+    name: "型を使う lint: 文字列と object を + でつなげない (restrict-plus-operands)",
+    path: "src/type-aware/restrict-plus-operands.ts",
+    source: "export const join = (text: string, value: { count: number }) => text + value;",
+    expectedRules: ["typescript(no-base-to-string)", "typescript(restrict-plus-operands)"],
+  },
+  {
+    name: "型を使う lint: test の file では await-thenable を止めない (bun の matcher の型が void のため)",
+    path: "src/__tests__/await-matcher.test.ts",
+    source: "export const waitFor = async (value: number) => {\n  await value;\n};",
+    expectedRules: [],
+  },
+];
+
 type Diagnostic = { readonly code: string; readonly filename: string };
 
 const groupsWithDistinctPaths = (cases: readonly Case[]): Case[][] =>
@@ -528,7 +647,27 @@ const fixtureDirs: string[] = [];
 const lintedFileCounts: { readonly written: number; readonly linted: number }[] = [];
 const rulesByCase = new Map<Case, string[]>();
 
-const lintGroup = (group: readonly Case[]): void => {
+const TYPE_AWARE_TSCONFIG = JSON.stringify({
+  compilerOptions: {
+    strict: true,
+    noEmit: true,
+    target: "ES2023",
+    module: "esnext",
+    moduleResolution: "bundler",
+    skipLibCheck: true,
+    types: [],
+  },
+  include: ["**/*.ts"],
+});
+
+type LintMode = "Syntax" | "TypeAware";
+
+const OXLINT_ARGS: Record<LintMode, readonly string[]> = {
+  Syntax: ["--format", "json", "."],
+  TypeAware: ["--type-aware", "--format", "json", "."],
+};
+
+const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
   const fixtureDir = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
   fixtureDirs.push(fixtureDir);
   writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
@@ -538,9 +677,16 @@ const lintGroup = (group: readonly Case[]): void => {
     mkdirSync(dirname(join(fixtureDir, path)), { recursive: true });
     writeFileSync(join(fixtureDir, path), `${source}\n`);
   }
-  const result = spawnSync(OXLINT, ["--format", "json", "."], {
+  if (mode === "TypeAware") {
+    writeFileSync(join(fixtureDir, "tsconfig.json"), TYPE_AWARE_TSCONFIG);
+  }
+  const result = spawnSync(OXLINT, [...OXLINT_ARGS[mode]], {
     cwd: fixtureDir,
     encoding: "utf8",
+    env: {
+      ...process.env,
+      OXLINT_TSGOLINT_PATH: join(REPO_ROOT, "node_modules/oxlint-tsgolint/bin/tsgolint.js"),
+    },
   });
   const { diagnostics, number_of_files } = JSON.parse(result.stdout) as {
     diagnostics: Diagnostic[];
@@ -557,7 +703,8 @@ const lintGroup = (group: readonly Case[]): void => {
 };
 
 beforeAll(() => {
-  groupsWithDistinctPaths(CASES).forEach(lintGroup);
+  for (const group of groupsWithDistinctPaths(CASES)) lintGroup(group);
+  lintGroup(TYPE_AWARE_CASES, "TypeAware");
 });
 
 afterAll(() => {
@@ -565,7 +712,7 @@ afterAll(() => {
 });
 
 describe("lint の rule は、oxlint で決めた path に効く", () => {
-  test.each([...CASES])("$name", (testCase: Case) => {
+  test.each([...CASES, ...TYPE_AWARE_CASES])("$name", (testCase: Case) => {
     expect(rulesByCase.get(testCase)).toEqual([...testCase.expectedRules]);
   });
 

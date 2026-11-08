@@ -13,7 +13,7 @@ describe("parseMfaKeyRing", () => {
   test("currentVersion は最大 version", () => {
     const ring = parseMfaKeyRing(`${V1},${V2}`);
     expect(ring.currentVersion).toBe(2);
-    expect([...ring.keys.keys()].sort()).toEqual([1, 2]);
+    expect([...ring.keys.keys()].sort((left, right) => left - right)).toEqual([1, 2]);
   });
 
   test.each([

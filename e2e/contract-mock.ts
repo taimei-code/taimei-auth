@@ -45,7 +45,7 @@ export const declaredFailure = (name: string, tag: string) => {
 export const routeEndpoint = (
   page: Page,
   name: string,
-  handler: (route: Route) => Promise<unknown> | unknown,
+  handler: (route: Route) => unknown,
   options?: { times?: number },
 ) => {
   const { method } = endpointNamed(name);

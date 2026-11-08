@@ -55,7 +55,7 @@ export const PendingInvitations = ({ companyId }: { companyId: string }) => {
       return;
     }
     setBusyInvitationId(invitationId);
-    revokeInvitation(companyId, invitationId)
+    void revokeInvitation(companyId, invitationId)
       .then(
         Exit.match({
           onSuccess: () =>

@@ -34,7 +34,7 @@ export const InviteMemberForm = ({ companyId, assignableRoles, redirectSearch }:
   const handleInvite = (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    createInvitation(companyId, {
+    void createInvitation(companyId, {
       email: inviteEmail.trim(),
       role: effectiveInviteRole,
       redirect_target: parseRedirectTarget(redirectSearch),

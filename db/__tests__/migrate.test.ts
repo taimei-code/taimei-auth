@@ -10,7 +10,10 @@ const runMigrate = (databaseUrl: string) => {
     cwd: repoRoot,
     env: { ...process.env, DATABASE_URL: databaseUrl },
   });
-  return { exitCode: result.exitCode, output: `${result.stdout}${result.stderr}` };
+  return {
+    exitCode: result.exitCode,
+    output: `${result.stdout.toString()}${result.stderr.toString()}`,
+  };
 };
 
 const localDatabaseUrl = process.env.DATABASE_URL!;
