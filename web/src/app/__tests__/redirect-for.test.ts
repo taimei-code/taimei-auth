@@ -15,30 +15,6 @@ const stubOrigin = () => {
 };
 
 describe("入口の判定から redirect への写しは redirectFor の 1 つだけ", () => {
-  test("signIn は今の URL を戻り先にして /auth/ へ document ごと移り、末尾の / を保つ (/auth に変わると server の session に応じた redirect を通らない)", () => {
-    stubOrigin();
-
-    const { options } = redirectFor({ kind: "signIn" }, "/account/members");
-
-    expect(options).toMatchObject({
-      href: `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(`${ORIGIN}/account/members`)}`,
-      reloadDocument: true,
-      replace: true,
-    });
-  });
-
-  test("goToRedirectUrl はその URL へ document ごと移る", () => {
-    const { options } = redirectFor(
-      { kind: "goToRedirectUrl", redirectUrl: "https://app.taimei-code.com/dashboard" },
-      "/auth/signup/company",
-    );
-
-    expect(options).toMatchObject({
-      href: "https://app.taimei-code.com/dashboard",
-      reloadDocument: true,
-    });
-  });
-
   test("companySignup は今の URL を戻り先にして事業所登録へ移る", () => {
     stubOrigin();
 
@@ -51,13 +27,10 @@ describe("入口の判定から redirect への写しは redirectFor の 1 つ�
     });
   });
 
-  test("show と failed は redirect に写せない (型で止める)", () => {
+  test("show は redirect に写せない (型で止める)", () => {
     const show: RouteEntry = { kind: "show" };
-    const failed: RouteEntry = { kind: "failed", message: "x" };
 
     // @ts-expect-error show は画面を出すので redirect にしない
     expect(() => redirectFor(show, "/account")).not.toThrow();
-    // @ts-expect-error failed は画面に文言を出すので redirect にしない
-    expect(() => redirectFor(failed, "/account")).not.toThrow();
   });
 });

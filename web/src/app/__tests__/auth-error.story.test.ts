@@ -4,9 +4,10 @@ import { UrlRequest } from "foldkit/navigation";
 import { Command, given, message, model, story } from "foldkit/story";
 import { fromString, type Url } from "foldkit/url";
 
-import { init, LoadDocument, Message, type Model, PushUrl, update } from "../auth/main";
+import { init, Message, type Model, update } from "../auth/main";
 import type { ErrorPageReason } from "../../auth/auth-error-reason";
 import { AuthRoute } from "../auth/route";
+import { LoadDocument, PushUrl, Message as NavigationMessage } from "../document-navigation";
 
 const urlOf = (href: string): Url =>
   Option.getOrThrowWith(fromString(href), () => new Error(`URL として読めない: ${href}`));
@@ -65,7 +66,7 @@ describe("エラー画面の application の link", () => {
         }),
       ),
       Command.expectExact(PushUrl),
-      Command.resolve(PushUrl, Message.CompletedPushUrl()),
+      Command.resolve(PushUrl, NavigationMessage.CompletedPushUrl()),
     );
   });
 
@@ -79,7 +80,7 @@ describe("エラー画面の application の link", () => {
         }),
       ),
       Command.expectExact(LoadDocument),
-      Command.resolve(LoadDocument, Message.CompletedLoadDocument()),
+      Command.resolve(LoadDocument, NavigationMessage.CompletedLoadDocument()),
     );
   });
 
@@ -91,7 +92,7 @@ describe("エラー画面の application の link", () => {
         Message.ClickedLink({ request: UrlRequest.External({ href: "https://example.com/" }) }),
       ),
       Command.expectExact(LoadDocument),
-      Command.resolve(LoadDocument, Message.CompletedLoadDocument()),
+      Command.resolve(LoadDocument, NavigationMessage.CompletedLoadDocument()),
     );
   });
 });

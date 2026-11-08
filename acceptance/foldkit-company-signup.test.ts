@@ -116,7 +116,7 @@ describe("事業所の登録の画面は Foldkit の runtime で出る", () => {
     },
   );
 
-  test.each(["/auth/signup/accept-invitation", "/account", "/auth/signup/company/extra"])(
+  test.each(["/account", "/auth/signup/company/extra"])(
     "AC-002: %s の document では React の runtime が選ばれる",
     async (pathname) => {
       const { runtimeForPath } = await loadRuntimeForPath();

@@ -2,7 +2,9 @@ import { Effect, Option, pipe, Schema } from "effect";
 import { Route } from "foldkit";
 import { defineRouteUnion, literal, slash, Transition } from "foldkit/route";
 
+import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
 import { type SignInParams, signInParamsSchema } from "@core/sign-in-params";
+import type { z } from "zod";
 
 import { ErrorPageReason } from "../../auth/auth-error-reason";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
@@ -12,6 +14,11 @@ export const AuthRoute = defineRouteUnion({
   SignIn: SignInOrSignUp.Params.fields,
   SignUp: SignInOrSignUp.Params.fields,
   SignUpCompany: SignInOrSignUp.Params.fields,
+  AcceptInvitation: {
+    invitation_token: Schema.optional(Schema.String),
+    service_name: Schema.optional(Schema.String),
+    redirect_url: Schema.optional(Schema.String),
+  },
   RejectedSignInParams: {},
   MfaChallenge: {},
   Error: { reason: Schema.Option(ErrorPageReason) },
@@ -54,6 +61,16 @@ const signUpCompanyRouter = pipe(
   Route.mapTo(AuthRoute.SignUpCompany),
 );
 
+const acceptInvitationRouter = pipe(
+  literal("auth"),
+  slash(literal("signup")),
+  slash(literal("accept-invitation")),
+  Route.query(
+    fromZodSearch<z.output<typeof acceptInvitationSearchSchema>>(acceptInvitationSearchSchema),
+  ),
+  Route.mapTo(AuthRoute.AcceptInvitation),
+);
+
 const mfaChallengeRouter = pipe(
   literal("auth"),
   slash(literal("mfa")),
@@ -78,6 +95,7 @@ export const urlToAuthRoute = Route.parseUrlWithFallback(
     signUpRouter,
     signUpRejectedRouter,
     signUpCompanyRouter,
+    acceptInvitationRouter,
     mfaChallengeRouter,
     errorRouter,
   ),

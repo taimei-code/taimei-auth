@@ -10,7 +10,7 @@ export const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]
 
 export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
-  ["invitation", new Set(["auth/auth-client.ts"])],
+  ["invitation", new Set(["auth/sign-in-client.ts"])],
   ["mfa", new Set(["auth/auth-page-card-view.ts"])],
   [
     "account",
@@ -65,8 +65,7 @@ export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "company/pages/Companies.tsx",
       "company/pages/CompanySettings.tsx",
       "company/pages/SignUpCompany.ts",
-      "invitation/accept-invitation.ts",
-      "invitation/pages/SignUpAcceptInvitation.tsx",
+      "invitation/pages/AcceptInvitation.ts",
       "invitation/redirect-target.ts",
       "membership/pages/Members.tsx",
       "mfa/mfa-atom.ts",

@@ -1,5 +1,7 @@
 export const SIGN_IN_LANDING_PATH = "/auth?service_name=accounts";
 
+export const ACCOUNT_HOME_PATH = "/account";
+
 const documentsBeingLeft = new WeakSet<Location>();
 
 export const leaveSpaTo = (url: string) => {
@@ -21,19 +23,20 @@ const accountsServiceUrl = (path: AccountsServicePath, returnToHref: string) =>
   accountsServiceUrlFrom(window.location.origin, path, returnToHref);
 
 export const accountSignInUrlFrom = (origin: string) =>
-  accountsServiceUrlFrom(origin, "/auth", "/account");
+  accountsServiceUrlFrom(origin, "/auth", ACCOUNT_HOME_PATH);
 
 export const signInUrlAfterSignOut = () => accountSignInUrlFrom(window.location.origin);
 
 export const leaveSpaAfterAccountDeleted = () => leaveSpaTo(signInUrlAfterSignOut());
 
-export const signInUrlReturningTo = (returnToHref: string) =>
-  accountsServiceUrl("/auth/", returnToHref);
+const signInUrlReturningTo = (returnToHref: string) => accountsServiceUrl("/auth/", returnToHref);
 
 export const companySignupUrlReturningTo = (returnToHref: string) =>
   accountsServiceUrl("/auth/signup/company", returnToHref);
 
-export const leaveSpaToSignIn = () => {
+const currentHref = () => {
   const { pathname, search, hash } = window.location;
-  leaveSpaTo(signInUrlReturningTo(`${pathname}${search}${hash}`));
+  return `${pathname}${search}${hash}`;
 };
+
+export const leaveSpaToSignIn = () => leaveSpaTo(signInUrlReturningTo(currentHref()));

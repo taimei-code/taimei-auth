@@ -7,11 +7,7 @@ import {
 import type { AtomRegistry } from "effect/reactivity";
 import type { ReactNode } from "react";
 
-import {
-  ACCEPT_INVITATION_ROUTE,
-  acceptInvitationSearchSchema,
-  redirectTargetSearchSchema,
-} from "@core/invitation/accept-path";
+import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
 
 import { companyStateAtom } from "../account/account-atom";
 import { accountEntryOf } from "../account/account-entry";
@@ -23,8 +19,6 @@ import { Sessions } from "../account/pages/Sessions";
 import { ErrorPage } from "../auth/pages/Error";
 import { Companies } from "../company/pages/Companies";
 import { CompanySettings } from "../company/pages/CompanySettings";
-import { acceptInvitation } from "../invitation/accept-invitation";
-import { SignUpAcceptInvitation } from "../invitation/pages/SignUpAcceptInvitation";
 import { Members } from "../membership/pages/Members";
 import { readResult } from "../shared/atom-runtime";
 import { FullScreenLoader } from "../shared/FullScreenLoader";
@@ -35,27 +29,6 @@ import { parseSearch, stringifySearch } from "./search-params";
 const rootRoute = createRootRouteWithContext<{ registry: AtomRegistry.AtomRegistry }>()({
   component: Outlet,
   notFoundComponent: () => <ErrorPage />,
-});
-
-const authRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: "/auth",
-  component: Outlet,
-});
-
-const acceptInvitationRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: ACCEPT_INVITATION_ROUTE,
-  validateSearch: acceptInvitationSearchSchema,
-  loaderDeps: ({ search }) => acceptInvitationSearchSchema.parse(search),
-  loader: async ({ context, deps, location }) => {
-    const entry = await acceptInvitation(context.registry, deps);
-    if (entry.kind !== "failed") {
-      throw redirectFor(entry, location.href);
-    }
-    return { message: entry.message };
-  },
-  component: SignUpAcceptInvitation,
 });
 
 const accountRoute = createRoute({
@@ -89,7 +62,6 @@ const membersRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  authRoute.addChildren([acceptInvitationRoute]),
   accountRoute.addChildren([
     accountPageRoute("/", Profile),
     accountPageRoute("/companies", Companies),
