@@ -6,11 +6,11 @@
 
 ## Decision
 
-`web/src/auth/CanaryTokens.tsx` で次の 3 経路を埋め込む。`VITE_CANARY_TOKEN_ID` env が未設定なら何も埋め込まない (開発環境のノイズを減らすため)。
+**共通ログイン画面** と **共通サインアップ画面** の page (`web/src/auth/pages/SignInOrSignUp.ts`) が、`web/src/auth/canary-tokens.ts` を使って次の 3 経路を埋め込む。`VITE_CANARY_TOKEN_ID` env が未設定か空なら何も埋め込まない (開発環境のノイズを減らすため)。
 
 1. **不可視リンク** (`<a aria-hidden tabIndex={-1} className="-left-[9999px] -top-[9999px]">`): DOM scraping bot が `<a href>` を辿る挙動を検出する
 2. **hidden input** (`<input type="hidden" name="canary_token">`): form 自動送信ボットが name の一致で値を拾う挙動を検出する
-3. **favicon URL** (`useEffect` で `<link rel="icon">` を動的に注入する): favicon prefetch の自動化を検出する
+3. **favicon URL** (page に入った時の Command で `<link rel="icon">` を `<head>` に足す): favicon prefetch の自動化を検出する
 
 埋め込む URL は `/auth/canary-token/:tokenId` (favicon は `/auth/canary-token/:tokenId.ico`) である。**auth ホスト** 側の `src/handlers/canary-token.ts` で受け、`Sentry.captureMessage("Canary token triggered", { level: "warning", tags: { token_id, embed_type } })` で通報した後、**204 No Content** を返す。
 

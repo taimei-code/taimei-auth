@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Exit, Layer } from "effect";
+import { Effect, Exit, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { AtomHttpApi, AtomRegistry } from "effect/reactivity";
 
@@ -7,10 +7,10 @@ import { SpaApi } from "@core/spa-contract";
 
 import { runMutation } from "../../shared/atom-runtime";
 import { leaveForSignInOnUnauthorized } from "../../shared/spa-api-client";
-import { MFA_FAILURE_MESSAGES, mfaFailureMessage } from "../mfa-atom";
-import { verificationOf } from "../use-mfa-challenge-flow";
-
-const GENERIC_MESSAGE = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
+import { SpaHttpClient } from "../../shared/spa-http-client";
+import { mfaFailureMessage } from "../mfa-atom";
+import { MFA_FAILURE_MESSAGES } from "../mfa-failure-messages";
+import { Message, VerifyCode } from "../pages/MfaChallenge";
 
 let reply: () => Response = () => new Response(null, { status: 500 });
 
@@ -36,41 +36,56 @@ class ReplyingSpaApiClient extends AtomHttpApi.Service<ReplyingSpaApiClient>()(
   },
 ) {}
 
-const verifyAtom = ReplyingSpaApiClient.mutation("mfaChallenge", "verify");
 const disableAtom = ReplyingSpaApiClient.mutation("mfa", "disable");
 const enrollAtom = ReplyingSpaApiClient.mutation("mfa", "enroll");
 
+const VISIT = 1;
+
 const verify = () =>
-  runMutation(AtomRegistry.make(), verifyAtom, { payload: { code: "123456", kind: "totp" } });
+  Effect.runPromise(
+    VerifyCode({ visit: VISIT, code: "123456", kind: "totp" }).effect.pipe(
+      Effect.provide(
+        SpaHttpClient.layer("http://localhost").pipe(
+          Layer.provide(Layer.succeed(FetchHttpClient.Fetch, replyingFetch)),
+        ),
+      ),
+    ),
+  );
 
 describe("MFA の API の応答の status と body から、画面に出す結果を選ぶ", () => {
-  test("verify が 401 の ChallengeExpired を返すと、入力を閉じる expired になる", async () => {
+  test("MFA チャレンジの確かめが 401 の ChallengeExpired を返すと、期限切れの失敗になる", async () => {
     answerWith(401, { _tag: "ChallengeExpired" });
-    expect(verificationOf(await verify())).toEqual({ kind: "expired" });
+    expect(await verify()).toEqual(
+      Message.FailedVerifyCode({ visit: VISIT, failure: "ChallengeExpired" }),
+    );
   });
 
-  test("verify が空の redirect_url を返すと、遷移せずに既定の文言の rejected になる", async () => {
+  test("MFA チャレンジの確かめが空の redirect_url を返すと、遷移せずに想定外の失敗になる", async () => {
     answerWith(200, { redirect_url: "" });
-    expect(verificationOf(await verify())).toEqual({
-      kind: "rejected",
-      errorMessage: GENERIC_MESSAGE,
-    });
+    expect(await verify()).toEqual(
+      Message.FailedVerifyCode({ visit: VISIT, failure: "Unexpected" }),
+    );
   });
 
-  test("verify が本文の無い 400 を返すと、既定の文言の rejected になる", async () => {
+  test("MFA チャレンジの確かめが本文の無い 400 を返すと、想定外の失敗になる", async () => {
     answerWith(400);
-    expect(verificationOf(await verify())).toEqual({
-      kind: "rejected",
-      errorMessage: GENERIC_MESSAGE,
-    });
+    expect(await verify()).toEqual(
+      Message.FailedVerifyCode({ visit: VISIT, failure: "Unexpected" }),
+    );
   });
 
-  test("verify が試行枠の 429 (RateLimited) を返すと、回数の上限の文言の rejected になる", async () => {
+  test("MFA チャレンジの確かめが試行枠の 429 (RateLimited) を返すと、回数の上限の失敗になる", async () => {
     answerWith(429, { _tag: "RateLimited" });
-    expect(verificationOf(await verify())).toEqual({
-      kind: "rejected",
-      errorMessage: MFA_FAILURE_MESSAGES.RateLimited,
-    });
+    expect(await verify()).toEqual(
+      Message.FailedVerifyCode({ visit: VISIT, failure: "RateLimited" }),
+    );
+  });
+
+  test("MFA チャレンジの確かめが redirect_url を返すと、その戻り先の成功になる", async () => {
+    answerWith(200, { redirect_url: "https://app.example.com/" });
+    expect(await verify()).toEqual(
+      Message.SucceededVerifyCode({ visit: VISIT, redirectUrl: "https://app.example.com/" }),
+    );
   });
 
   test("無効化が試行枠の 429 (RateLimited) を返すと、回数の上限の文言を出す", async () => {

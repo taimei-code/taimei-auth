@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MFA_FAILURE_MESSAGES, type MfaCodeKind } from "../mfa-atom";
-import { normalizeMfaCode, useMfaCodeInput, type MfaCodeInput } from "../use-mfa-code-entry";
+import type { MfaCodeKind } from "../mfa-atom";
+import { normalizeMfaCode } from "../mfa-code";
+import { MFA_FAILURE_MESSAGES } from "../mfa-failure-messages";
+import { useMfaCodeInput, type MfaCodeInput } from "../use-mfa-code-entry";
 
 type NormalizeCase = { name: string; raw: string; kind: MfaCodeKind; normalized: string };
 

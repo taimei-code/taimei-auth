@@ -3,7 +3,6 @@ import {
   createRoute,
   createRouter,
   Outlet,
-  redirect,
 } from "@tanstack/react-router";
 import type { AtomRegistry } from "effect/reactivity";
 import type { ReactNode } from "react";
@@ -13,7 +12,7 @@ import {
   acceptInvitationSearchSchema,
   redirectTargetSearchSchema,
 } from "@core/invitation/accept-path";
-import { INVALID_REDIRECT_URL_PAGE, signInParamsSchema } from "@core/sign-in-params";
+import { signInParamsSchema } from "@core/sign-in-params";
 
 import { companyStateAtom } from "../account/account-atom";
 import { accountEntryOf } from "../account/account-entry";
@@ -23,8 +22,6 @@ import { Profile } from "../account/pages/Profile";
 import { Security } from "../account/pages/Security";
 import { Sessions } from "../account/pages/Sessions";
 import { ErrorPage } from "../auth/pages/Error";
-import { SignIn } from "../auth/pages/SignIn";
-import { SignUp } from "../auth/pages/SignUp";
 import { readCompanySignupEntry } from "../company/company-signup-entry";
 import { Companies } from "../company/pages/Companies";
 import { CompanySettings } from "../company/pages/CompanySettings";
@@ -32,9 +29,6 @@ import { SignUpCompany } from "../company/pages/SignUpCompany";
 import { acceptInvitation } from "../invitation/accept-invitation";
 import { SignUpAcceptInvitation } from "../invitation/pages/SignUpAcceptInvitation";
 import { Members } from "../membership/pages/Members";
-import { mfaChallengeObservationOf, mfaChallengeStateAtom } from "../mfa/mfa-atom";
-import { MfaChallengeLoading } from "../mfa/MfaChallengeView";
-import { MfaChallenge } from "../mfa/pages/MfaChallenge";
 import { readResult } from "../shared/atom-runtime";
 import { FullScreenLoader } from "../shared/FullScreenLoader";
 import { AccountLayout } from "./AccountLayout";
@@ -50,26 +44,6 @@ const authRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/auth",
   component: Outlet,
-});
-
-const toInvalidRedirectError = () => {
-  throw redirect({ href: INVALID_REDIRECT_URL_PAGE, reloadDocument: true, replace: true });
-};
-
-const signInRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: "/",
-  validateSearch: signInParamsSchema,
-  onError: toInvalidRedirectError,
-  component: SignIn,
-});
-
-const signUpRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: "/signup",
-  validateSearch: signInParamsSchema,
-  onError: toInvalidRedirectError,
-  component: SignUp,
 });
 
 const companySignupRoute = createRoute({
@@ -107,17 +81,6 @@ const acceptInvitationRoute = createRoute({
   component: SignUpAcceptInvitation,
 });
 
-const mfaChallengeRoute = createRoute({
-  getParentRoute: () => authRoute,
-  path: "/mfa",
-  loader: async ({ context, abortController }) =>
-    mfaChallengeObservationOf(
-      await readResult(context.registry, mfaChallengeStateAtom, abortController.signal),
-    ),
-  pendingComponent: MfaChallengeLoading,
-  component: MfaChallenge,
-});
-
 const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/account",
@@ -149,13 +112,7 @@ const membersRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  authRoute.addChildren([
-    signInRoute,
-    signUpRoute,
-    companySignupRoute,
-    acceptInvitationRoute,
-    mfaChallengeRoute,
-  ]),
+  authRoute.addChildren([companySignupRoute, acceptInvitationRoute]),
   accountRoute.addChildren([
     accountPageRoute("/", Profile),
     accountPageRoute("/companies", Companies),

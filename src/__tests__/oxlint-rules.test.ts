@@ -425,6 +425,25 @@ const CASES: readonly Case[] = [
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
+    name: "Foldkit の画面の通信の client は、行ごとの許可を付ければ effect/http-api を import できる",
+    path: "web/src/shared/spa-http-client.ts",
+    source:
+      '// oxlint-disable-next-line no-restricted-imports -- 理由\nimport { HttpApiClient } from "effect/http-api"; export { HttpApiClient };',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の画面の通信の client も、web の import の禁止を失わない",
+    path: "web/src/shared/spa-http-client.ts",
+    source: 'import { toast } from "sonner"; export { toast };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "ほかの web の file は effect/http-api を import できない",
+    path: "web/src/mfa/http-api-client.ts",
+    source: 'import { HttpApiClient } from "effect/http-api"; export { HttpApiClient };',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
     name: "web は effect/crypto と effect/persistence を import できる",
     path: "web/src/shared/secure-random.ts",
     source:

@@ -1,4 +1,9 @@
-const FOLDKIT_AUTH_PATHS: ReadonlyArray<string> = ["/auth/error"];
+const FOLDKIT_AUTH_PATHS: ReadonlyArray<string> = [
+  "/auth",
+  "/auth/signup",
+  "/auth/mfa",
+  "/auth/error",
+];
 
 export type RuntimeForPath = "FoldkitAuth" | "React";
 

@@ -15,14 +15,13 @@ const stubOrigin = () => {
 };
 
 describe("入口の判定から redirect への写しは redirectFor の 1 つだけ", () => {
-  test("signIn は今の URL を戻り先にして /auth/ へ document ごと移る", () => {
+  test("signIn は今の URL を戻り先にして /auth/ へ document ごと移り、末尾の / を保つ (/auth に変わると server の session に応じた redirect を通らない)", () => {
     stubOrigin();
 
     const { options } = redirectFor({ kind: "signIn" }, "/account/members");
 
     expect(options).toMatchObject({
-      to: "/auth/",
-      search: { service_name: "accounts", redirect_url: `${ORIGIN}/account/members` },
+      href: `/auth/?service_name=accounts&redirect_url=${encodeURIComponent(`${ORIGIN}/account/members`)}`,
       reloadDocument: true,
       replace: true,
     });

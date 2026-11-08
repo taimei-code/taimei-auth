@@ -15,6 +15,10 @@ const runtimeImports = (path: string, source: string): string[] =>
 const mayUseHttpClient = (path: string) =>
   path.endsWith("-atom.ts") || path === "shared/spa-api-client.ts";
 
+const isFoldkitFile = (source: string) => /from\s+["']foldkit(\/[^"']*)?["']/.test(source);
+
+const isApplicationEntry = (path: string) => /^app\/[^/]+\/entry\.ts$/.test(path);
+
 const usesEffectHook = (source: string) => /\buse(Layout)?Effect\b/.test(source);
 
 const mayRunMutation = (path: string) =>
@@ -32,6 +36,13 @@ const RULES: readonly Rule[] = [
     violates: (path, _source, imports) =>
       imports.some((target) => target.endsWith("shared/spa-api-client")) &&
       !path.endsWith("-atom.ts"),
+  },
+  {
+    name: "SpaHttpClient",
+    violates: (path, source, imports) =>
+      imports.some((target) => target.endsWith("shared/spa-http-client")) &&
+      !isFoldkitFile(source) &&
+      !isApplicationEntry(path),
   },
   {
     name: "effect/http",
@@ -90,7 +101,7 @@ function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string
 }
 
 describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だけ (ADR-0017)", () => {
-  test("fetch は書かず、SpaApiClient と effect/http と better-auth の読み出しは *-atom.ts だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
+  test("fetch は書かず、SpaApiClient と effect/http と better-auth の読み出しは *-atom.ts だけが使い、Foldkit の SpaHttpClient は Foldkit の file と application の起動だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
     expect(analyzeWebDataAccess(readActualWebSources())).toEqual([]);
   });
 

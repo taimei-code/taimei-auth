@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Exit } from "effect";
+import { Cause } from "effect";
 import { HttpClientError, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { RateLimited, Unauthorized } from "@core/failures";
 import { InvalidCode, Locked } from "@core/mfa/errors";
 
-import { mfaChallengeObservationOf, mfaFailureMessage } from "../mfa-atom";
+import { mfaFailureMessage } from "../mfa-atom";
 
 const GENERIC = "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
@@ -44,21 +44,5 @@ describe("mfaFailureMessage", () => {
     ["通信の失敗", Cause.die(new Error("network"))],
   ] as const)("%s は既定の文言", (_name, cause) => {
     expect(mfaFailureMessage(cause)).toBe(GENERIC);
-  });
-});
-
-describe("mfaChallengeObservationOf", () => {
-  test("pending: true は present", () => {
-    expect(mfaChallengeObservationOf(Exit.succeed({ pending: true }))).toEqual({ kind: "present" });
-  });
-
-  test("pending: false は absent", () => {
-    expect(mfaChallengeObservationOf(Exit.succeed({ pending: false }))).toEqual({ kind: "absent" });
-  });
-
-  test("取得の失敗は absent と推測せず unavailable", () => {
-    expect(mfaChallengeObservationOf(Exit.die(new Error("network")))).toEqual({
-      kind: "unavailable",
-    });
   });
 });

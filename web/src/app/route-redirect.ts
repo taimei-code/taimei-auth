@@ -1,6 +1,6 @@
 import { redirect } from "@tanstack/react-router";
 
-import { searchReturningTo } from "../shared/leave-spa";
+import { searchReturningTo, signInUrlReturningTo } from "../shared/leave-spa";
 import type { RedirectingEntry } from "../shared/route-entry";
 
 const fullReload = { reloadDocument: true, replace: true } as const;
@@ -8,7 +8,7 @@ const fullReload = { reloadDocument: true, replace: true } as const;
 export const redirectFor = (entry: RedirectingEntry, href: string): ReturnType<typeof redirect> => {
   switch (entry.kind) {
     case "signIn":
-      return redirect({ to: "/auth/", search: searchReturningTo(href), ...fullReload });
+      return redirect({ href: signInUrlReturningTo(href), ...fullReload });
     case "goToRedirectUrl":
       return redirect({ href: entry.redirectUrl, ...fullReload });
     case "companySignup":
