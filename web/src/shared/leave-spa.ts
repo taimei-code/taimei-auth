@@ -1,10 +1,5 @@
 export const SIGN_IN_LANDING_PATH = "/auth?service_name=accounts";
 
-export const searchReturningTo = (href: string) => ({
-  service_name: "accounts" as const,
-  redirect_url: `${window.location.origin}${href}`,
-});
-
 const documentsBeingLeft = new WeakSet<Location>();
 
 export const leaveSpaTo = (url: string) => {
@@ -17,21 +12,26 @@ export const leaveSpaTo = (url: string) => {
 
 export const loadDocument = (href: string) => window.location.assign(href);
 
-type SignInPath = "/auth/" | "/auth";
+type AccountsServicePath = "/auth/" | "/auth" | "/auth/signup/company";
 
-const signInUrlFrom = (origin: string, path: SignInPath, returnToHref: string) =>
+const accountsServiceUrlFrom = (origin: string, path: AccountsServicePath, returnToHref: string) =>
   `${path}?service_name=accounts&redirect_url=${encodeURIComponent(`${origin}${returnToHref}`)}`;
 
-const signInUrl = (path: SignInPath, returnToHref: string) =>
-  signInUrlFrom(window.location.origin, path, returnToHref);
+const accountsServiceUrl = (path: AccountsServicePath, returnToHref: string) =>
+  accountsServiceUrlFrom(window.location.origin, path, returnToHref);
 
-export const accountSignInUrlFrom = (origin: string) => signInUrlFrom(origin, "/auth", "/account");
+export const accountSignInUrlFrom = (origin: string) =>
+  accountsServiceUrlFrom(origin, "/auth", "/account");
 
 export const signInUrlAfterSignOut = () => accountSignInUrlFrom(window.location.origin);
 
 export const leaveSpaAfterAccountDeleted = () => leaveSpaTo(signInUrlAfterSignOut());
 
-export const signInUrlReturningTo = (returnToHref: string) => signInUrl("/auth/", returnToHref);
+export const signInUrlReturningTo = (returnToHref: string) =>
+  accountsServiceUrl("/auth/", returnToHref);
+
+export const companySignupUrlReturningTo = (returnToHref: string) =>
+  accountsServiceUrl("/auth/signup/company", returnToHref);
 
 export const leaveSpaToSignIn = () => {
   const { pathname, search, hash } = window.location;

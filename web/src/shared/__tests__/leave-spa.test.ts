@@ -3,10 +3,10 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { signInParamsSchema } from "@core/sign-in-params";
 
 import {
+  companySignupUrlReturningTo,
   leaveSpaAfterAccountDeleted,
   leaveSpaTo,
   leaveSpaToSignIn,
-  searchReturningTo,
   signInUrlAfterSignOut,
 } from "../leave-spa";
 
@@ -92,14 +92,17 @@ describe("signInUrlAfterSignOut", () => {
   });
 });
 
-describe("searchReturningTo", () => {
-  test("受諾画面の search はログイン後の redirect_url にそのまま残る", () => {
+describe("companySignupUrlReturningTo", () => {
+  test("事業所の登録へ移り、今の URL の search は登録の後の redirect_url にそのまま残る", () => {
     stubWindow({ pathname: "/" });
     const href =
       "/auth/signup/accept-invitation?invitation_token=tok&service_name=taimei&redirect_url=https%3A%2F%2Fapp.taimei-code.com%2Fdashboard";
 
-    const returnTo = new URL(searchReturningTo(href).redirect_url);
+    const target = new URL(companySignupUrlReturningTo(href), ORIGIN);
+    const returnTo = new URL(target.searchParams.get("redirect_url") ?? "");
 
+    expect(target.pathname).toBe("/auth/signup/company");
+    expect(target.searchParams.get("service_name")).toBe("accounts");
     expect(returnTo.origin).toBe(ORIGIN);
     expect(returnTo.pathname).toBe("/auth/signup/accept-invitation");
     expect(Object.fromEntries(returnTo.searchParams)).toEqual({
