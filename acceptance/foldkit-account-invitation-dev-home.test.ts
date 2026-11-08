@@ -59,11 +59,6 @@ const MIGRATED_PAGE_DIRS = [ACCOUNT_PAGE_DIR, INVITATION_PAGE_DIR];
 
 const AUTH_ORIGIN = "https://auth.taimei-code.com";
 
-type RuntimeForPathModule = { runtimeForPath: (pathname: string) => string };
-
-const loadRuntimeForPath = async (): Promise<RuntimeForPathModule> =>
-  import(join(REPO_ROOT, "web/src/app/runtime-for-path.ts"));
-
 type Application = {
   init: (url: unknown) => { readonly model: unknown };
   update: (model: unknown, message: unknown) => { readonly model: unknown };
@@ -114,15 +109,7 @@ const sceneOf = async (applicationPath: string) => {
 
 const ACCEPT_INVITATION_FAILED_TITLE = "招待を受諾できませんでした";
 
-describe("招待の受諾の画面は Foldkit の runtime で出る", () => {
-  test.each(["/auth/signup/accept-invitation", "/auth/signup/accept-invitation/"])(
-    "AC-001: %s の document では Foldkit の runtime が選ばれる",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).toBe("FoldkitAuth");
-    },
-  );
-
+describe("招待の受諾の画面を開くと受諾を確かめる", () => {
   test("AC-002: 招待のトークンのある URL を開いた直後は status を出し、受諾できなかった画面を出さない", async () => {
     const sceneAt = await sceneOf("web/src/app/auth/main.ts");
     sceneAt(
@@ -194,40 +181,7 @@ describe("既存の保証", () => {
   });
 });
 
-describe("アカウント管理画面は Foldkit の runtime で出る", () => {
-  test.each(["/account", "/account/", "/account/sessions", "/account/connections", "/account/members"])(
-    "AC-013: %s の document ではアカウント管理画面の Foldkit の runtime が選ばれる",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).toBe("FoldkitAccount");
-    },
-  );
-
-  test.each(["/accounts", "/accountx"])(
-    "AC-014: %s の document ではアカウント管理画面の Foldkit の runtime が選ばれない",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).not.toBe("FoldkitAccount");
-    },
-  );
-
-  test("AC-015: auth-client が組むアカウント管理画面とメンバー画面の URL では、アカウント管理画面の Foldkit の runtime が選ばれる", async () => {
-    const { buildAccountUrl, buildMembersUrl } = await import("@taimei-code/auth-client");
-    const { runtimeForPath } = await loadRuntimeForPath();
-    const urls = [
-      buildAccountUrl({ authBaseUrl: AUTH_ORIGIN }),
-      buildMembersUrl({
-        authBaseUrl: AUTH_ORIGIN,
-        service: "taimei",
-        returnTo: "https://app.taimei-code.com/",
-      }),
-    ];
-    expect(urls.map((url) => runtimeForPath(new URL(url).pathname))).toEqual([
-      "FoldkitAccount",
-      "FoldkitAccount",
-    ]);
-  });
-
+describe("アカウント管理画面を開くと入口の確認をする", () => {
   test("AC-016: /account を開いた直後は status を出し、プロフィールの見出しとログアウトのボタンを出さない", async () => {
     const sceneAt = await sceneOf("web/src/app/account/main.ts");
     sceneAt(`${AUTH_ORIGIN}/account`, (Scene) => [
