@@ -574,12 +574,7 @@
       "files": ["web/src/**", "web/non-production/**"],
       "rules": {
         "curly": ["error", "all"]
-      },
-      "excludeFiles": [
-        "web/src/mfa/MfaDisableDialog.tsx",
-        "web/src/mfa/MfaEnrollDialog.tsx",
-        "web/src/mfa/use-mfa-code-entry.ts"
-      ]
+      }
     },
     {
       "files": ["web/src/shared/atom-runtime.ts"],

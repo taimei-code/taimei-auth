@@ -51,9 +51,9 @@ describe("web tooling aliases", () => {
 describe("analyzeWebStructure fixtures", () => {
   test("allowlist 済みの domain import を受理する", async () => {
     const result = await analyzeWebStructure({
-      "web/src/account/pages/Security.tsx":
-        'import { MfaSettingsItem } from "../../mfa/MfaSettingsItem";',
-      "web/src/mfa/MfaSettingsItem.tsx": "export const MfaSettingsItem = () => null;",
+      "web/src/account/pages/Security.ts":
+        'import * as MfaEnrollment from "../../mfa/mfa-enrollment";',
+      "web/src/mfa/mfa-enrollment.ts": "export const view = () => null;",
     });
 
     expect(result.violations).toEqual([]);

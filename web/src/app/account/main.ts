@@ -21,6 +21,7 @@ import {
 import * as CurrentCompany from "../../account/current-company";
 import * as Connections from "../../account/pages/Connections";
 import * as Profile from "../../account/pages/Profile";
+import * as Security from "../../account/pages/Security";
 import * as Sessions from "../../account/pages/Sessions";
 import * as AuthError from "../../auth/pages/AuthError";
 import * as Companies from "../../company/pages/Companies";
@@ -55,6 +56,7 @@ const AccountPage = defineTaggedUnion({
   Profile: { model: Profile.Model },
   Companies: { model: Companies.Model },
   CompanySettings: { model: CompanySettings.Model },
+  Security: { model: Security.Model },
   Sessions: { model: Sessions.Model },
   Connections: { model: Connections.Model },
 });
@@ -92,6 +94,7 @@ export const Message = defineMessageUnion({
   GotProfileMessage: { message: Profile.Message },
   GotCompaniesMessage: { message: Companies.Message },
   GotCompanySettingsMessage: { message: CompanySettings.Message },
+  GotSecurityMessage: { message: Security.Message },
   GotSessionsMessage: { message: Sessions.Message },
   GotConnectionsMessage: { message: Connections.Message },
   GotToastMessage: { message: NoticeToast.Message },
@@ -150,6 +153,7 @@ const toProfileMessage = (message: Profile.Message) => Message.GotProfileMessage
 const toCompaniesMessage = (message: Companies.Message) => Message.GotCompaniesMessage({ message });
 const toCompanySettingsMessage = (message: CompanySettings.Message) =>
   Message.GotCompanySettingsMessage({ message });
+const toSecurityMessage = (message: Security.Message) => Message.GotSecurityMessage({ message });
 const toSessionsMessage = (message: Sessions.Message) => Message.GotSessionsMessage({ message });
 const toConnectionsMessage = (message: Connections.Message) =>
   Message.GotConnectionsMessage({ message });
@@ -198,6 +202,13 @@ const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateRe
           }),
         ),
       }),
+      Security: () => {
+        const securityInit = Security.init(visit);
+        return {
+          model: withPage(entered, AccountPage.Security({ model: securityInit.model })),
+          commands: Command.mapMessages(securityInit.commands, toSecurityMessage),
+        };
+      },
       Sessions: () => {
         const sessionsInit = Sessions.init(visit);
         return {
@@ -371,6 +382,19 @@ const foldCompanySettings = Update.foldChild({
   }),
 });
 
+const foldSecurity = Update.foldChild({
+  update: Security.update,
+  read: (model: Model) =>
+    Option.map(Option.filter(model.maybePage, AccountPage.guards.Security), ({ model }) => model),
+  write: (model: Model, nextSecurity: Security.Model) =>
+    withPage(model, AccountPage.Security({ model: nextSecurity })),
+  toParentMessage: toSecurityMessage,
+  foldOutMessage: Security.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+  }),
+});
+
 const foldSessions = Update.foldChild({
   update: Sessions.update,
   read: (model: Model) =>
@@ -446,6 +470,7 @@ export const update = (model: Model, message: Message) =>
     GotCompaniesMessage: ({ message: pageMessage }) => foldCompanies(model, pageMessage),
     GotCompanySettingsMessage: ({ message: pageMessage }) =>
       foldCompanySettings(model, pageMessage),
+    GotSecurityMessage: ({ message: pageMessage }) => foldSecurity(model, pageMessage),
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),
     GotConnectionsMessage: ({ message: pageMessage }) => foldConnections(model, pageMessage),
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
@@ -528,6 +553,13 @@ const pageView = (
             model: pageModel,
             viewInputs: { currentCompany },
             toParentMessage: toCompanySettingsMessage,
+          }),
+        Security: ({ model: pageModel }) =>
+          h.submodel({
+            slotId: "security",
+            view: Security.view,
+            model: pageModel,
+            toParentMessage: toSecurityMessage,
           }),
         Sessions: ({ model: pageModel }) =>
           h.submodel({

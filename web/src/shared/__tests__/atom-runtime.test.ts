@@ -2,40 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { Cause, Effect, Exit, Layer, Option } from "effect";
 import { AsyncResult, Atom, AtomRegistry, Reactivity } from "effect/reactivity";
 
-import {
-  failedBeforeAnyValue,
-  readResult,
-  refreshAndWait,
-  runMutation,
-  waitForValue,
-} from "../atom-runtime";
-
-describe("refreshAndWait (MFA の有効化の後だけが使う。取り直すと有効化済みの表示に替わってリカバリーコードの dialog が外れるので、コードを閉じるまで取り直しを遅らせる)", () => {
-  test("mount 済みの atom を取得し直し、新しい値で resolve する", async () => {
-    let fetches = 0;
-    const counter = Atom.make(Effect.sync(() => ++fetches));
-    const registry = AtomRegistry.make();
-    const unmount = registry.mount(counter);
-
-    expect(await refreshAndWait(registry, counter)).toBe(2);
-    expect(fetches).toBe(2);
-    unmount();
-  });
-
-  test("取得し直しが失敗したら reject する", async () => {
-    let fetches = 0;
-    const failsOnRefresh = Atom.make(
-      Effect.suspend(() =>
-        ++fetches === 1 ? Effect.succeed(fetches) : Effect.fail("unavailable"),
-      ),
-    );
-    const registry = AtomRegistry.make();
-    const unmount = registry.mount(failsOnRefresh);
-
-    await expect(refreshAndWait(registry, failsOnRefresh)).rejects.toBe("unavailable");
-    unmount();
-  });
-});
+import { failedBeforeAnyValue, readResult, runMutation, waitForValue } from "../atom-runtime";
 
 describe("waitForValue (reactivityKeys を付けた更新の後の取り直しを待つ)", () => {
   test("更新が返った直後に待つと、更新の前の値ではなく取り直した値で resolve する", async () => {
