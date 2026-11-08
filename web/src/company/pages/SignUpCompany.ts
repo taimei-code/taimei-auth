@@ -6,7 +6,6 @@ import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 
 import { OrgCodeSchema } from "@core/company/company-contract";
-import { orgCodeLabelJa } from "@core/company/org-code";
 
 import { authPageCardView } from "../../auth/auth-page-card-view";
 import { checkSession } from "../../auth/sign-in-client";
@@ -18,6 +17,7 @@ import { buttonView } from "../../shared/ui/button-view";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";
 import { inputView } from "../../shared/ui/input-view";
 import { radioFieldsetView } from "../../shared/ui/radio-fieldset-view";
+import { orgCodeOptionsIn } from "../org-code-options";
 
 const LoadMembershipsFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
 
@@ -67,10 +67,7 @@ export type OutMessage = typeof OutMessage.Type;
 
 const CREATE_FAILED_MESSAGE = "事業所登録に失敗しました";
 
-const ORG_CODE_OPTIONS = OrgCodeSchema.literals.map((orgCode) => ({
-  value: orgCode,
-  label: orgCodeLabelJa(orgCode),
-}));
+const ORG_CODE_OPTIONS = orgCodeOptionsIn(OrgCodeSchema.literals);
 
 export const CheckSession = Command.define("CheckSession", {
   args: { visit: Schema.Int },

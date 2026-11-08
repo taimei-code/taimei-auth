@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 
 import { canInviteRole, isAtLeast, type Role } from "@core/membership/policy";
 
-import { useCurrentCompany } from "../../account/current-company";
+import { useCurrentCompany } from "../../account/current-company-context";
 import { InviteMemberForm } from "../../invitation/InviteMemberForm";
 import { PendingInvitations } from "../../invitation/PendingInvitations";
 import { Separator } from "../../shared/ui/separator";

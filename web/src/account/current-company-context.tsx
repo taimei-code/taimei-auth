@@ -1,17 +1,13 @@
 import { useAtomValue } from "@effect/atom-react";
-import { Exit } from "effect";
 import { AsyncResult } from "effect/reactivity";
 import { createContext, use, useMemo, type ReactNode } from "react";
 
 import type { CompanyState } from "@core/account/account-contract";
 import type { Unauthorized } from "@core/failures";
 
-import { useWaitForValue } from "../shared/atom-runtime";
-import { failureMessage } from "../shared/failure-message";
-import { notifyAfterRefresh, notifyError } from "../shared/notify";
-import { companyStateAtom, useSwitchCompanyRequest } from "./account-atom";
+import { companyStateAtom } from "./account-atom";
 
-export type Membership = CompanyState["memberships"][number];
+type Membership = CompanyState["memberships"][number];
 
 type CompanyStateView = {
   loading: boolean;
@@ -51,23 +47,4 @@ export const useCurrentCompany = (): CompanyStateView => {
     throw new Error("useCurrentCompany must be used within CurrentCompanyProvider");
   }
   return context;
-};
-
-const SWITCH_FAILED = "事業所を切り替えられませんでした。";
-
-export const useSwitchCompany = () => {
-  const { request, pending } = useSwitchCompanyRequest();
-  const waitForCompanyState = useWaitForValue(companyStateAtom);
-  const switchCompany = (companyId: string): Promise<void> =>
-    pending
-      ? Promise.resolve()
-      : request(companyId).then(
-          Exit.match({
-            onSuccess: () =>
-              notifyAfterRefresh(waitForCompanyState, { staleShort: "事業所を切り替えました" }),
-            onFailure: (cause) =>
-              notifyError(failureMessage(cause, { Forbidden: SWITCH_FAILED }, SWITCH_FAILED)),
-          }),
-        );
-  return { switchCompany, switchPending: pending };
 };

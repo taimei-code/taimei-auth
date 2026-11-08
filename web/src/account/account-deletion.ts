@@ -11,8 +11,14 @@ import { leaveSpaAfterAccountDeleted } from "../shared/leave-spa";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
-import { dialogClassNames } from "../shared/ui/class-names";
-import { Dialog, type DialogMessage, type DialogModel, dialogView } from "../shared/ui/dialog-view";
+import {
+  Dialog,
+  type DialogMessage,
+  type DialogModel,
+  dialogFoldsOf,
+  dialogFooterView,
+  dialogView,
+} from "../shared/ui/dialog-view";
 
 const DeleteAccountFailure = Schema.Literals([
   "LastOwner",
@@ -91,24 +97,12 @@ const isDeleting = (model: Model) => Submission.guards.Submitting(model.deletion
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const foldDialogOutMessage = Dialog.OutMessage.match<Update.Step<Model, Message>>({
-  Opened: () => (model) => ({ model }),
-  Closed: () => (model) => ({ model }),
-});
-
-const dialogChild = {
-  read: (model: Model) => Option.some(model.dialog),
+const dialogFolds = dialogFoldsOf({
+  isClosingBlocked: isDeleting,
+  toParentMessage: toDialogMessage,
   write: (model: Model, nextDialog: DialogModel) =>
     modifyFields(model, { dialog: () => nextDialog }),
-  toParentMessage: toDialogMessage,
-  foldOutMessage: foldDialogOutMessage,
-};
-
-const foldDialog = Update.foldChild({ ...dialogChild, update: Dialog.update });
-
-const foldDialogOpen = Update.foldChildStep({ ...dialogChild, update: Dialog.open });
-
-const foldDialogClose = Update.foldChildStep({ ...dialogChild, update: Dialog.close });
+});
 
 const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): UpdateReturn =>
   visit === model.visit && isDeleting(model) ? next() : { model };
@@ -116,7 +110,7 @@ const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): Up
 const failDeletion = (model: Model, failure: DeleteAccountFailure): UpdateReturn =>
   failure === "Unauthorized"
     ? { model, outMessage: OutMessage.RequiredSignIn() }
-    : foldDialogClose(
+    : dialogFolds.close(
         modifyFields(model, {
           deletion: () => Submission.Rejected({ message: FAILURE_MESSAGES[failure] }),
         }),
@@ -124,8 +118,8 @@ const failDeletion = (model: Model, failure: DeleteAccountFailure): UpdateReturn
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    ClickedDeleteAccount: () => (isDeleting(model) ? { model } : foldDialogOpen(model)),
-    ClickedCancelDeletion: () => (isDeleting(model) ? { model } : foldDialogClose(model)),
+    ClickedDeleteAccount: () => (isDeleting(model) ? { model } : dialogFolds.open(model)),
+    ClickedCancelDeletion: () => (isDeleting(model) ? { model } : dialogFolds.close(model)),
     ClickedConfirmDeletion: () =>
       isDeleting(model)
         ? { model }
@@ -133,18 +127,14 @@ export const update = (model: Model, message: Message) =>
             model: modifyFields(model, { deletion: () => Submission.Submitting() }),
             commands: [DeleteAccount({ visit: model.visit })],
           },
-    GotDialogMessage: ({ message: dialogMessage }) =>
-      isDeleting(model) && dialogMessage._tag === "RequestedClose"
-        ? { model }
-        : foldDialog(model, dialogMessage),
+    GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
     SucceededDeleteAccount: () => ({ model }),
     FailedDeleteAccount: ({ visit, failure }) =>
       forThisVisit(model, visit, () => failDeletion(model, failure)),
   });
 
-const dialogFooterView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.div(
-    [h.Class(dialogClassNames.footer)],
+const confirmFooterView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  dialogFooterView(
     [
       buttonView(
         {
@@ -169,6 +159,7 @@ const dialogFooterView = (model: Model, h: HtmlBuilder<Message>): Html =>
         h,
       ),
     ],
+    h,
   );
 
 export const view = Submodel.defineView<Model, Message>((model, h) =>
@@ -219,7 +210,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
             {
               title: "退会の確認",
               description: "本当にアカウントを削除しますか? この操作は取り消せません。",
-              body: [dialogFooterView(model, h)],
+              body: [confirmFooterView(model, h)],
               isClosingBlocked: isDeleting(model),
             },
             h,

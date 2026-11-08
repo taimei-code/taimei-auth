@@ -1,12 +1,17 @@
 import { describe, test } from "bun:test";
 import { Option } from "effect";
-import { expect, given, label, role, scene, text } from "foldkit/scene";
+import { expect, given, label, role, scene, text, withViewInputs } from "foldkit/scene";
 
 import { Submission } from "../../shared/submission";
+import * as CurrentCompany from "../current-company";
 import { init, type Model, update, view } from "../pages/Profile";
 
+const NO_COMPANY = CurrentCompany.init({ maybeCurrentCompanyId: Option.none(), memberships: [] });
+
+const profileView = withViewInputs(view, { currentCompany: NO_COMPANY });
+
 const present = (overrides: Partial<Model> = {}): Model => ({
-  ...init({ visit: 1, maybeCurrentCompany: Option.none() }).model,
+  ...init(1).model,
   profile: {
     _tag: "Present",
     loadedName: "山田",
@@ -22,7 +27,7 @@ const present = (overrides: Partial<Model> = {}): Model => ({
 describe("プロフィールの画面", () => {
   test("見出し、メールアドレス (変えられない)、名前、保存、写真、退会のボタンを出す", () => {
     scene(
-      { update, view },
+      { update, view: profileView() },
       given(present()),
       expect(role("heading", { name: "プロフィール" })).toExist(),
       expect(label("メールアドレス")).toBeDisabled(),
@@ -35,24 +40,31 @@ describe("プロフィールの画面", () => {
 
   test("現在の事業所があれば、名前と role を出す", () => {
     scene(
-      { update, view },
-      given(
-        present({
-          maybeCurrentCompany: Option.some({
-            companyName: "株式会社サンプル",
-            role: "OWNER",
-            orgCode: "CORPORATE",
+      {
+        update,
+        view: profileView({
+          currentCompany: CurrentCompany.init({
+            maybeCurrentCompanyId: Option.some("company-1"),
+            memberships: [
+              {
+                companyId: "company-1",
+                companyName: "株式会社サンプル",
+                role: "OWNER",
+                orgCode: "CORPORATE",
+              },
+            ],
           }),
         }),
-      ),
+      },
+      given(present()),
       expect(text("現在の事業所")).toExist(),
     );
   });
 
   test("session の user が無い間は、見出しを出さない", () => {
     scene(
-      { update, view },
-      given(init({ visit: 1, maybeCurrentCompany: Option.none() }).model),
+      { update, view: profileView() },
+      given(init(1).model),
       expect(role("heading", { name: "プロフィール" })).toBeAbsent(),
     );
   });
@@ -60,7 +72,7 @@ describe("プロフィールの画面", () => {
   test("退会が拒まれた時は、その文言を alert で出す", () => {
     const base = present();
     scene(
-      { update, view },
+      { update, view: profileView() },
       given({
         ...base,
         deletion: {

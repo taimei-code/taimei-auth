@@ -18,17 +18,25 @@ import {
   Users,
 } from "lucide";
 
+import * as CurrentCompany from "../../account/current-company";
 import * as Connections from "../../account/pages/Connections";
 import * as Profile from "../../account/pages/Profile";
 import * as Sessions from "../../account/pages/Sessions";
 import * as AuthError from "../../auth/pages/AuthError";
+import * as Companies from "../../company/pages/Companies";
+import * as CompanySettings from "../../company/pages/CompanySettings";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { leaveSpaToCompanySignup } from "../../shared/leave-spa";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
 import { fullScreenStatusView, iconView } from "../../shared/ui/icon-view";
-import { NoticeToast, noticeOf, noticeToastView } from "../../shared/ui/toast-view";
+import {
+  NoticeToast,
+  type NoticeTone,
+  noticeOf,
+  noticeToastView,
+} from "../../shared/ui/toast-view";
 import * as DocumentNavigation from "../document-navigation";
 import {
   AccountRoute,
@@ -45,6 +53,8 @@ import {
 
 const AccountPage = defineTaggedUnion({
   Profile: { model: Profile.Model },
+  Companies: { model: Companies.Model },
+  CompanySettings: { model: CompanySettings.Model },
   Sessions: { model: Sessions.Model },
   Connections: { model: Connections.Model },
 });
@@ -52,13 +62,12 @@ type AccountPage = typeof AccountPage.Type;
 
 const Entry = defineTaggedUnion({
   Checking: {},
-  Ready: { maybeCurrentCompany: Schema.Option(Profile.CurrentCompany) },
+  Ready: { currentCompany: CurrentCompany.Model },
 });
 type Entry = typeof Entry.Type;
 
 export const Model = Schema.Struct({
   route: AccountRoute,
-  origin: Schema.String,
   pageVisit: Schema.Int,
   entry: Entry,
   maybePage: Schema.Option(AccountPage),
@@ -73,16 +82,16 @@ export const Message = defineMessageUnion({
   GotDocumentNavigationMessage: { message: DocumentNavigation.Message },
   ClickedLink: { request: UrlRequest },
   ChangedUrl: { url: Url },
-  SucceededLoadCompanyState: {
-    isCompanyMember: Schema.Boolean,
-    maybeCurrentCompany: Schema.Option(Profile.CurrentCompany),
-  },
+  SucceededLoadCompanyState: { state: CurrentCompany.CompanyMemberships },
   FailedLoadCompanyState: { failure: LoadCompanyStateFailure },
   ClickedSignOut: {},
   SucceededSignOut: {},
   FailedSignOut: {},
   CompletedLeaveToCompanySignup: {},
+  GotCurrentCompanyMessage: { message: CurrentCompany.Message },
   GotProfileMessage: { message: Profile.Message },
+  GotCompaniesMessage: { message: Companies.Message },
+  GotCompanySettingsMessage: { message: CompanySettings.Message },
   GotSessionsMessage: { message: Sessions.Message },
   GotConnectionsMessage: { message: Connections.Message },
   GotToastMessage: { message: NoticeToast.Message },
@@ -90,6 +99,7 @@ export const Message = defineMessageUnion({
 export type Message = typeof Message.Type;
 
 type UpdateReturn = Update.Return<Model, Message, SpaHttpClient>;
+type Step = Update.Step<Model, Message, SpaHttpClient>;
 
 const navigate = (command: Command.Command<DocumentNavigation.Message>) =>
   Command.mapMessage(command, (message) => Message.GotDocumentNavigationMessage({ message }));
@@ -99,23 +109,8 @@ const failedLoadCompanyState = (failure: typeof LoadCompanyStateFailure.Type) =>
 
 export const LoadCompanyState = Command.define("LoadCompanyState", {
   messages: [Message.SucceededLoadCompanyState, Message.FailedLoadCompanyState],
-  execute: Effect.gen(function* () {
-    const client = yield* SpaHttpClient;
-    const state = yield* client.account.memberships();
-    return Message.SucceededLoadCompanyState({
-      isCompanyMember: Array.isReadonlyArrayNonEmpty(state.memberships),
-      maybeCurrentCompany: Array.findFirst(
-        state.memberships,
-        (membership) => membership.company_id === state.current_company_id,
-      ).pipe(
-        Option.map((membership) => ({
-          companyName: membership.company_name,
-          role: membership.role,
-          orgCode: membership.company_org_code,
-        })),
-      ),
-    });
-  }).pipe(
+  execute: CurrentCompany.readCompanyState.pipe(
+    Effect.map((state) => Message.SucceededLoadCompanyState({ state })),
     Effect.catchTags({
       Unauthorized: failedLoadCompanyState("Unauthorized"),
       HttpClientError: failedLoadCompanyState("Unexpected"),
@@ -144,7 +139,17 @@ const AFTER_SIGN_OUT_HREF = "/";
 
 const TOAST_ID = "account-notices";
 
+const EMPTY_COMPANY_STATE: CurrentCompany.CompanyMemberships = {
+  maybeCurrentCompanyId: Option.none(),
+  memberships: [],
+};
+
+const toCurrentCompanyMessage = (message: CurrentCompany.Message) =>
+  Message.GotCurrentCompanyMessage({ message });
 const toProfileMessage = (message: Profile.Message) => Message.GotProfileMessage({ message });
+const toCompaniesMessage = (message: Companies.Message) => Message.GotCompaniesMessage({ message });
+const toCompanySettingsMessage = (message: CompanySettings.Message) =>
+  Message.GotCompanySettingsMessage({ message });
 const toSessionsMessage = (message: Sessions.Message) => Message.GotSessionsMessage({ message });
 const toConnectionsMessage = (message: Connections.Message) =>
   Message.GotConnectionsMessage({ message });
@@ -154,10 +159,12 @@ const toToastMessage = (message: typeof NoticeToast.Message.Type) =>
 const withPage = (model: Model, page: AccountPage): Model =>
   modifyFields(model, { maybePage: (): Option.Option<AccountPage> => Option.some(page) });
 
-const enterPage = (
-  model: Model,
-  maybeCurrentCompany: Option.Option<Profile.CurrentCompany>,
-): UpdateReturn => {
+const leaveToSignIn: Step = (model) => ({
+  model,
+  commands: [navigate(DocumentNavigation.LeaveToSignIn())],
+});
+
+const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateReturn => {
   const entered = modifyFields(model, {
     pageVisit: Number.increment,
     maybePage: () => Option.none(),
@@ -167,12 +174,30 @@ const enterPage = (
     entered.route,
     {
       Profile: () => {
-        const profileInit = Profile.init({ visit, maybeCurrentCompany });
+        const profileInit = Profile.init(visit);
         return {
           model: withPage(entered, AccountPage.Profile({ model: profileInit.model })),
           commands: Command.mapMessages(profileInit.commands, toProfileMessage),
         };
       },
+      Companies: () => {
+        const companiesInit = Companies.init(visit);
+        return {
+          model: withPage(entered, AccountPage.Companies({ model: companiesInit.model })),
+          commands: Command.mapMessages(companiesInit.commands, toCompaniesMessage),
+        };
+      },
+      CompanySettings: () => ({
+        model: withPage(
+          entered,
+          AccountPage.CompanySettings({
+            model: CompanySettings.init(
+              visit,
+              CurrentCompany.maybeCurrentMembership(currentCompany.state),
+            ),
+          }),
+        ),
+      }),
       Sessions: () => {
         const sessionsInit = Sessions.init(visit);
         return {
@@ -192,17 +217,16 @@ const enterPage = (
   );
 };
 
-const enterRouteWhenReady = (model: Model): UpdateReturn =>
+const enterRouteWhenReady: Step = (model) =>
   Entry.matchOrElse(
     model.entry,
-    { Ready: ({ maybeCurrentCompany }) => enterPage(model, maybeCurrentCompany) },
+    { Ready: ({ currentCompany }) => enterPage(model, currentCompany) },
     () => ({ model }),
   );
 
 export const init = (url: Url): UpdateReturn => ({
   model: {
     route: urlToAccountRoute(url),
-    origin: DocumentNavigation.originOf(url),
     pageVisit: 0,
     entry: Entry.Checking(),
     maybePage: Option.none(),
@@ -212,47 +236,86 @@ export const init = (url: Url): UpdateReturn => ({
   commands: [LoadCompanyState()],
 });
 
-const becomeReady = (
-  model: Model,
-  maybeCurrentCompany: Option.Option<Profile.CurrentCompany>,
-): UpdateReturn =>
+const becomeReady = (model: Model, state: CurrentCompany.CompanyMemberships): UpdateReturn =>
   Entry.guards.Checking(model.entry)
     ? enterRouteWhenReady(
-        modifyFields(model, { entry: () => Entry.Ready({ maybeCurrentCompany }) }),
+        modifyFields(model, {
+          entry: () => Entry.Ready({ currentCompany: CurrentCompany.init(state) }),
+        }),
       )
     : { model };
 
-const foldToast = Update.foldChild({
-  update: NoticeToast.update,
+const toastChild = {
   read: (model: Model) => Option.some(model.toast),
-  write: (model: Model, nextToast: typeof NoticeToast.Model.Type) =>
+  write: (model: Model, nextToast: typeof NoticeToast.Model.Type): Model =>
     modifyFields(model, { toast: () => nextToast }),
   toParentMessage: toToastMessage,
-  foldOutMessage: NoticeToast.OutMessage.match<Update.Step<Model, Message>>({
+  foldOutMessage: NoticeToast.OutMessage.match<Step>({
     DismissedToast: () => (model) => ({ model }),
   }),
+};
+
+const foldToast = Update.foldChild({ ...toastChild, update: NoticeToast.update });
+
+const foldToastShow = Update.foldChild({ ...toastChild, update: NoticeToast.show });
+
+const notify = (tone: NoticeTone, text: string): Step => foldToastShow(noticeOf(tone, text));
+
+const notifyDone =
+  (maybeDoneText: Option.Option<string>): Step =>
+  (model) =>
+    Option.match(maybeDoneText, {
+      onNone: () => ({ model }),
+      onSome: (text) => notify("Success", text)(model),
+    });
+
+const reenterCompanySettings: Step = (model) =>
+  AccountRoute.guards.CompanySettings(model.route) ? enterRouteWhenReady(model) : { model };
+
+const currentCompanyChild = {
+  read: (model: Model) =>
+    Entry.matchOrElse(
+      model.entry,
+      { Ready: ({ currentCompany }) => Option.some(currentCompany) },
+      () => Option.none(),
+    ),
+  write: (model: Model, nextCurrentCompany: CurrentCompany.Model): Model =>
+    modifyFields(model, {
+      entry: (): Entry => Entry.Ready({ currentCompany: nextCurrentCompany }),
+    }),
+  toParentMessage: toCurrentCompanyMessage,
+  foldOutMessage: CurrentCompany.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+    RefreshedCompanyState: ({ maybeDoneText }) => notifyDone(maybeDoneText),
+    UpdatedCurrentCompany: ({ maybeDoneText }) =>
+      Update.combine([notifyDone(maybeDoneText), reenterCompanySettings]),
+  }),
+};
+
+const foldCurrentCompany = Update.foldChild({
+  ...currentCompanyChild,
+  update: CurrentCompany.update,
 });
 
-const foldToastShow = Update.foldChild({
-  update: NoticeToast.show,
-  read: (model: Model) => Option.some(model.toast),
-  write: (model: Model, nextToast: typeof NoticeToast.Model.Type) =>
-    modifyFields(model, { toast: () => nextToast }),
-  toParentMessage: toToastMessage,
-  foldOutMessage: NoticeToast.OutMessage.match<Update.Step<Model, Message>>({
-    DismissedToast: () => (model) => ({ model }),
-  }),
+const foldCurrentCompanySwitch = Update.foldChild({
+  ...currentCompanyChild,
+  update: CurrentCompany.switchTo,
 });
 
-const foldProfileOutMessage = Profile.OutMessage.match<Update.Step<Model, Message>>({
-  Notified:
-    ({ tone, text }) =>
-    (model) =>
-      foldToastShow(model, noticeOf(tone, text)),
-  RequiredSignIn: () => (model) => ({
-    model,
-    commands: [navigate(DocumentNavigation.LeaveToSignIn())],
-  }),
+const foldCurrentCompanyRefresh = Update.foldChild({
+  ...currentCompanyChild,
+  update: CurrentCompany.refresh,
+});
+
+const refreshCompanyState = (texts: CurrentCompany.RefreshTexts): Step =>
+  foldCurrentCompanyRefresh(texts);
+
+const selectCompany = (companyId: string): Step => foldCurrentCompanySwitch(companyId);
+
+const pushCompanies: Step = (model) => ({
+  model,
+  commands: [navigate(DocumentNavigation.PushUrl({ href: companiesRouter() }))],
 });
 
 const foldProfile = Update.foldChild({
@@ -262,7 +325,50 @@ const foldProfile = Update.foldChild({
   write: (model: Model, nextProfile: Profile.Model) =>
     withPage(model, AccountPage.Profile({ model: nextProfile })),
   toParentMessage: toProfileMessage,
-  foldOutMessage: foldProfileOutMessage,
+  foldOutMessage: Profile.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+  }),
+});
+
+const foldCompanies = Update.foldChild({
+  update: Companies.update,
+  read: (model: Model) =>
+    Option.map(Option.filter(model.maybePage, AccountPage.guards.Companies), ({ model }) => model),
+  write: (model: Model, nextCompanies: Companies.Model) =>
+    withPage(model, AccountPage.Companies({ model: nextCompanies })),
+  toParentMessage: toCompaniesMessage,
+  foldOutMessage: Companies.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+    UpdatedCompanyState: ({ texts }) => refreshCompanyState(texts),
+    SelectedCompany: ({ companyId }) => selectCompany(companyId),
+  }),
+});
+
+const foldCompanySettings = Update.foldChild({
+  update: CompanySettings.update,
+  read: (model: Model) =>
+    Option.map(
+      Option.filter(model.maybePage, AccountPage.guards.CompanySettings),
+      ({ model }) => model,
+    ),
+  write: (model: Model, nextSettings: CompanySettings.Model) =>
+    withPage(model, AccountPage.CompanySettings({ model: nextSettings })),
+  toParentMessage: toCompanySettingsMessage,
+  foldOutMessage: CompanySettings.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+    UpdatedCompanyState: ({ texts }) => refreshCompanyState(texts),
+    DeletedCompany: ({ companyName }) =>
+      Update.combine([
+        pushCompanies,
+        refreshCompanyState({
+          maybeDoneText: Option.some(`「${companyName}」を削除しました。`),
+          actionText: "事業所を削除しました",
+        }),
+      ]),
+  }),
 });
 
 const foldSessions = Update.foldChild({
@@ -313,14 +419,13 @@ export const update = (model: Model, message: Message) =>
         ? enterRouteWhenReady(nextModel)
         : { model: nextModel };
     },
-    SucceededLoadCompanyState: ({ isCompanyMember, maybeCurrentCompany }) =>
-      isCompanyMember
-        ? becomeReady(model, maybeCurrentCompany)
-        : { model, commands: [LeaveToCompanySignup()] },
+    SucceededLoadCompanyState: ({ state }) =>
+      Array.match(state.memberships, {
+        onEmpty: () => ({ model, commands: [LeaveToCompanySignup()] }),
+        onNonEmpty: () => becomeReady(model, state),
+      }),
     FailedLoadCompanyState: ({ failure }) =>
-      failure === "Unauthorized"
-        ? { model, commands: [navigate(DocumentNavigation.LeaveToSignIn())] }
-        : becomeReady(model, Option.none()),
+      failure === "Unauthorized" ? leaveToSignIn(model) : becomeReady(model, EMPTY_COMPANY_STATE),
     ClickedSignOut: () =>
       Submission.guards.Submitting(model.signOut)
         ? { model }
@@ -333,12 +438,14 @@ export const update = (model: Model, message: Message) =>
       commands: [navigate(DocumentNavigation.ReplaceDocument({ href: AFTER_SIGN_OUT_HREF }))],
     }),
     FailedSignOut: () =>
-      foldToastShow(
-        modifyFields(model, { signOut: () => Submission.Idle() }),
-        noticeOf("Error", SIGN_OUT_FAILED),
-      ),
+      notify("Error", SIGN_OUT_FAILED)(modifyFields(model, { signOut: () => Submission.Idle() })),
     CompletedLeaveToCompanySignup: () => ({ model }),
+    GotCurrentCompanyMessage: ({ message: childMessage }) =>
+      foldCurrentCompany(model, childMessage),
     GotProfileMessage: ({ message: pageMessage }) => foldProfile(model, pageMessage),
+    GotCompaniesMessage: ({ message: pageMessage }) => foldCompanies(model, pageMessage),
+    GotCompanySettingsMessage: ({ message: pageMessage }) =>
+      foldCompanySettings(model, pageMessage),
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),
     GotConnectionsMessage: ({ message: pageMessage }) => foldConnections(model, pageMessage),
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
@@ -389,7 +496,11 @@ const navLinksView = (
     ),
   );
 
-const pageView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
+const pageView = (
+  model: Model,
+  currentCompany: CurrentCompany.Model,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
   Option.match(model.maybePage, {
     onNone: () => [],
     onSome: (page) => [
@@ -399,7 +510,24 @@ const pageView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
             slotId: "profile",
             view: Profile.view,
             model: pageModel,
+            viewInputs: { currentCompany },
             toParentMessage: toProfileMessage,
+          }),
+        Companies: ({ model: pageModel }) =>
+          h.submodel({
+            slotId: "companies",
+            view: Companies.view,
+            model: pageModel,
+            viewInputs: { currentCompany },
+            toParentMessage: toCompaniesMessage,
+          }),
+        CompanySettings: ({ model: pageModel }) =>
+          h.submodel({
+            slotId: "company-settings",
+            view: CompanySettings.view,
+            model: pageModel,
+            viewInputs: { currentCompany },
+            toParentMessage: toCompanySettingsMessage,
           }),
         Sessions: ({ model: pageModel }) =>
           h.submodel({
@@ -419,13 +547,23 @@ const pageView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
     ],
   });
 
-const frameView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const frameView = (
+  model: Model,
+  currentCompany: CurrentCompany.Model,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.div(
     [h.Class("flex min-h-svh bg-background")],
     [
       h.aside(
         [h.Class("flex w-60 flex-col gap-1 border-r p-4")],
         [
+          h.submodel({
+            slotId: "current-company",
+            view: CurrentCompany.view,
+            model: currentCompany,
+            toParentMessage: toCurrentCompanyMessage,
+          }),
           h.div([h.Class(NAV_GROUP_LABEL_CLASS)], ["事業所"]),
           ...navLinksView(model, COMPANY_NAV, h),
           h.div([h.Class(`${NAV_GROUP_LABEL_CLASS} mt-3`)], ["アカウント"]),
@@ -451,7 +589,7 @@ const frameView = (model: Model, h: HtmlBuilder<Message>): Html =>
       ),
       h.main(
         [h.Class("flex-1 p-6 md:p-10")],
-        [h.div([h.Class("mx-auto max-w-2xl")], pageView(model, h))],
+        [h.div([h.Class("mx-auto max-w-2xl")], pageView(model, currentCompany, h))],
       ),
       noticeToastView(model.toast, toToastMessage, h),
     ],
@@ -461,9 +599,9 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   title: "taimei-auth",
   body: Entry.match(model.entry, {
     Checking: () => fullScreenStatusView("読み込み中…", h),
-    Ready: () =>
+    Ready: ({ currentCompany }) =>
       AccountRoute.guards.NotFound(model.route)
         ? AuthError.view(Option.none(), h)
-        : frameView(model, h),
+        : frameView(model, currentCompany, h),
   }),
 });

@@ -10,7 +10,7 @@ Foldkit のコードを書く前に、`.claude/skills/` の `foldkit` と `gener
 
 - `app`: route、layout、provider、guard の結線。他 domain の `pages` を import できる唯一の場所。
 - `auth`: ログイン、サインアップ、認証 client、認証後の redirect。
-- `account`: プロフィール、削除、セキュリティ、セッション、連携アカウント、現在の事業所の read model。
+- `account`: プロフィール、削除、セキュリティ、セッション、連携アカウント、現在の事業所の状態と切り替え。
 - `company` / `membership` / `invitation` / `mfa`: 各業務の操作。
 - `shared`: domain を知らない UI primitive、通知、汎用 hook、HTTP 基盤。複数の domain から使われることだけを理由に `shared` へ移さない。`shared/ui/` は domain の型と domain の判断を import しない。
 

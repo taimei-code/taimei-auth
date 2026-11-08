@@ -9,11 +9,9 @@ import type { ReactNode } from "react";
 
 import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
 
-import { CurrentCompanyProvider } from "../account/current-company";
+import { CurrentCompanyProvider } from "../account/current-company-context";
 import { Security } from "../account/pages/Security";
 import { ErrorPage } from "../auth/pages/Error";
-import { Companies } from "../company/pages/Companies";
-import { CompanySettings } from "../company/pages/CompanySettings";
 import { Members } from "../membership/pages/Members";
 import { FullScreenLoader } from "../shared/FullScreenLoader";
 import { Toaster } from "../shared/notify";
@@ -48,12 +46,7 @@ const membersRoute = createRoute({
 });
 
 const routeTree = rootRoute.addChildren([
-  accountRoute.addChildren([
-    accountPageRoute("/companies", Companies),
-    accountPageRoute("/company-settings", CompanySettings),
-    membersRoute,
-    accountPageRoute("/security", Security),
-  ]),
+  accountRoute.addChildren([membersRoute, accountPageRoute("/security", Security)]),
 ]);
 
 export const makeRouter = (registry: AtomRegistry.AtomRegistry) =>

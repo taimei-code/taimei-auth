@@ -104,6 +104,15 @@ export const dialogClassNames = {
 
 export const separatorClassName = "h-px w-full shrink-0 bg-border";
 
+const GUTTER_FOR_FORMS_PLUGIN_CHEVRON = "pr-8";
+const HEIGHT_FITTING_FORMS_PLUGIN_PY_2 = "h-10";
+
+export const nativeSelectClassNames = {
+  root: "block w-full truncate rounded-md border border-input bg-transparent pl-3 text-base text-foreground disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+  height: HEIGHT_FITTING_FORMS_PLUGIN_PY_2,
+  gutter: GUTTER_FOR_FORMS_PLUGIN_CHEVRON,
+} as const;
+
 export const avatarClassNames = {
   root: "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
   image: "aspect-square h-full w-full",
