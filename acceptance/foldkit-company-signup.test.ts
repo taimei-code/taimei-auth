@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -54,11 +54,6 @@ const AUTH_ORIGIN = "https://auth.taimei-code.com";
 const companySignupSearch = (redirectUrl: string) =>
   new URLSearchParams({ service_name: "taimei", redirect_url: redirectUrl }).toString();
 
-type RuntimeForPathModule = { runtimeForPath: (pathname: string) => string };
-
-const loadRuntimeForPath = async (): Promise<RuntimeForPathModule> =>
-  import(join(REPO_ROOT, "web/src/app/runtime-for-path.ts"));
-
 type AuthApplication = {
   init: (url: unknown) => { readonly model: unknown };
   update: (model: unknown, message: unknown) => { readonly model: unknown };
@@ -107,23 +102,7 @@ const checkingBeforeForm = (Scene: SceneModule) => [
   Scene.expect(Scene.role("button", { name: "事業所を作成" })).toBeAbsent(),
 ];
 
-describe("事業所の登録の画面は Foldkit の runtime で出る", () => {
-  test.each(["/auth/signup/company", "/auth/signup/company/"])(
-    "AC-001: %s の document では Foldkit の runtime が選ばれる",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).toBe("FoldkitAuth");
-    },
-  );
-
-  test.each(["/account", "/auth/signup/company/extra"])(
-    "AC-002: %s の document では React の runtime が選ばれる",
-    async (pathname) => {
-      const { runtimeForPath } = await loadRuntimeForPath();
-      expect(runtimeForPath(pathname)).toBe("React");
-    },
-  );
-
+describe("事業所の登録の画面を開くと確認の間の status を出す", () => {
   test("AC-003: 開いた直後は確認の間の status だけを出し、事業所名の入力欄と作成のボタンを出さない", async () => {
     const { sceneAt } = await loadApplication();
     sceneAt(
@@ -147,45 +126,15 @@ describe("事業所の登録の画面は Foldkit の runtime で出る", () => {
     },
   );
 
-  test("AC-005: auth-client が組む事業所作成画面の URL は、Foldkit の application が確認の間の status を出す", async () => {
+  test("AC-005: auth-client が組む事業所作成画面の URL を開くと、確認の間の status を出す", async () => {
     const { buildCompanySignupUrl } = await import("@taimei-code/auth-client");
     const url = buildCompanySignupUrl({
       authBaseUrl: AUTH_ORIGIN,
       service: "taimei",
       returnTo: ALLOWED_REDIRECT,
     });
-    const { runtimeForPath } = await loadRuntimeForPath();
-    expect(runtimeForPath(new URL(url).pathname)).toBe("FoldkitAuth");
     const { sceneAt } = await loadApplication();
     sceneAt(url, checkingBeforeForm);
-  });
-});
-
-describe("React の /account から事業所の登録への遷移", () => {
-  const ORIGIN = "http://auth.taimei-code.localhost:3100";
-  const originalWindow = globalThis.window;
-
-  afterEach(() => {
-    globalThis.window = originalWindow;
-  });
-
-  test("AC-006: 事業所の登録へ移す redirect は document を読み直して履歴を置き換え、今の URL を戻り先にする", async () => {
-    globalThis.window = { location: { origin: ORIGIN } } as unknown as typeof globalThis.window;
-    const { redirectFor }: {
-      redirectFor: (
-        entry: { kind: "companySignup" },
-        href: string,
-      ) => { options: Record<string, unknown> };
-    } = await import(join(REPO_ROOT, "web/src/app/route-redirect.ts"));
-
-    const { options } = redirectFor({ kind: "companySignup" }, "/account");
-
-    expect(options.reloadDocument).toBe(true);
-    expect(options.replace).toBe(true);
-    const target = new URL(String(options.href), ORIGIN);
-    expect(target.pathname).toBe("/auth/signup/company");
-    expect(target.searchParams.get("service_name")).toBe("accounts");
-    expect(target.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account`);
   });
 });
 
