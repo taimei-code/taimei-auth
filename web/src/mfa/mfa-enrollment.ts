@@ -39,9 +39,12 @@ type Verifying = typeof Verifying.Type;
 
 const Step = defineTaggedUnion({
   Starting: {},
-  Scan: { enrollment: Enrollment },
+  Scan: { enrollment: Enrollment, copy: CopyResult.Model },
   Verify: Verifying.fields,
-  RecoveryCodes: { recoveryCodes: Schema.Redacted(Schema.Array(Schema.String)) },
+  RecoveryCodes: {
+    recoveryCodes: Schema.Redacted(Schema.Array(Schema.String)),
+    copy: CopyResult.Model,
+  },
   Failed: { message: Schema.String },
 });
 type Step = typeof Step.Type;
@@ -59,7 +62,6 @@ export const Model = Schema.Struct({
   maybeResumableEnrollment: Schema.Option(Enrollment),
   qrCode: QrCode,
   requestNumber: Schema.Int,
-  copy: CopyResult.Model,
 });
 export type Model = typeof Model.Type;
 
@@ -194,7 +196,6 @@ export const init = (): Model => ({
   maybeResumableEnrollment: Option.none(),
   qrCode: QrCode.Drawing(),
   requestNumber: 0,
-  copy: CopyResult.init(),
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -227,20 +228,30 @@ const dialogFolds = dialogFoldsOf({
   whenClosed: reportClosed,
 });
 
+const hasCopyResult = Step.isAnyOf(["Scan", "RecoveryCodes"]);
+
 const foldCopyResult = Update.foldChild({
   update: CopyResult.update,
-  read: (model: Model) => Option.some(model.copy),
+  read: (model: Model) =>
+    hasCopyResult(model.step) ? Option.some(model.step.copy) : Option.none(),
   write: (model: Model, nextCopy: CopyResult.Model) =>
-    modifyFields(model, { copy: () => nextCopy }),
+    hasCopyResult(model.step)
+      ? withStep(model, modifyFields(model.step, { copy: () => nextCopy }))
+      : model,
   toParentMessage: (message: CopyResult.Message) => Message.GotCopyResultMessage({ message }),
 });
 
-const openDialog = (model: Model): UpdateReturn => {
-  const reset = modifyFields(model, { copy: () => CopyResult.init() });
-  return Option.match(model.maybeResumableEnrollment, {
-    onSome: (enrollment) => dialogFolds.open(withStep(reset, Step.Scan({ enrollment }))),
+const scanStep = (enrollment: Enrollment): Step =>
+  Step.Scan({ enrollment, copy: CopyResult.init() });
+
+const recoveryCodesStep = (enrollment: Enrollment): Step =>
+  Step.RecoveryCodes({ recoveryCodes: enrollment.recoveryCodes, copy: CopyResult.init() });
+
+const openDialog = (model: Model): UpdateReturn =>
+  Option.match(model.maybeResumableEnrollment, {
+    onSome: (enrollment) => dialogFolds.open(withStep(model, scanStep(enrollment))),
     onNone: () => {
-      const requested = modifyFields(reset, {
+      const requested = modifyFields(model, {
         step: () => Step.Starting(),
         qrCode: () => QrCode.Drawing(),
         requestNumber: Number.increment,
@@ -255,7 +266,6 @@ const openDialog = (model: Model): UpdateReturn => {
       };
     },
   });
-};
 
 const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
   requestNumber === model.requestNumber ? next() : { model };
@@ -329,7 +339,7 @@ export const update = (model: Model, message: Message) =>
       forThisRequest(model, requestNumber, () =>
         Step.guards.Starting(model.step)
           ? {
-              model: modifyFields(withStep(model, Step.Scan({ enrollment })), {
+              model: modifyFields(withStep(model, scanStep(enrollment)), {
                 maybeResumableEnrollment: () => Option.some(enrollment),
                 qrCode: () => QrCode.Drawing(),
               }),
@@ -363,7 +373,7 @@ export const update = (model: Model, message: Message) =>
       ),
     ClickedBack: () =>
       whileEditable(model, ({ enrollment }) => ({
-        model: withStep(model, Step.Scan({ enrollment })),
+        model: withStep(model, scanStep(enrollment)),
       })),
     UpdatedCode: ({ value }) =>
       whileEditable(model, (verifying) => ({
@@ -373,14 +383,10 @@ export const update = (model: Model, message: Message) =>
     SucceededActivateMfa: ({ requestNumber }) =>
       forThisRequest(model, requestNumber, () =>
         withVerifying(model, ({ enrollment }) => ({
-          model: modifyFields(
-            withStep(model, Step.RecoveryCodes({ recoveryCodes: enrollment.recoveryCodes })),
-            {
-              maybeResumableEnrollment: () => Option.none(),
-              qrCode: () => QrCode.Drawing(),
-              copy: () => CopyResult.init(),
-            },
-          ),
+          model: modifyFields(withStep(model, recoveryCodesStep(enrollment)), {
+            maybeResumableEnrollment: () => Option.none(),
+            qrCode: () => QrCode.Drawing(),
+          }),
         })),
       ),
     FailedActivateMfa: ({ requestNumber, failure }) =>
@@ -397,7 +403,7 @@ const readTotpSecret = (totpUri: Redacted.Redacted<string>): Option.Option<strin
 };
 
 const copyResultView = (
-  model: Model,
+  copy: CopyResult.Model,
   text: Redacted.Redacted<string>,
   label: string,
   h: HtmlBuilder<Message>,
@@ -405,7 +411,7 @@ const copyResultView = (
   h.submodel({
     slotId: "mfa-enrollment-copy",
     view: CopyResult.view,
-    model: model.copy,
+    model: copy,
     viewInputs: { text, label },
     toParentMessage: (message) => Message.GotCopyResultMessage({ message }),
   });
@@ -432,7 +438,12 @@ const qrCodeView = (qrCode: QrCode, h: HtmlBuilder<Message>): Html =>
       ),
   });
 
-const scanView = (model: Model, enrollment: Enrollment, h: HtmlBuilder<Message>): Html => {
+const scanView = (
+  model: Model,
+  enrollment: Enrollment,
+  copy: CopyResult.Model,
+  h: HtmlBuilder<Message>,
+): Html => {
   const maybeSecret = readTotpSecret(enrollment.totpUri);
   return h.div(
     [h.Class("space-y-4")],
@@ -456,9 +467,7 @@ const scanView = (model: Model, enrollment: Enrollment, h: HtmlBuilder<Message>)
           ),
           ...Option.match(maybeSecret, {
             onNone: () => [],
-            onSome: (secret) => [
-              copyResultView(model, Redacted.make(secret), "secret をコピー", h),
-            ],
+            onSome: (secret) => [copyResultView(copy, Redacted.make(secret), "secret をコピー", h)],
           }),
         ],
       ),
@@ -538,7 +547,7 @@ const verifyView = (verifying: Verifying, h: HtmlBuilder<Message>): Html => {
 };
 
 const recoveryCodesView = (
-  model: Model,
+  copy: CopyResult.Model,
   recoveryCodes: Redacted.Redacted<ReadonlyArray<string>>,
   h: HtmlBuilder<Message>,
 ): Html => {
@@ -556,7 +565,7 @@ const recoveryCodesView = (
         [h.Class("grid grid-cols-2 gap-2 rounded-md bg-muted p-3"), h.Translate("no")],
         codes.map((code) => h.keyed("li")(code, [h.Class("font-mono text-sm")], [code])),
       ),
-      copyResultView(model, Redacted.make(codes.join("\n")), "リカバリーコードをコピー", h),
+      copyResultView(copy, Redacted.make(codes.join("\n")), "リカバリーコードをコピー", h),
       dialogFooterView(
         [
           buttonView(
@@ -582,9 +591,9 @@ const stepView = (model: Model, h: HtmlBuilder<Message>): Html =>
     Starting: () => dialogLoadingStatusView("読み込み中…", h),
     Failed: ({ message: failureMessage }) =>
       h.p([h.Class("py-2 text-sm text-destructive")], [failureMessage]),
-    Scan: ({ enrollment }) => scanView(model, enrollment, h),
+    Scan: ({ enrollment, copy }) => scanView(model, enrollment, copy, h),
     Verify: (verifying) => verifyView(verifying, h),
-    RecoveryCodes: ({ recoveryCodes }) => recoveryCodesView(model, recoveryCodes, h),
+    RecoveryCodes: ({ recoveryCodes, copy }) => recoveryCodesView(copy, recoveryCodes, h),
   });
 
 export const view = Submodel.defineView<Model, Message>((model, h) =>
