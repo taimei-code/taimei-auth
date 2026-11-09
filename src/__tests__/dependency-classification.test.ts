@@ -54,7 +54,6 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@types/node": "type-only: 型定義のみ (runtime 実体なし)",
   "@types/pg": "type-only: 型定義のみ (runtime 実体なし)",
   "@types/qrcode": "type-only: 型定義のみ (runtime 実体なし)",
-  "@types/react": "type-only: 型定義のみ (runtime 実体なし)",
   "@better-auth/utils":
     "test-only-runtime: src/mfa/__tests__/helpers.ts と e2e から runtime import するが ship される server コードからは import しない",
   "@playwright/test":
