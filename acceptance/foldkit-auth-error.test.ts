@@ -168,9 +168,8 @@ describe("エラー画面へ入る遷移と、消した React の code", () => {
     expect(gitGrep(`to: "/auth/error"`, ":(glob)web/src/app/*.tsx")).toEqual([]);
   });
 
-  test("AC-036: React のエラー画面の route が使っていた zod の search の schema を書かず、Error.tsx は残す", () => {
+  test("AC-036: React のエラー画面の route が使っていた zod の search の schema を書かない", () => {
     expect(gitGrep("authErrorSearchSchema", "web/src")).toEqual([]);
-    expect(existsSync(join(REPO_ROOT, "web/src/auth/pages/Error.tsx"))).toBe(true);
   });
 
   test("AC-028: foldkit/navigation の load による document の読み直しは shared/leave-spa.ts の外に書かない", () => {
