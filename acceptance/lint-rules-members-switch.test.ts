@@ -331,11 +331,13 @@ const MOVED_CHECK_TITLES: Readonly<Record<string, string>> = {
   "AC-021": "testing の default-company-contract.test.ts が走査で落とした書き換え",
 };
 
+const LINT_ALL_FIXTURES_TIMEOUT_MS = 120_000;
+
 beforeAll(() => {
   for (const group of groupsWithDistinctPaths([...MOVED_CHECK_FIXTURES, ...WEB_RULE_FIXTURES])) {
     lintGroup(group);
   }
-});
+}, LINT_ALL_FIXTURES_TIMEOUT_MS);
 
 afterAll(() => {
   for (const fixtureDir of fixtureDirs) rmSync(fixtureDir, { recursive: true, force: true });
