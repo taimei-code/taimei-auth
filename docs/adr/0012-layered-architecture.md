@@ -67,7 +67,7 @@ drizzle の行はデータだけでメソッドを持てないためである。
 
 閾値は 1 ファイル 200 行以下とする。後続案件で entry を足す場合も、1 操作 1 ファイルで同じディレクトリに追加する。
 
-(2026-10-20 改訂) entry は `guard/verified.ts` の印を付けた値 (`Verified<T>`) を返し、use-case と、事業所を指す読み出しはその値だけを引数に受ける。`requireMembershipOf(actor, companyId, minRole)` は `VerifiedMember<minRole>` を返し、必要な role は use-case の引数の型 (`VerifiedMember<"OWNER">` など) が宣言する。handler が guard を呼び忘れるか、弱い role の値を渡すと型エラーになる。印の cast を書けるのは `guard/verified.ts` だけで、`src/membership/__tests__/containment.test.ts` が固定する。use-case 側の TOCTOU の再検証 (事業所の削除の OWNER の再確認、OWNER 招待の受諾) は残し、全操作へは広げない (下の「招待受諾の再検証を OWNER 招待に限定する脅威モデル」)。
+(2026-10-20 改訂) entry は `guard/verified.ts` の印を付けた値 (`Verified<T>`) を返し、use-case と、事業所を指す読み出しはその値だけを引数に受ける。`requireMembershipOf(actor, companyId, minRole)` は `VerifiedMember<minRole>` を返し、必要な role は use-case の引数の型 (`VerifiedMember<"OWNER">` など) が宣言する。handler が guard を呼び忘れるか、弱い role の値を渡すと型エラーになる。印の cast を書けるのは `guard/verified.ts` だけで、lint の `taimei/verified-only-in-guard` が止める。use-case 側の TOCTOU の再検証 (事業所の削除の OWNER の再確認、OWNER 招待の受諾) は残し、全操作へは広げない (下の「招待受諾の再検証を OWNER 招待に限定する脅威モデル」)。
 
 ### 操作単位 entry の判定順
 

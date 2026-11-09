@@ -14,7 +14,7 @@ import {
   listEmptyView,
   separatorView,
 } from "../../account/account-page-header-view";
-import type * as CurrentCompany from "../../account/current-company";
+import * as CurrentCompany from "../../account/current-company";
 import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as MemberInvitations from "../../invitation/member-invitations";
 import type { FailureMessages } from "../../shared/failure-message";
@@ -329,6 +329,14 @@ const withListing = (
 
 const isBusy = (listing: Listing) => !Busy.guards.Idle(listing.busy);
 
+export const isSubmitting = (model: Model): boolean =>
+  Page.match(model.page, {
+    NoCompany: () => false,
+    Listing: (listing) =>
+      isBusy(listing) ||
+      Option.exists(listing.maybeInvitations, MemberInvitations.isSendingOrRevoking),
+  });
+
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
 const dialogFolds = dialogFoldsOf({
@@ -504,6 +512,7 @@ const isBusyWith = (busy: Busy, member: Member) =>
 
 const operationsView = (
   listing: Listing,
+  isCompanyChanging: boolean,
   member: Member,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> =>
@@ -518,7 +527,7 @@ const operationsView = (
               value: role,
               label: roleLabelJa(role),
             })),
-            isDisabled: isBusy(listing),
+            isDisabled: isCompanyChanging || isBusy(listing),
             onChange: (value) => Message.SelectedRole({ member, value }),
             placement: "InRow",
           },
@@ -530,7 +539,7 @@ const operationsView = (
             type: "button",
             look: "ghostSmall",
             submission: Submission.Idle(),
-            isBlocked: isBusy(listing),
+            isBlocked: isCompanyChanging || isBusy(listing),
             onClick: Message.ClickedRemove({ member }),
           },
           h,
@@ -538,7 +547,12 @@ const operationsView = (
       ]
     : [h.span([h.Class("text-xs font-medium text-muted-foreground")], [roleLabelJa(member.role)])];
 
-const memberRowView = (listing: Listing, member: Member, h: HtmlBuilder<Message>): Html =>
+const memberRowView = (
+  listing: Listing,
+  isCompanyChanging: boolean,
+  member: Member,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.keyed("li")(
     member.userId,
     [
@@ -568,7 +582,7 @@ const memberRowView = (listing: Listing, member: Member, h: HtmlBuilder<Message>
           ...(isBusyWith(listing.busy, member)
             ? [h.span([h.Class("size-4 text-muted-foreground")], [spinnerView(h)])]
             : []),
-          ...operationsView(listing, member, h),
+          ...operationsView(listing, isCompanyChanging, member, h),
         ],
       ),
     ],
@@ -576,6 +590,7 @@ const memberRowView = (listing: Listing, member: Member, h: HtmlBuilder<Message>
 
 const membersListView = (
   listing: Listing,
+  isCompanyChanging: boolean,
   members: ReadonlyArray<Member>,
   failureAlerts: ReadonlyArray<Html>,
   h: HtmlBuilder<Message>,
@@ -586,20 +601,30 @@ const membersListView = (
       ...failureAlerts,
       h.ul(
         [h.Class("space-y-2")],
-        members.map((member) => memberRowView(listing, member, h)),
+        members.map((member) => memberRowView(listing, isCompanyChanging, member, h)),
       ),
     ],
   );
 
-const membersView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
+const membersView = (listing: Listing, isCompanyChanging: boolean, h: HtmlBuilder<Message>): Html =>
   Members.match(listing.members, {
     Loading: () => listLoadingStatusView("読み込み中…", h),
     Failed: () =>
-      membersListView(listing, [], [alertTextView("メンバーの一覧を取得できませんでした。", h)], h),
-    Loaded: ({ members }) => membersListView(listing, members, [], h),
+      membersListView(
+        listing,
+        isCompanyChanging,
+        [],
+        [alertTextView("メンバーの一覧を取得できませんでした。", h)],
+        h,
+      ),
+    Loaded: ({ members }) => membersListView(listing, isCompanyChanging, members, [], h),
   });
 
-const removalDialogView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
+const removalDialogView = (
+  listing: Listing,
+  isCompanyChanging: boolean,
+  h: HtmlBuilder<Message>,
+): Html =>
   dialogView(
     listing.dialog,
     toDialogMessage,
@@ -632,7 +657,7 @@ const removalDialogView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
                 submission: Busy.guards.Removing(listing.busy)
                   ? Submission.Submitting()
                   : Submission.Idle(),
-                isBlocked: false,
+                isBlocked: isCompanyChanging,
                 onClick: Message.ClickedConfirmRemoval(),
               },
               h,
@@ -646,13 +671,13 @@ const removalDialogView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
     h,
   );
 
-const listingView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
+const listingView = (listing: Listing, isCompanyChanging: boolean, h: HtmlBuilder<Message>): Html =>
   h.div(
     [],
     [
       ...accountPageHeaderView("メンバー", "事業所のメンバー一覧と招待", h),
-      membersView(listing, h),
-      removalDialogView(listing, h),
+      membersView(listing, isCompanyChanging, h),
+      removalDialogView(listing, isCompanyChanging, h),
       ...Option.match(listing.maybeInvitations, {
         onNone: () => [],
         onSome: (invitations) => [
@@ -661,6 +686,7 @@ const listingView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
             slotId: "member-invitations",
             view: MemberInvitations.view,
             model: invitations,
+            viewInputs: { isCompanyChanging },
             toParentMessage: toInvitationsMessage,
           }),
         ],
@@ -668,9 +694,12 @@ const listingView = (listing: Listing, h: HtmlBuilder<Message>): Html =>
     ],
   );
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
-  Page.match(model.page, {
-    NoCompany: () => listEmptyView("事業所が見つかりません。", h),
-    Listing: (listing) => listingView(listing, h),
-  }),
+type ViewInputs = Readonly<{ currentCompany: CurrentCompany.Model }>;
+
+export const view = Submodel.defineView<Model, Message, ViewInputs>(
+  (model, { currentCompany }, h) =>
+    Page.match(model.page, {
+      NoCompany: () => listEmptyView("事業所が見つかりません。", h),
+      Listing: (listing) => listingView(listing, CurrentCompany.isBusy(currentCompany), h),
+    }),
 );

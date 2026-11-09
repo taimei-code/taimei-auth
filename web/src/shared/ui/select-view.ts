@@ -1,5 +1,7 @@
 import { Select } from "@foldkit/ui";
+import { Schema } from "effect";
 import type { Attribute, Html, HtmlBuilder } from "foldkit/html";
+import { defineTaggedUnion } from "foldkit/schema";
 
 import { cn } from "../utils";
 import { labelClassName, nativeSelectClassNames } from "./class-names";
@@ -16,9 +18,11 @@ export type SelectViewConfig<Message> = Readonly<{
   onChange: (value: string) => Message;
 }>;
 
-export type SelectLabel =
-  | Readonly<{ _tag: "Visible"; text: string }>
-  | Readonly<{ _tag: "AriaOnly"; text: string }>;
+const SelectLabel = defineTaggedUnion({
+  Visible: { text: Schema.String },
+  AriaOnly: { text: Schema.String },
+});
+type SelectLabel = typeof SelectLabel.Type;
 
 type NativeSelectConfig<Message> = Readonly<{
   id: string;
@@ -45,7 +49,10 @@ const nativeSelectView = <Message>(
         const select = h.select(
           [
             ...attributes.select,
-            ...(config.label._tag === "AriaOnly" ? [h.AriaLabel(config.label.text)] : []),
+            ...SelectLabel.match(config.label, {
+              Visible: () => [],
+              AriaOnly: ({ text }) => [h.AriaLabel(text)],
+            }),
             ...config.extraAttributes,
             h.Class(config.className),
           ],
@@ -57,15 +64,14 @@ const nativeSelectView = <Message>(
             ),
           ),
         );
-        return config.label._tag === "Visible"
-          ? h.div(
+        return SelectLabel.match(config.label, {
+          Visible: ({ text }) =>
+            h.div(
               [h.Class("space-y-2")],
-              [
-                h.label([...attributes.label, h.Class(labelClassName)], [config.label.text]),
-                select,
-              ],
-            )
-          : select;
+              [h.label([...attributes.label, h.Class(labelClassName)], [text]), select],
+            ),
+          AriaOnly: () => select,
+        });
       },
     },
     h,

@@ -283,6 +283,8 @@ const isSending = (model: Model) => Submission.guards.Submitting(model.sending);
 
 const isRevoking = (model: Model) => RevokeProgress.guards.Revoking(model.revoking);
 
+export const isSendingOrRevoking = (model: Model): boolean => isSending(model) || isRevoking(model);
+
 const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): UpdateReturn =>
   visit === model.visit ? next() : { model };
 
@@ -420,7 +422,7 @@ export const update = (model: Model, message: Message) =>
 
 const ROLE_SELECT_ID = "invite-role";
 
-const inviteFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const inviteFormView = (model: Model, isCompanyChanging: boolean, h: HtmlBuilder<Message>): Html =>
   h.section(
     [h.AriaLabel("メンバーを招待"), h.Class("space-y-4")],
     [
@@ -469,7 +471,7 @@ const inviteFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
               type: "submit",
               look: "primaryInline",
               submission: model.sending,
-              isBlocked: !hasEmail(model),
+              isBlocked: isCompanyChanging || !hasEmail(model),
             },
             h,
           ),
@@ -480,6 +482,7 @@ const inviteFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
 
 const pendingRowView = (
   model: Model,
+  isCompanyChanging: boolean,
   invitation: PendingInvitation,
   h: HtmlBuilder<Message>,
 ): Html =>
@@ -520,7 +523,7 @@ const pendingRowView = (
               type: "button",
               look: "outlineSmall",
               submission: Submission.Idle(),
-              isBlocked: isRevoking(model),
+              isBlocked: isCompanyChanging || isRevoking(model),
               onClick: Message.ClickedRevoke({ invitationId: invitation.id }),
             },
             h,
@@ -530,7 +533,11 @@ const pendingRowView = (
     ],
   );
 
-const pendingView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
+const pendingView = (
+  model: Model,
+  isCompanyChanging: boolean,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> =>
   Pending.match(model.pending, {
     Loading: () => [],
     Failed: () => [
@@ -546,13 +553,19 @@ const pendingView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html>
             [h.AriaLabel("招待中"), h.Class("space-y-2")],
             [
               h.h2([h.Class("text-sm font-medium text-foreground")], ["招待中"]),
-              ...rows.map((invitation) => pendingRowView(model, invitation, h)),
+              ...rows.map((invitation) => pendingRowView(model, isCompanyChanging, invitation, h)),
             ],
           ),
         ],
       }),
   });
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
-  h.div([], [inviteFormView(model, h), ...pendingView(model, h)]),
+type ViewInputs = Readonly<{ isCompanyChanging: boolean }>;
+
+export const view = Submodel.defineView<Model, Message, ViewInputs>(
+  (model, { isCompanyChanging }, h) =>
+    h.div(
+      [],
+      [inviteFormView(model, isCompanyChanging, h), ...pendingView(model, isCompanyChanging, h)],
+    ),
 );

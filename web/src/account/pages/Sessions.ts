@@ -78,8 +78,9 @@ type UpdateReturn = Update.Return<Model, Message>;
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     SucceededLoadSessions: ({ visit, sessions }) =>
-      setListIfLoading(model, visit, SessionList.Loaded({ sessions })),
-    FailedLoadSessions: ({ visit }) => setListIfLoading(model, visit, SessionList.Failed()),
+      setListIfLoading(model, visit, SessionList.Loaded({ sessions }), SessionList.guards.Loading),
+    FailedLoadSessions: ({ visit }) =>
+      setListIfLoading(model, visit, SessionList.Failed(), SessionList.guards.Loading),
   });
 
 const sessionRowView = (session: SessionRow, h: HtmlBuilder<Message>): Html =>

@@ -10,7 +10,7 @@ const enabledTaimeiRules = () =>
     ...new Set(
       [
         ...readFileSync(path.join(REPO_ROOT, ".oxlintrc.json"), "utf8").matchAll(
-          /"taimei\/([a-z-]+)"/g,
+          /"taimei\/([a-z0-9-]+)"/g,
         ),
       ].map(([, rule]) => rule),
     ),

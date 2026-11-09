@@ -6,15 +6,7 @@ import { fileURLToPath } from "node:url";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-export const SOURCE_ROOTS = [
-  "src",
-  "db",
-  "web/src",
-  "e2e",
-  "management",
-  "packages",
-  "testing",
-] as const;
+export { SOURCE_ROOTS } from "../../lint/oxlint-plugin.mjs";
 
 type TestFiles = "include" | "exclude" | "only";
 
@@ -77,7 +69,7 @@ const transpilers = {
   tsx: new Bun.Transpiler({ loader: "tsx" }),
 };
 
-export const valueImportsInSource = (file: string, source: string): string[] =>
+const valueImportsInSource = (file: string, source: string): string[] =>
   transpilers[file.endsWith(".tsx") ? "tsx" : "ts"].scanImports(source).map((entry) => entry.path);
 
 export const valueImportsOf = (file: string): string[] =>
@@ -152,12 +144,3 @@ export const sourceFiles = (target: string, { tests = "include" }: FileFilter = 
     .filter((path) => keepsPath(tests, path))
     .map((path) => fromRepoRoot(join(absolute(target), path)))
     .sort();
-
-export const filesImporting = (
-  specifier: RegExp,
-  target: string,
-  opts: FileFilter = {},
-): string[] =>
-  sourceFiles(target, opts).filter((file) =>
-    valueImportsOf(file).some((imported) => specifier.test(imported)),
-  );

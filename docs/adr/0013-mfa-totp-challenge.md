@@ -84,8 +84,8 @@ session cookie がクリアされた状態で再ログインへ誘導し `Sentry
 
 - **`src/mfa/challenge-store.ts`**: 上記の形式を知る唯一のファイル。チャレンジの発行、読み出し、
   消費をここだけが行う。`two_factor` / `2fa-` のリテラルが `src/` 内の他のファイルに現れないことを
-  静的テストで固定する (`no-hono-import.test.ts` と同形)。「壊れた」しか検知できない e2e ではなく、
-  「漏れた」を検知するのがこの静的テストの役割である。
+  静的テストで固定する (lint の `taimei/no-hono-in-guard` と同形)。「壊れた」しか検知できない e2e ではなく、
+  「漏れた」を検知するのがこの静的テストの役割である。(2026-11-09 追記) この静的テストは今の repo に無い。
 - **`src/mfa/gateway.ts`**: `auth.api.*` / `auth.$context` への唯一の窓口
   (`src/account/delete-sessions.ts` の「唯一の正規窓口」規律と同形)。戻り値は plain data と転送用の
   `Headers` に限り、プラグインの型や内部知識を外に出さない。

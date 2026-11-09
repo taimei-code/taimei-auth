@@ -297,9 +297,16 @@ const notifyDone =
     });
 
 const isCompanySwitchBlocked = (model: Model): boolean =>
-  Option.exists(
-    Option.filter(model.maybePage, AccountPage.guards.CompanySettings),
-    ({ model: settings }) => CompanySettings.isSubmitting(settings),
+  Option.exists(model.maybePage, (page) =>
+    AccountPage.match(page, {
+      Profile: () => false,
+      Companies: () => false,
+      CompanySettings: ({ model: settings }) => CompanySettings.isSubmitting(settings),
+      Members: ({ model: members }) => Members.isSubmitting(members),
+      Security: () => false,
+      Sessions: () => false,
+      Connections: () => false,
+    }),
   );
 
 const reenterCompanyPage: Step = (model) =>
@@ -456,24 +463,17 @@ const foldConnections = Update.foldChild({
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     GotDocumentNavigationMessage: () => ({ model }),
-    ClickedLink: ({ request }) =>
-      UrlRequest.match<UpdateReturn>(request, {
-        Internal: ({ url }) => ({
-          model,
-          commands: [
-            navigate(
-              DocumentNavigation.commandForInternalUrl(
-                url,
-                !AccountRoute.guards.NotFound(urlToAccountRoute(url)),
-              ),
-            ),
-          ],
-        }),
-        External: ({ href }) => ({
-          model,
-          commands: [navigate(DocumentNavigation.LoadDocument({ href }))],
-        }),
-      }),
+    ClickedLink: ({ request }) => ({
+      model,
+      commands: [
+        navigate(
+          DocumentNavigation.commandForLink(
+            request,
+            (url) => !AccountRoute.guards.NotFound(urlToAccountRoute(url)),
+          ),
+        ),
+      ],
+    }),
     ChangedUrl: ({ url }) => {
       const nextModel = modifyFields(model, { route: () => urlToAccountRoute(url) });
       return Option.isSome(accountRouteToEnter(Option.some(model.route), nextModel.route))
@@ -570,7 +570,7 @@ const sidebarNavView = (model: Model, h: HtmlBuilder<Message>): Html =>
     items: NAV_ROUTES,
     ariaLabel: "アカウントのメニュー",
     toHref: (route) => NAV_ITEMS[route].href,
-    isItemCurrent: (route) => route === model.route._tag,
+    isItemCurrent: (route) => AccountRoute.isAnyOf([route])(model.route),
     toView: ({ nav, items }) => {
       const [companyItems, accountItems] = Array.splitAt(items, COMPANY_NAV_ROUTES.length);
       return h.nav(
@@ -621,6 +621,7 @@ const pageView = (
             slotId: "members",
             view: Members.view,
             model: pageModel,
+            viewInputs: { currentCompany },
             toParentMessage: toMembersMessage,
           }),
         Security: ({ model: pageModel }) =>

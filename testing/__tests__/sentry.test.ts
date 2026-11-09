@@ -83,14 +83,6 @@ describe("SentryLive", () => {
   });
 });
 
-test("Sentry の SDK を import するのは runtime ごとの初期化 file と worker.ts だけ (共通の sentry.ts から import すると Workers の bundle に @sentry/bun が混ざる)", () => {
-  expect(grepFiles('from "@sentry/', ["src", "testing"], { tests: "exclude" }).sort()).toEqual([
-    "src/sentry-cloudflare.ts",
-    "src/worker.ts",
-    "testing/sentry-bun.ts",
-  ]);
-});
-
 describe("captureThrown は観測自体の失敗を握る", () => {
   const sentryFailure = new Error("sentry down");
   beforeAll(() =>

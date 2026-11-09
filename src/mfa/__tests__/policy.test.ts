@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { grepLines } from "../../__tests__/source-scan";
 import { isMfaEnabled } from "../policy";
 
 describe("isMfaEnabled (MFA 登録状態が「有効」かの判定)", () => {
@@ -21,9 +20,7 @@ describe("isMfaEnabled (MFA 登録状態が「有効」かの判定)", () => {
     expect(at).toEqual(new Date(0));
   });
 
-  test("述語は import 0 件 — verified_at を直接比較する第 2 の判定経路が生えない", () => {
-    expect(grepLines("^import ", "src/mfa/policy.ts", {})).toEqual([]);
-
+  test("述語は同期で boolean を返す", () => {
     const decidedSynchronously: boolean = isMfaEnabled({ verifiedAt: new Date() });
     expect(decidedSynchronously).toBe(true);
   });

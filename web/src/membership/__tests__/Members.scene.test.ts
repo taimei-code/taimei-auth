@@ -1,10 +1,28 @@
 import { describe, test } from "bun:test";
 import { Option } from "effect";
-import { change, Command, expect, given, label, role, scene, text } from "foldkit/scene";
+import {
+  change,
+  Command,
+  expect,
+  given,
+  label,
+  role,
+  scene,
+  text,
+  withViewInputs,
+} from "foldkit/scene";
 
+import * as CurrentCompany from "../../account/current-company";
 import { ChangeRole, init, LoadMembers, Message, type Model, update, view } from "../pages/Members";
 
 const VISIT = 1;
+
+const idleCompany = CurrentCompany.init({
+  maybeCurrentCompanyId: Option.some("company-a"),
+  memberships: [],
+});
+
+const membersView = withViewInputs(view, { currentCompany: idleCompany });
 const SELF = "user-self";
 
 const ME = { userId: SELF, label: "自分", email: "self@example.com", role: "ADMIN" } as const;
@@ -47,7 +65,7 @@ const listed = (role: "OWNER" | "ADMIN" | "MEMBER"): Model =>
 describe("メンバーの画面", () => {
   test("読み込み中は見出しと読み込み中の印を出し、一覧の section を出さない", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(opened("ADMIN")),
       expect(role("heading", { name: "メンバー" })).toExist(),
       expect(role("status")).toExist(),
@@ -57,7 +75,7 @@ describe("メンバーの画面", () => {
 
   test("ADMIN には、自分の行に (自分) を出し、OWNER と自分の行に操作を出さず、MEMBER の行に操作と招待の form を出す", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(listed("ADMIN")),
       expect(text("(自分)")).toExist(),
       expect(label("mate@example.com の役割")).toHaveValue("MEMBER"),
@@ -70,7 +88,7 @@ describe("メンバーの画面", () => {
 
   test("MEMBER には、役割の select・削除・招待の form を出さない", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(listed("MEMBER")),
       expect(text("(自分)")).toExist(),
       expect(role("combobox")).toBeAbsent(),
@@ -81,7 +99,7 @@ describe("メンバーの画面", () => {
 
   test("利用者の id が分からない間は、どの行にも操作を出さない", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(
         update(
           init(VISIT, Option.some(membershipOf("OWNER")), {}).model,
@@ -100,7 +118,7 @@ describe("メンバーの画面", () => {
 
   test("初回の取得が失敗すると、一覧の section に取得できなかった旨を出す", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(
         update(
           opened("OWNER"),
@@ -118,7 +136,7 @@ describe("メンバーの画面", () => {
 
   test("役割を選ぶと変更を送って操作を止め、取り直しの後に新しい役割を出す", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(listed("OWNER")),
       change(label("mate@example.com の役割"), "ADMIN"),
       expect(label("mate@example.com の役割")).toBeDisabled(),
@@ -155,7 +173,7 @@ describe("メンバーの画面", () => {
 
   test("役割の変更が拒まれると、行の select に元の役割を出して操作を戻す", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(listed("OWNER")),
       change(label("mate@example.com の役割"), "ADMIN"),
       Command.resolve(ChangeRole, Message.FailedChangeRole({ visit: VISIT, failure: "Forbidden" })),
@@ -166,7 +184,7 @@ describe("メンバーの画面", () => {
 
   test("現在の事業所が無いと、事業所が見つからない旨を出す", () => {
     scene(
-      { update, view },
+      { update, view: membersView() },
       given(init(VISIT, Option.none(), {}).model),
       expect(text("事業所が見つかりません。")).toExist(),
     );

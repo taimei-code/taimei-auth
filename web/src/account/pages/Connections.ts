@@ -72,9 +72,14 @@ type UpdateReturn = Update.Return<Model, Message>;
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     SucceededLoadLinkedAccounts: ({ visit, accounts }) =>
-      setListIfLoading(model, visit, LinkedAccountList.Loaded({ accounts })),
+      setListIfLoading(
+        model,
+        visit,
+        LinkedAccountList.Loaded({ accounts }),
+        LinkedAccountList.guards.Loading,
+      ),
     FailedLoadLinkedAccounts: ({ visit }) =>
-      setListIfLoading(model, visit, LinkedAccountList.Failed()),
+      setListIfLoading(model, visit, LinkedAccountList.Failed(), LinkedAccountList.guards.Loading),
   });
 
 const providerIconView = (providerId: string, h: HtmlBuilder<Message>): Html =>
