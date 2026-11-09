@@ -2,15 +2,13 @@ import "./index.css";
 
 import { type RuntimeForPath, runtimeForPath } from "./app/runtime-for-path";
 
-const rootElement = document.getElementById("root");
-if (!rootElement) {
+if (!document.getElementById("root")) {
   throw new Error("root element #root not found");
 }
 
 const startRuntime: Record<RuntimeForPath, () => Promise<unknown>> = {
   FoldkitAuth: () => import("./app/auth/entry"),
   FoldkitAccount: () => import("./app/account/entry"),
-  React: () => import("./app/react-root").then(({ startReactRoot }) => startReactRoot(rootElement)),
 };
 
 void startRuntime[runtimeForPath(window.location.pathname)]();

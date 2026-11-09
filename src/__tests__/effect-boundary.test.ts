@@ -15,7 +15,7 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(effectImports("db")).toEqual([]);
   });
 
-  test("web/src の effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけで、effect/http-api は Foldkit の画面の通信の client だけ (ADR-0023)", () => {
+  test("web/src の effect の subpath は effect/http・effect/crypto・effect/persistence だけで、effect/http-api は Foldkit の画面の通信の client だけ (ADR-0023)", () => {
     const subpaths = grepLines(String.raw`(from|import)\s*["']effect/`, "web/src", {});
     const isSpaHttpClientUsingHttpApi = (line: string) =>
       line.startsWith("web/src/shared/spa-http-client.ts:") &&
@@ -23,7 +23,7 @@ describe("effect の import 境界 (ADR-0017)", () => {
     expect(
       subpaths.filter(
         (line) =>
-          !/["']effect\/(reactivity|http|crypto|persistence)["']/.test(line) &&
+          !/["']effect\/(http|crypto|persistence)["']/.test(line) &&
           !isSpaHttpClientUsingHttpApi(line),
       ),
     ).toEqual([]);

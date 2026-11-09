@@ -48,4 +48,16 @@ describe("エラー画面は理由ごとの文言を alert で出す", () => {
       ),
     );
   });
+
+  test.each([
+    ["/auth の下の知らない path", "https://auth.example.com/auth/no-such-page"],
+    ["/auth と /account の外の path", "https://auth.example.com/no-such-page"],
+    ["root の path", "https://auth.example.com/"],
+  ])("%s は既定の文言を出す", (_label, href) => {
+    scene(
+      { update, view },
+      given(modelAt(href)),
+      expect(role("alert")).toContainText("エラーが発生しました"),
+    );
+  });
 });

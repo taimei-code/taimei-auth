@@ -20,13 +20,7 @@
       {
         "name": "@effect/language-service",
         // unstable と承知で採用した module (docs/adr/0017-effect-v4-full-adoption.md)
-        "allowedUnstableApis": [
-          "effect/http-api",
-          "effect/http",
-          "effect/reactivity",
-          "effect/ErrorReporter",
-          "@effect/atom-react"
-        ],
+        "allowedUnstableApis": ["effect/http-api", "effect/http", "effect/ErrorReporter"],
         "diagnosticSeverity": {
           // runtime や配列を呼んだ時点で読むため、Layer・Effect を関数で返す
           "lazyEffect": "off",

@@ -87,7 +87,7 @@ Decision の各項が「何を選んだか」を言い、この節は「その�
 
 ## web への拡大 (2026-10-11 追記)
 
-(2026-11-07 追記) この節のうち、取得したデータを Atom と `@effect/atom-react` で持つ部分は [ADR-0023](./0023-web-foldkit.md) が置き換える。React の画面が残る間 (#396 まで) は、この節のまま読む。
+(2026-11-07 追記) この節のうち、取得したデータを Atom と `@effect/atom-react` で持つ部分は [ADR-0023](./0023-web-foldkit.md) が置き換える。#396 で React の画面と `@effect/atom-react` を外し、web は `effect/reactivity` も使わなくなった (ADR-0023 の Consequences)。この節は経緯として読む。
 
 共通画面 SPA (`web/src`) も Effect の対象にする。
 

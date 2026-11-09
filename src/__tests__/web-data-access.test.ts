@@ -11,17 +11,9 @@ const runtimeImports = (path: string, source: string): string[] =>
       : specifier,
   );
 
-const mayUseHttpClient = (path: string) =>
-  path.endsWith("-atom.ts") || path === "shared/spa-api-client.ts";
-
 const isFoldkitFile = (source: string) => /from\s+["']foldkit(\/[^"']*)?["']/.test(source);
 
 const isApplicationEntry = (path: string) => /^app\/[^/]+\/entry\.ts$/.test(path);
-
-const usesEffectHook = (source: string) => /\buse(Layout)?Effect\b/.test(source);
-
-const mayRunMutation = (path: string) =>
-  path.endsWith("-atom.ts") || path === "shared/atom-runtime.ts";
 
 type Rule = {
   readonly name: string;
@@ -31,12 +23,6 @@ type Rule = {
 const RULES: readonly Rule[] = [
   { name: "fetch", violates: (_path, source) => /\bfetch\(/.test(source) },
   {
-    name: "SpaApiClient",
-    violates: (path, _source, imports) =>
-      imports.some((target) => target.endsWith("shared/spa-api-client")) &&
-      !path.endsWith("-atom.ts"),
-  },
-  {
     name: "SpaHttpClient",
     violates: (path, source, imports) =>
       imports.some((target) => target.endsWith("shared/spa-http-client")) &&
@@ -45,16 +31,7 @@ const RULES: readonly Rule[] = [
   },
   {
     name: "effect/http",
-    violates: (path, _source, imports) =>
-      imports.includes("effect/http") && !mayUseHttpClient(path),
-  },
-  {
-    name: "useEffect",
-    violates: (path, source) => path.includes("/pages/") && usesEffectHook(source),
-  },
-  {
-    name: "promiseExit",
-    violates: (path, source) => /\bpromiseExit\b/.test(source) && !mayRunMutation(path),
+    violates: (_path, _source, imports) => imports.includes("effect/http"),
   },
   {
     name: "better-auth の読み出し",
@@ -72,8 +49,8 @@ const RULES: readonly Rule[] = [
   },
   {
     name: "cause を捨てる onFailure",
-    violates: (path, source) =>
-      (/\bonFailure:\s*\(\s*(_\w*)?\s*\)\s*=>/.test(source) && !path.endsWith("-atom.ts")) ||
+    violates: (_path, source) =>
+      /\bonFailure:\s*\(\s*(_\w*)?\s*\)\s*=>/.test(source) ||
       /\bEffect\.catch\(\s*\(\s*(_\w*)?\s*\)\s*=>|\borElseSucceed\b/.test(source),
   },
   {
@@ -98,23 +75,9 @@ function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string
   return results.sort();
 }
 
-describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だけ (ADR-0017)", () => {
-  test("fetch は書かず、SpaApiClient と effect/http は *-atom.ts だけが使い、better-auth の一覧の読み出しは account/auth-client-read.ts だけが書き、Foldkit の SpaHttpClient は Foldkit の file と application の起動だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
+describe("web は通信と遷移と sign-out を決めた file だけが書く", () => {
+  test("fetch と effect/http の値の import は書かず、Foldkit の SpaHttpClient は Foldkit の file と application の起動だけが使い、better-auth の一覧の読み出しは account/auth-client-read.ts、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書き、cause を捨てない", () => {
     expect(analyzeWebDataAccess(readActualWebSources())).toEqual([]);
-  });
-
-  test("reactivityKeys を書けるのは *-atom.ts だけ (一覧を変える更新は key を足した hook で渡す)", () => {
-    const writers = grepFiles("reactivityKeys:", "web/src", {
-      tests: "exclude",
-    });
-    expect(writers.filter((path) => !path.endsWith("-atom.ts"))).toEqual([]);
-  });
-
-  test("前回の成功値の有無は shared/atom-runtime.ts の failedBeforeAnyValue だけが読む", () => {
-    const readers = grepFiles("previousSuccess", "web/src", {
-      tests: "exclude",
-    });
-    expect(readers).toEqual(["web/src/shared/atom-runtime.ts"]);
   });
 
   test("失敗の _tag の判定は shared/failure-message.ts に集める", () => {
@@ -124,46 +87,18 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
     expect(callers).toEqual(["web/src/shared/failure-message.ts"]);
   });
 
-  test("更新の実行 (useAtomSet の promiseExit) は *-atom.ts の hook だけが書く", () => {
+  test("画面は失敗の cause を捨てない", () => {
     expect(
       analyzeWebDataAccess({
-        "web/src/company/AddCompanyDialog.tsx":
-          'const add = useAtomSet(addCompanyAtom, { mode: "promiseExit" });',
+        "web/src/company/pages/Companies.ts":
+          "Exit.match(exit, { onSuccess: () => 1, onFailure: () => 0 });",
       }),
-    ).toEqual(["company/AddCompanyDialog.tsx: promiseExit"]);
-  });
-
-  test("画面と hook は mutation の失敗の cause を捨てず、query を観測する *-atom.ts だけが捨ててよい", () => {
-    const discard = "Exit.match(exit, { onSuccess: () => 1, onFailure: () => 0 });";
-    expect(
-      analyzeWebDataAccess({
-        "web/src/company/AddCompanyDialog.tsx": discard,
-        "web/src/company/company-atom.ts": discard,
-      }),
-    ).toEqual(["company/AddCompanyDialog.tsx: cause を捨てる onFailure"]);
+    ).toEqual(["company/pages/Companies.ts: cause を捨てる onFailure"]);
   });
 
   test("名前が -api.ts で終わる file でも fetch を書くと落ちる", () => {
     expect(
       analyzeWebDataAccess({ "web/src/mfa/mfa-api.ts": 'export const f = () => fetch("/x");' }),
     ).toEqual(["mfa/mfa-api.ts: fetch"]);
-  });
-
-  test("route entry (pages/) が useEffect を import すると落ちる (遷移起点の処理は route の beforeLoad / loader)", () => {
-    expect(
-      analyzeWebDataAccess({
-        "web/src/company/pages/X.tsx":
-          'import { useEffect } from "react";\nexport const X = () => null;',
-      }),
-    ).toEqual(["company/pages/X.tsx: useEffect"]);
-  });
-
-  test.each([
-    ["namespace の React.useEffect", 'import * as React from "react";\nReact.useEffect(() => {});'],
-    ["useLayoutEffect", 'import { useLayoutEffect } from "react";\nuseLayoutEffect(() => {});'],
-  ])("route entry (pages/) の %s も落ちる", (_name, source) => {
-    expect(analyzeWebDataAccess({ "web/src/company/pages/X.tsx": source })).toEqual([
-      "company/pages/X.tsx: useEffect",
-    ]);
   });
 });

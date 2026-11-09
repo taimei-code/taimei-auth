@@ -38,7 +38,6 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@foldkit/oxlint-plugin": "build-tool: oxlint が読む Foldkit の lint の plugin",
   "@foldkit/vite-plugin": "build-tool: web/vite.config.ts が読む Foldkit の build plugin",
   "@tailwindcss/forms": "build-tool: tailwind.config.ts が読む PostCSS 時の plugin",
-  "@vitejs/plugin-react": "build-tool: web/vite.config.ts が読む build plugin",
   alchemy: "build-tool: infra/alchemy.run.ts が宣言する IaC の CLI (staging の deploy)",
   autoprefixer: "build-tool: postcss.config.js が読む build 時 plugin",
   "drizzle-kit": "build-tool: migration 生成 CLI (host の bun run db:generate)",
@@ -56,7 +55,6 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@types/pg": "type-only: 型定義のみ (runtime 実体なし)",
   "@types/qrcode": "type-only: 型定義のみ (runtime 実体なし)",
   "@types/react": "type-only: 型定義のみ (runtime 実体なし)",
-  "@types/react-dom": "type-only: 型定義のみ (runtime 実体なし)",
   "@better-auth/utils":
     "test-only-runtime: src/mfa/__tests__/helpers.ts と e2e から runtime import するが ship される server コードからは import しない",
   "@playwright/test":
@@ -140,7 +138,7 @@ describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", 
         rules: {
           "no-restricted-imports": [
             "error",
-            { patterns: [{ group: ["lucide-react"], message: WEB_ONLY_DEP_MESSAGE }] },
+            { patterns: [{ group: ["lucide"], message: WEB_ONLY_DEP_MESSAGE }] },
           ],
         },
       })),
