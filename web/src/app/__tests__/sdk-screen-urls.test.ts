@@ -39,7 +39,7 @@ const accountRouteTagOf = (url: string) =>
 
 describe("auth-client が組むアカウント管理画面の URL は、Foldkit の application の route に当たる", () => {
   test.each([
-    ["メンバー画面", buildMembersUrl(fromTaimei), AccountRoute.Members()._tag],
+    ["メンバー画面", buildMembersUrl(fromTaimei), AccountRoute.Members({})._tag],
     [
       "アカウント管理画面 (/account の下の最初の画面)",
       buildAccountUrl({ authBaseUrl }),

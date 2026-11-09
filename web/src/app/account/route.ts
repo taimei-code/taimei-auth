@@ -1,6 +1,11 @@
-import { type Option, pipe, Schema } from "effect";
+import { Equal, Option, pipe, Schema } from "effect";
 import { Route } from "foldkit";
-import { defineRouteUnion, literal, slash, Transition } from "foldkit/route";
+import { defineRouteUnion, literal, slash } from "foldkit/route";
+import type { z } from "zod";
+
+import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
+
+import { fromZodSearch } from "../zod-search";
 
 export const AccountRoute = defineRouteUnion({
   Profile: {},
@@ -8,7 +13,10 @@ export const AccountRoute = defineRouteUnion({
   Sessions: {},
   Connections: {},
   Companies: {},
-  Members: {},
+  Members: {
+    service_name: Schema.optional(Schema.String),
+    redirect_url: Schema.optional(Schema.String),
+  },
   CompanySettings: {},
   NotFound: { path: Schema.String },
 });
@@ -43,6 +51,9 @@ export const companiesRouter = pipe(
 export const membersRouter = pipe(
   literal("account"),
   slash(literal("members")),
+  Route.query(
+    fromZodSearch<z.output<typeof redirectTargetSearchSchema>>(redirectTargetSearchSchema),
+  ),
   Route.mapTo(AccountRoute.Members),
 );
 
@@ -65,7 +76,12 @@ export const urlToAccountRoute = Route.parseUrlWithFallback(
   AccountRoute.NotFound,
 );
 
-export const enteredAccountRoute = (
+export const accountRouteToEnter = (
   maybePreviousRoute: Option.Option<AccountRoute>,
   nextRoute: AccountRoute,
-): Option.Option<AccountRoute> => Transition.enteredAny({ maybePreviousRoute, nextRoute });
+): Option.Option<AccountRoute> =>
+  Option.liftPredicate(
+    nextRoute,
+    (route) =>
+      !Option.exists(maybePreviousRoute, (previousRoute) => Equal.equals(previousRoute, route)),
+  );

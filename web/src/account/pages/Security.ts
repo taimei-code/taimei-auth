@@ -11,7 +11,7 @@ import { SpaHttpClient } from "../../shared/spa-http-client";
 import { alertTextView } from "../../shared/ui/alert-text-view";
 import { badgeVariants } from "../../shared/ui/class-names";
 import { listLoadingStatusView } from "../../shared/ui/icon-view";
-import { NoticeTone, staleNoticeOf } from "../../shared/ui/toast-view";
+import { NoticeTone, ReloadTexts, staleNoticeOf } from "../../shared/ui/toast-view";
 import { accountPageHeaderView } from "../account-page-header-view";
 
 const MfaState = defineTaggedUnion({
@@ -21,9 +21,6 @@ const MfaState = defineTaggedUnion({
   Enabled: { recoveryCodesRemaining: Schema.Int },
 });
 type MfaRegistration = typeof MfaState.Disabled.Type | typeof MfaState.Enabled.Type;
-
-const MfaStatusReloadTexts = Schema.Struct({ doneText: Schema.String, actionText: Schema.String });
-type MfaStatusReloadTexts = typeof MfaStatusReloadTexts.Type;
 
 export const Model = Schema.Struct({
   visit: Schema.Int,
@@ -41,13 +38,13 @@ export const Message = defineMessageUnion({
     visit: Schema.Int,
     refreshNumber: Schema.Int,
     mfa: MfaState,
-    maybeTexts: Schema.Option(MfaStatusReloadTexts),
+    maybeTexts: Schema.Option(ReloadTexts),
   },
   FailedLoadMfaStatus: {
     visit: Schema.Int,
     refreshNumber: Schema.Int,
     failure: LoadFailure,
-    maybeTexts: Schema.Option(MfaStatusReloadTexts),
+    maybeTexts: Schema.Option(ReloadTexts),
   },
   GotMfaEnrollmentMessage: { message: MfaEnrollment.Message },
   GotMfaDisablingMessage: { message: MfaDisabling.Message },
@@ -62,12 +59,12 @@ export type OutMessage = typeof OutMessage.Type;
 
 const STATUS_UNAVAILABLE = "多要素認証 (MFA) の設定状態を取得できませんでした。";
 
-const AFTER_ENABLING: MfaStatusReloadTexts = {
+const AFTER_ENABLING: ReloadTexts = {
   doneText: "多要素認証 (MFA) を有効にしました。",
   actionText: "多要素認証 (MFA) を有効にしました",
 };
 
-const AFTER_DISABLING: MfaStatusReloadTexts = {
+const AFTER_DISABLING: ReloadTexts = {
   doneText: "多要素認証 (MFA) を無効にしました。",
   actionText: "多要素認証 (MFA) を無効にしました",
 };
@@ -78,7 +75,7 @@ const failedLoadMfaStatus =
   (
     visit: number,
     refreshNumber: number,
-    maybeTexts: Option.Option<MfaStatusReloadTexts>,
+    maybeTexts: Option.Option<ReloadTexts>,
     failure: typeof LoadFailure.Type,
   ) =>
   () =>
@@ -88,7 +85,7 @@ export const LoadMfaStatus = Command.define("LoadMfaStatus", {
   args: {
     visit: Schema.Int,
     refreshNumber: Schema.Int,
-    maybeTexts: Schema.Option(MfaStatusReloadTexts),
+    maybeTexts: Schema.Option(ReloadTexts),
   },
   messages: [Message.SucceededLoadMfaStatus, Message.FailedLoadMfaStatus],
   execute: ({ visit, refreshNumber, maybeTexts }) =>
@@ -127,7 +124,7 @@ type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaH
 type Step = Update.StepWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
 const reloadMfaStatus =
-  (texts: MfaStatusReloadTexts): Step =>
+  (texts: ReloadTexts): Step =>
   (model) => {
     const requested = modifyFields(model, { refreshNumber: Number.increment });
     return {
@@ -153,7 +150,7 @@ const forThisRefresh = (
 const failLoad = (
   model: Model,
   failure: typeof LoadFailure.Type,
-  maybeTexts: Option.Option<MfaStatusReloadTexts>,
+  maybeTexts: Option.Option<ReloadTexts>,
 ): UpdateReturn =>
   failure === "Unauthorized"
     ? { model, outMessage: OutMessage.RequiredSignIn() }

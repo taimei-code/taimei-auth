@@ -10,12 +10,11 @@ export const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]
 
 export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   ["auth", new Set()],
-  ["invitation", new Set(["auth/sign-in-client.ts"])],
+  ["invitation", new Set(["account/account-page-header-view.ts", "auth/sign-in-client.ts"])],
   ["mfa", new Set(["auth/auth-page-card-view.ts"])],
   [
     "account",
     new Set([
-      "auth/auth-client.ts",
       "auth/sign-in-client.ts",
       "auth/sign-out.ts",
       "auth/provider-label.ts",
@@ -26,11 +25,10 @@ export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   [
     "membership",
     new Set([
-      "account/account-atom.ts",
-      "account/current-company-context.tsx",
-      "auth/auth-client.ts",
-      "invitation/InviteMemberForm.tsx",
-      "invitation/PendingInvitations.tsx",
+      "account/account-page-header-view.ts",
+      "account/current-company.ts",
+      "auth/sign-in-client.ts",
+      "invitation/member-invitations.ts",
     ]),
   ],
   [
@@ -47,13 +45,11 @@ export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
   [
     "app",
     new Set([
-      "account/current-company-context.tsx",
       "account/current-company.ts",
       "account/pages/Connections.ts",
       "account/pages/Profile.ts",
       "account/pages/Security.ts",
       "account/pages/Sessions.ts",
-      "auth/auth-client.ts",
       "auth/auth-error-reason.ts",
       "auth/pages/AuthError.ts",
       "auth/pages/Error.tsx",
@@ -64,7 +60,7 @@ export const ALLOWED_CROSS_DOMAIN = new Map<string, ReadonlySet<string>>([
       "company/pages/SignUpCompany.ts",
       "invitation/pages/AcceptInvitation.ts",
       "invitation/redirect-target.ts",
-      "membership/pages/Members.tsx",
+      "membership/pages/Members.ts",
       "mfa/pages/MfaChallenge.ts",
     ]),
   ],

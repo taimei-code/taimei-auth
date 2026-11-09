@@ -12,6 +12,9 @@ export const NoticeToast = Toast.make(Notice);
 export const NoticeTone = Schema.Literals(["Success", "Error"]);
 export type NoticeTone = typeof NoticeTone.Type;
 
+export const ReloadTexts = Schema.Struct({ doneText: Schema.String, actionText: Schema.String });
+export type ReloadTexts = typeof ReloadTexts.Type;
+
 const DURATION_BY_TONE: Record<NoticeTone, Duration.Input> = {
   Success: Duration.seconds(4),
   Error: Duration.seconds(10),

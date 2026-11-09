@@ -17,6 +17,7 @@ import {
 import * as CurrentCompany from "../../account/current-company";
 import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
+import * as Members from "../../membership/pages/Members";
 import { Toast } from "@foldkit/ui";
 
 import { Dialog } from "../../shared/ui/dialog-view";
@@ -180,6 +181,81 @@ describe("現在の事業所の切り替え", () => {
         page._tag === "CompanySettings" ? page.model.settings : undefined,
       ),
     ).toMatchObject(Option.some({ _tag: "Editing", companyId: COMPANY_B.companyId }));
+  });
+
+  test("メンバーの画面で URL の戻り先だけが変わると、画面を入れ直して新しい戻り先を招待に使う", () => {
+    const withRedirect = ready(
+      "/account/members?service_name=taimei&redirect_url=https%3A%2F%2Fexample.com%2Fx",
+    );
+    const sameUrl = update(
+      withRedirect,
+      Message.ChangedUrl({
+        url: urlOf(
+          `${ORIGIN}/account/members?service_name=taimei&redirect_url=https%3A%2F%2Fexample.com%2Fx`,
+        ),
+      }),
+    ).model;
+    const withoutRedirect = update(
+      sameUrl,
+      Message.ChangedUrl({ url: urlOf(`${ORIGIN}/account/members`) }),
+    ).model;
+    expect(sameUrl.pageVisit).toBe(withRedirect.pageVisit);
+    expect(withoutRedirect.pageVisit).toBe(withRedirect.pageVisit + 1);
+    expect(
+      Option.flatMap(withoutRedirect.maybePage, (page) =>
+        page._tag === "Members" && page.model.page._tag === "Listing"
+          ? Option.map(
+              page.model.page.maybeInvitations,
+              (invitations) => invitations.redirectSearch,
+            )
+          : Option.none(),
+      ),
+    ).toEqual(Option.some({}));
+  });
+
+  test("メンバーの画面で現在の事業所が変わると、新しい事業所の一覧を読み、前の事業所の古い一覧の結果を描かない", () => {
+    const members = ready("/account/members");
+    const switched = update(
+      update(members, currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany())).model,
+      currentCompanyMessage(
+        CurrentCompany.Message.SucceededRefreshCompanyState({
+          refreshNumber: 1,
+          state: stateWithCurrent(COMPANY_B.companyId),
+          maybeDoneText: Option.none(),
+        }),
+      ),
+    );
+    expect(switched.model.pageVisit).toBe(members.pageVisit + 1);
+    expect(switched.commands).toContainEqual(
+      expect.objectContaining({
+        name: Members.LoadMembers.name,
+        args: expect.objectContaining({ companyId: COMPANY_B.companyId }),
+      }),
+    );
+    const afterStale = update(
+      switched.model,
+      Message.GotMembersMessage({
+        message: Members.Message.SucceededLoadMembers({
+          visit: members.pageVisit,
+          members: [
+            {
+              userId: "user-a-mate",
+              label: "前の事業所の人",
+              email: "a@example.com",
+              role: "MEMBER",
+            },
+          ],
+          reload: { _tag: "Opened" },
+        }),
+      }),
+    ).model;
+    expect(
+      Option.map(afterStale.maybePage, (page) =>
+        page._tag === "Members" && page.model.page._tag === "Listing"
+          ? page.model.page.members._tag
+          : undefined,
+      ),
+    ).toEqual(Option.some("Loading"));
   });
 
   test("古い読み直しの結果は、新しい読み直しの後の状態を戻さない", () => {
