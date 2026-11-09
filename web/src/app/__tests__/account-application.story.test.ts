@@ -17,6 +17,7 @@ import {
 import * as CurrentCompany from "../../account/current-company";
 import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
+import * as MemberInvitations from "../../invitation/member-invitations";
 import * as Members from "../../membership/pages/Members";
 import { Toast } from "@foldkit/ui";
 
@@ -567,5 +568,105 @@ describe("事業所の設定の送信中の切り替え", () => {
         ),
       ).commands ?? [],
     ).toEqual([]);
+  });
+});
+
+describe("メンバーの画面の送信中の切り替え", () => {
+  const MEMBER = {
+    userId: "user-member",
+    label: "メンバー太郎",
+    email: "member@example.com",
+    role: "MEMBER",
+  } as const;
+
+  const membersMessage = (message: Members.Message) => Message.GotMembersMessage({ message });
+
+  const invitationsMessage = (message: MemberInvitations.Message) =>
+    membersMessage(Members.Message.GotMemberInvitationsMessage({ message }));
+
+  const selectB = currentCompanyMessage(
+    CurrentCompany.Message.SelectedCompany({ companyId: COMPANY_B.companyId }),
+  );
+
+  const membersShown = (): Model => {
+    const opened = ready("/account/members");
+    return [
+      membersMessage(
+        Members.Message.CompletedReadSelfUserId({
+          visit: opened.pageVisit,
+          maybeUserId: Option.some("user-owner"),
+        }),
+      ),
+      membersMessage(
+        Members.Message.SucceededLoadMembers({
+          visit: opened.pageVisit,
+          members: [MEMBER],
+          reload: { _tag: "Opened" },
+        }),
+      ),
+    ].reduce((current, each) => update(current, each).model, opened);
+  };
+
+  const after = (start: Model, messages: ReadonlyArray<Message>): Model =>
+    messages.reduce((current, each) => update(current, each).model, start);
+
+  const changingRole = () =>
+    after(membersShown(), [
+      membersMessage(Members.Message.SelectedRole({ member: MEMBER, value: "ADMIN" })),
+    ]);
+
+  test("役割の変更の送信中は枠の select を止め、選ばれても切り替えを送らない", () => {
+    scene(
+      { update, view },
+      givenScene(changingRole()),
+      expectScene(role("combobox", { name: "事業所を切り替え" })).toBeDisabled(),
+    );
+    expect(update(changingRole(), selectB).commands ?? []).toEqual([]);
+  });
+
+  test("削除・招待・招待の取り消しの送信中は、枠で選ばれても切り替えを送らない", () => {
+    const sending = [
+      [
+        membersMessage(Members.Message.ClickedRemove({ member: MEMBER })),
+        membersMessage(Members.Message.ClickedConfirmRemoval()),
+      ],
+      [
+        invitationsMessage(MemberInvitations.Message.UpdatedEmail({ value: "new@example.com" })),
+        invitationsMessage(MemberInvitations.Message.SubmittedInvitation()),
+      ],
+      [
+        invitationsMessage(
+          MemberInvitations.Message.ClickedRevoke({ invitationId: "invitation-1" }),
+        ),
+      ],
+    ].map((messages) => after(membersShown(), messages));
+    expect(sending.map((model) => update(model, selectB).commands ?? [])).toEqual([[], [], []]);
+  });
+
+  test("役割の変更の失敗が届いた後は、枠で選ぶと切り替えを送る", () => {
+    const changing = changingRole();
+    const failed = after(changing, [
+      membersMessage(
+        Members.Message.FailedChangeRole({ visit: changing.pageVisit, failure: "Forbidden" }),
+      ),
+    ]);
+    expect(update(failed, selectB).commands).toContainEqual(
+      expect.objectContaining({ name: CurrentCompany.SwitchCompany.name }),
+    );
+  });
+
+  test("枠の切り替えが済むまでは、役割の select と削除と招待のボタンを押せない", () => {
+    scene(
+      { update, view },
+      givenScene(
+        after(membersShown(), [
+          invitationsMessage(MemberInvitations.Message.UpdatedEmail({ value: "new@example.com" })),
+          selectB,
+        ]),
+      ),
+      expectScene(role("combobox", { name: "member@example.com の役割" })).toBeDisabled(),
+      expectScene(role("button", { name: "削除" })).toBeDisabled(),
+      expectScene(role("button", { name: "招待する" })).toBeDisabled(),
+    );
   });
 });

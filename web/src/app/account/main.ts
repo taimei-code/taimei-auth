@@ -297,9 +297,16 @@ const notifyDone =
     });
 
 const isCompanySwitchBlocked = (model: Model): boolean =>
-  Option.exists(
-    Option.filter(model.maybePage, AccountPage.guards.CompanySettings),
-    ({ model: settings }) => CompanySettings.isSubmitting(settings),
+  Option.exists(model.maybePage, (page) =>
+    AccountPage.match(page, {
+      Profile: () => false,
+      Companies: () => false,
+      CompanySettings: ({ model: settings }) => CompanySettings.isSubmitting(settings),
+      Members: ({ model: members }) => Members.isSubmitting(members),
+      Security: () => false,
+      Sessions: () => false,
+      Connections: () => false,
+    }),
   );
 
 const reenterCompanyPage: Step = (model) =>
@@ -614,6 +621,7 @@ const pageView = (
             slotId: "members",
             view: Members.view,
             model: pageModel,
+            viewInputs: { currentCompany },
             toParentMessage: toMembersMessage,
           }),
         Security: ({ model: pageModel }) =>
