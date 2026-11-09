@@ -1,0 +1,29 @@
+{
+  "extends": "./base.json",
+  "include": [
+    "../src/membership/pages/**/*.ts",
+    "../src/membership/pages/**/*.tsx",
+    "../src/membership/__tests__/**/*.ts",
+    "../src/membership/__tests__/**/*.tsx"
+  ],
+  "references": [
+    {
+      "path": "./membership.json"
+    },
+    {
+      "path": "./account.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./invitation.json"
+    },
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

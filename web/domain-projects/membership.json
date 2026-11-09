@@ -1,0 +1,13 @@
+{
+  "extends": "./base.json",
+  "include": ["../src/membership/**/*.ts", "../src/membership/**/*.tsx"],
+  "exclude": ["../src/membership/pages", "../src/membership/__tests__"],
+  "references": [
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

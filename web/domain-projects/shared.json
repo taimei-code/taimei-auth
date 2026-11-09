@@ -1,0 +1,9 @@
+{
+  "extends": "./base.json",
+  "include": ["../src/shared/**/*.ts", "../src/shared/**/*.tsx", "../src/vite-env.d.ts"],
+  "references": [
+    {
+      "path": "./core.json"
+    }
+  ]
+}

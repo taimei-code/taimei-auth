@@ -1,0 +1,23 @@
+{
+  "extends": "./base.json",
+  "include": [
+    "../src/mfa/pages/**/*.ts",
+    "../src/mfa/pages/**/*.tsx",
+    "../src/mfa/__tests__/**/*.ts",
+    "../src/mfa/__tests__/**/*.tsx"
+  ],
+  "references": [
+    {
+      "path": "./mfa.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

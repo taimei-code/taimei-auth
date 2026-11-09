@@ -19,9 +19,12 @@ import {
 } from "typescript/unstable/ast/is";
 
 import { REPO_ROOT } from "./config-invariant-helpers";
-import { ALLOWED_CROSS_DOMAIN, BOOTSTRAP_FILES, DOMAIN_ROOTS } from "./web-domain-allowlist";
 
 const WEB_SRC = join(REPO_ROOT, "web/src");
+
+const DOMAIN_ROOTS = new Set(["account", "auth", "company", "invitation", "membership", "mfa"]);
+
+const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]);
 
 const MODULE_ROOTS = new Set([...DOMAIN_ROOTS, "app", "shared"]);
 
@@ -31,7 +34,6 @@ type AnalyzeOptions = {
 
 export type StructureResult = {
   violations: string[];
-  edges: string[];
   roots: string[];
   fileCount: number;
 };
@@ -156,41 +158,9 @@ const moduleRoot = (path: string): string | null => {
   return MODULE_ROOTS.has(root) ? root : null;
 };
 
-const findCycle = (edges: ReadonlyMap<string, ReadonlySet<string>>): string[] | null => {
-  const visited = new Set<string>();
-  const active: string[] = [];
-  const inActive = new Set<string>();
-
-  const visit = (node: string): string[] | null => {
-    if (inActive.has(node)) {
-      const start = active.indexOf(node);
-      return [...active.slice(start), node];
-    }
-    if (visited.has(node)) return null;
-    visited.add(node);
-    active.push(node);
-    inActive.add(node);
-    for (const next of [...(edges.get(node) ?? [])].sort()) {
-      const cycle = visit(next);
-      if (cycle) return cycle;
-    }
-    active.pop();
-    inActive.delete(node);
-    return null;
-  };
-
-  for (const node of [...edges.keys()].sort()) {
-    const cycle = visit(node);
-    if (cycle) return cycle;
-  }
-  return null;
-};
-
 type Scan = {
   readonly sources: ReadonlyMap<string, string>;
   readonly violations: string[];
-  readonly edges: Set<string>;
-  readonly graph: Map<string, Set<string>>;
   readonly roots: Set<string>;
   readonly pageFiles: Set<string>;
   readonly appTargets: Set<string>;
@@ -228,33 +198,6 @@ const placementViolations = (path: string, root: string | null): string[] => {
 
 const isDomainPage = (path: string): boolean => isDomainPageSegments(webRelative(path).split("/"));
 
-const crossRootViolation = (
-  root: string,
-  relativePath: string,
-  targetRoot: string,
-  targetRelative: string,
-): string | null => {
-  if (targetRelative.includes("/pages/") && root !== "app") {
-    return `domain page import is app-only: ${relativePath} -> ${targetRelative}`;
-  }
-  if (root === "shared" && targetRoot !== "shared") {
-    return `shared reverse dependency: ${relativePath} -> ${targetRelative}`;
-  }
-  if (targetRoot === "shared" || ALLOWED_CROSS_DOMAIN.get(root)?.has(targetRelative)) {
-    return null;
-  }
-  return `cross-domain path not allowed: ${relativePath} -> ${targetRelative}`;
-};
-
-const recordCrossRootEdge = (scan: Scan, root: string, targetRoot: string): void => {
-  scan.edges.add(`${root}->${targetRoot}`);
-  if (DOMAIN_ROOTS.has(root) && DOMAIN_ROOTS.has(targetRoot)) {
-    const next = scan.graph.get(root) ?? new Set<string>();
-    next.add(targetRoot);
-    scan.graph.set(root, next);
-  }
-};
-
 const scanCoreSpecifier = (scan: Scan, path: string, specifier: string): void => {
   const shadow = withExtension(`web/src/${specifier.slice("@core/".length)}`, scan.sources);
   if (shadow) {
@@ -274,20 +217,8 @@ const scanSpecifier = (scan: Scan, path: string, root: string | null, specifier:
     scan.violations.push(`unresolved web import: ${webRelative(path)} -> ${specifier}`);
     return;
   }
-  if (target === null) {
-    return;
-  }
-  const targetRoot = moduleRoot(target);
-  if (root === "app") {
+  if (target !== null && root === "app") {
     scan.appTargets.add(target);
-  }
-  if (!root || !targetRoot || root === targetRoot) {
-    return;
-  }
-  recordCrossRootEdge(scan, root, targetRoot);
-  const violation = crossRootViolation(root, webRelative(path), targetRoot, webRelative(target));
-  if (violation) {
-    scan.violations.push(violation);
   }
 };
 
@@ -323,8 +254,6 @@ export async function analyzeWebStructure(
   const scan: Scan = {
     sources,
     violations: [],
-    edges: new Set(),
-    graph: new Map(),
     roots: new Set(),
     pageFiles: new Set(),
     appTargets: new Set(),
@@ -348,14 +277,8 @@ export async function analyzeWebStructure(
     scan.violations.push(...targetTreeViolations(scan));
   }
 
-  const cycle = findCycle(scan.graph);
-  if (cycle) {
-    scan.violations.push(`domain dependency cycle: ${cycle.join(" -> ")}`);
-  }
-
   return {
     violations: [...new Set(scan.violations)].sort(),
-    edges: [...scan.edges].sort(),
     roots: [...scan.roots].sort(),
     fileCount: sources.size,
   };
