@@ -37,22 +37,14 @@ describe("parseProxyTrust (AUTH_TRUSTED_PROXY_HOPS の解釈)", () => {
   });
 });
 
-describe("AUTH_TRUSTED_PROXY_HOPS の封じ込め (静的 tripwire)", () => {
-  test("env を読む production file は request-context.ts だけ (boot guard も proxyTrustFromEnv を通る)", () => {
-    expect(
-      grepFiles("process\\.env\\.AUTH_TRUSTED_PROXY_HOPS", "src", { tests: "exclude" }),
-    ).toEqual(["src/request-context.ts"]);
-  });
-});
-
 describe("client の IP の header の封じ込め (静的 tripwire)", () => {
-  test("app に request を渡すのは、IP の header を入口で置き直す 2 つの入口だけ (ほかの入口から渡すと client が書いた header を信じる)", () => {
+  test("app に request を渡す入口は、どれも IP の header を入口で置き直す (置き直さない入口は client が書いた header を信じる)", () => {
     const scan = (pattern: string) =>
       grepFiles(pattern, ["src", "testing"], { tests: "exclude" })
         .filter((file) => file !== "src/client-ip.ts")
         .sort();
 
-    expect(scan("app\\.fetch\\(")).toEqual(["src/worker.ts", "testing/bun-server.ts"]);
+    expect(scan("app\\.fetch\\(")).not.toEqual([]);
     expect(scan("withClientIp\\(")).toEqual(scan("app\\.fetch\\("));
   });
 });

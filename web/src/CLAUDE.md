@@ -9,10 +9,8 @@ Foldkit のコードを書く前に、`.claude/skills/` の `foldkit` と `gener
 - file の所有者は、URL ではなく変更理由となる業務 domain で決める。`/account/*` の画面でも、company、membership、invitation、mfa の操作は各 domain が持つ。どの domain の変更理由かは、名前や import からは決まらない。
 - 複数の domain から使われることだけを理由に `shared` へ移さない。移した理由は source に残らない。
 - domain が肥大化したら、技術の種類ではなく `challenge` や `registration` のような機能名で分ける。技術名と機能名の区別は、決まった一覧では書けない (`lib/` と `components/` だけは test が止める)。
-- better-auth の client が返す `error` は、読み出しの失敗として扱う。読み出しを 1 つの file に限ることは test が止めるが、その中で `error` を読むかどうかは、型にも source の形にも出ない。
-- 画面の失敗の文言と動きは、`shared/failure-message.ts` の `failureMessage` と `failureOutcome` で選び、失敗の `_tag` を直接比べない。`_tag` の比較は、ほかの用途の比較と source の形が同じで、区別できない。
 - 失敗の文言は各画面に置く。同じ `_tag` でも画面ごとに意味が違うためである。共通の表を作ること自体は正当な書き方と区別できない。
 - MFA の画面は、同じ失敗に同じ文言を出すため、`mfa/mfa-failure-messages.ts` の 1 つの表を共有する。どの画面が MFA の画面かは source から決まらない。
 - search の検査に失敗した時の既定の値は、route の parser の中で決める。既定の値をどこで補ったかは、型が同じなので区別できない。
-- `/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は、application の `ReplaceDocument` か `LoadDocument` で document を読み直す (理由は ADR-0002 と ADR-0023 の Decision 2)。lint が止めるのは path を文字列で直接書く形だけで、`PushUrl` に替える書き方は Foldkit の形として正当なので止められない。
+- 認証の状態が変わった後の遷移は、同じ application の中でも、application の `ReplaceDocument` か `LoadDocument` で document を読み直す (理由は ADR-0002 と ADR-0023 の Decision 2)。いつ認証の状態が変わったかは source の形に出ないので、止められない。
 - 画面を開いた時の確認と取得は、route に入った時の `init` が返す Command に置く。同じ取得を `update` の Message から始める書き方も Foldkit の形として正当なので、止められない。

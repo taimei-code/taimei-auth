@@ -58,9 +58,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - consumer の CI は断片を `include:` する前に root の SDK を install し、private の image を pull するために `docker login ghcr.io` を行う
 - ADR-0014 の位置契約 (既定 target は dev) は残る (理由は ADR-0014 の Status)。変わるのは、consumer が Dockerfile を build するという前提だけである
 - QA-MR-09 は consumer の compose からの build ではなく試験用の image の起動と試験 API のログインを確かめる手順になる
-- 本番の `AuthApi` に、試験からしか呼ばない `createUser` が残る。本番の worker の bundle には method として入るので、型の境界では守れない。呼び手が試験の利用者を作る use-case だけであることを `testing/__tests__/containment.test.ts` が固定する
-- 試験の利用者も、consumer が受け取る現在の事業所の契約 (VerifySession と GetSession) を満たす。`testing/` の中で現在の事業所を書き換える呼び手を `testing/__tests__/default-company-contract.test.ts` が固定する
-- 資格情報なしの session 発行 (`AuthApi.issueSession`) の呼び手の固定 (`src/__tests__/effect-boundary.test.ts`) は変えない。試験 API は本物の Magic Link でログインさせる
+- 本番の `AuthApi` に、試験からしか呼ばない `createUser` が残る。本番の worker の bundle には method として入るので、型の境界では守れない。呼び手が試験の利用者を作る use-case だけであることを lint の `taimei/create-user-only-in-test-user-use-case` が止める
+- 試験の利用者も、consumer が受け取る現在の事業所の契約 (VerifySession と GetSession) を満たす。`testing/` の中で現在の事業所を書き換える呼び手を lint の `taimei/current-company-write-only-in-testing-use-cases` が止める
+- 資格情報なしの session 発行 (`AuthApi.issueSession`) の呼び手の固定 (lint の `taimei/issue-session-only-in-second-factor`) は変えない。試験 API は本物の Magic Link でログインさせる
 - `bun test` の preload は `testing/__tests__/preload.ts` になり、taimei-auth 自身の試験の runtime も Magic Link の URL を記録する
 - (2026-10-21) 試験の環境の Postgres の major を上げると、残った volume を読めずに起動しない。断片の Postgres の image を上げる時は、consumer に `down -v` を求める版の扱いを決めてから上げる
 - (2026-10-21) ADR-0019 の「Bun の TTL store は in-memory」の例外が試験用の entry に 1 つできる。`testing-server.test.ts` が本物の entry を local の DB に向けて起動するので、開発者の local の DB にも試験用の TTL store の表と開発用アカウントの行ができる

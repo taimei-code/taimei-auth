@@ -218,7 +218,7 @@ const CASES: readonly Case[] = [
   {
     name: "web は effect/http を import できる",
     path: "web/src/account/http.ts",
-    source: 'import "effect/http";',
+    source: 'import type { HttpClient } from "effect/http"; export type C = HttpClient.HttpClient;',
     expectedRules: [],
   },
   {
@@ -468,6 +468,54 @@ const CASES: readonly Case[] = [
     path: "src/eval.ts",
     source: "export const run = (code: string) => eval(code);",
     expectedRules: [EVAL],
+  },
+  {
+    name: "e2e の fixture は @/db/testing の外の @/db を値で import できない",
+    path: "e2e/fixtures.ts",
+    source: 'import { db } from "@/db/client";\nexport { db };',
+    expectedRules: ["taimei(db-import-in-e2e-fixtures-only-db-testing)"],
+  },
+  {
+    name: "e2e の fixture は @/db/testing を import できる",
+    path: "e2e/fixtures.ts",
+    source: 'import { createSeed } from "@/db/testing/seed";\nexport { createSeed };',
+    expectedRules: [],
+  },
+  {
+    name: "shebang はコメントとして止めない",
+    path: "management/shebang-probe.ts",
+    source: "#!/usr/bin/env bun\nexport const a = 1;",
+    expectedRules: [],
+  },
+  {
+    name: "each を使わない test file の入れ子の配列は、test 名の行として読まない",
+    path: "src/__tests__/rows-probe.test.ts",
+    source: 'export const rows = [["AC-001 x", 1]];',
+    expectedRules: [],
+  },
+  {
+    name: "each に渡す行の名前に設計書の番号を書けない",
+    path: "src/__tests__/each-probe.test.ts",
+    source: 'const rows = [["AC-001 x", 1]];\ntest.each(rows)("%s", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "SPA の API の file でも、決めた service の外の Layer.effect は書けない",
+    path: "src/handlers/spa-http-api.ts",
+    source: "export const l = Layer.effect(Other, make);",
+    expectedRules: ["taimei(no-failing-layer-constructor-in-src)"],
+  },
+  {
+    name: "SPA の API の file は、認証の service の Layer.effect を書ける",
+    path: "src/handlers/spa-http-api.ts",
+    source: "export const l = Layer.effect(Authenticated, make);",
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の失敗の code を key の名前でも読めない",
+    path: "src/membership/unauthorized-probe.ts",
+    source: "export const codes = { UNAUTHORIZED: 1 };",
+    expectedRules: ["taimei(api-error-shape-only-in-auth-wiring)"],
   },
 ];
 
