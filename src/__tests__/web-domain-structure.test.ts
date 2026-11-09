@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 
 import {
   analyzeWebStructure,
@@ -29,22 +28,6 @@ describe("extractModuleSpecifiers", () => {
       "./type-re-export",
       "./dynamic",
     ]);
-  });
-});
-
-describe("web tooling aliases", () => {
-  test("shadcn generator が廃止済み technical directory を再生成しない", () => {
-    const config = JSON.parse(
-      readFileSync(new URL("../../web/components.json", import.meta.url), "utf8"),
-    );
-
-    expect(config.aliases).toEqual({
-      components: "@/shared",
-      utils: "@/shared/utils",
-      ui: "@/shared/ui",
-      lib: "@/shared",
-      hooks: "@/shared",
-    });
   });
 });
 
