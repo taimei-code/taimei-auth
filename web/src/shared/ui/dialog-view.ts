@@ -13,6 +13,7 @@ export const Dialog = {
   init: FoldkitDialog.init,
   ShowDialog: FoldkitDialog.ShowDialog,
   CloseDialog: FoldkitDialog.CloseDialog,
+  AcquireResources: FoldkitDialog.AcquireResources,
 };
 export type DialogModel = FoldkitDialog.Model;
 export type DialogMessage = FoldkitDialog.Message;

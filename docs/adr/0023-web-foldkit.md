@@ -57,7 +57,8 @@ maintainer は採用の基準を「誰が書いても、どの agent が書い�
 
 - 強制するのは言語ではなく framework である。TypeScript の上なので、抜け道は lint で止めるところまでになる
 - 取り直しの時期と Message の選び方の誤り (実験の順番の不具合) は、型でも lint でも止まらない。Story テストで守る
-- 書く費用は上がる。移した画面と `shared/ui/` の部品が repo の中の見本になることで下がると見込む。移行を終えた後に、#386 の実験と同じ物差しで測り直す (手順と基準値は #396 の issue に書く)
+- 書く費用は上がる。移行を終えた後に #386 の実験と同じ物差しで測り直した (#396、各 model 1 回)。Foldkit を書く費用は React の 1.48 倍 (3 つの model の合計。#386 では 2.24 倍) で、model ごとには 1.08〜1.84 倍だった。Foldkit の書き手は 3 人とも、repo の中の画面と `shared/ui/` の部品を見本として写した
+- 同じ測り直しで、状態の置き場と処理を始める場所は 3 人とも 14 項目すべてそろった (#386 と同じ)。置き場と表し方の 2 つの値ともそろった項目は 86% (#386 では 57%) だった。ただし React の側も、条件を変えずに 14% から 43% へ同じだけ伸びたので、この伸びは移行の効果ではなく 1 回ごとの揺れとみなす。2 つの差は #386 と同じだった
 - web の `if` などの本体は braces を省けない (oxlint の `curly`)
 - Foldkit は pre-1.0 である。版を上げるときは、`@foldkit/*` と `.claude/skills/` の Foldkit の skill も同じ PR で上げる。`git subtree pull` は未 commit の変更があると動かないので、`package.json` の版を上げる変更を先に commit し、そのあとで `bash scripts/update-foldkit-reference.sh` を走らせる。script は `package.json` の版の tag で subtree を `git subtree pull` し、3 つの skill をその subtree の `skills/` から写す。写すときに `SKILL.md` の frontmatter に `metadata.foldkit-version` を付け、skill の中身の hash を `.claude/skills/foldkit-skills.lock.json` に書く。版は script が `package.json` から読んで書くので、手で転記する場面を作らない。`src/__tests__/foldkit-reference.test.ts` は、subtree の `foldkit`・`@foldkit/ui` の版、skill の `metadata.foldkit-version`、lock の版を `package.json` の版と照らし、skill の中身を lock の hash と照らす。skill を手で写したり書き換えたりすると落ちる
 - Foldkit の skill の指示とこの repo の検査が食い違う箇所 (見出しの comment、`// NOTE:`) は、検査の判定を優先する。書き手は検査に落とされてから直すことになる
