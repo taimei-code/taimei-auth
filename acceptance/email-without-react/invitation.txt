@@ -1,0 +1,25 @@
+事業所への招待
+
+佐藤 <i> さん (sato+a@example.com) から
+「<script>"株式会社&'"」への参加 (管理者) に招待されています。
+
+招待を受諾する https://auth.example.com/api/auth/magic-link/verify?token=x&y=1
+
+この招待リンクは24時間有効です
+
+この招待は invitee+<x>@example.com 宛です。
+受諾には同じメールアドレスでのログインが必要です。
+
+----------------------------------------
+
+ボタンが機能しない場合は、以下の URL をブラウザに貼り付けてください。 URL が auth.taimei-code.com で始まることを確認してください。
+
+https://auth.example.com/api/auth/magic-link/verify?token=x&y=1
+
+招待に心当たりがない場合は、このメールを無視してください。
+不審なメールは support@example.com までご連絡ください。
+IT 管理者向け SPF/DKIM 情報: https://example.com/security?a=1&b=2
+
+----------------------------------------
+
+© 2026 taimei

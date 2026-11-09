@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 import { getAppName, getMagicLinkFromEmail, renderAndSendEmail } from "./client";
-import MagicLinkEmail from "./magic-link";
+import { magicLinkEmail } from "./magic-link";
 
 export const sendMagicLinkEmail = Effect.fnUntraced(function* (email: string, url: string) {
   const appName = getAppName();
@@ -8,7 +8,7 @@ export const sendMagicLinkEmail = Effect.fnUntraced(function* (email: string, ur
     from: getMagicLinkFromEmail(),
     to: email,
     subject: `${appName} へのログインリンク`,
-    component: MagicLinkEmail({ url, appName }),
+    body: magicLinkEmail({ url, appName }),
     kind: "magic link",
   });
 });

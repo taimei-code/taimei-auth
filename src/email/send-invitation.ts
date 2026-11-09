@@ -6,7 +6,7 @@ import {
   getSupportEmail,
   renderAndSendEmail,
 } from "./client";
-import InvitationEmail from "./invitation";
+import { invitationEmail } from "./invitation";
 import type { DisplayText } from "./sanitize";
 
 export type InvitationEmailParams = {
@@ -24,7 +24,7 @@ export const sendInvitationEmail = Effect.fnUntraced(function* (params: Invitati
     from: getInvitationFromEmail(),
     to: params.inviteeEmail,
     subject: `[${appName}] ${params.inviterName} さんから「${params.companyName}」への招待`,
-    component: InvitationEmail({
+    body: invitationEmail({
       url: params.url,
       appName,
       companyName: params.companyName,

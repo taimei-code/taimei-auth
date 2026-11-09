@@ -11,7 +11,6 @@
     "isolatedModules": true,
     "noEmit": true,
     "types": ["bun"],
-    "jsx": "react-jsx",
     "paths": {
       "@/*": ["./*"],
       "@core/*": ["./src/*"]

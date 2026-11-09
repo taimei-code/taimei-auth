@@ -108,6 +108,7 @@ spike では予測しきれず、本番 (auth.taimei-code.com) で初めて当�
    の dynamic import で実行時に module の init を強制して回避した (auth.ts / send-welcome.ts / send-invitation.ts)。
    spike-4 の「namespace import で解決」は最小 spike のバンドルでのみ成立し、better-auth などを含む本実装の
    バンドルでは成立しなかった。
+   (2026-11-09 追記 (#419)) `@react-email/*` を依存から外したので、この回避は無くなった ([ADR-0024](./0024-email-template-as-data.md))。
 5. **vite の base=/auth/ に対する static rewrite の欠落**: index.html は `/auth/assets/*` を参照するが、Workers
    Static Assets は web/dist を `/` 直下に配信する。worker.ts の mountStatic で `/auth` を剥がしてから委譲
    しないと `/auth/assets/*` が実在せず、not_found_handling=single-page-application が index.html (html)

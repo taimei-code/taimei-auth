@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "unicorn", "oxc", "import", "jsx-a11y", "react"],
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
   "jsPlugins": [
     {
       "name": "taimei",
@@ -34,12 +34,6 @@
     ],
     "no-template-curly-in-string": "error",
     "unicorn/no-useless-spread": "off",
-    "jsx-a11y/prefer-tag-over-role": "off",
-    "react/purity": "off",
-    "react/globals": "off",
-    "react/no-danger": "error",
-    "react/jsx-no-target-blank": "error",
-    "react/button-has-type": "error",
     "eqeqeq": "error",
     "no-fallthrough": "error",
     "radix": "error",
@@ -326,7 +320,7 @@
               },
               {
                 "group": ["react", "react/*", "react-dom", "react-dom/*"],
-                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
+                "message": "web は React を使わない。画面は Foldkit で書く (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -379,7 +373,7 @@
               },
               {
                 "group": ["react", "react/*", "react-dom", "react-dom/*"],
-                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
+                "message": "web は React を使わない。画面は Foldkit で書く (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -436,7 +430,7 @@
               },
               {
                 "group": ["react", "react/*", "react-dom", "react-dom/*"],
-                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
+                "message": "web は React を使わない。画面は Foldkit で書く (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }

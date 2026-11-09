@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { getAppName, getAppUrl, getWelcomeFromEmail, renderAndSendEmail } from "./client";
 import type { DisplayText } from "./sanitize";
-import WelcomeEmail from "./welcome";
+import { welcomeEmail } from "./welcome";
 
 export const sendWelcomeEmail = Effect.fnUntraced(function* (email: string, userName: DisplayText) {
   const appName = getAppName();
@@ -9,7 +9,7 @@ export const sendWelcomeEmail = Effect.fnUntraced(function* (email: string, user
     from: getWelcomeFromEmail(),
     to: email,
     subject: `${appName} へようこそ！`,
-    component: WelcomeEmail({ appName, userName, dashboardUrl: `${getAppUrl()}/dashboard` }),
+    body: welcomeEmail({ appName, userName, dashboardUrl: `${getAppUrl()}/dashboard` }),
     kind: "welcome",
   });
 });

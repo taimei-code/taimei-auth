@@ -23,6 +23,3 @@ updates:
           - "@effect/tsgo"
       dev-dependencies:
         dependency-type: "development"
-      react-email:
-        patterns:
-          - "@react-email/*"

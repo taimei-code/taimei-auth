@@ -53,7 +53,7 @@
 - `__tests__/manual-regression-triggers.test.ts`: 手動回帰 (`docs/qa/manual-regression.md`) のどの QA-MR も契機の path を持ち、本番以外の file がどれかに当たり、どの path も実在の file に当たること
 - `account/__tests__/containment.test.ts`: 退会の判定と、commit 後の session 削除の呼び手が 1 つであること
 - `auth-plugins/__tests__/containment.test.ts`: better-auth の hook の判定が auth-plugins に閉じること
-- `email/__tests__/containment.test.ts`: メールの表示名が `DisplayText` を通り、template の依存と style の置き場が決まっていること
+- `email/__tests__/containment.test.ts`: メールの表示名が `DisplayText` を通ること
 - `health/__tests__/containment.test.ts`: `/health` の probe の呼び手が 1 つで、TTL store の ping が再試行しないこと
 - `membership/__tests__/containment.test.ts`: guard を通った印 (`Verified`) を付けられるのが guard だけであること
 - `membership/__tests__/no-hono-import.test.ts`: Guard 層が hono を import しないこと

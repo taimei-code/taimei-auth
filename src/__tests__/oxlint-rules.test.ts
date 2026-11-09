@@ -18,12 +18,7 @@ const RESTRICTED_IMPORT = "eslint(no-restricted-imports)";
 const RESTRICTED_GLOBAL = "eslint(no-restricted-globals)";
 const MISSING_EXTENSION = "import(extensions)";
 const TEMPLATE_PLACEHOLDER_IN_STRING = "eslint(no-template-curly-in-string)";
-const DANGEROUS_INNER_HTML = "react(no-danger)";
-const TARGET_BLANK_WITHOUT_NOOPENER = "react(jsx-no-target-blank)";
 const EVAL = "eslint(no-eval)";
-const EMPTY_HEADING = "jsx-a11y(heading-has-content)";
-const ARIA_HIDDEN_ON_FOCUSABLE = "jsx-a11y(no-aria-hidden-on-focusable)";
-const BUTTON_WITHOUT_TYPE = "react(button-has-type)";
 const LOOSE_EQUALITY = "eslint(eqeqeq)";
 const SWITCH_FALLTHROUGH = "eslint(no-fallthrough)";
 const PARSE_INT_WITHOUT_RADIX = "eslint(radix)";
@@ -297,37 +292,6 @@ const CASES: readonly Case[] = [
     path: "src/curly.ts",
     source: `export const text = "$${"{"}value}";`,
     expectedRules: [TEMPLATE_PLACEHOLDER_IN_STRING],
-  },
-  {
-    name: "メールの template は dangerouslySetInnerHTML を書けない",
-    path: "src/email/inner-html.tsx",
-    source:
-      "export const View = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />;",
-    expectedRules: [DANGEROUS_INNER_HTML],
-  },
-  {
-    name: "メールの template は rel の noreferrer の無い target=_blank の link を書けない",
-    path: "src/email/blank.tsx",
-    source: 'export const View = () => <a href="https://example.com" target="_blank">x</a>;',
-    expectedRules: [TARGET_BLANK_WITHOUT_NOOPENER],
-  },
-  {
-    name: "メールの template は文字の無い見出しを書けない",
-    path: "src/email/heading.tsx",
-    source: "export const View = () => <h2 />;",
-    expectedRules: [EMPTY_HEADING],
-  },
-  {
-    name: "メールの template は focus を受ける要素を aria-hidden で隠せない",
-    path: "src/email/hidden-button.tsx",
-    source: 'export const View = () => <button type="button" aria-hidden="true">x</button>;',
-    expectedRules: [ARIA_HIDDEN_ON_FOCUSABLE],
-  },
-  {
-    name: "メールの template は type の無い button を書けない",
-    path: "src/email/untyped-button.tsx",
-    source: "export const View = () => <button>x</button>;",
-    expectedRules: [BUTTON_WITHOUT_TYPE],
   },
   {
     name: "Foldkit の画面の view は Command の外で window を読めない",

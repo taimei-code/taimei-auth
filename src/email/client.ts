@@ -1,7 +1,7 @@
-import { Effect } from "effect";
-import type { ReactElement } from "react";
+import { Clock, Effect } from "effect";
 import { Resend } from "resend";
 import { EmailError, tryEmail } from "../errors";
+import { type EmailBody, renderEmail } from "./layout";
 
 let resendInstance: Resend | null = null;
 
@@ -9,12 +9,11 @@ export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   from: string;
   to: string;
   subject: string;
-  component: ReactElement;
+  body: EmailBody;
   kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
 }) {
-  const { render, toPlainText } = yield* tryEmail(() => import("@react-email/render"));
-  const html = yield* tryEmail(() => render(params.component));
-  const text = yield* tryEmail(async () => toPlainText(html));
+  const sentAt = new Date(yield* Clock.currentTimeMillis);
+  const { html, text } = renderEmail(params.body, sentAt.getUTCFullYear());
 
   const { error } = yield* tryEmail(() =>
     getResendClient().emails.send({
