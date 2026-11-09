@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Option } from "effect";
-import { expect as expectScene, given as givenScene, scene, text } from "foldkit/scene";
+import { expect as expectScene, given as givenScene, role, scene, text } from "foldkit/scene";
 import { Command, given, message, model, story } from "foldkit/story";
 import { fromString } from "foldkit/url";
 
@@ -258,27 +258,30 @@ describe("現在の事業所の切り替え", () => {
     ).toEqual(Option.some("Loading"));
   });
 
-  test("古い読み直しの結果は、新しい読み直しの後の状態を戻さない", () => {
-    const switched = update(
-      ready(),
+  test("新しい読み直しの成功の後に届いた古い読み直しの成功は、状態を戻さない", () => {
+    const second = [
       currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany()),
-    ).model;
-    const second = update(
-      switched,
       currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany()),
-    ).model;
+      currentCompanyMessage(
+        CurrentCompany.Message.SucceededRefreshCompanyState({
+          refreshNumber: 2,
+          state: stateWithCurrent(COMPANY_B.companyId),
+          maybeDoneText: Option.none(),
+        }),
+      ),
+    ].reduce((current, each) => update(current, each).model, ready());
     const stale = update(
       second,
       currentCompanyMessage(
         CurrentCompany.Message.SucceededRefreshCompanyState({
           refreshNumber: 1,
-          state: stateWithCurrent(COMPANY_B.companyId),
+          state: stateWithCurrent(COMPANY_A.companyId),
           maybeDoneText: Option.none(),
         }),
       ),
     ).model;
     expect(currentCompanyOf(stale)?.state.maybeCurrentCompanyId).toEqual(
-      Option.some(COMPANY_A.companyId),
+      Option.some(COMPANY_B.companyId),
     );
   });
 
@@ -450,6 +453,64 @@ describe("page から頼まれる事業所の操作", () => {
         ]);
       }),
       Toast.test.drainEntry({ entryId: "account-notices-entry-0" }),
+    );
+  });
+});
+
+const companiesWithSelf = (memberships: ReadonlyArray<typeof COMPANY_A | typeof COMPANY_B>) =>
+  update(
+    update(
+      opened("/account/companies").model,
+      Message.SucceededLoadCompanyState({
+        state: { maybeCurrentCompanyId: Option.some(COMPANY_A.companyId), memberships },
+      }),
+    ).model,
+    Message.GotCompaniesMessage({
+      message: Companies.Message.CompletedReadSignedInUserId({
+        visit: 1,
+        maybeUserId: Option.some("user-self"),
+      }),
+    }),
+  ).model;
+
+describe("事業所から抜けた後の読み直しまで", () => {
+  test("離脱が成功してから読み直しが済むまで「抜ける」を押せず、読み直しが失敗すると押せる", () => {
+    const leaving = update(
+      companiesWithSelf([COMPANY_B, COMPANY_A]),
+      Message.GotCompaniesMessage({
+        message: Companies.Message.ClickedLeaveCompany({ membership: COMPANY_B }),
+      }),
+    ).model;
+    const left = update(
+      leaving,
+      Message.GotCompaniesMessage({
+        message: Companies.Message.SucceededLeaveCompany({
+          visit: 1,
+          companyName: COMPANY_B.companyName,
+        }),
+      }),
+    );
+    expect(left.commands).toMatchObject([{ name: CurrentCompany.RefreshCompanyState.name }]);
+    scene(
+      { update, view },
+      givenScene(left.model),
+      expectScene(role("button", { name: "抜ける" })).toBeDisabled(),
+    );
+    scene(
+      { update, view },
+      givenScene(
+        update(
+          left.model,
+          currentCompanyMessage(
+            CurrentCompany.Message.FailedRefreshCompanyState({
+              refreshNumber: 1,
+              failure: "Unexpected",
+              actionText: "事業所から抜けました",
+            }),
+          ),
+        ).model,
+      ),
+      expectScene(role("button", { name: "抜ける" })).toBeEnabled(),
     );
   });
 });
