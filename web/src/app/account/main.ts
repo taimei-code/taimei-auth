@@ -1,4 +1,5 @@
 import { Array, Effect, Number, Option, Schema } from "effect";
+import { Nav } from "@foldkit/ui";
 import { Command, Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -508,49 +509,70 @@ export const update = (model: Model, message: Message) =>
   });
 
 const NAV_LINK_CLASS =
-  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[status=active]:bg-accent data-[status=active]:text-accent-foreground [&_svg]:size-4";
+  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[current]:bg-accent data-[current]:text-accent-foreground [&_svg]:size-4";
 
 const NAV_GROUP_LABEL_CLASS =
   "mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground";
 
-type NavItem = Readonly<{
-  href: string;
-  icon: IconNode;
-  label: string;
-  route: AccountRoute["_tag"];
-}>;
+type NavRoute = Exclude<AccountRoute["_tag"], "NotFound">;
 
-const COMPANY_NAV: ReadonlyArray<NavItem> = [
-  { href: companiesRouter(), icon: Building2, label: "所属事業所", route: "Companies" },
-  { href: membersRouter({}), icon: Users, label: "メンバー", route: "Members" },
-  { href: companySettingsRouter(), icon: Settings2, label: "事業所設定", route: "CompanySettings" },
+const NAV_ITEMS: Readonly<
+  Record<NavRoute, Readonly<{ href: string; icon: IconNode; label: string }>>
+> = {
+  Companies: { href: companiesRouter(), icon: Building2, label: "所属事業所" },
+  Members: { href: membersRouter({}), icon: Users, label: "メンバー" },
+  CompanySettings: { href: companySettingsRouter(), icon: Settings2, label: "事業所設定" },
+  Profile: { href: profileRouter(), icon: User, label: "プロフィール" },
+  Security: { href: securityRouter(), icon: ShieldCheck, label: "セキュリティ" },
+  Sessions: { href: sessionsRouter(), icon: Monitor, label: "セッション" },
+  Connections: { href: connectionsRouter(), icon: Plug, label: "連携アカウント" },
+};
+
+const COMPANY_NAV_ROUTES: ReadonlyArray<NavRoute> = ["Companies", "Members", "CompanySettings"];
+
+const ACCOUNT_NAV_ROUTES: ReadonlyArray<NavRoute> = [
+  "Profile",
+  "Security",
+  "Sessions",
+  "Connections",
 ];
 
-const ACCOUNT_NAV: ReadonlyArray<NavItem> = [
-  { href: profileRouter(), icon: User, label: "プロフィール", route: "Profile" },
-  { href: securityRouter(), icon: ShieldCheck, label: "セキュリティ", route: "Security" },
-  { href: sessionsRouter(), icon: Monitor, label: "セッション", route: "Sessions" },
-  { href: connectionsRouter(), icon: Plug, label: "連携アカウント", route: "Connections" },
-];
+const NAV_ROUTES: ReadonlyArray<NavRoute> = [...COMPANY_NAV_ROUTES, ...ACCOUNT_NAV_ROUTES];
 
-const navLinksView = (
-  model: Model,
-  items: ReadonlyArray<NavItem>,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  items.map((item) =>
-    h.keyed("a")(
-      item.href,
-      [
-        h.Href(item.href),
-        h.Class(NAV_LINK_CLASS),
-        ...(model.route._tag === item.route
-          ? [h.AriaCurrent("page"), h.DataAttribute("status", "active")]
-          : []),
-      ],
-      [iconView(item.icon, h), item.label],
-    ),
+const navLinkView = (item: Nav.ItemInfo<NavRoute>, h: HtmlBuilder<Message>): Html =>
+  h.keyed("a")(
+    item.value,
+    [...item.link, h.Class(NAV_LINK_CLASS)],
+    [iconView(NAV_ITEMS[item.value].icon, h), NAV_ITEMS[item.value].label],
   );
+
+const navGroupView = (
+  label: string,
+  labelClass: string,
+  items: ReadonlyArray<Nav.ItemInfo<NavRoute>>,
+  h: HtmlBuilder<Message>,
+): ReadonlyArray<Html> => [
+  h.div([h.Class(labelClass)], [label]),
+  ...items.map((item) => navLinkView(item, h)),
+];
+
+const sidebarNavView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  Nav.view<NavRoute>({
+    items: NAV_ROUTES,
+    ariaLabel: "アカウントのメニュー",
+    toHref: (route) => NAV_ITEMS[route].href,
+    isItemCurrent: (route) => route === model.route._tag,
+    toView: ({ nav, items }) => {
+      const [companyItems, accountItems] = Array.splitAt(items, COMPANY_NAV_ROUTES.length);
+      return h.nav(
+        [...nav, h.Class("flex flex-col gap-1")],
+        [
+          ...navGroupView("事業所", NAV_GROUP_LABEL_CLASS, companyItems, h),
+          ...navGroupView("アカウント", `${NAV_GROUP_LABEL_CLASS} mt-3`, accountItems, h),
+        ],
+      );
+    },
+  });
 
 const pageView = (
   model: Model,
@@ -634,10 +656,7 @@ const frameView = (
             model: currentCompany,
             toParentMessage: toCurrentCompanyMessage,
           }),
-          h.div([h.Class(NAV_GROUP_LABEL_CLASS)], ["事業所"]),
-          ...navLinksView(model, COMPANY_NAV, h),
-          h.div([h.Class(`${NAV_GROUP_LABEL_CLASS} mt-3`)], ["アカウント"]),
-          ...navLinksView(model, ACCOUNT_NAV, h),
+          sidebarNavView(model, h),
           h.div(
             [h.Class("mt-auto border-t pt-3")],
             [
