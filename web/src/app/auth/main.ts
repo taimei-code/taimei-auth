@@ -303,24 +303,17 @@ const foldMfaChallenge = Update.foldChild({
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     GotDocumentNavigationMessage: () => ({ model }),
-    ClickedLink: ({ request }) =>
-      UrlRequest.match<UpdateReturn>(request, {
-        Internal: ({ url }) => ({
-          model,
-          commands: [
-            navigate(
-              DocumentNavigation.commandForInternalUrl(
-                url,
-                !AuthRoute.guards.NotFound(urlToAuthRoute(url)),
-              ),
-            ),
-          ],
-        }),
-        External: ({ href }) => ({
-          model,
-          commands: [navigate(DocumentNavigation.LoadDocument({ href }))],
-        }),
-      }),
+    ClickedLink: ({ request }) => ({
+      model,
+      commands: [
+        navigate(
+          DocumentNavigation.commandForLink(
+            request,
+            (url) => !AuthRoute.guards.NotFound(urlToAuthRoute(url)),
+          ),
+        ),
+      ],
+    }),
     ChangedUrl: ({ url }) =>
       enterIfNewRoute(
         modifyFields(model, { route: () => urlToAuthRoute(url) }),

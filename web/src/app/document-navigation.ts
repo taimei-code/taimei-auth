@@ -1,7 +1,7 @@
 import { Effect, Option, Schema } from "effect";
 import { Command } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
-import { pushUrl } from "foldkit/navigation";
+import { pushUrl, UrlRequest } from "foldkit/navigation";
 import { toString as urlToString, type Url } from "foldkit/url";
 
 import { leaveSpaTo, leaveSpaToSignIn, loadDocument } from "../shared/leave-spa";
@@ -42,5 +42,11 @@ export const LeaveToSignIn = Command.define("LeaveToSignIn", {
 export const originOf = (url: Url): string =>
   `${url.protocol}//${url.host}${Option.match(url.port, { onNone: () => "", onSome: (port) => `:${port}` })}`;
 
-export const commandForInternalUrl = (url: Url, isOwnRoute: boolean) =>
-  isOwnRoute ? PushUrl({ href: urlToString(url) }) : LoadDocument({ href: urlToString(url) });
+export const commandForLink = (request: UrlRequest, isOwnRoute: (url: Url) => boolean) =>
+  UrlRequest.match(request, {
+    Internal: ({ url }) =>
+      isOwnRoute(url)
+        ? PushUrl({ href: urlToString(url) })
+        : LoadDocument({ href: urlToString(url) }),
+    External: ({ href }) => LoadDocument({ href }),
+  });

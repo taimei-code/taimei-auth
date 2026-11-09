@@ -1,5 +1,5 @@
 import { Dialog as FoldkitDialog } from "@foldkit/ui";
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { X } from "lucide";
@@ -110,7 +110,7 @@ export const dialogFoldsOf = <
   const foldDialog = Update.foldChild({ ...child, update: FoldkitDialog.update });
   return {
     fold: (model: Model, message: DialogMessage) =>
-      config.isClosingBlocked(model) && message._tag === "RequestedClose"
+      config.isClosingBlocked(model) && Schema.is(FoldkitDialog.Message.RequestedClose)(message)
         ? { model }
         : foldDialog(model, message),
     open: Update.foldChildStep({ ...child, update: FoldkitDialog.open }),
