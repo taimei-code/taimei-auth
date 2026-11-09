@@ -57,7 +57,7 @@ image から何も消えないため見送った。根本には 2 つの問題�
    削除する。既存の biome の ban は `packages/auth-client/**` の scope だけだったため、root の override
    (`src/**` / `db/**` / `management/**`) に 13 件と connect-node の `noRestrictedImports` を追加して
    分類を import の時点で強制する。`react` / `react-dom` は src/email の server 実行時の
-   描画で必要なため dependencies に残す (dynamic import で実行時に react を読み込む理由: [ADR-0011](./0011-cloudflare-workers-migration.md)「本番デプロイで発見した workerd 固有 2 点」)
+   描画で必要なため dependencies に残す (dynamic import で実行時に react を読み込む理由: [ADR-0011](./0011-cloudflare-workers-migration.md)「本番デプロイで発見した workerd 固有 2 点」)。(2026-11-09 追記 (#419)) `react` / `react-dom` は依存から外した ([ADR-0024](./0024-email-template-as-data.md))
 2. **install stage は manifests を起点にする**。`manifests` は manifest
    だけ (`package.json` / `bun.lock` / workspace package の `package.json`) を COPY する薄い stage で、
    install layer の cache key を source の編集から切り離す。workspace package を増やす時にここへ
