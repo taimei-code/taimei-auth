@@ -514,3 +514,58 @@ describe("事業所から抜けた後の読み直しまで", () => {
     );
   });
 });
+
+describe("事業所の設定の送信中の切り替え", () => {
+  const saving = () =>
+    update(
+      ready("/account/company-settings"),
+      companySettingsMessage(CompanySettings.Message.SubmittedCompanyForm()),
+    ).model;
+
+  test("保存の送信中は枠の select を止め、選ばれても切り替えを送らない", () => {
+    scene(
+      { update, view },
+      givenScene(saving()),
+      expectScene(role("combobox", { name: "事業所を切り替え" })).toBeDisabled(),
+    );
+    expect(
+      update(
+        saving(),
+        currentCompanyMessage(
+          CurrentCompany.Message.SelectedCompany({ companyId: COMPANY_B.companyId }),
+        ),
+      ).commands ?? [],
+    ).toEqual([]);
+  });
+
+  test("枠の切り替えが済むまでは、保存と削除のボタンを押せない", () => {
+    scene(
+      { update, view },
+      givenScene(
+        update(
+          ready("/account/company-settings"),
+          currentCompanyMessage(
+            CurrentCompany.Message.SelectedCompany({ companyId: COMPANY_B.companyId }),
+          ),
+        ).model,
+      ),
+      expectScene(role("button", { name: "保存" })).toBeDisabled(),
+      expectScene(role("button", { name: "削除する" })).toBeDisabled(),
+    );
+  });
+
+  test("削除の送信中は、枠で選ばれても切り替えを送らない", () => {
+    const deleting = [
+      deletionMessage({ _tag: "ClickedDeleteCompany" }),
+      deletionMessage({ _tag: "ClickedConfirmDeletion", companyName: COMPANY_A.companyName }),
+    ].reduce((current, each) => update(current, each).model, ready("/account/company-settings"));
+    expect(
+      update(
+        deleting,
+        currentCompanyMessage(
+          CurrentCompany.Message.SelectedCompany({ companyId: COMPANY_B.companyId }),
+        ),
+      ).commands ?? [],
+    ).toEqual([]);
+  });
+});

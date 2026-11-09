@@ -296,6 +296,12 @@ const notifyDone =
       onSome: (text) => notify("Success", text)(model),
     });
 
+const isCompanySwitchBlocked = (model: Model): boolean =>
+  Option.exists(
+    Option.filter(model.maybePage, AccountPage.guards.CompanySettings),
+    ({ model: settings }) => CompanySettings.isSubmitting(settings),
+  );
+
 const reenterCompanyPage: Step = (model) =>
   AccountRoute.isAnyOf(["CompanySettings", "Members"])(model.route)
     ? enterRouteWhenReady(model)
@@ -496,7 +502,10 @@ export const update = (model: Model, message: Message) =>
       notify("Error", SIGN_OUT_FAILED)(modifyFields(model, { signOut: () => Submission.Idle() })),
     CompletedLeaveToCompanySignup: () => ({ model }),
     GotCurrentCompanyMessage: ({ message: childMessage }) =>
-      foldCurrentCompany(model, childMessage),
+      Schema.is(CurrentCompany.Message.SelectedCompany)(childMessage) &&
+      isCompanySwitchBlocked(model)
+        ? { model }
+        : foldCurrentCompany(model, childMessage),
     GotProfileMessage: ({ message: pageMessage }) => foldProfile(model, pageMessage),
     GotCompaniesMessage: ({ message: pageMessage }) => foldCompanies(model, pageMessage),
     GotCompanySettingsMessage: ({ message: pageMessage }) =>
@@ -654,6 +663,7 @@ const frameView = (
             slotId: "current-company",
             view: CurrentCompany.view,
             model: currentCompany,
+            viewInputs: { isBlocked: isCompanySwitchBlocked(model) },
             toParentMessage: toCurrentCompanyMessage,
           }),
           sidebarNavView(model, h),

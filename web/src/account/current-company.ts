@@ -251,9 +251,12 @@ const SWITCHER_ID = "current-company-switcher";
 const membershipSummary = (membership: Membership): string =>
   `${orgCodeLabelJa(membership.orgCode)} ・ ${roleLabelJa(membership.role)}`;
 
+type ViewInputs = Readonly<{ isBlocked: boolean }>;
+
 const switcherView = (
   model: Model,
   current: Membership,
+  isBlocked: boolean,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> =>
   Array.match(Array.drop(model.state.memberships, 1), {
@@ -274,7 +277,7 @@ const switcherView = (
                 value: membership.companyId,
                 label: membership.companyName,
               })),
-              isDisabled: isSwitching(model),
+              isDisabled: isSwitching(model) || isBlocked,
               onChange: (companyId) => Message.SelectedCompany({ companyId }),
             },
             h,
@@ -287,7 +290,7 @@ const switcherView = (
     ],
   });
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
+export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { isBlocked }, h) =>
   Option.match(maybeCurrentMembership(model.state), {
     onNone: () => h.empty,
     onSome: (current) =>
@@ -298,7 +301,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
             [h.Class("flex items-center gap-2 text-xs text-muted-foreground [&_svg]:size-3.5")],
             [iconView(Building2, h), "現在の事業所"],
           ),
-          ...switcherView(model, current, h),
+          ...switcherView(model, current, isBlocked, h),
           h.p([h.Class("mt-1 text-xs text-muted-foreground")], [membershipSummary(current)]),
         ],
       ),
