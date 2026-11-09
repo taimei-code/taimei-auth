@@ -26,6 +26,7 @@ import * as Sessions from "../../account/pages/Sessions";
 import * as AuthError from "../../auth/pages/AuthError";
 import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
+import * as Members from "../../membership/pages/Members";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { leaveSpaToCompanySignup } from "../../shared/leave-spa";
 import { SpaHttpClient } from "../../shared/spa-http-client";
@@ -44,7 +45,7 @@ import {
   companiesRouter,
   companySettingsRouter,
   connectionsRouter,
-  enteredAccountRoute,
+  accountRouteToEnter,
   membersRouter,
   profileRouter,
   securityRouter,
@@ -56,6 +57,7 @@ const AccountPage = defineTaggedUnion({
   Profile: { model: Profile.Model },
   Companies: { model: Companies.Model },
   CompanySettings: { model: CompanySettings.Model },
+  Members: { model: Members.Model },
   Security: { model: Security.Model },
   Sessions: { model: Sessions.Model },
   Connections: { model: Connections.Model },
@@ -94,6 +96,7 @@ export const Message = defineMessageUnion({
   GotProfileMessage: { message: Profile.Message },
   GotCompaniesMessage: { message: Companies.Message },
   GotCompanySettingsMessage: { message: CompanySettings.Message },
+  GotMembersMessage: { message: Members.Message },
   GotSecurityMessage: { message: Security.Message },
   GotSessionsMessage: { message: Sessions.Message },
   GotConnectionsMessage: { message: Connections.Message },
@@ -153,6 +156,7 @@ const toProfileMessage = (message: Profile.Message) => Message.GotProfileMessage
 const toCompaniesMessage = (message: Companies.Message) => Message.GotCompaniesMessage({ message });
 const toCompanySettingsMessage = (message: CompanySettings.Message) =>
   Message.GotCompanySettingsMessage({ message });
+const toMembersMessage = (message: Members.Message) => Message.GotMembersMessage({ message });
 const toSecurityMessage = (message: Security.Message) => Message.GotSecurityMessage({ message });
 const toSessionsMessage = (message: Sessions.Message) => Message.GotSessionsMessage({ message });
 const toConnectionsMessage = (message: Connections.Message) =>
@@ -202,6 +206,17 @@ const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateRe
           }),
         ),
       }),
+      Members: ({ service_name, redirect_url }) => {
+        const membersInit = Members.init(
+          visit,
+          CurrentCompany.maybeCurrentMembership(currentCompany.state),
+          { service_name, redirect_url },
+        );
+        return {
+          model: withPage(entered, AccountPage.Members({ model: membersInit.model })),
+          commands: Command.mapMessages(membersInit.commands, toMembersMessage),
+        };
+      },
       Security: () => {
         const securityInit = Security.init(visit);
         return {
@@ -280,8 +295,10 @@ const notifyDone =
       onSome: (text) => notify("Success", text)(model),
     });
 
-const reenterCompanySettings: Step = (model) =>
-  AccountRoute.guards.CompanySettings(model.route) ? enterRouteWhenReady(model) : { model };
+const reenterCompanyPage: Step = (model) =>
+  AccountRoute.isAnyOf(["CompanySettings", "Members"])(model.route)
+    ? enterRouteWhenReady(model)
+    : { model };
 
 const currentCompanyChild = {
   read: (model: Model) =>
@@ -300,7 +317,7 @@ const currentCompanyChild = {
     RequiredSignIn: () => leaveToSignIn,
     RefreshedCompanyState: ({ maybeDoneText }) => notifyDone(maybeDoneText),
     UpdatedCurrentCompany: ({ maybeDoneText }) =>
-      Update.combine([notifyDone(maybeDoneText), reenterCompanySettings]),
+      Update.combine([notifyDone(maybeDoneText), reenterCompanyPage]),
   }),
 };
 
@@ -382,6 +399,19 @@ const foldCompanySettings = Update.foldChild({
   }),
 });
 
+const foldMembers = Update.foldChild({
+  update: Members.update,
+  read: (model: Model) =>
+    Option.map(Option.filter(model.maybePage, AccountPage.guards.Members), ({ model }) => model),
+  write: (model: Model, nextMembers: Members.Model) =>
+    withPage(model, AccountPage.Members({ model: nextMembers })),
+  toParentMessage: toMembersMessage,
+  foldOutMessage: Members.OutMessage.match<Step>({
+    Notified: ({ tone, text }) => notify(tone, text),
+    RequiredSignIn: () => leaveToSignIn,
+  }),
+});
+
 const foldSecurity = Update.foldChild({
   update: Security.update,
   read: (model: Model) =>
@@ -439,7 +469,7 @@ export const update = (model: Model, message: Message) =>
       }),
     ChangedUrl: ({ url }) => {
       const nextModel = modifyFields(model, { route: () => urlToAccountRoute(url) });
-      return Option.isSome(enteredAccountRoute(Option.some(model.route), nextModel.route))
+      return Option.isSome(accountRouteToEnter(Option.some(model.route), nextModel.route))
         ? enterRouteWhenReady(nextModel)
         : { model: nextModel };
     },
@@ -470,6 +500,7 @@ export const update = (model: Model, message: Message) =>
     GotCompaniesMessage: ({ message: pageMessage }) => foldCompanies(model, pageMessage),
     GotCompanySettingsMessage: ({ message: pageMessage }) =>
       foldCompanySettings(model, pageMessage),
+    GotMembersMessage: ({ message: pageMessage }) => foldMembers(model, pageMessage),
     GotSecurityMessage: ({ message: pageMessage }) => foldSecurity(model, pageMessage),
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),
     GotConnectionsMessage: ({ message: pageMessage }) => foldConnections(model, pageMessage),
@@ -491,7 +522,7 @@ type NavItem = Readonly<{
 
 const COMPANY_NAV: ReadonlyArray<NavItem> = [
   { href: companiesRouter(), icon: Building2, label: "所属事業所", route: "Companies" },
-  { href: membersRouter(), icon: Users, label: "メンバー", route: "Members" },
+  { href: membersRouter({}), icon: Users, label: "メンバー", route: "Members" },
   { href: companySettingsRouter(), icon: Settings2, label: "事業所設定", route: "CompanySettings" },
 ];
 
@@ -553,6 +584,13 @@ const pageView = (
             model: pageModel,
             viewInputs: { currentCompany },
             toParentMessage: toCompanySettingsMessage,
+          }),
+        Members: ({ model: pageModel }) =>
+          h.submodel({
+            slotId: "members",
+            view: Members.view,
+            model: pageModel,
+            toParentMessage: toMembersMessage,
           }),
         Security: ({ model: pageModel }) =>
           h.submodel({

@@ -1,18 +1,11 @@
-import { RegistryContext } from "@effect/atom-react";
 import { Effect, type Exit, Option } from "effect";
 import { AsyncResult, type Atom, AtomRegistry } from "effect/reactivity";
-import { use, useCallback } from "react";
 
 export const waitForValue = <A, E>(
   registry: AtomRegistry.AtomRegistry,
   atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>,
 ): Promise<A> =>
   Effect.runPromise(AtomRegistry.getResult(registry, atom, { suspendOnWaiting: true }));
-
-export const useWaitForValue = <A, E>(atom: Atom.Atom<AsyncResult.AsyncResult<A, E>>) => {
-  const registry = use(RegistryContext);
-  return useCallback(() => waitForValue(registry, atom), [registry, atom]);
-};
 
 export const failedBeforeAnyValue = <A, E>(
   result: AsyncResult.AsyncResult<A, E>,

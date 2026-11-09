@@ -2,8 +2,10 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { separatorClassName } from "../shared/ui/class-names";
 
-export const separatorView = <Message>(spacing: "my-6" | "my-10", h: HtmlBuilder<Message>): Html =>
-  h.div([h.Role("separator"), h.Class(`${separatorClassName} ${spacing}`)]);
+export const separatorView = <Message>(
+  spacing: "my-6" | "my-8" | "my-10",
+  h: HtmlBuilder<Message>,
+): Html => h.div([h.Role("separator"), h.Class(`${separatorClassName} ${spacing}`)]);
 
 export const pageTitleView = <Message>(
   title: string,
