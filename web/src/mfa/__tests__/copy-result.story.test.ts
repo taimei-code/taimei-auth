@@ -12,16 +12,16 @@ describe("コピーの結果", () => {
       update,
       given(init()),
       message(Message.ClickedCopy({ text: SECRET })),
-      Command.resolve(CopyText, Message.SucceededCopyText()),
+      Command.resolve(CopyText, Message.SucceededCopyText({ shownAt: 1000 })),
       model((next) => {
-        expect(next.result._tag).toBe("Copied");
+        expect(next._tag).toBe("Copied");
       }),
       Command.resolve(
         WaitBeforeHidingCopyResult,
-        Message.CompletedWaitBeforeHidingCopyResult({ shownNumber: 1 }),
+        Message.CompletedWaitBeforeHidingCopyResult({ shownAt: 1000 }),
       ),
       model((next) => {
-        expect(next.result._tag).toBe("Idle");
+        expect(next._tag).toBe("Idle");
       }),
     );
   });
@@ -31,25 +31,24 @@ describe("コピーの結果", () => {
       update,
       given(init()),
       message(Message.ClickedCopy({ text: SECRET })),
-      Command.resolve(CopyText, Message.FailedCopyText()),
+      Command.resolve(CopyText, Message.FailedCopyText({ shownAt: 1000 })),
       model((next) => {
-        expect(next.result._tag).toBe("NotCopied");
+        expect(next._tag).toBe("NotCopied");
       }),
       Command.resolve(
         WaitBeforeHidingCopyResult,
-        Message.CompletedWaitBeforeHidingCopyResult({ shownNumber: 1 }),
+        Message.CompletedWaitBeforeHidingCopyResult({ shownAt: 1000 }),
       ),
     );
   });
 
   test("古いコピーの結果を隠す合図は、新しいコピーの結果を消さない", () => {
     const shownTwice = update(
-      update(init(), Message.SucceededCopyText()).model,
-      Message.SucceededCopyText(),
+      update(init(), Message.SucceededCopyText({ shownAt: 1000 })).model,
+      Message.SucceededCopyText({ shownAt: 2000 }),
     ).model;
     expect(
-      update(shownTwice, Message.CompletedWaitBeforeHidingCopyResult({ shownNumber: 1 })).model
-        .result._tag,
+      update(shownTwice, Message.CompletedWaitBeforeHidingCopyResult({ shownAt: 1000 })).model._tag,
     ).toBe("Copied");
   });
 });
