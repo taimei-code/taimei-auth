@@ -1,6 +1,6 @@
 import { describe, test } from "bun:test";
 import { Option } from "effect";
-import { change, Command, expect, given, label, scene, text } from "foldkit/scene";
+import { change, Command, expect, given, label, scene, text, withViewInputs } from "foldkit/scene";
 
 import {
   init,
@@ -10,6 +10,8 @@ import {
   update,
   view,
 } from "../current-company";
+
+const switcherView = withViewInputs(view, { isBlocked: false });
 
 const COMPANY_A = {
   companyId: "company-a",
@@ -28,7 +30,7 @@ const COMPANY_B = {
 describe("枠の現在の事業所の欄", () => {
   test("所属が 1 件なら、select でなく事業所名と事業形態・role を出す", () => {
     scene(
-      { update, view },
+      { update, view: switcherView() },
       given(
         init({ maybeCurrentCompanyId: Option.some(COMPANY_A.companyId), memberships: [COMPANY_A] }),
       ),
@@ -41,7 +43,7 @@ describe("枠の現在の事業所の欄", () => {
 
   test("select で別の事業所を選ぶと切り替えを送り、読み直しの後に選んだ事業所を出す", () => {
     scene(
-      { update, view },
+      { update, view: switcherView() },
       given(
         init({
           maybeCurrentCompanyId: Option.some(COMPANY_A.companyId),

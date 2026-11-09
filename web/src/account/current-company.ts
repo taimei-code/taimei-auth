@@ -39,6 +39,8 @@ export const Model = Schema.Struct({
   state: CompanyMemberships,
   switching: Switching,
   refreshNumber: Schema.Int,
+  appliedRefreshNumber: Schema.Int,
+  pendingRefreshCount: Schema.Int,
 });
 export type Model = typeof Model.Type;
 
@@ -147,6 +149,8 @@ export const init = (state: CompanyMemberships): Model => ({
   state,
   switching: Switching.Idle(),
   refreshNumber: 0,
+  appliedRefreshNumber: 0,
+  pendingRefreshCount: 0,
 });
 
 export const maybeCurrentMembership = (state: CompanyMemberships): Option.Option<Membership> =>
@@ -154,12 +158,19 @@ export const maybeCurrentMembership = (state: CompanyMemberships): Option.Option
     Array.findFirst(state.memberships, (membership) => membership.companyId === companyId),
   );
 
-export const isSwitching = (model: Model): boolean => Switching.guards.Switching(model.switching);
+const isSwitching = (model: Model): boolean => Switching.guards.Switching(model.switching);
+
+export const isRefreshing = (model: Model): boolean => model.pendingRefreshCount > 0;
+
+export const isBusy = (model: Model): boolean => isSwitching(model) || isRefreshing(model);
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
 export const refresh = (model: Model, texts: RefreshTexts): UpdateReturn => {
-  const requested = modifyFields(model, { refreshNumber: Number.increment });
+  const requested = modifyFields(model, {
+    refreshNumber: Number.increment,
+    pendingRefreshCount: Number.increment,
+  });
   return {
     model: requested,
     commands: [RefreshCompanyState({ refreshNumber: requested.refreshNumber, texts })],
@@ -191,6 +202,12 @@ export const switchTo = (model: Model, companyId: string): UpdateReturn =>
 const isLatestRefresh = (model: Model, refreshNumber: number) =>
   refreshNumber === model.refreshNumber;
 
+const isNewerThanApplied = (model: Model, refreshNumber: number) =>
+  refreshNumber > model.appliedRefreshNumber;
+
+const decrementPendingRefresh = (model: Model): Model =>
+  modifyFields(model, { pendingRefreshCount: Number.decrement });
+
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     SelectedCompany: ({ companyId }) => switchTo(model, companyId),
@@ -204,14 +221,24 @@ export const update = (model: Model, message: Message) =>
           : OutMessage.Notified({ tone: "Error", text: SWITCH_FAILED }),
     }),
     SucceededRefreshCompanyState: ({ refreshNumber, state, maybeDoneText }) =>
-      isLatestRefresh(model, refreshNumber)
-        ? replaceState(model, state, maybeDoneText)
-        : { model, outMessage: OutMessage.RefreshedCompanyState({ maybeDoneText }) },
+      isNewerThanApplied(model, refreshNumber)
+        ? replaceState(
+            modifyFields(model, {
+              appliedRefreshNumber: () => refreshNumber,
+              pendingRefreshCount: Number.decrement,
+            }),
+            state,
+            maybeDoneText,
+          )
+        : {
+            model: decrementPendingRefresh(model),
+            outMessage: OutMessage.RefreshedCompanyState({ maybeDoneText }),
+          },
     FailedRefreshCompanyState: ({ refreshNumber, failure, actionText }) =>
       !isLatestRefresh(model, refreshNumber)
-        ? { model }
+        ? { model: decrementPendingRefresh(model) }
         : {
-            model,
+            model: decrementPendingRefresh(model),
             outMessage:
               failure === "Unauthorized"
                 ? OutMessage.RequiredSignIn()
@@ -224,9 +251,12 @@ const SWITCHER_ID = "current-company-switcher";
 const membershipSummary = (membership: Membership): string =>
   `${orgCodeLabelJa(membership.orgCode)} ・ ${roleLabelJa(membership.role)}`;
 
+type ViewInputs = Readonly<{ isBlocked: boolean }>;
+
 const switcherView = (
   model: Model,
   current: Membership,
+  isBlocked: boolean,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Html> =>
   Array.match(Array.drop(model.state.memberships, 1), {
@@ -247,7 +277,7 @@ const switcherView = (
                 value: membership.companyId,
                 label: membership.companyName,
               })),
-              isDisabled: isSwitching(model),
+              isDisabled: isSwitching(model) || isBlocked,
               onChange: (companyId) => Message.SelectedCompany({ companyId }),
             },
             h,
@@ -260,7 +290,7 @@ const switcherView = (
     ],
   });
 
-export const view = Submodel.defineView<Model, Message>((model, h) =>
+export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { isBlocked }, h) =>
   Option.match(maybeCurrentMembership(model.state), {
     onNone: () => h.empty,
     onSome: (current) =>
@@ -271,7 +301,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
             [h.Class("flex items-center gap-2 text-xs text-muted-foreground [&_svg]:size-3.5")],
             [iconView(Building2, h), "現在の事業所"],
           ),
-          ...switcherView(model, current, h),
+          ...switcherView(model, current, isBlocked, h),
           h.p([h.Class("mt-1 text-xs text-muted-foreground")], [membershipSummary(current)]),
         ],
       ),

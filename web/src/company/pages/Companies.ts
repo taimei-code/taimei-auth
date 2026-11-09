@@ -277,7 +277,7 @@ const switchButtonView = (
         },
         () => Submission.Idle(),
       ),
-      isBlocked: isLeaving(model) || CurrentCompany.isSwitching(currentCompany),
+      isBlocked: isLeaving(model) || CurrentCompany.isBusy(currentCompany),
       onClick: Message.ClickedSwitchCompany({ companyId: membership.companyId }),
     },
     h,
@@ -309,7 +309,7 @@ const leaveOrTransferButtonView = (
           submission: Submission.Idle(),
           isBlocked:
             isLeaving(model) ||
-            CurrentCompany.isSwitching(currentCompany) ||
+            CurrentCompany.isBusy(currentCompany) ||
             Option.isNone(model.maybeSelfUserId),
           onClick: Message.ClickedLeaveCompany({ membership }),
         },

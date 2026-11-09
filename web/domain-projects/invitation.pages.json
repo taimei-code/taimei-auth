@@ -1,0 +1,23 @@
+{
+  "extends": "./base.json",
+  "include": [
+    "../src/invitation/pages/**/*.ts",
+    "../src/invitation/pages/**/*.tsx",
+    "../src/invitation/__tests__/**/*.ts",
+    "../src/invitation/__tests__/**/*.tsx"
+  ],
+  "references": [
+    {
+      "path": "./invitation.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

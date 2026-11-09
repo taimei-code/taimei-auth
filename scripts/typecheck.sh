@@ -7,5 +7,6 @@ tsc=$(node_modules/.bin/effect-tsgo get-exe-path) || { echo "$tsc" >&2; exit 1; 
 "$tsc" --noEmit
 "$tsc" --noEmit -p testing/tsconfig.json
 "$tsc" --noEmit -p web/tsconfig.json
+"$tsc" -b web/domain-projects/index.json
 "$tsc" --noEmit -p packages/auth-client/tsconfig.json
 "$tsc" --noEmit -p packages/auth-client/tsconfig.testing-node.json

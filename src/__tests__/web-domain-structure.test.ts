@@ -32,51 +32,6 @@ describe("extractModuleSpecifiers", () => {
 });
 
 describe("analyzeWebStructure fixtures", () => {
-  test("allowlist 済みの domain import を受理する", async () => {
-    const result = await analyzeWebStructure({
-      "web/src/account/pages/Security.ts":
-        'import * as MfaEnrollment from "../../mfa/mfa-enrollment";',
-      "web/src/mfa/mfa-enrollment.ts": "export const view = () => null;",
-    });
-
-    expect(result.violations).toEqual([]);
-    expect(result.edges).toContain("account->mfa");
-  });
-
-  test("allowlist 外の domain import を拒否する", async () => {
-    const result = await analyzeWebStructure({
-      "web/src/account/pages/Profile.tsx":
-        'import { reduceMfaChallengeFlow } from "../../mfa/mfa-challenge-flow";',
-      "web/src/mfa/mfa-challenge-flow.ts": "export const reduceMfaChallengeFlow = () => {};",
-    });
-
-    expect(result.violations).toContain(
-      "cross-domain path not allowed: account/pages/Profile.tsx -> mfa/mfa-challenge-flow.ts",
-    );
-  });
-
-  test("他 domain の page import を拒否する", async () => {
-    const result = await analyzeWebStructure({
-      "web/src/account/ProfileLink.tsx": 'import { Companies } from "../company/pages/Companies";',
-      "web/src/company/pages/Companies.tsx": "export const Companies = () => null;",
-    });
-
-    expect(result.violations).toContain(
-      "domain page import is app-only: account/ProfileLink.tsx -> company/pages/Companies.tsx",
-    );
-  });
-
-  test("shared から domain への逆依存を拒否する", async () => {
-    const result = await analyzeWebStructure({
-      "web/src/shared/notify.ts": 'import { authClient } from "../auth/auth-client";',
-      "web/src/auth/auth-client.ts": "export const authClient = {};",
-    });
-
-    expect(result.violations).toContain(
-      "shared reverse dependency: shared/notify.ts -> auth/auth-client.ts",
-    );
-  });
-
   test("@core specifier を shadow する web file を拒否する", async () => {
     const result = await analyzeWebStructure({
       "web/src/company/OrgCodeField.tsx":
@@ -86,21 +41,6 @@ describe("analyzeWebStructure fixtures", () => {
 
     expect(result.violations).toContain(
       "@core specifier shadowed by web file: company/OrgCodeField.tsx -> company/org-code.ts",
-    );
-  });
-
-  test("domain graph の cycle を閉路として報告する", async () => {
-    const result = await analyzeWebStructure({
-      "web/src/account/current-company.tsx":
-        'import { companyValue } from "../company/company-api";',
-      "web/src/company/company-api.ts":
-        'import { memberValue } from "../membership/membership-api"; export const companyValue = memberValue;',
-      "web/src/membership/membership-api.ts":
-        'import { accountValue } from "../account/current-company"; export const memberValue = accountValue;',
-    });
-
-    expect(result.violations).toContain(
-      "domain dependency cycle: account -> company -> membership -> account",
     );
   });
 
@@ -114,7 +54,7 @@ describe("analyzeWebStructure fixtures", () => {
 });
 
 describe("actual web/src structure", () => {
-  test("target roots と既知 edge を持ち違反がない", async () => {
+  test("target roots を持ち違反がない", async () => {
     const result = await analyzeWebStructure(readActualWebSources(), { enforceTargetTree: true });
 
     expect(result.fileCount).toBeGreaterThan(0);
@@ -128,7 +68,6 @@ describe("actual web/src structure", () => {
       "mfa",
       "shared",
     ]);
-    expect(result.edges).toContain("account->mfa");
     expect(result.violations).toEqual([]);
   });
 });

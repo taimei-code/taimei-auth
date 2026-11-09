@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./account.json"
+    },
+    {
+      "path": "./account.pages.json"
+    },
+    {
+      "path": "./app.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./auth.pages.json"
+    },
+    {
+      "path": "./company.json"
+    },
+    {
+      "path": "./company.pages.json"
+    },
+    {
+      "path": "./core.json"
+    },
+    {
+      "path": "./invitation.json"
+    },
+    {
+      "path": "./invitation.pages.json"
+    },
+    {
+      "path": "./membership.json"
+    },
+    {
+      "path": "./membership.pages.json"
+    },
+    {
+      "path": "./mfa.json"
+    },
+    {
+      "path": "./mfa.pages.json"
+    },
+    {
+      "path": "./shared.json"
+    }
+  ]
+}

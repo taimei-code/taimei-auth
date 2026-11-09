@@ -108,7 +108,7 @@ export const init = (start: Readonly<{ visit: number; companyId: string }>): Mod
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
-const isDeleting = (model: Model) => Submission.guards.Submitting(model.deletion);
+export const isDeleting = (model: Model) => Submission.guards.Submitting(model.deletion);
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 

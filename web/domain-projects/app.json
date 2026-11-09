@@ -1,0 +1,39 @@
+{
+  "extends": "./base.json",
+  "include": ["../src/app/**/*.ts", "../src/app/**/*.tsx"],
+  "references": [
+    {
+      "path": "./account.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./invitation.json"
+    },
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    },
+    {
+      "path": "./account.pages.json"
+    },
+    {
+      "path": "./auth.pages.json"
+    },
+    {
+      "path": "./company.pages.json"
+    },
+    {
+      "path": "./invitation.pages.json"
+    },
+    {
+      "path": "./membership.pages.json"
+    },
+    {
+      "path": "./mfa.pages.json"
+    }
+  ]
+}

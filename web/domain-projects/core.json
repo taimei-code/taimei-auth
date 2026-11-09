@@ -1,0 +1,31 @@
+{
+  "extends": "./base.json",
+  "files": [
+    "../../src/account/account-contract.ts",
+    "../../src/account/actor-contract.ts",
+    "../../src/company/company-contract.ts",
+    "../../src/company/errors.ts",
+    "../../src/company/org-code.ts",
+    "../../src/failures.ts",
+    "../../src/invitation/accept-path.ts",
+    "../../src/invitation/errors.ts",
+    "../../src/invitation/invitation-contract.ts",
+    "../../src/membership/errors.ts",
+    "../../src/membership/membership-contract.ts",
+    "../../src/membership/policy.ts",
+    "../../src/membership/role-label.ts",
+    "../../src/mfa/errors.ts",
+    "../../src/mfa/mfa-contract.ts",
+    "../../src/redirect-hosts.ts",
+    "../../src/services.ts",
+    "../../src/sign-in-params.ts",
+    "../../src/spa-contract-schemas.ts",
+    "../../src/spa-contract.ts",
+    "../../src/url-allowlist.ts",
+    "../../db/client.ts",
+    "../../db/enums.ts",
+    "../../db/repositories/membership.ts",
+    "../../db/schema.ts",
+    "../../db/transaction.ts"
+  ]
+}

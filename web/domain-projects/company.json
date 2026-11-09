@@ -1,0 +1,13 @@
+{
+  "extends": "./base.json",
+  "include": ["../src/company/**/*.ts", "../src/company/**/*.tsx"],
+  "exclude": ["../src/company/pages", "../src/company/__tests__"],
+  "references": [
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

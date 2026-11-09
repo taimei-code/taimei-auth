@@ -143,6 +143,16 @@ const withEditing = (model: Model, next: (editing: Editing) => UpdateReturn): Up
 const withSettings = (model: Model, editing: Editing): Model =>
   modifyFields(model, { settings: () => Settings.Editing(editing) });
 
+export const isSubmitting = (model: Model): boolean =>
+  Settings.matchOrElse(
+    model.settings,
+    {
+      Editing: ({ save, deletion }) =>
+        Submission.guards.Submitting(save) || CompanyDeletion.isDeleting(deletion),
+    },
+    () => false,
+  );
+
 const whileEditable = (model: Model, next: (editing: Editing) => UpdateReturn): UpdateReturn =>
   withEditing(model, (editing) =>
     Submission.guards.Submitting(editing.save) ? { model } : next(editing),
@@ -233,7 +243,11 @@ export const update = (model: Model, message: Message) =>
       foldCompanyDeletion(model, deletionMessage),
   });
 
-const companyFormView = (editing: Editing, h: HtmlBuilder<Message>): Html =>
+const companyFormView = (
+  editing: Editing,
+  isCompanyChanging: boolean,
+  h: HtmlBuilder<Message>,
+): Html =>
   h.form(
     [h.Class("max-w-md space-y-4"), h.OnSubmit(Message.SubmittedCompanyForm())],
     [
@@ -268,7 +282,7 @@ const companyFormView = (editing: Editing, h: HtmlBuilder<Message>): Html =>
           type: "submit",
           look: "primaryInline",
           submission: editing.save,
-          isBlocked: String.isEmpty(String.trim(editing.nameDraft)),
+          isBlocked: isCompanyChanging || String.isEmpty(String.trim(editing.nameDraft)),
         },
         h,
       ),
@@ -284,7 +298,7 @@ const editingView = (
     [],
     [
       ...accountPageHeaderView("事業所設定", "事業所名と事業形態の編集", h),
-      companyFormView(editing, h),
+      companyFormView(editing, CurrentCompany.isBusy(currentCompany), h),
       separatorView("my-10", h),
       h.submodel({
         slotId: "company-deletion",
@@ -296,7 +310,8 @@ const editingView = (
             onSome: (membership) => membership.companyName,
           }),
           isLastCompany: currentCompany.state.memberships.length <= 1,
-          isBlocked: Submission.guards.Submitting(editing.save),
+          isBlocked:
+            Submission.guards.Submitting(editing.save) || CurrentCompany.isBusy(currentCompany),
         },
         toParentMessage: (message) => Message.GotCompanyDeletionMessage({ message }),
       }),

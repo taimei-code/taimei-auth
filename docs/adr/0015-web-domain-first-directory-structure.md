@@ -24,6 +24,8 @@ route entryだけを各ドメインの `pages` に置き、page以外のドメ�
 
 allowlistはruntime importとtype-only importの両方へ適用し、TypeScript ASTからside-effect import、re-export、literal dynamic importを含めて抽出する。
 
+(2026-11-09 追記 (#403)) 上の 2 段落 (ドメイン間 import の allowlist と cycle の禁止) は TypeScript の project references ([ADR-0025](./0025-web-domain-project-references.md)) に置き換えた。
+
 account、company、membership、invitationが共有するroleとOrgCodeの型および表示labelは、browser-safeな `@core` moduleに定義し、各ドメインはそれを参照する。
 
 `app` はrouteと複数ドメインの結線を所有し、`shared` はドメインを知らないUI primitive、通知、汎用hook、HTTP基盤だけを所有する。
@@ -39,10 +41,10 @@ account、company、membership、invitationが共有するroleとOrgCodeの型�
 
 URLとpageの所有ドメインは別の軸になる。
 
-新しいcross-domain interfaceにはarchitecture testのallowlist更新が必要になる。
+新しいcross-domain interfaceに要る変更は ADR-0025 の Consequences に従う (2026-11-09 改訂 (#403)。前は architecture test の allowlist の更新)。
 
 共通画面 SPAのURL、HTTP contract、UI挙動、サーバーruntimeは変更しない。
 
-target treeと配置・依存規則の運用はこのADRと [`web/src/CLAUDE.md`](../../web/src/CLAUDE.md) に定義し、`src/__tests__/web-domain-structure.test.ts` が機械検査する。
+target treeと配置規則の運用はこのADRと [`web/src/CLAUDE.md`](../../web/src/CLAUDE.md) に定義し、`src/__tests__/web-domain-structure.test.ts` が機械検査する。依存規則の検査は ADR-0025 に従う。
 
 移行順とrollbackは一度きりの手順のため恒久文書には残さない。

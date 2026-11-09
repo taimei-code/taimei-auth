@@ -1,0 +1,29 @@
+{
+  "extends": "./base.json",
+  "include": [
+    "../src/company/pages/**/*.ts",
+    "../src/company/pages/**/*.tsx",
+    "../src/company/__tests__/**/*.ts",
+    "../src/company/__tests__/**/*.tsx"
+  ],
+  "references": [
+    {
+      "path": "./company.json"
+    },
+    {
+      "path": "./account.json"
+    },
+    {
+      "path": "./auth.json"
+    },
+    {
+      "path": "./membership.json"
+    },
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}
