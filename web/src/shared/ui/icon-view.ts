@@ -73,3 +73,9 @@ export const loadingStatusView = <Message>(label: string, h: HtmlBuilder<Message
 
 export const fullScreenStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
   statusView(label, { wrapper: "flex min-h-svh items-center justify-center", icon: "size-6" }, h);
+
+export const listLoadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+  statusView(label, { wrapper: "flex justify-center py-12", icon: "size-6" }, h);
+
+export const dialogLoadingStatusView = <Message>(label: string, h: HtmlBuilder<Message>): Html =>
+  statusView(label, { wrapper: "flex justify-center py-8", icon: "size-5" }, h);

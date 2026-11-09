@@ -7,7 +7,7 @@ export type MfaFailure =
   | DeclaredFailure<"mfa", "disable">
   | DeclaredFailure<"mfaChallenge", "verify">;
 
-export const MFA_GENERIC_FAILURE_MESSAGE =
+const MFA_GENERIC_FAILURE_MESSAGE =
   "処理に失敗しました。しばらく待ってからもう一度お試しください。";
 
 export const MFA_FAILURE_MESSAGES: FailureMessages<MfaFailure> = {
@@ -21,3 +21,8 @@ export const MFA_FAILURE_MESSAGES: FailureMessages<MfaFailure> = {
   NotEnabled: "多要素認証 (MFA) は有効になっていません。ページを再読み込みしてください。",
   MfaNotFound: MFA_GENERIC_FAILURE_MESSAGE,
 };
+
+export const mfaFailureText = (
+  failure: keyof typeof MFA_FAILURE_MESSAGES | "Unexpected",
+): string =>
+  failure === "Unexpected" ? MFA_GENERIC_FAILURE_MESSAGE : MFA_FAILURE_MESSAGES[failure];

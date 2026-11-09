@@ -1,4 +1,11 @@
+import { Schema } from "effect";
+
 import type { MfaCodeKind } from "@core/mfa/mfa-contract";
+
+export const MfaCodeKindSchema: Schema.Schema<MfaCodeKind> = Schema.Literals([
+  "totp",
+  "recovery_code",
+]);
 
 const WHITESPACE = /\s+/g;
 const HYPHEN_LIKE = /[-‐-―−ー]/g;

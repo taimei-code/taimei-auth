@@ -89,3 +89,32 @@ export const cardClassNames = {
   content: "p-6 pt-0",
   footer: "flex items-center p-6 pt-0",
 } as const;
+
+export const dialogClassNames = {
+  overlay: "fixed inset-0 z-50 bg-black/80",
+  content:
+    "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+  header: "flex flex-col space-y-1.5 text-center sm:text-left",
+  footer: "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+  title: "text-lg font-semibold leading-none tracking-tight",
+  description: "text-sm text-muted-foreground",
+  close:
+    "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
+} as const;
+
+export const separatorClassName = "h-px w-full shrink-0 bg-border";
+
+const GUTTER_FOR_FORMS_PLUGIN_CHEVRON = "pr-8";
+const HEIGHT_FITTING_FORMS_PLUGIN_PY_2 = "h-10";
+
+export const nativeSelectClassNames = {
+  root: "block w-full truncate rounded-md border border-input bg-transparent pl-3 text-base text-foreground disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+  height: HEIGHT_FITTING_FORMS_PLUGIN_PY_2,
+  gutter: GUTTER_FOR_FORMS_PLUGIN_CHEVRON,
+} as const;
+
+export const avatarClassNames = {
+  root: "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+  image: "aspect-square h-full w-full",
+  fallback: "flex h-full w-full items-center justify-center rounded-full bg-muted",
+} as const;

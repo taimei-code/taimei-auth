@@ -1,15 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Exit, Layer } from "effect";
+import { Effect, Layer } from "effect";
 import { FetchHttpClient } from "effect/http";
-import { AtomHttpApi, AtomRegistry } from "effect/reactivity";
 
-import { SpaApi } from "@core/spa-contract";
-
-import { runMutation } from "../../shared/atom-runtime";
-import { leaveForSignInOnUnauthorized } from "../../shared/spa-api-client";
 import { SpaHttpClient } from "../../shared/spa-http-client";
-import { mfaFailureMessage } from "../mfa-atom";
-import { MFA_FAILURE_MESSAGES } from "../mfa-failure-messages";
+import * as MfaDisabling from "../mfa-disabling";
+import * as MfaEnrollment from "../mfa-enrollment";
 import { Message, VerifyCode } from "../pages/MfaChallenge";
 
 let reply: () => Response = () => new Response(null, { status: 500 });
@@ -24,33 +19,20 @@ const answerWith = (status: number, body?: unknown) => {
 
 const replyingFetch = (() => Promise.resolve(reply())) as unknown as typeof globalThis.fetch;
 
-class ReplyingSpaApiClient extends AtomHttpApi.Service<ReplyingSpaApiClient>()(
-  "ReplyingSpaApiClient",
-  {
-    api: SpaApi,
-    httpClient: FetchHttpClient.layer.pipe(
-      Layer.provide(Layer.succeed(FetchHttpClient.Fetch, replyingFetch)),
-    ),
-    baseUrl: "http://localhost",
-    transformResponse: leaveForSignInOnUnauthorized,
-  },
-) {}
-
-const disableAtom = ReplyingSpaApiClient.mutation("mfa", "disable");
-const enrollAtom = ReplyingSpaApiClient.mutation("mfa", "enroll");
-
 const VISIT = 1;
+
+const replyingSpaHttpClient = SpaHttpClient.layer("http://localhost").pipe(
+  Layer.provide(Layer.succeed(FetchHttpClient.Fetch, replyingFetch)),
+);
 
 const verify = () =>
   Effect.runPromise(
     VerifyCode({ visit: VISIT, code: "123456", kind: "totp" }).effect.pipe(
-      Effect.provide(
-        SpaHttpClient.layer("http://localhost").pipe(
-          Layer.provide(Layer.succeed(FetchHttpClient.Fetch, replyingFetch)),
-        ),
-      ),
+      Effect.provide(replyingSpaHttpClient),
     ),
   );
+
+const REQUEST_NUMBER = 1;
 
 describe("MFA の API の応答の status と body から、画面に出す結果を選ぶ", () => {
   test("MFA チャレンジの確かめが 401 の ChallengeExpired を返すと、期限切れの失敗になる", async () => {
@@ -88,23 +70,37 @@ describe("MFA の API の応答の status と body から、画面に出す結�
     );
   });
 
-  test("無効化が試行枠の 429 (RateLimited) を返すと、回数の上限の文言を出す", async () => {
+  test("無効化が試行枠の 429 (RateLimited) を返すと、回数の上限の失敗になる", async () => {
     answerWith(429, { _tag: "RateLimited" });
-    const exit = await runMutation(AtomRegistry.make(), disableAtom, {
-      payload: { code: "123456", kind: "totp" },
-    });
-    if (Exit.isSuccess(exit)) {
-      throw new Error("disable unexpectedly succeeded");
-    }
-    expect(mfaFailureMessage(exit.cause)).toBe(MFA_FAILURE_MESSAGES.RateLimited);
+    expect(
+      await Effect.runPromise(
+        MfaDisabling.DisableMfa({
+          requestNumber: REQUEST_NUMBER,
+          code: "123456",
+          kind: "totp",
+        }).effect.pipe(Effect.provide(replyingSpaHttpClient)),
+      ),
+    ).toEqual(
+      MfaDisabling.Message.FailedDisableMfa({
+        requestNumber: REQUEST_NUMBER,
+        failure: "RateLimited",
+      }),
+    );
   });
 
-  test("登録が 409 の AlreadyEnabled を返すと、再読み込みの案内の文言を出す", async () => {
+  test("登録が 409 の AlreadyEnabled を返すと、再読み込みの案内の失敗になる", async () => {
     answerWith(409, { _tag: "AlreadyEnabled" });
-    const exit = await runMutation(AtomRegistry.make(), enrollAtom, {});
-    if (Exit.isSuccess(exit)) {
-      throw new Error("enroll unexpectedly succeeded");
-    }
-    expect(mfaFailureMessage(exit.cause)).toBe(MFA_FAILURE_MESSAGES.AlreadyEnabled);
+    expect(
+      await Effect.runPromise(
+        MfaEnrollment.EnrollMfa({ requestNumber: REQUEST_NUMBER }).effect.pipe(
+          Effect.provide(replyingSpaHttpClient),
+        ),
+      ),
+    ).toEqual(
+      MfaEnrollment.Message.FailedEnrollMfa({
+        requestNumber: REQUEST_NUMBER,
+        failure: "AlreadyEnabled",
+      }),
+    );
   });
 });

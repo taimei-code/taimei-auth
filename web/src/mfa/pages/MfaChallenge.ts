@@ -1,4 +1,4 @@
-import { Effect, Option, Schema } from "effect";
+import { Effect, Schema } from "effect";
 import { Command, Submodel, type Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -12,16 +12,15 @@ import { maybeRejectedMessage, Submission } from "../../shared/submission";
 import { buttonLinkView, buttonView } from "../../shared/ui/button-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
 import { loadingStatusView } from "../../shared/ui/icon-view";
-import { inputErrorView, inputView } from "../../shared/ui/input-view";
+import { inputView, maybeInputErrorView } from "../../shared/ui/input-view";
 import {
   MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
   MFA_CODE_TEXTS,
   normalizeMfaCode,
+  MfaCodeKindSchema,
   otherMfaCodeKind,
 } from "../mfa-code";
-import { MFA_FAILURE_MESSAGES, MFA_GENERIC_FAILURE_MESSAGE } from "../mfa-failure-messages";
-
-const CodeKind = Schema.Literals(["totp", "recovery_code"]);
+import { mfaFailureText } from "../mfa-failure-messages";
 
 const VerifyFailure = Schema.Literals([
   "ChallengeExpired",
@@ -34,7 +33,7 @@ type VerifyFailure = typeof VerifyFailure.Type;
 
 const Phase = defineTaggedUnion({
   Observing: {},
-  Entering: { kind: CodeKind, code: Schema.String, submission: Submission },
+  Entering: { kind: MfaCodeKindSchema, code: Schema.String, submission: Submission },
   Expired: {},
   Leaving: {},
 });
@@ -88,7 +87,7 @@ const failedVerify = (visit: number, failure: VerifyFailure) => () =>
   Effect.succeed(Message.FailedVerifyCode({ visit, failure }));
 
 export const VerifyCode = Command.define("VerifyCode", {
-  args: { visit: Schema.Int, code: Schema.String, kind: CodeKind },
+  args: { visit: Schema.Int, code: Schema.String, kind: MfaCodeKindSchema },
   messages: [Message.SucceededVerifyCode, Message.FailedVerifyCode],
   execute: ({ visit, code, kind }) =>
     Effect.gen(function* () {
@@ -142,9 +141,6 @@ const finishObserving = (model: Model, visit: number, nextPhase: Phase): UpdateR
     ),
   );
 
-const rejectedMessage = (failure: Exclude<VerifyFailure, "ChallengeExpired">): string =>
-  failure === "Unexpected" ? MFA_GENERIC_FAILURE_MESSAGE : MFA_FAILURE_MESSAGES[failure];
-
 const submitCode = (model: Model): UpdateReturn =>
   whileEditable(model, (entering) => {
     const code = normalizeMfaCode(entering.code, entering.kind);
@@ -167,7 +163,7 @@ const failVerify = (model: Model, failure: VerifyFailure): UpdateReturn =>
           model: withPhase(
             model,
             modifyFields(entering, {
-              submission: () => Submission.Rejected({ message: rejectedMessage(failure) }),
+              submission: () => Submission.Rejected({ message: mfaFailureText(failure) }),
             }),
           ),
         },
@@ -279,10 +275,7 @@ const enteringView = (
         h.a([h.Href(model.signInHref), h.Class(textLinkClassName)], ["ログインをやり直す"]),
       ],
     ),
-    ...Option.match(maybeErrorMessage, {
-      onNone: () => [],
-      onSome: (errorMessage) => [inputErrorView(CODE_INPUT_ID, errorMessage, h)],
-    }),
+    ...maybeInputErrorView(CODE_INPUT_ID, maybeErrorMessage, h),
   ];
 };
 

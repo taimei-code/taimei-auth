@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join, posix } from "node:path";
+import { posix } from "node:path";
 
-import { grepFiles, REPO_ROOT, valueImportsInSource } from "./source-scan";
+import { grepFiles, valueImportsInSource } from "./source-scan";
 import { readActualWebSources } from "./web-domain-structure-helpers";
 
 const runtimeImports = (path: string, source: string): string[] =>
@@ -60,7 +59,7 @@ const RULES: readonly Rule[] = [
   {
     name: "better-auth の読み出し",
     violates: (path, source) =>
-      /\bauthClient\.(listSessions|listAccounts)\(/.test(source) && !path.endsWith("-atom.ts"),
+      /\.(listSessions|listAccounts)\(/.test(source) && path !== "account/auth-client-read.ts",
   },
   {
     name: "SPA を離れる遷移",
@@ -100,7 +99,7 @@ function analyzeWebDataAccess(sources: Readonly<Record<string, string>>): string
 }
 
 describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だけ (ADR-0017)", () => {
-  test("fetch は書かず、SpaApiClient と effect/http と better-auth の読み出しは *-atom.ts だけが使い、Foldkit の SpaHttpClient は Foldkit の file と application の起動だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
+  test("fetch は書かず、SpaApiClient と effect/http は *-atom.ts だけが使い、better-auth の一覧の読み出しは account/auth-client-read.ts だけが書き、Foldkit の SpaHttpClient は Foldkit の file と application の起動だけが使い、pages/ は useEffect を使わず、SPA を離れる遷移は shared/leave-spa.ts、sign-out は auth/sign-out.ts だけが書く", () => {
     expect(analyzeWebDataAccess(readActualWebSources())).toEqual([]);
   });
 
@@ -109,18 +108,6 @@ describe("web のデータの取得と更新は *-atom.ts の SpaApiClient だ�
       tests: "exclude",
     });
     expect(writers.filter((path) => !path.endsWith("-atom.ts"))).toEqual([]);
-  });
-
-  test("MFA の状態の query と無効化は同じ MFA_STATUS_KEY を付け、有効化は reactivityKeys を付けない (有効化の直後に取り直すと、リカバリーコードが画面から消える)", () => {
-    const source = readFileSync(join(REPO_ROOT, "web/src/mfa/mfa-atom.ts"), "utf8");
-    const activate = source.slice(
-      source.indexOf("export const useActivateMfa"),
-      source.indexOf("export const useDisableMfa"),
-    );
-    expect(source.match(/reactivityKeys: \[MFA_STATUS_KEY\]/g)).toHaveLength(2);
-    expect(source.match(/reactivityKeys/g)).toHaveLength(2);
-    expect(activate).toContain("activate({ payload })");
-    expect(activate).not.toContain("reactivityKeys");
   });
 
   test("前回の成功値の有無は shared/atom-runtime.ts の failedBeforeAnyValue だけが読む", () => {
