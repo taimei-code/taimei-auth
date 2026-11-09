@@ -52,15 +52,21 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "house の dialog の file も react は import できない",
+    path: "web/src/shared/ui/dialog-view.ts",
+    source: 'import "react";',
+    expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
     name: "server は web 専用の依存を import できない",
     path: "src/handlers/web-only.ts",
-    source: 'import "lucide-react";',
+    source: 'import "foldkit";',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
     name: "db は web 専用の依存を import できない",
     path: "db/web-only.ts",
-    source: 'import "@radix-ui/react-dialog";',
+    source: 'import "@foldkit/ui";',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
@@ -127,7 +133,7 @@ const CASES: readonly Case[] = [
   {
     name: "src の test も web 専用の依存は import できない",
     path: "src/__tests__/web-only.test.ts",
-    source: 'import "sonner";',
+    source: 'import "lucide";',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
@@ -197,28 +203,22 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
-    name: "web は sonner を直接 import できない",
-    path: "web/src/account/sonner.ts",
-    source: 'import "sonner";',
+    name: "web は react を import できない",
+    path: "web/src/account/react.ts",
+    source: 'import "react";',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
-    name: "web/src/shared/notify.tsx は sonner を import できる",
-    path: "web/src/shared/notify.tsx",
-    source: 'import "sonner";',
-    expectedRules: [],
-  },
-  {
-    name: "notify.tsx も pg は import できない",
-    path: "web/src/shared/notify.tsx",
-    source: 'import "pg";',
+    name: "web は react-dom の subpath を import できない",
+    path: "web/non-production/react-dom.ts",
+    source: 'import "react-dom/client";',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
-    name: "web は effect/reactivity を import できる",
+    name: "web は effect/reactivity を import できない",
     path: "web/src/account/reactivity.ts",
     source: 'import "effect/reactivity";',
-    expectedRules: [],
+    expectedRules: [RESTRICTED_IMPORT],
   },
   {
     name: "web は effect/http を import できる",
@@ -249,12 +249,6 @@ const CASES: readonly Case[] = [
     path: "web/src/auth/search.ts",
     source: 'export const params = new URLSearchParams("");',
     expectedRules: [RESTRICTED_GLOBAL],
-  },
-  {
-    name: "web/src/app/search-params.ts は URLSearchParams を使える",
-    path: "web/src/app/search-params.ts",
-    source: 'export const params = new URLSearchParams("");',
-    expectedRules: [],
   },
   {
     name: "web の test は URLSearchParams を使える",
@@ -305,33 +299,33 @@ const CASES: readonly Case[] = [
     expectedRules: [TEMPLATE_PLACEHOLDER_IN_STRING],
   },
   {
-    name: "画面は dangerouslySetInnerHTML を書けない",
-    path: "web/src/account/inner-html.tsx",
+    name: "メールの template は dangerouslySetInnerHTML を書けない",
+    path: "src/email/inner-html.tsx",
     source:
       "export const View = ({ html }: { html: string }) => <div dangerouslySetInnerHTML={{ __html: html }} />;",
     expectedRules: [DANGEROUS_INNER_HTML],
   },
   {
-    name: "画面は rel の noreferrer の無い target=_blank の link を書けない",
-    path: "web/src/account/blank.tsx",
+    name: "メールの template は rel の noreferrer の無い target=_blank の link を書けない",
+    path: "src/email/blank.tsx",
     source: 'export const View = () => <a href="https://example.com" target="_blank">x</a>;',
     expectedRules: [TARGET_BLANK_WITHOUT_NOOPENER],
   },
   {
-    name: "画面は文字の無い見出しを書けない",
-    path: "web/src/account/heading.tsx",
+    name: "メールの template は文字の無い見出しを書けない",
+    path: "src/email/heading.tsx",
     source: "export const View = () => <h2 />;",
     expectedRules: [EMPTY_HEADING],
   },
   {
-    name: "画面は focus を受ける要素を aria-hidden で隠せない",
-    path: "web/src/account/hidden-button.tsx",
+    name: "メールの template は focus を受ける要素を aria-hidden で隠せない",
+    path: "src/email/hidden-button.tsx",
     source: 'export const View = () => <button type="button" aria-hidden="true">x</button>;',
     expectedRules: [ARIA_HIDDEN_ON_FOCUSABLE],
   },
   {
-    name: "画面は type の無い button を書けない",
-    path: "web/src/account/untyped-button.tsx",
+    name: "メールの template は type の無い button を書けない",
+    path: "src/email/untyped-button.tsx",
     source: "export const View = () => <button>x</button>;",
     expectedRules: [BUTTON_WITHOUT_TYPE],
   },
@@ -426,14 +420,14 @@ const CASES: readonly Case[] = [
   {
     name: "app/*/route.ts も web の import の禁止を失わない",
     path: "web/src/app/account/route.ts",
-    source: 'import { toast } from "sonner"; export { toast };',
+    source: 'import { useState } from "react"; export { useState };',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
     name: "Foldkit の画面の file も、web の import の禁止を失わない",
-    path: "web/src/mfa/notify-program.ts",
+    path: "web/src/mfa/react-program.ts",
     source:
-      'import { Command } from "foldkit"; import { toast } from "sonner"; export { Command, toast };',
+      'import { Command } from "foldkit"; import { useState } from "react"; export { Command, useState };',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
@@ -446,7 +440,7 @@ const CASES: readonly Case[] = [
   {
     name: "Foldkit の画面の通信の client も、web の import の禁止を失わない",
     path: "web/src/shared/spa-http-client.ts",
-    source: 'import { toast } from "sonner"; export { toast };',
+    source: 'import { useState } from "react"; export { useState };',
     expectedRules: [RESTRICTED_IMPORT],
   },
   {

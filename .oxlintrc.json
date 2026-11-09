@@ -64,18 +64,12 @@
                 "group": [
                   "class-variance-authority",
                   "clsx",
-                  "@effect/atom-react",
                   "@effect/platform-browser",
                   "@foldkit/ui",
                   "foldkit",
                   "lucide",
-                  "lucide-react",
                   "qrcode",
-                  "@radix-ui/*",
-                  "sonner",
-                  "tailwind-merge",
-                  "tailwindcss-animate",
-                  "@tanstack/react-router"
+                  "tailwind-merge"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -123,18 +117,12 @@
                 "group": [
                   "class-variance-authority",
                   "clsx",
-                  "@effect/atom-react",
                   "@effect/platform-browser",
                   "@foldkit/ui",
                   "foldkit",
                   "lucide",
-                  "lucide-react",
                   "qrcode",
-                  "@radix-ui/*",
-                  "sonner",
-                  "tailwind-merge",
-                  "tailwindcss-animate",
-                  "@tanstack/react-router"
+                  "tailwind-merge"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -187,18 +175,12 @@
                 "group": [
                   "class-variance-authority",
                   "clsx",
-                  "@effect/atom-react",
                   "@effect/platform-browser",
                   "@foldkit/ui",
                   "foldkit",
                   "lucide",
-                  "lucide-react",
                   "qrcode",
-                  "@radix-ui/*",
-                  "sonner",
-                  "tailwind-merge",
-                  "tailwindcss-animate",
-                  "@tanstack/react-router"
+                  "tailwind-merge"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -245,18 +227,12 @@
                 "group": [
                   "class-variance-authority",
                   "clsx",
-                  "@effect/atom-react",
                   "@effect/platform-browser",
                   "@foldkit/ui",
                   "foldkit",
                   "lucide",
-                  "lucide-react",
                   "qrcode",
-                  "@radix-ui/*",
-                  "sonner",
-                  "tailwind-merge",
-                  "tailwindcss-animate",
-                  "@tanstack/react-router"
+                  "tailwind-merge"
                 ],
                 "message": "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)"
               },
@@ -296,7 +272,7 @@
     },
     {
       "files": ["web/**"],
-      "excludeFiles": ["web/src/shared/notify.tsx", "web/src/shared/ui/dialog-view.ts"],
+      "excludeFiles": ["web/src/shared/ui/dialog-view.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",
@@ -304,7 +280,7 @@
             "paths": [
               {
                 "name": "sonner",
-                "message": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
               },
               {
                 "name": "drizzle-orm",
@@ -334,12 +310,11 @@
                 "group": [
                   "effect/*",
                   "effect/**",
-                  "!effect/reactivity",
                   "!effect/http",
                   "!effect/crypto",
                   "!effect/persistence"
                 ],
-                "message": "web で使える effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
+                "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
               },
               {
                 "group": ["drizzle-orm/**"],
@@ -348,6 +323,10 @@
               {
                 "group": ["@/*", "@/**"],
                 "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
+              },
+              {
+                "group": ["react", "react/*", "react-dom", "react-dom/*"],
+                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -363,7 +342,7 @@
             "paths": [
               {
                 "name": "sonner",
-                "message": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
               },
               {
                 "name": "drizzle-orm",
@@ -384,12 +363,11 @@
                 "group": [
                   "effect/*",
                   "effect/**",
-                  "!effect/reactivity",
                   "!effect/http",
                   "!effect/crypto",
                   "!effect/persistence"
                 ],
-                "message": "web で使える effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
+                "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
               },
               {
                 "group": ["drizzle-orm/**"],
@@ -398,50 +376,10 @@
               {
                 "group": ["@/*", "@/**"],
                 "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["web/src/shared/notify.tsx"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "drizzle-orm",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
               },
               {
-                "name": "pg",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "name": "foldkit/route",
-                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "name": "foldkit",
-                "importNames": ["Route"],
-                "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "name": "@foldkit/ui",
-                "importNames": ["Dialog"],
-                "message": "dialog は web/src/shared/ui/dialog-view.ts の dialogView と Dialog で書く (class を受け取らない house の dialog。docs/adr/0023-web-foldkit.md)"
-              }
-            ],
-            "patterns": [
-              {
-                "group": ["drizzle-orm/**"],
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "group": ["@/*", "@/**"],
-                "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
+                "group": ["react", "react/*", "react-dom", "react-dom/*"],
+                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -457,7 +395,7 @@
             "paths": [
               {
                 "name": "sonner",
-                "message": "通知は web/src/shared/notify.tsx の notifySuccess / notifyError を経由すること (duration / closeButton 等の通知ポリシーの正本。直 import すると policy を素通りする)"
+                "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
               },
               {
                 "name": "drizzle-orm",
@@ -482,12 +420,11 @@
                 "group": [
                   "effect/*",
                   "effect/**",
-                  "!effect/reactivity",
                   "!effect/http",
                   "!effect/crypto",
                   "!effect/persistence"
                 ],
-                "message": "web で使える effect の subpath は effect/reactivity・effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
+                "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
               },
               {
                 "group": ["drizzle-orm/**"],
@@ -496,6 +433,10 @@
               {
                 "group": ["@/*", "@/**"],
                 "message": "web の domain の内部は相対 import で書く (web/src/CLAUDE.md、docs/adr/0023-web-foldkit.md)"
+              },
+              {
+                "group": ["react", "react/*", "react-dom", "react-dom/*"],
+                "message": "web は React を使わない。画面は Foldkit で書く。react・react-dom はメールの template のためだけに入れている (docs/adr/0023-web-foldkit.md)"
               }
             ]
           }
@@ -504,13 +445,13 @@
     },
     {
       "files": ["web/src/**"],
-      "excludeFiles": ["web/src/**/__tests__/**", "web/src/app/search-params.ts"],
+      "excludeFiles": ["web/src/**/__tests__/**"],
       "rules": {
         "no-restricted-globals": [
           "error",
           {
             "name": "URLSearchParams",
-            "message": "search は route の validateSearch で parse する (web/src/CLAUDE.md)"
+            "message": "search は app/*/route.ts の route の parser で読む (docs/adr/0023-web-foldkit.md)"
           }
         ]
       }
@@ -530,7 +471,12 @@
           {
             "assertionStyle": "never"
           }
-        ],
+        ]
+      }
+    },
+    {
+      "files": ["web/src/**", "web/non-production/**"],
+      "rules": {
         "foldkit/acquire-release-constructs-in-acquire-body": "error",
         "foldkit/command-binding-matches-name": "error",
         "foldkit/command-define-pascal-const": "error",
@@ -571,21 +517,48 @@
       }
     },
     {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"],
+      "rules": {
+        "foldkit/command-binding-matches-name": "off",
+        "foldkit/command-define-pascal-const": "off",
+        "foldkit/got-prefix-requires-submodel-payload": "off",
+        "foldkit/got-submodel-message-name": "off",
+        "foldkit/got-wrapper-carries-only-routing": "off",
+        "foldkit/keyed-required-for-mapped-rows": "off",
+        "foldkit/lazy-view-stable-references": "off",
+        "foldkit/mount-factory-must-use-element": "off",
+        "foldkit/no-array-index-view-keys": "off",
+        "foldkit/no-child-message-construction-in-root": "off",
+        "foldkit/no-direct-submodel-state-update": "off",
+        "foldkit/no-disabling-dev-guardrails": "off",
+        "foldkit/no-duplicate-onmount-per-element": "off",
+        "foldkit/no-empty-children-array": "off",
+        "foldkit/no-empty-commands-array": "off",
+        "foldkit/no-empty-to-parent-out-message": "off",
+        "foldkit/no-empty-object-tagged-call": "off",
+        "foldkit/no-hand-rolled-command-struct": "off",
+        "foldkit/no-hardcoded-route-strings": "off",
+        "foldkit/no-impure-call-at-decision-time": "off",
+        "foldkit/no-module-level-mutable-state": "off",
+        "foldkit/no-nonportable-server-globals": "off",
+        "foldkit/no-noop-message": "off",
+        "foldkit/no-prevent-default-in-stream-operator": "off",
+        "foldkit/no-raw-dom-event-attributes": "off",
+        "foldkit/no-route-query-constructor-default": "off",
+        "foldkit/no-spread-in-modify-fields": "off",
+        "foldkit/prefer-callable-message-constructor": "off",
+        "foldkit/prefer-command-mapmessage": "off",
+        "foldkit/prefer-option-over-nullable-in-model": "off",
+        "foldkit/require-fold-for-child-update-result": "off",
+        "foldkit/require-rel-for-external-link": "off",
+        "foldkit/selection-submodel-factory-at-module-scope": "off",
+        "foldkit/wrap-child-output-in-got-message": "off"
+      }
+    },
+    {
       "files": ["web/src/**", "web/non-production/**"],
       "rules": {
         "curly": ["error", "all"]
-      }
-    },
-    {
-      "files": ["web/src/shared/atom-runtime.ts"],
-      "rules": {
-        "taimei/no-effect-run-in-web": "off"
-      }
-    },
-    {
-      "files": ["web/src/shared/notify.tsx"],
-      "rules": {
-        "foldkit/no-module-level-mutable-state": "off"
       }
     },
     {

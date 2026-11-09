@@ -2,13 +2,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Config } from "tailwindcss";
 import formsPlugin from "@tailwindcss/forms";
-import animatePlugin from "tailwindcss-animate";
 
 const dir = path.dirname(fileURLToPath(import.meta.url));
 
 export const PRODUCTION_CONTENT_GLOBS = [
   path.join(dir, "index.html"),
-  path.join(dir, "src/**/*.{ts,tsx}"),
+  path.join(dir, "src/**/*.ts"),
 ];
 
 const config: Config = {
@@ -66,6 +65,6 @@ const config: Config = {
       },
     },
   },
-  plugins: [formsPlugin, animatePlugin],
+  plugins: [formsPlugin],
 };
 export default config;
