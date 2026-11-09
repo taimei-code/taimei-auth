@@ -2,34 +2,17 @@
 
 Foldkit のコードを書く前に、`.claude/skills/` の `foldkit` と `generate-program` の skill を読み込み、その手順に従う。書いたコードの review には `audit-program` の skill を使う。skill が指す `repos/foldkit/` は入れた版の Foldkit の repo の写しである (置き方と版の上げ方は [`ADR-0023`](../../docs/adr/0023-web-foldkit.md))。Foldkit の書き方や API を調べるときは、サブエージェントを起動せず、自分で skill を読み込み、`repos/foldkit/` を読む。
 
-配置の判断は [`ADR-0015`](../../docs/adr/0015-web-domain-first-directory-structure.md) が定義元である。cross-domain import の allowlist は `src/__tests__/web-domain-structure.test.ts` が固定し、path の追加は新しい cross-domain interface を設ける設計変更として review する。
+配置の判断は [`ADR-0015`](../../docs/adr/0015-web-domain-first-directory-structure.md) が定義元である。型・lint・test で守る規則は、ここに書かない。ここに残すのは、破っても何も落ちない規則だけである。
 
-## 所有 domain
+## 仕組みで守れない規則
 
-ファイルの所有者は、URL ではなく変更理由となる業務ドメインで決める。`/account/*` の画面であっても、company、membership、invitation、mfa の操作は各 domain が所有する。
-
-- `app`: route、layout、provider、guard の結線。他 domain の `pages` を import できる唯一の場所。
-- `auth`: ログイン、サインアップ、認証 client、認証後の redirect。
-- `account`: プロフィール、削除、セキュリティ、セッション、連携アカウント、現在の事業所の状態と切り替え。
-- `company` / `membership` / `invitation` / `mfa`: 各業務の操作。
-- `shared`: domain を知らない UI primitive、通知、汎用 hook、HTTP 基盤。複数の domain から使われることだけを理由に `shared` へ移さない。`shared/ui/` は domain の型と domain の判断を import しない。
-
-## 配置
-
-- route entry だけを各 domain の `pages/` に置き、それ以外の domain 固有 module は domain 直下に置く。肥大化したら `challenge` や `registration` のような機能名で分割する。
-- `lib/`、`components/`、domain barrel の `index.ts` を作らず、許可されたファイルを直接 import する。domain の内部は相対 import にする。
-- サーバーのデータの取得と更新は、`<domain>/<domain>-atom.ts` に `SpaApiClient` (`shared/spa-api-client.ts`) の `query` と `mutation` で置き、component と hook はその atom を読む。better-auth の client の一覧 (session・連携アカウント) は `account/auth-client-read.ts` だけが読み、client が返す `error` を失敗にする。他の場所から `fetch`・`SpaApiClient`・better-auth の一覧の読み出しを使うと `src/__tests__/web-data-access.test.ts` が落とす。読み取りだけの画面は読み出しの結果を `shared/AsyncSection.tsx` にそのまま渡す。
-- 更新は `*-atom.ts` が hook として渡し、mutation の atom は export しない (route の loader が `runMutation` で使う atom だけを export する)。一覧や事業所状態を変える更新は、hook が `reactivityKeys` を足す。初回の取得の失敗は `failedBeforeAnyValue` で判定して文言を出す。
-- 画面の失敗の文言は、契約に宣言した失敗の `_tag` から `shared/failure-message.ts` の `failureMessage` で選ぶ。表は宣言した失敗の `_tag` を `Unauthorized` を除いてすべて持つ必要があり、文言は各画面に置く (同じ `_tag` でも画面ごとに意味が違うため)。`Unauthorized` は `shared/spa-api-client.ts` だけが扱い、今の URL を戻り先にして共通ログイン画面 (`/auth/`) へ移すので、表に書かない。文言でなく画面の動きを `_tag` で分ける時は、同じ file の `failureOutcome` で宣言した失敗のすべての `_tag` に結果を割り当てる (server が失敗を足すと表が足りずに型エラーになる)。`onFailure` で cause を捨てない (捨てると `src/__tests__/web-data-access.test.ts` が落ちる)。MFA の画面は同じ失敗に同じ文言を出すので、`mfa/mfa-failure-messages.ts` の 1 つの表を共有する。
-
-## 遷移
-
-- route は `app/router.tsx` に置く。page は route の値を `getRouteApi(<route id>)` の `useSearch` / `useLoaderData` で読む。
-- search は route の `validateSearch` で parse し、page で `URLSearchParams` を読まない (oxlint の `no-restricted-globals` が落とす)。検査に失敗した時に既定の値を使う search は、`validateSearch` の中で既定の値にする。
-- 遷移を起点とする処理 (画面を開く前の確認、状態の取得) は route の `beforeLoad` / `loader` に置き、`pages/` で `useEffect` を使わない (`web-data-access.test.ts` が落とす)。
-- 遷移は `Link` / `navigate` / `redirect` で書き、path と search を型で検査させる。`/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は `reloadDocument` にする (理由は ADR-0002 の router の節)。router の外で SPA を離れる遷移 (`window.location`) は `shared/leave-spa.ts` だけが書き、sign-out は `auth/sign-out.ts` の `signOut` だけが better-auth を呼ぶ (`web-data-access.test.ts` が落とす)。
-
-## 検証
-
-- `@core` import を変えたら `src/__tests__/web-shared-core-runtime-free.test.ts` を実行する。
-- compose で browser 確認する前に `docker compose up --build -d auth-service` で rebuild する。
+- file の所有者は、URL ではなく変更理由となる業務 domain で決める。`/account/*` の画面でも、company、membership、invitation、mfa の操作は各 domain が持つ。どの domain の変更理由かは、名前や import からは決まらない。
+- 複数の domain から使われることだけを理由に `shared` へ移さない。移した理由は source に残らない。
+- domain が肥大化したら、技術の種類ではなく `challenge` や `registration` のような機能名で分ける。技術名と機能名の区別は、決まった一覧では書けない (`lib/` と `components/` だけは test が止める)。
+- better-auth の client が返す `error` は、読み出しの失敗として扱う。読み出しを 1 つの file に限ることは test が止めるが、その中で `error` を読むかどうかは、型にも source の形にも出ない。
+- 画面の失敗の文言と動きは、`shared/failure-message.ts` の `failureMessage` と `failureOutcome` で選び、失敗の `_tag` を直接比べない。`_tag` の比較は、ほかの用途の比較と source の形が同じで、区別できない。
+- 失敗の文言は各画面に置く。同じ `_tag` でも画面ごとに意味が違うためである。共通の表を作ること自体は正当な書き方と区別できない。
+- MFA の画面は、同じ失敗に同じ文言を出すため、`mfa/mfa-failure-messages.ts` の 1 つの表を共有する。どの画面が MFA の画面かは source から決まらない。
+- search の検査に失敗した時の既定の値は、route の parser の中で決める。既定の値をどこで補ったかは、型が同じなので区別できない。
+- `/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は、application の `ReplaceDocument` か `LoadDocument` で document を読み直す (理由は ADR-0002 と ADR-0023 の Decision 2)。lint が止めるのは path を文字列で直接書く形だけで、`PushUrl` に替える書き方は Foldkit の形として正当なので止められない。
+- 画面を開いた時の確認と取得は、route に入った時の `init` が返す Command に置く。同じ取得を `update` の Message から始める書き方も Foldkit の形として正当なので、止められない。
