@@ -51,7 +51,7 @@ jobs:
         run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
 
       - name: Lint (shellcheck)
-        run: shellcheck scripts/*.sh e2e/*.sh
+        run: git ls-files '*.sh' ':!repos' | xargs shellcheck
 
       - name: Buf breaking check (破壊的変更なら SDK の major が上がっていること)
         run: bash scripts/check-sdk-breaking.sh origin/main

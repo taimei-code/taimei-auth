@@ -1,4 +1,5 @@
 import { Context, Layer } from "effect";
+import * as migrationStatus from "@/db/testing/migration-status";
 import * as read from "@/db/testing/read";
 import { createSeed, ids } from "@/db/testing/seed";
 import { type LiftedModule, liftAll } from "../errors";
@@ -10,4 +11,10 @@ export class TestDb extends Context.Service<
 >()("taimei/TestDb") {}
 
 export const testDbLayer = (prefix: string): Layer.Layer<TestDb> =>
-  Layer.succeed(TestDb, { ...liftAll(createSeed(prefix)), ...liftAll(read), ids: ids(prefix) });
+  Layer.succeed(TestDb, {
+    ...liftAll(createSeed(prefix)),
+    ...liftAll(read),
+    ids: ids(prefix),
+  });
+
+export const testDbMigrations = liftAll(migrationStatus);
