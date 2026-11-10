@@ -1,4 +1,4 @@
-import { Effect, Number, Option, Redacted, Schema, String } from "effect";
+import { Effect, Number, Option, Redacted, Schema, String, pipe } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -12,7 +12,6 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
   dialogFooterView,
   dialogView,
@@ -56,8 +55,15 @@ const QrCode = defineTaggedUnion({
 });
 type QrCode = typeof QrCode.Type;
 
+export const OutMessage = defineMessageUnion({
+  ClosedAfterEnabling: {},
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   step: Step,
   maybeResumableEnrollment: Schema.Option(Enrollment),
   qrCode: QrCode,
@@ -103,12 +109,6 @@ export const Message = defineMessageUnion({
   GotCopyResultMessage: { message: CopyResult.Message },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  ClosedAfterEnabling: {},
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const QR_CODE_WIDTH = 192;
 const TOTP_TEXTS = MFA_CODE_TEXTS.totp;
@@ -192,6 +192,7 @@ export const DrawQrCode = Command.define("DrawQrCode", {
 
 export const init = (): Model => ({
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   step: Step.Starting(),
   maybeResumableEnrollment: Option.none(),
   qrCode: QrCode.Drawing(),
@@ -199,7 +200,6 @@ export const init = (): Model => ({
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
-type StepUpdate = Update.StepWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
 const isSubmitting = (model: Model): boolean =>
   Step.matchOrElse(
@@ -215,17 +215,13 @@ const withStep = (model: Model, step: Step): Model => modifyFields(model, { step
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const reportClosed: StepUpdate = (model) =>
-  Step.guards.RecoveryCodes(model.step)
-    ? { model: withStep(model, Step.Starting()), outMessage: OutMessage.ClosedAfterEnabling() }
-    : { model };
+const withoutShownRecoveryCodes = (model: Model): Model =>
+  Step.guards.RecoveryCodes(model.step) ? withStep(model, Step.Starting()) : model;
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  whenClosed: reportClosed,
+  whenClosed: withoutShownRecoveryCodes,
 });
 
 const hasCopyResult = Step.isAnyOf(["Scan", "RecoveryCodes"]);
@@ -257,13 +253,14 @@ const openDialog = (model: Model): UpdateReturn =>
         requestNumber: Number.increment,
       });
       const opened = dialogFolds.open(requested);
-      return {
+      const enrolling: Update.Return<Model, Message, SpaHttpClient> = {
         model: opened.model,
         commands: [
           ...(opened.commands ?? []),
           EnrollMfa({ requestNumber: requested.requestNumber }),
         ],
       };
+      return pipe(enrolling, Update.withOutMessage(opened.outMessage));
     },
   });
 
@@ -382,12 +379,15 @@ export const update = (model: Model, message: Message) =>
     SubmittedCode: () => submitCode(model),
     SucceededActivateMfa: ({ requestNumber }) =>
       forThisRequest(model, requestNumber, () =>
-        withVerifying(model, ({ enrollment }) => ({
-          model: modifyFields(withStep(model, recoveryCodesStep(enrollment)), {
-            maybeResumableEnrollment: () => Option.none(),
-            qrCode: () => QrCode.Drawing(),
-          }),
-        })),
+        withVerifying(model, ({ enrollment }) =>
+          dialogFolds.reportAfterClose(
+            modifyFields(withStep(model, recoveryCodesStep(enrollment)), {
+              maybeResumableEnrollment: () => Option.none(),
+              qrCode: () => QrCode.Drawing(),
+            }),
+            OutMessage.ClosedAfterEnabling(),
+          ),
+        ),
       ),
     FailedActivateMfa: ({ requestNumber, failure }) =>
       forThisRequest(model, requestNumber, () => failActivate(model, failure)),

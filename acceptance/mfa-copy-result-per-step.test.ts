@@ -4,11 +4,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Effect, Fiber, Option, Redacted } from "effect";
 import { TestClock } from "effect/testing";
-import { expect as expectView, given, Mount, role, scene, text } from "foldkit/scene";
+import { Command, expect as expectView, given, Mount, role, scene, text } from "foldkit/scene";
 
 import { init, Message, type Model, update, view } from "../web/src/account/pages/Security";
 import * as CopyResult from "../web/src/mfa/copy-result";
 import * as MfaEnrollment from "../web/src/mfa/mfa-enrollment";
+import { pendingDialogTransitionResolvers } from "../web/src/shared/__tests__/dialog-resolvers";
 import { Dialog } from "../web/src/shared/ui/dialog-view";
 
 const REPO_ROOT = join(import.meta.dir, "..");
@@ -195,6 +196,7 @@ const shows = (model: Model, label: string): boolean =>
       { update, view },
       given(model),
       Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...pendingDialogTransitionResolvers(model.enrollment.dialog)),
       expectView(text(label)).toExist(),
     ),
   );
@@ -205,6 +207,7 @@ const hides = (model: Model, label: string): boolean =>
       { update, view },
       given(model),
       Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...pendingDialogTransitionResolvers(model.enrollment.dialog)),
       expectView(role("heading", { name: DIALOG_TITLE })).toExist(),
       expectView(text(label)).toBeAbsent(),
     ),

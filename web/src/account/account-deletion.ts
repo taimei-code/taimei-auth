@@ -13,8 +13,8 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
+  isDialogVisible,
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
@@ -27,9 +27,15 @@ const DeleteAccountFailure = Schema.Literals([
 ]);
 type DeleteAccountFailure = typeof DeleteAccountFailure.Type;
 
+export const OutMessage = defineMessageUnion({
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   visit: Schema.Int,
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   deletion: Submission,
 });
 export type Model = typeof Model.Type;
@@ -43,11 +49,6 @@ export const Message = defineMessageUnion({
   FailedDeleteAccount: { visit: Schema.Int, failure: DeleteAccountFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const DELETE_FAILED = "退会処理に失敗しました";
 
@@ -86,6 +87,7 @@ const DIALOG_ID = "account-deletion-dialog";
 export const init = (visit: number): Model => ({
   visit,
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   deletion: Submission.Idle(),
 });
 
@@ -95,11 +97,9 @@ const isDeleting = (model: Model) => Submission.guards.Submitting(model.deletion
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: isDeleting,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
 });
 
 const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): UpdateReturn =>
@@ -116,7 +116,10 @@ const failDeletion = (model: Model, failure: DeleteAccountFailure): UpdateReturn
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    ClickedDeleteAccount: () => (isDeleting(model) ? { model } : dialogFolds.open(model)),
+    ClickedDeleteAccount: () =>
+      isDeleting(model)
+        ? { model }
+        : dialogFolds.open(modifyFields(model, { deletion: () => Submission.Idle() })),
     ClickedCancelDeletion: () => (isDeleting(model) ? { model } : dialogFolds.close(model)),
     ClickedConfirmDeletion: () =>
       isDeleting(model)
@@ -130,6 +133,9 @@ export const update = (model: Model, message: Message) =>
     FailedDeleteAccount: ({ visit, failure }) =>
       forThisVisit(model, visit, () => failDeletion(model, failure)),
   });
+
+const maybeRejectionAfterClose = (model: Model): Option.Option<string> =>
+  isDialogVisible(model.dialog) ? Option.none() : maybeRejectedMessage(model.deletion);
 
 const confirmFooterView = (model: Model, h: HtmlBuilder<Message>): Html =>
   dialogFooterView(
@@ -179,7 +185,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
                 [h.Class("mt-1 text-sm text-muted-foreground")],
                 ["すべてのデータが削除され、復元できません。"],
               ),
-              ...Option.match(maybeRejectedMessage(model.deletion), {
+              ...Option.match(maybeRejectionAfterClose(model), {
                 onNone: () => [],
                 onSome: (failureMessage) => [
                   h.p(

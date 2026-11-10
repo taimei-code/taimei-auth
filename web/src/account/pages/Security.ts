@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 
+import { isDialogVisible } from "../../shared/ui/dialog-view";
 import * as MfaDisabling from "../../mfa/mfa-disabling";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
 import { SpaHttpClient } from "../../shared/spa-http-client";
@@ -271,7 +272,7 @@ const mfaRowView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<
             Enabled: () => [
               badgeView("有効", "default", h),
               disablingView(model, h),
-              ...(model.enrollment.dialog.isOpen ? [enrollmentView(model, h)] : []),
+              ...(isDialogVisible(model.enrollment.dialog) ? [enrollmentView(model, h)] : []),
             ],
           },
           () => [badgeView("無効", "secondary", h), enrollmentView(model, h)],

@@ -11,7 +11,10 @@ import {
 } from "foldkit/story";
 
 import * as OwnershipTransfer from "../../membership/ownership-transfer";
-import { Dialog } from "../../shared/ui/dialog-view";
+import {
+  FIRST_DIALOG_CLOSING_MESSAGES,
+  FIRST_DIALOG_OPENING,
+} from "../../shared/__tests__/dialog-resolvers";
 import * as AddCompany from "../add-company";
 import {
   init,
@@ -43,6 +46,14 @@ const signedIn = (): Model =>
 
 const leaving = (): Model =>
   update(signedIn(), Message.ClickedLeaveCompany({ membership: COMPANY })).model;
+
+const [DIALOG_PAINTED_CLOSING, DIALOG_ENDED_CLOSING] = FIRST_DIALOG_CLOSING_MESSAGES;
+
+const afterDialogClosed = (
+  closing: Model,
+  toMessage: (dialogMessage: typeof DIALOG_ENDED_CLOSING) => Message,
+) =>
+  update(update(closing, toMessage(DIALOG_PAINTED_CLOSING)).model, toMessage(DIALOG_ENDED_CLOSING));
 
 describe("事業所の一覧を開く", () => {
   test("開くとログイン中の利用者の id を読む", () => {
@@ -167,15 +178,19 @@ describe("事業所の追加とオーナーの委譲", () => {
       { name: AddCompany.AddCompany.name, args: { name: "新事業所", orgCode: "CORPORATE" } },
     ]);
     expect(second.commands ?? []).toEqual([]);
-    expect(
-      update(
-        first.model,
-        Message.GotAddCompanyMessage({
-          message: AddCompany.Message.SucceededAddCompany({
-            requestNumber: 1,
-            companyName: "新事業所",
-          }),
+    const closing = update(
+      first.model,
+      Message.GotAddCompanyMessage({
+        message: AddCompany.Message.SucceededAddCompany({
+          requestNumber: 1,
+          companyName: "新事業所",
         }),
+      }),
+    );
+    expect(closing.outMessage).toBeUndefined();
+    expect(
+      afterDialogClosed(closing.model, (message) =>
+        Message.GotAddCompanyMessage({ message: AddCompany.Message.GotDialogMessage({ message }) }),
       ).outMessage,
     ).toEqual(
       OutMessage.UpdatedCompanyState({
@@ -221,13 +236,29 @@ describe("事業所の追加とオーナーの委譲", () => {
         }),
       }),
     ).model;
-    const transferred = update(
+    const closing = update(
       transferring,
       Message.GotOwnershipTransferMessage({
         message: OwnershipTransfer.Message.SucceededTransferOwnership({
           requestNumber: transferring.ownershipTransfer.requestNumber,
           memberLabel: "メイト",
         }),
+      }),
+    );
+    expect(closing.outMessage).toBeUndefined();
+    expect(
+      update(closing.model, Message.ClickedTransferOwnership({ membership: COMPANY })).outMessage,
+    ).toEqual(
+      OutMessage.UpdatedCompanyState({
+        texts: {
+          maybeDoneText: Option.some("メイト にオーナーを委譲しました。"),
+          actionText: "オーナーを委譲しました",
+        },
+      }),
+    );
+    const transferred = afterDialogClosed(closing.model, (message) =>
+      Message.GotOwnershipTransferMessage({
+        message: OwnershipTransfer.Message.GotDialogMessage({ message }),
       }),
     );
     expect(transferred.model.maybeSoleOwnerCompanyId).toEqual(Option.none());
@@ -336,7 +367,7 @@ describe("追加と委譲の失敗", () => {
       update,
       given(signedIn()),
       message(addCompanyMessage(AddCompany.Message.ClickedAddCompany())),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       message(addCompanyMessage(AddCompany.Message.UpdatedName({ value: "新事業所" }))),
       message(addCompanyMessage(AddCompany.Message.SubmittedAddCompanyForm())),
       Command.resolve(
@@ -358,7 +389,7 @@ describe("追加と委譲の失敗", () => {
       update,
       given(soleOwner()),
       message(Message.ClickedTransferOwnership({ membership: COMPANY })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       Command.resolve(
         OwnershipTransfer.LoadCandidates,
         OwnershipTransfer.Message.SucceededLoadCandidates({
@@ -396,7 +427,7 @@ describe("追加と委譲の失敗", () => {
       update,
       given(soleOwner()),
       message(Message.ClickedTransferOwnership({ membership: COMPANY })),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       Command.resolve(
         OwnershipTransfer.LoadCandidates,
         OwnershipTransfer.Message.FailedLoadCandidates({ requestNumber: 1, failure: "Unexpected" }),

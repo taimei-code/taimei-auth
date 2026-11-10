@@ -1,8 +1,9 @@
 import { describe, test } from "bun:test";
 import { Option } from "effect";
-import { expect, given, Mount, role, scene, text } from "foldkit/scene";
+import { Command, expect, given, Mount, role, scene, text } from "foldkit/scene";
 
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import { pendingDialogTransitionResolvers } from "../../shared/__tests__/dialog-resolvers";
 import { Dialog } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, update, view } from "../pages/Security";
 
@@ -22,6 +23,7 @@ describe("セキュリティの画面", () => {
       { update, view },
       given(clicked),
       Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...pendingDialogTransitionResolvers(clicked.enrollment.dialog)),
       expect(role("heading", { name: "多要素認証 (MFA) を有効にする" })).toExist(),
       expect(role("status")).toHaveText("読み込み中…"),
     );

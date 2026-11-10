@@ -21,8 +21,12 @@ import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
 import * as MemberInvitations from "../../invitation/member-invitations";
 import * as Members from "../../membership/pages/Members";
-import { Toast } from "@foldkit/ui";
+import { Animation, Toast } from "@foldkit/ui";
 
+import {
+  DIALOG_RESOURCES_RELEASED,
+  FIRST_DIALOG_CLOSING,
+} from "../../shared/__tests__/dialog-resolvers";
 import { Dialog } from "../../shared/ui/dialog-view";
 import {
   LeaveAfterAccountDeleted,
@@ -355,8 +359,10 @@ describe("page から頼まれる事業所の操作", () => {
       update,
       given(deleting),
       message(deletionMessage({ _tag: "SucceededDeleteCompany", visit, companyName: "事業所A" })),
-      Command.expectHas(PushUrl, CurrentCompany.RefreshCompanyState),
-      Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+      Command.expectExact(Animation.WaitForPaint),
+      ...FIRST_DIALOG_CLOSING,
+      Command.expectHas(PushUrl, CurrentCompany.RefreshCompanyState, Dialog.CloseDialog),
+      DIALOG_RESOURCES_RELEASED,
       Command.resolve(PushUrl, DocumentNavigationMessage.CompletedPushUrl()),
       Command.resolve(
         CurrentCompany.RefreshCompanyState,

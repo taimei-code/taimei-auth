@@ -31,12 +31,50 @@ const BROWSER_GLOBAL_OUTSIDE_COMMAND = "taimei(no-browser-global-outside-command
 const TIMER_CLOCK_RANDOM_IN_FOLDKIT = "taimei(no-timer-clock-random-in-foldkit)";
 const ATOM_IMPORT_IN_FOLDKIT = "taimei(no-atom-import-in-foldkit)";
 const RAW_FORM_ELEMENT = "taimei(no-raw-form-element)";
+const DIALOG_VISIBLE = "taimei(dialog-visible-only-by-is-dialog-visible)";
+const DIALOG_TRANSITION_STATE = "taimei(dialog-transition-state-only-in-dialog-view)";
+const CHILD_MESSAGE_IN_ROOT = "foldkit(no-child-message-construction-in-root)";
 const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
 const BRACES_REQUIRED = "eslint(curly)";
 const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
 
 const CASES: readonly Case[] = [
+  {
+    name: "page は dialog を描くかどうかを dialog.isOpen で決められない",
+    path: "web/src/account/pages/DialogVisibleProbe.ts",
+    source:
+      "export const shows = (model: { enrollment: { dialog: { isOpen: boolean } } }) => model.enrollment.dialog.isOpen;",
+    expectedRules: [DIALOG_VISIBLE],
+  },
+  {
+    name: "house の dialog の外は、dialog の animation の状態を直接比べられない",
+    path: "web/src/company/dialog-transition-probe.ts",
+    source:
+      'export const isLeaving = (model: { dialog: { animation: { transitionState: string } } }) => model.dialog.animation.transitionState === "LeaveStart";',
+    expectedRules: [DIALOG_TRANSITION_STATE],
+  },
+  {
+    name: "dialog を持つ Submodel は、開いている間の再操作を dialog.isOpen で止められる",
+    path: "web/src/company/dialog-open-probe.ts",
+    source:
+      "export const isOpen = (model: { dialog: { isOpen: boolean } }) => model.dialog.isOpen;",
+    expectedRules: [],
+  },
+  {
+    name: "dialog の開閉の resolver の file は、試験のために子の Message を組める",
+    path: "web/src/shared/__tests__/dialog-resolvers.ts",
+    source:
+      'import { Animation } from "@foldkit/ui";\nexport const settled = Animation.Message.EndedAnimation({ generation: 1 });',
+    expectedRules: [],
+  },
+  {
+    name: "ほかの試験用の file は、production と同じく子の Message を組めない",
+    path: "web/src/shared/__tests__/other-support.ts",
+    source:
+      'import { Animation } from "@foldkit/ui";\nexport const settled = Animation.Message.EndedAnimation({ generation: 1 });',
+    expectedRules: [CHILD_MESSAGE_IN_ROOT],
+  },
   {
     name: "web の画面は @foldkit/ui の Dialog を直接 import できない",
     path: "web/src/account/pages/DialogProbe.ts",
