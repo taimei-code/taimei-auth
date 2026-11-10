@@ -171,6 +171,13 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 
 1〜3 回目で足した `esbuild` (と `@esbuild/*` の 26 platform)・`undici`・`nanoid` の除外を外した。lockfile が固定している版 (esbuild 0.28.1、undici 6.29.1、nanoid 5.1.16 / 3.3.18 / 3.3.20) は、いずれも公開から 7 日を超えている。advisory の修正版の下限は `package.json` の `overrides` (`esbuild`・`undici`) と lockfile が引き続き守る。
 
+### 4 回目の除外の撤去 (2026-11-10)
+
+「4 回目 bypass」の節の対象 17 個と、#388 が Foldkit 0.170.0 の peer として足した `@effect/platform-browser` の除外を外した (#385)。`bunfig.toml` の `minimumReleaseAgeExcludes` は key ごと消し、除外は 0 個になった。
+
+- lockfile が固定している版は、同じ節の期限 (2026-11-09 21:08 UTC) を過ぎ、18 個とも公開から 7 日を超えた
+- lockfile がある `bun install` は公開からの日数を調べない (`minimumReleaseAge` を 8 日にしても `--frozen-lockfile` は通る)。だから撤去できることは、18 個だけを lockfile と同じ版で依存に書いた、lockfile の無い project の `bun install --lockfile-only` で確かめた。`minimumReleaseAge` が 7 日なら通り、8 日なら `alchemy`・`@alchemy.run/*`・`@distilled.cloud/*` が `failed to resolve` で落ちる
+
 ## Did not adopt
 
 ### D. publish-auth-client.yml の environment + required reviewers
