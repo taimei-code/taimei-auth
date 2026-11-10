@@ -50,7 +50,7 @@
     "infra/**/*.ts",
     "lint/**/*.mts",
     "e2e/**/*.ts",
-    "web/src/shared/leave-spa.ts",
+    "web/src/shared/landing-paths.ts",
     "testing/sent-links.ts",
     "testing/local-delivery-log.ts",
     "testing/redirect-hosts.ts",

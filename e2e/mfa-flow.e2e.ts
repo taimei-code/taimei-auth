@@ -6,7 +6,7 @@ import {
   TOTP_PERIOD_SECONDS,
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
-import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 

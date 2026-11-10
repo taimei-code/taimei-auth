@@ -57,6 +57,10 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
+export const isLastCompanyDeleted = (message: Message): boolean =>
+  Schema.is(Message.GotCompanyDeletionMessage)(message) &&
+  Schema.is(CompanyDeletion.Message.SucceededDeleteLastCompany)(message.message);
+
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},

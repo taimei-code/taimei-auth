@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { sentLinkIn } from "../testing/local-delivery-log";
-import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import type { ConsumableFixture } from "./fixture-names";
 
 const SERVER_LOG = join(process.cwd(), "e2e", ".server.log");

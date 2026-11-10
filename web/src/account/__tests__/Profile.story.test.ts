@@ -160,7 +160,7 @@ describe("退会", () => {
   const confirming = (): Model =>
     update(loaded(), deletionMessage(AccountDeletion.Message.ClickedConfirmDeletion())).model;
 
-  test("確定すると削除を送り、成功しても画面は送信中のまま (sign-out と document の置き換えは削除の Command の中で行う)", () => {
+  test("確定すると削除を送り、成功しても画面は送信中のまま (document の置き換えは application が行う)", () => {
     story(
       update,
       given(loaded()),

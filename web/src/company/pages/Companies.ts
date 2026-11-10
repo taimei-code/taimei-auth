@@ -12,7 +12,6 @@ import * as CurrentCompany from "../../account/current-company";
 import { pageTitleView, separatorView } from "../../account/account-page-header-view";
 import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as OwnershipTransfer from "../../membership/ownership-transfer";
-import { leaveSpaAfterAccountDeleted } from "../../shared/leave-spa";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
@@ -44,6 +43,8 @@ export const Message = defineMessageUnion({
   GotOwnershipTransferMessage: { message: OwnershipTransfer.Message },
 });
 export type Message = typeof Message.Type;
+
+export const isLastCompanyLeft = Schema.is(Message.SucceededLeaveLastCompany);
 
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
@@ -93,11 +94,9 @@ export const LeaveCompany = Command.define("LeaveCompany", {
       const { account_deleted } = yield* client.membership.remove({
         params: { companyId: membership.companyId, targetUserId: selfUserId },
       });
-      if (account_deleted) {
-        yield* Effect.sync(leaveSpaAfterAccountDeleted);
-        return Message.SucceededLeaveLastCompany();
-      }
-      return Message.SucceededLeaveCompany({ visit, companyName: membership.companyName });
+      return account_deleted
+        ? Message.SucceededLeaveLastCompany()
+        : Message.SucceededLeaveCompany({ visit, companyName: membership.companyName });
     }).pipe(
       Effect.catchTags({
         LastOwner: failedLeave(visit, membership.companyId, "LastOwner"),

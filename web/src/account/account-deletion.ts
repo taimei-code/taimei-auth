@@ -7,7 +7,6 @@ import { Trash2 } from "lucide";
 
 import { signOut } from "../auth/sign-out";
 import type { FailureMessages } from "../shared/failure-message";
-import { leaveSpaAfterAccountDeleted } from "../shared/leave-spa";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
@@ -70,7 +69,6 @@ export const DeleteAccount = Command.define("DeleteAccount", {
       const client = yield* SpaHttpClient;
       yield* client.account.deleteAccount();
       yield* Effect.promise(() => signOut());
-      yield* Effect.sync(leaveSpaAfterAccountDeleted);
       return Message.SucceededDeleteAccount({ visit });
     }).pipe(
       Effect.catchTags({

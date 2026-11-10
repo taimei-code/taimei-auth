@@ -4,10 +4,10 @@ import { defineRouteUnion, literal, slash, Transition } from "foldkit/route";
 
 import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
 import { type SignInParams, signInParamsSchema } from "@core/sign-in-params";
-import type { z } from "zod";
 
 import { ErrorPageReason } from "../../auth/auth-error-reason";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
+import { redirectUrlAfterAccept } from "../../invitation/redirect-target";
 import { fromZodSearch } from "../zod-search";
 
 export const AuthRoute = defineRouteUnion({
@@ -15,9 +15,8 @@ export const AuthRoute = defineRouteUnion({
   SignUp: SignInOrSignUp.Params.fields,
   SignUpCompany: SignInOrSignUp.Params.fields,
   AcceptInvitation: {
-    invitation_token: Schema.optional(Schema.String),
-    service_name: Schema.optional(Schema.String),
-    redirect_url: Schema.optional(Schema.String),
+    invitation_token: Schema.UndefinedOr(Schema.String),
+    redirect_url: Schema.String,
   },
   RejectedSignInParams: {},
   MfaChallenge: {},
@@ -66,7 +65,12 @@ const acceptInvitationRouter = pipe(
   slash(literal("signup")),
   slash(literal("accept-invitation")),
   Route.query(
-    fromZodSearch<z.output<typeof acceptInvitationSearchSchema>>(acceptInvitationSearchSchema),
+    fromZodSearch(
+      acceptInvitationSearchSchema.transform((search) => ({
+        invitation_token: search.invitation_token,
+        redirect_url: redirectUrlAfterAccept(search),
+      })),
+    ),
   ),
   Route.mapTo(AuthRoute.AcceptInvitation),
 );

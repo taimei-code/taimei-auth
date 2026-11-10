@@ -173,6 +173,11 @@ const leaveToSignIn: Step = (model) => ({
   commands: [navigate(DocumentNavigation.LeaveToSignIn())],
 });
 
+const leaveAfterAccountDeleted: Step = (model) => ({
+  model,
+  commands: [navigate(DocumentNavigation.LeaveAfterAccountDeleted())],
+});
+
 const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateReturn => {
   const entered = modifyFields(model, {
     pageVisit: Number.increment,
@@ -506,10 +511,18 @@ export const update = (model: Model, message: Message) =>
       isCompanySwitchBlocked(model)
         ? { model }
         : foldCurrentCompany(model, childMessage),
-    GotProfileMessage: ({ message: pageMessage }) => foldProfile(model, pageMessage),
-    GotCompaniesMessage: ({ message: pageMessage }) => foldCompanies(model, pageMessage),
+    GotProfileMessage: ({ message: pageMessage }) =>
+      Profile.isAccountDeleted(pageMessage)
+        ? leaveAfterAccountDeleted(model)
+        : foldProfile(model, pageMessage),
+    GotCompaniesMessage: ({ message: pageMessage }) =>
+      Companies.isLastCompanyLeft(pageMessage)
+        ? leaveAfterAccountDeleted(model)
+        : foldCompanies(model, pageMessage),
     GotCompanySettingsMessage: ({ message: pageMessage }) =>
-      foldCompanySettings(model, pageMessage),
+      CompanySettings.isLastCompanyDeleted(pageMessage)
+        ? leaveAfterAccountDeleted(model)
+        : foldCompanySettings(model, pageMessage),
     GotMembersMessage: ({ message: pageMessage }) => foldMembers(model, pageMessage),
     GotSecurityMessage: ({ message: pageMessage }) => foldSecurity(model, pageMessage),
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),

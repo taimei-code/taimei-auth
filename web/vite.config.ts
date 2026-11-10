@@ -12,7 +12,6 @@ export default defineConfig({
   root: webDir,
   resolve: {
     alias: {
-      "@": path.resolve(webDir, "./src"),
       "@core": path.resolve(webDir, "../src"),
     },
   },
