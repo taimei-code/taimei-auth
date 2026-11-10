@@ -19,7 +19,7 @@
     "web/vite.config.ts",
     "web/tailwind.config.ts"
   ],
-  "ignorePatterns": ["repos/**"],
+  "ignorePatterns": ["repos/**", "packages/auth-client/api/**"],
   "ignoreFindings": ["src/gen/**", "packages/auth-client/src/gen/**"],
   "ignoreDependencies": [
     "@bufbuild/protoc-gen-es",

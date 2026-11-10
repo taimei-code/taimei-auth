@@ -1,0 +1,47 @@
+import type { Result } from "./gen/auth/v1/auth_pb";
+export type Role = "OWNER" | "ADMIN" | "MEMBER";
+export type SessionData = {
+    user: {
+        id: string;
+        name: string;
+        email: string;
+        emailVerified: boolean;
+        image?: string;
+        createdAt: string;
+        updatedAt: string;
+    };
+    session: {
+        id: string;
+        expiresAt: string;
+        kind: "user";
+    };
+    /** 出どころは proto の User.default_company_id で、値の約束もそこに書いてある。undefined は事業所未選択なので、consumer は /auth/signup/company へ誘導する。 */
+    companyId?: string;
+    /** 出どころは proto の VerifySessionOk.current_role で、値の約束もそこに書いてある。undefined の時、consumer は権限なしとして扱う。 */
+    role?: Role;
+};
+export type VerifyResult = {
+    ok: true;
+    data: SessionData;
+} | {
+    ok: false;
+    reason: Result;
+};
+export type Member = {
+    userId: string;
+    name: string;
+    email: string;
+    /** SDK が知らない role の時は undefined で、consumer は権限なしとして扱う (`SessionData.role` と同じ)。 */
+    role?: Role;
+};
+export type ListMembersResult = {
+    ok: true;
+    data: {
+        companyId?: string;
+        members: readonly Member[];
+    };
+} | {
+    ok: false;
+    reason: Result;
+};
+//# sourceMappingURL=types.d.ts.map

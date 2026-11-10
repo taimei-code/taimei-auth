@@ -36,6 +36,7 @@
   ],
   "scripts": {
     "build": "rm -rf dist && tsc -p tsconfig.build.json --outDir dist --declaration --declarationMap",
+    "api": "bun run build && rm -rf api && mkdir api && cp dist/*.d.ts api/",
     "check:testing-fragment": "grep -q 'taimei-auth-testing@sha256:' testing/compose.yml",
     "prepublishOnly": "bun run check:testing-fragment && bun run build"
   },
