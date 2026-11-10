@@ -13,6 +13,7 @@ export class IdGenerator extends Context.Service<
     invitationToken(): string;
     enrollmentId(): string;
     recoveryCodeId(index: number): string;
+    loginChallengeId(): string;
   }
 >()("taimei/IdGenerator") {}
 
@@ -25,5 +26,6 @@ export const IdGeneratorLive = Layer.succeed(
     invitationToken: generateInvitationToken,
     enrollmentId: generateEnrollmentId,
     recoveryCodeId: generateRecoveryCodeId,
+    loginChallengeId: () => `mfa-lc-${crypto.randomUUID()}`,
   }),
 );

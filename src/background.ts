@@ -20,7 +20,7 @@ const awaitInBackground = (fiber: Fiber.Fiber<unknown, unknown>) =>
 export class Background extends Context.Service<
   Background,
   {
-    run<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<void, never, R>;
+    run<A, R>(effect: Effect.Effect<A, never, R>): Effect.Effect<void, never, R>;
   }
 >()("taimei/Background") {}
 

@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { parse as parseCookieHeader, serialize as serializeSetCookie } from "hono/utils/cookie";
 import { z } from "zod";
 import { AuthApi } from "../../auth-service";
+import { IdGenerator } from "../../id-generator";
 import { TtlStore } from "../../ttl-store-service";
 import { captureCause, SentryService } from "../../sentry";
 import {
@@ -50,7 +51,7 @@ export type LoginChallengeCookie = {
 };
 
 export const openLoginChallenge = Effect.fnUntraced(function* (challenge: LoginChallenge) {
-  const challengeId = `mfa-lc-${crypto.randomUUID()}`;
+  const challengeId = (yield* IdGenerator).loginChallengeId();
   yield* TtlStore.use((r) =>
     r.set(challengeKey(challengeId), JSON.stringify(challenge), CHALLENGE_TTL_SECONDS),
   );
