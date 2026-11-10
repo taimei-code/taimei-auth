@@ -25,6 +25,10 @@
 
 Bun 1.3 以降で対応している (このリポジトリは `bun-version: "1.3"`)。既に `bun.lock` にある version はそのまま install され続けるため、この設定は **`bun add` / `bun update` / Dependabot PR のマージ後の再 resolve** の時点で働く。
 
+`.github/dependabot.yml` の npm の `cooldown` も同じ 7 日にする (`default-days: 7`)。Dependabot は、公開から 7 日未満の版へ上げる PR を出さない。7 日未満の版を止めるのは、この `cooldown` と、lockfile に無い版を resolve する時の `minimumReleaseAge` の 2 つである。CI の `bun install --frozen-lockfile` は、lockfile が固定した版の公開からの日数を調べないので、止めない (「4 回目の除外の撤去」の実測)。`cooldown` を `minimumReleaseAge` より短くすると、Dependabot は lockfile を作り直せない版の PR を出す。`cooldown` は security update には働かない (Dependabot の仕様)。7 日未満の修正版が要る時は、上の `minimumReleaseAgeExcludes` の運用に従う。
+
+機械検証: `src/__tests__/dependabot-cooldown.test.ts` (npm の `cooldown` の日数が `minimumReleaseAge` と同じであることを assert する)
+
 ### A. GitHub Actions を commit SHA pin に変更
 
 `actions/checkout` / `oven-sh/setup-bun` / `actions/setup-node` の version 指定を tag pin から **commit SHA pin と末尾コメントの version 注釈** に変更する。tag は動く参照であり、付け替えられれば検知できないまま悪性 version を実行してしまう。
