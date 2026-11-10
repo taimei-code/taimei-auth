@@ -40,7 +40,7 @@ OWNER になれる TOCTOU の窓が残っていた。
 | Transport | `src/handlers/`, `src/rpc/` | protocol の変換のみ (パラメータと zod の parse、guard、use-case、JSON 化の順) |
 | Guard | `src/membership/guard/` + `src/membership/policy.ts` | 操作単位の認可を一度に判定する。Hono 非依存 |
 | Use-case | `src/company/`, `src/membership/`, `src/invitation/`, `src/account/` | 業務手続を関数 1 つで表す。tx / audit / 不変条件 (OWNER が 1 人以上、orphan の連動削除) / TOCTOU 再検証を所有する |
-| Repository | `db/repositories/` | 薄いままにする (db/CLAUDE.md のルールを維持)。判定を持たない |
+| Repository | `db/repositories/` | 薄いままにする (DB への接触を db/ に閉じる lint の行を維持)。判定を持たない |
 
 **`src/membership/policy.ts` は Guard 層と Use-case 層が共有する純粋な述語と parser の kernel** である (isAtLeast /
 canChangeRole / canInviteRole / canAttemptRemoval / canRemoveTarget /
@@ -53,7 +53,7 @@ use-case (Use-case 層) に集約する規律である (PR #103–#108 とこの
 Transport の禁止事項: policy 述語の直接呼び出し / repository への直接 write / `runInTransaction` の所有。
 Rails との対応: Controller が Transport、before_action と Pundit が Guard、Service Object が Use-case、
 AR クエリが Repository にあたる。fat model を採らない理由は、identity DB レイヤの将来のプロセス分離
-(CLAUDE.md の最上位制約) のために repository を薄く保つルール (db/CLAUDE.md「認証ドメインのモデルは repository 経由で触る」) が既にあり、
+(CLAUDE.md の最上位制約) のために repository を薄く保つルール (lint の行 `db-import-only-in-db`) が既にあり、
 drizzle の行はデータだけでメソッドを持てないためである。
 
 ### Guard 層の構成 (directory module)

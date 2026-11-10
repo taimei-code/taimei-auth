@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
-import { REPO_ROOT, repoFiles, SOURCE_ROOTS, sourceFiles, valueImportsOf } from "./source-scan";
+import taimeiPlugin from "../../lint/oxlint-plugin.mjs";
+import { REPO_ROOT, repoFiles } from "./source-scan";
 
 const RULE_NUMBER_REFERENCE = /CLAUDE\.md`? ルール ?[0-9]/;
 const HEADING_REFERENCE = /([\w./-]*CLAUDE\.md)`?(?: の)?「([^」]+)」/g;
 const HEADING = /^#{1,6} (.+)$/gm;
-const SCAN_HELPERS = /(^|\/)(source-scan|config-invariant-helpers)$/;
-const TEST_PATH = /`([^`\s]*\/[^`\s]*\.test\.tsx?)`/g;
+const LINT_RULE_NAME_OR_TEST_PATH = /taimei\/[a-z][a-z-]*|[\w./-]+\.test\.tsx?/g;
+const RULE_DOCUMENT_BYTES_CEILING = 6883;
 
 type RepoText = { readonly path: string; readonly text: string };
 
@@ -35,45 +36,46 @@ const missingHeadings = (texts: readonly RepoText[]): string[] =>
       .map(([reference]) => `${path}: ${reference}`),
   );
 
-const ruleDocuments = (): RepoText[] => repoTexts(":(glob)**/CLAUDE.md", ":(glob)docs/adr/*.md");
-
-const mentionedTestPaths = (document: RepoText): string[] =>
-  [...document.text.matchAll(TEST_PATH)].map(([, mentioned]) => mentioned ?? "");
+const ruleDocuments = (): RepoText[] => repoTexts(":(glob)**/CLAUDE.md", ":(exclude)repos/**");
 
 const resolvesTo = (document: RepoText, mentioned: string): string[] => [
   normalize(mentioned),
   normalize(join(dirname(document.path), mentioned)),
 ];
 
-const staticChecks = (): string[] =>
-  SOURCE_ROOTS.flatMap((root) => sourceFiles(root, { tests: "only" }))
-    .filter((file) => /\.test\.tsx?$/.test(file))
-    .filter((file) => valueImportsOf(file).some((imported) => SCAN_HELPERS.test(imported)));
+type RuleSeverities = Readonly<Record<string, unknown>>;
 
-const unnamedChecks = (checks: readonly string[], documents: readonly RepoText[]) => {
-  const named = new Set(
-    documents.flatMap((document) =>
-      mentionedTestPaths(document).flatMap((mentioned) => resolvesTo(document, mentioned)),
-    ),
-  );
-  return checks.filter((check) => !named.has(check));
+const enabledTaimeiRules = (): string[] => {
+  const config: {
+    readonly rules: RuleSeverities;
+    readonly overrides: ReadonlyArray<{ readonly rules?: RuleSeverities }>;
+  } = JSON.parse(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8"));
+  const enabled = [config.rules, ...config.overrides.map(({ rules = {} }) => rules)]
+    .flatMap((rules) => Object.entries(rules))
+    .filter(([name, severity]) => name.startsWith("taimei/") && severity === "error")
+    .map(([name]) => name.slice("taimei/".length));
+  return [...new Set(enabled)];
 };
 
-const missingMentions = (documents: readonly RepoText[]) =>
-  documents.flatMap((document) =>
-    mentionedTestPaths(document)
-      .filter((mentioned) =>
-        resolvesTo(document, mentioned).every((path) => !existsSync(join(REPO_ROOT, path))),
-      )
-      .map((mentioned) => `${document.path}: ${mentioned}`),
-  );
+describe("規則の正本は違反した時の message と test 名で、CLAUDE.md は担保の写しを持たない (ADR-0027)", () => {
+  test("CLAUDE.md は lint の rule 名と test file の path を書かない (型・lint・test が止める規則は、message と test 名が説明する)", () => {
+    expect(
+      ruleDocuments().flatMap(({ path, text }) =>
+        [...text.matchAll(LINT_RULE_NAME_OR_TEST_PATH)].map(([copy]) => `${path}: ${copy}`),
+      ),
+    ).toEqual([]);
+  });
 
-describe("規則から静的な検査へ 1 hop で着く", () => {
-  test("source を走査する検査 (source-scan か config-invariant-helpers を使う test) は、どれかの CLAUDE.md か ADR が path で名指す", () => {
-    const checks = staticChecks();
-    expect(checks.length).toBeGreaterThan(10);
+  test("CLAUDE.md の合計 byte は上限以下 (規則を仕組みにして文を消した時だけ、上限を下げる)", () => {
+    const documents = ruleDocuments();
+    expect(documents.length).toBeGreaterThan(5);
+    expect(
+      documents.reduce((total, { text }) => total + Buffer.byteLength(text, "utf8"), 0),
+    ).toBeLessThanOrEqual(RULE_DOCUMENT_BYTES_CEILING);
+  });
 
-    expect(unnamedChecks(checks, ruleDocuments())).toEqual([]);
+  test("lint の plugin が持つ rule と、.oxlintrc.json で error にした taimei の rule は同じ", () => {
+    expect(enabledTaimeiRules().toSorted()).toEqual(Object.keys(taimeiPlugin.rules).toSorted());
   });
 
   test("文書への参照は CLAUDE.md の規則の番号でなく見出しで書く", () => {
@@ -99,9 +101,11 @@ describe("規則から静的な検査へ 1 hop で着く", () => {
     expect(withoutAgents).toEqual([]);
   });
 
-  test("CLAUDE.md が path で名指す test file は存在する", () => {
+  test("追跡している AGENTS.md は、どれも symlink である (CLAUDE.md の無い dir に実 file の AGENTS.md を置かない)", () => {
     expect(
-      missingMentions(ruleDocuments().filter(({ path }) => path.endsWith("CLAUDE.md"))),
+      repoFiles(":(glob)**/AGENTS.md", ":(exclude)repos/**").filter(
+        (path) => !lstatSync(join(REPO_ROOT, path)).isSymbolicLink(),
+      ),
     ).toEqual([]);
   });
 });
