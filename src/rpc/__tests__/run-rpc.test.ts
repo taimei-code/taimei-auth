@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
+import { WIRE_STATUSES } from "../../failure";
 import { InvalidArgument, NotFound } from "../../failures";
 import { runRpc, statusToCode } from "../run-rpc";
 
@@ -19,7 +20,7 @@ const rejectsWith = async (p: Promise<unknown>) => {
 
 describe("statusToCode", () => {
   test("HTTP status → Connect Code の対応表", () => {
-    expect([400, 401, 403, 404, 409, 410, 429, 500].map(statusToCode)).toEqual([
+    expect(WIRE_STATUSES.map(statusToCode)).toEqual([
       Code.InvalidArgument,
       Code.Unauthenticated,
       Code.PermissionDenied,
@@ -27,7 +28,7 @@ describe("statusToCode", () => {
       Code.FailedPrecondition,
       Code.FailedPrecondition,
       Code.ResourceExhausted,
-      Code.Internal,
+      Code.Unavailable,
     ]);
   });
 });
@@ -42,6 +43,19 @@ describe("runRpc", () => {
     expect([e.code, e.rawMessage]).toEqual([Code.InvalidArgument, "InvalidArgument"]);
     const f = await rejectsWith(runRpc(Effect.fail(new NotFound())));
     expect([f.code, f.rawMessage]).toEqual([Code.NotFound, "NotFound"]);
+  });
+
+  test("表に無い status を宣言した失敗は宣言した失敗として扱わず、Sentry に送って Code.Unknown を返す", async () => {
+    class InternalOnly extends Schema.TaggedError<InternalOnly>()(
+      "InternalOnly",
+      {},
+      { httpApiStatus: 500 },
+    ) {}
+    captured.length = 0;
+    const internalOnly = new InternalOnly();
+    const e = await rejectsWith(runRpc(Effect.fail(internalOnly) as Effect.Effect<never>));
+    expect(e.code).toBe(Code.Unknown);
+    expect(captured.map(([e]) => e)).toEqual([internalOnly]);
   });
 
   test("boundary error は Sentry(cause) + Code.Unknown で元 message を保つ (旧 ConnectRPC adapter と同契約)", async () => {

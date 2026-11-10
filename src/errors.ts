@@ -16,15 +16,17 @@ export const isBoundaryError = (e: unknown): e is BoundaryError =>
   e instanceof TtlStoreError ||
   e instanceof EmailError;
 
-const tryBoundary =
-  <Err>(wrap: (cause: unknown) => Err) =>
-  <A>(thunk: () => Promise<A>): Effect.Effect<A, Err> =>
-    Effect.tryPromise({ try: thunk, catch: wrap });
+type BoundaryFailure<Err> = new (args: { readonly cause: unknown }) => Err;
 
-export const tryDb = tryBoundary((cause) => new DbError({ cause }));
-export const tryAuthApi = tryBoundary((cause) => new AuthApiError({ cause }));
-export const tryTtlStore = tryBoundary((cause) => new TtlStoreError({ cause }));
-export const tryEmail = tryBoundary((cause) => new EmailError({ cause }));
+const tryBoundary =
+  <Err>(Failure: BoundaryFailure<Err>) =>
+  <A>(thunk: () => Promise<A>): Effect.Effect<A, Err> =>
+    Effect.tryPromise({ try: thunk, catch: (cause) => new Failure({ cause }) });
+
+export const tryDb = tryBoundary(DbError);
+export const tryAuthApi = tryBoundary(AuthApiError);
+export const tryTtlStore = tryBoundary(TtlStoreError);
+export const tryEmail = tryBoundary(EmailError);
 
 type Lifted<F extends (...args: never[]) => Promise<unknown>> = (
   ...args: Parameters<F>
@@ -53,9 +55,9 @@ export const liftAll = <M extends object>(module: M): LiftedModule<M> =>
   ) as LiftedModule<M>;
 
 export const timeoutAsBoundary =
-  <Err>(wrap: (cause: unknown) => Err, duration: Duration.Input) =>
+  <Err>(Failure: BoundaryFailure<Err>, duration: Duration.Input) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | Err, R> =>
     effect.pipe(
       Effect.timeout(duration),
-      Effect.catchTag("TimeoutError", (timeout) => Effect.fail(wrap(timeout))),
+      Effect.catchTag("TimeoutError", (cause) => Effect.fail(new Failure({ cause }))),
     );

@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import type { Cause, Effect } from "effect";
 import { Exit } from "effect";
+import type { WireStatus } from "../failure";
 import {
   parseClientFacingError,
   type RouteError,
@@ -10,7 +11,7 @@ import { type AppServices, getRuntime } from "../runtime";
 
 export type RpcEffect<A> = Effect.Effect<A, RouteError, AppServices>;
 
-const STATUS_TO_CODE: Record<number, Code> = {
+const STATUS_TO_CODE: Record<WireStatus, Code> = {
   400: Code.InvalidArgument,
   401: Code.Unauthenticated,
   403: Code.PermissionDenied,
@@ -18,9 +19,10 @@ const STATUS_TO_CODE: Record<number, Code> = {
   409: Code.FailedPrecondition,
   410: Code.FailedPrecondition,
   429: Code.ResourceExhausted,
+  503: Code.Unavailable,
 };
 
-export const statusToCode = (status: number): Code => STATUS_TO_CODE[status] ?? Code.Internal;
+export const statusToCode = (status: WireStatus): Code => STATUS_TO_CODE[status];
 
 export async function runRpc<A>(program: RpcEffect<A>): Promise<A> {
   const exit = await getRuntime().runPromiseExit(program);

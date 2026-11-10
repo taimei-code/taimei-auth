@@ -21,10 +21,7 @@ export class TtlStore extends Context.Service<
 
 const TTL_STORE_TIMEOUT = "2 seconds";
 const retrySchedule = Schedule.exponential("100 millis").pipe(Schedule.jittered);
-const withTtlStoreTimeout = timeoutAsBoundary(
-  (cause) => new TtlStoreError({ cause }),
-  TTL_STORE_TIMEOUT,
-);
+const withTtlStoreTimeout = timeoutAsBoundary(TtlStoreError, TTL_STORE_TIMEOUT);
 
 const withTtlStoreRetry = <A, R>(
   effect: Effect.Effect<A, TtlStoreError, R>,

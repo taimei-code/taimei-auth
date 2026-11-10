@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { Effect } from "effect";
-import {
-  getValidServiceKeys,
-  ServiceKeyMisconfigured,
-  ServiceKeyRejected,
-  verifyServiceKey,
-} from "../service-key";
+import { ServiceKeyMisconfigured, ServiceKeyRejected } from "../failures";
+import { getValidServiceKeys, verifyServiceKey } from "../service-key";
 import { grepLines } from "./source-scan";
 
 const originalEnv = { ...process.env };

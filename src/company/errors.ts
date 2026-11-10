@@ -1,7 +1,3 @@
-import { Schema } from "effect";
+import { failure } from "../failure";
 
-export class AlreadyExists extends Schema.TaggedError<AlreadyExists>()(
-  "AlreadyExists",
-  {},
-  { httpApiStatus: 409 },
-) {}
+export class AlreadyExists extends failure<AlreadyExists>()("AlreadyExists", {}, 409) {}

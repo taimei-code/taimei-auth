@@ -1,23 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { Effect, Schema } from "effect";
+import { Effect } from "effect";
+import { ServiceKeyMisconfigured, ServiceKeyRejected } from "./failures";
 
 export function getValidServiceKeys(): string[] {
   const active = process.env.AUTH_SERVICE_KEY;
   const previous = process.env.AUTH_SERVICE_KEY_PREVIOUS;
   return [active, previous].filter((key): key is string => !!key);
 }
-
-export class ServiceKeyRejected extends Schema.TaggedError<ServiceKeyRejected>()(
-  "ServiceKeyRejected",
-  {},
-  { httpApiStatus: 401 },
-) {}
-
-export class ServiceKeyMisconfigured extends Schema.TaggedError<ServiceKeyMisconfigured>()(
-  "ServiceKeyMisconfigured",
-  {},
-  { httpApiStatus: 503 },
-) {}
 
 type ServiceKeyError = ServiceKeyRejected | ServiceKeyMisconfigured;
 
