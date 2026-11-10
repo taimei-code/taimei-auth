@@ -1,5 +1,5 @@
 import { Dialog as FoldkitDialog } from "@foldkit/ui";
-import { identity, Option, pipe, Schema } from "effect";
+import { identity, Option, pipe, Predicate, Schema } from "effect";
 import { Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { X } from "lucide";
@@ -15,6 +15,7 @@ export const Dialog = {
   ShowDialog: FoldkitDialog.ShowDialog,
   CloseDialog: FoldkitDialog.CloseDialog,
   AcquireResources: FoldkitDialog.AcquireResources,
+  ReleaseDialogResources: FoldkitDialog.ReleaseDialogResources,
 };
 export type DialogModel = FoldkitDialog.Model;
 export type DialogMessage = FoldkitDialog.Message;
@@ -88,6 +89,21 @@ export const isDialogVisible = (dialog: DialogModel): boolean =>
   dialog.isOpen ||
   dialog.animation.transitionState === "LeaveStart" ||
   dialog.animation.transitionState === "LeaveAnimating";
+
+const isDialogModel = Schema.is(FoldkitDialog.Model);
+
+const visibleDialogsIn = (discarded: unknown): ReadonlyArray<DialogModel> => {
+  if (!Predicate.isObjectOrArray(discarded)) {
+    return [];
+  }
+  if (isDialogModel(discarded)) {
+    return isDialogVisible(discarded) ? [discarded] : [];
+  }
+  return Object.values(discarded).flatMap(visibleDialogsIn);
+};
+
+export const releaseDialogsIn = (discarded: unknown) =>
+  visibleDialogsIn(discarded).map(({ id }) => FoldkitDialog.ReleaseDialogResources({ id }));
 
 type ModelWithDialog<OutMessage> = Readonly<{
   dialog: DialogModel;
