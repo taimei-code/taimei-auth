@@ -12,7 +12,6 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    # bunfig.toml の minimumReleaseAge (7 日) に揃える。7 日未満の版の PR は install で落ちる
     cooldown:
       default-days: 7
     groups:
