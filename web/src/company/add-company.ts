@@ -1,4 +1,4 @@
-import { Effect, Number, Option, Schema, String, pipe } from "effect";
+import { Effect, Number, Option, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -14,7 +14,6 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
   dialogFooterView,
   dialogView,
@@ -23,8 +22,15 @@ import { inputView } from "../shared/ui/input-view";
 import { radioFieldsetView } from "../shared/ui/radio-fieldset-view";
 import { orgCodeOptionsIn } from "./org-code-options";
 
+export const OutMessage = defineMessageUnion({
+  AddedCompany: { companyName: Schema.String },
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
   submission: Submission,
@@ -44,12 +50,6 @@ export const Message = defineMessageUnion({
   FailedAddCompany: { requestNumber: Schema.Int, failure: AddCompanyFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  AddedCompany: { companyName: Schema.String },
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const ADD_FAILED = "事業所の作成に失敗しました。";
 
@@ -81,6 +81,7 @@ const DIALOG_ID = "add-company-dialog";
 
 export const init = (): Model => ({
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   nameDraft: "",
   orgCode: DEFAULT_ORG_CODE,
   submission: Submission.Idle(),
@@ -100,12 +101,10 @@ const clearedForm = (model: Model): Model =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: isSubmitting,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  whenClosed: (model) => ({ model: clearedForm(model) }),
+  whenClosed: clearedForm,
 });
 
 const submitForm = (model: Model): UpdateReturn => {
@@ -139,10 +138,7 @@ export const update = (model: Model, message: Message) =>
     SubmittedAddCompanyForm: () => submitForm(model),
     SucceededAddCompany: ({ requestNumber, companyName }) =>
       forThisRequest(model, requestNumber, () =>
-        pipe(
-          dialogFolds.close(clearedForm(model)),
-          Update.withOutMessage(OutMessage.AddedCompany({ companyName })),
-        ),
+        dialogFolds.closeThen(model, OutMessage.AddedCompany({ companyName })),
       ),
     FailedAddCompany: ({ requestNumber, failure }) =>
       forThisRequest(model, requestNumber, () =>

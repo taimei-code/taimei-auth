@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Animation } from "@foldkit/ui";
 import { Option } from "effect";
 import {
   Command,
@@ -10,7 +11,7 @@ import {
 } from "foldkit/story";
 
 import * as MemberInvitations from "../../invitation/member-invitations";
-import { Dialog } from "../../shared/ui/dialog-view";
+import { FIRST_DIALOG_CLOSING_MESSAGES } from "../../shared/__tests__/dialog-resolvers";
 import {
   ChangeRole,
   init,
@@ -71,6 +72,14 @@ const listing = (model: Model) => {
   }
   return model.page;
 };
+
+const [DIALOG_PAINTED_CLOSING, DIALOG_ENDED_CLOSING] = FIRST_DIALOG_CLOSING_MESSAGES;
+
+const afterDialogClosed = (closing: Model) =>
+  update(
+    update(closing, Message.GotDialogMessage({ message: DIALOG_PAINTED_CLOSING })).model,
+    Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
+  );
 
 const removing = (): Model => {
   const asked = update(listed(), Message.ClickedRemove({ member: MATE })).model;
@@ -281,11 +290,15 @@ describe("メンバーの削除", () => {
         reload: { _tag: "Removed", texts },
       }),
     );
-    expect(reloaded.outMessage).toEqual(
+    expect(reloaded.outMessage).toBeUndefined();
+    expect(reloaded.commands).toMatchObject([{ name: Animation.WaitForPaint.name }]);
+    expect(listing(reloaded.model).dialog.isOpen).toBe(false);
+    expect(update(reloaded.model, Message.ClickedConfirmRemoval()).commands ?? []).toEqual([]);
+    const closed = afterDialogClosed(reloaded.model);
+    expect(closed.outMessage).toEqual(
       OutMessage.Notified({ tone: "Success", text: "メンバーを削除しました。" }),
     );
-    expect(reloaded.commands).toMatchObject([{ name: Dialog.CloseDialog.name }]);
-    expect(listing(reloaded.model).busy._tag).toBe("Idle");
+    expect(listing(closed.model).busy._tag).toBe("Idle");
   });
 
   test("削除の成功の後の取り直しが失敗しても、dialog を閉じて表示の更新の失敗を通知する", () => {
@@ -298,13 +311,14 @@ describe("メンバーの削除", () => {
         reload: { _tag: "Removed", texts },
       }),
     );
-    expect(reloaded.outMessage).toEqual(
+    expect(afterDialogClosed(reloaded.model).outMessage).toEqual(
       OutMessage.Notified({
         tone: "Error",
         text: "メンバーとアカウントを削除しましたが、表示の更新に失敗しました。ページを再読み込みしてください。",
       }),
     );
-    expect(reloaded.commands).toMatchObject([{ name: Dialog.CloseDialog.name }]);
+    expect(reloaded.commands).toMatchObject([{ name: Animation.WaitForPaint.name }]);
+    expect(listing(reloaded.model).dialog.isOpen).toBe(false);
     expect(listing(reloaded.model).members).toMatchObject({ _tag: "Loaded", members: [ME, MATE] });
   });
 
@@ -315,9 +329,12 @@ describe("メンバーの削除", () => {
     ["Unexpected", "メンバーの削除に失敗しました。"],
   ] as const)("削除の %s の失敗は dialog を閉じてその失敗の文言を通知する", (failure, text) => {
     const failed = update(removing(), Message.FailedRemoveMember({ visit: VISIT, failure }));
-    expect(failed.outMessage).toEqual(OutMessage.Notified({ tone: "Error", text }));
-    expect(failed.commands).toMatchObject([{ name: Dialog.CloseDialog.name }]);
-    expect(listing(failed.model).busy._tag).toBe("Idle");
+    expect(failed.outMessage).toBeUndefined();
+    expect(failed.commands).toMatchObject([{ name: Animation.WaitForPaint.name }]);
+    expect(listing(failed.model).dialog.isOpen).toBe(false);
+    const closed = afterDialogClosed(failed.model);
+    expect(closed.outMessage).toEqual(OutMessage.Notified({ tone: "Error", text }));
+    expect(listing(closed.model).busy._tag).toBe("Idle");
   });
 
   test("古い訪問の削除の結果は、今の画面を変えない", () => {

@@ -1,4 +1,4 @@
-import { Effect, Schema, pipe } from "effect";
+import { Effect, Schema, Option } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -11,7 +11,6 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
   dialogFooterView,
   dialogView,
@@ -26,10 +25,18 @@ const DeleteCompanyFailure = Schema.Literals([
 ]);
 type DeleteCompanyFailure = typeof DeleteCompanyFailure.Type;
 
+export const OutMessage = defineMessageUnion({
+  DeletedCompany: { companyName: Schema.String },
+  Notified: { tone: NoticeTone, text: Schema.String },
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   visit: Schema.Int,
   companyId: Schema.String,
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   deletion: Submission,
 });
 export type Model = typeof Model.Type;
@@ -44,13 +51,6 @@ export const Message = defineMessageUnion({
   FailedDeleteCompany: { visit: Schema.Int, failure: DeleteCompanyFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  DeletedCompany: { companyName: Schema.String },
-  Notified: { tone: NoticeTone, text: Schema.String },
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 type ViewInputs = Readonly<{
   companyName: string;
@@ -100,6 +100,7 @@ const DIALOG_ID = "company-deletion-dialog";
 export const init = (start: Readonly<{ visit: number; companyId: string }>): Model => ({
   ...start,
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   deletion: Submission.Idle(),
 });
 
@@ -109,27 +110,21 @@ export const isDeleting = (model: Model) => Submission.guards.Submitting(model.d
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: isDeleting,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
+  whenClosed: (model) => modifyFields(model, { deletion: () => Submission.Idle() }),
 });
 
 const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): UpdateReturn =>
   visit === model.visit && isDeleting(model) ? next() : { model };
 
-const settled = (model: Model) =>
-  dialogFolds.close(modifyFields(model, { deletion: () => Submission.Idle() }));
-
 const failDeletion = (model: Model, failure: DeleteCompanyFailure): UpdateReturn =>
   failure === "Unauthorized"
     ? { model, outMessage: OutMessage.RequiredSignIn() }
-    : pipe(
-        settled(model),
-        Update.withOutMessage(
-          OutMessage.Notified({ tone: "Error", text: FAILURE_MESSAGES[failure] }),
-        ),
+    : dialogFolds.closeThen(
+        model,
+        OutMessage.Notified({ tone: "Error", text: FAILURE_MESSAGES[failure] }),
       );
 
 export const update = (model: Model, message: Message) =>
@@ -148,7 +143,7 @@ export const update = (model: Model, message: Message) =>
     GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
     SucceededDeleteCompany: ({ visit, companyName }) =>
       forThisVisit(model, visit, () =>
-        pipe(settled(model), Update.withOutMessage(OutMessage.DeletedCompany({ companyName }))),
+        dialogFolds.closeThen(model, OutMessage.DeletedCompany({ companyName })),
       ),
     SucceededDeleteLastCompany: () => ({ model }),
     FailedDeleteCompany: ({ visit, failure }) =>

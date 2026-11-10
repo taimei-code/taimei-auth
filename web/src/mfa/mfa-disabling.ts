@@ -1,4 +1,4 @@
-import { Effect, Number, Schema, String, pipe } from "effect";
+import { Effect, Number, Schema, String, Option } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -11,7 +11,6 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
   dialogFooterView,
   dialogView,
@@ -26,8 +25,15 @@ import {
 } from "./mfa-code";
 import { mfaFailureText } from "./mfa-failure-messages";
 
+export const OutMessage = defineMessageUnion({
+  Disabled: {},
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   kind: MfaCodeKindSchema,
   code: Schema.String,
   submission: Submission,
@@ -56,12 +62,6 @@ export const Message = defineMessageUnion({
   FailedDisableMfa: { requestNumber: Schema.Int, failure: DisableFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  Disabled: {},
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const CODE_INPUT_ID = "mfa-disable-code";
 const DIALOG_ID = "mfa-disabling-dialog";
@@ -92,6 +92,7 @@ export const DisableMfa = Command.define("DisableMfa", {
 
 export const init = (): Model => ({
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   kind: "totp",
   code: "",
   submission: Submission.Idle(),
@@ -111,12 +112,10 @@ const clearedEntry = (model: Model): Model =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: isSubmitting,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
-  whenClosed: (model) => ({ model: clearedEntry(model) }),
+  whenClosed: clearedEntry,
 });
 
 const whileEditable = (model: Model, next: () => UpdateReturn): UpdateReturn =>
@@ -161,7 +160,7 @@ export const update = (model: Model, message: Message) =>
     SubmittedCode: () => submitCode(model),
     SucceededDisableMfa: ({ requestNumber }) =>
       forThisRequest(model, requestNumber, () =>
-        pipe(dialogFolds.close(clearedEntry(model)), Update.withOutMessage(OutMessage.Disabled())),
+        dialogFolds.closeThen(model, OutMessage.Disabled()),
       ),
     FailedDisableMfa: ({ requestNumber, failure }) =>
       forThisRequest(model, requestNumber, () =>

@@ -25,7 +25,6 @@ import { buttonView } from "../../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  type DialogModel,
   dialogFoldsOf,
   dialogFooterView,
   dialogView,
@@ -63,6 +62,12 @@ const Reload = defineTaggedUnion({
 });
 type Reload = typeof Reload.Type;
 
+export const OutMessage = defineMessageUnion({
+  Notified: { tone: NoticeTone, text: Schema.String },
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 const Listing = Schema.Struct({
   companyId: Schema.String,
   actorRole: RoleSchema,
@@ -71,6 +76,7 @@ const Listing = Schema.Struct({
   busy: Busy,
   maybeRemovalTarget: Schema.Option(Member),
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   maybeInvitations: Schema.Option(MemberInvitations.Model),
 });
 type Listing = typeof Listing.Type;
@@ -112,12 +118,6 @@ export const Message = defineMessageUnion({
   GotMemberInvitationsMessage: { message: MemberInvitations.Message },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  Notified: { tone: NoticeTone, text: Schema.String },
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const ROLES_IN_SELECT_ORDER: ReadonlyArray<Role> = ["MEMBER", "ADMIN", "OWNER"];
 
@@ -284,6 +284,7 @@ export const init = (
             busy: Busy.Idle(),
             maybeRemovalTarget: Option.none(),
             dialog: Dialog.init({ id: DIALOG_ID }),
+            maybeOutMessageAfterClose: Option.none(),
             maybeInvitations: Option.map(
               maybeInvitationsInit,
               (invitationsInit) => invitationsInit.model,
@@ -339,11 +340,13 @@ export const isSubmitting = (model: Model): boolean =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: (listing: Listing) => Busy.guards.Removing(listing.busy),
   toParentMessage: toDialogMessage,
-  write: (listing: Listing, nextDialog: DialogModel) =>
-    modifyFields(listing, { dialog: () => nextDialog }),
+  whenClosed: (listing) =>
+    Busy.guards.Removing(listing.busy)
+      ? modifyFields(listing, { busy: () => Busy.Idle() })
+      : listing,
 });
 
 const finishReload = (
@@ -357,11 +360,7 @@ const finishReload = (
       model: modifyFields(listing, { busy: () => Busy.Idle() }),
       outMessage: noticeOf(texts),
     }),
-    Removed: ({ texts }) =>
-      pipe(
-        dialogFolds.close(modifyFields(listing, { busy: () => Busy.Idle() })),
-        Update.withOutMessage(noticeOf(texts)),
-      ),
+    Removed: ({ texts }) => dialogFolds.closeThen(listing, noticeOf(texts)),
   });
 
 const reloadMembers = (visit: number, listing: Listing, reload: Reload): ListingReturn => ({
@@ -403,14 +402,11 @@ const finishFailedChange = (
   listing: Listing,
   failure: MemberChangeFailure,
   messages: Readonly<Record<Exclude<MemberChangeFailure, "Unauthorized">, string>>,
-  afterFailure: (listing: Listing) => ListingReturn,
+  notify: (listing: Listing, notice: OutMessage) => ListingReturn,
 ): ListingReturn =>
   failure === "Unauthorized"
     ? { model: listing, outMessage: OutMessage.RequiredSignIn() }
-    : {
-        ...afterFailure(modifyFields(listing, { busy: () => Busy.Idle() })),
-        outMessage: OutMessage.Notified({ tone: "Error", text: messages[failure] }),
-      };
+    : notify(listing, OutMessage.Notified({ tone: "Error", text: messages[failure] }));
 
 const foldInvitations = Update.foldChild({
   update: MemberInvitations.update,
@@ -459,9 +455,15 @@ export const update = (model: Model, message: Message) =>
       ),
     FailedChangeRole: ({ visit, failure }) =>
       withListing(model, visit, (listing) =>
-        finishFailedChange(listing, failure, ROLE_CHANGE_FAILURE_MESSAGES, (idleListing) => ({
-          model: idleListing,
-        })),
+        finishFailedChange(
+          listing,
+          failure,
+          ROLE_CHANGE_FAILURE_MESSAGES,
+          (changing, outMessage) => ({
+            model: modifyFields(changing, { busy: () => Busy.Idle() }),
+            outMessage,
+          }),
+        ),
       ),
     ClickedRemove: ({ member }) =>
       withListing(model, model.visit, (listing) =>
@@ -483,7 +485,7 @@ export const update = (model: Model, message: Message) =>
       ),
     FailedRemoveMember: ({ visit, failure }) =>
       withListing(model, visit, (listing) =>
-        finishFailedChange(listing, failure, REMOVAL_FAILURE_MESSAGES, dialogFolds.close),
+        finishFailedChange(listing, failure, REMOVAL_FAILURE_MESSAGES, dialogFolds.closeThen),
       ),
     GotDialogMessage: ({ message: dialogMessage }) =>
       withListing(model, model.visit, (listing) => dialogFolds.fold(listing, dialogMessage)),

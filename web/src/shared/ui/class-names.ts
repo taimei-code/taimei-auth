@@ -91,9 +91,10 @@ export const cardClassNames = {
 } as const;
 
 export const dialogClassNames = {
-  overlay: "fixed inset-0 z-50 bg-black/80",
+  overlay:
+    "fixed inset-0 z-50 bg-black/80 transition-opacity duration-200 ease-out data-[closed]:opacity-0 motion-reduce:transition-none",
   content:
-    "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 sm:rounded-lg",
+    "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 motion-reduce:transition-none sm:rounded-lg",
   header: "flex flex-col space-y-1.5 text-center sm:text-left",
   footer: "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
   title: "text-lg font-semibold leading-none tracking-tight",

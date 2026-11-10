@@ -10,7 +10,11 @@ import {
   story,
 } from "foldkit/story";
 
-import { Dialog } from "../../shared/ui/dialog-view";
+import {
+  DIALOG_RESOURCES_RELEASED,
+  FIRST_DIALOG_CLOSING,
+  FIRST_DIALOG_OPENING,
+} from "../../shared/__tests__/dialog-resolvers";
 
 import * as CompanyDeletion from "../company-deletion";
 import {
@@ -109,17 +113,22 @@ describe("事業所の削除", () => {
     const second = update(first.model, confirm);
     expect(first.commands).toMatchObject([{ name: CompanyDeletion.DeleteCompany.name }]);
     expect(second.commands ?? []).toEqual([]);
-    expect(
-      update(
-        first.model,
+    story(
+      update,
+      given(first.model),
+      message(
         deletionMessage(
           CompanyDeletion.Message.SucceededDeleteCompany({
             visit: VISIT,
             companyName: OWNER.companyName,
           }),
         ),
-      ).outMessage,
-    ).toEqual(OutMessage.DeletedCompany({ companyName: OWNER.companyName }));
+      ),
+      expectNoOutMessage(),
+      ...FIRST_DIALOG_CLOSING,
+      expectOutMessage(OutMessage.DeletedCompany({ companyName: OWNER.companyName })),
+      DIALOG_RESOURCES_RELEASED,
+    );
   });
 
   test("削除が拒まれたら、権限の文言を通知する", () => {
@@ -129,18 +138,22 @@ describe("事業所の削除", () => {
         CompanyDeletion.Message.ClickedConfirmDeletion({ companyName: OWNER.companyName }),
       ),
     ).model;
-    expect(
-      update(
-        deleting,
+    story(
+      update,
+      given(deleting),
+      message(
         deletionMessage(
           CompanyDeletion.Message.FailedDeleteCompany({ visit: VISIT, failure: "Forbidden" }),
         ),
-      ).outMessage,
-    ).toEqual(
-      OutMessage.Notified({
-        tone: "Error",
-        text: "この事業所を削除する権限がないか、既に削除されています。",
-      }),
+      ),
+      ...FIRST_DIALOG_CLOSING,
+      expectOutMessage(
+        OutMessage.Notified({
+          tone: "Error",
+          text: "この事業所を削除する権限がないか、既に削除されています。",
+        }),
+      ),
+      DIALOG_RESOURCES_RELEASED,
     );
   });
 });
@@ -189,7 +202,7 @@ describe("保存と削除の想定外の失敗", () => {
       update,
       given(editing()),
       message(deletionMessage(CompanyDeletion.Message.ClickedDeleteCompany())),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       message(
         deletionMessage(
           CompanyDeletion.Message.ClickedConfirmDeletion({ companyName: OWNER.companyName }),
@@ -199,10 +212,11 @@ describe("保存と削除の想定外の失敗", () => {
         CompanyDeletion.DeleteCompany,
         CompanyDeletion.Message.FailedDeleteCompany({ visit: VISIT, failure }),
       ),
+      ...FIRST_DIALOG_CLOSING,
       expectOutMessage(
         OutMessage.Notified({ tone: "Error", text: "事業所の削除に失敗しました。" }),
       ),
-      Command.resolve(Dialog.CloseDialog, Dialog.Message.CompletedCloseDialog()),
+      DIALOG_RESOURCES_RELEASED,
     );
   });
 

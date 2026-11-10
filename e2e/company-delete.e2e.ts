@@ -37,4 +37,8 @@ test("所属が残る事業所削除は一覧へ遷移し、遷移先で成功�
   const main = page.getByRole("main");
   await expect(main.getByText("e2e-co-delete-multi-other")).toBeVisible();
   await expect(main.getByText(DELETED_COMPANY)).toHaveCount(0);
+
+  await expect(page.locator("html")).not.toHaveCSS("overflow", "hidden");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(":focus")).toHaveCount(1);
 });

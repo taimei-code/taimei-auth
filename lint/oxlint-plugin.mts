@@ -1756,6 +1756,21 @@ const ROWS: readonly Row[] = [
       "失敗の文言の表 (FailureMessages) は画面ごとに置き、export しない (同じ _tag でも画面ごとに意味が違う)。共有するのは MFA の表 (mfa/mfa-failure-messages.ts) だけ",
   },
   {
+    name: "dialog-visible-only-by-is-dialog-visible",
+    within: ["web/src/**/pages/**"],
+    matchers: [{ kind: "member", paths: [".dialog.isOpen"] }],
+    message:
+      "dialog を描くかどうかは shared/ui/dialog-view.ts の isDialogVisible で決める (dialog は isOpen が false になった後も、閉じる animation が終わるまで描く)",
+  },
+  {
+    name: "dialog-transition-state-only-in-dialog-view",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/ui/dialog-view.ts"],
+    matchers: [{ kind: "member", paths: [".dialog.animation.transitionState"] }],
+    message:
+      "dialog が閉じる途中かどうかは shared/ui/dialog-view.ts の isDialogVisible で読む (Foldkit の Dialog の animation の状態を、ほかの file が直接比べない)",
+  },
+  {
     name: "mfa-failure-messages-import-only-in-mfa",
     within: ["web/src/**"],
     allowedIn: ["web/src/mfa/**"],

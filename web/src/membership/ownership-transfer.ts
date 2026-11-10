@@ -8,13 +8,7 @@ import { modifyFields } from "foldkit/struct";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
-import {
-  Dialog,
-  type DialogMessage,
-  type DialogModel,
-  dialogFoldsOf,
-  dialogView,
-} from "../shared/ui/dialog-view";
+import { Dialog, type DialogMessage, dialogFoldsOf, dialogView } from "../shared/ui/dialog-view";
 import { loadingStatusView } from "../shared/ui/icon-view";
 import { memberLabel } from "./member-label";
 
@@ -41,8 +35,15 @@ const Transferring = defineTaggedUnion({
   Failed: {},
 });
 
+export const OutMessage = defineMessageUnion({
+  TransferredOwnership: { memberLabel: Schema.String },
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
   dialog: Dialog.Model,
+  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   maybeTarget: Schema.Option(Target),
   candidates: Candidates,
   transferring: Transferring,
@@ -61,12 +62,6 @@ export const Message = defineMessageUnion({
   FailedTransferOwnership: { requestNumber: Schema.Int, failure: RequestFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  TransferredOwnership: { memberLabel: Schema.String },
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
@@ -130,6 +125,7 @@ const DIALOG_ID = "ownership-transfer-dialog";
 
 export const init = (): Model => ({
   dialog: Dialog.init({ id: DIALOG_ID }),
+  maybeOutMessageAfterClose: Option.none(),
   maybeTarget: Option.none(),
   candidates: Candidates.Loading(),
   transferring: Transferring.Idle(),
@@ -142,11 +138,10 @@ const isTransferring = (model: Model) => Transferring.guards.Transferring(model.
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf({
+const dialogFolds = dialogFoldsOf<OutMessage>()({
   isClosingBlocked: isTransferring,
   toParentMessage: toDialogMessage,
-  write: (model: Model, nextDialog: DialogModel) =>
-    modifyFields(model, { dialog: () => nextDialog }),
+  whenClosed: (model) => modifyFields(model, { transferring: () => Transferring.Idle() }),
 });
 
 export const open = (model: Model, target: Target): UpdateReturn => {
@@ -157,13 +152,14 @@ export const open = (model: Model, target: Target): UpdateReturn => {
     requestNumber: Number.increment,
   });
   const opened = dialogFolds.open(requested);
-  return {
+  const loading: Update.Return<Model, Message, SpaHttpClient> = {
     model: opened.model,
     commands: [
       ...(opened.commands ?? []),
       LoadCandidates({ requestNumber: requested.requestNumber, target }),
     ],
   };
+  return pipe(loading, Update.withOutMessage(opened.outMessage));
 };
 
 const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
@@ -205,10 +201,7 @@ export const update = (model: Model, message: Message) =>
     ClickedTransfer: ({ candidate }) => startTransfer(model, candidate),
     SucceededTransferOwnership: ({ requestNumber, memberLabel: label }) =>
       forThisRequest(model, requestNumber, () =>
-        pipe(
-          dialogFolds.close(modifyFields(model, { transferring: () => Transferring.Idle() })),
-          Update.withOutMessage(OutMessage.TransferredOwnership({ memberLabel: label })),
-        ),
+        dialogFolds.closeThen(model, OutMessage.TransferredOwnership({ memberLabel: label })),
       ),
     FailedTransferOwnership: ({ requestNumber, failure }) =>
       forThisRequest(model, requestNumber, () =>

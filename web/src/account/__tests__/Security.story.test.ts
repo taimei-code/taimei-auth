@@ -4,7 +4,10 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 
 import * as MfaDisabling from "../../mfa/mfa-disabling";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
-import { Dialog } from "../../shared/ui/dialog-view";
+import {
+  FIRST_DIALOG_CLOSING_MESSAGES,
+  FIRST_DIALOG_OPENING,
+} from "../../shared/__tests__/dialog-resolvers";
 import { init, LoadMfaStatus, Message, type Model, OutMessage, update } from "../pages/Security";
 
 const VISIT = 5;
@@ -52,6 +55,20 @@ const showingRecoveryCodes = (): Model =>
     enrollmentMessage(MfaEnrollment.Message.SubmittedCode()),
     enrollmentMessage(MfaEnrollment.Message.SucceededActivateMfa({ requestNumber: 2 })),
   );
+
+const [DIALOG_PAINTED_CLOSING, DIALOG_ENDED_CLOSING] = FIRST_DIALOG_CLOSING_MESSAGES;
+const enrollmentDialogPaintedClosing = enrollmentMessage(
+  MfaEnrollment.Message.GotDialogMessage({ message: DIALOG_PAINTED_CLOSING }),
+);
+const enrollmentDialogClosed = enrollmentMessage(
+  MfaEnrollment.Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
+);
+const disablingDialogPaintedClosing = disablingMessage(
+  MfaDisabling.Message.GotDialogMessage({ message: DIALOG_PAINTED_CLOSING }),
+);
+const disablingDialogClosed = disablingMessage(
+  MfaDisabling.Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
+);
 
 const loadsStatus = (current: Model, next: Message) =>
   (update(current, next).commands ?? []).some((command) => command.name === LoadMfaStatus.name);
@@ -111,9 +128,11 @@ describe("MFA の有効化", () => {
     expect(
       loadsStatus(codes, enrollmentMessage(MfaEnrollment.Message.UpdatedCode({ value: "1" }))),
     ).toBe(false);
+    const closing = enrollmentMessage(MfaEnrollment.Message.ClickedCloseAfterSavingCodes());
+    expect(loadsStatus(codes, closing)).toBe(false);
     const closed = update(
-      codes,
-      enrollmentMessage(MfaEnrollment.Message.ClickedCloseAfterSavingCodes()),
+      send(codes, closing, enrollmentDialogPaintedClosing),
+      enrollmentDialogClosed,
     );
     expect((closed.commands ?? []).some((command) => command.name === LoadMfaStatus.name)).toBe(
       true,
@@ -188,10 +207,14 @@ describe("MFA の無効化", () => {
     const second = update(first.model, submit);
     expect(first.commands).toMatchObject([{ name: MfaDisabling.DisableMfa.name }]);
     expect(second.commands ?? []).toEqual([]);
+    const succeeded = disablingMessage(
+      MfaDisabling.Message.SucceededDisableMfa({ requestNumber: 1 }),
+    );
+    expect(loadsStatus(first.model, succeeded)).toBe(false);
     expect(
       loadsStatus(
-        first.model,
-        disablingMessage(MfaDisabling.Message.SucceededDisableMfa({ requestNumber: 1 })),
+        send(first.model, succeeded, disablingDialogPaintedClosing),
+        disablingDialogClosed,
       ),
     ).toBe(true);
   });
@@ -212,6 +235,8 @@ describe("MFA の無効化", () => {
       disablingMessage(MfaDisabling.Message.UpdatedCode({ value: "654321" })),
       disablingMessage(MfaDisabling.Message.SubmittedCode()),
       disablingMessage(MfaDisabling.Message.SucceededDisableMfa({ requestNumber: 1 })),
+      disablingDialogPaintedClosing,
+      disablingDialogClosed,
     );
     const stale = update(
       reloaded,
@@ -299,7 +324,7 @@ describe("登録と状態の取得の失敗", () => {
       update,
       given(disabled()),
       message(enrollmentMessage(MfaEnrollment.Message.ClickedEnable())),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
         MfaEnrollment.Message.FailedEnrollMfa({ requestNumber: 1, failure: "AlreadyEnabled" }),
@@ -318,7 +343,7 @@ describe("登録と状態の取得の失敗", () => {
       update,
       given(disabled()),
       message(enrollmentMessage(MfaEnrollment.Message.ClickedEnable())),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
         MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
@@ -339,7 +364,7 @@ describe("登録と状態の取得の失敗", () => {
       update,
       given(disabled()),
       message(enrollmentMessage(MfaEnrollment.Message.ClickedEnable())),
-      Command.resolve(Dialog.ShowDialog, Dialog.Message.SucceededShowDialog()),
+      ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
         MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
