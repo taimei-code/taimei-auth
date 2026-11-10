@@ -101,6 +101,35 @@ describe("アカウント管理画面の入口の確認", () => {
   });
 });
 
+describe("dialog を開いたまま page が替わる", () => {
+  const releasedDialogsAfterLeavingProfile = (profile: Model) =>
+    (
+      update(profile, Message.ChangedUrl({ url: urlOf(`${ORIGIN}/account/members`) })).commands ??
+      []
+    )
+      .filter(({ name }) => name === Dialog.ReleaseDialogResources.name)
+      .map(({ args }) => args);
+
+  test("退会の dialog を開いたまま別の画面へ URL が替わると、その dialog の資源を放す", () => {
+    const withDeletionDialogOpen = update(
+      ready(),
+      Message.GotProfileMessage({
+        message: Profile.Message.GotAccountDeletionMessage({
+          message: AccountDeletion.Message.ClickedDeleteAccount(),
+        }),
+      }),
+    ).model;
+
+    expect(releasedDialogsAfterLeavingProfile(withDeletionDialogOpen)).toEqual([
+      { id: AccountDeletion.init(0).dialog.id },
+    ]);
+  });
+
+  test("dialog を開いていない画面から URL が替わっても、dialog の資源を放す Command を出さない", () => {
+    expect(releasedDialogsAfterLeavingProfile(ready())).toEqual([]);
+  });
+});
+
 describe("枠の遷移とログアウト", () => {
   test("アカウント管理画面の中の link は履歴に積み、知らない path は document を読み直す", () => {
     const clicked = (href: string) =>

@@ -33,6 +33,7 @@ import { leaveSpaToCompanySignup } from "../../shared/leave-spa";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
+import { Dialog, releaseDialogsIn } from "../../shared/ui/dialog-view";
 import { fullScreenStatusView, iconView } from "../../shared/ui/icon-view";
 import {
   NoticeToast,
@@ -102,6 +103,7 @@ export const Message = defineMessageUnion({
   GotSessionsMessage: { message: Sessions.Message },
   GotConnectionsMessage: { message: Connections.Message },
   GotToastMessage: { message: NoticeToast.Message },
+  GotLeftPageDialogMessage: { message: Dialog.Message },
 });
 export type Message = typeof Message.Type;
 
@@ -178,11 +180,17 @@ const leaveAfterAccountDeleted: Step = (model) => ({
   commands: [navigate(DocumentNavigation.LeaveAfterAccountDeleted())],
 });
 
-const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateReturn => {
-  const entered = modifyFields(model, {
+const discardPage: Step = (model) => ({
+  model: modifyFields(model, {
     pageVisit: Number.increment,
     maybePage: () => Option.none(),
-  });
+  }),
+  commands: Command.mapMessages(releaseDialogsIn(model.maybePage), (message) =>
+    Message.GotLeftPageDialogMessage({ message }),
+  ),
+});
+
+const initPage = (entered: Model, currentCompany: CurrentCompany.Model): UpdateReturn => {
   const visit = entered.pageVisit;
   return AccountRoute.matchOrElse<UpdateReturn>(
     entered.route,
@@ -248,6 +256,9 @@ const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateRe
     () => ({ model: entered }),
   );
 };
+
+const enterPage = (model: Model, currentCompany: CurrentCompany.Model): UpdateReturn =>
+  Update.combine(model, [discardPage, (entered) => initPage(entered, currentCompany)]);
 
 const enterRouteWhenReady: Step = (model) =>
   Entry.matchOrElse(
@@ -528,6 +539,7 @@ export const update = (model: Model, message: Message) =>
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),
     GotConnectionsMessage: ({ message: pageMessage }) => foldConnections(model, pageMessage),
     GotToastMessage: ({ message: toastMessage }) => foldToast(model, toastMessage),
+    GotLeftPageDialogMessage: () => ({ model }),
   });
 
 const NAV_LINK_CLASS =
