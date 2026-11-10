@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { packageNameOf } from "../../lint/oxlint-plugin.mjs";
 import { disallowedImportsReachableFrom } from "./source-scan";
 import { readPackageJson } from "./config-invariant-helpers";
 
@@ -7,12 +8,6 @@ const TESTING_SERVER_ENTRIES = [
   "testing/staging-worker.ts",
   "testing/server.ts",
 ];
-
-const packageNameOf = (specifier: string) =>
-  specifier
-    .split("/")
-    .slice(0, specifier.startsWith("@") ? 2 : 1)
-    .join("/");
 
 const isRuntimeBuiltin = (specifier: string) =>
   specifier.startsWith("node:") || specifier.startsWith("cloudflare:");

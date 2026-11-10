@@ -21,7 +21,8 @@
     "packages/auth-client/dist/**",
     "web/dist/**",
     "drizzle/**",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    "packages/auth-client/api/**"
   ],
   "rules": {
     "no-unused-vars": [
@@ -62,7 +63,7 @@
     "taimei/run-in-transaction-only-in-transaction": "error",
     "taimei/spa-api-path-only-in-contract": "error",
     "taimei/no-raw-http-response-in-handlers": "error",
-    "taimei/no-port-import-in-spa-handlers": "error",
+    "taimei/port-import-only-in-reading-transport": "error",
     "taimei/no-effect-in-db": "error",
     "taimei/repository-import-only-in-wiring": "error",
     "taimei/no-promise-all": "error",
@@ -84,7 +85,7 @@
     "taimei/get-session-only-in-session-check": "error",
     "taimei/api-error-shape-only-in-auth-wiring": "error",
     "taimei/db-import-in-src-tests-only-in-test-db": "error",
-    "taimei/db-import-in-e2e-fixtures-only-db-testing": "error",
+    "taimei/db-import-in-e2e-only-db-testing": "error",
     "taimei/no-failing-layer-constructor-in-src": "error",
     "taimei/no-code-comment": "error",
     "taimei/no-design-number-in-test-name": "error",
@@ -122,7 +123,32 @@
     "taimei/create-user-only-in-test-user-use-case": "error",
     "taimei/app-env-only-in-outside-production-check": "error",
     "taimei/no-io-resource-import-in-runtime": "error",
-    "taimei/current-company-write-only-in-testing-use-cases": "error"
+    "taimei/current-company-write-only-in-testing-use-cases": "error",
+    "taimei/no-policy-or-transaction-in-transport": "error",
+    "taimei/db-import-only-in-db": "error",
+    "taimei/db-value-import-only-in-db-in-tests": "error",
+    "taimei/db-testing-import-only-in-listed-files": "error",
+    "taimei/pg-import-only-in-db-client": "error",
+    "taimei/tagged-error-only-in-failure": "error",
+    "taimei/failure-only-in-failures-and-domain-errors": "error",
+    "taimei/boundary-error-construction-only-in-errors": "error",
+    "taimei/effect-run-only-in-listed-files": "error",
+    "taimei/clock-and-id-only-in-services": "error",
+    "taimei/ttl-store-driver-import-only-in-entry-files": "error",
+    "taimei/email-send-only-in-email-wiring": "error",
+    "taimei/connect-error-only-in-run-rpc": "error",
+    "taimei/no-with-headers-in-http-api": "error",
+    "taimei/no-services-or-utils-dir": "error",
+    "taimei/fixtures-import-only-in-seed": "error",
+    "taimei/page-route-only-in-contract-mock": "error",
+    "taimei/server-log-only-in-helpers": "error",
+    "taimei/login-links-only-in-helpers": "error",
+    "taimei/declared-failure-only-in-contract-mock": "error",
+    "taimei/leave-spa-import-only-in-app": "error",
+    "taimei/account-deleted-message-only-in-owning-page": "error",
+    "taimei/failure-messages-not-exported": "error",
+    "taimei/mfa-failure-messages-import-only-in-mfa": "error",
+    "taimei/sdk-import-only-peer-dependencies": "error"
   },
   "overrides": [
     {
@@ -167,18 +193,6 @@
           {
             "paths": [
               {
-                "name": "drizzle-orm",
-                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
-              },
-              {
-                "name": "@/db/schema",
-                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
-              },
-              {
-                "name": "@/db/client",
-                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
-              },
-              {
                 "name": "better-auth/cookies",
                 "importNames": ["getSessionCookie"],
                 "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
@@ -219,18 +233,6 @@
           "error",
           {
             "paths": [
-              {
-                "name": "drizzle-orm",
-                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
-              },
-              {
-                "name": "@/db/schema",
-                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
-              },
-              {
-                "name": "@/db/client",
-                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
-              },
               {
                 "name": "better-auth/cookies",
                 "importNames": ["getSessionCookie"],
@@ -277,18 +279,6 @@
           {
             "paths": [
               {
-                "name": "drizzle-orm",
-                "message": "src/* からは drizzle を直叩きせず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ (db/CLAUDE.md「例外 path (正本)」)"
-              },
-              {
-                "name": "@/db/schema",
-                "message": "src/* からは drizzle schema を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ"
-              },
-              {
-                "name": "@/db/client",
-                "message": "src/* からは @/db/client を直接 import せず db/repositories/* を経由すること (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)。better-auth schema 利用の例外は src/auth.ts のみ。Workers entry (src/worker.ts) の runtime bootstrap は oxlint-disable-next-line で個別に許可"
-              },
-              {
                 "name": "better-auth/cookies",
                 "importNames": ["getSessionCookie"],
                 "message": "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)"
@@ -330,10 +320,6 @@
           {
             "patterns": [
               {
-                "group": ["@/db/**", "**/db/**", "drizzle-orm", "drizzle-orm/**", "pg"],
-                "message": "e2e の DB 接触は fixture 再生成に限り e2e/fixtures.ts に閉じる (db/CLAUDE.md「例外 path (正本)」)。spec からは helpers.ts の reseedFixture (子プロセス) を使うこと — spec プロセスに pg Pool を開くと閉じる手段が無く runner が hang する"
-              },
-              {
                 "group": ["effect", "effect/*", "effect/**"],
                 "message": "e2e は effect を直接 import しない。モックの path と失敗の応答は e2e/contract-mock.ts で契約から作る (docs/adr/0017-effect-v4-full-adoption.md)"
               }
@@ -353,14 +339,6 @@
               {
                 "name": "sonner",
                 "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "name": "drizzle-orm",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "name": "pg",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
               },
               {
                 "name": "foldkit/route",
@@ -387,10 +365,6 @@
                   "!effect/persistence"
                 ],
                 "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "group": ["drizzle-orm/**"],
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
               },
               {
                 "group": ["@/*", "@/**"],
@@ -417,14 +391,6 @@
                 "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
               },
               {
-                "name": "drizzle-orm",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "name": "pg",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
                 "name": "@foldkit/ui",
                 "importNames": ["Dialog"],
                 "message": "dialog は web/src/shared/ui/dialog-view.ts の dialogView と Dialog で書く (class を受け取らない house の dialog。docs/adr/0023-web-foldkit.md)"
@@ -440,10 +406,6 @@
                   "!effect/persistence"
                 ],
                 "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "group": ["drizzle-orm/**"],
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
               },
               {
                 "group": ["@/*", "@/**"],
@@ -470,14 +432,6 @@
                 "message": "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)"
               },
               {
-                "name": "drizzle-orm",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "name": "pg",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
                 "name": "foldkit/route",
                 "message": "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)"
               },
@@ -497,10 +451,6 @@
                   "!effect/persistence"
                 ],
                 "message": "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)"
-              },
-              {
-                "group": ["drizzle-orm/**"],
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
               },
               {
                 "group": ["@/*", "@/**"],
@@ -650,68 +600,6 @@
       "rules": {
         "taimei/no-browser-global-outside-command": "off",
         "foldkit/no-impure-call-at-decision-time": "off"
-      }
-    },
-    {
-      "files": ["packages/auth-client/**"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "paths": [
-              {
-                "name": "next",
-                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "next/headers",
-                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "next/navigation",
-                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "next/server",
-                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "next/cache",
-                "message": "auth-client は consumer framework 非依存 (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "react",
-                "message": "SDK は React.cache 等の React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "react-dom",
-                "message": "SDK は React 固有 API に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "@connectrpc/connect-node",
-                "message": "SDK は Node 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "@connectrpc/connect-web",
-                "message": "SDK は Web 限定 transport に依存しない (packages/auth-client/CLAUDE.md「SDK の公開 API は consumer framework に依存させない」)"
-              },
-              {
-                "name": "drizzle-orm",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              },
-              {
-                "name": "pg",
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              }
-            ],
-            "patterns": [
-              {
-                "group": ["drizzle-orm/**"],
-                "message": "DB への接触は db/ に閉じる (db/CLAUDE.md「DB アクセスは `db/` に閉じる」)"
-              }
-            ]
-          }
-        ]
       }
     },
     {

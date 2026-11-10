@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, posix, relative, resolve } from "node:path";
 
 type AstNode = {
   readonly type: string;
@@ -29,6 +29,8 @@ type AstNode = {
   readonly expression?: AstNode;
   readonly typeName?: AstNode;
   readonly discriminant?: AstNode;
+  readonly declaration?: AstNode | null;
+  readonly id?: AstNode;
   readonly body?: readonly AstNode[];
   readonly parent?: AstNode;
 };
@@ -59,6 +61,7 @@ type Matcher =
   | { readonly kind: "identifier"; readonly names: readonly string[]; readonly callOnly?: true }
   | { readonly kind: "member"; readonly paths: readonly string[]; readonly callOnly?: true }
   | { readonly kind: "valueImport"; readonly source: RegExp }
+  | { readonly kind: "importTarget"; readonly target: RegExp; readonly includesTypeImports?: true }
   | { readonly kind: "typeAssertion"; readonly typePrefix: string }
   | { readonly kind: "literal"; readonly pattern: RegExp }
   | {
@@ -199,18 +202,37 @@ const isTypeOnlyImport = (node: AstNode) =>
       (specifier) => specifier.importKind === "type" || specifier.exportKind === "type",
     ));
 
-const valueImportVisitors = (
-  matcher: Extract<Matcher, { kind: "valueImport" }>,
+export const TSCONFIG_PATH_ALIASES = [
+  { prefix: "@core/", directory: "src" },
+  { prefix: "@/", directory: "" },
+] as const;
+
+const importTargetOf = (filename: string, specifier: string): string => {
+  const alias = TSCONFIG_PATH_ALIASES.find(({ prefix }) => specifier.startsWith(prefix));
+  if (alias !== undefined) {
+    return posix.join(alias.directory, specifier.slice(alias.prefix.length));
+  }
+  return specifier.startsWith(".")
+    ? pathFromConfigRoot(resolve(dirname(filename), specifier))
+    : specifier;
+};
+
+type CheckedImports = "valueOnly" | "valueAndType";
+
+const importVisitors = (
+  matchedTextOf: (source: string) => string | undefined,
+  checkedImports: CheckedImports,
   report: Report,
 ): Visitors => {
   const check = (node: AstNode) => {
     const source = stringOf(node.source);
-    if (source !== undefined && matcher.source.test(source)) {
-      report(node, source);
+    const matchedText = source === undefined ? undefined : matchedTextOf(source);
+    if (matchedText !== undefined) {
+      report(node, matchedText);
     }
   };
   const checkDeclaration = (node: AstNode) => {
-    if (!isTypeOnlyImport(node)) {
+    if (checkedImports === "valueAndType" || !isTypeOnlyImport(node)) {
       check(node);
     }
   };
@@ -222,6 +244,20 @@ const valueImportVisitors = (
   };
 };
 
+const importTargetVisitors = (
+  matcher: Extract<Matcher, { kind: "importTarget" }>,
+  filename: string,
+  report: Report,
+): Visitors =>
+  importVisitors(
+    (source) => {
+      const target = importTargetOf(filename, source);
+      return matcher.target.test(target) ? target : undefined;
+    },
+    matcher.includesTypeImports === true ? "valueAndType" : "valueOnly",
+    report,
+  );
+
 const visitorsOf = (
   matcher: Matcher,
   report: Report,
@@ -229,15 +265,14 @@ const visitorsOf = (
   context: RuleContext,
 ): Visitors => {
   switch (matcher.kind) {
-    case "identifier":
+    case "identifier": {
+      const reportNamedCallee = (node: AstNode) => {
+        if (matcher.names.includes(calleeNameOf(node.callee) ?? "")) {
+          report(node);
+        }
+      };
       return matcher.callOnly === true
-        ? {
-            CallExpression: (node) => {
-              if (matcher.names.includes(calleeNameOf(node.callee) ?? "")) {
-                report(node);
-              }
-            },
-          }
+        ? { CallExpression: reportNamedCallee, NewExpression: reportNamedCallee }
         : {
             Identifier: (node) => {
               if (matcher.names.includes(node.name ?? "")) {
@@ -245,6 +280,7 @@ const visitorsOf = (
               }
             },
           };
+    }
     case "member":
       return {
         MemberExpression: (node) => {
@@ -258,7 +294,13 @@ const visitorsOf = (
         },
       };
     case "valueImport":
-      return valueImportVisitors(matcher, report);
+      return importVisitors(
+        (source) => (matcher.source.test(source) ? source : undefined),
+        "valueOnly",
+        report,
+      );
+    case "importTarget":
+      return importTargetVisitors(matcher, context.filename, report);
     case "literal": {
       const check = (node: AstNode) => {
         const text = stringOf(node);
@@ -403,6 +445,32 @@ const isAppEnvPassedToOutsideProductionCheck = (read: AstNode | undefined) =>
 const NEVER_FAILING_LAYERS = new Set(["succeed", "mergeAll", "provide"]);
 
 const COMPARISONS = new Set(["===", "!==", "==", "!="]);
+
+const DB_ACCESS_TARGET = /^drizzle-orm(\/|$)|^db\/(client|schema)(\/|\.|$)/;
+
+const PG_TARGET = /^pg(\/|$)/;
+
+const peerDependenciesByRoot = new Map<string, readonly string[]>();
+
+const sdkPeerDependencies = (filename: string): readonly string[] => {
+  const root = configRootOf(dirname(filename));
+  const cached = peerDependenciesByRoot.get(root);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const manifest: { readonly peerDependencies?: Readonly<Record<string, string>> } = JSON.parse(
+    readFileSync(join(root, "packages/auth-client/package.json"), "utf8"),
+  );
+  const names = Object.keys(manifest.peerDependencies ?? {});
+  peerDependenciesByRoot.set(root, names);
+  return names;
+};
+
+export const packageNameOf = (specifier: string): string =>
+  specifier
+    .split("/")
+    .slice(0, specifier.startsWith("@") ? 2 : 1)
+    .join("/");
 
 const ROWS: readonly Row[] = [
   {
@@ -629,9 +697,9 @@ const ROWS: readonly Row[] = [
     name: "spa-api-path-only-in-contract",
     within: ["src/**"],
     allowedIn: ["src/**/*-contract.ts"],
-    matchers: [{ kind: "literal", pattern: /^\/api\/(account|mfa)/ }],
+    matchers: [{ kind: "literal", pattern: /^\/api\/(?!auth(\/|$))/ }],
     message:
-      "SPA の API (/api/account・/api/mfa) は Hono に直接登録せず、契約 (*-contract.ts) から mountSpaApi で載せる",
+      "SPA の API (/api/auth 以外の /api/*) は Hono に直接登録せず、契約 (*-contract.ts) を handlers/*-http-api.ts で実装して mountSpaApi で載せる",
   },
   {
     name: "no-raw-http-response-in-handlers",
@@ -654,12 +722,25 @@ const ROWS: readonly Row[] = [
       "HttpApi の handler は HttpServerResponse を直接組まない (契約の応答の型を素通りしない)",
   },
   {
-    name: "no-port-import-in-spa-handlers",
-    within: ["src/handlers/*-http-api.ts"],
-    allowedIn: ["src/handlers/spa-http-api.ts"],
+    name: "port-import-only-in-reading-transport",
+    within: ["src/handlers/**", "src/rpc/**"],
+    allowedIn: [
+      "src/handlers/spa-http-api.ts",
+      "src/handlers/auth-entry-redirect.ts",
+      "src/rpc/auth-handler.ts",
+      "src/rpc/company-handler.ts",
+      "src/rpc/user-handler.ts",
+    ],
     matchers: [{ kind: "valueImport", source: /\/ports$/ }],
     message:
-      "SPA の handler は repository の port を値で import せず、guard の値を use-case か読み出しの関数に渡す",
+      "Transport は repository の port を値で import せず、guard の値を use-case か読み出しの関数に渡す (repository へ直接 write しない)。許した file は port を読み出しにだけ使う",
+  },
+  {
+    name: "no-policy-or-transaction-in-transport",
+    within: ["src/handlers/**", "src/rpc/**"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)(policy|transaction)$/ }],
+    message:
+      "Transport (handlers/・rpc/) は policy 述語と transaction を持たない。認可は Guard、transaction は Use-case が受け持つ (ADR-0012)",
   },
   {
     name: "no-effect-in-db",
@@ -673,7 +754,7 @@ const ROWS: readonly Row[] = [
     name: "repository-import-only-in-wiring",
     within: ["src/**"],
     allowedIn: ["src/**/wiring.ts", "src/id-generator.ts", "src/transaction.ts", "src/auth.ts"],
-    matchers: [{ kind: "valueImport", source: /^@\/db\/(repositories|transaction)/ }],
+    matchers: [{ kind: "importTarget", target: /^db\/(repositories|transaction)(\/|\.|$)/ }],
     message:
       "Use-case は Repository を ports 経由で使う。db/repositories と db/transaction を値で import するのは wiring.ts・id-generator.ts・transaction.ts・auth.ts だけ",
   },
@@ -687,9 +768,12 @@ const ROWS: readonly Row[] = [
     name: "run-background-only-in-background",
     within: ["src/**"],
     allowedIn: ["src/background.ts"],
-    matchers: [{ kind: "identifier", names: ["runBackground"], callOnly: true }],
+    matchers: [
+      { kind: "identifier", names: ["runBackground"], callOnly: true },
+      { kind: "member", paths: ["Effect.forkDetach"] },
+    ],
     message:
-      "fire-and-forget は Background.run で書く。runBackground を呼ぶのは src/background.ts だけ",
+      "fire-and-forget は Background.run で書く。runBackground を呼び、fiber を切り離す (Effect.forkDetach) のは src/background.ts だけ",
   },
   {
     name: "sentry-capture-only-in-sentry-facade",
@@ -886,16 +970,16 @@ const ROWS: readonly Row[] = [
     within: ["src/**/__tests__/**"],
     allowedIn: ["src/__tests__/test-db.ts"],
     includesTestFiles: true,
-    matchers: [{ kind: "valueImport", source: /^@\/db\// }],
+    matchers: [{ kind: "importTarget", target: /^db\// }],
     message:
-      "src の test の DB 接触は TestDb の面 (src/__tests__/test-db.ts) に閉じる。@/db を値で import しない (型の import は可)",
+      "src の test の DB 接触は TestDb の面 (src/__tests__/test-db.ts) に閉じる。db/ を値で import しない (型の import は可)",
   },
   {
-    name: "db-import-in-e2e-fixtures-only-db-testing",
-    within: ["e2e/fixtures.ts"],
-    matchers: [{ kind: "valueImport", source: /^@\/db\/(?!testing\/)/ }],
+    name: "db-import-in-e2e-only-db-testing",
+    within: ["e2e/**"],
+    matchers: [{ kind: "importTarget", target: /^db\/(?!testing\/)/ }],
     message:
-      "e2e の fixture が値で import する @/db は @/db/testing/* だけ (db/CLAUDE.md「例外 path (正本)」)",
+      "e2e が値で import する db/ は db/testing/* だけ (seed・観測・cleanup の実体は db/ が持つ。spec の process に pg の Pool を開くと閉じる手段が無く、runner が止まらない)",
   },
   {
     name: "no-failing-layer-constructor-in-src",
@@ -951,7 +1035,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "TS にコメントを書かない。理由は名前・型・test 名へ移す。書けるのは directive (@ts-expect-error・oxlint-disable-next-line・/// <reference・@vite-ignore) だけ (CLAUDE.md)",
+      "TS にコメントを書かない。理由は名前・型・test 名へ移す。書けるのは directive (@ts-expect-error・oxlint-disable-next-line・/// <reference・@vite-ignore) だけ",
   },
   {
     name: "no-design-number-in-test-name",
@@ -996,7 +1080,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "test 名は振る舞いの文で書き、repo の外にしか定義の無い番号 (AC-001・#52 など) を書かない。書いてよいのは QA-MR-* と ADR-NNNN だけ (CLAUDE.md)",
+      "test 名は振る舞いの文で書き、repo の外にしか定義の無い番号 (AC-001・#52 など) を書かない。番号から意味を引けないためである。書いてよいのは repo に定義のある QA-MR-* (docs/qa/manual-regression.md) と ADR-NNNN だけ",
   },
   {
     name: "proxy-hops-env-only-in-request-context",
@@ -1193,8 +1277,13 @@ const ROWS: readonly Row[] = [
   },
   {
     name: "no-hono-in-guard",
-    within: ["src/membership/guard/**", "src/membership/policy.ts", "src/invitation/accept.ts"],
-    matchers: [{ kind: "literal", pattern: /^hono$/ }],
+    within: [
+      "src/membership/guard/**",
+      "src/membership/policy.ts",
+      "src/invitation/accept.ts",
+      "src/invitation/policy.ts",
+    ],
+    matchers: [{ kind: "literal", pattern: /^hono(\/.*)?$/ }],
     message: "Guard 層は型も値も hono を import しない (Hono に依存しない操作単位の認可)",
   },
   {
@@ -1344,8 +1433,7 @@ const ROWS: readonly Row[] = [
         }),
       },
     ],
-    message:
-      "DATABASE_URL の向き先が local かを判定するのは db/testing/local-database.ts だけ (db/CLAUDE.md)",
+    message: "DATABASE_URL の向き先が local かを判定するのは db/testing/local-database.ts だけ",
   },
   {
     name: "create-user-only-in-test-user-use-case",
@@ -1395,6 +1483,306 @@ const ROWS: readonly Row[] = [
     ],
     message:
       "試験の module で現在の事業所を書き換えるのは、試験の利用者を作る use-case と現在の事業所を切り替える use-case だけ (ADR-0020)",
+  },
+  {
+    name: "db-import-only-in-db",
+    within: ["**"],
+    allowedIn: ["db/**"],
+    allowedMatches: {
+      "src/auth.ts": ["db/client", "db/schema"],
+      "src/worker.ts": ["db/client"],
+    },
+    matchers: [
+      { kind: "importTarget", target: DB_ACCESS_TARGET, includesTypeImports: true },
+      { kind: "importTarget", target: PG_TARGET },
+    ],
+    message:
+      "DB への接触は db/ に閉じる (identity DB を別 process へ分けるため)。db/ の外は pg・drizzle-orm・db/client・db/schema を import せず、db/repositories を ports 経由で使う。例外は、better-auth の DB adapter を結線する src/auth.ts (db/client・db/schema) と、request ごとの pool を供給する src/worker.ts (db/client。ADR-0011) だけ",
+  },
+  {
+    name: "db-value-import-only-in-db-in-tests",
+    within: ["**/__tests__/**", "acceptance/**"],
+    allowedIn: ["db/**"],
+    includesTestFiles: true,
+    matchers: [
+      { kind: "importTarget", target: DB_ACCESS_TARGET },
+      { kind: "importTarget", target: PG_TARGET },
+    ],
+    message:
+      "test も pg・drizzle-orm・db/client・db/schema を値で import しない (型の import は可)。seed・観測・cleanup は db/testing/* を通す",
+  },
+  {
+    name: "db-testing-import-only-in-listed-files",
+    within: ["**"],
+    allowedIn: ["db/**", "testing/**", "src/__tests__/test-db.ts", "e2e/fixtures.ts"],
+    includesTestFiles: true,
+    matchers: [{ kind: "importTarget", target: /^db\/testing(\/|$)/ }],
+    message:
+      "db/testing/* (test の seed・観測・cleanup) を値で import するのは、src の test の面 src/__tests__/test-db.ts (ADR-0017)、e2e の seed (e2e/fixtures.ts)、本番以外の entry の testing/** (ADR-0020・ADR-0022) だけ",
+  },
+  {
+    name: "pg-import-only-in-db-client",
+    within: ["db/**"],
+    allowedIn: ["db/client.ts"],
+    includesTestFiles: true,
+    matchers: [{ kind: "importTarget", target: PG_TARGET }],
+    message:
+      "pg の Pool を作るのは db/client.ts だけ。workerd は別の request で開いた socket を再利用できないので、db は単一のまま、中の Pool を request ごとに差し替える (ADR-0011)",
+  },
+  {
+    name: "tagged-error-only-in-failure",
+    within: ["src/**"],
+    allowedIn: ["src/failure.ts"],
+    matchers: [{ kind: "member", paths: ["Schema.TaggedError"] }],
+    message:
+      "client に出る失敗の class は src/failure.ts の failure() で作る (status が必須で、表に無い status は型エラーになる)。Schema.TaggedError を直接書かない",
+  },
+  {
+    name: "failure-only-in-failures-and-domain-errors",
+    within: ["src/**"],
+    allowedIn: ["src/failure.ts", "src/failures.ts", "src/*/errors.ts"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          CallExpression: (node) => {
+            if (node.callee?.type === "Identifier" && node.callee.name === "failure") {
+              report(node);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "失敗の class の置き場は 2 つ: どの domain にも属さない失敗は src/failures.ts、domain の不変条件が破れた失敗はその domain の errors.ts。ほかの domain は、その errors.ts から import する",
+  },
+  {
+    name: "boundary-error-construction-only-in-errors",
+    within: ["src/**"],
+    allowedIn: ["src/errors.ts"],
+    matchers: [
+      {
+        kind: "identifier",
+        names: ["DbError", "AuthApiError", "TtlStoreError", "EmailError"],
+        callOnly: true,
+      },
+    ],
+    message:
+      "サードパーティ境界の失敗 (DbError・AuthApiError・TtlStoreError・EmailError) を作るのは src/errors.ts だけ。producer は tryDb・tryAuthApi・tryTtlStore・tryEmail と timeoutAsBoundary を使う",
+  },
+  {
+    name: "effect-run-only-in-listed-files",
+    within: ["src/**"],
+    allowedIn: [
+      "src/handlers/run-route.ts",
+      "src/rpc/run-rpc.ts",
+      "src/transaction.ts",
+      "src/background.ts",
+      "src/auth.ts",
+      "src/auth-plugins/primary-auth.ts",
+      "src/ttl-store-better-auth.ts",
+    ],
+    matchers: [
+      {
+        kind: "member",
+        paths: [
+          ".runPromise",
+          ".runPromiseExit",
+          ".runPromiseWith",
+          ".runPromiseExitWith",
+          ".runFork",
+          ".runForkWith",
+          ".runSync",
+          ".runSyncExit",
+          ".runCallback",
+        ],
+      },
+    ],
+    message:
+      "Effect を走らせ、failure と defect を応答に変えるのは adapter (runRoute・runMiddleware・runRpc) だけ。ほかに走らせてよいのは、runtime の外から呼ばれる口 (transaction の callback、切り離した fiber、better-auth の hook) の file だけ。program は Effect を返す",
+  },
+  {
+    name: "clock-and-id-only-in-services",
+    within: ["src/**"],
+    allowedIn: ["src/kv-store.do.ts", "src/kv-store.memory.ts", "src/id-generator.ts"],
+    matchers: [{ kind: "member", paths: ["Date.now", "crypto.randomUUID", "Math.random"] }],
+    message:
+      "時刻は Clock.currentTimeMillis、ID は IdGenerator から取る (test が Layer で差し替える)。Date.now・crypto.randomUUID・Math.random を書けるのは、Effect の外で動く TTL store の driver と id-generator.ts だけ",
+  },
+  {
+    name: "ttl-store-driver-import-only-in-entry-files",
+    within: ["src/**"],
+    allowedIn: ["src/worker.ts", "src/boot.ts"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)(ttl-store|kv-store\.(do|memory))$/ }],
+    message:
+      "TTL store は TtlStore の service で使う。driver (ttl-store・kv-store.*) を値で import して結線するのは entry (worker.ts・boot.ts) だけ",
+  },
+  {
+    name: "email-send-only-in-email-wiring",
+    within: ["src/**"],
+    allowedIn: ["src/email/wiring.ts", "src/email/send-*.ts"],
+    matchers: [
+      { kind: "valueImport", source: /(^|\/)send-[a-z-]+$/ },
+      { kind: "identifier", names: ["renderAndSendEmail"], callOnly: true },
+    ],
+    message:
+      "メールは EmailSender の service で送る。send-* を値で import し、renderAndSendEmail を呼ぶのは email/wiring.ts と email/send-*.ts だけ",
+  },
+  {
+    name: "connect-error-only-in-run-rpc",
+    within: ["src/**"],
+    allowedIn: ["src/rpc/run-rpc.ts"],
+    matchers: [{ kind: "identifier", names: ["ConnectError"] }],
+    message:
+      "失敗を Connect の応答 (ConnectError) に変えるのは adapter の rpc/run-rpc.ts だけ。handler は failure class で失敗する",
+  },
+  {
+    name: "no-with-headers-in-http-api",
+    within: ["src/**"],
+    matchers: [{ kind: "member", paths: ["HttpApiSchema.WithHeaders"] }],
+    message:
+      "HttpApiSchema.WithHeaders は複数の Set-Cookie を 1 本に連結するので使わない。better-auth の Set-Cookie は HttpEffect.appendPreResponseHandler で足す (request-http-api.ts の forwardSetCookies)",
+  },
+  {
+    name: "no-services-or-utils-dir",
+    within: ["src/**/services/**", "src/**/utils/**"],
+    includesTestFiles: true,
+    matchers: [{ kind: "custom", visitors: (report) => ({ Program: (node) => report(node) }) }],
+    message:
+      "services/ や utils/ のような、無関係な実装の寄せ集めの dir を作らない。変更理由を所有する domain の dir に置き、肥大化したら操作名で下位 dir を作る",
+  },
+  {
+    name: "fixtures-import-only-in-seed",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/seed.ts"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)fixtures$/ }],
+    message:
+      "e2e の spec は DB を import しない。fixtures.ts を import するのは seed.ts だけで、spec は helpers.ts の reseedFixture (子 process) で行を作り直す。spec の process に pg の Pool を開くと閉じる手段が無く、runner が止まらない",
+  },
+  {
+    name: "page-route-only-in-contract-mock",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/contract-mock.ts"],
+    matchers: [{ kind: "member", paths: ["page.route", "context.route"], callOnly: true }],
+    message:
+      "SPA の API のモックは contract-mock.ts の routeEndpoint で張る (path と method を契約から取る)。契約の外の応答は routeOutsideContract で張る",
+  },
+  {
+    name: "server-log-only-in-helpers",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/helpers.ts"],
+    matchers: [{ kind: "literal", pattern: /\.server\.log/ }],
+    message:
+      "送ったメールの URL は helpers.ts の sentLinkAfter で、その操作より後に log に出た行から読む (server の log は spec をまたいで残るので、同じ email の古い行を拾わないため)",
+  },
+  {
+    name: "login-links-only-in-helpers",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/helpers.ts"],
+    matchers: [{ kind: "literal", pattern: /\/login-links/ }],
+    message:
+      "ログインは helpers.ts の signInWithMagicLink で行う (e2e 専用の試験 API から URL を取って開く)。ログイン画面から Magic Link を送るのは、その画面を確かめる spec だけ (signInThroughMagicLinkForm)",
+  },
+  {
+    name: "declared-failure-only-in-contract-mock",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/contract-mock.ts"],
+    matchers: [{ kind: "identifier", names: ["_tag"] }],
+    message:
+      "契約で宣言した失敗の応答は contract-mock.ts の declaredFailure で作る (契約を変えると、モックを作る所で throw する)。契約に無い応答 (body の無い 500、遅延、abort) は応答だけを手で書く",
+  },
+  {
+    name: "leave-spa-import-only-in-app",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/app/**"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)leave-spa$/ }],
+    message:
+      "document を離れるのは application (web/src/app/**) だけ。page は結果を message で返し、application が document を読み直す (退会の成功は、表示中の page に関係なく application が受ける。認証の状態が変わった後は document を読み直す。ADR-0023 Decision 2)",
+  },
+  {
+    name: "account-deleted-message-only-in-owning-page",
+    within: ["web/src/**"],
+    allowedIn: [
+      "web/src/account/account-deletion.ts",
+      "web/src/account/pages/Profile.ts",
+      "web/src/company/company-deletion.ts",
+      "web/src/company/pages/CompanySettings.ts",
+      "web/src/company/pages/Companies.ts",
+    ],
+    matchers: [
+      {
+        kind: "member",
+        paths: [
+          ".SucceededDeleteAccount",
+          ".SucceededDeleteLastCompany",
+          ".SucceededLeaveLastCompany",
+        ],
+      },
+    ],
+    message:
+      "退会が成功したかは、その message を持つ page の述語 (Profile.isAccountDeleted・Companies.isLastCompanyLeft・CompanySettings.isLastCompanyDeleted) で判定する。ほかの file で message を直接比べない",
+  },
+  {
+    name: "failure-messages-not-exported",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/failure-message.ts", "web/src/mfa/mfa-failure-messages.ts"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report, _path, context) => {
+          const tables = new Set<string>();
+          const namesFailureMessages = (node: AstNode) =>
+            /\bFailureMessages\b/.test(context.sourceCode.getText(node));
+          return {
+            VariableDeclarator: (node) => {
+              if (node.id?.name !== undefined && namesFailureMessages(node)) {
+                tables.add(node.id.name);
+              }
+            },
+            ExportNamedDeclaration: (node) => {
+              const declaration = node.declaration ?? undefined;
+              if (
+                (declaration !== undefined && namesFailureMessages(declaration)) ||
+                (node.specifiers ?? []).some((each) => tables.has(each.local?.name ?? ""))
+              ) {
+                report(node);
+              }
+            },
+          };
+        },
+      },
+    ],
+    message:
+      "失敗の文言の表 (FailureMessages) は画面ごとに置き、export しない (同じ _tag でも画面ごとに意味が違う)。共有するのは MFA の表 (mfa/mfa-failure-messages.ts) だけ",
+  },
+  {
+    name: "mfa-failure-messages-import-only-in-mfa",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/mfa/**"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)mfa-failure-messages$/ }],
+    message:
+      "MFA の失敗の文言の表 (mfa/mfa-failure-messages.ts) を使うのは MFA の画面 (web/src/mfa/**) だけ。同じ失敗に同じ文言を出すために共有している",
+  },
+  {
+    name: "sdk-import-only-peer-dependencies",
+    within: ["packages/auth-client/src/**"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report, _path, context) =>
+          importVisitors(
+            (source) =>
+              source.startsWith(".") ||
+              sdkPeerDependencies(context.filename).includes(packageNameOf(source))
+                ? undefined
+                : source,
+            "valueAndType",
+            report,
+          ),
+      },
+    ],
+    message:
+      "SDK が import できる外部 package は packages/auth-client/package.json の peerDependencies だけ (型の import も .d.ts に出る)。consumer の framework (Next.js・React・Node) と transport に依存させない (ADR-0028)",
   },
 ];
 

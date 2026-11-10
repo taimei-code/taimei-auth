@@ -3,12 +3,11 @@ import { Predicate } from "effect";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TSCONFIG_PATH_ALIASES } from "../../lint/oxlint-plugin.mjs";
 
 export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-export { SOURCE_ROOTS } from "../../lint/oxlint-plugin.mjs";
-
-type TestFiles = "include" | "exclude" | "only";
+type TestFiles = "include" | "exclude";
 
 type ScanOptions = {
   readonly include?: readonly string[];
@@ -26,10 +25,8 @@ const fromRepoRoot = (path: string): string =>
 
 const isTestPath = (path: string): boolean => `/${path}`.includes("/__tests__/");
 
-const keepsPath = (tests: TestFiles, path: string): boolean => {
-  if (tests === "include") return true;
-  return tests === "only" ? isTestPath(path) : !isTestPath(path);
-};
+const keepsPath = (tests: TestFiles, path: string): boolean =>
+  tests === "include" || !isTestPath(path);
 
 const grep =
   (output: "files" | "lines") =>
@@ -74,11 +71,6 @@ const valueImportsInSource = (file: string, source: string): string[] =>
 
 export const valueImportsOf = (file: string): string[] =>
   valueImportsInSource(file, readFileSync(absolute(file), "utf8"));
-
-const TSCONFIG_PATH_ALIASES = [
-  { prefix: "@core/", directory: "src" },
-  { prefix: "@/", directory: "" },
-] as const;
 
 const aliasOf = (specifier: string) =>
   TSCONFIG_PATH_ALIASES.find(({ prefix }) => specifier.startsWith(prefix));
