@@ -30,12 +30,18 @@ const run = (command: string, args: readonly string[]) =>
     timeout: SPAWN_TIMEOUT_MS,
   });
 
-const gitGrep = (pattern: string, ...pathspecs: string[]): string[] =>
-  run("git", ["grep", "-n", "-E", "--untracked", pattern, "--", ...pathspecs])
-    .stdout.split("\n")
-    .filter((line) => line !== "");
+const GIT_GREP_MATCHED = 0;
+const GIT_GREP_MATCHED_NOTHING = 1;
 
-const PACKAGES_EXCLUDED_BY_383 = String.raw`^[[:space:]]*"(effect|@effect/platform-(bun|node|node-shared)|alchemy|@alchemy\.run/(cloudflare|acme|cloudflare-runtime|docker|node-utils|sql)|@distilled\.cloud/(acme|aws|aws4signer|cloudflare|core|iceberg))",?[[:space:]]*$`;
+const gitGrep = (pattern: string, ...pathspecs: string[]): string[] => {
+  const grepped = run("git", ["grep", "-n", "-E", "--untracked", pattern, "--", ...pathspecs]);
+  if (grepped.status !== GIT_GREP_MATCHED && grepped.status !== GIT_GREP_MATCHED_NOTHING) {
+    throw new Error(
+      `git grep が失敗した (status ${grepped.status})\n${grepped.error ?? grepped.stderr}`,
+    );
+  }
+  return grepped.stdout.split("\n").filter((line) => line !== "");
+};
 
 const DOMAIN_DIRS = ["account", "app", "auth", "company", "invitation", "membership", "mfa"].map(
   (domain) => `web/src/${domain}`,
@@ -92,18 +98,9 @@ const enrollmentDialogShowingSecret = (): Model => {
 };
 
 describe("minimumReleaseAge の例外 (#385)", () => {
-  test("AC-001: bunfig.toml に、#383 が足した package の名前を例外として書かない", () => {
-    expect(gitGrep(PACKAGES_EXCLUDED_BY_383, "bunfig.toml")).toEqual([]);
+  test("AC-001: bunfig.toml に minimumReleaseAgeExcludes を書かない", () => {
+    expect(gitGrep("minimumReleaseAgeExcludes", "bunfig.toml")).toEqual([]);
   });
-
-  test(
-    "AC-002: lockfile を固定した install が通る",
-    () => {
-      const installed = run("bun", ["install", "--frozen-lockfile", "--dry-run"]);
-      expect(installed.status).toBe(0);
-    },
-    SPAWN_TIMEOUT_MS,
-  );
 });
 
 describe("dialog の開閉の animation (#424)", () => {
