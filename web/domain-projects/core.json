@@ -6,6 +6,7 @@
     "../../src/company/company-contract.ts",
     "../../src/company/errors.ts",
     "../../src/company/org-code.ts",
+    "../../src/failure.ts",
     "../../src/failures.ts",
     "../../src/invitation/accept-path.ts",
     "../../src/invitation/errors.ts",

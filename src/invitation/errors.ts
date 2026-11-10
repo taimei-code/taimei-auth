@@ -1,19 +1,11 @@
-import { Schema } from "effect";
+import { failure } from "../failure";
 
-export class NotFoundOrNotPending extends Schema.TaggedError<NotFoundOrNotPending>()(
+export class NotFoundOrNotPending extends failure<NotFoundOrNotPending>()(
   "NotFoundOrNotPending",
   {},
-  { httpApiStatus: 404 },
+  404,
 ) {}
 
-export class EmailMismatch extends Schema.TaggedError<EmailMismatch>()(
-  "EmailMismatch",
-  {},
-  { httpApiStatus: 403 },
-) {}
+export class EmailMismatch extends failure<EmailMismatch>()("EmailMismatch", {}, 403) {}
 
-export class ExpiredOrUsed extends Schema.TaggedError<ExpiredOrUsed>()(
-  "ExpiredOrUsed",
-  {},
-  { httpApiStatus: 410 },
-) {}
+export class ExpiredOrUsed extends failure<ExpiredOrUsed>()("ExpiredOrUsed", {}, 410) {}

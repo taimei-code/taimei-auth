@@ -18,7 +18,7 @@
     "sweep:abandoned-signups": "bun run management/sweep-abandoned-signups.ts",
     "test": "bun test",
     "test:e2e": "playwright test",
-    "check": "bun run --cwd packages/auth-client build && bun run lint && bun run generate:check && bun run types:check && bun run typecheck && bun test",
+    "check": "bun run typecheck && bun run lint && bun run generate:check && bun run types:check && bun test",
     "lint": "oxlint --type-aware --disable-nested-config --deny-warnings --report-unused-disable-directives && biome format && fallow audit",
     "lint:fix": "oxlint --type-aware --disable-nested-config --fix && bun run format",
     "format": "biome format --write",

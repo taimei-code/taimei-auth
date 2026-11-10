@@ -2,6 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+bun run --cwd packages/auth-client build
+
 # get-exe-path は非対応の TypeScript の版のエラーも stdout に出す
 tsc=$(node_modules/.bin/effect-tsgo get-exe-path) || { echo "$tsc" >&2; exit 1; }
 "$tsc" --noEmit

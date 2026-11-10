@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { BASE_URL, expectSignInLanding, signInWithMagicLink } from "./helpers";
-import { routeEndpoint } from "./contract-mock";
+import { routeEndpoint, routeOutsideContract } from "./contract-mock";
 
 const EVIL_URL = "https://evil.example.com/";
 
@@ -11,7 +11,7 @@ const signedIn = async (page: Page) => {
 
 const returnToOf = (url: string) => new URL(url).searchParams.get("redirect_url");
 
-test("許可されていない redirect_url のログイン画面は、不正なリダイレクト URL のエラー画面に移る", async ({
+test("許可されていない redirect_url の共通ログイン画面は、不正なリダイレクト URL のエラー画面に移る", async ({
   page,
 }) => {
   await page.goto(`/auth?service_name=accounts&redirect_url=${encodeURIComponent(EVIL_URL)}`);
@@ -20,7 +20,9 @@ test("許可されていない redirect_url のログイン画面は、不正な
   await expect(page.getByText("不正なリダイレクト URL")).toBeVisible();
 });
 
-test("許可されていない redirect_url の新規登録画面も、同じエラー画面に移る", async ({ page }) => {
+test("許可されていない redirect_url の共通サインアップ画面も、同じエラー画面に移る", async ({
+  page,
+}) => {
   await page.goto(
     `/auth/signup?service_name=accounts&redirect_url=${encodeURIComponent(EVIL_URL)}`,
   );
@@ -34,7 +36,9 @@ test("定義外の reason のエラー画面は既定の文言を出す", async 
   await expect(page.getByText("エラーが発生しました", { exact: true })).toBeVisible();
 });
 
-test("ログイン画面から新規登録への link は、宣言した search だけを引き継ぐ", async ({ page }) => {
+test("共通ログイン画面から新規登録への link は、宣言した search だけを引き継ぐ", async ({
+  page,
+}) => {
   await page.goto(
     `/auth?service_name=accounts&redirect_url=${encodeURIComponent(`${BASE_URL}/account`)}&error=signin_failed`,
   );
@@ -168,7 +172,7 @@ test("sidebar の link は表示中の画面だけが aria-current を持つ", a
   );
 });
 
-test("session の無い browser で事業所登録を開くと、事業所状態を取得せずにログイン画面へ移る", async ({
+test("session の無い browser で事業所登録を開くと、事業所状態を取得せずに共通ログイン画面へ移る", async ({
   page,
 }) => {
   let membershipRequests = 0;
@@ -207,7 +211,7 @@ test("所属のある user が許可されていない redirect_url で事業所
   await expect(page).toHaveURL(`${BASE_URL}/account`);
 });
 
-test("事業所登録の「別のアカウントでログインする」は、末尾スラッシュ無しのログイン画面に移る", async ({
+test("事業所登録の「別のアカウントでログインする」は、末尾スラッシュ無しの共通ログイン画面に移る", async ({
   page,
 }) => {
   await signInWithMagicLink(page, `e2e-newbie-${Date.now()}@example.com`);
@@ -223,7 +227,9 @@ test("事業所登録の「別のアカウントでログインする」は、�
 }) => {
   await signInWithMagicLink(page, `e2e-newbie-${Date.now()}@example.com`);
   await expect(page.getByText("事業所を登録してください")).toBeVisible();
-  await page.route(/\/api\/auth\/sign-out$/, (route) => route.fulfill({ status: 500, json: {} }));
+  await routeOutsideContract(page, /\/api\/auth\/sign-out$/, (route) =>
+    route.fulfill({ status: 500, json: {} }),
+  );
 
   await page.getByRole("button", { name: "別のアカウントでログインする" }).click();
 

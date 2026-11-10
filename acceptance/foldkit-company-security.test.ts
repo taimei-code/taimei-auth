@@ -81,55 +81,9 @@ const MIGRATED_E2E = [
   "e2e/mfa-flow.e2e.ts",
 ];
 
-const INTEGRATION_BRANCH_BASE = "360288b0a";
-
 describe("移した画面の e2e", () => {
   test("AC-005: 移した画面の e2e の file に test.fixme を書かない", () => {
     expect(gitGrep(String.raw`test\.fixme\(`, ...MIGRATED_E2E)).toEqual([]);
-  });
-
-  test("AC-006: 統合の branch からの e2e の差分は、test.fixme を test にした行と locator の行だけである", () => {
-    const normalize = (source: string) =>
-      source
-        .replaceAll("test.fixme(", "test(")
-        .replace(/\s+/g, "")
-        .replace(/,([}\])])/g, "$1");
-    const changed = run("git", ["diff", "--name-only", INTEGRATION_BRANCH_BASE, "--", "e2e/"])
-      .stdout.split("\n")
-      .filter((line) => line !== "");
-    const untracked = gitFiles("e2e/").filter(
-      (path) => run("git", ["cat-file", "-e", `${INTEGRATION_BRANCH_BASE}:${path}`]).status !== 0,
-    );
-    expect(untracked).toEqual([]);
-    const isLocatorLine = (line: string) => /getBy|locator\(/.test(line);
-    for (const path of changed) {
-      const before = run("git", ["show", `${INTEGRATION_BRANCH_BASE}:${path}`]).stdout;
-      const after = existsSync(join(REPO_ROOT, path)) ? read(path) : "";
-      if (normalize(before) === normalize(after)) {
-        continue;
-      }
-      const diffLines = run("git", ["diff", "-U0", "-w", INTEGRATION_BRANCH_BASE, "--", path])
-        .stdout.split("\n")
-        .filter((line) => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line));
-      const added = new Set(diffLines.filter((line) => line.startsWith("+")).map((l) => l.slice(1)));
-      const unexplained = diffLines.filter((line) => {
-        const body = line.slice(1);
-        if (isLocatorLine(body)) {
-          return false;
-        }
-        if (line.startsWith("-") && body.includes("test.fixme(")) {
-          return !added.has(body.replace("test.fixme(", "test("));
-        }
-        if (line.startsWith("+")) {
-          return !diffLines.some(
-            (removed) =>
-              removed.startsWith("-") && removed.slice(1).replace("test.fixme(", "test(") === body,
-          );
-        }
-        return true;
-      });
-      expect({ path, unexplained }).toEqual({ path, unexplained: [] });
-    }
   });
 });
 

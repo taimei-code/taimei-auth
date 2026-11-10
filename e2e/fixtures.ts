@@ -14,6 +14,8 @@ import {
 import { createSeed, ids, type SeedInvitationOptions } from "@/db/testing/seed";
 import type { ConsumableFixture } from "./fixture-names";
 
+requireLocalDatabase(process.env.DATABASE_URL);
+
 type Role = SeedInvitationOptions["role"];
 
 const E2E_PREFIX = "e2e-";
@@ -50,7 +52,6 @@ type FixtureSpec = {
 };
 
 async function ensureFixture(spec: FixtureSpec): Promise<void> {
-  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: spec.members.map((m) => m.suffix),
     companySuffixes: [spec.company],
@@ -101,7 +102,6 @@ const DELETE_MULTI_CURRENT_COMPANY = "delete-multi-current";
 const DELETE_MULTI_OTHER_COMPANY = "delete-multi-other";
 
 async function ensureDeleteMultiFixture(): Promise<void> {
-  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: [DELETE_MULTI_USER],
     companySuffixes: [DELETE_MULTI_CURRENT_COMPANY, DELETE_MULTI_OTHER_COMPANY],
@@ -119,7 +119,6 @@ const SWITCH_COMPANY_B = "switch-b";
 const COMPANIES_CREATED_BY_SPECS = ["switch-added", "switch-b-renamed"];
 
 async function ensureSwitchFixture(): Promise<void> {
-  requireLocalDatabase(process.env.DATABASE_URL);
   await removeFixtureRows({
     userSuffixes: [SWITCH_USER, "switch-a-mate", "switch-b-mate"],
     companySuffixes: [SWITCH_COMPANY_A, SWITCH_COMPANY_B, ...COMPANIES_CREATED_BY_SPECS],
@@ -150,7 +149,6 @@ const MFA_FIXTURE: FixtureSpec = {
 const INVITATION_TOKEN = "e2e-invitation-token";
 
 async function ensureInvitationFixture(): Promise<void> {
-  requireLocalDatabase(process.env.DATABASE_URL);
   const main = await findTheMainCompany();
   await removeFixtureRows({ userSuffixes: ["invitee"] });
   await deleteInvitationByToken(INVITATION_TOKEN);
@@ -188,7 +186,6 @@ export const consumableFixtures: Record<ConsumableFixture, () => Promise<void>> 
 };
 
 export async function resetAllFixtures(): Promise<void> {
-  requireLocalDatabase(process.env.DATABASE_URL);
   const staleIds = await readUserIdsByEmailPrefix(E2E_PREFIX);
   await deleteAuditByUserIds(staleIds);
   await deleteUsersByIds(staleIds);

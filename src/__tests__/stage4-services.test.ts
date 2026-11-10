@@ -45,7 +45,7 @@ describe("TtlStore service (live)", () => {
 
 describe("timeoutAsBoundary", () => {
   test("期限内に終わらない境界呼び出しは boundary error (cause = TimeoutError) になる", async () => {
-    const wrap = timeoutAsBoundary((cause) => new TtlStoreError({ cause }), "10 millis");
+    const wrap = timeoutAsBoundary(TtlStoreError, "10 millis");
     const e = await Effect.runPromise(
       Effect.flip(wrap(tryTtlStore(() => new Promise<never>(() => {})))),
     );

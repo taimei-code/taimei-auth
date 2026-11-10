@@ -2,7 +2,7 @@
 
 自動化できない回帰ケース (実ブラウザと実ドメイン、外部サービスとの実連携、実 workerd、別 repo の build context のいずれかが必要なもの) の台帳である。
 
-- **ID 体系**: `QA-MR-*` はこの文書専用の体系である。自動テストの名前に書いてよい番号は、root の `CLAUDE.md` の test 名の規則が決める
+- **ID 体系**: `QA-MR-*` はこの文書専用の体系である。自動テストの名前に書いてよい番号は、lint の `taimei/no-design-number-in-test-name` が決める
 - **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。「契機の path」は、変えた file がその glob に当たれば契機に当たることを示す。本番以外の file がどれかの glob に当たることと、どの glob も実在の file に当たることは `src/__tests__/manual-regression-triggers.test.ts` が固定する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
 - **担当**: 該当 PR の作者 (デプロイ後のスモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す

@@ -1,22 +1,33 @@
 import { Cause, Predicate, Schema } from "effect";
 import { type BoundaryError, isBoundaryError } from "../errors";
-import type { Forbidden, InvalidArgument, NotFound, RateLimited } from "../failures";
+import { isWireStatus, type WireFailure, type WireStatus } from "../failure";
+import type {
+  Forbidden,
+  InvalidArgument,
+  NotFound,
+  RateLimited,
+  ServiceKeyMisconfigured,
+  ServiceKeyRejected,
+} from "../failures";
 import { type CaptureContext, Sentry } from "../sentry";
-import type { ServiceKeyMisconfigured, ServiceKeyRejected } from "../service-key";
+
+type OnlyWireFailures<E extends WireFailure> = E;
 
 export type RouteError =
   | BoundaryError
-  | Forbidden
-  | InvalidArgument
-  | NotFound
-  | RateLimited
-  | ServiceKeyRejected
-  | ServiceKeyMisconfigured;
+  | OnlyWireFailures<
+      | Forbidden
+      | InvalidArgument
+      | NotFound
+      | RateLimited
+      | ServiceKeyRejected
+      | ServiceKeyMisconfigured
+    >;
 
 export type ClientFacing = {
   readonly failure: object;
   readonly tag: string;
-  readonly status: number;
+  readonly status: WireStatus;
   readonly body: unknown;
 };
 
@@ -37,7 +48,7 @@ export const parseClientFacingError = (e: unknown): ClientFacing | undefined => 
   const schema: unknown = e.constructor;
   if (!Schema.isSchema(schema)) return undefined;
   const status = schema.ast.annotations?.httpApiStatus;
-  if (!Predicate.isNumber(status)) return undefined;
+  if (!isWireStatus(status)) return undefined;
   return {
     failure: e,
     tag: e._tag,

@@ -5,15 +5,21 @@ import * as invitationErrors from "../../invitation/errors";
 import * as membershipErrors from "../../membership/errors";
 import * as failures from "../../failures";
 import * as mfaErrors from "../../mfa/errors";
-import * as serviceKey from "../../service-key";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import { DbError } from "../../errors";
 import { InvalidCode, Locked, MfaNotFound } from "../../mfa/errors";
 import { AlreadyExists } from "../../company/errors";
 import { ExpiredOrUsed, NotFoundOrNotPending } from "../../invitation/errors";
 import { LastOwner } from "../../membership/errors";
-import { Forbidden, InvalidArgument, NotFound, RateLimited, Unauthorized } from "../../failures";
-import { ServiceKeyMisconfigured, ServiceKeyRejected } from "../../service-key";
+import {
+  Forbidden,
+  InvalidArgument,
+  NotFound,
+  RateLimited,
+  ServiceKeyMisconfigured,
+  ServiceKeyRejected,
+  Unauthorized,
+} from "../../failures";
 import {
   captureThrown,
   internalErrorResponse,
@@ -78,14 +84,7 @@ describe("parseClientFacingError", () => {
 
 describe("失敗の宣言", () => {
   test("失敗の module が export する Schema の class は、どれも次の httpApiStatus を持つ", () => {
-    const classes = [
-      failures,
-      membershipErrors,
-      companyErrors,
-      invitationErrors,
-      mfaErrors,
-      serviceKey,
-    ]
+    const classes = [failures, membershipErrors, companyErrors, invitationErrors, mfaErrors]
       .flatMap((module) => Object.values(module))
       .filter(Schema.isSchema);
     const statusByTag = Object.fromEntries(

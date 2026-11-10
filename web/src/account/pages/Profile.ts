@@ -68,6 +68,10 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
+export const isAccountDeleted = (message: Message): boolean =>
+  Schema.is(Message.GotAccountDeletionMessage)(message) &&
+  Schema.is(AccountDeletion.Message.SucceededDeleteAccount)(message.message);
+
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},

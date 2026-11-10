@@ -6,7 +6,7 @@ import {
   TOTP_PERIOD_SECONDS,
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
-import { SIGN_IN_LANDING_PATH } from "../web/src/shared/leave-spa";
+import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
 import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
 
@@ -359,7 +359,7 @@ test("unmount 後も送信済み POST は完了し、遅い成功で遷移しな
   await expect(challengeCodeInput(page)).toHaveCount(0);
 });
 
-test("「ログインをやり直す」は末尾スラッシュ無しのログイン画面を指す", async ({ page }) => {
+test("「ログインをやり直す」は末尾スラッシュ無しの共通ログイン画面を指す", async ({ page }) => {
   await challengePending(page);
   await routeEndpoint(page, "mfaChallenge.verify", (route) =>
     route.fulfill(declaredFailure("mfaChallenge.verify", "InvalidCode")),

@@ -1,6 +1,6 @@
 import { Clock, Effect } from "effect";
 import { Resend } from "resend";
-import { EmailError, tryEmail } from "../errors";
+import { tryEmail } from "../errors";
 import { type EmailBody, renderEmail } from "./layout";
 
 let resendInstance: Resend | null = null;
@@ -15,20 +15,20 @@ export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   const sentAt = new Date(yield* Clock.currentTimeMillis);
   const { html, text } = renderEmail(params.body, sentAt.getUTCFullYear());
 
-  const { error } = yield* tryEmail(() =>
-    getResendClient().emails.send({
+  yield* tryEmail(async () => {
+    const { error } = await getResendClient().emails.send({
       from: params.from,
       to: params.to,
       subject: params.subject,
       html,
       text,
-    }),
+    });
+    if (error) throw new Error(`Email sending failed: ${error.message}`, { cause: error });
+  }).pipe(
+    Effect.tapError((failure) =>
+      Effect.logError(`Failed to send ${params.kind} email:`, failure.cause),
+    ),
   );
-
-  if (error) {
-    yield* Effect.logError(`Failed to send ${params.kind} email:`, error);
-    return yield* new EmailError({ cause: new Error(`Email sending failed: ${error.message}`) });
-  }
 });
 
 function getResendClient(): Resend {

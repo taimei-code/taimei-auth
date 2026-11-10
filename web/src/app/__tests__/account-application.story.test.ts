@@ -14,7 +14,9 @@ import {
   update,
   view,
 } from "../account/main";
+import * as AccountDeletion from "../../account/account-deletion";
 import * as CurrentCompany from "../../account/current-company";
+import * as Profile from "../../account/pages/Profile";
 import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
 import * as MemberInvitations from "../../invitation/member-invitations";
@@ -23,6 +25,7 @@ import { Toast } from "@foldkit/ui";
 
 import { Dialog } from "../../shared/ui/dialog-view";
 import {
+  LeaveAfterAccountDeleted,
   LeaveToSignIn,
   LoadDocument,
   Message as DocumentNavigationMessage,
@@ -473,6 +476,43 @@ const companiesWithSelf = (memberships: ReadonlyArray<typeof COMPANY_A | typeof 
       }),
     }),
   ).model;
+
+const ANOTHER_PAGE_PATH = "/account/security";
+
+describe("退会した後の遷移", () => {
+  test.each([
+    {
+      label: "プロフィールで退会した",
+      path: "/account",
+      pageMessage: Message.GotProfileMessage({
+        message: Profile.Message.GotAccountDeletionMessage({
+          message: AccountDeletion.Message.SucceededDeleteAccount({ visit: 1 }),
+        }),
+      }),
+    },
+    {
+      label: "最後の所属から抜けた",
+      path: "/account/companies",
+      pageMessage: Message.GotCompaniesMessage({
+        message: Companies.Message.SucceededLeaveLastCompany(),
+      }),
+    },
+    {
+      label: "最後の事業所を削除した",
+      path: "/account/company-settings",
+      pageMessage: deletionMessage({ _tag: "SucceededDeleteLastCompany" }),
+    },
+  ])("$label 後は、その画面のままでも別の画面へ移った後でも、application が退会の後のログイン画面へ document を置き換える", ({
+    path,
+    pageMessage,
+  }) => {
+    for (const shownPath of [path, ANOTHER_PAGE_PATH]) {
+      expect(update(ready(shownPath), pageMessage).commands).toMatchObject([
+        { name: LeaveAfterAccountDeleted.name },
+      ]);
+    }
+  });
+});
 
 describe("事業所から抜けた後の読み直しまで", () => {
   test("離脱が成功してから読み直しが済むまで「抜ける」を押せず、読み直しが失敗すると押せる", () => {

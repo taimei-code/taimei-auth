@@ -4,7 +4,7 @@ import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
-import { ACCOUNT_HOME_PATH } from "../src/shared/leave-spa";
+import { ACCOUNT_HOME_PATH } from "../src/shared/landing-paths";
 import { Submission } from "../src/shared/submission";
 import { alertTextView } from "../src/shared/ui/alert-text-view";
 import { buttonLinkView, buttonView } from "../src/shared/ui/button-view";

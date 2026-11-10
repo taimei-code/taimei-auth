@@ -1,13 +1,5 @@
-import { Schema } from "effect";
+import { failure } from "../failure";
 
-export class LastOwner extends Schema.TaggedError<LastOwner>()(
-  "LastOwner",
-  {},
-  { httpApiStatus: 409 },
-) {}
+export class LastOwner extends failure<LastOwner>()("LastOwner", {}, 409) {}
 
-export class AlreadyOwner extends Schema.TaggedError<AlreadyOwner>()(
-  "AlreadyOwner",
-  {},
-  { httpApiStatus: 400 },
-) {}
+export class AlreadyOwner extends failure<AlreadyOwner>()("AlreadyOwner", {}, 400) {}

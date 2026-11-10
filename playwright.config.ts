@@ -16,7 +16,7 @@ export default defineConfig({
   webServer: {
     command: "bash e2e/start-server.sh",
     port: PORT,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });

@@ -5,7 +5,6 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import type { FailureMessages } from "../shared/failure-message";
-import { leaveSpaAfterAccountDeleted } from "../shared/leave-spa";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
@@ -82,11 +81,9 @@ export const DeleteCompany = Command.define("DeleteCompany", {
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       const { account_deleted } = yield* client.company.delete({ params: { companyId } });
-      if (account_deleted) {
-        yield* Effect.sync(leaveSpaAfterAccountDeleted);
-        return Message.SucceededDeleteLastCompany();
-      }
-      return Message.SucceededDeleteCompany({ visit, companyName });
+      return account_deleted
+        ? Message.SucceededDeleteLastCompany()
+        : Message.SucceededDeleteCompany({ visit, companyName });
     }).pipe(
       Effect.catchTags({
         Forbidden: failedDeleteCompany(visit, "Forbidden"),

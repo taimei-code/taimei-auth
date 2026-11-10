@@ -65,7 +65,7 @@ image から何も消えないため見送った。根本には 2 つの問題�
    明示する)。足し忘れは deps stage の `bun install --frozen-lockfile` が失敗するので気付けるが、
    メッセージは 2 通りに分かれる (bun 1.3.5 で実測)。root が `workspace:*` で依存する通常の
    workspace package では `error: Workspace dependency "<name>" not found` になる。bun.lock が正しいのに
-   これで失敗したら manifests stage の COPY 漏れと読む (CLAUDE.md「リポジトリ共通規則」の workspace 依存の項と同じ文言)。
+   これで失敗したら manifests stage の COPY 漏れと読む。
    root が依存していない workspace package の場合だけ
    `error: lockfile had changes, but lockfile is frozen` になる。
    `deps` は manifests から full install した**後に** source を COPY して auth-client を

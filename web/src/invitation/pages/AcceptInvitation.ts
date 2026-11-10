@@ -7,7 +7,7 @@ import { modifyFields } from "foldkit/struct";
 
 import { checkSession } from "../../auth/sign-in-client";
 import type { FailureMessages } from "../../shared/failure-message";
-import { ACCOUNT_HOME_PATH } from "../../shared/leave-spa";
+import { ACCOUNT_HOME_PATH } from "../../shared/landing-paths";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
 import { cardClassNames } from "../../shared/ui/class-names";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";

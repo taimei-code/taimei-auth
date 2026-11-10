@@ -1,5 +1,9 @@
 [test]
-preload = ["./testing/redirect-hosts-plugin.ts", "./testing/__tests__/preload.ts"]
+preload = [
+  "./testing/__tests__/build-sdk.ts",
+  "./testing/redirect-hosts-plugin.ts",
+  "./testing/__tests__/preload.ts",
+]
 pathIgnorePatterns = ["repos/**"]
 
 [install]

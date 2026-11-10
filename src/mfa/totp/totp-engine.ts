@@ -27,11 +27,7 @@ export function buildTotpUri(input: {
   return asTotp(input.secret, { issuer: input.issuer, label: input.accountLabel }).toString();
 }
 
-export function matchTotpCode(
-  secret: Uint8Array,
-  code: string,
-  timestamp: number = Date.now(),
-): number | null {
+export function matchTotpCode(secret: Uint8Array, code: string, timestamp: number): number | null {
   if (!TOTP_CODE.test(code)) return null;
   const delta = asTotp(secret).validate({ token: code, timestamp, window: TOTP_WINDOW_STEPS });
   if (delta === null) return null;

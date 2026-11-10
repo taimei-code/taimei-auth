@@ -15,6 +15,9 @@ type Case = {
 };
 
 const RESTRICTED_IMPORT = "eslint(no-restricted-imports)";
+const DB_IMPORT = "taimei(db-import-only-in-db)";
+const DB_VALUE_IMPORT_IN_TEST = "taimei(db-value-import-only-in-db-in-tests)";
+const SDK_IMPORT = "taimei(sdk-import-only-peer-dependencies)";
 const RESTRICTED_GLOBAL = "eslint(no-restricted-globals)";
 const MISSING_EXTENSION = "import(extensions)";
 const TEMPLATE_PLACEHOLDER_IN_STRING = "eslint(no-template-curly-in-string)";
@@ -80,19 +83,19 @@ const CASES: readonly Case[] = [
     name: "src は drizzle-orm を直接 import できない",
     path: "src/drizzle.ts",
     source: 'import "drizzle-orm";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "src は @/db/client を直接 import できない",
     path: "src/db-client.ts",
     source: 'import "@/db/client";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "src は @/db/schema を直接 import できない",
     path: "src/db-schema.ts",
     source: 'import "@/db/schema";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "src は getSessionCookie を import できない",
@@ -108,22 +111,40 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
-    name: "src/auth.ts は drizzle-orm を import できる",
+    name: "src/auth.ts は db/client と db/schema を import できる",
+    path: "src/auth.ts",
+    source: 'import "@/db/client";\nimport "@/db/schema";',
+    expectedRules: [],
+  },
+  {
+    name: "src/auth.ts も drizzle-orm は import できない",
     path: "src/auth.ts",
     source: 'import "drizzle-orm";',
-    expectedRules: [],
+    expectedRules: [DB_IMPORT],
   },
   {
-    name: "src の test は drizzle-orm を import できる",
+    name: "src は db/client を相対 path でも import できない",
+    path: "src/handlers/relative-db-client.ts",
+    source: 'import "../../db/client";',
+    expectedRules: [DB_IMPORT],
+  },
+  {
+    name: "src は drizzle-orm を型でも import できない",
+    path: "src/drizzle-type.ts",
+    source: 'import type { SQL } from "drizzle-orm";\nexport type S = SQL;',
+    expectedRules: [DB_IMPORT],
+  },
+  {
+    name: "src の test は drizzle-orm を値で import できない",
     path: "src/__tests__/drizzle.test.ts",
     source: 'import "drizzle-orm";',
-    expectedRules: [],
+    expectedRules: [DB_VALUE_IMPORT_IN_TEST],
   },
   {
-    name: "testing の test は drizzle-orm を import できる",
+    name: "testing の test は drizzle-orm を値で import できない",
     path: "testing/__tests__/drizzle.test.ts",
     source: 'import "drizzle-orm";',
-    expectedRules: [],
+    expectedRules: [DB_VALUE_IMPORT_IN_TEST],
   },
   {
     name: "src の test も web 専用の依存は import できない",
@@ -171,19 +192,39 @@ const CASES: readonly Case[] = [
     name: "Hono に載せる実装は drizzle-orm を import できない",
     path: "src/handlers/session-http-api.ts",
     source: 'import "drizzle-orm";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "e2e の spec は pg を import できない",
     path: "e2e/pg.spec.ts",
     source: 'import "pg";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "e2e の spec は db を相対 path で import できない",
     path: "e2e/db.spec.ts",
     source: 'import "../db/schema";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT, "taimei(db-import-in-e2e-only-db-testing)"],
+  },
+  {
+    name: "e2e の spec は db/repositories を値で import できない",
+    path: "e2e/repository.spec.ts",
+    source: 'import { findUser } from "@/db/repositories/user";\nexport { findUser };',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)"],
+  },
+  {
+    name: "退会の成功の message を、持ち主の page の外で直接比べられない",
+    path: "web/src/app/account/zz-deleted.ts",
+    source:
+      'import * as Companies from "../../company/pages/Companies";\nexport const deleted = Companies.Message.SucceededLeaveLastCompany;',
+    expectedRules: ["taimei(account-deleted-message-only-in-owning-page)"],
+  },
+  {
+    name: "失敗の class を作る failure() と同じ名前の method (Exit.failure など) は呼べる",
+    path: "src/exit-failure.ts",
+    source:
+      "declare const Exit: { failure(value: number): unknown };\nexport const failed = Exit.failure(1);",
+    expectedRules: [],
   },
   {
     name: "e2e の spec は effect を import できない",
@@ -192,10 +233,10 @@ const CASES: readonly Case[] = [
     expectedRules: [RESTRICTED_IMPORT],
   },
   {
-    name: "e2e/fixtures.ts は pg を import できる",
+    name: "e2e/fixtures.ts も pg は import できない",
     path: "e2e/fixtures.ts",
     source: 'import "pg";',
-    expectedRules: [],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "web は react を import できない",
@@ -231,13 +272,13 @@ const CASES: readonly Case[] = [
     name: "web は drizzle-orm の subpath を import できない",
     path: "web/src/account/pg-core.ts",
     source: 'import "drizzle-orm/pg-core";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "web は pg を import できない",
     path: "web/non-production/pg.ts",
     source: 'import "pg";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [DB_IMPORT],
   },
   {
     name: "web の page は URLSearchParams を使えない",
@@ -255,13 +296,13 @@ const CASES: readonly Case[] = [
     name: "SDK は react を import できない",
     path: "packages/auth-client/src/react.ts",
     source: 'import "react";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [SDK_IMPORT],
   },
   {
     name: "SDK は next/headers を import できない",
     path: "packages/auth-client/src/next.ts",
     source: 'import "next/headers";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: [SDK_IMPORT],
   },
   {
     name: "SDK の testing.ts は拡張子の無い相対 import を書けない",
@@ -473,7 +514,7 @@ const CASES: readonly Case[] = [
     name: "e2e の fixture は @/db/testing の外の @/db を値で import できない",
     path: "e2e/fixtures.ts",
     source: 'import { db } from "@/db/client";\nexport { db };',
-    expectedRules: ["taimei(db-import-in-e2e-fixtures-only-db-testing)"],
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", DB_IMPORT],
   },
   {
     name: "e2e の fixture は @/db/testing を import できる",
@@ -691,6 +732,10 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
   writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
   mkdirSync(join(fixtureDir, "packages/auth-client/src"), { recursive: true });
   writeFileSync(join(fixtureDir, "packages/auth-client/src/types.ts"), "export type Types = 1;\n");
+  writeFileSync(
+    join(fixtureDir, "packages/auth-client/package.json"),
+    readFileSync(join(REPO_ROOT, "packages/auth-client/package.json"), "utf8"),
+  );
   for (const { path, source } of group) {
     mkdirSync(dirname(join(fixtureDir, path)), { recursive: true });
     writeFileSync(join(fixtureDir, path), `${source}\n`);

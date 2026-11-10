@@ -52,7 +52,7 @@ test("使用済み magic link の再クリックでは session を得られな�
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
 });
 
-test("session の無い browser で /account を開くとログイン画面に移る", async ({ page }) => {
+test("session の無い browser で /account を開くと共通ログイン画面に移る", async ({ page }) => {
   await page.goto("/account");
 
   await expect(page).toHaveURL(/\/auth\//);

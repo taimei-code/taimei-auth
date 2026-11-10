@@ -35,3 +35,12 @@ oxlint 1.90.0 で確かめた振る舞いは次のとおりである。
 - 表の行の fixture (違反と許す例) は `src/__tests__/oxlint-rules.test.ts` に置く。#398 で移した行の fixture は、受け入れテスト `acceptance/lint-rules-members-switch.test.ts` にある
 - 移せなかった検査の一覧と理由は #398 の PR に書いた
 - #398 より前からある taimei の rule 6 本 (`no-effect-run-in-web` ほか) は、範囲を `.oxlintrc.json` の override で決めたままにしている。表の行に移せば範囲の決め方が 1 つになる
+
+## DB の import の行 (2026-11-10 追記、#431)
+
+`db/` の外から DB に触れる import の禁止は、`.oxlintrc.json` の `no-restricted-imports` の 8 つの override にあった。specifier の完全一致で比べるので、相対 path (`../../db/client`)・subpath (`drizzle-orm/sql`)・`@core/` の綴りと、src の `pg` は通った。例外は `db/CLAUDE.md` の一覧と config の `excludeFiles` に二重にあった。
+
+- matcher の種類 `importTarget` を足した。specifier を repo root からの path に直してから比べる (`@/x` は `x`、`@core/x` は `src/x`、相対 path は lint する file から解決する)。`allowedMatches` には直した後の target を書く
+- 禁止と例外を行に移し、`.oxlintrc.json` の db の項を消した。Decision 3 の「今ある group の禁止だけ」のうち、db の禁止は表が持つ
+- 例外の file と理由は、行 `db-import-only-in-db` と `db-testing-import-only-in-listed-files` の `allowedMatches`・`allowedIn` と message だけが持つ (ここに写しを置かない)。`testing/**` に `db/testing/*` を許す根拠は ADR-0020 Decision 6・7 と ADR-0022 Decision 9・15 である
+- 型だけの import は、`drizzle-orm`・`db/client`・`db/schema` を本番の file で止める。`db/repositories`・`db/transaction` の型は ports が使うので通す。test は値の import だけを止める

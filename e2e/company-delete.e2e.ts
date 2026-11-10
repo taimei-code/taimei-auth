@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { expectSignInLanding, reseedFixture, signInWithMagicLink } from "./helpers";
 
-test("最後の事業所削除はアカウントごと削除され、ログイン画面に着地する", async ({ page }) => {
+test("最後の事業所削除はアカウントごと削除され、共通ログイン画面に着地する", async ({ page }) => {
   reseedFixture("delete");
   await signInWithMagicLink(page, "e2e-delete@example.com");
   await expect(page).toHaveURL(/\/account/);

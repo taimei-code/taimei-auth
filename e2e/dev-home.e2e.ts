@@ -1,5 +1,6 @@
 import { createTestingClient, DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { expect, type Page, test } from "@playwright/test";
+import { routeOutsideContract } from "./contract-mock";
 import { BASE_URL } from "./helpers";
 
 const OWNER = { id: "dev-account-owner", email: "dev-owner@example.com" };
@@ -52,7 +53,7 @@ const focusIsVisible = (page: Page) =>
 const expectForbiddenFromOtherOrigin = async (page: Page, path: string, userId?: string) => {
   const input =
     userId === undefined ? "" : `<input type="hidden" name="userId" value="${userId}" />`;
-  await page.route(`${SAME_SITE_OTHER_ORIGIN}/**`, (route) =>
+  await routeOutsideContract(page, `${SAME_SITE_OTHER_ORIGIN}/**`, (route) =>
     route.fulfill({
       contentType: "text/html",
       body: `<form method="post" action="${BASE_URL}${path}">${input}</form><script>document.forms[0].submit()</script>`,

@@ -6,7 +6,7 @@ import { sendMagicLinkEmail } from "./send-magic-link";
 import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "./send-mfa-notification";
 import { sendWelcomeEmail } from "./send-welcome";
 
-const withEmailTimeout = timeoutAsBoundary((cause) => new EmailError({ cause }), "10 seconds");
+const withEmailTimeout = timeoutAsBoundary(EmailError, "10 seconds");
 
 export const emailSenderLive = EmailSender.of({
   sendWelcome: (email, userName) => withEmailTimeout(sendWelcomeEmail(email, userName)),

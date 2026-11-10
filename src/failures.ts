@@ -1,33 +1,30 @@
 import { Effect, Predicate, Schema } from "effect";
+import { failure } from "./failure";
 
-export class Unauthorized extends Schema.TaggedError<Unauthorized>()(
-  "Unauthorized",
-  {},
-  { httpApiStatus: 401 },
-) {}
+export class Unauthorized extends failure<Unauthorized>()("Unauthorized", {}, 401) {}
 
-export class Forbidden extends Schema.TaggedError<Forbidden>()(
-  "Forbidden",
-  {},
-  { httpApiStatus: 403 },
-) {}
+export class Forbidden extends failure<Forbidden>()("Forbidden", {}, 403) {}
 
-export class NotFound extends Schema.TaggedError<NotFound>()(
-  "NotFound",
-  {},
-  { httpApiStatus: 404 },
-) {}
+export class NotFound extends failure<NotFound>()("NotFound", {}, 404) {}
 
 export const orNotFound = Effect.filterOrFail(Predicate.isNotUndefined, () => new NotFound());
 
-export class InvalidArgument extends Schema.TaggedError<InvalidArgument>()(
+export class InvalidArgument extends failure<InvalidArgument>()(
   "InvalidArgument",
   { details: Schema.optional(Schema.Unknown) },
-  { httpApiStatus: 400 },
+  400,
 ) {}
 
-export class RateLimited extends Schema.TaggedError<RateLimited>()(
-  "RateLimited",
+export class RateLimited extends failure<RateLimited>()("RateLimited", {}, 429) {}
+
+export class ServiceKeyRejected extends failure<ServiceKeyRejected>()(
+  "ServiceKeyRejected",
   {},
-  { httpApiStatus: 429 },
+  401,
+) {}
+
+export class ServiceKeyMisconfigured extends failure<ServiceKeyMisconfigured>()(
+  "ServiceKeyMisconfigured",
+  {},
+  503,
 ) {}

@@ -2,10 +2,9 @@ import { expect } from "bun:test";
 import { Effect, Layer, Predicate } from "effect";
 import type { DbTx } from "@/db/transaction";
 import { withWaitUntil } from "../background";
-import { HealthRepo } from "../health/ports";
 import { type AppServices, appLayer } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
-import { TestDb, testDbLayer } from "./test-db";
+import { TestDb, testDbLayer, testDbMigrations } from "./test-db";
 import { testTtlStore } from "./test-ttl-store";
 import { recordingEmailSender } from "../../testing/sent-links";
 
@@ -13,19 +12,29 @@ export type TestServices = AppServices | TestDb;
 
 const testAppLayer = appLayer(testTtlStore, recordingEmailSender);
 
+const MIGRATE_COMMANDS = "bun run db:migrate && bun run db:migrate-manual";
+
 let reachabilityCheck: Promise<void> | undefined;
 
 const requireReachableDatabase = (): Promise<void> =>
   (reachabilityCheck ??= Effect.runPromise(
-    HealthRepo.use((repo) => repo.pingDatabase()).pipe(
+    testDbMigrations.unappliedMigrationCount().pipe(
       Effect.catchTag("DbError", ({ cause }) =>
         Effect.die(
           new Error(
-            `DB に接続できない (${unreachableReason(cause)})。.env の DATABASE_URL を確かめ、docker compose up auth-postgres -d && bun run db:migrate && bun run db:migrate-manual を実行する`,
+            `DB に接続できない (${unreachableReason(cause)})。.env の DATABASE_URL を確かめ、docker compose up auth-postgres -d && ${MIGRATE_COMMANDS} を実行する`,
           ),
         ),
       ),
-      Effect.provide(testAppLayer),
+      Effect.flatMap((unapplied) =>
+        unapplied > 0
+          ? Effect.die(
+              new Error(
+                `DB に当たっていない migration が ${unapplied} 件ある。${MIGRATE_COMMANDS} を実行する`,
+              ),
+            )
+          : Effect.void,
+      ),
     ),
   ));
 

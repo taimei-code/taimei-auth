@@ -13,7 +13,9 @@ test.beforeEach(() => reseedFixture("invitation"));
 const INVITEE_EMAIL = "e2e-invitee@example.com";
 const INVITATION_TOKEN = "e2e-invitation-token";
 
-test("SignIn 画面からの magic link でも招待を受諾でき /account に到達する", async ({ page }) => {
+test("共通ログイン画面からの magic link でも招待を受諾でき /account に到達する", async ({
+  page,
+}) => {
   let acceptPosts = 0;
   page.on("request", (request) => {
     if (request.method() === "POST" && request.url().endsWith("/api/account/accept-invitation")) {

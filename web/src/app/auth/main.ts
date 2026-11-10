@@ -11,7 +11,6 @@ import * as AuthError from "../../auth/pages/AuthError";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as AcceptInvitation from "../../invitation/pages/AcceptInvitation";
-import { redirectUrlAfterAccept } from "../../invitation/redirect-target";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
 import { accountSignInUrlFrom } from "../../shared/leave-spa";
 import type { SpaHttpClient } from "../../shared/spa-http-client";
@@ -110,11 +109,11 @@ const enterSignUpCompany = (model: Model, redirectUrl: string): UpdateReturn => 
 
 const enterAcceptInvitation = (
   model: Model,
-  search: Readonly<{ invitation_token?: string; service_name?: string; redirect_url?: string }>,
+  search: Readonly<{ invitation_token?: string; redirect_url: string }>,
 ): UpdateReturn => {
   const init_ = AcceptInvitation.init({
     visit: model.pageVisit,
-    redirectUrl: redirectUrlAfterAccept(search),
+    redirectUrl: search.redirect_url,
     invitationToken: search.invitation_token,
   });
   return {
