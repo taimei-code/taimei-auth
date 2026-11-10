@@ -3,7 +3,7 @@ import { expectSignInLanding, reseedFixture, signInWithMagicLink } from "./helpe
 
 test.beforeEach(() => reseedFixture("leave"));
 
-test("最後の所属事業所から抜けるとアカウントごと削除され、ログイン画面に着地する", async ({
+test("最後の所属事業所から抜けるとアカウントごと削除され、共通ログイン画面に着地する", async ({
   page,
 }) => {
   await signInWithMagicLink(page, "e2e-leaver@example.com");

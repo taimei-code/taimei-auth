@@ -18,7 +18,7 @@ test("唯一の OWNER の退会は中断され、エラーが表示されて /ac
   await expect(page.getByRole("heading", { name: "プロフィール" })).toBeVisible();
 });
 
-test("共同 OWNER がいれば退会でき、ログイン画面へ移り session が消える", async ({ page }) => {
+test("共同 OWNER がいれば退会でき、共通ログイン画面へ移り session が消える", async ({ page }) => {
   reseedFixture("withdraw");
   await signInWithMagicLink(page, "e2e-withdraw@example.com");
   await expect(page).toHaveURL(/\/account/);

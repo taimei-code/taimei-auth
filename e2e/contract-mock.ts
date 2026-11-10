@@ -42,6 +42,12 @@ export const declaredFailure = (name: string, tag: string) => {
   return { status, json: { _tag: tag } };
 };
 
+export const routeOutsideContract = (
+  page: Page,
+  url: string | RegExp,
+  handler: (route: Route) => unknown,
+) => page.route(url, handler);
+
 export const routeEndpoint = (
   page: Page,
   name: string,
