@@ -14,7 +14,8 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  dialogFoldsOf,
+  ReportingDialog,
+  reportingDialogFoldsOf,
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
@@ -29,8 +30,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
   submission: Submission,
@@ -80,8 +80,7 @@ export const AddCompany = Command.define("AddCompany", {
 const DIALOG_ID = "add-company-dialog";
 
 export const init = (): Model => ({
-  dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
   nameDraft: "",
   orgCode: DEFAULT_ORG_CODE,
   submission: Submission.Idle(),
@@ -101,7 +100,7 @@ const clearedForm = (model: Model): Model =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked: isSubmitting,
   toParentMessage: toDialogMessage,
   whenClosed: clearedForm,

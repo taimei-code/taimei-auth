@@ -7,21 +7,22 @@ import {
   type DialogModel,
   dialogFoldsOf,
   releaseDialogsIn,
+  ReportingDialog,
+  reportingDialogFoldsOf,
 } from "../ui/dialog-view";
 
-type Holder = Readonly<{
-  dialog: DialogModel;
-  maybeOutMessageAfterClose: Option.Option<never>;
-}>;
+type Holder = Readonly<{ dialog: DialogModel }>;
 
-const folds = dialogFoldsOf<never>()<Holder, DialogMessage>({
+const folds = dialogFoldsOf<Holder, DialogMessage>({
   toParentMessage: identity,
   isClosingBlocked: () => false,
 });
 
-const closed = (id: string): Holder => ({
-  dialog: Dialog.init({ id }),
-  maybeOutMessageAfterClose: Option.none(),
+const closed = (id: string): Holder => ({ dialog: Dialog.init({ id }) });
+
+const reportingFolds = reportingDialogFoldsOf<string>()({
+  toParentMessage: identity<DialogMessage>,
+  isClosingBlocked: () => false,
 });
 
 const opened = (id: string): Holder => folds.open(closed(id)).model;
@@ -47,6 +48,11 @@ describe("捨てる model の中の dialog の資源を放す", () => {
 
   test("閉じる animation の途中の dialog も放す", () => {
     expect(releasedDialogIds({ deletion: closing("closing") })).toEqual([release("closing")]);
+  });
+
+  test("閉じた後の報告を持つ dialog も放す", () => {
+    const reporting = reportingFolds.open({ dialog: ReportingDialog.init({ id: "reporting" }) });
+    expect(releasedDialogIds({ removal: reporting.model })).toEqual([release("reporting")]);
   });
 
   test("閉じている dialog と、dialog を持たない値には何も出さない", () => {

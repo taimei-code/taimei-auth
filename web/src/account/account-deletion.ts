@@ -35,7 +35,6 @@ export type OutMessage = typeof OutMessage.Type;
 export const Model = Schema.Struct({
   visit: Schema.Int,
   dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
   deletion: Submission,
 });
 export type Model = typeof Model.Type;
@@ -87,7 +86,6 @@ const DIALOG_ID = "account-deletion-dialog";
 export const init = (visit: number): Model => ({
   visit,
   dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
   deletion: Submission.Idle(),
 });
 
@@ -97,7 +95,7 @@ const isDeleting = (model: Model) => Submission.guards.Submitting(model.deletion
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = dialogFoldsOf({
   isClosingBlocked: isDeleting,
   toParentMessage: toDialogMessage,
 });

@@ -25,7 +25,8 @@ import { buttonView } from "../../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  dialogFoldsOf,
+  ReportingDialog,
+  reportingDialogFoldsOf,
   dialogFooterView,
   dialogView,
 } from "../../shared/ui/dialog-view";
@@ -75,8 +76,7 @@ const Listing = Schema.Struct({
   members: Members,
   busy: Busy,
   maybeRemovalTarget: Schema.Option(Member),
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   maybeInvitations: Schema.Option(MemberInvitations.Model),
 });
 type Listing = typeof Listing.Type;
@@ -283,8 +283,7 @@ export const init = (
             members: Members.Loading(),
             busy: Busy.Idle(),
             maybeRemovalTarget: Option.none(),
-            dialog: Dialog.init({ id: DIALOG_ID }),
-            maybeOutMessageAfterClose: Option.none(),
+            dialog: ReportingDialog.init({ id: DIALOG_ID }),
             maybeInvitations: Option.map(
               maybeInvitationsInit,
               (invitationsInit) => invitationsInit.model,
@@ -340,7 +339,7 @@ export const isSubmitting = (model: Model): boolean =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked: (listing: Listing) => Busy.guards.Removing(listing.busy),
   toParentMessage: toDialogMessage,
   whenClosed: (listing) =>
