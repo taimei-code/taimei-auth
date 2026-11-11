@@ -16,6 +16,7 @@
   },
   "ignorePatterns": [
     "repos/**",
+    ".claude/**",
     "src/gen/**",
     "packages/auth-client/src/gen/**",
     "packages/auth-client/dist/**",

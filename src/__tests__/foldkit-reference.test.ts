@@ -49,6 +49,17 @@ const skillsSha256 = () =>
       .join(""),
   );
 
+const SKILL_DIR_REFERENCE = /\$\{CLAUDE_SKILL_DIR\}\/([\w./@-]+)/g;
+
+const pathsReferencedFromSkillDir = () =>
+  skillFiles()
+    .filter((file) => file.endsWith(".md"))
+    .flatMap((file) =>
+      [...readRepoFile(file).matchAll(SKILL_DIR_REFERENCE)].map(([, referenced = ""]) =>
+        path.join(path.dirname(file), referenced.replace(/\.+$/, "")),
+      ),
+    );
+
 describe("agent が読む Foldkit の参照は、入れた版と一致する", () => {
   test("package.json の foldkit は範囲を持たない版で固定する", () => {
     expect(installedFoldkitVersion).toMatch(/^\d+\.\d+\.\d+$/);
@@ -91,5 +102,13 @@ describe("agent が読む Foldkit の参照は、入れた版と一致する", (
 
   test("repo の .mcp.json に Foldkit の DevTools の MCP server を足さない", () => {
     expect(readRepoFile(".mcp.json")).not.toMatch(/foldkit/i);
+  });
+});
+
+describe("写した Foldkit の repo は、この repo の agent の設定と噛み合う", () => {
+  test("写した skill が自分の dir から指す path は、どれも在る (無い dir を指したら .claude/ に repos/foldkit への symlink を足す)", () => {
+    const referenced = pathsReferencedFromSkillDir();
+    expect(referenced.length).toBeGreaterThan(0);
+    expect(referenced.filter((file) => !existsSync(path.join(REPO_ROOT, file)))).toEqual([]);
   });
 });
