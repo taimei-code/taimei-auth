@@ -1771,6 +1771,14 @@ const ROWS: readonly Row[] = [
       "dialog が閉じる途中かどうかは shared/ui/dialog-view.ts の isDialogVisible で読む (Foldkit の Dialog の animation の状態を、ほかの file が直接比べない)",
   },
   {
+    name: "dialog-held-report-only-in-dialog-view",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/ui/dialog-view.ts"],
+    matchers: [{ kind: "member", paths: [".maybeOutMessageAfterClose"] }],
+    message:
+      "dialog が閉じた後に出す報告は shared/ui/dialog-view.ts の reportingDialogFoldsOf の closeThen と reportAfterClose で置く (置いた報告を、ほかの file が直接読まない)",
+  },
+  {
     name: "mfa-failure-messages-import-only-in-mfa",
     within: ["web/src/**"],
     allowedIn: ["web/src/mfa/**"],

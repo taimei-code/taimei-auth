@@ -148,6 +148,7 @@
     "taimei/leave-spa-import-only-in-app": "error",
     "taimei/account-deleted-message-only-in-owning-page": "error",
     "taimei/failure-messages-not-exported": "error",
+    "taimei/dialog-held-report-only-in-dialog-view": "error",
     "taimei/dialog-transition-state-only-in-dialog-view": "error",
     "taimei/dialog-visible-only-by-is-dialog-visible": "error",
     "taimei/mfa-failure-messages-import-only-in-mfa": "error",
