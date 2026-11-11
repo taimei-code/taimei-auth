@@ -130,6 +130,41 @@ describe("dialog を開いたまま page が替わる", () => {
   });
 });
 
+describe("dialog を閉じる animation の間に page が替わる", () => {
+  const settingsAfter = (messages: ReadonlyArray<Message>): Model =>
+    messages.reduce(
+      (current, each) => update(current, each).model,
+      ready("/account/company-settings"),
+    );
+
+  const companyStateRefreshesAfterLeaving = (settings: Model) =>
+    (
+      update(settings, Message.ChangedUrl({ url: urlOf(`${ORIGIN}/account`) })).commands ?? []
+    ).filter(({ name }) => name === CurrentCompany.RefreshCompanyState.name).length;
+
+  test("事業所の削除の報告を出す前に別の画面へ URL が替わると、事業所の状態を読み直す", () => {
+    const closingWithDeletionReport = settingsAfter([
+      deletionMessage({ _tag: "ClickedDeleteCompany" }),
+      deletionMessage({ _tag: "ClickedConfirmDeletion", companyName: COMPANY_A.companyName }),
+      deletionMessage({
+        _tag: "SucceededDeleteCompany",
+        visit: ready("/account/company-settings").pageVisit,
+        companyName: COMPANY_A.companyName,
+      }),
+    ]);
+
+    expect(companyStateRefreshesAfterLeaving(closingWithDeletionReport)).toBe(1);
+  });
+
+  test("削除の dialog を開いているだけで URL が替わっても、事業所の状態を読み直さない", () => {
+    const withDeletionDialogOpen = settingsAfter([
+      deletionMessage({ _tag: "ClickedDeleteCompany" }),
+    ]);
+
+    expect(companyStateRefreshesAfterLeaving(withDeletionDialogOpen)).toBe(0);
+  });
+});
+
 describe("枠の遷移とログアウト", () => {
   test("アカウント管理画面の中の link は履歴に積み、知らない path は document を読み直す", () => {
     const clicked = (href: string) =>

@@ -121,6 +121,13 @@ const visibleDialogsIn = (discarded: unknown): ReadonlyArray<DialogModel> => {
 export const releaseDialogsIn = (discarded: unknown) =>
   visibleDialogsIn(discarded).map(({ id }) => FoldkitDialog.ReleaseDialogResources({ id }));
 
+const isReportingDialogModel = Schema.is(ReportingDialog.Model(Schema.Unknown));
+
+export const hasHeldReportIn = (discarded: unknown): boolean =>
+  visibleDialogsIn(discarded).some(
+    (dialog) => isReportingDialogModel(dialog) && Option.isSome(dialog.maybeOutMessageAfterClose),
+  );
+
 type ModelWithDialog = Readonly<{ dialog: DialogModel }>;
 
 type ModelWithSilentDialog = Readonly<{

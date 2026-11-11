@@ -33,7 +33,7 @@ import { leaveSpaToCompanySignup } from "../../shared/leave-spa";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
-import { Dialog, releaseDialogsIn } from "../../shared/ui/dialog-view";
+import { Dialog, hasHeldReportIn, releaseDialogsIn } from "../../shared/ui/dialog-view";
 import { fullScreenStatusView, iconView } from "../../shared/ui/icon-view";
 import {
   NoticeToast,
@@ -180,15 +180,28 @@ const leaveAfterAccountDeleted: Step = (model) => ({
   commands: [navigate(DocumentNavigation.LeaveAfterAccountDeleted())],
 });
 
-const discardPage: Step = (model) => ({
-  model: modifyFields(model, {
-    pageVisit: Number.increment,
-    maybePage: () => Option.none(),
-  }),
-  commands: Command.mapMessages(releaseDialogsIn(model.maybePage), (message) =>
-    Message.GotLeftPageDialogMessage({ message }),
-  ),
-});
+const AFTER_DISCARDING_HELD_REPORT: CurrentCompany.RefreshTexts = {
+  maybeDoneText: Option.none(),
+  actionText: "画面を移動しました",
+};
+
+const discardPage: Step = (model) => {
+  const releaseDialogsAndEmptyPage: Step = (stepModel) => ({
+    model: modifyFields(stepModel, {
+      pageVisit: Number.increment,
+      maybePage: () => Option.none(),
+    }),
+    commands: Command.mapMessages(releaseDialogsIn(stepModel.maybePage), (message) =>
+      Message.GotLeftPageDialogMessage({ message }),
+    ),
+  });
+  return hasHeldReportIn(model.maybePage)
+    ? Update.combine(model, [
+        releaseDialogsAndEmptyPage,
+        refreshCompanyState(AFTER_DISCARDING_HELD_REPORT),
+      ])
+    : releaseDialogsAndEmptyPage(model);
+};
 
 const initPage = (entered: Model, currentCompany: CurrentCompany.Model): UpdateReturn => {
   const visit = entered.pageVisit;

@@ -6,6 +6,7 @@ import {
   type DialogMessage,
   type DialogModel,
   dialogFoldsOf,
+  hasHeldReportIn,
   releaseDialogsIn,
   ReportingDialog,
   reportingDialogFoldsOf,
@@ -58,5 +59,29 @@ describe("捨てる model の中の dialog の資源を放す", () => {
   test("閉じている dialog と、dialog を持たない値には何も出さない", () => {
     expect(releasedDialogIds({ deletion: closed("closed"), name: "x", count: 1 })).toEqual([]);
     expect(releasedDialogIds(Option.none())).toEqual([]);
+  });
+});
+
+describe("捨てる model の中に、dialog が閉じた後に出すはずの報告が残っているかを答える", () => {
+  const reportingOpened = reportingFolds.open({
+    dialog: ReportingDialog.init({ id: "reporting" }),
+  }).model;
+
+  test("閉じる animation の途中で報告を持つ dialog が、Option と配列の中にあれば残っている", () => {
+    const closingWithReport = reportingFolds.closeThen(reportingOpened, "report").model;
+
+    expect(hasHeldReportIn(Option.some({ model: { transfers: [closingWithReport] } }))).toBe(true);
+  });
+
+  test("開いたまま報告を持つ dialog があれば残っている", () => {
+    const openWithReport = reportingFolds.reportAfterClose(reportingOpened, "report").model;
+
+    expect(hasHeldReportIn({ enrollment: openWithReport })).toBe(true);
+  });
+
+  test("報告を持たない dialog と、dialog を持たない値には残っていない", () => {
+    expect(hasHeldReportIn({ removal: reportingOpened })).toBe(false);
+    expect(hasHeldReportIn({ deletion: closing("closing"), name: "x" })).toBe(false);
+    expect(hasHeldReportIn(Option.none())).toBe(false);
   });
 });
