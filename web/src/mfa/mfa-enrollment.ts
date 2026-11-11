@@ -12,7 +12,8 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  dialogFoldsOf,
+  ReportingDialog,
+  reportingDialogFoldsOf,
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
@@ -62,8 +63,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   step: Step,
   maybeResumableEnrollment: Schema.Option(Enrollment),
   qrCode: QrCode,
@@ -191,8 +191,7 @@ export const DrawQrCode = Command.define("DrawQrCode", {
 });
 
 export const init = (): Model => ({
-  dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
   step: Step.Starting(),
   maybeResumableEnrollment: Option.none(),
   qrCode: QrCode.Drawing(),
@@ -218,7 +217,7 @@ const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ m
 const withoutShownRecoveryCodes = (model: Model): Model =>
   Step.guards.RecoveryCodes(model.step) ? withStep(model, Step.Starting()) : model;
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked,
   toParentMessage: toDialogMessage,
   whenClosed: withoutShownRecoveryCodes,

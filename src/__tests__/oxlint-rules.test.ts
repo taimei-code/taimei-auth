@@ -33,6 +33,7 @@ const ATOM_IMPORT_IN_FOLDKIT = "taimei(no-atom-import-in-foldkit)";
 const RAW_FORM_ELEMENT = "taimei(no-raw-form-element)";
 const DIALOG_VISIBLE = "taimei(dialog-visible-only-by-is-dialog-visible)";
 const DIALOG_TRANSITION_STATE = "taimei(dialog-transition-state-only-in-dialog-view)";
+const DIALOG_HELD_REPORT = "taimei(dialog-held-report-only-in-dialog-view)";
 const CHILD_MESSAGE_IN_ROOT = "foldkit(no-child-message-construction-in-root)";
 const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
@@ -53,6 +54,13 @@ const CASES: readonly Case[] = [
     source:
       'export const isLeaving = (model: { dialog: { animation: { transitionState: string } } }) => model.dialog.animation.transitionState === "LeaveStart";',
     expectedRules: [DIALOG_TRANSITION_STATE],
+  },
+  {
+    name: "house の dialog の外は、閉じた後に出す報告を直接読めない",
+    path: "web/src/company/dialog-held-report-probe.ts",
+    source:
+      "export const held = (model: { dialog: { maybeOutMessageAfterClose: unknown } }) => model.dialog.maybeOutMessageAfterClose;",
+    expectedRules: [DIALOG_HELD_REPORT],
   },
   {
     name: "dialog を持つ Submodel は、開いている間の再操作を dialog.isOpen で止められる",

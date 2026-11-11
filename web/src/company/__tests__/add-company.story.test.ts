@@ -80,11 +80,16 @@ describe("dialog を閉じた結果の報告", () => {
     const opened = send(init(), Message.ClickedAddCompany());
     const held = {
       ...opened,
-      maybeOutMessageAfterClose: Option.some(OutMessage.AddedCompany({ companyName: "新事業所" })),
+      dialog: {
+        ...opened.dialog,
+        maybeOutMessageAfterClose: Option.some(
+          OutMessage.AddedCompany({ companyName: "新事業所" }),
+        ),
+      },
     };
     const unmounted = update(held, dialogMessage(Dialog.Message.Unmounted()));
     expect(unmounted.outMessage).toEqual(OutMessage.AddedCompany({ companyName: "新事業所" }));
-    expect(unmounted.model.maybeOutMessageAfterClose._tag).toBe("None");
+    expect(unmounted.model.dialog.maybeOutMessageAfterClose._tag).toBe("None");
   });
 
   test("閉じる途中で開き直すと、前の結果を開く時に報告し、後の閉じ終わりで出し直さない", () => {
@@ -92,6 +97,6 @@ describe("dialog を閉じた結果の報告", () => {
     const reopened = update(closing, Message.ClickedAddCompany());
     expect(reopened.outMessage).toEqual(OutMessage.AddedCompany({ companyName: "新事業所" }));
     expect(reopened.model.nameDraft).toBe("");
-    expect(reopened.model.maybeOutMessageAfterClose._tag).toBe("None");
+    expect(reopened.model.dialog.maybeOutMessageAfterClose._tag).toBe("None");
   });
 });

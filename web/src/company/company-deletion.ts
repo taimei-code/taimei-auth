@@ -1,4 +1,4 @@
-import { Effect, Schema, Option } from "effect";
+import { Effect, Schema } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -11,7 +11,8 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  dialogFoldsOf,
+  ReportingDialog,
+  reportingDialogFoldsOf,
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
@@ -35,8 +36,7 @@ export type OutMessage = typeof OutMessage.Type;
 export const Model = Schema.Struct({
   visit: Schema.Int,
   companyId: Schema.String,
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   deletion: Submission,
 });
 export type Model = typeof Model.Type;
@@ -99,8 +99,7 @@ const DIALOG_ID = "company-deletion-dialog";
 
 export const init = (start: Readonly<{ visit: number; companyId: string }>): Model => ({
   ...start,
-  dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
   deletion: Submission.Idle(),
 });
 
@@ -110,7 +109,7 @@ export const isDeleting = (model: Model) => Submission.guards.Submitting(model.d
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked: isDeleting,
   toParentMessage: toDialogMessage,
   whenClosed: (model) => modifyFields(model, { deletion: () => Submission.Idle() }),

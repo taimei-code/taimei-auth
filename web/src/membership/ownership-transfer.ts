@@ -8,7 +8,13 @@ import { modifyFields } from "foldkit/struct";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
-import { Dialog, type DialogMessage, dialogFoldsOf, dialogView } from "../shared/ui/dialog-view";
+import {
+  Dialog,
+  type DialogMessage,
+  ReportingDialog,
+  reportingDialogFoldsOf,
+  dialogView,
+} from "../shared/ui/dialog-view";
 import { loadingStatusView } from "../shared/ui/icon-view";
 import { memberLabel } from "./member-label";
 
@@ -42,8 +48,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   maybeTarget: Schema.Option(Target),
   candidates: Candidates,
   transferring: Transferring,
@@ -124,8 +129,7 @@ export const TransferOwnership = Command.define("TransferOwnership", {
 const DIALOG_ID = "ownership-transfer-dialog";
 
 export const init = (): Model => ({
-  dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
   maybeTarget: Option.none(),
   candidates: Candidates.Loading(),
   transferring: Transferring.Idle(),
@@ -138,7 +142,7 @@ const isTransferring = (model: Model) => Transferring.guards.Transferring(model.
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked: isTransferring,
   toParentMessage: toDialogMessage,
   whenClosed: (model) => modifyFields(model, { transferring: () => Transferring.Idle() }),

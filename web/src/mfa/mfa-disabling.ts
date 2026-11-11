@@ -1,4 +1,4 @@
-import { Effect, Number, Schema, String, Option } from "effect";
+import { Effect, Number, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -11,7 +11,8 @@ import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
   type DialogMessage,
-  dialogFoldsOf,
+  ReportingDialog,
+  reportingDialogFoldsOf,
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
@@ -32,8 +33,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  dialog: Dialog.Model,
-  maybeOutMessageAfterClose: Schema.Option(OutMessage),
+  dialog: ReportingDialog.Model(OutMessage),
   kind: MfaCodeKindSchema,
   code: Schema.String,
   submission: Submission,
@@ -91,8 +91,7 @@ export const DisableMfa = Command.define("DisableMfa", {
 });
 
 export const init = (): Model => ({
-  dialog: Dialog.init({ id: DIALOG_ID }),
-  maybeOutMessageAfterClose: Option.none(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
   kind: "totp",
   code: "",
   submission: Submission.Idle(),
@@ -112,7 +111,7 @@ const clearedEntry = (model: Model): Model =>
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
-const dialogFolds = dialogFoldsOf<OutMessage>()({
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
   isClosingBlocked: isSubmitting,
   toParentMessage: toDialogMessage,
   whenClosed: clearedEntry,
