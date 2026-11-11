@@ -5,6 +5,7 @@ import path from "node:path";
 import { Schema } from "effect";
 
 import { readPackageJson, REPO_ROOT } from "./config-invariant-helpers";
+import { repoFiles } from "./source-scan";
 
 const SKILL_VERSION = /^---\n(?:.*\n)*?  foldkit-version: (\S+)\n(?:.*\n)*?---\n/;
 const FOLDKIT_SKILLS = ["foldkit", "generate-program", "audit-program"] as const;
@@ -49,6 +50,39 @@ const skillsSha256 = () =>
       .join(""),
   );
 
+const SKILL_DIR_REFERENCE = /\$\{CLAUDE_SKILL_DIR\}\/([\w./@-]+)/g;
+
+const pathsReferencedFromSkillDir = () =>
+  skillFiles()
+    .filter((file) => file.endsWith(".md"))
+    .flatMap((file) =>
+      [...readRepoFile(file).matchAll(SKILL_DIR_REFERENCE)].map(([, referenced = ""]) =>
+        path.join(path.dirname(file), referenced.replace(/\.+$/, "")),
+      ),
+    );
+
+const AgentSettings = Schema.fromJsonString(
+  Schema.Struct({
+    claudeMdExcludes: Schema.Array(Schema.String),
+    skillOverrides: Schema.Record(Schema.String, Schema.String),
+  }),
+);
+
+const agentSettings = Schema.decodeSync(AgentSettings)(readRepoFile(".claude/settings.json"));
+
+const upstreamSkillNames = () =>
+  repoFiles(":(glob)repos/**/.claude/skills/*/SKILL.md").map((file) =>
+    path.basename(path.dirname(file)),
+  );
+
+const upstreamInstructionDocuments = () =>
+  repoFiles(":(glob)repos/**/CLAUDE.md", ":(glob)repos/**/AGENTS.md");
+
+const isExcludedFromAutoLoad = (file: string) =>
+  agentSettings.claudeMdExcludes.some((glob) =>
+    new Bun.Glob(glob).match(path.join(REPO_ROOT, file)),
+  );
+
 describe("agent が読む Foldkit の参照は、入れた版と一致する", () => {
   test("package.json の foldkit は範囲を持たない版で固定する", () => {
     expect(installedFoldkitVersion).toMatch(/^\d+\.\d+\.\d+$/);
@@ -91,5 +125,25 @@ describe("agent が読む Foldkit の参照は、入れた版と一致する", (
 
   test("repo の .mcp.json に Foldkit の DevTools の MCP server を足さない", () => {
     expect(readRepoFile(".mcp.json")).not.toMatch(/foldkit/i);
+  });
+});
+
+describe("写した Foldkit の repo は、この repo の agent の設定と噛み合う", () => {
+  test("写した skill が自分の dir から指す path は、どれも在る (無い dir を指したら .claude/ に repos/foldkit への symlink を足す)", () => {
+    const referenced = pathsReferencedFromSkillDir();
+    expect(referenced.length).toBeGreaterThan(0);
+    expect(referenced.filter((file) => !existsSync(path.join(REPO_ROOT, file)))).toEqual([]);
+  });
+
+  test("repos/ の下の .claude/skills が持つ上流の skill は、どれも .claude/settings.json の skillOverrides で off にする (上流の repo を保守するための skill で、この repo の作業には使わない)", () => {
+    const upstream = upstreamSkillNames();
+    expect(upstream.length).toBeGreaterThan(0);
+    expect(upstream.filter((name) => agentSettings.skillOverrides[name] !== "off")).toEqual([]);
+  });
+
+  test("repos/ の下の CLAUDE.md と AGENTS.md は、どれも .claude/settings.json の claudeMdExcludes で自動の読み込みから外す (上流の文書は、この repo に無い dir で Effect を調べさせる)", () => {
+    const documents = upstreamInstructionDocuments();
+    expect(documents.length).toBeGreaterThan(0);
+    expect(documents.filter((file) => !isExcludedFromAutoLoad(file))).toEqual([]);
   });
 });

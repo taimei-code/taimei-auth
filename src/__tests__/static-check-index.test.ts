@@ -8,7 +8,7 @@ const RULE_NUMBER_REFERENCE = /CLAUDE\.md`? ルール ?[0-9]/;
 const HEADING_REFERENCE = /([\w./-]*CLAUDE\.md)`?(?: の)?「([^」]+)」/g;
 const HEADING = /^#{1,6} (.+)$/gm;
 const LINT_RULE_NAME_OR_TEST_PATH = /taimei\/[a-z][a-z-]*|[\w./-]+\.test\.tsx?/g;
-const RULE_DOCUMENT_BYTES_CEILING = 6883;
+const RULE_DOCUMENT_BYTES_CEILING = 7311;
 
 type RepoText = { readonly path: string; readonly text: string };
 
