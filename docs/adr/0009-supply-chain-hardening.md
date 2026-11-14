@@ -27,7 +27,7 @@ Bun 1.3 以降で対応している (このリポジトリは `bun-version: "1.3
 
 `.github/dependabot.yml` の bun の `cooldown` も同じ 7 日にする (`default-days: 7`)。Dependabot は、公開から 7 日未満の版へ上げる PR を出さない。7 日未満の版を止めるのは、この `cooldown` と、lockfile に無い版を resolve する時の `minimumReleaseAge` と、CI の検査の 3 つである。CI の `bun install --frozen-lockfile` は、lockfile が固定した版の公開からの日数を調べない (「4 回目の除外の撤去」の実測)。`cooldown` を `minimumReleaseAge` より短くすると、Dependabot は CI の検査で落ちる版の PR を出す。
 
-機械検証: `src/__tests__/dependabot-cooldown.test.ts` (bun の `cooldown` の日数が `minimumReleaseAge` と同じであることと、npm の update が無いことを assert する)
+機械検証: `src/__tests__/dependabot-cooldown.test.ts` (bun の `cooldown` の日数が `minimumReleaseAge` と同じであることと、npm の update が無いことを assert する)。下の「CI の検査」は、step の置き場所と `bunfig.toml` の値の検査を `src/__tests__/lockfile-release-age-check.test.ts` が、依存を import しないことを `lint/oxlint-plugin.mts` の行 `scripts-import-only-node-builtins` が確かめる
 
 CI の検査: `.github/workflows/ci.yml` の check job の step "Release age of the versions this PR adds to bun.lock" が、`scripts/check-lockfile-release-age.ts` を走らせる。PR が `origin/main` との merge-base から `bun.lock` に足した entry の版を、registry の公開日時と比べ、`minimumReleaseAge` に満たない版があれば落ちる。閾値・例外 (`minimumReleaseAgeExcludes`)・registry は `bunfig.toml` の `[install]` だけから読むので、7 日を待てない時の抜け道は install と同じである。registry に届かない時や、公開日時を読めない時は、通さずに落ちる。検査は `bun install` の前に走り、依存の package を import しない。検査する対象の package が、検査の結果を書き換えられないようにするためである。全 entry でなく足した entry だけを調べるのは、7 日を超えた版は日がたっても 7 日未満に戻らないからである (全 entry を調べると、毎回 500 を超える package について、registry から版ごとの公開日時を含む metadata を取ることになる)。lockfile と同じ版を依存に書いた、lockfile の無い project で `bun install --lockfile-only` を流す方法は、lockfile と違う版まで resolve し、同じ名前の別の版を依存に書くのに alias が要るので採らなかった。
 

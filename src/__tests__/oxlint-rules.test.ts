@@ -16,6 +16,7 @@ type Case = {
 
 const RESTRICTED_IMPORT = "eslint(no-restricted-imports)";
 const DB_IMPORT = "taimei(db-import-only-in-db)";
+const SCRIPTS_IMPORT = "taimei(scripts-import-only-node-builtins)";
 const DB_VALUE_IMPORT_IN_TEST = "taimei(db-value-import-only-in-db-in-tests)";
 const SDK_IMPORT = "taimei(sdk-import-only-peer-dependencies)";
 const RESTRICTED_GLOBAL = "eslint(no-restricted-globals)";
@@ -100,6 +101,37 @@ const CASES: readonly Case[] = [
     path: "web/src/shared/ui/dialog-view.ts",
     source: 'import "react";',
     expectedRules: [RESTRICTED_IMPORT],
+  },
+  {
+    name: "scripts は依存を install する前に走るので、package を import できない",
+    path: "scripts/package-import.ts",
+    source: 'import "effect";',
+    expectedRules: [SCRIPTS_IMPORT],
+  },
+  {
+    name: "scripts は依存を install する前に走るので、package を import() で読めない",
+    path: "scripts/package-dynamic-import.ts",
+    source: 'export const loaded = await import("effect");',
+    expectedRules: [SCRIPTS_IMPORT],
+  },
+  {
+    name: "scripts は createRequire で package を読めない",
+    path: "scripts/package-create-require.ts",
+    source:
+      'import { createRequire } from "node:module";\nexport const loaded = createRequire(import.meta.url)("effect");',
+    expectedRules: [SCRIPTS_IMPORT],
+  },
+  {
+    name: "scripts は import.meta.require で package を読めない",
+    path: "scripts/package-meta-require.ts",
+    source: 'export const loaded = import.meta.require("effect");',
+    expectedRules: [SCRIPTS_IMPORT],
+  },
+  {
+    name: "scripts は node: の組み込みの module を import できる",
+    path: "scripts/node-import.ts",
+    source: 'import { join } from "node:path";\nexport const joined = join("a", "b");',
+    expectedRules: [],
   },
   {
     name: "server は web 専用の依存を import できない",

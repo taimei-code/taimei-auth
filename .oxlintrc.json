@@ -87,6 +87,7 @@
     "taimei/api-error-shape-only-in-auth-wiring": "error",
     "taimei/db-import-in-src-tests-only-in-test-db": "error",
     "taimei/db-import-in-e2e-only-db-testing": "error",
+    "taimei/scripts-import-only-node-builtins": "error",
     "taimei/no-failing-layer-constructor-in-src": "error",
     "taimei/no-code-comment": "error",
     "taimei/no-design-number-in-test-name": "error",
