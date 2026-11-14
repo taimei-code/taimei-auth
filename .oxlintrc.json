@@ -147,6 +147,7 @@
     "taimei/declared-failure-only-in-contract-mock": "error",
     "taimei/leave-spa-import-only-in-app": "error",
     "taimei/account-deleted-message-only-in-owning-page": "error",
+    "taimei/company-change-message-only-in-owning-module": "error",
     "taimei/failure-messages-not-exported": "error",
     "taimei/dialog-held-report-only-in-dialog-view": "error",
     "taimei/dialog-transition-state-only-in-dialog-view": "error",
