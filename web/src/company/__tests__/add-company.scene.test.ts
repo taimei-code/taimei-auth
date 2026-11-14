@@ -20,7 +20,7 @@ describe("事業所の追加の dialog", () => {
       Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
       Command.resolveAll(...pendingDialogTransitionResolvers(opened.dialog)),
       expect(PANEL).not.toHaveAttr("inert"),
-      click(role("button", { name: "Close" })),
+      click(role("button", { name: "閉じる" })),
       expect(PANEL).toHaveAttr("inert"),
       Command.resolveAll(...FIRST_DIALOG_CLOSING_RESOLVERS, DIALOG_RESOURCES_RELEASED_RESOLVER),
       Mount.expectEnded(Dialog.AcquireResources),

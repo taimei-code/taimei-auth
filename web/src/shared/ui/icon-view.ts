@@ -52,8 +52,10 @@ const svgView = <Message>(
 export const iconView = <Message>(icon: IconNode, h: HtmlBuilder<Message>): Html =>
   svgView(icon, [], h);
 
+const SPIN_CLASS = "animate-spin motion-reduce:[animation-duration:6s]";
+
 export const spinnerView = <Message>(h: HtmlBuilder<Message>): Html =>
-  svgView(LoaderCircle, [h.Class("animate-spin")], h);
+  svgView(LoaderCircle, [h.Class(SPIN_CLASS)], h);
 
 const statusView = <Message>(
   label: string,
@@ -63,7 +65,7 @@ const statusView = <Message>(
   h.div(
     [h.Class(classNames.wrapper), h.Role("status"), h.AriaLive("polite")],
     [
-      svgView(LoaderCircle, [h.Class(`${classNames.icon} animate-spin text-muted-foreground`)], h),
+      svgView(LoaderCircle, [h.Class(`${classNames.icon} ${SPIN_CLASS} text-muted-foreground`)], h),
       h.span([h.Class("sr-only")], [label]),
     ],
   );
