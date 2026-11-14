@@ -55,7 +55,6 @@ describe("MFA チャレンジの画面", () => {
       given(entering()),
       expect(codeInput).toHaveAttr("autocomplete", "one-time-code"),
       expect(codeInput).toHaveAttr("inputmode", "numeric"),
-      expect(codeInput).toHaveAttr("aria-label", "確認コード"),
       expect(codeInput).toHaveAttr("aria-invalid", "false"),
       expect(codeInput).toHaveAttr("aria-describedby", "mfa-challenge-code-hint"),
       expect(role("button", { name: "ログインを続ける" })).toBeDisabled(),

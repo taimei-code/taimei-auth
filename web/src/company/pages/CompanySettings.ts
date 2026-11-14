@@ -275,6 +275,7 @@ const companyFormView = (
           onInput: (value) => Message.UpdatedName({ value }),
           submission: editing.save,
           placeholder: "",
+          autocomplete: "organization",
           maxLength: 100,
         },
         h,

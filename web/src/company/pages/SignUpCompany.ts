@@ -328,6 +328,7 @@ const companyFormView = (editing: Editing, h: HtmlBuilder<Message>): Html =>
           onInput: (value) => Message.UpdatedName({ value }),
           submission: editing.creation,
           placeholder: "例: 株式会社サンプル / 山田太郎",
+          autocomplete: "organization",
           maxLength: 100,
           hint: {
             text: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",

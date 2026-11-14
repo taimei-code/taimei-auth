@@ -20,13 +20,23 @@ export const fileInputView = <Message>(
 ): Html => {
   const isSubmitting = Submission.guards.Submitting(config.submission);
   return h.div(
-    [],
+    [h.Class("relative")],
     [
+      h.input([
+        h.Id(config.id),
+        h.Name(config.id),
+        h.Type("file"),
+        h.Accept(config.accept),
+        h.Class("peer sr-only"),
+        h.Disabled(isSubmitting),
+        h.AriaDescribedBy(config.describedBy),
+        h.OnFileChange(config.onSelect),
+      ]),
       h.label(
         [
           h.For(config.id),
           h.Class(
-            "inline-flex cursor-pointer items-center gap-2 text-sm text-primary hover:underline [&_svg]:size-4",
+            "inline-flex cursor-pointer items-center gap-2 rounded-sm text-sm text-primary hover:underline peer-focus-visible:ring-2 peer-focus-visible:ring-ring [&_svg]:size-4",
           ),
         ],
         [
@@ -34,15 +44,6 @@ export const fileInputView = <Message>(
           isSubmitting ? config.submittingLabel : config.label,
         ],
       ),
-      h.input([
-        h.Id(config.id),
-        h.Type("file"),
-        h.Accept(config.accept),
-        h.Class("hidden"),
-        h.Disabled(isSubmitting),
-        h.AriaDescribedBy(config.describedBy),
-        h.OnFileChange(config.onSelect),
-      ]),
     ],
   );
 };

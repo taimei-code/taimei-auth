@@ -445,6 +445,7 @@ const inviteFormView = (model: Model, isCompanyChanging: boolean, h: HtmlBuilder
                   onInput: (value) => Message.UpdatedEmail({ value }),
                   submission: model.sending,
                   placeholder: "member@example.com",
+                  autocomplete: "off",
                 },
                 h,
               ),

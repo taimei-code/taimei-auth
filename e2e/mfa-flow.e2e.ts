@@ -195,13 +195,13 @@ test("チャレンジ画面のコード入力欄は種別に応じた入力支�
   const input = challengeCodeInput(page);
   await expect(input).toHaveAttribute("autocomplete", "one-time-code");
   await expect(input).toHaveAttribute("inputmode", "numeric");
-  await expect(input).toHaveAttribute("aria-label", "確認コード");
+  await expect(input).toHaveAccessibleName("確認コード");
   await expect(input).toHaveAttribute("aria-invalid", "false");
   await expect(input).toHaveAttribute("aria-describedby", "mfa-challenge-code-hint");
 
   await page.getByRole("button", { name: "リカバリーコードを使う" }).click();
   await expect(input).toHaveAttribute("inputmode", "text");
-  await expect(input).toHaveAttribute("aria-label", "リカバリーコード");
+  await expect(input).toHaveAccessibleName("リカバリーコード");
   await expect(input).toHaveAttribute("autocomplete", "one-time-code");
 });
 

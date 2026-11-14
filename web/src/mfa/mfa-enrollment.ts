@@ -506,7 +506,6 @@ const verifyView = (verifying: Verifying, h: HtmlBuilder<Message>): Html => {
           placeholder: TOTP_TEXTS.placeholder,
           autocomplete: "one-time-code",
           inputMode: TOTP_TEXTS.inputMode,
-          ariaLabel: TOTP_TEXTS.label,
           maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
           isAutoCorrectionOff: true,
           hint: { text: TOTP_TEXTS.hint, maybeErrorMessage },

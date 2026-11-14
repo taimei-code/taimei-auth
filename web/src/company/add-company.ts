@@ -188,6 +188,7 @@ const formView = (model: Model, h: HtmlBuilder<Message>): Html =>
           submission: model.submission,
           placeholder: "例: 株式会社サンプル / 山田太郎",
           maxLength: 100,
+          autocomplete: "organization",
           hint: {
             text: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
             maybeErrorMessage: Option.none(),

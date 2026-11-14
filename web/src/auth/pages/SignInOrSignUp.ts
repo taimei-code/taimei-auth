@@ -308,6 +308,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
                 submission: busySubmission(model),
                 placeholder: "山田 太郎",
               },
+                autocomplete: "name",
               h,
             ),
           ]
@@ -322,6 +323,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
           submission: busySubmission(model),
           placeholder: "you@example.com",
         },
+          autocomplete: "username",
         h,
       ),
       buttonView(
