@@ -25,9 +25,11 @@
 
 Bun 1.3 以降で対応している (このリポジトリは `bun-version: "1.3"`)。既に `bun.lock` にある version はそのまま install され続けるため、この設定は **`bun add` / `bun update` / Dependabot PR のマージ後の再 resolve** の時点で働く。
 
-`.github/dependabot.yml` の npm の `cooldown` も同じ 7 日にする (`default-days: 7`)。Dependabot は、公開から 7 日未満の版へ上げる PR を出さない。7 日未満の版を止めるのは、この `cooldown` と、lockfile に無い版を resolve する時の `minimumReleaseAge` の 2 つである。CI の `bun install --frozen-lockfile` は、lockfile が固定した版の公開からの日数を調べないので、止めない (「4 回目の除外の撤去」の実測)。`cooldown` を `minimumReleaseAge` より短くすると、Dependabot は lockfile を作り直せない版の PR を出す。`cooldown` は security update には働かない (Dependabot の仕様)。7 日未満の修正版が要る時は、上の `minimumReleaseAgeExcludes` の運用に従う。
+`.github/dependabot.yml` の npm の `cooldown` も同じ 7 日にする (`default-days: 7`)。Dependabot は、公開から 7 日未満の版へ上げる PR を出さない。7 日未満の版を止めるのは、この `cooldown` と、lockfile に無い版を resolve する時の `minimumReleaseAge` と、CI の検査の 3 つである。CI の `bun install --frozen-lockfile` は、lockfile が固定した版の公開からの日数を調べない (「4 回目の除外の撤去」の実測)。`cooldown` を `minimumReleaseAge` より短くすると、Dependabot は lockfile を作り直せない版の PR を出す。`cooldown` は security update には働かない (Dependabot の仕様)。7 日未満の修正版が要る時は、上の `minimumReleaseAgeExcludes` の運用に従う。
 
 機械検証: `src/__tests__/dependabot-cooldown.test.ts` (npm の `cooldown` の日数が `minimumReleaseAge` と同じであることを assert する)
+
+CI の検査: `.github/workflows/ci.yml` の check job の step "Release age of the versions this PR adds to bun.lock" が、`scripts/check-lockfile-release-age.ts` を走らせる。PR が `origin/main` との merge-base から `bun.lock` に足した entry の版を、registry の公開日時と比べ、`minimumReleaseAge` に満たない版があれば落ちる。閾値・例外 (`minimumReleaseAgeExcludes`)・registry は `bunfig.toml` の `[install]` だけから読むので、7 日を待てない時の抜け道は install と同じである。registry に届かない時や、公開日時を読めない時は、通さずに落ちる。検査は `bun install` の前に走り、依存の package を import しない。検査する対象の package が、検査の結果を書き換えられないようにするためである。全 entry でなく足した entry だけを調べるのは、7 日を超えた版は日がたっても 7 日未満に戻らないからである (全 entry を調べると、毎回 500 を超える package について、registry から版ごとの公開日時を含む metadata を取ることになる)。lockfile と同じ版を依存に書いた、lockfile の無い project で `bun install --lockfile-only` を流す方法は、lockfile と違う版まで resolve し、同じ名前の別の版を依存に書くのに alias が要るので採らなかった。
 
 ### A. GitHub Actions を commit SHA pin に変更
 
@@ -79,6 +81,9 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 - Dependabot の SHA update PR が weekly で発生するため、トリアージのコストがかかる
 - `--ignore-scripts` を明示しているため、将来 native binding 系の依存 (例: `better-sqlite3`、`sharp`) を追加する時は `trustedDependencies` に列挙するかの判断が必要になる
 - `bun audit` の false positive で CI が壊れる場合は、`--audit-level=critical` への緩和か `continue-on-error: true` での warn 化を判断する必要がある
+- registry に届かない間も、`bun.lock` を変えない PR は §H の CI の検査で落ちない (registry に問い合わせない)
+- §H の CI の検査は、main への push では merge-base が `HEAD` になり、何も調べない。PR を経ずに main へ入れた版は止めない
+- 7 日未満の security patch (Dependabot の security update を含む) と、既定の registry 以外 (git・tarball・別の registry) から入れる package を足す PR は、`minimumReleaseAgeExcludes` に足すまで §H の CI の検査で落ちる
 - **この PR で audit step の導入と同時に既知の high 3 件を修正した**: `drizzle-orm 0.44.4 → 0.45.2` (identifier escape 経由の SQL injection。直接依存を minor bump)、`defu → 6.1.7` (prototype pollution)、`kysely → 0.28.17` (JSON-path traversal injection)。後者 2 件は better-auth / drizzle の間接依存のため、`package.json` の `overrides` で強制的に固定した。すべて publish 日 (それぞれ 2026-03-27 / 2026-04-07 / 2026-05-03) が `minimumReleaseAge = 7d` を満たすため、bypass は不要だった
 
 ### `minimumReleaseAgeExcludes` 初回 bypass (2026-06-14, esbuild)
@@ -191,7 +196,7 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 今回の Mini Shai-Hulud worm の IoC は陰性を確認済みである。IoC は worm の version ごとに変わるため、固定した script は古くなりやすい。代わりに同等の手順をこの ADR の末尾に inline で記述する (下記)。
 
 ### F. `bun.lock` 差分の CODEOWNERS 必須レビュー化
-H (`minimumReleaseAge`) で lockfile 経由の侵害の主な窓を塞ぐため、bun.lock 専用の reviewer を上乗せしても効果が薄い。
+lockfile を作る側では H (`minimumReleaseAge`) が、PR の側では §H の CI の検査が、7 日未満の版を止める。lockfile 経由の侵害の主な窓はこの 2 つで塞いだので、bun.lock 専用の reviewer を上乗せしても効果が薄い。
 
 ### G. base image `oven/bun:1.3` の digest pin
 Actions は §A で SHA pin する一方、Dockerfile の base image は minor tag 止まり (patch は動く) という非対称がある。これを承知のうえで当面は pin しない。patch のずれによってリポジトリに変更が無いまま docker job が赤くなった場合は原因を都度切り分ける運用とし、頻発するようなら digest pin へ切り替える。
