@@ -30,7 +30,7 @@
         "@effect/platform-browser": "4.1.2",
         "@effect/platform-bun": "4.1.2",
         "@effect/platform-node": "4.1.2",
-        "@effect/tsgo": "0.56.0",
+        "@effect/tsgo": "0.67.4",
         "@foldkit/oxlint-plugin": "0.15.4",
         "@foldkit/ui": "0.170.0",
         "@foldkit/vite-plugin": "0.29.0",
@@ -71,7 +71,6 @@
       },
     },
   },
-  "trustedDependencies": [],
   "overrides": {
     "defu": "^6.1.7",
     "esbuild": "0.28.1",
@@ -200,21 +199,21 @@
 
     "@effect/sql-d1": ["@effect/sql-d1@4.1.0", "", { "dependencies": { "@cloudflare/workers-types": "^5.20261016.1" }, "peerDependencies": { "effect": "^4.1.0" } }, "sha512-Sg3UxQGc5yPc9LZ4WmiwHzVv+Wpqntue+4QRYx/XdLLyrZH4w+BkshPzifC7p7uQg9OaiaeQJPlsKZs6Bm9plw=="],
 
-    "@effect/tsgo": ["@effect/tsgo@0.56.0", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.56.0", "@effect/tsgo-darwin-x64": "0.56.0", "@effect/tsgo-linux-arm": "0.56.0", "@effect/tsgo-linux-arm64": "0.56.0", "@effect/tsgo-linux-x64": "0.56.0", "@effect/tsgo-win32-arm64": "0.56.0", "@effect/tsgo-win32-x64": "0.56.0" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-/S5G8RJjtaVjE/RhwFNTvWQwFAQyDGc+3Ig4Oynvlo3gJu8le4MUgM/DBjoiwkwBsQ+BhufGDCBpwojplerGlw=="],
+    "@effect/tsgo": ["@effect/tsgo@0.67.4", "", { "optionalDependencies": { "@effect/tsgo-darwin-arm64": "0.67.4", "@effect/tsgo-darwin-x64": "0.67.4", "@effect/tsgo-linux-arm": "0.67.4", "@effect/tsgo-linux-arm64": "0.67.4", "@effect/tsgo-linux-x64": "0.67.4", "@effect/tsgo-win32-arm64": "0.67.4", "@effect/tsgo-win32-x64": "0.67.4" }, "bin": { "effect-tsgo": "dist/effect-tsgo.cjs" } }, "sha512-p3TjL/46B8eLq2h5KpX0JgL8iREyb5CU9D+bMk+Y+YKAxlQDn2ebqDqMrB3Q6aHSm91QTQIdbrd5q+mf5p2vwQ=="],
 
-    "@effect/tsgo-darwin-arm64": ["@effect/tsgo-darwin-arm64@0.56.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-08yYRU3OOw/jKzy582EF741xKvLJ2HK6GO+L2zuSR97b61ES7fER2fxg1xp4mv8u2Fc3bBRvk7026GzdKEGFgw=="],
+    "@effect/tsgo-darwin-arm64": ["@effect/tsgo-darwin-arm64@0.67.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-DI1/t3HQ2utqAWVH9KviuZc85t3yBiuNK4oKE2kMDBfjSlYLz67pcACUjKODH0nhD0I268PPyFphsKrNvyd0zg=="],
 
-    "@effect/tsgo-darwin-x64": ["@effect/tsgo-darwin-x64@0.56.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-UQvYvVaam+EVMYm9gfHBx1WpKwLlW+ptjb2UD7qGhZdg+GzxMbl26AhuuqV2t/dN9shZ6EcFE2+++ThISMp/9g=="],
+    "@effect/tsgo-darwin-x64": ["@effect/tsgo-darwin-x64@0.67.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-WT/PnPdqOX/BqKGmmDrw9yOt7fBtsisS73URJmudaoeYdgVgpV4KoRjy0P6V2QiKoBQLS3UM3v7kuzc+yHvhvA=="],
 
-    "@effect/tsgo-linux-arm": ["@effect/tsgo-linux-arm@0.56.0", "", { "os": "linux", "cpu": "arm" }, "sha512-3WuPwP8vQPqKVpfGmKlnguuAZb7NGUyAhIHQjZnaINU6Aim7WczOy2WOmKjDPSKRlonU2WyYT+Q5T3B7f0VTLw=="],
+    "@effect/tsgo-linux-arm": ["@effect/tsgo-linux-arm@0.67.4", "", { "os": "linux", "cpu": "arm" }, "sha512-YK19SF0aMCv4qjJ8s//xzqIxeo5/0OHUEKF27ykaw3rglj6dYgVZO0YdUnxgiNK3gQSuaR9trm10bSU2czKV0w=="],
 
-    "@effect/tsgo-linux-arm64": ["@effect/tsgo-linux-arm64@0.56.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-zzzo/w7lLqiCMuJOI+jbjIuhHob3ccmth1bD9m1E98ukMuHhIqQMOXKU9EreoQkCGeoVrxGqHbXkl6E/+68/Sg=="],
+    "@effect/tsgo-linux-arm64": ["@effect/tsgo-linux-arm64@0.67.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-OUvjVbjzu29fTfaf1bn3d3+HAw++Fg6eDpqz5LUGMwfzcguar4TK+g0cEXCSGz0R39BvWpu3+RLuDrjdXIOZxg=="],
 
-    "@effect/tsgo-linux-x64": ["@effect/tsgo-linux-x64@0.56.0", "", { "os": "linux", "cpu": "x64" }, "sha512-R0d3dGf8qKPtvjff+J9HL0UjIBIES6xZiU16rMMezI4K52b+DGQkaWi1OX3tSgGivjlV+NSN7UhPJ2pYKufglw=="],
+    "@effect/tsgo-linux-x64": ["@effect/tsgo-linux-x64@0.67.4", "", { "os": "linux", "cpu": "x64" }, "sha512-672VKtYcr1Nzsd4G3gh4FIK45RatXkuOS2K/H26cGxSXuibVk0h8PgRcJWpZ3YUyO+8mm1FB/W/4IoPeiXHwog=="],
 
-    "@effect/tsgo-win32-arm64": ["@effect/tsgo-win32-arm64@0.56.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-uVaLdXULUZx9U30YxlVu5PBiu+1a+9/UT2Ex7jQpIasnJy1CHWlhMbfCD/+7Ez1vqG5fLOvUESoQu5XSjs3Lnw=="],
+    "@effect/tsgo-win32-arm64": ["@effect/tsgo-win32-arm64@0.67.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-HIDIJjAWZBNFxvf2Sk6fcZReW2/y/IRxEFP3NH93lzWKYqbFFNStze87/Ez1glh8K4hizbiqhhkohBLZVccKWQ=="],
 
-    "@effect/tsgo-win32-x64": ["@effect/tsgo-win32-x64@0.56.0", "", { "os": "win32", "cpu": "x64" }, "sha512-Cf6SDixFTkp7Aoeg2eRwJps/2BG9lvx2m+iVRjUzxdqkTbCCNKmmOAIyDslNZm2sMwaDUw/iN/BPGqxx7xMxww=="],
+    "@effect/tsgo-win32-x64": ["@effect/tsgo-win32-x64@0.67.4", "", { "os": "win32", "cpu": "x64" }, "sha512-kRuQnXwZNDvOMpFSfd0+lMNVk7+61jRXkhcJ4b1sfdaJXmkRQeinLZlJAIl/CQPm/g3mdPId5f0PrbZZfzGIyg=="],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
@@ -462,21 +461,21 @@
 
     "@oxlint/binding-linux-arm-musleabihf": ["@oxlint/binding-linux-arm-musleabihf@1.90.0", "", { "os": "linux", "cpu": "arm" }, "sha512-MvYmpHyJqUJjEvkZbJHdwfdL45cGn8EVBkYmoXFiaYFW9suoD3dbJl5mBdpy0DVgdjlyddmldbRtk3cCgETadQ=="],
 
-    "@oxlint/binding-linux-arm64-gnu": ["@oxlint/binding-linux-arm64-gnu@1.90.0", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-L13Sy+Kg0nZhwTsToniqjUFPA2TuM6962qCZ5Wp5KeB517Tw7ApdLTTtlb+bF86fcZZa2EtvCVvAJxk4Dya/MQ=="],
+    "@oxlint/binding-linux-arm64-gnu": ["@oxlint/binding-linux-arm64-gnu@1.90.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-L13Sy+Kg0nZhwTsToniqjUFPA2TuM6962qCZ5Wp5KeB517Tw7ApdLTTtlb+bF86fcZZa2EtvCVvAJxk4Dya/MQ=="],
 
-    "@oxlint/binding-linux-arm64-musl": ["@oxlint/binding-linux-arm64-musl@1.90.0", "", { "os": "linux", "cpu": "arm64", "libc": "musl" }, "sha512-wFDdZWGpzIPFdJFjSLWnKB0TGzFriTKUIrl04iMqMyM9BBIJTuerfCHYa0WpDSjr5x3lcW/CHLyacSt886WpGg=="],
+    "@oxlint/binding-linux-arm64-musl": ["@oxlint/binding-linux-arm64-musl@1.90.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-wFDdZWGpzIPFdJFjSLWnKB0TGzFriTKUIrl04iMqMyM9BBIJTuerfCHYa0WpDSjr5x3lcW/CHLyacSt886WpGg=="],
 
-    "@oxlint/binding-linux-ppc64-gnu": ["@oxlint/binding-linux-ppc64-gnu@1.90.0", "", { "os": "linux", "cpu": "ppc64", "libc": "glibc" }, "sha512-FRywfn+MoKn8xpBSzgNwNVliSKRI2QXkxi/iF7o6FEQs8Bh8z2RpVTaFAcO3pchXjvB2eGNFIoLLQABIQ+u7VA=="],
+    "@oxlint/binding-linux-ppc64-gnu": ["@oxlint/binding-linux-ppc64-gnu@1.90.0", "", { "os": "linux", "cpu": "ppc64" }, "sha512-FRywfn+MoKn8xpBSzgNwNVliSKRI2QXkxi/iF7o6FEQs8Bh8z2RpVTaFAcO3pchXjvB2eGNFIoLLQABIQ+u7VA=="],
 
-    "@oxlint/binding-linux-riscv64-gnu": ["@oxlint/binding-linux-riscv64-gnu@1.90.0", "", { "os": "linux", "cpu": "none", "libc": "glibc" }, "sha512-IS2PaUgpc/qeLADTyhUNmdx3x4ijs9pjJdPKBYHaT+mAE7k3FsjnHPTjhpsak1b++h6CIPhv6WX9Z+y7Pw0voQ=="],
+    "@oxlint/binding-linux-riscv64-gnu": ["@oxlint/binding-linux-riscv64-gnu@1.90.0", "", { "os": "linux", "cpu": "none" }, "sha512-IS2PaUgpc/qeLADTyhUNmdx3x4ijs9pjJdPKBYHaT+mAE7k3FsjnHPTjhpsak1b++h6CIPhv6WX9Z+y7Pw0voQ=="],
 
-    "@oxlint/binding-linux-riscv64-musl": ["@oxlint/binding-linux-riscv64-musl@1.90.0", "", { "os": "linux", "cpu": "none", "libc": "musl" }, "sha512-s7JFKRkGS8O7i2ZVODfuO++NC7sH6HDqpMn8lYxw91w0SXJOxnAVjQ8utvmDwLMMT0jaSkuOKuUYJDGDtu4sHQ=="],
+    "@oxlint/binding-linux-riscv64-musl": ["@oxlint/binding-linux-riscv64-musl@1.90.0", "", { "os": "linux", "cpu": "none" }, "sha512-s7JFKRkGS8O7i2ZVODfuO++NC7sH6HDqpMn8lYxw91w0SXJOxnAVjQ8utvmDwLMMT0jaSkuOKuUYJDGDtu4sHQ=="],
 
-    "@oxlint/binding-linux-s390x-gnu": ["@oxlint/binding-linux-s390x-gnu@1.90.0", "", { "os": "linux", "cpu": "s390x", "libc": "glibc" }, "sha512-b0GxrOQr5VONCkd7KLSqmP6b6nqZuTpuS8QPQHzltmqdXP5bY0Jl0CZ0QmlCTrS3ExaLYbioFYOARzNbYvcApQ=="],
+    "@oxlint/binding-linux-s390x-gnu": ["@oxlint/binding-linux-s390x-gnu@1.90.0", "", { "os": "linux", "cpu": "s390x" }, "sha512-b0GxrOQr5VONCkd7KLSqmP6b6nqZuTpuS8QPQHzltmqdXP5bY0Jl0CZ0QmlCTrS3ExaLYbioFYOARzNbYvcApQ=="],
 
-    "@oxlint/binding-linux-x64-gnu": ["@oxlint/binding-linux-x64-gnu@1.90.0", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-iaJeShJtgUp8rZbt9YUdTAGOpmX5KogCLba17Jp1tWdJ3F4M3D2g2TKUyI1FMTHxKH9NNHuQcuC2kZRg6IV7yQ=="],
+    "@oxlint/binding-linux-x64-gnu": ["@oxlint/binding-linux-x64-gnu@1.90.0", "", { "os": "linux", "cpu": "x64" }, "sha512-iaJeShJtgUp8rZbt9YUdTAGOpmX5KogCLba17Jp1tWdJ3F4M3D2g2TKUyI1FMTHxKH9NNHuQcuC2kZRg6IV7yQ=="],
 
-    "@oxlint/binding-linux-x64-musl": ["@oxlint/binding-linux-x64-musl@1.90.0", "", { "os": "linux", "cpu": "x64", "libc": "musl" }, "sha512-/aZoXnL5WBLCXuzfHqvEFXcm4iwYmr/cYByHDTXzLFzJdE5DC7bm6phpWqHv6BeqpVgY9IpBAxGDv2WEkl5JCg=="],
+    "@oxlint/binding-linux-x64-musl": ["@oxlint/binding-linux-x64-musl@1.90.0", "", { "os": "linux", "cpu": "x64" }, "sha512-/aZoXnL5WBLCXuzfHqvEFXcm4iwYmr/cYByHDTXzLFzJdE5DC7bm6phpWqHv6BeqpVgY9IpBAxGDv2WEkl5JCg=="],
 
     "@oxlint/binding-openharmony-arm64": ["@oxlint/binding-openharmony-arm64@1.90.0", "", { "os": "none", "cpu": "arm64" }, "sha512-SMhk7ozwoxYDKfYqGZCQEfULOKDneF9uhaoIf2neoDLWvNtjY9yVeL7YHmE5L9WdKvMpWNwwZxhenxBu6AgfOg=="],
 
@@ -1076,7 +1075,7 @@
 
     "@alchemy.run/cloudflare-runtime/magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
-    "@alchemy.run/cloudflare-runtime/workerd": ["workerd@1.20261026.1", "", { "optionalDependencies": { "@cloudflare/workerd-darwin-64": "1.20261026.1", "@cloudflare/workerd-darwin-arm64": "1.20261026.1", "@cloudflare/workerd-linux-64": "1.20261026.1", "@cloudflare/workerd-linux-arm64": "1.20261026.1", "@cloudflare/workerd-windows-64": "1.20261026.1" }, "hasInstallScript": true, "bin": { "workerd": "bin/workerd" } }, "sha512-zMkGDn4DHj7AEDrD0FT3VuaVf9QKWbE3Xg6j8oGt1vE+UtDY5gubW5jcyEYXULy5ojCYwVbmEyDkiukWY7gtVg=="],
+    "@alchemy.run/cloudflare-runtime/workerd": ["workerd@1.20261026.1", "", { "optionalDependencies": { "@cloudflare/workerd-darwin-64": "1.20261026.1", "@cloudflare/workerd-darwin-arm64": "1.20261026.1", "@cloudflare/workerd-linux-64": "1.20261026.1", "@cloudflare/workerd-linux-arm64": "1.20261026.1", "@cloudflare/workerd-windows-64": "1.20261026.1" }, "bin": { "workerd": "bin/workerd" } }, "sha512-zMkGDn4DHj7AEDrD0FT3VuaVf9QKWbE3Xg6j8oGt1vE+UtDY5gubW5jcyEYXULy5ojCYwVbmEyDkiukWY7gtVg=="],
 
     "@alchemy.run/node-utils/chokidar": ["chokidar@5.0.0", "", { "dependencies": { "readdirp": "^5.0.0" } }, "sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw=="],
 
