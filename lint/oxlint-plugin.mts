@@ -982,6 +982,17 @@ const ROWS: readonly Row[] = [
       "e2e が値で import する db/ は db/testing/* だけ (seed・観測・cleanup の実体は db/ が持つ。spec の process に pg の Pool を開くと閉じる手段が無く、runner が止まらない)",
   },
   {
+    name: "scripts-import-only-node-builtins",
+    within: ["scripts/**"],
+    matchers: [
+      { kind: "importTarget", target: /^(?!node:)/, includesTypeImports: true },
+      { kind: "identifier", names: ["createRequire"] },
+      { kind: "member", paths: ["import.meta.require"] },
+    ],
+    message:
+      "scripts/ の検査は依存を install する前に走り、検査の対象の package に結果を書き換えさせないため、node: の組み込みの module だけを import する (ADR-0009 §H)",
+  },
+  {
     name: "no-failing-layer-constructor-in-src",
     within: ["src/**"],
     allowedMatches: {
