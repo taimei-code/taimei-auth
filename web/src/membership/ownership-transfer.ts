@@ -7,6 +7,7 @@ import { modifyFields } from "foldkit/struct";
 
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
+import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
@@ -275,7 +276,7 @@ const candidateRowView = (model: Model, candidate: Candidate, h: HtmlBuilder<Mes
 const candidatesView = (model: Model, candidates: Candidates, h: HtmlBuilder<Message>): Html =>
   Candidates.match(candidates, {
     Loading: () => loadingStatusView("読み込み中…", h),
-    Failed: () => h.p([h.Class("text-sm text-destructive")], ["メンバーの取得に失敗しました。"]),
+    Failed: () => alertTextView("メンバーの取得に失敗しました。", h),
     Loaded: ({ candidates: loaded }) =>
       Array.match(loaded, {
         onEmpty: () =>
@@ -305,7 +306,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
       body: [
         candidatesView(model, model.candidates, h),
         ...(Transferring.guards.Failed(model.transferring)
-          ? [h.p([h.Class("text-sm text-destructive")], [TRANSFER_FAILED])]
+          ? [alertTextView(TRANSFER_FAILED, h)]
           : []),
       ],
       isClosingBlocked: isTransferring(model),

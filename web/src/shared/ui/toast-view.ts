@@ -54,23 +54,19 @@ export const noticeToastView = <Message>(
         h.div(
           [
             h.Class(
-              `flex w-80 items-start gap-3 rounded-md border bg-background p-4 text-sm shadow-lg ${entryClassOf(entry.variant)}`,
+              `flex w-80 max-w-[calc(100vw-2rem)] items-start gap-3 rounded-md border bg-background p-4 text-sm shadow-lg ${entryClassOf(entry.variant)}`,
             ),
           ],
           [
             h.p([h.Class("flex-1")], [entry.payload.text]),
-            ...(entry.variant === "Error"
-              ? [
-                  h.button(
-                    [
-                      ...handlers.dismiss,
-                      h.Type("button"),
-                      h.Class("shrink-0 rounded-sm opacity-70 hover:opacity-100"),
-                    ],
-                    [iconView(X, h), h.span([h.Class("sr-only")], ["閉じる"])],
-                  ),
-                ]
-              : []),
+            h.button(
+              [
+                ...handlers.dismiss,
+                h.Type("button"),
+                h.Class("shrink-0 rounded-sm opacity-70 hover:opacity-100 active:opacity-50"),
+              ],
+              [iconView(X, h), h.span([h.Class("sr-only")], ["閉じる"])],
+            ),
           ],
         ),
     },

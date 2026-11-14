@@ -10,6 +10,7 @@ import type { OrgCode } from "@core/company/org-code";
 
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
+import { maybeAlertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
@@ -187,8 +188,8 @@ const formView = (model: Model, h: HtmlBuilder<Message>): Html =>
           onInput: (value) => Message.UpdatedName({ value }),
           submission: model.submission,
           placeholder: "例: 株式会社サンプル / 山田太郎",
-          maxLength: 100,
           autocomplete: "organization",
+          maxLength: 100,
           hint: {
             text: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
             maybeErrorMessage: Option.none(),
@@ -208,10 +209,7 @@ const formView = (model: Model, h: HtmlBuilder<Message>): Html =>
         },
         h,
       ),
-      ...Option.match(maybeRejectedMessage(model.submission), {
-        onNone: () => [],
-        onSome: (failureMessage) => [h.p([h.Class("text-sm text-destructive")], [failureMessage])],
-      }),
+      ...maybeAlertTextView(maybeRejectedMessage(model.submission), h),
       dialogFooterView(
         [
           buttonView(
