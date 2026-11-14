@@ -60,11 +60,27 @@
     },
     {
       "file": "web/src/*/pages/*.ts",
-      "exports": ["Model", "Message", "OutMessage", "init", "update", "view"]
+      "exports": [
+        "Model",
+        "Message",
+        "OutMessage",
+        "init",
+        "update",
+        "view",
+        "visitOfCompanyChange"
+      ]
     },
     {
       "file": "web/src/*/*.ts",
-      "exports": ["Model", "Message", "OutMessage", "init", "update", "view"]
+      "exports": [
+        "Model",
+        "Message",
+        "OutMessage",
+        "init",
+        "update",
+        "view",
+        "visitOfCompanyChange"
+      ]
     }
   ]
 }

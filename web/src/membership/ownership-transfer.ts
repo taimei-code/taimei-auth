@@ -72,6 +72,11 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
+const isTransferredOwnership = Schema.is(Message.SucceededTransferOwnership);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isTransferredOwnership(message) ? Option.some(message.visit) : Option.none();
+
 const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
 const failedLoadCandidates = (request: Request, failure: typeof RequestFailure.Type) => () =>

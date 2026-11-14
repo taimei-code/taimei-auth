@@ -46,6 +46,21 @@ export type Message = typeof Message.Type;
 
 export const isLastCompanyLeft = Schema.is(Message.SucceededLeaveLastCompany);
 
+const isLeftCompany = Schema.is(Message.SucceededLeaveCompany);
+
+const isAddCompanyMessage = Schema.is(Message.GotAddCompanyMessage);
+
+const isOwnershipTransferMessage = Schema.is(Message.GotOwnershipTransferMessage);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isLeftCompany(message)
+    ? Option.some(message.visit)
+    : isAddCompanyMessage(message)
+      ? AddCompany.visitOfCompanyChange(message.message)
+      : isOwnershipTransferMessage(message)
+        ? OwnershipTransfer.visitOfCompanyChange(message.message)
+        : Option.none();
+
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},

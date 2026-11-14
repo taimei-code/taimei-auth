@@ -55,6 +55,11 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
+const isAddedCompany = Schema.is(Message.SucceededAddCompany);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isAddedCompany(message) ? Option.some(message.visit) : Option.none();
+
 const ADD_FAILED = "事業所の作成に失敗しました。";
 
 const DEFAULT_ORG_CODE: OrgCode = "CORPORATE";
