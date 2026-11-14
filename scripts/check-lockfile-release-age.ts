@@ -32,7 +32,12 @@ const readInstall = async (root: string) => {
     minimumReleaseAgeExcludes = [],
     registry = DEFAULT_REGISTRY,
   } = install;
-  ensure(typeof minimumReleaseAge === "number", "bunfig.toml の minimumReleaseAge が数でない");
+  ensure(
+    typeof minimumReleaseAge === "number" &&
+      Number.isFinite(minimumReleaseAge) &&
+      minimumReleaseAge > 0,
+    "bunfig.toml の minimumReleaseAge が正の有限の数でない",
+  );
   ensure(Array.isArray(minimumReleaseAgeExcludes), "minimumReleaseAgeExcludes が配列でない");
   ensure(typeof registry === "string", "bunfig.toml の registry が文字列でない");
   return {

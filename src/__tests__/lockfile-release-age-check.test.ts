@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { REPO_ROOT } from "./config-invariant-helpers";
@@ -12,6 +12,34 @@ afterAll(() => {
   for (const repo of repos.splice(0)) {
     rmSync(repo, { recursive: true, force: true });
   }
+});
+
+const checkFromSubdirectoryWith = (minimumReleaseAge: string) => {
+  const root = mkdtempSync(join(tmpdir(), "lockfile-release-age-"));
+  repos.push(root);
+  writeFileSync(join(root, "bunfig.toml"), `[install]\nminimumReleaseAge = ${minimumReleaseAge}\n`);
+  mkdirSync(join(root, "web"));
+  expect(spawnSync("git", ["init", "--quiet"], { cwd: root }).status).toBe(0);
+  const ran = spawnSync("bun", [join(REPO_ROOT, CHECK_SCRIPT), "origin/main"], {
+    cwd: join(root, "web"),
+    encoding: "utf8",
+  });
+  return { exitCode: ran.status, output: ran.stdout };
+};
+
+describe("bun.lock の公開日時の検査は、bunfig.toml の minimumReleaseAge を正の有限の数でしか受けない", () => {
+  test.each([
+    "0",
+    "-1",
+    "nan",
+    "inf",
+    "-inf",
+  ])("minimumReleaseAge が %s なら、bun が bunfig.toml を読まない下の directory から走らせても、理由を出して落ちる", (minimumReleaseAge) => {
+    expect(checkFromSubdirectoryWith(minimumReleaseAge)).toEqual({
+      exitCode: 1,
+      output: expect.stringContaining("minimumReleaseAge が正の有限の数でない"),
+    });
+  });
 });
 
 const UNREACHABLE_REGISTRY = "http://127.0.0.1:9/";
