@@ -15,6 +15,7 @@ import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
 import { accountSignInUrlFrom } from "../../shared/leave-spa";
 import type { SpaHttpClient } from "../../shared/spa-http-client";
 import * as DocumentNavigation from "../document-navigation";
+import { documentTitleOf, ERROR_PAGE_NAME } from "../document-title";
 import {
   AuthRoute,
   enteredAuthRoute,
@@ -370,7 +371,18 @@ const pageView = (model: Model, h: HtmlBuilder<Message>) =>
       ),
   });
 
+const PAGE_NAME_BY_ROUTE: Record<AuthRoute["_tag"], string> = {
+  SignIn: "ログイン",
+  SignUp: "新規登録",
+  SignUpCompany: "事業所の登録",
+  AcceptInvitation: "招待の受諾",
+  RejectedSignInParams: ERROR_PAGE_NAME,
+  MfaChallenge: "多要素認証 (MFA)",
+  Error: ERROR_PAGE_NAME,
+  NotFound: ERROR_PAGE_NAME,
+};
+
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: "taimei-auth",
+  title: documentTitleOf(PAGE_NAME_BY_ROUTE[model.route._tag]),
   body: pageView(model, h),
 });

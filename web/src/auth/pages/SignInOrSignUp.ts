@@ -11,6 +11,7 @@ import { SERVICE_NAMES, TAIMEI_SERVICES } from "@core/services";
 
 import { maybeRejectedMessage, Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
+import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
 import { inputView } from "../../shared/ui/input-view";
 import { authPageCardView } from "../auth-page-card-view";
@@ -307,6 +308,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
                 onInput: (value) => Message.UpdatedName({ value }),
                 submission: busySubmission(model),
                 placeholder: "山田 太郎",
+                autocomplete: "name",
               },
               h,
             ),
@@ -321,6 +323,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
           onInput: (value) => Message.UpdatedEmail({ value }),
           submission: busySubmission(model),
           placeholder: "you@example.com",
+          autocomplete: "username",
         },
         h,
       ),
@@ -404,10 +407,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
           Editing: () => editingView(model, h),
           SentMagicLink: () => [sentView(model, h)],
         }),
-        ...Option.match(maybeRejectedMessageOf(model), {
-          onNone: () => [],
-          onSome: (failure) => [h.p([h.Class("text-sm text-destructive")], [failure])],
-        }),
+        ...maybeAlertTextView(maybeRejectedMessageOf(model), h),
       ],
     },
     h,

@@ -601,7 +601,7 @@ const membersListView = (
     [
       ...failureAlerts,
       h.ul(
-        [h.Class("space-y-2")],
+        [h.Role("list"), h.Class("space-y-2")],
         members.map((member) => memberRowView(listing, isCompanyChanging, member, h)),
       ),
     ],

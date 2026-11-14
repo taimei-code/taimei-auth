@@ -152,10 +152,10 @@ describe("エラー画面は Foldkit で今と同じ文言を出す", () => {
     expectAlertTexts(href, [DEFAULT_MESSAGE.title, DEFAULT_MESSAGE.description]);
   });
 
-  test("AC-005: エラー画面の document の title は taimei-auth で、canonical と og:url を持たない", async () => {
+  test("AC-005: エラー画面の document の title は「エラー | taimei-auth」で、canonical と og:url を持たない", async () => {
     const { documentAt } = await loadApplication();
     const document = documentAt("https://auth.example.com/auth/error?reason=signin_failed");
-    expect(document.title).toBe("taimei-auth");
+    expect(document.title).toBe("エラー | taimei-auth");
     expect(document.canonical).toBeUndefined();
     expect(document.ogUrl).toBeUndefined();
     expect(read("web/index.html")).toContain("<title>taimei-auth</title>");

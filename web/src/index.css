@@ -2,21 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -65,10 +50,11 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+
+  :where(button:not(:disabled), a[href]):active {
+    opacity: 0.8;
   }
 }

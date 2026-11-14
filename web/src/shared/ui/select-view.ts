@@ -42,6 +42,7 @@ const nativeSelectView = <Message>(
   Select.view(
     {
       id: config.id,
+      name: config.id,
       value: config.value,
       isDisabled: config.isDisabled,
       onChange: config.onChange,

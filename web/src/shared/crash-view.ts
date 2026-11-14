@@ -6,8 +6,13 @@ export const crashView = <Model, Message>(
   h: HtmlBuilder<never>,
 ): Document => ({
   title: "taimei-auth",
-  body: h.div(
-    [h.Style({ padding: ".5rem", maxWidth: "100%" })],
-    [h.strong([h.Style({ fontSize: "1rem" })], ["Something went wrong!"])],
+  body: h.main(
+    [h.Class("p-2")],
+    [
+      h.h1(
+        [h.Class("text-base font-semibold")],
+        ["問題が発生しました。ページを再読み込みしてください。"],
+      ),
+    ],
   ),
 });

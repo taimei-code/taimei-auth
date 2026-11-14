@@ -9,7 +9,7 @@ import { checkSession } from "../../auth/sign-in-client";
 import type { FailureMessages } from "../../shared/failure-message";
 import { ACCOUNT_HOME_PATH } from "../../shared/landing-paths";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
-import { cardClassNames } from "../../shared/ui/class-names";
+import { cardClassNames, textLinkClassName } from "../../shared/ui/class-names";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";
 
 const AcceptFailure = Schema.Literals([
@@ -128,7 +128,7 @@ export const update = (model: Model, message: Message) =>
   });
 
 const failedView = (message: string, h: HtmlBuilder<Message>): Html =>
-  h.div(
+  h.main(
     [
       h.Class(
         "relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10",
@@ -141,7 +141,7 @@ const failedView = (message: string, h: HtmlBuilder<Message>): Html =>
           h.div(
             [h.Class(cardClassNames.header)],
             [
-              h.div([h.Class(cardClassNames.title)], ["招待を受諾できませんでした"]),
+              h.h1([h.Class(cardClassNames.title)], ["招待を受諾できませんでした"]),
               h.div([h.Class(cardClassNames.description)], [message]),
             ],
           ),
@@ -149,10 +149,7 @@ const failedView = (message: string, h: HtmlBuilder<Message>): Html =>
             [h.Class(cardClassNames.content)],
             [
               h.a(
-                [
-                  h.Href(ACCOUNT_HOME_PATH),
-                  h.Class("text-sm font-medium text-foreground underline underline-offset-4"),
-                ],
+                [h.Href(ACCOUNT_HOME_PATH), h.Class(`${textLinkClassName} text-sm`)],
                 ["アカウントに戻る"],
               ),
             ],

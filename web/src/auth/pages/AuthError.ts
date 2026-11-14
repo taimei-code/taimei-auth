@@ -11,7 +11,7 @@ export const view = <Message>(
   h: HtmlBuilder<Message>,
 ): Html => {
   const message = errorPageMessage(maybeReason);
-  return h.div(
+  return h.main(
     [
       h.Class(
         "flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10",
@@ -25,7 +25,7 @@ export const view = <Message>(
             [h.Role("alert"), h.Class(alertVariants({ variant: "destructive" }))],
             [
               iconView(CircleAlert, h),
-              h.h5([h.Class(alertClassNames.title)], [message.title]),
+              h.h1([h.Class(alertClassNames.title)], [message.title]),
               h.div([h.Class(alertClassNames.description)], [message.description]),
             ],
           ),

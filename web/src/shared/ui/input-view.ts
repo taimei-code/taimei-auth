@@ -15,9 +15,8 @@ export type InputViewConfig<Message> = Readonly<{
   onInput?: (value: string) => Message;
   submission: Submission;
   placeholder: string;
-  autocomplete?: string;
+  autocomplete: "name" | "email" | "username" | "organization" | "one-time-code" | "off";
   inputMode?: "numeric" | "text";
-  ariaLabel?: string;
   maxLength?: number;
   isAutoCorrectionOff?: boolean;
   hint?: InputHint;
@@ -46,12 +45,10 @@ const hintAttributes = <Message>(
       ];
 
 const autoCorrectionAttributes = <Message>(
-  isAutoCorrectionOff: boolean | undefined,
+  isAutoCorrectionOff: boolean,
   h: HtmlBuilder<Message>,
 ): ReadonlyArray<Attribute<Message>> =>
-  isAutoCorrectionOff === true
-    ? [h.Autocapitalize("off"), h.Autocorrect("off"), h.Spellcheck(false)]
-    : [];
+  isAutoCorrectionOff ? [h.Autocapitalize("off"), h.Autocorrect("off"), h.Spellcheck(false)] : [];
 
 export const inputView = <Message>(
   config: InputViewConfig<Message>,
@@ -60,6 +57,7 @@ export const inputView = <Message>(
   Input.view(
     {
       id: config.id,
+      name: config.id,
       type: config.type,
       value: config.value,
       placeholder: config.placeholder,
@@ -70,17 +68,6 @@ export const inputView = <Message>(
           [h.Class("space-y-2")],
           [
             h.label([...attributes.label, h.Class(labelClassName)], [config.label]),
-            h.input([
-              ...attributes.input,
-              h.Required(true),
-              h.Class(inputClassName),
-              ...(config.autocomplete === undefined ? [] : [h.Autocomplete(config.autocomplete)]),
-              ...(config.inputMode === undefined ? [] : [h.InputMode(config.inputMode)]),
-              ...(config.ariaLabel === undefined ? [] : [h.AriaLabel(config.ariaLabel)]),
-              ...(config.maxLength === undefined ? [] : [h.Maxlength(config.maxLength)]),
-              ...autoCorrectionAttributes(config.isAutoCorrectionOff, h),
-              ...hintAttributes(config.id, config.hint, h),
-            ]),
             ...(config.hint === undefined
               ? []
               : [
@@ -89,6 +76,19 @@ export const inputView = <Message>(
                     [config.hint.text],
                   ),
                 ]),
+            h.input([
+              ...attributes.input,
+              h.Required(true),
+              h.Class(inputClassName),
+              h.Autocomplete(config.autocomplete),
+              ...(config.inputMode === undefined ? [] : [h.InputMode(config.inputMode)]),
+              ...(config.maxLength === undefined ? [] : [h.Maxlength(config.maxLength)]),
+              ...autoCorrectionAttributes(
+                config.isAutoCorrectionOff === true || config.type === "email",
+                h,
+              ),
+              ...hintAttributes(config.id, config.hint, h),
+            ]),
           ],
         ),
     },
@@ -137,6 +137,7 @@ export const searchInputView = <Message>(
   Input.view(
     {
       id: config.id,
+      name: config.id,
       type: "search",
       value: config.value,
       placeholder: config.placeholder,
@@ -150,6 +151,7 @@ export const searchInputView = <Message>(
               ...attributes.input,
               h.Class(inputClassName),
               h.Autocomplete("off"),
+              ...autoCorrectionAttributes(true, h),
               h.AriaControls(config.controls),
             ]),
           ],

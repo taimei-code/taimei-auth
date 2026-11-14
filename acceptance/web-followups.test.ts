@@ -127,7 +127,12 @@ const BASE_LINK_CLASSES = [
   "[&_svg]:size-4",
 ];
 
-const CURRENT_LINK_CLASSES = [...BASE_LINK_CLASSES, "bg-accent", "text-accent-foreground"];
+const CURRENT_LINK_CLASSES = [
+  ...BASE_LINK_CLASSES,
+  "bg-accent",
+  "font-semibold",
+  "text-accent-foreground",
+];
 
 type VNodeLike = {
   data?: {

@@ -114,7 +114,7 @@ describe("dialog の開閉の animation (#424)", () => {
       ),
       Command.resolveAll(...transitionSettles(FIRST_OPENING)),
       expectView(role("heading", { name: DIALOG_TITLE })).toExist(),
-      click(role("button", { name: "Close" })),
+      click(role("button", { name: "閉じる" })),
       expectView(role("heading", { name: DIALOG_TITLE })).toExist(),
       Command.resolveAll(...transitionSettles(FIRST_CLOSING), [
         FoldkitDialog.CloseDialog,

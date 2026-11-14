@@ -124,7 +124,7 @@ const listView = (list: typeof LinkedAccountList.Type, h: HtmlBuilder<Message>):
         onEmpty: () => listEmptyView("連携アカウントはありません。", h),
         onNonEmpty: (rows) =>
           h.ul(
-            [h.Class("divide-y")],
+            [h.Role("list"), h.Class("divide-y")],
             rows.map((account) => accountRowView(account, h)),
           ),
       }),

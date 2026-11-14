@@ -389,7 +389,12 @@ const avatarView = (present: Present, h: HtmlBuilder<Message>): Html =>
                 [present.loadedName.charAt(0).toUpperCase() || "?"],
               ),
             onSome: (imageUrl) =>
-              h.img([h.Src(imageUrl), h.Alt(present.loadedName), h.Class(avatarClassNames.image)]),
+              h.img([
+                h.Src(imageUrl),
+                h.Alt(present.loadedName),
+                h.Attribute("referrerpolicy", "no-referrer"),
+                h.Class(avatarClassNames.image),
+              ]),
           }),
         ],
       ),

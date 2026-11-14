@@ -85,13 +85,16 @@ export const view = Submodel.defineView<Model, Message, ViewInputs>((model, { te
         },
         h,
       ),
-      ...Model.match(model, {
-        Idle: () => [],
-        Copied: () => [h.span([h.Class("text-xs text-muted-foreground")], ["コピーしました"])],
-        NotCopied: () => [
-          h.span([h.Class("text-xs text-destructive")], ["コピーできませんでした"]),
-        ],
-      }),
+      h.span(
+        [h.Role("status")],
+        Model.match(model, {
+          Idle: () => [],
+          Copied: () => [h.span([h.Class("text-xs text-muted-foreground")], ["コピーしました"])],
+          NotCopied: () => [
+            h.span([h.Class("text-xs text-destructive")], ["コピーできませんでした"]),
+          ],
+        }),
+      ),
     ],
   ),
 );

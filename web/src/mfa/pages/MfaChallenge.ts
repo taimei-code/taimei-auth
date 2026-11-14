@@ -232,7 +232,6 @@ const enteringView = (
             placeholder: texts.placeholder,
             autocomplete: "one-time-code",
             inputMode: texts.inputMode,
-            ariaLabel: texts.label,
             maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
             isAutoCorrectionOff: true,
             hint: { text: texts.hint, maybeErrorMessage },

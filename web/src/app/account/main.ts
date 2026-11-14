@@ -42,6 +42,7 @@ import {
   noticeToastView,
 } from "../../shared/ui/toast-view";
 import * as DocumentNavigation from "../document-navigation";
+import { documentTitleOf, ERROR_PAGE_NAME } from "../document-title";
 import {
   AccountRoute,
   companiesRouter,
@@ -570,7 +571,7 @@ export const update = (model: Model, message: Message) =>
   });
 
 const NAV_LINK_CLASS =
-  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[current]:bg-accent data-[current]:text-accent-foreground [&_svg]:size-4";
+  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground data-[current]:bg-accent data-[current]:font-semibold data-[current]:text-accent-foreground [&_svg]:size-4";
 
 const NAV_GROUP_LABEL_CLASS =
   "mb-1 px-3 text-xs font-medium uppercase tracking-wide text-muted-foreground";
@@ -748,7 +749,9 @@ const frameView = (
   );
 
 export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
-  title: "taimei-auth",
+  title: documentTitleOf(
+    AccountRoute.guards.NotFound(model.route) ? ERROR_PAGE_NAME : NAV_ITEMS[model.route._tag].label,
+  ),
   body: Entry.match(model.entry, {
     Checking: () => fullScreenStatusView("読み込み中…", h),
     Ready: ({ currentCompany }) =>

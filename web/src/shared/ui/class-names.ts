@@ -84,7 +84,7 @@ export const labelClassName =
 export const cardClassNames = {
   root: "rounded-lg border bg-card text-card-foreground shadow-sm",
   header: "flex flex-col space-y-1.5 p-6",
-  title: "text-2xl font-semibold leading-none tracking-tight",
+  title: "text-balance text-2xl font-semibold leading-none tracking-tight",
   description: "text-sm text-muted-foreground",
   content: "p-6 pt-0",
   footer: "flex items-center p-6 pt-0",
@@ -97,13 +97,11 @@ export const dialogClassNames = {
     "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg transition duration-200 ease-out data-[closed]:scale-95 data-[closed]:opacity-0 motion-reduce:transition-none sm:rounded-lg",
   header: "flex flex-col space-y-1.5 text-center sm:text-left",
   footer: "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
-  title: "text-lg font-semibold leading-none tracking-tight",
+  title: "text-balance text-lg font-semibold leading-none tracking-tight",
   description: "text-sm text-muted-foreground",
   close:
-    "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none",
+    "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:opacity-50 disabled:pointer-events-none",
 } as const;
-
-export const separatorClassName = "h-px w-full shrink-0 bg-border";
 
 const GUTTER_FOR_FORMS_PLUGIN_CHEVRON = "pr-8";
 const HEIGHT_FITTING_FORMS_PLUGIN_PY_2 = "h-10";

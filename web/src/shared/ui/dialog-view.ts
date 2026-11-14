@@ -85,7 +85,7 @@ export const dialogView = <Message>(
                         h.Disabled(content.isClosingBlocked),
                         h.Class(dialogClassNames.close),
                       ],
-                      [iconView(X, h), h.span([h.Class("sr-only")], ["Close"])],
+                      [iconView(X, h), h.span([h.Class("sr-only")], ["閉じる"])],
                     ),
                   ],
                 ),

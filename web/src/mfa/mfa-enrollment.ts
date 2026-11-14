@@ -8,6 +8,7 @@ import { ShieldCheck } from "lucide";
 
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
+import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
@@ -506,7 +507,6 @@ const verifyView = (verifying: Verifying, h: HtmlBuilder<Message>): Html => {
           placeholder: TOTP_TEXTS.placeholder,
           autocomplete: "one-time-code",
           inputMode: TOTP_TEXTS.inputMode,
-          ariaLabel: TOTP_TEXTS.label,
           maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
           isAutoCorrectionOff: true,
           hint: { text: TOTP_TEXTS.hint, maybeErrorMessage },
@@ -561,7 +561,11 @@ const recoveryCodesView = (
         ],
       ),
       h.ul(
-        [h.Class("grid grid-cols-2 gap-2 rounded-md bg-muted p-3"), h.Translate("no")],
+        [
+          h.Role("list"),
+          h.Class("grid grid-cols-2 gap-2 rounded-md bg-muted p-3"),
+          h.Translate("no"),
+        ],
         codes.map((code) => h.keyed("li")(code, [h.Class("font-mono text-sm")], [code])),
       ),
       copyResultView(copy, Redacted.make(codes.join("\n")), "リカバリーコードをコピー", h),
@@ -588,8 +592,7 @@ const recoveryCodesView = (
 const stepView = (model: Model, h: HtmlBuilder<Message>): Html =>
   Step.match(model.step, {
     Starting: () => dialogLoadingStatusView("読み込み中…", h),
-    Failed: ({ message: failureMessage }) =>
-      h.p([h.Class("py-2 text-sm text-destructive")], [failureMessage]),
+    Failed: ({ message: failureMessage }) => alertTextView(failureMessage, h),
     Scan: ({ enrollment, copy }) => scanView(model, enrollment, copy, h),
     Verify: (verifying) => verifyView(verifying, h),
     RecoveryCodes: ({ recoveryCodes, copy }) => recoveryCodesView(copy, recoveryCodes, h),
