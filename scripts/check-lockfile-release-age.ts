@@ -50,7 +50,8 @@ const lockEntries = (text: string, source: string) => {
 
 const idOf = (entry: LockEntry) => {
   const id = String(entry[0]);
-  const at = id.lastIndexOf("@");
+  const at = id.indexOf("@", 1);
+  ensure(at > 0, `bun.lock の entry ${JSON.stringify(entry)} の ${id} を名前と版に分けられない`);
   return { id, name: id.slice(0, at), version: id.slice(at + 1) };
 };
 
@@ -89,7 +90,7 @@ const tooYoungVersions = async (baseRef: string | undefined) => {
   const added = new Map(
     lockEntries(await Bun.file(join(root, "bun.lock")).text(), "bun.lock")
       .filter((entry) => !baseEntries.has(JSON.stringify(entry)))
-      .filter((entry) => !String(entry[0]).includes("@workspace:"))
+      .filter((entry) => !idOf(entry).version.startsWith("workspace:"))
       .filter((entry) => !excludes.has(idOf(entry).name))
       .map(registryPackageOf)
       .map((pkg) => [pkg.id, pkg]),
