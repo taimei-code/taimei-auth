@@ -172,6 +172,24 @@ test("sidebar の link は表示中の画面だけが aria-current を持つ", a
   );
 });
 
+test("sidebar で移ると、document の title が移った先の画面の名前になる", async ({ page }) => {
+  await signedIn(page);
+  await expect(page).toHaveTitle("プロフィール | taimei-auth");
+
+  await page.getByRole("link", { name: "セキュリティ" }).click();
+
+  await expect(page).toHaveTitle("セキュリティ | taimei-auth");
+});
+
+test("プロフィール写真のファイルの入力欄は keyboard の focus を受ける", async ({ page }) => {
+  await signedIn(page);
+  const fileInput = page.getByLabel("画像を変更");
+
+  await fileInput.focus();
+
+  await expect(fileInput).toBeFocused();
+});
+
 test("session の無い browser で事業所登録を開くと、事業所状態を取得せずに共通ログイン画面へ移る", async ({
   page,
 }) => {
