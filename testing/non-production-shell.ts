@@ -21,11 +21,10 @@ export const nonProductionShell = (props: PageProps) => html`<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>${PAGE_TITLES[props._tag]}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" referrerpolicy="no-referrer" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="${NON_PRODUCTION_STYLESHEET_HREF}" />
     <script type="module" src="${NON_PRODUCTION_SCRIPT_HREF}"></script>
   </head>
