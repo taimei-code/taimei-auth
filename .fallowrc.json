@@ -12,6 +12,7 @@
     "db/migrate.ts",
     "db/migrate-manual.ts",
     "management/*.ts",
+    "scripts/*.ts",
     "infra/*.ts",
     "e2e/*.ts",
     "drizzle.config.ts",
