@@ -1723,6 +1723,31 @@ const ROWS: readonly Row[] = [
       "退会が成功したかは、その message を持つ page の述語 (Profile.isAccountDeleted・Companies.isLastCompanyLeft・CompanySettings.isLastCompanyDeleted) で判定する。ほかの file で message を直接比べない",
   },
   {
+    name: "company-change-message-only-in-owning-module",
+    within: ["web/src/**"],
+    allowedIn: [
+      "web/src/company/add-company.ts",
+      "web/src/company/company-deletion.ts",
+      "web/src/company/pages/Companies.ts",
+      "web/src/company/pages/CompanySettings.ts",
+      "web/src/membership/ownership-transfer.ts",
+    ],
+    matchers: [
+      {
+        kind: "member",
+        paths: [
+          ".SucceededAddCompany",
+          ".SucceededDeleteCompany",
+          ".SucceededLeaveCompany",
+          ".SucceededTransferOwnership",
+          ".SucceededUpdateCompany",
+        ],
+      },
+    ],
+    message:
+      "事業所を変えた成功かは、その message を持つ module の visitOfCompanyChange (Companies・CompanySettings が入れ子の分も返す) で判定する。ほかの file で message を直接比べない (page を離れた後に届いた成功で、application が事業所の状態を読み直す判定を迂回させない)",
+  },
+  {
     name: "failure-messages-not-exported",
     within: ["web/src/**"],
     allowedIn: ["web/src/shared/failure-message.ts", "web/src/mfa/mfa-failure-messages.ts"],

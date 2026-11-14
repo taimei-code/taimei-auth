@@ -266,6 +266,13 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(account-deleted-message-only-in-owning-page)"],
   },
   {
+    name: "事業所を変えた成功の message を、持ち主の module の外で直接比べられない",
+    path: "web/src/app/account/zz-company-change.ts",
+    source:
+      'import * as AddCompany from "../../company/add-company";\nexport const added = AddCompany.Message.SucceededAddCompany;',
+    expectedRules: ["taimei(company-change-message-only-in-owning-module)"],
+  },
+  {
     name: "失敗の class を作る failure() と同じ名前の method (Exit.failure など) は呼べる",
     path: "src/exit-failure.ts",
     source:

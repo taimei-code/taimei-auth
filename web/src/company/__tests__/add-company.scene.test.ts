@@ -13,7 +13,7 @@ const PANEL = selector("#add-company-dialog-panel");
 
 describe("事業所の追加の dialog", () => {
   test("開いている間は操作でき、閉じる animation の間は中身を操作できない", () => {
-    const opened = update(init(), Message.ClickedAddCompany()).model;
+    const opened = update(init(1), Message.ClickedAddCompany()).model;
     scene(
       { update, view },
       given(opened),

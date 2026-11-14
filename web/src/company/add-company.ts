@@ -30,6 +30,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
+  visit: Schema.Int,
   dialog: ReportingDialog.Model(OutMessage),
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
@@ -40,16 +41,24 @@ export type Model = typeof Model.Type;
 
 const AddCompanyFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
 
+const RequestFields = { visit: Schema.Int, requestNumber: Schema.Int };
+type Request = Readonly<{ visit: number; requestNumber: number }>;
+
 export const Message = defineMessageUnion({
   ClickedAddCompany: {},
   GotDialogMessage: { message: Dialog.Message },
   UpdatedName: { value: Schema.String },
   SelectedOrgCode: { orgCode: OrgCodeSchema },
   SubmittedAddCompanyForm: {},
-  SucceededAddCompany: { requestNumber: Schema.Int, companyName: Schema.String },
-  FailedAddCompany: { requestNumber: Schema.Int, failure: AddCompanyFailure },
+  SucceededAddCompany: { ...RequestFields, companyName: Schema.String },
+  FailedAddCompany: { ...RequestFields, failure: AddCompanyFailure },
 });
 export type Message = typeof Message.Type;
+
+const isAddedCompany = Schema.is(Message.SucceededAddCompany);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isAddedCompany(message) ? Option.some(message.visit) : Option.none();
 
 const ADD_FAILED = "事業所の作成に失敗しました。";
 
@@ -57,29 +66,30 @@ const DEFAULT_ORG_CODE: OrgCode = "CORPORATE";
 
 const ORG_CODE_OPTIONS = orgCodeOptionsIn(["CORPORATE", "PERSONAL"]);
 
-const failedAddCompany = (requestNumber: number, failure: typeof AddCompanyFailure.Type) => () =>
-  Effect.succeed(Message.FailedAddCompany({ requestNumber, failure }));
+const failedAddCompany = (request: Request, failure: typeof AddCompanyFailure.Type) => () =>
+  Effect.succeed(Message.FailedAddCompany({ ...request, failure }));
 
 export const AddCompany = Command.define("AddCompany", {
-  args: { requestNumber: Schema.Int, name: Schema.String, orgCode: OrgCodeSchema },
+  args: { ...RequestFields, name: Schema.String, orgCode: OrgCodeSchema },
   messages: [Message.SucceededAddCompany, Message.FailedAddCompany],
-  execute: ({ requestNumber, name, orgCode }) =>
+  execute: ({ name, orgCode, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       yield* client.company.add({ payload: { name, org_code: orgCode } });
-      return Message.SucceededAddCompany({ requestNumber, companyName: name });
+      return Message.SucceededAddCompany({ ...request, companyName: name });
     }).pipe(
       Effect.catchTags({
-        Unauthorized: failedAddCompany(requestNumber, "Unauthorized"),
-        HttpClientError: failedAddCompany(requestNumber, "Unexpected"),
-        SchemaError: failedAddCompany(requestNumber, "Unexpected"),
+        Unauthorized: failedAddCompany(request, "Unauthorized"),
+        HttpClientError: failedAddCompany(request, "Unexpected"),
+        SchemaError: failedAddCompany(request, "Unexpected"),
       }),
     ),
 });
 
 const DIALOG_ID = "add-company-dialog";
 
-export const init = (): Model => ({
+export const init = (visit: number): Model => ({
+  visit,
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   nameDraft: "",
   orgCode: DEFAULT_ORG_CODE,
@@ -118,13 +128,22 @@ const submitForm = (model: Model): UpdateReturn => {
   return {
     model: requested,
     commands: [
-      AddCompany({ requestNumber: requested.requestNumber, name, orgCode: requested.orgCode }),
+      AddCompany({
+        visit: requested.visit,
+        requestNumber: requested.requestNumber,
+        name,
+        orgCode: requested.orgCode,
+      }),
     ],
   };
 };
 
-const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
-  requestNumber === model.requestNumber && isSubmitting(model) ? next() : { model };
+const forThisRequest = (model: Model, request: Request, next: () => UpdateReturn) =>
+  request.visit === model.visit &&
+  request.requestNumber === model.requestNumber &&
+  isSubmitting(model)
+    ? next()
+    : { model };
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
@@ -135,13 +154,13 @@ export const update = (model: Model, message: Message) =>
     SelectedOrgCode: ({ orgCode }) =>
       isSubmitting(model) ? { model } : { model: modifyFields(model, { orgCode: () => orgCode }) },
     SubmittedAddCompanyForm: () => submitForm(model),
-    SucceededAddCompany: ({ requestNumber, companyName }) =>
-      forThisRequest(model, requestNumber, () =>
-        dialogFolds.closeThen(model, OutMessage.AddedCompany({ companyName })),
+    SucceededAddCompany: (added) =>
+      forThisRequest(model, added, () =>
+        dialogFolds.closeThen(model, OutMessage.AddedCompany({ companyName: added.companyName })),
       ),
-    FailedAddCompany: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () =>
-        failure === "Unauthorized"
+    FailedAddCompany: (failed) =>
+      forThisRequest(model, failed, () =>
+        failed.failure === "Unauthorized"
           ? { model, outMessage: OutMessage.RequiredSignIn() }
           : {
               model: modifyFields(model, {

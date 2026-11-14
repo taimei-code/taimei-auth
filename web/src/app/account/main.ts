@@ -180,7 +180,7 @@ const leaveAfterAccountDeleted: Step = (model) => ({
   commands: [navigate(DocumentNavigation.LeaveAfterAccountDeleted())],
 });
 
-const AFTER_DISCARDING_HELD_REPORT: CurrentCompany.RefreshTexts = {
+const AFTER_LEAVING_PAGE: CurrentCompany.RefreshTexts = {
   maybeDoneText: Option.none(),
   actionText: "画面を移動しました",
 };
@@ -196,10 +196,7 @@ const discardPage: Step = (model) => {
     ),
   });
   return hasHeldReportIn(model.maybePage)
-    ? Update.combine(model, [
-        releaseDialogsAndEmptyPage,
-        refreshCompanyState(AFTER_DISCARDING_HELD_REPORT),
-      ])
+    ? Update.combine(model, [releaseDialogsAndEmptyPage, refreshCompanyState(AFTER_LEAVING_PAGE)])
     : releaseDialogsAndEmptyPage(model);
 };
 
@@ -384,6 +381,15 @@ const refreshCompanyState = (texts: CurrentCompany.RefreshTexts): Step =>
 
 const selectCompany = (companyId: string): Step => foldCurrentCompanySwitch(companyId);
 
+const foldUnlessLeftPageChangedCompany = (
+  model: Model,
+  maybeCompanyChangeVisit: Option.Option<number>,
+  foldPage: Step,
+): UpdateReturn =>
+  Option.exists(maybeCompanyChangeVisit, (visit) => visit !== model.pageVisit)
+    ? refreshCompanyState(AFTER_LEAVING_PAGE)(model)
+    : foldPage(model);
+
 const pushCompanies: Step = (model) => ({
   model,
   commands: [navigate(DocumentNavigation.PushUrl({ href: companiesRouter() }))],
@@ -542,11 +548,19 @@ export const update = (model: Model, message: Message) =>
     GotCompaniesMessage: ({ message: pageMessage }) =>
       Companies.isLastCompanyLeft(pageMessage)
         ? leaveAfterAccountDeleted(model)
-        : foldCompanies(model, pageMessage),
+        : foldUnlessLeftPageChangedCompany(
+            model,
+            Companies.visitOfCompanyChange(pageMessage),
+            foldCompanies(pageMessage),
+          ),
     GotCompanySettingsMessage: ({ message: pageMessage }) =>
       CompanySettings.isLastCompanyDeleted(pageMessage)
         ? leaveAfterAccountDeleted(model)
-        : foldCompanySettings(model, pageMessage),
+        : foldUnlessLeftPageChangedCompany(
+            model,
+            CompanySettings.visitOfCompanyChange(pageMessage),
+            foldCompanySettings(pageMessage),
+          ),
     GotMembersMessage: ({ message: pageMessage }) => foldMembers(model, pageMessage),
     GotSecurityMessage: ({ message: pageMessage }) => foldSecurity(model, pageMessage),
     GotSessionsMessage: ({ message: pageMessage }) => foldSessions(model, pageMessage),

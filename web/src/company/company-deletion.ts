@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -51,6 +51,11 @@ export const Message = defineMessageUnion({
   FailedDeleteCompany: { visit: Schema.Int, failure: DeleteCompanyFailure },
 });
 export type Message = typeof Message.Type;
+
+const isDeletedCompany = Schema.is(Message.SucceededDeleteCompany);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isDeletedCompany(message) ? Option.some(message.visit) : Option.none();
 
 type ViewInputs = Readonly<{
   companyName: string;

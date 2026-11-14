@@ -57,8 +57,19 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
+const isUpdatedCompany = Schema.is(Message.SucceededUpdateCompany);
+
+const isCompanyDeletionMessage = Schema.is(Message.GotCompanyDeletionMessage);
+
+export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
+  isUpdatedCompany(message)
+    ? Option.some(message.visit)
+    : isCompanyDeletionMessage(message)
+      ? CompanyDeletion.visitOfCompanyChange(message.message)
+      : Option.none();
+
 export const isLastCompanyDeleted = (message: Message): boolean =>
-  Schema.is(Message.GotCompanyDeletionMessage)(message) &&
+  isCompanyDeletionMessage(message) &&
   Schema.is(CompanyDeletion.Message.SucceededDeleteLastCompany)(message.message);
 
 export const OutMessage = defineMessageUnion({
