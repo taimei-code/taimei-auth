@@ -3,9 +3,45 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { REPO_ROOT } from "./config-invariant-helpers";
+import { indexOfStepRunning, readWorkflow, REPO_ROOT } from "./config-invariant-helpers";
 
 const CHECK_SCRIPT = "scripts/check-lockfile-release-age.ts";
+
+interface WorkflowStep {
+  uses?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+}
+
+const stepsBeforeTheCheck = () => {
+  const { jobs: byName } = readWorkflow<{ jobs: Record<string, { steps?: WorkflowStep[] }> }>(
+    "ci.yml",
+  );
+  const jobs = Object.values(byName).flatMap(({ steps = [] }) => {
+    const at = indexOfStepRunning(steps, CHECK_SCRIPT);
+    return at === -1 ? [] : [steps.slice(0, at)];
+  });
+  expect(jobs.length).toBeGreaterThan(0);
+  return jobs;
+};
+
+describe("bun.lock の公開日時の検査は、依存を入れる前に、全ての履歴を持つ checkout で走る (ADR-0009 §H)", () => {
+  test("bun.lock の公開日時の step より前に、依存を入れうる run の step を置かない", () => {
+    const jobs = stepsBeforeTheCheck();
+    expect(jobs.map((steps) => steps.filter((step) => step.run !== undefined))).toEqual(
+      jobs.map(() => []),
+    );
+  });
+
+  test("bun.lock の公開日時の step より前の checkout は、merge-base を引ける fetch-depth: 0 だけ", () => {
+    const checkouts = stepsBeforeTheCheck().map((steps) =>
+      steps
+        .filter((step) => step.uses?.startsWith("actions/checkout@") === true)
+        .map((step) => step.with?.["fetch-depth"]),
+    );
+    expect(checkouts).toEqual(checkouts.map(() => [0]));
+  });
+});
 
 const repos: string[] = [];
 afterAll(() => {
