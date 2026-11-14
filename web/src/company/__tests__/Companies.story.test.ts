@@ -182,6 +182,7 @@ describe("事業所の追加とオーナーの委譲", () => {
       first.model,
       Message.GotAddCompanyMessage({
         message: AddCompany.Message.SucceededAddCompany({
+          visit: VISIT,
           requestNumber: 1,
           companyName: "新事業所",
         }),
@@ -211,7 +212,26 @@ describe("事業所の追加とオーナーの委譲", () => {
       openedTwice,
       Message.GotOwnershipTransferMessage({
         message: OwnershipTransfer.Message.SucceededLoadCandidates({
+          visit: VISIT,
           requestNumber: 1,
+          candidates: [{ userId: "user-old", label: "古い候補" }],
+        }),
+      }),
+    ).model;
+    expect(stale.ownershipTransfer.candidates._tag).toBe("Loading");
+  });
+
+  test("委譲の要求の番号が同じでも、page を離れる前の要求の一覧は描かない", () => {
+    const opened = update(
+      signedIn(),
+      Message.ClickedTransferOwnership({ membership: COMPANY }),
+    ).model;
+    const stale = update(
+      opened,
+      Message.GotOwnershipTransferMessage({
+        message: OwnershipTransfer.Message.SucceededLoadCandidates({
+          visit: VISIT - 1,
+          requestNumber: opened.ownershipTransfer.requestNumber,
           candidates: [{ userId: "user-old", label: "古い候補" }],
         }),
       }),
@@ -240,6 +260,7 @@ describe("事業所の追加とオーナーの委譲", () => {
       transferring,
       Message.GotOwnershipTransferMessage({
         message: OwnershipTransfer.Message.SucceededTransferOwnership({
+          visit: VISIT,
           requestNumber: transferring.ownershipTransfer.requestNumber,
           memberLabel: "メイト",
         }),
@@ -300,6 +321,7 @@ describe("session の切れた操作", () => {
         adding,
         Message.GotAddCompanyMessage({
           message: AddCompany.Message.FailedAddCompany({
+            visit: VISIT,
             requestNumber: 1,
             failure: "Unauthorized",
           }),
@@ -315,6 +337,7 @@ describe("session の切れた操作", () => {
         transferOpened,
         Message.GotOwnershipTransferMessage({
           message: OwnershipTransfer.Message.FailedLoadCandidates({
+            visit: VISIT,
             requestNumber: 1,
             failure: "Unauthorized",
           }),
@@ -372,7 +395,11 @@ describe("追加と委譲の失敗", () => {
       message(addCompanyMessage(AddCompany.Message.SubmittedAddCompanyForm())),
       Command.resolve(
         AddCompany.AddCompany,
-        AddCompany.Message.FailedAddCompany({ requestNumber: 1, failure: "Unexpected" }),
+        AddCompany.Message.FailedAddCompany({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "Unexpected",
+        }),
       ),
       model((next) => {
         expect(next.addCompany.submission).toEqual({
@@ -393,6 +420,7 @@ describe("追加と委譲の失敗", () => {
       Command.resolve(
         OwnershipTransfer.LoadCandidates,
         OwnershipTransfer.Message.SucceededLoadCandidates({
+          visit: VISIT,
           requestNumber: 1,
           candidates: [{ userId: "user-mate", label: "メイト" }],
         }),
@@ -410,6 +438,7 @@ describe("追加と委譲の失敗", () => {
       Command.resolve(
         OwnershipTransfer.TransferOwnership,
         OwnershipTransfer.Message.FailedTransferOwnership({
+          visit: VISIT,
           requestNumber: 2,
           failure: "Unexpected",
         }),
@@ -430,7 +459,11 @@ describe("追加と委譲の失敗", () => {
       ...FIRST_DIALOG_OPENING,
       Command.resolve(
         OwnershipTransfer.LoadCandidates,
-        OwnershipTransfer.Message.FailedLoadCandidates({ requestNumber: 1, failure: "Unexpected" }),
+        OwnershipTransfer.Message.FailedLoadCandidates({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "Unexpected",
+        }),
       ),
       model((next) => {
         expect(next.ownershipTransfer.candidates._tag).toBe("Failed");

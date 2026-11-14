@@ -115,8 +115,8 @@ export const init = (visit: number): Update.Return<Model, Message, SpaHttpClient
     maybeSelfUserId: Option.none(),
     leaving: Submission.Idle(),
     maybeSoleOwnerCompanyId: Option.none(),
-    addCompany: AddCompany.init(),
-    ownershipTransfer: OwnershipTransfer.init(),
+    addCompany: AddCompany.init(visit),
+    ownershipTransfer: OwnershipTransfer.init(visit),
   },
   commands: [ReadSignedInUserId({ visit })],
 });

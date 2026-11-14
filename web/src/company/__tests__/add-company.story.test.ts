@@ -9,6 +9,8 @@ import {
 import { Dialog, isDialogVisible } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, OutMessage, update } from "../add-company";
 
+const VISIT = 1;
+
 const send = (current: Model, ...messages: ReadonlyArray<Message>): Model =>
   messages.reduce((next, each) => update(next, each).model, current);
 
@@ -17,13 +19,17 @@ const dialogMessage = (dialog: typeof Dialog.Message.Type) =>
 
 const submitting = (): Model =>
   send(
-    init(),
+    init(VISIT),
     Message.ClickedAddCompany(),
     Message.UpdatedName({ value: "新事業所" }),
     Message.SubmittedAddCompanyForm(),
   );
 
-const ADDED = Message.SucceededAddCompany({ requestNumber: 1, companyName: "新事業所" });
+const ADDED = Message.SucceededAddCompany({
+  visit: VISIT,
+  requestNumber: 1,
+  companyName: "新事業所",
+});
 
 describe("dialog を閉じた結果の報告", () => {
   test("作成の成功は、dialog が閉じ終わるまで入力を残して報告せず、閉じ終わりに 1 回だけ報告して入力を消す", () => {
@@ -77,7 +83,7 @@ describe("dialog を閉じた結果の報告", () => {
   });
 
   test("開いている dialog の要素が無くなると、置いてあった報告をそこで出す", () => {
-    const opened = send(init(), Message.ClickedAddCompany());
+    const opened = send(init(VISIT), Message.ClickedAddCompany());
     const held = {
       ...opened,
       dialog: {
@@ -98,5 +104,17 @@ describe("dialog を閉じた結果の報告", () => {
     expect(reopened.outMessage).toEqual(OutMessage.AddedCompany({ companyName: "新事業所" }));
     expect(reopened.model.nameDraft).toBe("");
     expect(reopened.model.dialog.maybeOutMessageAfterClose._tag).toBe("None");
+  });
+});
+
+describe("page を離れる前に送った要求の応答", () => {
+  test("要求の番号が同じでも、page を離れる前の要求の失敗は、送信中の form に失敗を出さない", () => {
+    const current = submitting();
+    expect(
+      send(
+        current,
+        Message.FailedAddCompany({ visit: VISIT - 1, requestNumber: 1, failure: "Unexpected" }),
+      ),
+    ).toEqual(current);
   });
 });

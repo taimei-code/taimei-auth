@@ -48,6 +48,7 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
+  visit: Schema.Int,
   dialog: ReportingDialog.Model(OutMessage),
   maybeTarget: Schema.Option(Target),
   candidates: Candidates,
@@ -58,77 +59,81 @@ export type Model = typeof Model.Type;
 
 const RequestFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
 
+const RequestFields = { visit: Schema.Int, requestNumber: Schema.Int };
+type Request = Readonly<{ visit: number; requestNumber: number }>;
+
 export const Message = defineMessageUnion({
   GotDialogMessage: { message: Dialog.Message },
-  SucceededLoadCandidates: { requestNumber: Schema.Int, candidates: Schema.Array(Candidate) },
-  FailedLoadCandidates: { requestNumber: Schema.Int, failure: RequestFailure },
+  SucceededLoadCandidates: { ...RequestFields, candidates: Schema.Array(Candidate) },
+  FailedLoadCandidates: { ...RequestFields, failure: RequestFailure },
   ClickedTransfer: { candidate: Candidate },
-  SucceededTransferOwnership: { requestNumber: Schema.Int, memberLabel: Schema.String },
-  FailedTransferOwnership: { requestNumber: Schema.Int, failure: RequestFailure },
+  SucceededTransferOwnership: { ...RequestFields, memberLabel: Schema.String },
+  FailedTransferOwnership: { ...RequestFields, failure: RequestFailure },
 });
 export type Message = typeof Message.Type;
 
 const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
-const failedLoadCandidates = (requestNumber: number, failure: typeof RequestFailure.Type) => () =>
-  Effect.succeed(Message.FailedLoadCandidates({ requestNumber, failure }));
+const failedLoadCandidates = (request: Request, failure: typeof RequestFailure.Type) => () =>
+  Effect.succeed(Message.FailedLoadCandidates({ ...request, failure }));
 
 export const LoadCandidates = Command.define("LoadCandidates", {
-  args: { requestNumber: Schema.Int, target: Target },
+  args: { ...RequestFields, target: Target },
   messages: [Message.SucceededLoadCandidates, Message.FailedLoadCandidates],
-  execute: ({ requestNumber, target }) =>
+  execute: ({ target, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       const { members } = yield* client.membership.list({
         params: { companyId: target.companyId },
       });
       return Message.SucceededLoadCandidates({
-        requestNumber,
+        ...request,
         candidates: members
           .filter((member) => member.user_id !== target.selfUserId)
           .map((member) => ({ userId: member.user_id, label: memberLabel(member) })),
       });
     }).pipe(
       Effect.catchTags({
-        Forbidden: failedLoadCandidates(requestNumber, "Unexpected"),
-        Unauthorized: failedLoadCandidates(requestNumber, "Unauthorized"),
-        HttpClientError: failedLoadCandidates(requestNumber, "Unexpected"),
-        SchemaError: failedLoadCandidates(requestNumber, "Unexpected"),
+        Forbidden: failedLoadCandidates(request, "Unexpected"),
+        Unauthorized: failedLoadCandidates(request, "Unauthorized"),
+        HttpClientError: failedLoadCandidates(request, "Unexpected"),
+        SchemaError: failedLoadCandidates(request, "Unexpected"),
       }),
     ),
 });
 
-const failedTransfer = (requestNumber: number, failure: typeof RequestFailure.Type) => () =>
-  Effect.succeed(Message.FailedTransferOwnership({ requestNumber, failure }));
+const failedTransfer = (request: Request, failure: typeof RequestFailure.Type) => () =>
+  Effect.succeed(Message.FailedTransferOwnership({ ...request, failure }));
 
 export const TransferOwnership = Command.define("TransferOwnership", {
-  args: { requestNumber: Schema.Int, companyId: Schema.String, candidate: Candidate },
+  args: { ...RequestFields, companyId: Schema.String, candidate: Candidate },
   messages: [Message.SucceededTransferOwnership, Message.FailedTransferOwnership],
-  execute: ({ requestNumber, companyId, candidate }) =>
+  execute: ({ companyId, candidate, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       yield* client.membership.transferOwnership({
         params: { companyId },
         payload: { to_user_id: candidate.userId },
       });
-      return Message.SucceededTransferOwnership({ requestNumber, memberLabel: candidate.label });
+      return Message.SucceededTransferOwnership({ ...request, memberLabel: candidate.label });
     }).pipe(
       Effect.catchTags({
-        Forbidden: failedTransfer(requestNumber, "Unexpected"),
-        NotFound: failedTransfer(requestNumber, "Unexpected"),
-        InvalidArgument: failedTransfer(requestNumber, "Unexpected"),
-        AlreadyOwner: failedTransfer(requestNumber, "Unexpected"),
-        LastOwner: failedTransfer(requestNumber, "Unexpected"),
-        Unauthorized: failedTransfer(requestNumber, "Unauthorized"),
-        HttpClientError: failedTransfer(requestNumber, "Unexpected"),
-        SchemaError: failedTransfer(requestNumber, "Unexpected"),
+        Forbidden: failedTransfer(request, "Unexpected"),
+        NotFound: failedTransfer(request, "Unexpected"),
+        InvalidArgument: failedTransfer(request, "Unexpected"),
+        AlreadyOwner: failedTransfer(request, "Unexpected"),
+        LastOwner: failedTransfer(request, "Unexpected"),
+        Unauthorized: failedTransfer(request, "Unauthorized"),
+        HttpClientError: failedTransfer(request, "Unexpected"),
+        SchemaError: failedTransfer(request, "Unexpected"),
       }),
     ),
 });
 
 const DIALOG_ID = "ownership-transfer-dialog";
 
-export const init = (): Model => ({
+export const init = (visit: number): Model => ({
+  visit,
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   maybeTarget: Option.none(),
   candidates: Candidates.Loading(),
@@ -160,14 +165,16 @@ export const open = (model: Model, target: Target): UpdateReturn => {
     model: opened.model,
     commands: [
       ...(opened.commands ?? []),
-      LoadCandidates({ requestNumber: requested.requestNumber, target }),
+      LoadCandidates({ visit: requested.visit, requestNumber: requested.requestNumber, target }),
     ],
   };
   return pipe(loading, Update.withOutMessage(opened.outMessage));
 };
 
-const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
-  requestNumber === model.requestNumber ? next() : { model };
+const forThisRequest = (model: Model, request: Request, next: () => UpdateReturn) =>
+  request.visit === model.visit && request.requestNumber === model.requestNumber
+    ? next()
+    : { model };
 
 const startTransfer = (model: Model, candidate: Candidate): UpdateReturn =>
   Option.match(model.maybeTarget, {
@@ -183,7 +190,12 @@ const startTransfer = (model: Model, candidate: Candidate): UpdateReturn =>
       return {
         model: requested,
         commands: [
-          TransferOwnership({ requestNumber: requested.requestNumber, companyId, candidate }),
+          TransferOwnership({
+            visit: requested.visit,
+            requestNumber: requested.requestNumber,
+            companyId,
+            candidate,
+          }),
         ],
       };
     },
@@ -192,24 +204,29 @@ const startTransfer = (model: Model, candidate: Candidate): UpdateReturn =>
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
-    SucceededLoadCandidates: ({ requestNumber, candidates }) =>
-      forThisRequest(model, requestNumber, () => ({
-        model: modifyFields(model, { candidates: () => Candidates.Loaded({ candidates }) }),
+    SucceededLoadCandidates: (loaded) =>
+      forThisRequest(model, loaded, () => ({
+        model: modifyFields(model, {
+          candidates: () => Candidates.Loaded({ candidates: loaded.candidates }),
+        }),
       })),
-    FailedLoadCandidates: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () =>
-        failure === "Unauthorized"
+    FailedLoadCandidates: (failed) =>
+      forThisRequest(model, failed, () =>
+        failed.failure === "Unauthorized"
           ? { model, outMessage: OutMessage.RequiredSignIn() }
           : { model: modifyFields(model, { candidates: () => Candidates.Failed() }) },
       ),
     ClickedTransfer: ({ candidate }) => startTransfer(model, candidate),
-    SucceededTransferOwnership: ({ requestNumber, memberLabel: label }) =>
-      forThisRequest(model, requestNumber, () =>
-        dialogFolds.closeThen(model, OutMessage.TransferredOwnership({ memberLabel: label })),
+    SucceededTransferOwnership: (transferred) =>
+      forThisRequest(model, transferred, () =>
+        dialogFolds.closeThen(
+          model,
+          OutMessage.TransferredOwnership({ memberLabel: transferred.memberLabel }),
+        ),
       ),
-    FailedTransferOwnership: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () =>
-        failure === "Unauthorized"
+    FailedTransferOwnership: (failed) =>
+      forThisRequest(model, failed, () =>
+        failed.failure === "Unauthorized"
           ? { model, outMessage: OutMessage.RequiredSignIn() }
           : {
               model: modifyFields(model, {
