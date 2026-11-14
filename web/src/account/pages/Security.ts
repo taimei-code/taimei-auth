@@ -300,7 +300,10 @@ const passkeyRowView = (h: HtmlBuilder<Message>): Html =>
   );
 
 const mfaListView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<Message>): Html =>
-  h.ul([h.Class("divide-y")], [mfaRowView(model, registration, h), passkeyRowView(h)]);
+  h.ul(
+    [h.Role("list"), h.Class("divide-y")],
+    [mfaRowView(model, registration, h), passkeyRowView(h)],
+  );
 
 const mfaStateView = (model: Model, h: HtmlBuilder<Message>): Html =>
   MfaState.match(model.mfa, {

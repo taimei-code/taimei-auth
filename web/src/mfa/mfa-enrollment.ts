@@ -561,7 +561,11 @@ const recoveryCodesView = (
         ],
       ),
       h.ul(
-        [h.Class("grid grid-cols-2 gap-2 rounded-md bg-muted p-3"), h.Translate("no")],
+        [
+          h.Role("list"),
+          h.Class("grid grid-cols-2 gap-2 rounded-md bg-muted p-3"),
+          h.Translate("no"),
+        ],
         codes.map((code) => h.keyed("li")(code, [h.Class("font-mono text-sm")], [code])),
       ),
       copyResultView(copy, Redacted.make(codes.join("\n")), "リカバリーコードをコピー", h),

@@ -22,7 +22,7 @@ export const authPageCardView = <Message>(
   card: AuthPageCardContent,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.div(
+  h.main(
     [
       h.Class(
         "relative flex min-h-svh flex-col items-center justify-center gap-6 bg-background p-6 md:p-10",
@@ -36,7 +36,7 @@ export const authPageCardView = <Message>(
           h.div(
             [h.Class(cardClassNames.header)],
             [
-              h.div([h.Class(cardClassNames.title)], [card.title]),
+              h.h1([h.Class(cardClassNames.title)], [card.title]),
               h.div([h.Class(cardClassNames.description)], [card.description]),
             ],
           ),

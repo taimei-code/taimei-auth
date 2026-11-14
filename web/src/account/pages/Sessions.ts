@@ -97,7 +97,7 @@ const sessionRowView = (session: SessionRow, h: HtmlBuilder<Message>): Html =>
         [
           h.p(
             [h.Class("truncate font-medium"), h.Translate("no")],
-            [session.userAgent || "Unknown device"],
+            [session.userAgent || "不明なデバイス"],
           ),
           h.p(
             [h.Class("mt-1 text-sm text-muted-foreground")],
@@ -121,7 +121,7 @@ const listView = (list: typeof SessionList.Type, h: HtmlBuilder<Message>): Html 
         onEmpty: () => listEmptyView("アクティブなセッションはありません。", h),
         onNonEmpty: (rows) =>
           h.ul(
-            [h.Class("divide-y")],
+            [h.Role("list"), h.Class("divide-y")],
             rows.map((session) => sessionRowView(session, h)),
           ),
       }),
