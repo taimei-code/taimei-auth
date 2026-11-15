@@ -205,7 +205,7 @@ describe("サイドバーの nav", () => {
   );
 
   test.each(SIDEBAR_LINKS)(
-    "AC-003: $path を開くと、表示中と表示中でないリンクに当たる class が今と同じである",
+    "AC-003: $path を開くと、表示中と表示中でないリンクに当たる class が今と同じである (表示中は色に加えて太さでも示す。#469)",
     ({ path, name }) => {
       scene(
         { update, view },

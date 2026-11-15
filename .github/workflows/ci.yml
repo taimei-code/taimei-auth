@@ -49,9 +49,8 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile --ignore-scripts
 
-      # GHSA-vfj7-8cjw-p6xm (braces の DoS) は修正版が無く、braces は tailwindcss 経由の dev 依存で Worker に入らない。braces の修正版が出たら外す
       - name: Audit dependencies
-        run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
+        run: bun run audit
 
       - name: Lint (shellcheck)
         run: git ls-files '*.sh' ':!repos' | xargs shellcheck
