@@ -204,6 +204,18 @@ describe("アカウント管理画面の知らない path", () => {
 const currentCompanyMessage = (message: CurrentCompany.Message) =>
   Message.GotCurrentCompanyMessage({ message });
 
+const refreshedWith = (start: Model, state: CurrentCompany.CompanyMemberships): Model =>
+  update(
+    update(start, currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany())).model,
+    currentCompanyMessage(
+      CurrentCompany.Message.SucceededRefreshCompanyState({
+        refreshNumber: 1,
+        state,
+        maybeDoneText: Option.none(),
+      }),
+    ),
+  ).model;
+
 const currentCompanyOf = (current: Model) =>
   current.entry._tag === "Ready" ? current.entry.currentCompany : undefined;
 
@@ -236,23 +248,30 @@ describe("現在の事業所の切り替え", () => {
 
   test("読み直しで現在の事業所が変わると、事業所設定の画面を新しい事業所の値で入れ直す", () => {
     const settings = ready("/account/company-settings");
-    const refreshed = update(
-      update(settings, currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany()))
-        .model,
-      currentCompanyMessage(
-        CurrentCompany.Message.SucceededRefreshCompanyState({
-          refreshNumber: 1,
-          state: stateWithCurrent(COMPANY_B.companyId),
-          maybeDoneText: Option.none(),
-        }),
-      ),
-    ).model;
+    const refreshed = refreshedWith(settings, stateWithCurrent(COMPANY_B.companyId));
     expect(refreshed.pageVisit).toBe(settings.pageVisit + 1);
     expect(
       Option.map(refreshed.maybePage, (page) =>
         page._tag === "CompanySettings" ? page.model.settings : undefined,
       ),
     ).toMatchObject(Option.some({ _tag: "Editing", companyId: COMPANY_B.companyId }));
+  });
+
+  test("読み直しで現在の事業所の名前だけが変わっても、事業所設定の page の状態をそのまま保つ。保存の後の読み直しで、開いている削除の dialog と focus を失わない", () => {
+    const settings = update(
+      ready("/account/company-settings"),
+      Message.GotCompanySettingsMessage({
+        message: CompanySettings.Message.GotCompanyDeletionMessage({
+          message: { _tag: "ClickedDeleteCompany" },
+        }),
+      }),
+    ).model;
+    const refreshed = refreshedWith(settings, {
+      ...stateWithCurrent(COMPANY_A.companyId),
+      memberships: [{ ...COMPANY_A, companyName: "事業所A2" }, COMPANY_B],
+    });
+    expect(refreshed.pageVisit).toBe(settings.pageVisit);
+    expect(refreshed.maybePage).toEqual(settings.maybePage);
   });
 
   test("メンバーの画面で URL の戻り先だけが変わると、画面を入れ直して新しい戻り先を招待に使う", () => {

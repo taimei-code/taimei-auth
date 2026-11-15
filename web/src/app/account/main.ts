@@ -357,7 +357,7 @@ const currentCompanyChild = {
     Notified: ({ tone, text }) => notify(tone, text),
     RequiredSignIn: () => leaveToSignIn,
     RefreshedCompanyState: ({ maybeDoneText }) => notifyDone(maybeDoneText),
-    UpdatedCurrentCompany: ({ maybeDoneText }) =>
+    ChangedCurrentMembership: ({ maybeDoneText }) =>
       Update.combine([notifyDone(maybeDoneText), reenterCompanyPage]),
   }),
 };
