@@ -88,7 +88,7 @@ describe("ログインチャレンジ", () => {
         );
         const setCookie = reissued.getSetCookie();
         expect(setCookie.length).toBe(1);
-        expect(setCookie[0]).toContain("mfa_login_challenge=");
+        expect(setCookie[0]).toContain("__Host-mfa_login_challenge=");
         expect(setCookie[0]).toContain("Max-Age=600");
         expect(setCookie[0]).toContain("HttpOnly");
         expect(setCookie[0]).toContain("SameSite=Lax");
@@ -139,7 +139,9 @@ describe("ログインチャレンジ", () => {
           false,
         );
         expect(
-          setCookies.some((c) => c.startsWith("mfa_login_challenge=") && /max-age=0/i.test(c)),
+          setCookies.some(
+            (c) => c.startsWith("__Host-mfa_login_challenge=") && /max-age=0/i.test(c),
+          ),
         ).toBe(true);
 
         const browserHeaders = browserCookieHeaders(
