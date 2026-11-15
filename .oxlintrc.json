@@ -155,6 +155,7 @@
     "taimei/dialog-visible-only-by-is-dialog-visible": "error",
     "taimei/mfa-failure-messages-import-only-in-mfa": "error",
     "taimei/page-request-only-in-page-request": "error",
+    "taimei/form-only-in-form-view": "error",
     "taimei/no-external-font-host": "error",
     "taimei/sdk-import-only-peer-dependencies": "error"
   },
