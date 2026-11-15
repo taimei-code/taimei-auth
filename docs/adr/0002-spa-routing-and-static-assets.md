@@ -30,6 +30,15 @@
 - `/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は、client 側の遷移ではなく document を読み直す (`reloadDocument`)。理由は 2 つある。session に応じた redirect は、document の要求でしか動かない。もう 1 つは cache の鮮度で、Effect Atom の registry (取得したデータの cache) に古い所属の一覧が残ったまま `/account` を開く前の確認がそれを読むと、事業所の作成や招待の受諾の直後でも事業所登録へ戻してしまう
 - search の値は文字列のまま読む (`web/src/app/search-params.ts`)。router の既定は数字だけの値を数に、`true` を boolean に変え、consumer が渡す query が zod の検査で落ちる
 
+### security の header は buildApp の最初の middleware で付ける (2026-11-15 追記、#463)
+
+- CSP・`X-Frame-Options`・`Referrer-Policy` などの header は、`src/security-headers.ts` の `securityHeaders` を `buildApp` の最初の middleware に置いて付ける。Worker (`src/worker.ts`) と Bun (`testing/bun-server.ts`) の両方が `buildApp` を通るので、API・RPC・静的な file (`ASSETS.fetch` の応答を含む) のすべてに同じ値が付く。workerd の `ASSETS.fetch` の応答の headers は書き換えられる (`wrangler dev` で確かめた)
+- CSP は `'self'` の allowlist にする。document は静的で inline の script が無く、nonce や hash を差す仕組みが要らない。外の origin を許すのは `img-src` と `connect-src` だけである。`img-src` の `data:` は MFA の QR コード (`data:` URL) のため、`https://avatars.githubusercontent.com` と `https://*.public.blob.vercel-storage.com` は avatar (GitHub のログインで得た画像と、upload した画像) のため。`https:` 全体を許すと、差し込まれた `<img>` が任意の host へ値を送れる。`connect-src` の `https://vercel.com` は、avatar の upload (`@vercel/blob/client` の `upload`) が `https://vercel.com/api/blob` に要求を出すため
+- hono の既定から 3 つの値を変える。`Strict-Transport-Security` は `max-age=86400` で `includeSubDomains` を付けない (長い max-age は誤った時に browser の cache が切れるまで戻せないので、短く始めて様子を見る)。`Cross-Origin-Opener-Policy` は `same-origin-allow-popups` (GitHub の OAuth のような、画面が開く popup を壊さない)。`Permissions-Policy` は camera・microphone・geolocation・payment・usb を止める (画面が使わない)。document の `<meta name="referrer">` は、header と同じ値を 2 か所に持たないよう外した
+- `Cross-Origin-Resource-Policy` は付けない (hono の既定の `same-origin` を外す)。ほかの origin が `/auth/assets/*` や canary の icon を読んでいないかを確かめていないためで、#477 で決める
+- sign-out の成功の応答には `Clear-Site-Data: "cache", "storage"` を付ける。`"cookies"` は応答の登録 domain 全体 (consumer の subdomain を含む) の cookie を消すので入れない。session の cookie は better-auth の sign-out が `Set-Cookie` で消す
+- zod 4 は schema を作る時に `Function("")` で eval を使えるかを試し、CSP の下ではこれが違反として報告される。SPA の 2 つの application の entry (`web/src/app/*/entry.ts`) の最初で `web/src/shared/zod-jitless.ts` を import し、schema を作る前に試しを止める。bundle の root (`web/src/main.ts`) に置くと zod の一部が entry の chunk に写り、本番の JS が `acceptance/drop-react.test.ts` の AC-009 の上限を超える
+
 ## Why
 
 - 1 つの build で済むので、bundle や chunk hash の重複を避けられる
