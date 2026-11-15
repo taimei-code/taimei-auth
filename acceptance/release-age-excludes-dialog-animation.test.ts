@@ -104,7 +104,7 @@ describe("minimumReleaseAge の例外 (#385)", () => {
 });
 
 describe("dialog の開閉の animation (#424)", () => {
-  test("AC-004: dialog を閉じる操作の後、閉じる animation が終わるまで中身を描き、終わると消す", () => {
+  test("AC-004: dialog を閉じる操作の後、閉じる animation が終わるまで中身を描き、終わると消す (閉じるボタンの名前は「閉じる」。#469)", () => {
     scene(
       { update, view },
       given(enrollmentDialogShowingSecret()),
