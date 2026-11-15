@@ -36,6 +36,7 @@ const DIALOG_VISIBLE = "taimei(dialog-visible-only-by-is-dialog-visible)";
 const DIALOG_TRANSITION_STATE = "taimei(dialog-transition-state-only-in-dialog-view)";
 const DIALOG_HELD_REPORT = "taimei(dialog-held-report-only-in-dialog-view)";
 const PAGE_REQUEST = "taimei(page-request-only-in-page-request)";
+const EXTERNAL_FONT = "taimei(no-external-font-host)";
 const CHILD_MESSAGE_IN_ROOT = "foldkit(no-child-message-construction-in-root)";
 const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
@@ -63,6 +64,26 @@ const CASES: readonly Case[] = [
     source:
       "export const held = (model: { dialog: { maybeOutMessageAfterClose: unknown } }) => model.dialog.maybeOutMessageAfterClose;",
     expectedRules: [DIALOG_HELD_REPORT],
+  },
+  {
+    name: "メールの template は Google Fonts を @import できない",
+    path: "src/email/font-probe.ts",
+    source:
+      "export const style = `@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP');`;",
+    expectedRules: [EXTERNAL_FONT],
+  },
+  {
+    name: "画面の code は Google Fonts の font を読めない",
+    path: "web/src/shared/font-probe.ts",
+    source: 'export const href = "https://fonts.googleapis.com/css2?family=Inter";',
+    expectedRules: [EXTERNAL_FONT],
+  },
+  {
+    name: "本番以外の shell は Google Fonts の stylesheet を読めない",
+    path: "testing/font-probe.ts",
+    source:
+      'export const link = "<link rel=\\"preconnect\\" href=\\"https://fonts.gstatic.com\\" />";',
+    expectedRules: [EXTERNAL_FONT],
   },
   {
     name: "要求の番号を来訪番号と組にせず Schema に書けない。page を作り直した後に前の page の応答を受ける",
