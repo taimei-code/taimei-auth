@@ -31,7 +31,7 @@ PoC (crypto core と session 発行) とプロトタイプの 2 段で、TOTP �
   verified 化と timestep (TOTP の 30 秒刻みの counter) 消費を条件に付けた単文 UPDATE、コード消費は単調比較または `used_at IS NULL` の単文で行う。
   勝者はちょうど 1 つになる
 - チャレンジ状態は Redis の 1 key (`mfa:login-challenge:*`、TTL 600 秒) と自前で署名した cookie
-  `mfa_login_challenge` (HMAC 鍵は AUTH_SECRET を共有) で持つ。単回消費は getAndDelete で行う。試行枠は
+  `__Host-mfa_login_challenge` (HMAC 鍵は AUTH_SECRET を共有) で持つ。単回消費は getAndDelete で行う。試行枠は
   per-challenge 5 回で fail-closed とする。session 発行は `AuthApi` の `issueSession` (`src/auth-wiring.ts`) の 1 窓口で行う
   (`internalAdapter.createSession` と公開 export の `makeSignature` を使い、Max-Age を明示的に付与する)
 - チャレンジの要否は、一次認証成功後の after-hook が `mfa_totp.verified_at` の最小射影を読んで決める (+1 SELECT、

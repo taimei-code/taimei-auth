@@ -517,7 +517,7 @@ describe("enforceChallenge (program 単体)", () => {
   const challengeWithCookie = Exit.succeed({
     _tag: "Challenge" as const,
     cookie: expect.objectContaining({
-      name: "mfa_login_challenge",
+      name: "__Host-mfa_login_challenge",
       value: expect.stringMatching(/.+/),
     }),
   });

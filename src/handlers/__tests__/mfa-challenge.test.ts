@@ -69,13 +69,13 @@ describe("MFA チャレンジ API", () => {
         expect(yield* responseJson(res)).toEqual({ redirect_url: "/account/security" });
         const setCookieNames = res.headers.getSetCookie().map((c) => c.split("=")[0]);
         expect(setCookieNames.sort()).toEqual([
+          "__Host-mfa_login_challenge",
           "__Secure-better-auth.session_token",
-          "mfa_login_challenge",
         ]);
         expect(
           res.headers
             .getSetCookie()
-            .filter((cookie) => cookie.startsWith("mfa_login_challenge="))
+            .filter((cookie) => cookie.startsWith("__Host-mfa_login_challenge="))
             .map((cookie) => attributeSet(cookie).has("Secure")),
         ).toEqual([true]);
       }),

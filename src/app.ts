@@ -17,6 +17,7 @@ import { attemptBudgetMiddleware } from "./handlers/attempt-budget-hono";
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
+import { clearSiteDataOnSignOut, securityHeaders } from "./security-headers";
 
 async function readEmailWithoutCloningBody(c: Context): Promise<string> {
   const body = await c.req
@@ -33,6 +34,8 @@ export type AppOptions = {
 
 export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
+
+  app.use("*", securityHeaders);
 
   const allowedOrigins = getTrustedOrigins();
   app.use(
@@ -77,6 +80,8 @@ export function buildApp(options: AppOptions): Hono {
     ),
     attemptBudgetMiddleware(ATTEMPT_BUDGETS.magicLinkPerEmail, readEmailWithoutCloningBody),
   );
+
+  app.use("/api/auth/sign-out", clearSiteDataOnSignOut);
 
   app.on([...BETTER_AUTH_METHODS], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();

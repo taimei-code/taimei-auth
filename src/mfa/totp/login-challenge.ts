@@ -14,7 +14,7 @@ import {
 import { ChallengeExpired, type InvalidCode, Locked } from "../errors";
 import { ownKey, type TtlKey } from "../../ttl-key";
 
-const LOGIN_CHALLENGE_COOKIE = "mfa_login_challenge";
+const LOGIN_CHALLENGE_COOKIE = "__Host-mfa_login_challenge";
 
 const ATTEMPT_BUDGET = ATTEMPT_BUDGETS.mfaLoginChallenge;
 const CHALLENGE_TTL_SECONDS = ATTEMPT_BUDGET.windowSeconds;
