@@ -1815,6 +1815,13 @@ const ROWS: readonly Row[] = [
       "dialog が閉じた後に出す報告は shared/ui/dialog-view.ts の reportingDialogFoldsOf の closeThen と reportAfterClose で置く (置いた報告を、ほかの file が直接読まない)",
   },
   {
+    name: "no-external-font-host",
+    within: ["web/**", "testing/**", "src/email/**"],
+    matchers: [{ kind: "literal", pattern: /fonts\.(googleapis|gstatic)\.com/ }],
+    message:
+      "外部の font (Google Fonts) を読まない。書体は Tailwind の既定の system の font を使う。外部の stylesheet は描画を止め、画面とメールを開いた事実を第三者に送る",
+  },
+  {
     name: "page-request-only-in-page-request",
     within: ["web/src/**"],
     allowedIn: ["web/src/shared/page-request.ts"],

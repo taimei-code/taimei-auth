@@ -166,10 +166,6 @@ const previewHtml = (preview: string): string => {
   return `<div style="${STYLES.preview}" data-skip-in-text="true">${escapeHtml(text)}${padding}</div>`;
 };
 
-const FONT_IMPORT = `
-            @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
-          `;
-
 const DIVIDER_HTML = `<hr style="${STYLES.divider}"/>`;
 
 const copyrightText = (body: EmailBody, year: number): string => `© ${year} ${body.appName}`;
@@ -196,7 +192,7 @@ const renderHtml = (body: EmailBody, year: number): string => {
     DIVIDER_HTML,
     `<p style="${STYLES.copyright}">${escapeHtml(copyrightText(body, year))}</p>`,
   ].join("");
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html dir="ltr" lang="ja"><head>${logoPreload}<meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/><meta name="x-apple-disable-message-reformatting"/><style>${FONT_IMPORT}</style></head><body style="${STYLES.body}">${previewHtml(body.preview)}<table border="0" width="100%" cellPadding="0" cellSpacing="0" role="presentation" align="center"><tbody><tr><td style="${STYLES.bodyCell}">${TABLE_OPEN} style="${STYLES.container}"><tbody><tr style="width:100%"><td>${content}</td></tr></tbody></table></td></tr></tbody></table></body></html>`;
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html dir="ltr" lang="ja"><head>${logoPreload}<meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/><meta name="x-apple-disable-message-reformatting"/></head><body style="${STYLES.body}">${previewHtml(body.preview)}<table border="0" width="100%" cellPadding="0" cellSpacing="0" role="presentation" align="center"><tbody><tr><td style="${STYLES.bodyCell}">${TABLE_OPEN} style="${STYLES.container}"><tbody><tr style="width:100%"><td>${content}</td></tr></tbody></table></td></tr></tbody></table></body></html>`;
 };
 
 const HTML_TO_TEXT_WHITESPACE_RUN = /[ \t\r\n\f\u200B]+/g;

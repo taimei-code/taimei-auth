@@ -15,9 +15,6 @@ const config: Config = {
   content: PRODUCTION_CONTENT_GLOBS,
   theme: {
     extend: {
-      fontFamily: {
-        sans: ["Inter", "system-ui", "-apple-system", "sans-serif"],
-      },
       colors: {
         blue: {
           "400": "#2589FE",
