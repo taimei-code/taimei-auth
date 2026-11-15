@@ -142,12 +142,14 @@ test("encode していない redirect_url の query で開いた開発者ホー�
   );
 });
 
-test("既存の画面と同じ CSS が当たり、書体は Inter で、上端の帯は primary の色である", async ({
+test("既存の画面と同じ CSS が当たり、書体は system の font で、上端の帯は primary の色である", async ({
   page,
 }) => {
   await page.goto(DEV_HOME_PATH);
 
-  expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain("Inter");
+  const fontFamily = await page.evaluate(() => getComputedStyle(document.body).fontFamily);
+  expect(fontFamily).toContain("system-ui");
+  expect(fontFamily).not.toContain("Inter");
   await expect(page.getByRole("banner")).toHaveCSS("background-color", "rgb(23, 23, 23)");
 });
 
