@@ -67,12 +67,13 @@ const ENROLLMENT = {
 const enrollment = (message: MfaEnrollment.Message): Message =>
   Message.GotMfaEnrollmentMessage({ message });
 
-const requestNumberOfEnrollMfa = (commands: ReadonlyArray<{ name: string; args?: unknown }>) => {
+const requestOfEnrollMfa = (commands: ReadonlyArray<{ name: string; args?: unknown }>) => {
   const enrollMfa = commands.find((command) => command.name === MfaEnrollment.EnrollMfa.name);
   if (enrollMfa === undefined) {
     throw new Error("EnrollMfa was not requested");
   }
-  return (enrollMfa.args as { requestNumber: number }).requestNumber;
+  const { visit, requestNumber } = enrollMfa.args as { visit: number; requestNumber: number };
+  return { visit, requestNumber };
 };
 
 const enrollmentDialogShowingSecret = (): Model => {
@@ -90,7 +91,7 @@ const enrollmentDialogShowingSecret = (): Model => {
     opened.model,
     enrollment(
       MfaEnrollment.Message.SucceededEnrollMfa({
-        requestNumber: requestNumberOfEnrollMfa(opened.commands ?? []),
+        ...requestOfEnrollMfa(opened.commands ?? []),
         enrollment: ENROLLMENT,
       }),
     ),
