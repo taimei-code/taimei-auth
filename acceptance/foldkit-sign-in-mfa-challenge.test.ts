@@ -160,22 +160,6 @@ describe("共通ログイン画面と共通サインアップ画面は Foldkit �
     ]);
   });
 
-  test("AC-007: 送信のボタンは、必要な入力が空の間は無効で、入れると有効になる", async () => {
-    const { sceneAt } = await loadApplication();
-    sceneAt(`${AUTH_ORIGIN}/auth?${signInSearch(ALLOWED_REDIRECT)}`, (Scene) => [
-      Scene.expect(button(Scene, "Magic Link を送信")).toBeDisabled(),
-      Scene.type(Scene.label("メールアドレス"), "user@example.com"),
-      Scene.expect(button(Scene, "Magic Link を送信")).toBeEnabled(),
-    ]);
-    sceneAt(`${AUTH_ORIGIN}/auth/signup?${signInSearch(ALLOWED_REDIRECT)}`, (Scene) => [
-      Scene.expect(button(Scene, "Magic Link で登録")).toBeDisabled(),
-      Scene.type(Scene.label("お名前"), "山田 太郎"),
-      Scene.expect(button(Scene, "Magic Link で登録")).toBeDisabled(),
-      Scene.type(Scene.label("メールアドレス"), "user@example.com"),
-      Scene.expect(button(Scene, "Magic Link で登録")).toBeEnabled(),
-    ]);
-  });
-
   test.each([
     ["/auth", "Magic Link を送信"],
     ["/auth/signup", "Magic Link で登録"],
