@@ -39,6 +39,7 @@ const editing = (): Model => ({
     orgCode: "PERSONAL",
     creation: Submission.Idle(),
     signOut: Submission.Idle(),
+    showsRequiredErrors: false,
   },
 });
 
@@ -70,7 +71,7 @@ describe("事業所の登録の画面", () => {
       expect(role("group", { name: "事業形態" })).toExist(),
       expect(role("radio", { name: "個人事業主" })).toBeChecked(),
       expect(role("radio", { name: "法人" })).not.toBeChecked(),
-      expect(createButton).toBeDisabled(),
+      expect(createButton).toBeEnabled(),
       expect(text("URL が auth.taimei-code.com であることを確認してください")).toExist(),
       expect(role("button", { name: "別のアカウントでログインする" })).toBeEnabled(),
     );

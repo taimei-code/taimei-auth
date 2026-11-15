@@ -117,13 +117,16 @@ test("無効化ダイアログは error を表示し、閉じると入力状態�
   let dialog = page.getByRole("dialog");
   await dialog.locator("#mfa-disable-code").fill(await wrongTotpCode(secret));
   await dialog.getByRole("button", { name: "無効にする" }).click();
-  await expect(dialog.getByRole("alert")).toHaveText("入力されたコードが正しくありません。");
+  await expect(dialog.locator("#mfa-disable-code")).toBeFocused();
+  await expect(dialog.locator("#mfa-disable-code")).toHaveAccessibleDescription(
+    /入力されたコードが正しくありません。/,
+  );
 
   await dialog.getByRole("button", { name: "キャンセル" }).click();
   await row.getByRole("button", { name: "無効にする" }).click();
   dialog = page.getByRole("dialog");
   await expect(dialog.locator("#mfa-disable-code")).toHaveValue("");
-  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(dialog.getByText("入力されたコードが正しくありません。")).toHaveCount(0);
 
   await dialog.locator("#mfa-disable-code").fill(await totpCode(secret));
   await dialog.getByRole("button", { name: "無効にする" }).click();
@@ -372,7 +375,7 @@ test("「ログインをやり直す」は末尾スラッシュ無しの共通�
   expect(href?.startsWith(`${SIGN_IN_LANDING_PATH}&redirect_url=`)).toBe(true);
 });
 
-test("空の code は verify を呼ばない", async ({ page }) => {
+test("空の code は verify を呼ばず、入力欄に誤りを示して focus する", async ({ page }) => {
   let postCalls = 0;
   await challengePending(page);
   await routeEndpoint(page, "mfaChallenge.verify", async (route) => {
@@ -381,10 +384,10 @@ test("空の code は verify を呼ばない", async ({ page }) => {
   });
 
   await page.goto("/auth/mfa");
-  await expect(page.getByRole("button", { name: "ログインを続ける" })).toBeDisabled();
-  await page.locator("form").evaluate((form) => (form as HTMLFormElement).requestSubmit());
-  await page.waitForTimeout(100);
+  await page.getByRole("button", { name: "ログインを続ける" }).click();
 
+  await expect(challengeCodeInput(page)).toBeFocused();
+  await expect(page.getByText("確認コードを入力してください。")).toBeVisible();
   expect(postCalls).toBe(0);
 });
 
@@ -478,8 +481,8 @@ test("有効化が EnrollmentChanged で失敗した後に開き直すと、登�
   await dialog.getByRole("button", { name: "次へ" }).click();
   await dialog.locator("#mfa-enroll-code").fill("123456");
   await dialog.getByRole("button", { name: "有効にする" }).click();
-  await expect(dialog.getByRole("alert")).toHaveText(
-    "登録情報が更新されました。もう一度登録を開始してください。",
+  await expect(dialog.locator("#mfa-enroll-code")).toHaveAccessibleDescription(
+    /登録情報が更新されました。もう一度登録を開始してください。/,
   );
 
   await page.keyboard.press("Escape");

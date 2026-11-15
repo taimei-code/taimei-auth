@@ -18,6 +18,7 @@ import {
 
 import * as CompanyDeletion from "../company-deletion";
 import {
+  FocusCompanySettingsName,
   init,
   Message,
   type Model,
@@ -60,9 +61,11 @@ describe("事業所の名前と事業形態の保存", () => {
     expect(second.commands ?? []).toEqual([]);
   });
 
-  test("空白だけの名前は送らない", () => {
+  test("空白だけの名前は送らず、事業所名の欄へ focus する", () => {
     const blank = update(editing(), Message.UpdatedName({ value: "   " })).model;
-    expect(update(blank, Message.SubmittedCompanyForm()).commands ?? []).toEqual([]);
+    expect(
+      (update(blank, Message.SubmittedCompanyForm()).commands ?? []).map(({ name }) => name),
+    ).toEqual([FocusCompanySettingsName.name]);
   });
 
   test("保存の成功で事業所の状態の読み直しを頼む", () => {

@@ -13,6 +13,7 @@ import {
 } from "foldkit/scene";
 
 import {
+  FocusMagicLinkField,
   init,
   Message,
   type Params,
@@ -45,7 +46,7 @@ describe("ログイン画面", () => {
       expect(text("taimei-auth にログイン")).toExist(),
       expect(label("メールアドレス")).toExist(),
       expect(label("お名前")).toBeAbsent(),
-      expect(role("button", { name: "Magic Link を送信" })).toBeDisabled(),
+      expect(role("button", { name: "Magic Link を送信" })).toBeEnabled(),
       expect(role("button", { name: "GitHub でログイン" })).toBeEnabled(),
       expect(role("link", { name: "新規登録" })).toHaveAttr("href", "/other"),
     );
@@ -110,15 +111,17 @@ describe("ログイン画面", () => {
 });
 
 describe("新規登録画面", () => {
-  test("お名前の欄を出し、両方を入れるまで送れない", () => {
+  test("お名前の欄を出し、お名前が空のまま送ると、お名前の欄に誤りを示す", () => {
     scene(
       { update, view },
       given(pageOf("SignUp")),
       expect(text("taimei-auth に登録")).toExist(),
       type(label("メールアドレス"), "user@example.com"),
-      expect(role("button", { name: "Magic Link で登録" })).toBeDisabled(),
-      type(label("お名前"), "山田 太郎"),
-      expect(role("button", { name: "Magic Link で登録" })).toBeEnabled(),
+      click(role("button", { name: "Magic Link で登録" })),
+      expect(text("お名前を入力してください。")).toExist(),
+      expect(label("お名前")).toHaveAttr("aria-invalid", "true"),
+      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "false"),
+      Command.resolve(FocusMagicLinkField, Message.CompletedFocusField()),
       expect(role("link", { name: "ログイン" })).toHaveAttr("href", "/other"),
     );
   });

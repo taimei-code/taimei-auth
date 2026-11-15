@@ -14,6 +14,8 @@ import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-clien
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
 import { inputView } from "../../shared/ui/input-view";
+import { formView } from "../../shared/ui/form-view";
+import { focusField, isBlank, maybeFieldError } from "../../shared/required-field";
 import { radioFieldsetView } from "../../shared/ui/radio-fieldset-view";
 import { orgCodeOptionsIn } from "../org-code-options";
 import { NoticeTone } from "../../shared/ui/toast-view";
@@ -24,6 +26,7 @@ const Editing = Schema.Struct({
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
   save: Submission,
+  showsRequiredErrors: Schema.Boolean,
   deletion: CompanyDeletion.Model,
 });
 type Editing = typeof Editing.Type;
@@ -54,8 +57,16 @@ export const Message = defineMessageUnion({
   SucceededUpdateCompany: { visit: Schema.Int },
   FailedUpdateCompany: { visit: Schema.Int, failure: UpdateCompanyFailure },
   GotCompanyDeletionMessage: { message: CompanyDeletion.Message },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
+
+const NAME_FIELD = { id: "company-name", label: "事業所名" } as const;
+
+export const FocusCompanySettingsName = Command.define("FocusCompanySettingsName", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(NAME_FIELD.id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 const isUpdatedCompany = Schema.is(Message.SucceededUpdateCompany);
 
@@ -143,6 +154,7 @@ export const init = (
           nameDraft: membership.companyName,
           orgCode: membership.orgCode,
           save: Submission.Idle(),
+          showsRequiredErrors: false,
           deletion: CompanyDeletion.init({ visit, companyId: membership.companyId }),
         }),
     },
@@ -176,12 +188,18 @@ const whileEditable = (model: Model, next: (editing: Editing) => UpdateReturn): 
 const submitCompanyForm = (model: Model): UpdateReturn =>
   whileEditable(model, (editing) => {
     const name = String.trim(editing.nameDraft);
-    return String.isEmpty(name)
-      ? { model }
+    return isBlank(name)
+      ? {
+          model: withSettings(model, modifyFields(editing, { showsRequiredErrors: () => true })),
+          commands: [FocusCompanySettingsName()],
+        }
       : {
           model: withSettings(
             model,
-            modifyFields(editing, { save: () => Submission.Submitting() }),
+            modifyFields(editing, {
+              save: () => Submission.Submitting(),
+              showsRequiredErrors: () => false,
+            }),
           ),
           commands: [
             UpdateCompany({
@@ -256,6 +274,7 @@ export const update = (model: Model, message: Message) =>
       finishUpdate(model, visit, failureOutMessage(failure)),
     GotCompanyDeletionMessage: ({ message: deletionMessage }) =>
       foldCompanyDeletion(model, deletionMessage),
+    CompletedFocusField: () => ({ model }),
   });
 
 const companyFormView = (
@@ -263,46 +282,54 @@ const companyFormView = (
   isCompanyChanging: boolean,
   h: HtmlBuilder<Message>,
 ): Html =>
-  h.form(
-    [h.Class("max-w-md space-y-4"), h.OnSubmit(Message.SubmittedCompanyForm())],
-    [
-      inputView(
-        {
-          id: "company-name",
-          label: "事業所名",
-          type: "text",
-          value: editing.nameDraft,
-          onInput: (value) => Message.UpdatedName({ value }),
-          submission: editing.save,
-          placeholder: "",
-          autocomplete: "organization",
-          maxLength: 100,
-        },
-        h,
-      ),
-      radioFieldsetView(
-        {
-          id: "org_code",
-          legend: "事業形態",
-          name: "org_code",
-          options: ORG_CODE_OPTIONS,
-          selected: editing.orgCode,
-          onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
-          isDisabled: Submission.guards.Submitting(editing.save),
-        },
-        h,
-      ),
-      buttonView(
-        {
-          label: "保存",
-          type: "submit",
-          look: "primaryInline",
-          submission: editing.save,
-          isBlocked: isCompanyChanging || String.isEmpty(String.trim(editing.nameDraft)),
-        },
-        h,
-      ),
-    ],
+  formView(
+    {
+      onSubmit: Message.SubmittedCompanyForm(),
+      attributes: [h.Class("max-w-md space-y-4")],
+      children: [
+        inputView(
+          {
+            ...NAME_FIELD,
+            type: "text",
+            value: editing.nameDraft,
+            onInput: (value) => Message.UpdatedName({ value }),
+            submission: editing.save,
+            placeholder: "",
+            autocomplete: "organization",
+            maxLength: 100,
+            enterKeyHint: "done",
+            maybeErrorMessage: maybeFieldError(editing.showsRequiredErrors, {
+              ...NAME_FIELD,
+              value: editing.nameDraft,
+            }),
+          },
+          h,
+        ),
+        radioFieldsetView(
+          {
+            id: "org_code",
+            legend: "事業形態",
+            name: "org_code",
+            options: ORG_CODE_OPTIONS,
+            selected: editing.orgCode,
+            onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
+            isDisabled: Submission.guards.Submitting(editing.save),
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: "保存",
+            type: "submit",
+            look: "primaryInline",
+            submission: editing.save,
+            isBlocked: isCompanyChanging,
+          },
+          h,
+        ),
+      ],
+    },
+    h,
   );
 
 const editingView = (

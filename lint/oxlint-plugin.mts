@@ -1822,6 +1822,14 @@ const ROWS: readonly Row[] = [
       "外部の font (Google Fonts) を読まない。書体は Tailwind の既定の system の font を使う。外部の stylesheet は描画を止め、画面とメールを開いた事実を第三者に送る",
   },
   {
+    name: "form-only-in-form-view",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/ui/form-view.ts"],
+    matchers: [{ kind: "member", paths: ["h.form"], callOnly: true }],
+    message:
+      "form は shared/ui/form-view.ts の formView で書く。novalidate で browser の検証を止め、送信の処理が誤りを示して最初の誤りの欄へ focus を移し、必須の印の説明を form の先頭に出す",
+  },
+  {
     name: "page-request-only-in-page-request",
     within: ["web/src/**"],
     allowedIn: ["web/src/shared/page-request.ts"],

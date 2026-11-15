@@ -11,11 +11,13 @@ import { authPageCardView } from "../../auth/auth-page-card-view";
 import { checkSession } from "../../auth/sign-in-client";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { SpaHttpClient } from "../../shared/spa-http-client";
-import { maybeRejectedMessage, Submission } from "../../shared/submission";
+import { maybeRejectedMessage, Submission, withoutRejection } from "../../shared/submission";
 import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { buttonView } from "../../shared/ui/button-view";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";
 import { inputView } from "../../shared/ui/input-view";
+import { formView } from "../../shared/ui/form-view";
+import { focusField, isBlank, maybeFieldError } from "../../shared/required-field";
 import { radioFieldsetView } from "../../shared/ui/radio-fieldset-view";
 import { orgCodeOptionsIn } from "../org-code-options";
 
@@ -30,6 +32,7 @@ const Phase = defineTaggedUnion({
     orgCode: OrgCodeSchema,
     creation: Submission,
     signOut: Submission,
+    showsRequiredErrors: Schema.Boolean,
   },
 });
 type Phase = typeof Phase.Type;
@@ -55,8 +58,16 @@ export const Message = defineMessageUnion({
   ClickedSignOut: {},
   SucceededSignOut: { visit: Schema.Int },
   FailedSignOut: { visit: Schema.Int },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
+
+const NAME_FIELD = { id: "company-name", label: "事業所名" } as const;
+
+export const FocusSignUpCompanyName = Command.define("FocusSignUpCompanyName", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(NAME_FIELD.id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 export const OutMessage = defineMessageUnion({
   ConfirmedCompanyMembership: { redirectUrl: Schema.String },
@@ -151,10 +162,8 @@ const startEditing = (): Phase =>
     orgCode: "PERSONAL",
     creation: Submission.Idle(),
     signOut: Submission.Idle(),
+    showsRequiredErrors: false,
   });
-
-const withoutRejection = (submission: Submission): Submission =>
-  Submission.guards.Rejected(submission) ? Submission.Idle() : submission;
 
 const withPhase = (model: Model, phase: Phase): Model =>
   modifyFields(model, { phase: () => phase });
@@ -186,8 +195,11 @@ const requireSignIn = (model: Model): UpdateReturn => ({
 const submitCompanyForm = (model: Model): UpdateReturn =>
   whileEditable(model, (editing) => {
     const name = String.trim(editing.name);
-    if (String.isEmpty(name)) {
-      return { model };
+    if (isBlank(name)) {
+      return {
+        model: withPhase(model, modifyFields(editing, { showsRequiredErrors: () => true })),
+        commands: [FocusSignUpCompanyName()],
+      };
     } else {
       return {
         model: withPhase(
@@ -293,6 +305,7 @@ export const update = (model: Model, message: Message) =>
       forThisVisit(model, visit, () =>
         withEditing(model, () => ({ model, outMessage: OutMessage.SignedOut() })),
       ),
+    CompletedFocusField: () => ({ model }),
     FailedSignOut: ({ visit }) =>
       forThisVisit(model, visit, () =>
         withEditing(model, (editing) => ({
@@ -312,55 +325,56 @@ const maybeFailureMessageOf = (editing: Editing): Option.Option<string> =>
   );
 
 const companyFormView = (editing: Editing, h: HtmlBuilder<Message>): Html =>
-  h.form(
-    [
-      h.Class("space-y-4"),
-      h.AriaLabel("事業所登録フォーム"),
-      h.OnSubmit(Message.SubmittedCompanyForm()),
-    ],
-    [
-      inputView(
-        {
-          id: "company-name",
-          label: "事業所名",
-          type: "text",
-          value: editing.name,
-          onInput: (value) => Message.UpdatedName({ value }),
-          submission: editing.creation,
-          placeholder: "例: 株式会社サンプル / 山田太郎",
-          autocomplete: "organization",
-          maxLength: 100,
-          hint: {
-            text: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
-            maybeErrorMessage: Option.none(),
+  formView(
+    {
+      onSubmit: Message.SubmittedCompanyForm(),
+      attributes: [h.Class("space-y-4"), h.AriaLabel("事業所登録フォーム")],
+      children: [
+        inputView(
+          {
+            ...NAME_FIELD,
+            type: "text",
+            value: editing.name,
+            onInput: (value) => Message.UpdatedName({ value }),
+            submission: editing.creation,
+            placeholder: "例: 株式会社サンプル / 山田太郎",
+            autocomplete: "organization",
+            maxLength: 100,
+            hint: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
+            maybeErrorMessage: maybeFieldError(editing.showsRequiredErrors, {
+              ...NAME_FIELD,
+              value: editing.name,
+            }),
+            enterKeyHint: "done",
           },
-        },
-        h,
-      ),
-      radioFieldsetView(
-        {
-          id: "org-code",
-          legend: "事業形態",
-          name: "org_code",
-          options: ORG_CODE_OPTIONS,
-          selected: editing.orgCode,
-          onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
-          isDisabled: Submission.guards.Submitting(editing.creation),
-        },
-        h,
-      ),
-      buttonView(
-        {
-          label: "事業所を作成",
-          type: "submit",
-          look: "primary",
-          submission: editing.creation,
-          isBlocked: String.isEmpty(String.trim(editing.name)),
-        },
-        h,
-      ),
-      ...maybeAlertTextView(maybeFailureMessageOf(editing), h),
-    ],
+          h,
+        ),
+        radioFieldsetView(
+          {
+            id: "org-code",
+            legend: "事業形態",
+            name: "org_code",
+            options: ORG_CODE_OPTIONS,
+            selected: editing.orgCode,
+            onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
+            isDisabled: Submission.guards.Submitting(editing.creation),
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: "事業所を作成",
+            type: "submit",
+            look: "primary",
+            submission: editing.creation,
+            isBlocked: false,
+          },
+          h,
+        ),
+        ...maybeAlertTextView(maybeFailureMessageOf(editing), h),
+      ],
+    },
+    h,
   );
 
 const editingView = (editing: Editing, h: HtmlBuilder<Message>): Html =>

@@ -11,6 +11,7 @@ import {
 
 import { MFA_FAILURE_MESSAGES } from "../mfa-failure-messages";
 import {
+  FocusChallengeCode,
   init,
   LoadChallengeState,
   Message,
@@ -92,8 +93,19 @@ describe("MFA チャレンジのコードの送信", () => {
     );
   });
 
-  test("空のコードは送らない", () => {
-    story(update, given(entering("  ")), message(Message.SubmittedCode()), Command.expectNone());
+  test("空白だけのコードは送らず、確認コードの必須の誤りを示して入力欄へ focus する", () => {
+    story(
+      update,
+      given(entering("  ")),
+      message(Message.SubmittedCode()),
+      Command.expectExact(FocusChallengeCode),
+      model((next) => {
+        expect(next.phase).toMatchObject({
+          submission: { _tag: "Rejected", message: "確認コードを入力してください。" },
+        });
+      }),
+      Command.resolve(FocusChallengeCode, Message.CompletedFocusField()),
+    );
   });
 
   test("送信中の二重の送信は、もう一度は送らない", () => {
@@ -158,6 +170,7 @@ describe("MFA チャレンジのコードの送信", () => {
       given(entering("123456")),
       message(Message.SubmittedCode()),
       Command.resolve(VerifyCode, Message.FailedVerifyCode({ visit: VISIT, failure })),
+      Command.resolve(FocusChallengeCode, Message.CompletedFocusField()),
       model((next) => {
         expect(next.phase).toMatchObject({
           _tag: "Entering",
@@ -176,6 +189,7 @@ describe("MFA チャレンジのコードの送信", () => {
         VerifyCode,
         Message.FailedVerifyCode({ visit: VISIT, failure: "Unexpected" }),
       ),
+      Command.resolve(FocusChallengeCode, Message.CompletedFocusField()),
       model((next) => {
         expect(next.phase).toMatchObject({
           submission: {

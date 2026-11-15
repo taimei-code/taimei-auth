@@ -12,6 +12,7 @@ import {
 import { SIGN_OUT_FAILED } from "../../auth/sign-out";
 import { Submission } from "../../shared/submission";
 import {
+  FocusSignUpCompanyName,
   CheckSession,
   CreateCompany,
   init,
@@ -40,7 +41,14 @@ const editingWith = ({
   signOut = Submission.Idle(),
 }: EditingFields): Model => ({
   ...checking(),
-  phase: { _tag: "Editing", name, orgCode: "PERSONAL", creation, signOut },
+  phase: {
+    _tag: "Editing",
+    name,
+    orgCode: "PERSONAL",
+    creation,
+    signOut,
+    showsRequiredErrors: false,
+  },
 });
 
 const editing = (name = ""): Model => editingWith({ name });
@@ -167,12 +175,13 @@ describe("事業所の作成", () => {
     );
   });
 
-  test("空白だけの事業所名では作成しない", () => {
+  test("空白だけの事業所名では作成せず、事業所名の欄に誤りを示して focus する", () => {
     story(
       update,
       given(editing("   ")),
       message(Message.SubmittedCompanyForm()),
-      Command.expectNone(),
+      Command.expectExact(FocusSignUpCompanyName),
+      Command.resolve(FocusSignUpCompanyName, Message.CompletedFocusField()),
     );
   });
 

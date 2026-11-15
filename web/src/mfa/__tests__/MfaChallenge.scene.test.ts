@@ -12,7 +12,15 @@ import {
   type,
 } from "foldkit/scene";
 
-import { init, Message, type Model, update, VerifyCode, view } from "../pages/MfaChallenge";
+import {
+  FocusChallengeCode,
+  init,
+  Message,
+  type Model,
+  update,
+  VerifyCode,
+  view,
+} from "../pages/MfaChallenge";
 
 const SIGN_IN_HREF =
   "/auth?service_name=accounts&redirect_url=https%3A%2F%2Fauth.example.com%2Faccount";
@@ -57,12 +65,12 @@ describe("MFA チャレンジの画面", () => {
       expect(codeInput).toHaveAttr("inputmode", "numeric"),
       expect(codeInput).toHaveAttr("aria-invalid", "false"),
       expect(codeInput).toHaveAttr("aria-describedby", "mfa-challenge-code-hint"),
-      expect(role("button", { name: "ログインを続ける" })).toBeDisabled(),
+      expect(role("button", { name: "ログインを続ける" })).toBeEnabled(),
       expect(role("link", { name: "ログインをやり直す" })).toHaveAttr("href", SIGN_IN_HREF),
     );
   });
 
-  test("送信中は入力と切り替えを止め、誤りは alert で出して説明に結ぶ", () => {
+  test("送信中は入力と切り替えを止め、server の誤りは入力欄の説明に結んで欄へ focus する", () => {
     scene(
       { update, view },
       given(entering()),
@@ -72,7 +80,9 @@ describe("MFA チャレンジの画面", () => {
       expect(role("button", { name: "ログインを続ける" })).toBeDisabled(),
       expect(role("button", { name: "リカバリーコードを使う" })).toBeDisabled(),
       Command.resolve(VerifyCode, Message.FailedVerifyCode({ visit: 1, failure: "InvalidCode" })),
-      expect(role("alert")).toHaveText("入力されたコードが正しくありません。"),
+      Command.expectExact(FocusChallengeCode),
+      Command.resolve(FocusChallengeCode, Message.CompletedFocusField()),
+      expect(text("入力されたコードが正しくありません。")).toExist(),
       expect(codeInput).toHaveAttr("aria-invalid", "true"),
       expect(codeInput).toHaveAttr(
         "aria-describedby",
@@ -96,7 +106,7 @@ describe("MFA チャレンジの画面", () => {
       click(role("button", { name: "リカバリーコードを使う" })),
       expect(label("リカバリーコード")).toHaveAttr("inputmode", "text"),
       expect(label("リカバリーコード")).toHaveValue(""),
-      expect(role("alert")).toBeAbsent(),
+      expect(text("誤り")).toBeAbsent(),
     );
   });
 });

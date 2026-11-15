@@ -3,6 +3,7 @@ import { Option } from "effect";
 import { expectNoOutMessage, expectOutMessage, given, message, story } from "foldkit/story";
 
 import {
+  FocusInvitationEmail,
   CreateInvitation,
   expiresAtTextOf,
   init,
@@ -114,8 +115,10 @@ describe("招待の送信", () => {
     expect(second.commands ?? []).toEqual([]);
   });
 
-  test("メールが空白だけなら送らない", () => {
-    expect(update(typed("   "), Message.SubmittedInvitation()).commands ?? []).toEqual([]);
+  test("メールが空白だけなら送らず、メールアドレスの欄に誤りを示して focus する", () => {
+    const submitted = update(typed("   "), Message.SubmittedInvitation());
+    expect((submitted.commands ?? []).map(({ name }) => name)).toEqual([FocusInvitationEmail.name]);
+    expect(submitted.model.showsRequiredErrors).toBe(true);
   });
 
   test("割り当てられない役割は選べない", () => {

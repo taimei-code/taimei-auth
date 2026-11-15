@@ -37,6 +37,7 @@ const DIALOG_TRANSITION_STATE = "taimei(dialog-transition-state-only-in-dialog-v
 const DIALOG_HELD_REPORT = "taimei(dialog-held-report-only-in-dialog-view)";
 const PAGE_REQUEST = "taimei(page-request-only-in-page-request)";
 const EXTERNAL_FONT = "taimei(no-external-font-host)";
+const FORM_VIEW = "taimei(form-only-in-form-view)";
 const CHILD_MESSAGE_IN_ROOT = "foldkit(no-child-message-construction-in-root)";
 const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
@@ -64,6 +65,20 @@ const CASES: readonly Case[] = [
     source:
       "export const held = (model: { dialog: { maybeOutMessageAfterClose: unknown } }) => model.dialog.maybeOutMessageAfterClose;",
     expectedRules: [DIALOG_HELD_REPORT],
+  },
+  {
+    name: "画面は h.form で form を書けない。novalidate と送信の時の誤りの表示が抜ける",
+    path: "web/src/company/form-probe.ts",
+    source:
+      'import type { HtmlBuilder } from "foldkit/html";\nexport const view = <M>(h: HtmlBuilder<M>) => h.form([], ["x"]);',
+    expectedRules: [FORM_VIEW],
+  },
+  {
+    name: "form の部品の file は h.form を書ける",
+    path: "web/src/shared/ui/form-view.ts",
+    source:
+      'import type { HtmlBuilder } from "foldkit/html";\nexport const view = <M>(h: HtmlBuilder<M>) => h.form([], ["x"]);',
+    expectedRules: [],
   },
   {
     name: "メールの template は Google Fonts を @import できない",

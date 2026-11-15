@@ -14,7 +14,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
-import { maybeRejectedMessage, Submission } from "../shared/submission";
+import { maybeRejectedMessage, Submission, withoutRejection } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
@@ -24,7 +24,9 @@ import {
   dialogFooterView,
   dialogView,
 } from "../shared/ui/dialog-view";
-import { inputView, maybeInputErrorView } from "../shared/ui/input-view";
+import { inputView } from "../shared/ui/input-view";
+import { formView } from "../shared/ui/form-view";
+import { focusField, requiredErrorText } from "../shared/required-field";
 import {
   MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
   MFA_CODE_TEXTS,
@@ -68,10 +70,16 @@ export const Message = defineMessageUnion({
   SubmittedCode: {},
   SucceededDisableMfa: PageRequestFields,
   FailedDisableMfa: { ...PageRequestFields, failure: DisableFailure },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
 
 const CODE_INPUT_ID = "mfa-disable-code";
+
+const FocusDisablingCode = Command.define("FocusDisablingCode", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(CODE_INPUT_ID).pipe(Effect.as(Message.CompletedFocusField())),
+});
 const DIALOG_ID = "mfa-disabling-dialog";
 
 const failedDisable = (request: PageRequest, failure: DisableFailure) => () =>
@@ -132,7 +140,13 @@ const submitCode = (model: Model): UpdateReturn =>
   whileEditable(model, () => {
     const code = normalizeMfaCode(model.code, model.kind);
     if (String.isEmpty(code)) {
-      return { model };
+      return {
+        model: modifyFields(model, {
+          submission: () =>
+            Submission.Rejected({ message: requiredErrorText(MFA_CODE_TEXTS[model.kind].label) }),
+        }),
+        commands: [FocusDisablingCode()],
+      };
     }
     const requested = withNextPageRequest(
       modifyFields(model, { submission: () => Submission.Submitting() }),
@@ -152,7 +166,9 @@ export const update = (model: Model, message: Message) =>
     ClickedCancel: () => whileEditable(model, () => dialogFolds.close(model)),
     GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
     UpdatedCode: ({ value }) =>
-      whileEditable(model, () => ({ model: modifyFields(model, { code: () => value }) })),
+      whileEditable(model, () => ({
+        model: modifyFields(model, { code: () => value, submission: withoutRejection }),
+      })),
     ClickedToggleCodeKind: () =>
       whileEditable(model, () => ({
         model: modifyFields(model, {
@@ -175,73 +191,80 @@ export const update = (model: Model, message: Message) =>
               model: modifyFields(model, {
                 submission: () => Submission.Rejected({ message: mfaFailureText(failure) }),
               }),
+              commands: [FocusDisablingCode()],
             },
       ),
+    CompletedFocusField: () => ({ model }),
   });
 
-const formView = (model: Model, h: HtmlBuilder<Message>): Html => {
+const codeFormView = (model: Model, h: HtmlBuilder<Message>): Html => {
   const texts = MFA_CODE_TEXTS[model.kind];
   const maybeErrorMessage = maybeRejectedMessage(model.submission);
-  return h.form(
-    [h.Class("space-y-4"), h.OnSubmit(Message.SubmittedCode())],
-    [
-      inputView(
-        {
-          id: CODE_INPUT_ID,
-          label: texts.label,
-          type: "text",
-          value: model.code,
-          onInput: (value) => Message.UpdatedCode({ value }),
-          submission: model.submission,
-          placeholder: texts.placeholder,
-          autocomplete: "one-time-code",
-          inputMode: texts.inputMode,
-          maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
-          isAutoCorrectionOff: true,
-          hint: { text: texts.hint, maybeErrorMessage },
-        },
-        h,
-      ),
-      buttonView(
-        {
-          label: texts.toggleLabel,
-          type: "button",
-          look: "subtleLink",
-          submission: Submission.Idle(),
-          isBlocked: isSubmitting(model),
-          onClick: Message.ClickedToggleCodeKind(),
-        },
-        h,
-      ),
-      ...maybeInputErrorView(CODE_INPUT_ID, maybeErrorMessage, h),
-      dialogFooterView(
-        [
-          buttonView(
-            {
-              label: "キャンセル",
-              type: "button",
-              look: "outlineInline",
-              submission: Submission.Idle(),
-              isBlocked: isSubmitting(model),
-              onClick: Message.ClickedCancel(),
-            },
-            h,
-          ),
-          buttonView(
-            {
-              label: "無効にする",
-              type: "submit",
-              look: "destructive",
-              submission: model.submission,
-              isBlocked: String.isEmpty(normalizeMfaCode(model.code, model.kind)),
-              icon: ShieldOff,
-            },
-            h,
-          ),
-        ],
-        h,
-      ),
-    ],
+  return formView(
+    {
+      onSubmit: Message.SubmittedCode(),
+      attributes: [h.Class("space-y-4")],
+      children: [
+        inputView(
+          {
+            id: CODE_INPUT_ID,
+            label: texts.label,
+            type: "text",
+            value: model.code,
+            onInput: (value) => Message.UpdatedCode({ value }),
+            submission: model.submission,
+            placeholder: texts.placeholder,
+            autocomplete: "one-time-code",
+            inputMode: texts.inputMode,
+            maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+            isAutoCorrectionOff: true,
+            hint: texts.hint,
+            maybeErrorMessage,
+            enterKeyHint: "go",
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: texts.toggleLabel,
+            type: "button",
+            look: "subtleLink",
+            submission: Submission.Idle(),
+            isBlocked: isSubmitting(model),
+            onClick: Message.ClickedToggleCodeKind(),
+          },
+          h,
+        ),
+        dialogFooterView(
+          [
+            buttonView(
+              {
+                label: "キャンセル",
+                type: "button",
+                look: "outlineInline",
+                submission: Submission.Idle(),
+                isBlocked: isSubmitting(model),
+                onClick: Message.ClickedCancel(),
+              },
+              h,
+            ),
+            buttonView(
+              {
+                label: "無効にする",
+                type: "submit",
+                look: "destructive",
+                submission: model.submission,
+                isBlocked: false,
+                icon: ShieldOff,
+              },
+              h,
+            ),
+          ],
+          h,
+        ),
+      ],
+    },
+    h,
   );
 };
 
@@ -267,7 +290,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
           title: "多要素認証 (MFA) を無効にする",
           description:
             "無効にすると、ログイン時の確認コードの入力が不要になります。本人確認のため、現在の確認コードまたはリカバリーコードを入力してください。",
-          body: [formView(model, h)],
+          body: [codeFormView(model, h)],
           isClosingBlocked: isSubmitting(model),
         },
         h,

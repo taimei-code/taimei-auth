@@ -5,8 +5,6 @@ import type { Attribute, Html, HtmlBuilder } from "foldkit/html";
 import { Submission } from "../submission";
 import { inputClassName, labelClassName } from "./class-names";
 
-export type InputHint = Readonly<{ text: string; maybeErrorMessage: Option.Option<string> }>;
-
 export type InputViewConfig<Message> = Readonly<{
   id: string;
   label: string;
@@ -16,10 +14,12 @@ export type InputViewConfig<Message> = Readonly<{
   submission: Submission;
   placeholder: string;
   autocomplete: "name" | "email" | "username" | "organization" | "one-time-code" | "off";
+  enterKeyHint: "go" | "send" | "next" | "done";
+  maybeErrorMessage: Option.Option<string>;
   inputMode?: "numeric" | "text";
   maxLength?: number;
   isAutoCorrectionOff?: boolean;
-  hint?: InputHint;
+  hint?: string;
   isDisabled?: boolean;
 }>;
 
@@ -27,22 +27,18 @@ const inputHintId = (id: string): string => `${id}-hint`;
 
 const inputErrorId = (id: string): string => `${id}-error`;
 
-const hintAttributes = <Message>(
-  id: string,
-  maybeHint: InputHint | undefined,
+const describedByIds = <Message>(config: InputViewConfig<Message>): ReadonlyArray<string> => [
+  ...(config.hint === undefined ? [] : [inputHintId(config.id)]),
+  ...(Option.isSome(config.maybeErrorMessage) ? [inputErrorId(config.id)] : []),
+];
+
+const describedByAttributes = <Message>(
+  config: InputViewConfig<Message>,
   h: HtmlBuilder<Message>,
-): ReadonlyArray<Attribute<Message>> =>
-  maybeHint === undefined
-    ? []
-    : [
-        h.AriaInvalid(Option.isSome(maybeHint.maybeErrorMessage)),
-        h.AriaDescribedBy(
-          Option.match(maybeHint.maybeErrorMessage, {
-            onNone: () => inputHintId(id),
-            onSome: () => `${inputHintId(id)} ${inputErrorId(id)}`,
-          }),
-        ),
-      ];
+): ReadonlyArray<Attribute<Message>> => {
+  const ids = describedByIds(config);
+  return ids.length === 0 ? [] : [h.AriaDescribedBy(ids.join(" "))];
+};
 
 const autoCorrectionAttributes = <Message>(
   isAutoCorrectionOff: boolean,
@@ -67,46 +63,52 @@ export const inputView = <Message>(
         h.div(
           [h.Class("space-y-2")],
           [
-            h.label([...attributes.label, h.Class(labelClassName)], [config.label]),
+            h.div(
+              [h.Class("flex items-baseline gap-1")],
+              [
+                h.label([...attributes.label, h.Class(labelClassName)], [config.label]),
+                ...(config.isDisabled === true
+                  ? []
+                  : [h.span([h.AriaHidden(true), h.Class("text-sm text-destructive")], ["*"])]),
+              ],
+            ),
             ...(config.hint === undefined
               ? []
               : [
                   h.p(
                     [h.Id(inputHintId(config.id)), h.Class("text-xs text-muted-foreground")],
-                    [config.hint.text],
+                    [config.hint],
                   ),
                 ]),
             h.input([
               ...attributes.input,
-              h.Required(true),
+              h.Required(config.isDisabled !== true),
               h.Class(inputClassName),
               h.Autocomplete(config.autocomplete),
+              h.EnterKeyHint(config.enterKeyHint),
+              h.AriaInvalid(Option.isSome(config.maybeErrorMessage)),
+              ...describedByAttributes(config, h),
               ...(config.inputMode === undefined ? [] : [h.InputMode(config.inputMode)]),
               ...(config.maxLength === undefined ? [] : [h.Maxlength(config.maxLength)]),
               ...autoCorrectionAttributes(
                 config.isAutoCorrectionOff === true || config.type === "email",
                 h,
               ),
-              ...hintAttributes(config.id, config.hint, h),
             ]),
+            ...Option.match(config.maybeErrorMessage, {
+              onNone: () => [],
+              onSome: (message) => [
+                h.p(
+                  [h.Id(inputErrorId(config.id)), h.Class("text-sm text-destructive")],
+                  [message],
+                ),
+              ],
+            }),
           ],
         ),
     },
     h,
   );
-
-const inputErrorView = <Message>(id: string, message: string, h: HtmlBuilder<Message>): Html =>
-  h.p([h.Id(inputErrorId(id)), h.Role("alert"), h.Class("text-sm text-destructive")], [message]);
-
-export const maybeInputErrorView = <Message>(
-  id: string,
-  maybeMessage: Option.Option<string>,
-  h: HtmlBuilder<Message>,
-): ReadonlyArray<Html> =>
-  Option.match(maybeMessage, {
-    onNone: () => [],
-    onSome: (message) => [inputErrorView(id, message, h)],
-  });
 
 export const hiddenInputView = <Message>(
   config: Readonly<{ name: string; value: string }>,

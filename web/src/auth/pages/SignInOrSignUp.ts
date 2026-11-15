@@ -14,6 +14,13 @@ import { buttonView } from "../../shared/ui/button-view";
 import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
 import { inputView } from "../../shared/ui/input-view";
+import { formView } from "../../shared/ui/form-view";
+import {
+  focusField,
+  maybeFirstInvalidField,
+  maybeFieldError,
+  type RequiredField,
+} from "../../shared/required-field";
 import { authPageCardView } from "../auth-page-card-view";
 import {
   canaryIconHref,
@@ -50,6 +57,7 @@ export const Model = Schema.Struct({
   form: Form,
   magicLink: Submission,
   gitHub: Submission,
+  showsRequiredErrors: Schema.Boolean,
 });
 export type Model = typeof Model.Type;
 
@@ -64,6 +72,7 @@ export const Message = defineMessageUnion({
   FailedStartGitHubSignIn: { visit: Schema.Int, message: Schema.String },
   CompletedAddCanaryIcon: {},
   CompletedRemoveCanaryIcon: {},
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
 
@@ -117,8 +126,19 @@ const callbackUrlOf = (model: Model): string =>
 const isBusy = (model: Model): boolean =>
   Submission.guards.Submitting(model.magicLink) || Submission.guards.Submitting(model.gitHub);
 
-const hasRequiredInput = (model: Model): boolean =>
-  model.email !== "" && (model.kind === "SignIn" || model.name !== "");
+const NAME_FIELD = { id: "name", label: "お名前" } as const;
+const EMAIL_FIELD = { id: "email", label: "メールアドレス" } as const;
+
+const requiredFieldsOf = (model: Model): ReadonlyArray<RequiredField> => [
+  ...(model.kind === "SignUp" ? [{ ...NAME_FIELD, value: model.name }] : []),
+  { ...EMAIL_FIELD, value: model.email, isEmail: true },
+];
+
+export const FocusMagicLinkField = Command.define("FocusMagicLinkField", {
+  args: { id: Schema.String },
+  messages: [Message.CompletedFocusField],
+  execute: ({ id }) => focusField(id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 const maybeRejectedMessageOf = (model: Model): Option.Option<string> =>
   Option.orElse(maybeRejectedMessage(model.magicLink), () => maybeRejectedMessage(model.gitHub));
@@ -210,6 +230,7 @@ export const init = (
     form: Form.Editing(),
     magicLink: Submission.Idle(),
     gitHub: Submission.Idle(),
+    showsRequiredErrors: false,
   },
   commands: Option.match(maybeCanaryTokenId, {
     onNone: () => [],
@@ -218,22 +239,30 @@ export const init = (
 });
 
 const submitMagicLink = (model: Model): Update.Return<Model, Message> =>
-  isBusy(model) || !hasRequiredInput(model)
+  isBusy(model)
     ? { model }
-    : {
-        model: modifyFields(model, {
-          magicLink: () => Submission.Submitting(),
-          gitHub: () => Submission.Idle(),
+    : Option.match(maybeFirstInvalidField(requiredFieldsOf(model)), {
+        onSome: (field) => ({
+          model: modifyFields(model, { showsRequiredErrors: () => true }),
+          commands: [FocusMagicLinkField({ id: field.id })],
         }),
-        commands: [
-          SendMagicLink({
-            visit: model.visit,
-            email: model.email,
-            maybeName: model.kind === "SignUp" ? Option.some(model.name) : Option.none(),
-            callbackUrl: callbackUrlOf(model),
-          }),
-        ],
-      };
+        onNone: () => sendMagicLink(model),
+      });
+
+const sendMagicLink = (model: Model): Update.Return<Model, Message> => ({
+  model: modifyFields(model, {
+    magicLink: () => Submission.Submitting(),
+    gitHub: () => Submission.Idle(),
+  }),
+  commands: [
+    SendMagicLink({
+      visit: model.visit,
+      email: model.email,
+      maybeName: model.kind === "SignUp" ? Option.some(model.name) : Option.none(),
+      callbackUrl: callbackUrlOf(model),
+    }),
+  ],
+});
 
 const startGitHubSignIn = (model: Model): Update.Return<Model, Message> =>
   isBusy(model)
@@ -263,6 +292,7 @@ export const update = (model: Model, message: Message) =>
     UpdatedEmail: ({ value }) => ({ model: modifyFields(model, { email: () => value }) }),
     UpdatedName: ({ value }) => ({ model: modifyFields(model, { name: () => value }) }),
     SubmittedMagicLinkForm: () => submitMagicLink(model),
+    CompletedFocusField: () => ({ model }),
     ClickedGitHubSignIn: () => startGitHubSignIn(model),
     SucceededSendMagicLink: ({ visit }) =>
       forThisVisit(model, visit, () => ({
@@ -294,51 +324,64 @@ const busySubmission = (model: Model): Submission =>
   isBusy(model) ? Submission.Submitting() : Submission.Idle();
 
 const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.form(
-    [h.Class("space-y-3"), h.OnSubmit(Message.SubmittedMagicLinkForm())],
-    [
-      ...(model.kind === "SignUp"
-        ? [
-            inputView(
-              {
-                id: "name",
-                label: "お名前",
-                type: "text",
-                value: model.name,
-                onInput: (value) => Message.UpdatedName({ value }),
-                submission: busySubmission(model),
-                placeholder: "山田 太郎",
-                autocomplete: "name",
-              },
-              h,
-            ),
-          ]
-        : []),
-      inputView(
-        {
-          id: "email",
-          label: "メールアドレス",
-          type: "email",
-          value: model.email,
-          onInput: (value) => Message.UpdatedEmail({ value }),
-          submission: busySubmission(model),
-          placeholder: "you@example.com",
-          autocomplete: "username",
-        },
-        h,
-      ),
-      buttonView(
-        {
-          label: TEXTS[model.kind].submitLabel,
-          type: "submit",
-          look: "primary",
-          submission: model.magicLink,
-          isBlocked: Submission.guards.Submitting(model.gitHub) || !hasRequiredInput(model),
-          icon: Mail,
-        },
-        h,
-      ),
-    ],
+  formView(
+    {
+      onSubmit: Message.SubmittedMagicLinkForm(),
+      attributes: [h.Class("space-y-3")],
+      children: [
+        ...(model.kind === "SignUp"
+          ? [
+              inputView(
+                {
+                  ...NAME_FIELD,
+                  type: "text",
+                  value: model.name,
+                  enterKeyHint: "next",
+                  maybeErrorMessage: maybeFieldError(model.showsRequiredErrors, {
+                    ...NAME_FIELD,
+                    value: model.name,
+                  }),
+                  onInput: (value) => Message.UpdatedName({ value }),
+                  submission: busySubmission(model),
+                  placeholder: "山田 太郎",
+                  autocomplete: "name",
+                },
+                h,
+              ),
+            ]
+          : []),
+        inputView(
+          {
+            ...EMAIL_FIELD,
+            type: "email",
+            value: model.email,
+            enterKeyHint: "send",
+            maybeErrorMessage: maybeFieldError(model.showsRequiredErrors, {
+              ...EMAIL_FIELD,
+              value: model.email,
+              isEmail: true,
+            }),
+            onInput: (value) => Message.UpdatedEmail({ value }),
+            submission: busySubmission(model),
+            placeholder: "you@example.com",
+            autocomplete: "username",
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: TEXTS[model.kind].submitLabel,
+            type: "submit",
+            look: "primary",
+            submission: model.magicLink,
+            isBlocked: Submission.guards.Submitting(model.gitHub),
+            icon: Mail,
+          },
+          h,
+        ),
+      ],
+    },
+    h,
   );
 
 const socialSignInView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>

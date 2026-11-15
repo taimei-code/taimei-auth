@@ -15,7 +15,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
-import { maybeRejectedMessage, Submission } from "../shared/submission";
+import { maybeRejectedMessage, Submission, withoutRejection } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
@@ -27,7 +27,9 @@ import {
   dialogView,
 } from "../shared/ui/dialog-view";
 import { dialogLoadingStatusView, spinnerView } from "../shared/ui/icon-view";
-import { inputView, maybeInputErrorView } from "../shared/ui/input-view";
+import { inputView } from "../shared/ui/input-view";
+import { formView } from "../shared/ui/form-view";
+import { focusField, requiredErrorText } from "../shared/required-field";
 import * as CopyResult from "./copy-result";
 import { MFA_CODE_PASTE_TOLERANT_MAX_LENGTH, MFA_CODE_TEXTS, normalizeMfaCode } from "./mfa-code";
 import { mfaFailureText } from "./mfa-failure-messages";
@@ -116,12 +118,18 @@ export const Message = defineMessageUnion({
   FailedActivateMfa: { ...PageRequestFields, failure: ActivateFailure },
   ClickedCloseAfterSavingCodes: {},
   GotCopyResultMessage: { message: CopyResult.Message },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
 
 const QR_CODE_WIDTH = 192;
 const TOTP_TEXTS = MFA_CODE_TEXTS.totp;
 const CODE_INPUT_ID = "mfa-enroll-code";
+
+const FocusEnrollmentCode = Command.define("FocusEnrollmentCode", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(CODE_INPUT_ID).pipe(Effect.as(Message.CompletedFocusField())),
+});
 const DIALOG_ID = "mfa-enrollment-dialog";
 const ENROLL_DESCRIPTION = "認証アプリを登録すると、ログイン時に確認コードの入力を求めます。";
 
@@ -293,7 +301,18 @@ const submitCode = (model: Model): UpdateReturn =>
   whileEditable(model, (verifying) => {
     const code = normalizeMfaCode(verifying.code, "totp");
     if (String.isEmpty(code)) {
-      return { model };
+      return {
+        model: withStep(
+          model,
+          Step.Verify(
+            modifyFields(verifying, {
+              submission: () =>
+                Submission.Rejected({ message: requiredErrorText(TOTP_TEXTS.label) }),
+            }),
+          ),
+        ),
+        commands: [FocusEnrollmentCode()],
+      };
     }
     const requested = withNextPageRequest(
       withStep(
@@ -331,6 +350,7 @@ const failActivate = (model: Model, failure: ActivateFailure): UpdateReturn =>
               failure === "EnrollmentChanged" ? Option.none() : current,
           },
         ),
+        commands: [FocusEnrollmentCode()],
       }));
 
 export const update = (model: Model, message: Message) =>
@@ -379,7 +399,10 @@ export const update = (model: Model, message: Message) =>
       })),
     UpdatedCode: ({ value }) =>
       whileEditable(model, (verifying) => ({
-        model: withStep(model, Step.Verify(modifyFields(verifying, { code: () => value }))),
+        model: withStep(
+          model,
+          Step.Verify(modifyFields(verifying, { code: () => value, submission: withoutRejection })),
+        ),
       })),
     SubmittedCode: () => submitCode(model),
     SucceededActivateMfa: (response) =>
@@ -398,6 +421,7 @@ export const update = (model: Model, message: Message) =>
       forThisRequest(model, response, () => failActivate(model, failure)),
     ClickedCloseAfterSavingCodes: () => dialogFolds.close(model),
     GotCopyResultMessage: ({ message: copyMessage }) => foldCopyResult(model, copyMessage),
+    CompletedFocusField: () => ({ model }),
   });
 
 const readTotpSecret = (totpUri: Redacted.Redacted<string>): Option.Option<string> => {
@@ -498,55 +522,60 @@ const scanView = (
 
 const verifyView = (verifying: Verifying, h: HtmlBuilder<Message>): Html => {
   const maybeErrorMessage = maybeRejectedMessage(verifying.submission);
-  return h.form(
-    [h.Class("space-y-4"), h.OnSubmit(Message.SubmittedCode())],
-    [
-      inputView(
-        {
-          id: CODE_INPUT_ID,
-          label: TOTP_TEXTS.label,
-          type: "text",
-          value: verifying.code,
-          onInput: (value) => Message.UpdatedCode({ value }),
-          submission: verifying.submission,
-          placeholder: TOTP_TEXTS.placeholder,
-          autocomplete: "one-time-code",
-          inputMode: TOTP_TEXTS.inputMode,
-          maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
-          isAutoCorrectionOff: true,
-          hint: { text: TOTP_TEXTS.hint, maybeErrorMessage },
-        },
-        h,
-      ),
-      ...maybeInputErrorView(CODE_INPUT_ID, maybeErrorMessage, h),
-      dialogFooterView(
-        [
-          buttonView(
-            {
-              label: "戻る",
-              type: "button",
-              look: "outlineInline",
-              submission: Submission.Idle(),
-              isBlocked: Submission.guards.Submitting(verifying.submission),
-              onClick: Message.ClickedBack(),
-            },
-            h,
-          ),
-          buttonView(
-            {
-              label: "有効にする",
-              type: "submit",
-              look: "primaryInline",
-              submission: verifying.submission,
-              isBlocked: String.isEmpty(normalizeMfaCode(verifying.code, "totp")),
-              icon: ShieldCheck,
-            },
-            h,
-          ),
-        ],
-        h,
-      ),
-    ],
+  return formView(
+    {
+      onSubmit: Message.SubmittedCode(),
+      attributes: [h.Class("space-y-4")],
+      children: [
+        inputView(
+          {
+            id: CODE_INPUT_ID,
+            label: TOTP_TEXTS.label,
+            type: "text",
+            value: verifying.code,
+            onInput: (value) => Message.UpdatedCode({ value }),
+            submission: verifying.submission,
+            placeholder: TOTP_TEXTS.placeholder,
+            autocomplete: "one-time-code",
+            inputMode: TOTP_TEXTS.inputMode,
+            maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+            isAutoCorrectionOff: true,
+            hint: TOTP_TEXTS.hint,
+            maybeErrorMessage,
+            enterKeyHint: "go",
+          },
+          h,
+        ),
+        dialogFooterView(
+          [
+            buttonView(
+              {
+                label: "戻る",
+                type: "button",
+                look: "outlineInline",
+                submission: Submission.Idle(),
+                isBlocked: Submission.guards.Submitting(verifying.submission),
+                onClick: Message.ClickedBack(),
+              },
+              h,
+            ),
+            buttonView(
+              {
+                label: "有効にする",
+                type: "submit",
+                look: "primaryInline",
+                submission: verifying.submission,
+                isBlocked: false,
+                icon: ShieldCheck,
+              },
+              h,
+            ),
+          ],
+          h,
+        ),
+      ],
+    },
+    h,
   );
 };
 
