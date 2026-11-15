@@ -45,6 +45,8 @@ Dependabot の bun は security update に対応しない ([GitHub の supported
 
 `.github/workflows/ci.yml` の install 直後に `bun audit --audit-level=high` を追加する。high と critical だけで fail させ、`bun.lock` 全体を既知脆弱性 DB と照合する。
 
+command は `package.json` の script `audit` に置く。workflow に `--ignore` を直に書くと `src/__tests__/report-advisories.test.ts` が落ちる。`--ignore=GHSA-vfj7-8cjw-p6xm` (braces の DoS) は、修正版が無く、braces は tailwindcss 経由の dev 依存で Worker に入らないので付けた (#246)。braces の修正版が出たら外す。
+
 導入と同時に発見した既存の high 3 件をこの PR 内で修正した。
 - `drizzle-orm` は直接依存のため、`package.json` の semver range を `^0.44.4` から `^0.45.2` に minor bump した
 - `defu` / `kysely` は `better-auth` / `drizzle-orm` の間接依存のため、`package.json` の `"overrides"` フィールドで強制的に固定した (`defu: ^6.1.7`、`kysely: ^0.28.17`)。`overrides` は npm 互換の構文で bun もサポートしている
