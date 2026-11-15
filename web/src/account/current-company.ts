@@ -1,4 +1,4 @@
-import { Array, Effect, Number, Option, Schema, String } from "effect";
+import { Array, Effect, Equivalence, Number, Option, Schema, String } from "effect";
 import { Command, Submodel, type Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -68,7 +68,7 @@ export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},
   RefreshedCompanyState: { maybeDoneText: Schema.Option(Schema.String) },
-  UpdatedCurrentCompany: { maybeDoneText: Schema.Option(Schema.String) },
+  ChangedCurrentMembership: { maybeDoneText: Schema.Option(Schema.String) },
 });
 export type OutMessage = typeof OutMessage.Type;
 
@@ -158,6 +158,10 @@ export const maybeCurrentMembership = (state: CompanyMemberships): Option.Option
     Array.findFirst(state.memberships, (membership) => membership.companyId === companyId),
   );
 
+const isSamePageMembership = Option.makeEquivalence(
+  Equivalence.Struct({ companyId: String.Equivalence, role: String.Equivalence }),
+);
+
 const isSwitching = (model: Model): boolean => Switching.guards.Switching(model.switching);
 
 export const isRefreshing = (model: Model): boolean => model.pendingRefreshCount > 0;
@@ -183,12 +187,12 @@ const replaceState = (
   maybeDoneText: Option.Option<string>,
 ): UpdateReturn => ({
   model: modifyFields(model, { state: () => state }),
-  outMessage: Option.makeEquivalence(String.Equivalence)(
-    model.state.maybeCurrentCompanyId,
-    state.maybeCurrentCompanyId,
+  outMessage: isSamePageMembership(
+    maybeCurrentMembership(model.state),
+    maybeCurrentMembership(state),
   )
     ? OutMessage.RefreshedCompanyState({ maybeDoneText })
-    : OutMessage.UpdatedCurrentCompany({ maybeDoneText }),
+    : OutMessage.ChangedCurrentMembership({ maybeDoneText }),
 });
 
 export const switchTo = (model: Model, companyId: string): UpdateReturn =>
