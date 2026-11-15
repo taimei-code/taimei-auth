@@ -1,4 +1,4 @@
-import { Effect, Number, Option, Schema, String } from "effect";
+import { Effect, Option, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -8,6 +8,14 @@ import { Plus } from "lucide";
 import { OrgCodeSchema } from "@core/company/company-contract";
 import type { OrgCode } from "@core/company/org-code";
 
+import {
+  isCurrentPageRequest,
+  type PageRequest,
+  PageRequestFields,
+  firstPageRequest,
+  pageRequestOf,
+  withNextPageRequest,
+} from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { maybeAlertTextView } from "../shared/ui/alert-text-view";
@@ -31,19 +39,15 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  visit: Schema.Int,
   dialog: ReportingDialog.Model(OutMessage),
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
   submission: Submission,
-  requestNumber: Schema.Int,
+  ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
 
 const AddCompanyFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
-
-const RequestFields = { visit: Schema.Int, requestNumber: Schema.Int };
-type Request = Readonly<{ visit: number; requestNumber: number }>;
 
 export const Message = defineMessageUnion({
   ClickedAddCompany: {},
@@ -51,8 +55,8 @@ export const Message = defineMessageUnion({
   UpdatedName: { value: Schema.String },
   SelectedOrgCode: { orgCode: OrgCodeSchema },
   SubmittedAddCompanyForm: {},
-  SucceededAddCompany: { ...RequestFields, companyName: Schema.String },
-  FailedAddCompany: { ...RequestFields, failure: AddCompanyFailure },
+  SucceededAddCompany: { ...PageRequestFields, companyName: Schema.String },
+  FailedAddCompany: { ...PageRequestFields, failure: AddCompanyFailure },
 });
 export type Message = typeof Message.Type;
 
@@ -67,11 +71,11 @@ const DEFAULT_ORG_CODE: OrgCode = "CORPORATE";
 
 const ORG_CODE_OPTIONS = orgCodeOptionsIn(["CORPORATE", "PERSONAL"]);
 
-const failedAddCompany = (request: Request, failure: typeof AddCompanyFailure.Type) => () =>
+const failedAddCompany = (request: PageRequest, failure: typeof AddCompanyFailure.Type) => () =>
   Effect.succeed(Message.FailedAddCompany({ ...request, failure }));
 
 export const AddCompany = Command.define("AddCompany", {
-  args: { ...RequestFields, name: Schema.String, orgCode: OrgCodeSchema },
+  args: { ...PageRequestFields, name: Schema.String, orgCode: OrgCodeSchema },
   messages: [Message.SucceededAddCompany, Message.FailedAddCompany],
   execute: ({ name, orgCode, ...request }) =>
     Effect.gen(function* () {
@@ -90,12 +94,11 @@ export const AddCompany = Command.define("AddCompany", {
 const DIALOG_ID = "add-company-dialog";
 
 export const init = (visit: number): Model => ({
-  visit,
+  ...firstPageRequest(visit),
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   nameDraft: "",
   orgCode: DEFAULT_ORG_CODE,
   submission: Submission.Idle(),
-  requestNumber: 0,
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -122,16 +125,14 @@ const submitForm = (model: Model): UpdateReturn => {
   if (isSubmitting(model) || String.isEmpty(name)) {
     return { model };
   }
-  const requested = modifyFields(model, {
-    submission: () => Submission.Submitting(),
-    requestNumber: Number.increment,
-  });
+  const requested = withNextPageRequest(
+    modifyFields(model, { submission: () => Submission.Submitting() }),
+  );
   return {
     model: requested,
     commands: [
       AddCompany({
-        visit: requested.visit,
-        requestNumber: requested.requestNumber,
+        ...pageRequestOf(requested),
         name,
         orgCode: requested.orgCode,
       }),
@@ -139,12 +140,8 @@ const submitForm = (model: Model): UpdateReturn => {
   };
 };
 
-const forThisRequest = (model: Model, request: Request, next: () => UpdateReturn) =>
-  request.visit === model.visit &&
-  request.requestNumber === model.requestNumber &&
-  isSubmitting(model)
-    ? next()
-    : { model };
+const forThisRequest = (model: Model, response: PageRequest, next: () => UpdateReturn) =>
+  isCurrentPageRequest(model, response) && isSubmitting(model) ? next() : { model };
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {

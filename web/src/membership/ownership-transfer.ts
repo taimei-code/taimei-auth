@@ -1,10 +1,18 @@
-import { Array, Effect, Number, Option, Schema, pipe } from "effect";
+import { Array, Effect, Option, Schema, pipe } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 
+import {
+  isCurrentPageRequest,
+  type PageRequest,
+  PageRequestFields,
+  firstPageRequest,
+  pageRequestOf,
+  withNextPageRequest,
+} from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
@@ -49,27 +57,23 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 export const Model = Schema.Struct({
-  visit: Schema.Int,
   dialog: ReportingDialog.Model(OutMessage),
   maybeTarget: Schema.Option(Target),
   candidates: Candidates,
   transferring: Transferring,
-  requestNumber: Schema.Int,
+  ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
 
 const RequestFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
 
-const RequestFields = { visit: Schema.Int, requestNumber: Schema.Int };
-type Request = Readonly<{ visit: number; requestNumber: number }>;
-
 export const Message = defineMessageUnion({
   GotDialogMessage: { message: Dialog.Message },
-  SucceededLoadCandidates: { ...RequestFields, candidates: Schema.Array(Candidate) },
-  FailedLoadCandidates: { ...RequestFields, failure: RequestFailure },
+  SucceededLoadCandidates: { ...PageRequestFields, candidates: Schema.Array(Candidate) },
+  FailedLoadCandidates: { ...PageRequestFields, failure: RequestFailure },
   ClickedTransfer: { candidate: Candidate },
-  SucceededTransferOwnership: { ...RequestFields, memberLabel: Schema.String },
-  FailedTransferOwnership: { ...RequestFields, failure: RequestFailure },
+  SucceededTransferOwnership: { ...PageRequestFields, memberLabel: Schema.String },
+  FailedTransferOwnership: { ...PageRequestFields, failure: RequestFailure },
 });
 export type Message = typeof Message.Type;
 
@@ -80,11 +84,11 @@ export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
 
 const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
-const failedLoadCandidates = (request: Request, failure: typeof RequestFailure.Type) => () =>
+const failedLoadCandidates = (request: PageRequest, failure: typeof RequestFailure.Type) => () =>
   Effect.succeed(Message.FailedLoadCandidates({ ...request, failure }));
 
 export const LoadCandidates = Command.define("LoadCandidates", {
-  args: { ...RequestFields, target: Target },
+  args: { ...PageRequestFields, target: Target },
   messages: [Message.SucceededLoadCandidates, Message.FailedLoadCandidates],
   execute: ({ target, ...request }) =>
     Effect.gen(function* () {
@@ -108,11 +112,11 @@ export const LoadCandidates = Command.define("LoadCandidates", {
     ),
 });
 
-const failedTransfer = (request: Request, failure: typeof RequestFailure.Type) => () =>
+const failedTransfer = (request: PageRequest, failure: typeof RequestFailure.Type) => () =>
   Effect.succeed(Message.FailedTransferOwnership({ ...request, failure }));
 
 export const TransferOwnership = Command.define("TransferOwnership", {
-  args: { ...RequestFields, companyId: Schema.String, candidate: Candidate },
+  args: { ...PageRequestFields, companyId: Schema.String, candidate: Candidate },
   messages: [Message.SucceededTransferOwnership, Message.FailedTransferOwnership],
   execute: ({ companyId, candidate, ...request }) =>
     Effect.gen(function* () {
@@ -139,12 +143,11 @@ export const TransferOwnership = Command.define("TransferOwnership", {
 const DIALOG_ID = "ownership-transfer-dialog";
 
 export const init = (visit: number): Model => ({
-  visit,
+  ...firstPageRequest(visit),
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   maybeTarget: Option.none(),
   candidates: Candidates.Loading(),
   transferring: Transferring.Idle(),
-  requestNumber: 0,
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -160,27 +163,23 @@ const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
 });
 
 export const open = (model: Model, target: Target): UpdateReturn => {
-  const requested = modifyFields(model, {
-    maybeTarget: () => Option.some(target),
-    candidates: () => Candidates.Loading(),
-    transferring: () => Transferring.Idle(),
-    requestNumber: Number.increment,
-  });
+  const requested = withNextPageRequest(
+    modifyFields(model, {
+      maybeTarget: () => Option.some(target),
+      candidates: () => Candidates.Loading(),
+      transferring: () => Transferring.Idle(),
+    }),
+  );
   const opened = dialogFolds.open(requested);
   const loading: Update.Return<Model, Message, SpaHttpClient> = {
     model: opened.model,
-    commands: [
-      ...(opened.commands ?? []),
-      LoadCandidates({ visit: requested.visit, requestNumber: requested.requestNumber, target }),
-    ],
+    commands: [...(opened.commands ?? []), LoadCandidates({ ...pageRequestOf(requested), target })],
   };
   return pipe(loading, Update.withOutMessage(opened.outMessage));
 };
 
-const forThisRequest = (model: Model, request: Request, next: () => UpdateReturn) =>
-  request.visit === model.visit && request.requestNumber === model.requestNumber
-    ? next()
-    : { model };
+const forThisRequest = (model: Model, response: PageRequest, next: () => UpdateReturn) =>
+  isCurrentPageRequest(model, response) ? next() : { model };
 
 const startTransfer = (model: Model, candidate: Candidate): UpdateReturn =>
   Option.match(model.maybeTarget, {
@@ -189,16 +188,16 @@ const startTransfer = (model: Model, candidate: Candidate): UpdateReturn =>
       if (isTransferring(model)) {
         return { model };
       }
-      const requested = modifyFields(model, {
-        transferring: () => Transferring.Transferring({ userId: candidate.userId }),
-        requestNumber: Number.increment,
-      });
+      const requested = withNextPageRequest(
+        modifyFields(model, {
+          transferring: () => Transferring.Transferring({ userId: candidate.userId }),
+        }),
+      );
       return {
         model: requested,
         commands: [
           TransferOwnership({
-            visit: requested.visit,
-            requestNumber: requested.requestNumber,
+            ...pageRequestOf(requested),
             companyId,
             candidate,
           }),

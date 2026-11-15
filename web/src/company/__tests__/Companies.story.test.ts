@@ -25,6 +25,7 @@ import {
   ReadSignedInUserId,
   update,
 } from "../pages/Companies";
+import { pageRequestOf } from "../../shared/page-request";
 
 const VISIT = 2;
 const SELF = "user-self";
@@ -230,8 +231,8 @@ describe("事業所の追加とオーナーの委譲", () => {
       opened,
       Message.GotOwnershipTransferMessage({
         message: OwnershipTransfer.Message.SucceededLoadCandidates({
+          ...pageRequestOf(opened.ownershipTransfer),
           visit: VISIT - 1,
-          requestNumber: opened.ownershipTransfer.requestNumber,
           candidates: [{ userId: "user-old", label: "古い候補" }],
         }),
       }),
@@ -260,8 +261,7 @@ describe("事業所の追加とオーナーの委譲", () => {
       transferring,
       Message.GotOwnershipTransferMessage({
         message: OwnershipTransfer.Message.SucceededTransferOwnership({
-          visit: VISIT,
-          requestNumber: transferring.ownershipTransfer.requestNumber,
+          ...pageRequestOf(transferring.ownershipTransfer),
           memberLabel: "メイト",
         }),
       }),

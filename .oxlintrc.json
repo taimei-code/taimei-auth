@@ -154,6 +154,7 @@
     "taimei/dialog-transition-state-only-in-dialog-view": "error",
     "taimei/dialog-visible-only-by-is-dialog-visible": "error",
     "taimei/mfa-failure-messages-import-only-in-mfa": "error",
+    "taimei/page-request-only-in-page-request": "error",
     "taimei/sdk-import-only-peer-dependencies": "error"
   },
   "overrides": [

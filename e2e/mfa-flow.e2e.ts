@@ -8,12 +8,16 @@ import {
 } from "../src/mfa/totp/totp-parameters";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
-import { reseedFixture, signInWithMagicLink, watchMainFrameNavigations } from "./helpers";
+import {
+  MFA_EMAIL,
+  mfaRow,
+  reseedFixture,
+  signInWithMagicLink,
+  watchMainFrameNavigations,
+} from "./helpers";
 
 const challengePending = (page: Page) =>
   routeEndpoint(page, "mfaChallenge.state", (route) => route.fulfill({ json: { pending: true } }));
-
-const MFA_EMAIL = "e2e-mfa@example.com";
 
 test.describe.configure({ timeout: 90_000 });
 
@@ -83,9 +87,6 @@ const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await signInWithMagicLink(page, MFA_EMAIL);
   await expect(page).toHaveURL(/\/auth\/mfa/);
 };
-
-const mfaRow = (page: Page) =>
-  page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
 
 const challengeCodeInput = (page: Page) => page.locator("#mfa-challenge-code");
 

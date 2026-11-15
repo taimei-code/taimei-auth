@@ -13,6 +13,11 @@ export const BASE_URL = "http://localhost:3110";
 
 export const SWITCH_EMAIL = "e2e-switch@example.com";
 
+export const MFA_EMAIL = "e2e-mfa@example.com";
+
+export const mfaRow = (page: Page) =>
+  page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
+
 export const companySwitcher = (page: Page) =>
   page.getByRole("combobox", { name: "事業所を切り替え" });
 

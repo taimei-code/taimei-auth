@@ -35,6 +35,7 @@ const RAW_FORM_ELEMENT = "taimei(no-raw-form-element)";
 const DIALOG_VISIBLE = "taimei(dialog-visible-only-by-is-dialog-visible)";
 const DIALOG_TRANSITION_STATE = "taimei(dialog-transition-state-only-in-dialog-view)";
 const DIALOG_HELD_REPORT = "taimei(dialog-held-report-only-in-dialog-view)";
+const PAGE_REQUEST = "taimei(page-request-only-in-page-request)";
 const CHILD_MESSAGE_IN_ROOT = "foldkit(no-child-message-construction-in-root)";
 const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
@@ -62,6 +63,46 @@ const CASES: readonly Case[] = [
     source:
       "export const held = (model: { dialog: { maybeOutMessageAfterClose: unknown } }) => model.dialog.maybeOutMessageAfterClose;",
     expectedRules: [DIALOG_HELD_REPORT],
+  },
+  {
+    name: "要求の番号を来訪番号と組にせず Schema に書けない。page を作り直した後に前の page の応答を受ける",
+    path: "web/src/company/request-number-probe.ts",
+    source:
+      'import { Schema } from "effect";\nexport const Fields = { requestNumber: Schema.Int };',
+    expectedRules: [PAGE_REQUEST],
+  },
+  {
+    name: "要求の番号を直接読んで応答を照合できない",
+    path: "web/src/company/request-number-read-probe.ts",
+    source:
+      "export const isCurrent = (model: { requestNumber: number }, requestNumber: number) => model.requestNumber === requestNumber;",
+    expectedRules: [PAGE_REQUEST],
+  },
+  {
+    name: "応答の要求の番号を分割代入で取り出して照合できない",
+    path: "web/src/company/request-number-destructure-probe.ts",
+    source:
+      "export const isCurrent = (current: number, { requestNumber }: { requestNumber: number }) => requestNumber === current;",
+    expectedRules: [PAGE_REQUEST],
+  },
+  {
+    name: "要求の番号の初期値と進め方を手で書けない。進めずに次の要求を送ると、前の要求の応答を受ける",
+    path: "web/src/company/request-number-init-probe.ts",
+    source: "export const init = (visit: number) => ({ visit, requestNumber: 0 });",
+    expectedRules: [PAGE_REQUEST],
+  },
+  {
+    name: "要求の番号を文字列の key で読めない",
+    path: "web/src/company/request-number-computed-probe.ts",
+    source: 'export const read = (model: { requestNumber: number }) => model["requestNumber"];',
+    expectedRules: [PAGE_REQUEST],
+  },
+  {
+    name: "要求の field の組と照合は shared/page-request.ts に置ける",
+    path: "web/src/shared/page-request.ts",
+    source:
+      'import { Schema } from "effect";\nexport const Fields = { visit: Schema.Int, requestNumber: Schema.Int };\nexport const same = (a: { requestNumber: number }, b: { requestNumber: number }) => a.requestNumber === b.requestNumber;',
+    expectedRules: [],
   },
   {
     name: "dialog を持つ Submodel は、開いている間の再操作を dialog.isOpen で止められる",

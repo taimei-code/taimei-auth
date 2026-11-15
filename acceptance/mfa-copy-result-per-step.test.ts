@@ -59,12 +59,16 @@ const loadedDisabled = (): Model =>
     }),
   ).model;
 
-const requestNumberOf = (commands: ReadonlyArray<AnyCommand>, name: string): number => {
+const requestOf = (
+  commands: ReadonlyArray<AnyCommand>,
+  name: string,
+): { visit: number; requestNumber: number } => {
   const found = commands.find((command) => command.name === name);
   if (found === undefined) {
     throw new Error(`${name} was not requested`);
   }
-  return (found.args as { requestNumber: number }).requestNumber;
+  const { visit, requestNumber } = found.args as { visit: number; requestNumber: number };
+  return { visit, requestNumber };
 };
 
 const send = (
@@ -126,11 +130,11 @@ const openScanStep = (): Effect.Effect<Running, unknown, never> =>
       { model: loadedDisabled(), waits: [] },
       enrollment(MfaEnrollment.Message.ClickedEnable()),
     );
-    const requestNumber = requestNumberOf(opened.commands, MfaEnrollment.EnrollMfa.name);
+    const request = requestOf(opened.commands, MfaEnrollment.EnrollMfa.name);
     return yield* sendAll(
       opened.running,
       enrollment(
-        MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber, enrollment: ENROLLMENT }),
+        MfaEnrollment.Message.SucceededEnrollMfa({ ...request, enrollment: ENROLLMENT }),
       ),
     );
   });
@@ -169,10 +173,10 @@ const activate = (running: Running) =>
       enrollment(MfaEnrollment.Message.UpdatedCode({ value: "123456" })),
     );
     const submitted = yield* send(typed, enrollment(MfaEnrollment.Message.SubmittedCode()));
-    const requestNumber = requestNumberOf(submitted.commands, MfaEnrollment.ActivateMfa.name);
+    const request = requestOf(submitted.commands, MfaEnrollment.ActivateMfa.name);
     return yield* sendAll(
       submitted.running,
-      enrollment(MfaEnrollment.Message.SucceededActivateMfa({ requestNumber })),
+      enrollment(MfaEnrollment.Message.SucceededActivateMfa(request)),
     );
   });
 
@@ -270,11 +274,11 @@ describe("MFA の有効化の dialog のコピーの結果", () => {
           enrollment(MfaEnrollment.Message.ClickedCloseAfterSavingCodes()),
         );
         const reopened = yield* send(closed, enrollment(MfaEnrollment.Message.ClickedEnable()));
-        const requestNumber = requestNumberOf(reopened.commands, MfaEnrollment.EnrollMfa.name);
+        const request = requestOf(reopened.commands, MfaEnrollment.EnrollMfa.name);
         const scanned = yield* sendAll(
           reopened.running,
           enrollment(
-            MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber, enrollment: ENROLLMENT }),
+            MfaEnrollment.Message.SucceededEnrollMfa({ ...request, enrollment: ENROLLMENT }),
           ),
         );
         return { shownBefore, starting: reopened.running.model, scanned: scanned.model };

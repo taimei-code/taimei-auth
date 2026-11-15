@@ -1815,6 +1815,31 @@ const ROWS: readonly Row[] = [
       "dialog が閉じた後に出す報告は shared/ui/dialog-view.ts の reportingDialogFoldsOf の closeThen と reportAfterClose で置く (置いた報告を、ほかの file が直接読まない)",
   },
   {
+    name: "page-request-only-in-page-request",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/page-request.ts"],
+    matchers: [
+      { kind: "member", paths: [".requestNumber"] },
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          Property: (node) => {
+            if ((node.key?.name ?? node.key?.value) === "requestNumber") {
+              report(node);
+            }
+          },
+          MemberExpression: (node) => {
+            if (node.computed === true && node.property?.value === "requestNumber") {
+              report(node);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "要求の番号は shared/page-request.ts の PageRequestFields・firstPageRequest・withNextPageRequest・pageRequestOf・isCurrentPageRequest で扱う。来訪番号と組にして照合し、page を作り直した後に前の page の応答を受けない",
+  },
+  {
     name: "mfa-failure-messages-import-only-in-mfa",
     within: ["web/src/**"],
     allowedIn: ["web/src/mfa/**"],
