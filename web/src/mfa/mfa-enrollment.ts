@@ -1,4 +1,4 @@
-import { Effect, Number, Option, Redacted, Schema, String, pipe } from "effect";
+import { Effect, Option, Redacted, Schema, String, pipe } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -6,6 +6,14 @@ import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
 import { ShieldCheck } from "lucide";
 
+import {
+  isCurrentPageRequest,
+  type PageRequest,
+  PageRequestFields,
+  firstPageRequest,
+  pageRequestOf,
+  withNextPageRequest,
+} from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
@@ -68,7 +76,7 @@ export const Model = Schema.Struct({
   step: Step,
   maybeResumableEnrollment: Schema.Option(Enrollment),
   qrCode: QrCode,
-  requestNumber: Schema.Int,
+  ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
 
@@ -96,16 +104,16 @@ type ActivateFailure = typeof ActivateFailure.Type;
 export const Message = defineMessageUnion({
   ClickedEnable: {},
   GotDialogMessage: { message: Dialog.Message },
-  SucceededEnrollMfa: { requestNumber: Schema.Int, enrollment: Enrollment },
-  FailedEnrollMfa: { requestNumber: Schema.Int, failure: EnrollFailure },
+  SucceededEnrollMfa: { ...PageRequestFields, enrollment: Enrollment },
+  FailedEnrollMfa: { ...PageRequestFields, failure: EnrollFailure },
   SucceededDrawQrCode: { enrollmentId: Schema.String, dataUrl: Schema.Redacted(Schema.String) },
   FailedDrawQrCode: { enrollmentId: Schema.String },
   ClickedNext: {},
   ClickedBack: {},
   UpdatedCode: { value: Schema.String },
   SubmittedCode: {},
-  SucceededActivateMfa: { requestNumber: Schema.Int },
-  FailedActivateMfa: { requestNumber: Schema.Int, failure: ActivateFailure },
+  SucceededActivateMfa: PageRequestFields,
+  FailedActivateMfa: { ...PageRequestFields, failure: ActivateFailure },
   ClickedCloseAfterSavingCodes: {},
   GotCopyResultMessage: { message: CopyResult.Message },
 });
@@ -117,18 +125,18 @@ const CODE_INPUT_ID = "mfa-enroll-code";
 const DIALOG_ID = "mfa-enrollment-dialog";
 const ENROLL_DESCRIPTION = "認証アプリを登録すると、ログイン時に確認コードの入力を求めます。";
 
-const failedEnroll = (requestNumber: number, failure: EnrollFailure) => () =>
-  Effect.succeed(Message.FailedEnrollMfa({ requestNumber, failure }));
+const failedEnroll = (request: PageRequest, failure: EnrollFailure) => () =>
+  Effect.succeed(Message.FailedEnrollMfa({ ...request, failure }));
 
 export const EnrollMfa = Command.define("EnrollMfa", {
-  args: { requestNumber: Schema.Int },
+  args: PageRequestFields,
   messages: [Message.SucceededEnrollMfa, Message.FailedEnrollMfa],
-  execute: ({ requestNumber }) =>
+  execute: (request) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       const enrollment = yield* client.mfa.enroll();
       return Message.SucceededEnrollMfa({
-        requestNumber,
+        ...request,
         enrollment: {
           enrollmentId: enrollment.enrollment_id,
           totpUri: Redacted.make(enrollment.totp_uri),
@@ -137,38 +145,38 @@ export const EnrollMfa = Command.define("EnrollMfa", {
       });
     }).pipe(
       Effect.catchTags({
-        AlreadyEnabled: failedEnroll(requestNumber, "AlreadyEnabled"),
-        ChallengeExpired: failedEnroll(requestNumber, "ChallengeExpired"),
-        RateLimited: failedEnroll(requestNumber, "RateLimited"),
-        Unauthorized: failedEnroll(requestNumber, "Unauthorized"),
-        HttpClientError: failedEnroll(requestNumber, "Unexpected"),
-        SchemaError: failedEnroll(requestNumber, "Unexpected"),
+        AlreadyEnabled: failedEnroll(request, "AlreadyEnabled"),
+        ChallengeExpired: failedEnroll(request, "ChallengeExpired"),
+        RateLimited: failedEnroll(request, "RateLimited"),
+        Unauthorized: failedEnroll(request, "Unauthorized"),
+        HttpClientError: failedEnroll(request, "Unexpected"),
+        SchemaError: failedEnroll(request, "Unexpected"),
       }),
     ),
 });
 
-const failedActivate = (requestNumber: number, failure: ActivateFailure) => () =>
-  Effect.succeed(Message.FailedActivateMfa({ requestNumber, failure }));
+const failedActivate = (request: PageRequest, failure: ActivateFailure) => () =>
+  Effect.succeed(Message.FailedActivateMfa({ ...request, failure }));
 
 export const ActivateMfa = Command.define("ActivateMfa", {
-  args: { requestNumber: Schema.Int, code: Schema.String, enrollmentId: Schema.String },
+  args: { ...PageRequestFields, code: Schema.String, enrollmentId: Schema.String },
   messages: [Message.SucceededActivateMfa, Message.FailedActivateMfa],
-  execute: ({ requestNumber, code, enrollmentId }) =>
+  execute: ({ code, enrollmentId, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       yield* client.mfa.activate({ payload: { code, enrollment_id: enrollmentId } });
-      return Message.SucceededActivateMfa({ requestNumber });
+      return Message.SucceededActivateMfa(request);
     }).pipe(
       Effect.catchTags({
-        InvalidCode: failedActivate(requestNumber, "InvalidCode"),
-        Locked: failedActivate(requestNumber, "Locked"),
-        EnrollmentChanged: failedActivate(requestNumber, "EnrollmentChanged"),
-        AlreadyEnabled: failedActivate(requestNumber, "AlreadyEnabled"),
-        MfaNotFound: failedActivate(requestNumber, "MfaNotFound"),
-        RateLimited: failedActivate(requestNumber, "RateLimited"),
-        Unauthorized: failedActivate(requestNumber, "Unauthorized"),
-        HttpClientError: failedActivate(requestNumber, "Unexpected"),
-        SchemaError: failedActivate(requestNumber, "Unexpected"),
+        InvalidCode: failedActivate(request, "InvalidCode"),
+        Locked: failedActivate(request, "Locked"),
+        EnrollmentChanged: failedActivate(request, "EnrollmentChanged"),
+        AlreadyEnabled: failedActivate(request, "AlreadyEnabled"),
+        MfaNotFound: failedActivate(request, "MfaNotFound"),
+        RateLimited: failedActivate(request, "RateLimited"),
+        Unauthorized: failedActivate(request, "Unauthorized"),
+        HttpClientError: failedActivate(request, "Unexpected"),
+        SchemaError: failedActivate(request, "Unexpected"),
       }),
     ),
 });
@@ -191,12 +199,12 @@ export const DrawQrCode = Command.define("DrawQrCode", {
     ),
 });
 
-export const init = (): Model => ({
+export const init = (visit: number): Model => ({
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   step: Step.Starting(),
   maybeResumableEnrollment: Option.none(),
   qrCode: QrCode.Drawing(),
-  requestNumber: 0,
+  ...firstPageRequest(visit),
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -247,25 +255,23 @@ const openDialog = (model: Model): UpdateReturn =>
   Option.match(model.maybeResumableEnrollment, {
     onSome: (enrollment) => dialogFolds.open(withStep(model, scanStep(enrollment))),
     onNone: () => {
-      const requested = modifyFields(model, {
-        step: () => Step.Starting(),
-        qrCode: () => QrCode.Drawing(),
-        requestNumber: Number.increment,
-      });
+      const requested = withNextPageRequest(
+        modifyFields(model, {
+          step: () => Step.Starting(),
+          qrCode: () => QrCode.Drawing(),
+        }),
+      );
       const opened = dialogFolds.open(requested);
       const enrolling: Update.Return<Model, Message, SpaHttpClient> = {
         model: opened.model,
-        commands: [
-          ...(opened.commands ?? []),
-          EnrollMfa({ requestNumber: requested.requestNumber }),
-        ],
+        commands: [...(opened.commands ?? []), EnrollMfa(pageRequestOf(requested))],
       };
       return pipe(enrolling, Update.withOutMessage(opened.outMessage));
     },
   });
 
-const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
-  requestNumber === model.requestNumber ? next() : { model };
+const forThisRequest = (model: Model, response: PageRequest, next: () => UpdateReturn) =>
+  isCurrentPageRequest(model, response) ? next() : { model };
 
 const forResumable = (model: Model, enrollmentId: string, qrCode: QrCode): UpdateReturn =>
   Option.exists(
@@ -289,18 +295,17 @@ const submitCode = (model: Model): UpdateReturn =>
     if (String.isEmpty(code)) {
       return { model };
     }
-    const requested = modifyFields(
+    const requested = withNextPageRequest(
       withStep(
         model,
         Step.Verify(modifyFields(verifying, { submission: () => Submission.Submitting() })),
       ),
-      { requestNumber: Number.increment },
     );
     return {
       model: requested,
       commands: [
         ActivateMfa({
-          requestNumber: requested.requestNumber,
+          ...pageRequestOf(requested),
           code,
           enrollmentId: verifying.enrollment.enrollmentId,
         }),
@@ -332,8 +337,8 @@ export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     ClickedEnable: () => (model.dialog.isOpen ? { model } : openDialog(model)),
     GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
-    SucceededEnrollMfa: ({ requestNumber, enrollment }) =>
-      forThisRequest(model, requestNumber, () =>
+    SucceededEnrollMfa: ({ enrollment, ...response }) =>
+      forThisRequest(model, response, () =>
         Step.guards.Starting(model.step)
           ? {
               model: modifyFields(withStep(model, scanStep(enrollment)), {
@@ -346,8 +351,8 @@ export const update = (model: Model, message: Message) =>
             }
           : { model },
       ),
-    FailedEnrollMfa: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () =>
+    FailedEnrollMfa: ({ failure, ...response }) =>
+      forThisRequest(model, response, () =>
         failure === "Unauthorized"
           ? { model, outMessage: OutMessage.RequiredSignIn() }
           : { model: withStep(model, Step.Failed({ message: mfaFailureText(failure) })) },
@@ -377,8 +382,8 @@ export const update = (model: Model, message: Message) =>
         model: withStep(model, Step.Verify(modifyFields(verifying, { code: () => value }))),
       })),
     SubmittedCode: () => submitCode(model),
-    SucceededActivateMfa: ({ requestNumber }) =>
-      forThisRequest(model, requestNumber, () =>
+    SucceededActivateMfa: (response) =>
+      forThisRequest(model, response, () =>
         withVerifying(model, ({ enrollment }) =>
           dialogFolds.reportAfterClose(
             modifyFields(withStep(model, recoveryCodesStep(enrollment)), {
@@ -389,8 +394,8 @@ export const update = (model: Model, message: Message) =>
           ),
         ),
       ),
-    FailedActivateMfa: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () => failActivate(model, failure)),
+    FailedActivateMfa: ({ failure, ...response }) =>
+      forThisRequest(model, response, () => failActivate(model, failure)),
     ClickedCloseAfterSavingCodes: () => dialogFolds.close(model),
     GotCopyResultMessage: ({ message: copyMessage }) => foldCopyResult(model, copyMessage),
   });

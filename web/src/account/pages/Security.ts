@@ -115,8 +115,8 @@ export const init = (visit: number): Update.Return<Model, Message, SpaHttpClient
     visit,
     mfa: MfaState.Loading(),
     refreshNumber: 0,
-    enrollment: MfaEnrollment.init(),
-    disabling: MfaDisabling.init(),
+    enrollment: MfaEnrollment.init(visit),
+    disabling: MfaDisabling.init(visit),
   },
   commands: [LoadMfaStatus({ visit, refreshNumber: 0, maybeTexts: Option.none() })],
 });

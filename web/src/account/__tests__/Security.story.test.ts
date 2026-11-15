@@ -43,7 +43,11 @@ const verifying = (): Model =>
     disabled(),
     enrollmentMessage(MfaEnrollment.Message.ClickedEnable()),
     enrollmentMessage(
-      MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+      MfaEnrollment.Message.SucceededEnrollMfa({
+        visit: VISIT,
+        requestNumber: 1,
+        enrollment: ENROLLMENT,
+      }),
     ),
     enrollmentMessage(MfaEnrollment.Message.ClickedNext()),
     enrollmentMessage(MfaEnrollment.Message.UpdatedCode({ value: "123 456" })),
@@ -53,7 +57,9 @@ const showingRecoveryCodes = (): Model =>
   send(
     verifying(),
     enrollmentMessage(MfaEnrollment.Message.SubmittedCode()),
-    enrollmentMessage(MfaEnrollment.Message.SucceededActivateMfa({ requestNumber: 2 })),
+    enrollmentMessage(
+      MfaEnrollment.Message.SucceededActivateMfa({ visit: VISIT, requestNumber: 2 }),
+    ),
   );
 
 const [DIALOG_PAINTED_CLOSING, DIALOG_ENDED_CLOSING] = FIRST_DIALOG_CLOSING_MESSAGES;
@@ -117,7 +123,9 @@ describe("MFA の有効化", () => {
     const submitted = send(verifying(), enrollmentMessage(MfaEnrollment.Message.SubmittedCode()));
     const stale = send(
       submitted,
-      enrollmentMessage(MfaEnrollment.Message.SucceededActivateMfa({ requestNumber: 1 })),
+      enrollmentMessage(
+        MfaEnrollment.Message.SucceededActivateMfa({ visit: VISIT, requestNumber: 1 }),
+      ),
     );
     expect(stale.enrollment.step._tag).toBe("Verify");
   });
@@ -168,7 +176,11 @@ describe("MFA の有効化", () => {
       disabled(),
       enrollmentMessage(MfaEnrollment.Message.ClickedEnable()),
       enrollmentMessage(
-        MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+        MfaEnrollment.Message.SucceededEnrollMfa({
+          visit: VISIT,
+          requestNumber: 1,
+          enrollment: ENROLLMENT,
+        }),
       ),
       enrollmentMessage(
         MfaEnrollment.Message.GotDialogMessage({
@@ -188,7 +200,11 @@ describe("MFA の有効化", () => {
       verifying(),
       enrollmentMessage(MfaEnrollment.Message.SubmittedCode()),
       enrollmentMessage(
-        MfaEnrollment.Message.FailedActivateMfa({ requestNumber: 2, failure: "EnrollmentChanged" }),
+        MfaEnrollment.Message.FailedActivateMfa({
+          visit: VISIT,
+          requestNumber: 2,
+          failure: "EnrollmentChanged",
+        }),
       ),
     );
     expect(Option.isNone(changed.enrollment.maybeResumableEnrollment)).toBe(true);
@@ -208,7 +224,7 @@ describe("MFA の無効化", () => {
     expect(first.commands).toMatchObject([{ name: MfaDisabling.DisableMfa.name }]);
     expect(second.commands ?? []).toEqual([]);
     const succeeded = disablingMessage(
-      MfaDisabling.Message.SucceededDisableMfa({ requestNumber: 1 }),
+      MfaDisabling.Message.SucceededDisableMfa({ visit: VISIT, requestNumber: 1 }),
     );
     expect(loadsStatus(first.model, succeeded)).toBe(false);
     expect(
@@ -234,7 +250,9 @@ describe("MFA の無効化", () => {
       disablingMessage(MfaDisabling.Message.ClickedDisable()),
       disablingMessage(MfaDisabling.Message.UpdatedCode({ value: "654321" })),
       disablingMessage(MfaDisabling.Message.SubmittedCode()),
-      disablingMessage(MfaDisabling.Message.SucceededDisableMfa({ requestNumber: 1 })),
+      disablingMessage(
+        MfaDisabling.Message.SucceededDisableMfa({ visit: VISIT, requestNumber: 1 }),
+      ),
       disablingDialogPaintedClosing,
       disablingDialogClosed,
     );
@@ -258,7 +276,11 @@ describe("MFA の無効化", () => {
       disablingMessage(MfaDisabling.Message.UpdatedCode({ value: "000000" })),
       disablingMessage(MfaDisabling.Message.SubmittedCode()),
       disablingMessage(
-        MfaDisabling.Message.FailedDisableMfa({ requestNumber: 1, failure: "InvalidCode" }),
+        MfaDisabling.Message.FailedDisableMfa({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "InvalidCode",
+        }),
       ),
     );
     expect(failed.disabling.submission).toEqual({
@@ -286,7 +308,11 @@ describe("session の切れた操作", () => {
       update(
         submitted,
         enrollmentMessage(
-          MfaEnrollment.Message.FailedActivateMfa({ requestNumber: 2, failure: "Unauthorized" }),
+          MfaEnrollment.Message.FailedActivateMfa({
+            visit: VISIT,
+            requestNumber: 2,
+            failure: "Unauthorized",
+          }),
         ),
       ).outMessage,
     ).toEqual(OutMessage.RequiredSignIn());
@@ -300,7 +326,11 @@ describe("session の切れた操作", () => {
       update(
         disabling,
         disablingMessage(
-          MfaDisabling.Message.FailedDisableMfa({ requestNumber: 1, failure: "Unauthorized" }),
+          MfaDisabling.Message.FailedDisableMfa({
+            visit: VISIT,
+            requestNumber: 1,
+            failure: "Unauthorized",
+          }),
         ),
       ).outMessage,
     ).toEqual(OutMessage.RequiredSignIn());
@@ -327,7 +357,11 @@ describe("登録と状態の取得の失敗", () => {
       ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
-        MfaEnrollment.Message.FailedEnrollMfa({ requestNumber: 1, failure: "AlreadyEnabled" }),
+        MfaEnrollment.Message.FailedEnrollMfa({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "AlreadyEnabled",
+        }),
       ),
       model((next) => {
         expect(next.enrollment.step).toEqual({
@@ -346,7 +380,11 @@ describe("登録と状態の取得の失敗", () => {
       ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
-        MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+        MfaEnrollment.Message.SucceededEnrollMfa({
+          visit: VISIT,
+          requestNumber: 1,
+          enrollment: ENROLLMENT,
+        }),
       ),
       Command.resolve(
         MfaEnrollment.DrawQrCode,
@@ -367,7 +405,11 @@ describe("登録と状態の取得の失敗", () => {
       ...FIRST_DIALOG_OPENING,
       Command.resolve(
         MfaEnrollment.EnrollMfa,
-        MfaEnrollment.Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+        MfaEnrollment.Message.SucceededEnrollMfa({
+          visit: VISIT,
+          requestNumber: 1,
+          enrollment: ENROLLMENT,
+        }),
       ),
       Command.resolve(
         MfaEnrollment.DrawQrCode,

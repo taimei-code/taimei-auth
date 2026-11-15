@@ -3,6 +3,7 @@ import { Redacted } from "effect";
 import { given, message, model, story } from "foldkit/story";
 
 import * as CopyResult from "../copy-result";
+import { pageRequestOf } from "../../shared/page-request";
 import { Dialog } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, OutMessage, update } from "../mfa-enrollment";
 
@@ -12,6 +13,7 @@ const ENROLLMENT = {
   recoveryCodes: Redacted.make(["aaaaa-11111", "bbbbb-22222"]),
 };
 
+const VISIT = 1;
 const FIRST_COPY_AT = 1000;
 const SECOND_COPY_AT = 2000;
 
@@ -25,9 +27,9 @@ const copyResultOnScan = (current: Model): string =>
 
 const copiedOnScan = (): Model =>
   send(
-    init(),
+    init(VISIT),
     Message.ClickedEnable(),
-    Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+    Message.SucceededEnrollMfa({ visit: VISIT, requestNumber: 1, enrollment: ENROLLMENT }),
     copyMessage(CopyResult.Message.ClickedCopy({ text: Redacted.make("JBSWY3DPEHPK3PXP") })),
     copyMessage(CopyResult.Message.SucceededCopyText({ shownAt: FIRST_COPY_AT })),
   );
@@ -82,19 +84,16 @@ describe("MFA の有効化の dialog のコピーの結果", () => {
 describe("MFA を有効にした後の報告", () => {
   const submitted = (): Model =>
     send(
-      init(),
+      init(VISIT),
       Message.ClickedEnable(),
-      Message.SucceededEnrollMfa({ requestNumber: 1, enrollment: ENROLLMENT }),
+      Message.SucceededEnrollMfa({ visit: VISIT, requestNumber: 1, enrollment: ENROLLMENT }),
       Message.ClickedNext(),
       Message.UpdatedCode({ value: "123456" }),
       Message.SubmittedCode(),
     );
 
   test("dialog が見えている間に有効化が通ると、リカバリーコードを出し、閉じ終わるまで報告しない", () => {
-    const activated = update(
-      submitted(),
-      Message.SucceededActivateMfa({ requestNumber: submitted().requestNumber }),
-    );
+    const activated = update(submitted(), Message.SucceededActivateMfa(pageRequestOf(submitted())));
     expect(activated.model.step._tag).toBe("RecoveryCodes");
     expect(activated.outMessage).toBeUndefined();
   });
@@ -102,7 +101,7 @@ describe("MFA を有効にした後の報告", () => {
   test("リカバリーコードを出している dialog の要素が無くなると、有効にしたことをそこで報告する", () => {
     const showingCodes = send(
       submitted(),
-      Message.SucceededActivateMfa({ requestNumber: submitted().requestNumber }),
+      Message.SucceededActivateMfa(pageRequestOf(submitted())),
     );
     const unmounted = update(
       showingCodes,
@@ -117,10 +116,7 @@ describe("MFA を有効にした後の報告", () => {
       submitted(),
       Message.GotDialogMessage({ message: Dialog.Message.Unmounted() }),
     );
-    const activated = update(
-      unmounted,
-      Message.SucceededActivateMfa({ requestNumber: unmounted.requestNumber }),
-    );
+    const activated = update(unmounted, Message.SucceededActivateMfa(pageRequestOf(unmounted)));
     expect(activated.outMessage).toEqual(OutMessage.ClosedAfterEnabling());
     expect(activated.model.step._tag).toBe("Starting");
   });

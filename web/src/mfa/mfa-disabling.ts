@@ -1,10 +1,18 @@
-import { Effect, Number, Schema, String } from "effect";
+import { Effect, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 import { ShieldOff } from "lucide";
 
+import {
+  isCurrentPageRequest,
+  type PageRequest,
+  PageRequestFields,
+  firstPageRequest,
+  pageRequestOf,
+  withNextPageRequest,
+} from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
@@ -37,7 +45,7 @@ export const Model = Schema.Struct({
   kind: MfaCodeKindSchema,
   code: Schema.String,
   submission: Submission,
-  requestNumber: Schema.Int,
+  ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
 
@@ -58,44 +66,44 @@ export const Message = defineMessageUnion({
   UpdatedCode: { value: Schema.String },
   ClickedToggleCodeKind: {},
   SubmittedCode: {},
-  SucceededDisableMfa: { requestNumber: Schema.Int },
-  FailedDisableMfa: { requestNumber: Schema.Int, failure: DisableFailure },
+  SucceededDisableMfa: PageRequestFields,
+  FailedDisableMfa: { ...PageRequestFields, failure: DisableFailure },
 });
 export type Message = typeof Message.Type;
 
 const CODE_INPUT_ID = "mfa-disable-code";
 const DIALOG_ID = "mfa-disabling-dialog";
 
-const failedDisable = (requestNumber: number, failure: DisableFailure) => () =>
-  Effect.succeed(Message.FailedDisableMfa({ requestNumber, failure }));
+const failedDisable = (request: PageRequest, failure: DisableFailure) => () =>
+  Effect.succeed(Message.FailedDisableMfa({ ...request, failure }));
 
 export const DisableMfa = Command.define("DisableMfa", {
-  args: { requestNumber: Schema.Int, code: Schema.String, kind: MfaCodeKindSchema },
+  args: { ...PageRequestFields, code: Schema.String, kind: MfaCodeKindSchema },
   messages: [Message.SucceededDisableMfa, Message.FailedDisableMfa],
-  execute: ({ requestNumber, code, kind }) =>
+  execute: ({ code, kind, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       yield* client.mfa.disable({ payload: { code, kind } });
-      return Message.SucceededDisableMfa({ requestNumber });
+      return Message.SucceededDisableMfa(request);
     }).pipe(
       Effect.catchTags({
-        InvalidCode: failedDisable(requestNumber, "InvalidCode"),
-        Locked: failedDisable(requestNumber, "Locked"),
-        NotEnabled: failedDisable(requestNumber, "NotEnabled"),
-        RateLimited: failedDisable(requestNumber, "RateLimited"),
-        Unauthorized: failedDisable(requestNumber, "Unauthorized"),
-        HttpClientError: failedDisable(requestNumber, "Unexpected"),
-        SchemaError: failedDisable(requestNumber, "Unexpected"),
+        InvalidCode: failedDisable(request, "InvalidCode"),
+        Locked: failedDisable(request, "Locked"),
+        NotEnabled: failedDisable(request, "NotEnabled"),
+        RateLimited: failedDisable(request, "RateLimited"),
+        Unauthorized: failedDisable(request, "Unauthorized"),
+        HttpClientError: failedDisable(request, "Unexpected"),
+        SchemaError: failedDisable(request, "Unexpected"),
       }),
     ),
 });
 
-export const init = (): Model => ({
+export const init = (visit: number): Model => ({
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
   kind: "totp",
   code: "",
   submission: Submission.Idle(),
-  requestNumber: 0,
+  ...firstPageRequest(visit),
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -126,20 +134,17 @@ const submitCode = (model: Model): UpdateReturn =>
     if (String.isEmpty(code)) {
       return { model };
     }
-    const requested = modifyFields(model, {
-      submission: () => Submission.Submitting(),
-      requestNumber: Number.increment,
-    });
+    const requested = withNextPageRequest(
+      modifyFields(model, { submission: () => Submission.Submitting() }),
+    );
     return {
       model: requested,
-      commands: [
-        DisableMfa({ requestNumber: requested.requestNumber, code, kind: requested.kind }),
-      ],
+      commands: [DisableMfa({ ...pageRequestOf(requested), code, kind: requested.kind })],
     };
   });
 
-const forThisRequest = (model: Model, requestNumber: number, next: () => UpdateReturn) =>
-  requestNumber === model.requestNumber && isSubmitting(model) ? next() : { model };
+const forThisRequest = (model: Model, response: PageRequest, next: () => UpdateReturn) =>
+  isCurrentPageRequest(model, response) && isSubmitting(model) ? next() : { model };
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
@@ -157,12 +162,10 @@ export const update = (model: Model, message: Message) =>
         }),
       })),
     SubmittedCode: () => submitCode(model),
-    SucceededDisableMfa: ({ requestNumber }) =>
-      forThisRequest(model, requestNumber, () =>
-        dialogFolds.closeThen(model, OutMessage.Disabled()),
-      ),
-    FailedDisableMfa: ({ requestNumber, failure }) =>
-      forThisRequest(model, requestNumber, () =>
+    SucceededDisableMfa: (response) =>
+      forThisRequest(model, response, () => dialogFolds.closeThen(model, OutMessage.Disabled())),
+    FailedDisableMfa: ({ failure, ...response }) =>
+      forThisRequest(model, response, () =>
         failure === "Unauthorized"
           ? {
               model: modifyFields(model, { submission: () => Submission.Idle() }),

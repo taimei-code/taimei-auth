@@ -75,6 +75,7 @@ describe("MFA の API の応答の status と body から、画面に出す結�
     expect(
       await Effect.runPromise(
         MfaDisabling.DisableMfa({
+          visit: VISIT,
           requestNumber: REQUEST_NUMBER,
           code: "123456",
           kind: "totp",
@@ -82,6 +83,7 @@ describe("MFA の API の応答の status と body から、画面に出す結�
       ),
     ).toEqual(
       MfaDisabling.Message.FailedDisableMfa({
+        visit: VISIT,
         requestNumber: REQUEST_NUMBER,
         failure: "RateLimited",
       }),
@@ -92,12 +94,13 @@ describe("MFA の API の応答の status と body から、画面に出す結�
     answerWith(409, { _tag: "AlreadyEnabled" });
     expect(
       await Effect.runPromise(
-        MfaEnrollment.EnrollMfa({ requestNumber: REQUEST_NUMBER }).effect.pipe(
+        MfaEnrollment.EnrollMfa({ visit: VISIT, requestNumber: REQUEST_NUMBER }).effect.pipe(
           Effect.provide(replyingSpaHttpClient),
         ),
       ),
     ).toEqual(
       MfaEnrollment.Message.FailedEnrollMfa({
+        visit: VISIT,
         requestNumber: REQUEST_NUMBER,
         failure: "AlreadyEnabled",
       }),
