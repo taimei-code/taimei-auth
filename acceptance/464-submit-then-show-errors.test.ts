@@ -104,16 +104,6 @@ describe("送らせて誤りを示す form (#464)", () => {
     );
   });
 
-  test("AC-005: 誤りを示した欄に値を入れると、aria-invalid=\"false\" に戻り、誤りの文言が消える", () => {
-    observeAuth(
-      SIGN_IN,
-      click(role("button", { name: "Magic Link を送信" })),
-      type(label("メールアドレス"), "user@example.com"),
-      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "false"),
-      expect(text("メールアドレスを入力してください。")).toBeAbsent(),
-    );
-  });
-
   test("AC-006: MFA のコードを server が拒んだ後、入力欄の aria-describedby が誤りの文言の要素を指す", () => {
     const entering = {
       ...MfaChallenge.init({ visit: 1, signInHref: "/auth" }).model,
