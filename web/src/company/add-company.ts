@@ -16,7 +16,9 @@ import {
   pageRequestOf,
   withNextPageRequest,
 } from "../shared/page-request";
+import { focusField, isBlank, maybeFieldError } from "../shared/required-field";
 import { SpaHttpClient } from "../shared/spa-http-client";
+import { formView } from "../shared/ui/form-view";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { maybeAlertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
@@ -43,6 +45,7 @@ export const Model = Schema.Struct({
   nameDraft: Schema.String,
   orgCode: OrgCodeSchema,
   submission: Submission,
+  showsRequiredErrors: Schema.Boolean,
   ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
@@ -57,8 +60,16 @@ export const Message = defineMessageUnion({
   SubmittedAddCompanyForm: {},
   SucceededAddCompany: { ...PageRequestFields, companyName: Schema.String },
   FailedAddCompany: { ...PageRequestFields, failure: AddCompanyFailure },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
+
+const NAME_FIELD = { id: "add-company-name", label: "事業所名" } as const;
+
+const FocusAddCompanyName = Command.define("FocusAddCompanyName", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(NAME_FIELD.id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 const isAddedCompany = Schema.is(Message.SucceededAddCompany);
 
@@ -99,6 +110,7 @@ export const init = (visit: number): Model => ({
   nameDraft: "",
   orgCode: DEFAULT_ORG_CODE,
   submission: Submission.Idle(),
+  showsRequiredErrors: false,
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
@@ -110,6 +122,7 @@ const clearedForm = (model: Model): Model =>
     nameDraft: () => "",
     orgCode: () => DEFAULT_ORG_CODE,
     submission: () => Submission.Idle(),
+    showsRequiredErrors: () => false,
   });
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
@@ -122,8 +135,14 @@ const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
 
 const submitForm = (model: Model): UpdateReturn => {
   const name = String.trim(model.nameDraft);
-  if (isSubmitting(model) || String.isEmpty(name)) {
+  if (isSubmitting(model)) {
     return { model };
+  }
+  if (isBlank(name)) {
+    return {
+      model: modifyFields(model, { showsRequiredErrors: () => true }),
+      commands: [FocusAddCompanyName()],
+    };
   }
   const requested = withNextPageRequest(
     modifyFields(model, { submission: () => Submission.Submitting() }),
@@ -166,63 +185,65 @@ export const update = (model: Model, message: Message) =>
               }),
             },
       ),
+    CompletedFocusField: () => ({ model }),
   });
 
-const formView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  h.form(
-    [
-      h.Class("space-y-4"),
-      h.AriaLabel("事業所追加フォーム"),
-      h.OnSubmit(Message.SubmittedAddCompanyForm()),
-    ],
-    [
-      inputView(
-        {
-          id: "add-company-name",
-          label: "事業所名",
-          type: "text",
-          value: model.nameDraft,
-          onInput: (value) => Message.UpdatedName({ value }),
-          submission: model.submission,
-          placeholder: "例: 株式会社サンプル / 山田太郎",
-          autocomplete: "organization",
-          maxLength: 100,
-          hint: {
-            text: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
-            maybeErrorMessage: Option.none(),
+const addCompanyFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  formView(
+    {
+      onSubmit: Message.SubmittedAddCompanyForm(),
+      attributes: [h.Class("space-y-4"), h.AriaLabel("事業所追加フォーム")],
+      children: [
+        inputView(
+          {
+            ...NAME_FIELD,
+            type: "text",
+            value: model.nameDraft,
+            onInput: (value) => Message.UpdatedName({ value }),
+            submission: model.submission,
+            placeholder: "例: 株式会社サンプル / 山田太郎",
+            autocomplete: "organization",
+            maxLength: 100,
+            hint: "法人なら正式社名、個人事業主なら屋号 (なければご自身のお名前)",
+            maybeErrorMessage: maybeFieldError(model.showsRequiredErrors, {
+              ...NAME_FIELD,
+              value: model.nameDraft,
+            }),
+            enterKeyHint: "done",
           },
-        },
-        h,
-      ),
-      radioFieldsetView(
-        {
-          id: "add-org-code",
-          legend: "事業形態",
-          name: "add-org-code",
-          options: ORG_CODE_OPTIONS,
-          selected: model.orgCode,
-          onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
-          isDisabled: isSubmitting(model),
-        },
-        h,
-      ),
-      ...maybeAlertTextView(maybeRejectedMessage(model.submission), h),
-      dialogFooterView(
-        [
-          buttonView(
-            {
-              label: "作成する",
-              type: "submit",
-              look: "primaryInline",
-              submission: model.submission,
-              isBlocked: String.isEmpty(String.trim(model.nameDraft)),
-            },
-            h,
-          ),
-        ],
-        h,
-      ),
-    ],
+          h,
+        ),
+        radioFieldsetView(
+          {
+            id: "add-org-code",
+            legend: "事業形態",
+            name: "add-org-code",
+            options: ORG_CODE_OPTIONS,
+            selected: model.orgCode,
+            onSelect: (orgCode) => Message.SelectedOrgCode({ orgCode }),
+            isDisabled: isSubmitting(model),
+          },
+          h,
+        ),
+        ...maybeAlertTextView(maybeRejectedMessage(model.submission), h),
+        dialogFooterView(
+          [
+            buttonView(
+              {
+                label: "作成する",
+                type: "submit",
+                look: "primaryInline",
+                submission: model.submission,
+                isBlocked: false,
+              },
+              h,
+            ),
+          ],
+          h,
+        ),
+      ],
+    },
+    h,
   );
 
 export const view = Submodel.defineView<Model, Message>((model, h) =>
@@ -248,7 +269,7 @@ export const view = Submodel.defineView<Model, Message>((model, h) =>
           title: "事業所を追加",
           description:
             "新しい事業所を作成します。作成後は自動でこの事業所に切り替わり、あなたがオーナーになります。",
-          body: [formView(model, h)],
+          body: [addCompanyFormView(model, h)],
           isClosingBlocked: isSubmitting(model),
         },
         h,

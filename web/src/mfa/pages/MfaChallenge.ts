@@ -8,11 +8,13 @@ import { ShieldCheck } from "lucide";
 
 import { authPageCardView } from "../../auth/auth-page-card-view";
 import { SpaHttpClient } from "../../shared/spa-http-client";
-import { maybeRejectedMessage, Submission } from "../../shared/submission";
+import { maybeRejectedMessage, Submission, withoutRejection } from "../../shared/submission";
 import { buttonLinkView, buttonView } from "../../shared/ui/button-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
 import { loadingStatusView } from "../../shared/ui/icon-view";
-import { inputView, maybeInputErrorView } from "../../shared/ui/input-view";
+import { inputView } from "../../shared/ui/input-view";
+import { formView } from "../../shared/ui/form-view";
+import { focusField, requiredErrorText } from "../../shared/required-field";
 import {
   MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
   MFA_CODE_TEXTS,
@@ -55,6 +57,7 @@ export const Message = defineMessageUnion({
   SubmittedCode: {},
   SucceededVerifyCode: { visit: Schema.Int, redirectUrl: Schema.String },
   FailedVerifyCode: { visit: Schema.Int, failure: VerifyFailure },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
 
@@ -64,6 +67,10 @@ export const OutMessage = defineMessageUnion({
 export type OutMessage = typeof OutMessage.Type;
 
 const CODE_INPUT_ID = "mfa-challenge-code";
+export const FocusChallengeCode = Command.define("FocusChallengeCode", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(CODE_INPUT_ID).pipe(Effect.as(Message.CompletedFocusField())),
+});
 const NEEDS_CHALLENGE_DESCRIPTION = "ログインを完了するには、追加の確認が必要です";
 
 export const LoadChallengeState = Command.define("LoadChallengeState", {
@@ -145,7 +152,18 @@ const submitCode = (model: Model): UpdateReturn =>
   whileEditable(model, (entering) => {
     const code = normalizeMfaCode(entering.code, entering.kind);
     return code === ""
-      ? { model }
+      ? {
+          model: withPhase(
+            model,
+            modifyFields(entering, {
+              submission: () =>
+                Submission.Rejected({
+                  message: requiredErrorText(MFA_CODE_TEXTS[entering.kind].label),
+                }),
+            }),
+          ),
+          commands: [FocusChallengeCode()],
+        }
       : {
           model: withPhase(
             model,
@@ -166,6 +184,7 @@ const failVerify = (model: Model, failure: VerifyFailure): UpdateReturn =>
               submission: () => Submission.Rejected({ message: mfaFailureText(failure) }),
             }),
           ),
+          commands: [FocusChallengeCode()],
         },
   );
 
@@ -176,7 +195,10 @@ export const update = (model: Model, message: Message) =>
     FailedLoadChallengeState: ({ visit }) => finishObserving(model, visit, startEntering()),
     UpdatedCode: ({ value }) =>
       whileEditable(model, (entering) => ({
-        model: withPhase(model, modifyFields(entering, { code: () => value })),
+        model: withPhase(
+          model,
+          modifyFields(entering, { code: () => value, submission: withoutRejection }),
+        ),
       })),
     ClickedToggleCodeKind: () =>
       whileEditable(model, (entering) => ({
@@ -199,6 +221,7 @@ export const update = (model: Model, message: Message) =>
       ),
     FailedVerifyCode: ({ visit, failure }) =>
       forThisVisit(model, visit, () => failVerify(model, failure)),
+    CompletedFocusField: () => ({ model }),
   });
 
 const expiredView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> => [
@@ -218,38 +241,44 @@ const enteringView = (
   const maybeErrorMessage = maybeRejectedMessage(entering.submission);
   const isSubmitting = Submission.guards.Submitting(entering.submission);
   return [
-    h.form(
-      [h.Class("space-y-3"), h.OnSubmit(Message.SubmittedCode())],
-      [
-        inputView(
-          {
-            id: CODE_INPUT_ID,
-            label: texts.label,
-            type: "text",
-            value: entering.code,
-            onInput: (value) => Message.UpdatedCode({ value }),
-            submission: entering.submission,
-            placeholder: texts.placeholder,
-            autocomplete: "one-time-code",
-            inputMode: texts.inputMode,
-            maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
-            isAutoCorrectionOff: true,
-            hint: { text: texts.hint, maybeErrorMessage },
-          },
-          h,
-        ),
-        buttonView(
-          {
-            label: "ログインを続ける",
-            type: "submit",
-            look: "primary",
-            submission: entering.submission,
-            isBlocked: normalizeMfaCode(entering.code, entering.kind) === "",
-            icon: ShieldCheck,
-          },
-          h,
-        ),
-      ],
+    formView(
+      {
+        onSubmit: Message.SubmittedCode(),
+        attributes: [h.Class("space-y-3")],
+        children: [
+          inputView(
+            {
+              id: CODE_INPUT_ID,
+              label: texts.label,
+              type: "text",
+              value: entering.code,
+              onInput: (value) => Message.UpdatedCode({ value }),
+              submission: entering.submission,
+              placeholder: texts.placeholder,
+              autocomplete: "one-time-code",
+              inputMode: texts.inputMode,
+              maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+              isAutoCorrectionOff: true,
+              hint: texts.hint,
+              maybeErrorMessage,
+              enterKeyHint: "go",
+            },
+            h,
+          ),
+          buttonView(
+            {
+              label: "ログインを続ける",
+              type: "submit",
+              look: "primary",
+              submission: entering.submission,
+              isBlocked: false,
+              icon: ShieldCheck,
+            },
+            h,
+          ),
+        ],
+      },
+      h,
     ),
     h.div(
       [h.Class("text-center")],
@@ -274,7 +303,6 @@ const enteringView = (
         h.a([h.Href(model.signInHref), h.Class(textLinkClassName)], ["ログインをやり直す"]),
       ],
     ),
-    ...maybeInputErrorView(CODE_INPUT_ID, maybeErrorMessage, h),
   ];
 };
 

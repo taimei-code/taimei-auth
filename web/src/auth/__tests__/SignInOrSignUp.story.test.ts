@@ -3,6 +3,7 @@ import { Option } from "effect";
 import { Command, given, message, model, story } from "foldkit/story";
 
 import {
+  FocusMagicLinkField,
   init,
   Message,
   type Model,
@@ -82,21 +83,26 @@ describe("Magic Link の送信", () => {
     );
   });
 
-  test("メールアドレスが空なら送らない", () => {
+  test("メールアドレスが空なら送らず、誤りを示してメールアドレスの欄へ focus する", () => {
     story(
       update,
       given(pageOf("SignIn")),
       message(Message.SubmittedMagicLinkForm()),
-      Command.expectNone(),
+      Command.expectExact(FocusMagicLinkField),
+      model((current) => {
+        expect(current.showsRequiredErrors).toBe(true);
+      }),
+      Command.resolve(FocusMagicLinkField, Message.CompletedFocusField()),
     );
   });
 
-  test("新規登録画面は名前が空なら送らない", () => {
+  test("新規登録画面は名前が空なら送らず、名前の欄へ focus する", () => {
     story(
       update,
       given({ ...pageOf("SignUp"), email: "user@example.com" }),
       message(Message.SubmittedMagicLinkForm()),
-      Command.expectNone(),
+      Command.expectExact(FocusMagicLinkField),
+      Command.resolve(FocusMagicLinkField, Message.CompletedFocusField()),
     );
   });
 

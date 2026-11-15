@@ -17,6 +17,8 @@ import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import { spinnerView } from "../shared/ui/icon-view";
 import { inputView } from "../shared/ui/input-view";
+import { formView } from "../shared/ui/form-view";
+import { focusField, maybeFieldError, maybeFirstInvalidField } from "../shared/required-field";
 import { fieldSelectView } from "../shared/ui/select-view";
 import { NoticeTone, ReloadTexts, staleNoticeOf } from "../shared/ui/toast-view";
 import { parseRedirectTarget } from "./redirect-target";
@@ -61,6 +63,7 @@ export const Model = Schema.Struct({
   emailDraft: Schema.String,
   roleDraft: RoleSchema,
   sending: Submission,
+  showsRequiredErrors: Schema.Boolean,
   pending: Pending,
   listNumber: Schema.Int,
   revoking: RevokeProgress,
@@ -104,8 +107,16 @@ export const Message = defineMessageUnion({
     failure: RequestFailure,
     reload: Reload,
   },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
+
+const EMAIL_FIELD = { id: "invite-email", label: "メールアドレス" } as const;
+
+export const FocusInvitationEmail = Command.define("FocusInvitationEmail", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(EMAIL_FIELD.id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
@@ -265,6 +276,7 @@ export const init = (
     emailDraft: "",
     roleDraft: "MEMBER",
     sending: Submission.Idle(),
+    showsRequiredErrors: false,
     pending: Pending.Loading(),
     listNumber: 0,
     revoking: RevokeProgress.Idle(),
@@ -316,26 +328,31 @@ const finishReload = (model: Model, reload: Reload, textOf: (texts: ReloadTexts)
     }),
   });
 
-const hasEmail = (model: Model) => String.isNonEmpty(String.trim(model.emailDraft));
-
 const isLatestList = (model: Model, listNumber: number) => listNumber === model.listNumber;
 
 const submitInvitation = (model: Model): UpdateReturn => {
   const email = String.trim(model.emailDraft);
-  return isSending(model) || !hasEmail(model)
+  return isSending(model)
     ? { model }
-    : {
-        model: modifyFields(model, { sending: () => Submission.Submitting() }),
-        commands: [
-          CreateInvitation({
-            visit: model.visit,
-            companyId: model.companyId,
-            email,
-            role: model.roleDraft,
-            redirectSearch: model.redirectSearch,
-          }),
-        ],
-      };
+    : Option.isSome(
+          maybeFirstInvalidField([{ ...EMAIL_FIELD, value: model.emailDraft, isEmail: true }]),
+        )
+      ? {
+          model: modifyFields(model, { showsRequiredErrors: () => true }),
+          commands: [FocusInvitationEmail()],
+        }
+      : {
+          model: modifyFields(model, { sending: () => Submission.Submitting() }),
+          commands: [
+            CreateInvitation({
+              visit: model.visit,
+              companyId: model.companyId,
+              email,
+              role: model.roleDraft,
+              redirectSearch: model.redirectSearch,
+            }),
+          ],
+        };
 };
 
 const startRevoke = (model: Model, invitationId: string): UpdateReturn =>
@@ -364,7 +381,7 @@ export const update = (model: Model, message: Message) =>
     SucceededCreateInvitation: ({ visit, reused }) =>
       forThisVisit(model, visit, () =>
         reloadAfter(
-          modifyFields(model, { emailDraft: () => "" }),
+          modifyFields(model, { emailDraft: () => "", showsRequiredErrors: () => false }),
           Reload.Sent({ texts: textsAfterSending(reused) }),
         ),
       ),
@@ -381,6 +398,7 @@ export const update = (model: Model, message: Message) =>
             },
       ),
     ClickedRevoke: ({ invitationId }) => startRevoke(model, invitationId),
+    CompletedFocusField: () => ({ model }),
     SucceededRevokeInvitation: ({ visit }) =>
       forThisVisit(model, visit, () => reloadAfter(model, Reload.Revoked({ texts: AFTER_REVOKE }))),
     FailedRevokeInvitation: ({ visit, failure }) =>
@@ -427,56 +445,62 @@ const inviteFormView = (model: Model, isCompanyChanging: boolean, h: HtmlBuilder
     [h.AriaLabel("メンバーを招待"), h.Class("space-y-4")],
     [
       h.h2([h.Class("text-sm font-medium text-foreground")], ["メンバーを招待"]),
-      h.form(
-        [
-          h.Class("flex flex-col gap-3 sm:flex-row sm:items-end"),
-          h.OnSubmit(Message.SubmittedInvitation()),
-        ],
-        [
-          h.div(
-            [h.Class("flex-1")],
-            [
-              inputView(
-                {
-                  id: "invite-email",
-                  label: "メールアドレス",
-                  type: "email",
-                  value: model.emailDraft,
-                  onInput: (value) => Message.UpdatedEmail({ value }),
-                  submission: model.sending,
-                  placeholder: "member@example.com",
-                  autocomplete: "off",
-                },
-                h,
-              ),
-            ],
-          ),
-          fieldSelectView(
-            {
-              id: ROLE_SELECT_ID,
-              label: { _tag: "Visible", text: "役割" },
-              value: model.roleDraft,
-              options: model.assignableRoles.map((role) => ({
-                value: role,
-                label: roleLabelJa(role),
-              })),
-              isDisabled: isSending(model),
-              onChange: (value) => Message.SelectedRole({ value }),
-              placement: "InForm",
-            },
-            h,
-          ),
-          buttonView(
-            {
-              label: "招待する",
-              type: "submit",
-              look: "primaryInline",
-              submission: model.sending,
-              isBlocked: isCompanyChanging || !hasEmail(model),
-            },
-            h,
-          ),
-        ],
+      formView(
+        {
+          onSubmit: Message.SubmittedInvitation(),
+          attributes: [h.Class("flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end")],
+          children: [
+            h.div(
+              [h.Class("flex-1")],
+              [
+                inputView(
+                  {
+                    ...EMAIL_FIELD,
+                    type: "email",
+                    value: model.emailDraft,
+                    onInput: (value) => Message.UpdatedEmail({ value }),
+                    submission: model.sending,
+                    placeholder: "member@example.com",
+                    autocomplete: "off",
+                    enterKeyHint: "send",
+                    maybeErrorMessage: maybeFieldError(model.showsRequiredErrors, {
+                      ...EMAIL_FIELD,
+                      value: model.emailDraft,
+                      isEmail: true,
+                    }),
+                  },
+                  h,
+                ),
+              ],
+            ),
+            fieldSelectView(
+              {
+                id: ROLE_SELECT_ID,
+                label: { _tag: "Visible", text: "役割" },
+                value: model.roleDraft,
+                options: model.assignableRoles.map((role) => ({
+                  value: role,
+                  label: roleLabelJa(role),
+                })),
+                isDisabled: isSending(model),
+                onChange: (value) => Message.SelectedRole({ value }),
+                placement: "InForm",
+              },
+              h,
+            ),
+            buttonView(
+              {
+                label: "招待する",
+                type: "submit",
+                look: "primaryInline",
+                submission: model.sending,
+                isBlocked: isCompanyChanging,
+              },
+              h,
+            ),
+          ],
+        },
+        h,
       ),
     ],
   );

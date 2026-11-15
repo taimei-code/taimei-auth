@@ -20,6 +20,7 @@ const present = (overrides: Partial<Model> = {}): Model => ({
     maybeImageUrl: Option.none(),
     save: Submission.Idle(),
     avatar: Submission.Idle(),
+    showsRequiredErrors: false,
   },
   ...overrides,
 });

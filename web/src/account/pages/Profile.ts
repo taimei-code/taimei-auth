@@ -17,6 +17,8 @@ import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { buttonView } from "../../shared/ui/button-view";
 import { fileInputView } from "../../shared/ui/file-input-view";
 import { inputView } from "../../shared/ui/input-view";
+import { formView } from "../../shared/ui/form-view";
+import { focusField, isBlank, maybeFieldError } from "../../shared/required-field";
 import { NoticeTone } from "../../shared/ui/toast-view";
 import * as AccountDeletion from "../account-deletion";
 import * as CurrentCompany from "../current-company";
@@ -38,6 +40,7 @@ const Profile = defineTaggedUnion({
     maybeImageUrl: Schema.Option(Schema.String),
     save: Submission,
     avatar: Submission,
+    showsRequiredErrors: Schema.Boolean,
   },
 });
 type Profile = typeof Profile.Type;
@@ -65,8 +68,16 @@ export const Message = defineMessageUnion({
     message: Schema.String,
   },
   GotAccountDeletionMessage: { message: AccountDeletion.Message },
+  CompletedFocusField: {},
 });
 export type Message = typeof Message.Type;
+
+const NAME_FIELD = { id: "name", label: "名前" } as const;
+
+const FocusProfileName = Command.define("FocusProfileName", {
+  messages: [Message.CompletedFocusField],
+  execute: focusField(NAME_FIELD.id).pipe(Effect.as(Message.CompletedFocusField())),
+});
 
 export const isAccountDeleted = (message: Message): boolean =>
   Schema.is(Message.GotAccountDeletionMessage)(message) &&
@@ -193,6 +204,7 @@ const loadedProfile = (maybeUser: Option.Option<typeof SignedInUser.Type>): Prof
         maybeImageUrl,
         save: Submission.Idle(),
         avatar: Submission.Idle(),
+        showsRequiredErrors: false,
       }),
   });
 
@@ -200,10 +212,21 @@ const submitProfileForm = (model: Model): UpdateReturn =>
   withPresent(model, (present) =>
     Submission.guards.Submitting(present.save)
       ? { model }
-      : {
-          model: withProfile(model, modifyFields(present, { save: () => Submission.Submitting() })),
-          commands: [SaveProfile({ visit: model.visit, name: present.nameDraft })],
-        },
+      : isBlank(present.nameDraft)
+        ? {
+            model: withProfile(model, modifyFields(present, { showsRequiredErrors: () => true })),
+            commands: [FocusProfileName()],
+          }
+        : {
+            model: withProfile(
+              model,
+              modifyFields(present, {
+                save: () => Submission.Submitting(),
+                showsRequiredErrors: () => false,
+              }),
+            ),
+            commands: [SaveProfile({ visit: model.visit, name: present.nameDraft })],
+          },
   );
 
 const finishSave = (model: Model, visit: number, tone: typeof NoticeTone.Type, text: string) =>
@@ -307,6 +330,7 @@ export const update = (model: Model, message: Message) =>
       finishUpload(model, visit, Option.some(imageUrl), Submission.Idle()),
     FailedUploadAvatar: ({ visit, maybeImageUrl, message: failureMessage }) =>
       finishUpload(model, visit, maybeImageUrl, Submission.Rejected({ message: failureMessage })),
+    CompletedFocusField: () => ({ model }),
     GotAccountDeletionMessage: ({ message: deletionMessage }) =>
       foldAccountDeletion(model, deletionMessage),
   });
@@ -327,51 +351,58 @@ const currentCompanyView = (company: CurrentCompany.Membership, h: HtmlBuilder<M
   );
 
 const profileFormView = (present: Present, h: HtmlBuilder<Message>): Html =>
-  h.form(
-    [h.Class("space-y-5"), h.OnSubmit(Message.SubmittedProfileForm())],
-    [
-      inputView(
-        {
-          id: "email",
-          label: "メールアドレス",
-          type: "email",
-          value: present.email,
-          submission: Submission.Idle(),
-          placeholder: "",
-          autocomplete: "email",
-          isDisabled: true,
-        },
-        h,
-      ),
-      inputView(
-        {
-          id: "name",
-          label: "名前",
-          type: "text",
-          value: present.nameDraft,
-          onInput: (value) => Message.UpdatedName({ value }),
-          submission: present.save,
-          placeholder: "",
-          autocomplete: "name",
-          hint: {
-            text: "アプリケーション内で表示される名前です",
+  formView(
+    {
+      onSubmit: Message.SubmittedProfileForm(),
+      attributes: [h.Class("space-y-5")],
+      children: [
+        inputView(
+          {
+            id: "email",
+            label: "メールアドレス",
+            type: "email",
+            value: present.email,
+            submission: Submission.Idle(),
+            placeholder: "",
+            autocomplete: "email",
+            enterKeyHint: "next",
             maybeErrorMessage: Option.none(),
+            isDisabled: true,
           },
-        },
-        h,
-      ),
-      buttonView(
-        {
-          label: "保存",
-          submittingLabel: "保存中…",
-          type: "submit",
-          look: "primaryInline",
-          submission: present.save,
-          isBlocked: false,
-        },
-        h,
-      ),
-    ],
+          h,
+        ),
+        inputView(
+          {
+            ...NAME_FIELD,
+            type: "text",
+            value: present.nameDraft,
+            onInput: (value) => Message.UpdatedName({ value }),
+            submission: present.save,
+            placeholder: "",
+            autocomplete: "name",
+            hint: "アプリケーション内で表示される名前です",
+            maybeErrorMessage: maybeFieldError(present.showsRequiredErrors, {
+              ...NAME_FIELD,
+              value: present.nameDraft,
+            }),
+            enterKeyHint: "done",
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: "保存",
+            submittingLabel: "保存中…",
+            type: "submit",
+            look: "primaryInline",
+            submission: present.save,
+            isBlocked: false,
+          },
+          h,
+        ),
+      ],
+    },
+    h,
   );
 
 const avatarView = (present: Present, h: HtmlBuilder<Message>): Html =>
