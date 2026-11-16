@@ -931,19 +931,23 @@ const ROWS: readonly Row[] = [
       "initRuntime と initAuth を呼ぶのは boot.ts だけ (runtime と better-auth に同じ TTL store を渡す)",
   },
   {
-    name: "issue-session-only-in-second-factor",
+    name: "issue-session-only-in-establish-sign-in",
     within: ["src/**"],
-    allowedIn: [
-      "src/auth-service.ts",
-      "src/auth-wiring.ts",
-      "src/mfa/totp/complete-login-challenge.ts",
-    ],
+    allowedIn: ["src/auth-service.ts", "src/auth-wiring.ts", "src/establish-sign-in.ts"],
     matchers: [
       { kind: "identifier", names: ["issueSession"] },
       { kind: "literal", pattern: /^issueSession$/ },
     ],
     message:
-      "資格情報を確かめずに session を発行する AuthApi.issueSession を呼ぶのは、第二要素の検証を終えた complete-login-challenge.ts だけ",
+      "資格情報を確かめずに session を発行する AuthApi.issueSession を呼ぶのは、ログインの成立の手順 establish-sign-in.ts だけ (session の発行、ログインの記帳、redirect_url の検査を 1 つにまとめる)",
+  },
+  {
+    name: "establish-sign-in-only-after-credential-check",
+    within: PRODUCTION_ROOTS,
+    allowedIn: ["src/mfa/totp/complete-login-challenge.ts"],
+    matchers: [{ kind: "importTarget", target: /^src\/establish-sign-in(\.ts)?$/ }],
+    message:
+      "ログインの成立の手順 (establish-sign-in.ts) は資格情報を確かめずに session を発行するので、import するのは資格情報の検証を終えた complete-login-challenge.ts だけ",
   },
   {
     name: "get-session-only-in-session-check",

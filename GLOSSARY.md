@@ -117,6 +117,10 @@ _Avoid_: onboarding URL, after-signup URL (こちらはプロダクト側の pat
 メールアドレス宛に送る、1 回だけ使えるログイン用のリンク。開くと本人の確認、**session** の確立、**redirect_url** への移動までが済む。有効期限は 5 分で、consumer app は auth-client を通じてこの値を受け取る。
 _Avoid_: メールリンク
 
+**パスキー**:
+user が端末か password manager に持ち、生体か PIN の確認を経て本人であることを示す、**auth ホスト** に登録した資格情報。詳細: ADR-0029。
+_Avoid_: Passkey (英字の表記。画面も「パスキー」と書く), WebAuthn / FIDO2 (仕組みの規格の名前で、登録した資格情報そのものではない), 生体認証 (確認の方法の 1 つで、PIN を含まない), セキュリティキー (物理の鍵だけを指す), credential (一般語で、**Service Key** などと紛らわしい)
+
 **新規登録の直後**:
 user が作られてから、**Magic Link** の有効期限と同じ長さの時間が経つまでの間。consumer app は auth-client を通じてこの判定を受け取る。
 _Avoid_: 初回ログイン (その間の 2 回目のログインも含むため), 事業所の未作成 (**事業所** を作っていない状態は別の判定)

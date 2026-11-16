@@ -1,8 +1,6 @@
 import { Effect } from "effect";
-import { appendAuditBestEffort, signInEntry } from "../../audit/append";
-import { AuthApi } from "../../auth-service";
+import { establishSignIn } from "../../establish-sign-in";
 import { ChallengeExpired } from "../errors";
-import { validateChallengeRedirect } from "../redirect-guard";
 import type { MfaCodeKind } from "../mfa-contract";
 import {
   consumeLoginChallenge,
@@ -29,14 +27,11 @@ export const completeLoginChallenge = Effect.fnUntraced(function* (
   const clearCookie = yield* consumeLoginChallenge(challenge.challengeId);
   yield* consumeMatchedCode(challenge.userId, matched);
 
-  const sessionHeaders = yield* AuthApi.use((authApi) => authApi.issueSession(challenge.userId));
+  const signedIn = yield* establishSignIn(headers, challenge);
 
-  yield* appendAuditBestEffort(signInEntry(challenge.userId, challenge.method, headers));
+  for (const cookie of clearCookie.getSetCookie()) {
+    signedIn.forwardedHeaders.append("set-cookie", cookie);
+  }
 
-  for (const cookie of clearCookie.getSetCookie()) sessionHeaders.append("set-cookie", cookie);
-
-  return {
-    redirectUrl: yield* validateChallengeRedirect(challenge.redirectUrl),
-    forwardedHeaders: sessionHeaders,
-  };
+  return signedIn;
 });
