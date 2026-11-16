@@ -16,7 +16,7 @@ export const appendAuditBestEffort = (entry: AuditLogEntry) =>
     ),
   );
 
-type SignInMethod = Extract<AuditLogEntry, { eventType: "sign_in" }>["payload"]["method"];
+export type SignInMethod = Extract<AuditLogEntry, { eventType: "sign_in" }>["payload"]["method"];
 
 export const signInEntry = (
   userId: string,
