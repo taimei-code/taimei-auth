@@ -8,7 +8,7 @@ Accepted (2026-11-16)。判断主体は maintainer。仕様の正本は taimei-c
 
 user は **Magic Link** か GitHub OAuth でログインし、MFA を有効にしている user はさらに **TOTP** のコードを入力する。どちらの手段も偽の画面に入力させて中継する手口 (フィッシング) を構造としては防げない。パスキーは、browser が origin を署名に含めるので、中継された応答は検証で落ちる。
 
-MFA を better-auth の twoFactor plugin の上に作った時は、plugin が持つ書き込みから状態機械、遷移の guard、運用の手順書が派生し、自前の実装に置き換えた (ADR-0016 の Context)。パスキーで同じことを繰り返したくない。
+MFA を better-auth の twoFactor plugin の上に作った時は、plugin が 1 つの操作で user の表の flag と行を別々に書き、自前の DB transaction に入れられなかった。途中の失敗が中断した状態として残り、そこから状態機械、遷移の guard、運用の手順書が派生し、自前の実装に置き換えた (ADR-0013 §7、ADR-0016 の Context)。better-auth の passkey plugin (1.7.12) は、登録で passkey の行を 1 回 INSERT するだけで、user の表に flag を書かない。plugin を使っても中断した状態は生まれない。plugin を採らない理由は、状態ではなく、守りたい条件を plugin の外に置くことになる点にある (Considered Options)。
 
 PoC (#482) では、`@simplewebauthn/server` 14.1.0 がこの repo と同じ compatibility の設定の workerd で、bundle、登録の検証、認証の検証、生体か PIN の確認の無い応答の拒否を通した。開発環境の host (`auth.taimei-code.localhost`) と e2e の host (`localhost`) でも、登録と認証が通った。
 
@@ -24,7 +24,7 @@ PoC (#482) では、`@simplewebauthn/server` 14.1.0 がこの repo と同じ com
 
 | 案 | 選ばなかった理由 |
 |---|---|
-| better-auth の passkey plugin | plugin が表と書き込みを持つので、Context に書いた MFA の経緯を繰り返す。生体か PIN の必須と RP ID を、plugin の設定と自前の検査の 2 か所で守ることになる |
+| better-auth の passkey plugin | 1.7.12 の source で次を確かめた。(1) 登録と認証の検証が `requireUserVerification: false` で固定され、生体か PIN の必須を hook でもう一度確かめることになり、守る場所が 2 か所に分かれる。(2) plugin が INSERT を持つので、「10 本未満なら」の条件を文に付けられず、登録の前の **TOTP** の確認も plugin の外の hook に置くことになる。(3) ログインの成功で plugin が自分で **session** を発行するので、**session** の発行、ログインの記帳、**redirect_url** の検査をまとめた手順を通らない。(4) 期待する origin を設定しないと、要求の Origin header をそのまま期待値に使う |
 | 親 domain (`taimei-code.com`) の RP ID | パスキーの登録と認証は **auth ホスト** の画面だけが行う (ADR-0006) ので、親 domain にして得るものが無い。親 domain にすると、consumer app を含むすべてのサブドメインの page が、この RP ID での登録と認証を browser に要求できる。後から RP ID を狭めると、その環境のパスキーが全部無効になる |
 | パスキーでのログインの後にも **MFA チャレンジ** を求める | 生体か PIN の確認を必須にしたパスキーは、それだけで 2 要素を満たす。**TOTP** を重ねても防げる攻撃は増えず、ログインの手間だけが増える |
 | 状態を表す列や guard の表を持つ (登録中、無効化中など) | 行の有無で使えるかが決まるので、中間の状態が要らない。列を持つと、ADR-0016 で無くした状態機械と遷移の guard が戻る |
