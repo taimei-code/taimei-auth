@@ -83,6 +83,7 @@
     "taimei/auth-instance-import-only-in-app-and-auth-wiring": "error",
     "taimei/init-runtime-only-in-boot": "error",
     "taimei/issue-session-only-in-establish-sign-in": "error",
+    "taimei/establish-sign-in-only-after-credential-check": "error",
     "taimei/get-session-only-in-session-check": "error",
     "taimei/api-error-shape-only-in-auth-wiring": "error",
     "taimei/db-import-in-src-tests-only-in-test-db": "error",
