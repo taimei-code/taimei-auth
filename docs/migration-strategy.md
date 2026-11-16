@@ -20,7 +20,7 @@ freee の authenticator gem `PekozRunner` パターンの縮小版を採用す�
 
 新旧両方の endpoint / payload を read できるようにする。
 
-- SDK 内の feature flag (`USE_LEGACY_PROTO` 等) を環境変数または build flag で切り替える
+- SDK 内の proto の版の切り替え (`USE_LEGACY_PROTO` 等) を、環境変数または build flag で行う
 - consumer は `if (FLAG) verifySessionV1() else verifySessionV2()` で分岐する
 - proto v1 / v2 を**同時に generate** して両方を import する (`src/gen/v1/*` + `src/gen/v2/*`)
 
