@@ -105,6 +105,8 @@
     "taimei/no-hand-written-cookie-attribute": "error",
     "taimei/mfa-totp-repo-only-in-listed-files": "error",
     "taimei/login-cookie-name-only-in-login-challenge": "error",
+    "taimei/registration-challenge-key-only-in-register-passkey": "error",
+    "taimei/issued-challenge-shape-only-in-register-passkey": "error",
     "taimei/find-mfa-totp-only-in-listed-files": "error",
     "taimei/verified-at-only-in-mfa-policy": "error",
     "taimei/passkey-transports-only-in-passkey-entry": "error",
