@@ -1596,6 +1596,7 @@ const ROWS: readonly Row[] = [
       "src/auth.ts",
       "src/auth-plugins/primary-auth.ts",
       "src/ttl-store-better-auth.ts",
+      "src/passkey/webauthn.ts",
     ],
     matchers: [
       {
@@ -1614,7 +1615,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "Effect を走らせ、failure と defect を応答に変えるのは adapter (runRoute・runMiddleware・runRpc) だけ。ほかに走らせてよいのは、runtime の外から呼ばれる口 (transaction の callback、切り離した fiber、better-auth の hook) の file だけ。program は Effect を返す",
+      "Effect を走らせ、failure と defect を応答に変えるのは adapter (runRoute・runMiddleware・runRpc) だけ。ほかに走らせてよいのは、runtime の外から呼ばれる口 (transaction の callback、切り離した fiber、better-auth の hook、検証の library が呼ぶ challenge の照合) の file だけ。program は Effect を返す",
   },
   {
     name: "clock-and-id-only-in-services",
