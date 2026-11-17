@@ -89,7 +89,7 @@ const coseKeyOf = (algorithm: SignatureAlgorithm, jwk: JsonWebKey): Uint8Array =
   );
 };
 
-export const TRANSPORTS = ["internal", "hybrid"] as const;
+const TRANSPORTS = ["internal", "hybrid"] as const;
 
 export const authHost = () => new URL(process.env.AUTH_SERVICE_URL ?? "");
 
@@ -176,13 +176,11 @@ export type VerificationOutcome =
     }
   | { readonly rejected: { readonly tag: string; readonly status: number } };
 
-const entry = () => import("../../src/passkey/webauthn");
-
 export const verifyRegistrationResponseOf = async (
   response: ReturnType<typeof signedRegistration>["response"],
   matchesChallenge: (challenge: string) => boolean,
 ): Promise<VerificationOutcome> => {
-  const { verifyRegistration } = await entry();
+  const { verifyRegistration } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(
     verifyRegistration({
       response,
@@ -210,6 +208,6 @@ export const verifyRegistrationResponseOf = async (
 };
 
 export const registrationOptionsFor = async (user: { readonly userId: string; readonly email: string }) => {
-  const { registrationOptions } = await entry();
+  const { registrationOptions } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(registrationOptions(user));
 };
