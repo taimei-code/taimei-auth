@@ -9,9 +9,18 @@ import {
   bigint,
   jsonb,
   check,
+  customType,
 } from "drizzle-orm/pg-core";
-import { inArray, relations } from "drizzle-orm";
-import { ORG_CODES, ROLES, type OrgCode, type Role } from "./enums";
+import { inArray, relations, sql } from "drizzle-orm";
+import {
+  ORG_CODES,
+  PASSKEY_CREDENTIAL_ID_MAX_BASE64URL_LENGTH,
+  PASSKEY_TRANSPORTS,
+  ROLES,
+  type OrgCode,
+  type PasskeyTransport,
+  type Role,
+} from "./enums";
 
 export type { OrgCode, Role } from "./enums";
 
@@ -157,6 +166,43 @@ export const mfaRecoveryCode = pgTable(
     usedAt: timestamp("used_at"),
   },
   (table) => [index("mfa_recovery_code_user_id_idx").on(table.userId)],
+);
+
+const bytes = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (value) => new Uint8Array(value),
+});
+
+export const passkey = pgTable(
+  "passkey",
+  {
+    id: text("id").primaryKey().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull(),
+    publicKey: bytes("public_key").notNull(),
+    counter: bigint("counter", { mode: "number" }).notNull(),
+    aaguid: text("aaguid").notNull(),
+    transports: text("transports").array().$type<PasskeyTransport[]>().notNull().default([]),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    lastUsedAt: timestamp("last_used_at"),
+  },
+  (table) => [
+    uniqueIndex("passkey_credential_id_key").on(table.credentialId),
+    index("passkey_user_id_idx").on(table.userId),
+    check(
+      "passkey_transports_check",
+      sql`${table.transports} <@ ARRAY[${sql.join(
+        PASSKEY_TRANSPORTS.map((transport) => sql`${transport}`),
+        sql`, `,
+      )}]::text[]`.inlineParams(),
+    ),
+    check(
+      "passkey_credential_id_length_check",
+      sql`char_length(${table.credentialId}) <= ${PASSKEY_CREDENTIAL_ID_MAX_BASE64URL_LENGTH}`.inlineParams(),
+    ),
+  ],
 );
 
 export const auditLog = pgTable(
