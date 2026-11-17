@@ -8,7 +8,7 @@ import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { ttlStoreLayer } from "../../ttl-store-service";
 import { JSON_HEADERS } from "../client-facing-error";
 import { signedIn as signedInLayer } from "../../membership/__tests__/test-layers";
-import { buildAppWith } from "./helpers";
+import { buildAppWith, freshSessionCookie } from "./helpers";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
@@ -108,7 +108,7 @@ describe("MFA の状態変更の試行枠 (session ごとに 60 秒で 10 回、
 
   const signedIn = Effect.gen(function* () {
     const user = yield* TestDb.use((db) => db.seedUser("budget"));
-    const cookie = `__Secure-better-auth.session_token=${crypto.randomUUID()}`;
+    const { cookie } = freshSessionCookie();
     return { app: buildAppWith(signedInLayer(user.id, user.email)), cookie };
   });
   const post = (app: Hono, cookie: string, path: string, body: unknown) =>

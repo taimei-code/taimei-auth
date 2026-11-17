@@ -5,7 +5,7 @@ import { CLIENT_IP_HEADER } from "../../client-ip";
 import { signedIn, signedOut } from "../../membership/__tests__/test-layers";
 import { PasskeyRepo } from "../../passkey/ports";
 import { JSON_HEADERS } from "../client-facing-error";
-import { buildAppWith } from "./helpers";
+import { buildAppWith, freshSessionCookie } from "./helpers";
 
 const USED = {
   id: "pk-used",
@@ -25,10 +25,6 @@ const passkeyRepoWith = (rows: (typeof USED)[]) =>
     PasskeyRepo,
     partial<PasskeyRepo["Service"]>({ listPasskeys: () => Effect.succeed(rows) }),
   );
-
-const freshSessionCookie = () => ({
-  cookie: `__Secure-better-auth.session_token=${crypto.randomUUID()}`,
-});
 
 describe("パスキーの一覧の API の応答", () => {
   test("使ったパスキーは最後に使った日時を ISO 8601 の文字列で、未使用のパスキーは null で返す", async () => {
