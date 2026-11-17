@@ -90,6 +90,14 @@ const rejectedCases: ReadonlyArray<readonly [string, () => Promise<VerificationO
         acceptAll,
       ),
   ],
+  [
+    "固定した方式の外の ML-DSA-44 の応答",
+    () =>
+      verifyRegistrationResponseOf(
+        signedRegistration({ algorithm: "ML-DSA-44", challenge: CHALLENGE, userVerified: true }).response,
+        acceptAll,
+      ),
+  ],
 ];
 
 describe("依存の追加", () => {
@@ -186,6 +194,15 @@ describe("パスキーの登録の応答の検証", () => {
     );
   });
 
+  test("正しく署名した ML-DSA-44 の応答は、検証する実行環境が ML-DSA-44 を扱えても既知の失敗になる", async () => {
+    expectRejected(
+      await verifyRegistrationResponseOf(
+        signedRegistration({ algorithm: "ML-DSA-44", challenge: CHALLENGE, userVerified: true }).response,
+        acceptAll,
+      ),
+    );
+  });
+
   test("不正な応答の失敗は、どの理由でも同じ 1 種類の既知の失敗で、4xx の状態を持つ", async () => {
     const tags = new Set<string>();
     for (const [, run] of rejectedCases) {
@@ -205,7 +222,7 @@ describe("パスキーの登録の options", () => {
     expect(options.user.name).toBe(user.email);
   });
 
-  test("RP ID は auth ホストの host で、受け付ける署名の方式は EdDSA、ES256、RS256 の 3 つ", async () => {
+  test("RP ID は auth ホストの host で、受け付ける署名の方式は、実行環境が ML-DSA-44 を扱えても EdDSA、ES256、RS256 の 3 つ", async () => {
     const options = await registrationOptionsFor(user);
     expect(options.rp.id).toBe(authHost().hostname);
     expect(options.pubKeyCredParams.map(({ alg }) => alg).toSorted()).toEqual([-8, -7, -257].toSorted());

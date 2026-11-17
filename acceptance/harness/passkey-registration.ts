@@ -1,5 +1,6 @@
-import { createHash, createSign, generateKeyPairSync, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { Effect } from "effect";
+import { parseClientFacingError } from "../../src/handlers/client-facing-error";
 
 type CborValue = number | string | Uint8Array | ReadonlyMap<CborValue, CborValue>;
 
@@ -42,32 +43,49 @@ const FLAG_USER_PRESENT = 0x01;
 const FLAG_USER_VERIFIED = 0x04;
 const FLAG_ATTESTED_CREDENTIAL = 0x40;
 
-export type SignatureAlgorithm = "ES256" | "RS256";
+export type SignatureAlgorithm = "ES256" | "RS256" | "ML-DSA-44";
 
-const COSE_ALGORITHM: Readonly<Record<SignatureAlgorithm, number>> = { ES256: -7, RS256: -257 };
+const COSE_ALGORITHM: Readonly<Record<SignatureAlgorithm, number>> = {
+  ES256: -7,
+  RS256: -257,
+  "ML-DSA-44": -48,
+};
 
-const keyPairOf = (algorithm: SignatureAlgorithm) =>
-  algorithm === "ES256"
-    ? generateKeyPairSync("ec", { namedCurve: "P-256" })
-    : generateKeyPairSync("rsa", { modulusLength: 2048 });
+const keyPairOf = (algorithm: SignatureAlgorithm) => {
+  if (algorithm === "ES256") return generateKeyPairSync("ec", { namedCurve: "P-256" });
+  if (algorithm === "RS256") return generateKeyPairSync("rsa", { modulusLength: 2048 });
+  return generateKeyPairSync("ml-dsa-44");
+};
 
 const coseKeyOf = (algorithm: SignatureAlgorithm, jwk: JsonWebKey): Uint8Array => {
   const bytes = (field: string | undefined) => new Uint8Array(Buffer.from(field ?? "", "base64url"));
+  if (algorithm === "ES256") {
+    return cbor(
+      new Map<CborValue, CborValue>([
+        [1, 2],
+        [3, COSE_ALGORITHM.ES256],
+        [-1, 1],
+        [-2, bytes(jwk.x)],
+        [-3, bytes(jwk.y)],
+      ]),
+    );
+  }
+  if (algorithm === "RS256") {
+    return cbor(
+      new Map<CborValue, CborValue>([
+        [1, 3],
+        [3, COSE_ALGORITHM.RS256],
+        [-1, bytes(jwk.n)],
+        [-2, bytes(jwk.e)],
+      ]),
+    );
+  }
   return cbor(
-    algorithm === "ES256"
-      ? new Map<CborValue, CborValue>([
-          [1, 2],
-          [3, COSE_ALGORITHM.ES256],
-          [-1, 1],
-          [-2, bytes(jwk.x)],
-          [-3, bytes(jwk.y)],
-        ])
-      : new Map<CborValue, CborValue>([
-          [1, 3],
-          [3, COSE_ALGORITHM.RS256],
-          [-1, bytes(jwk.n)],
-          [-2, bytes(jwk.e)],
-        ]),
+    new Map<CborValue, CborValue>([
+      [1, 7],
+      [3, COSE_ALGORITHM["ML-DSA-44"]],
+      [-1, bytes((jwk as JsonWebKey & { readonly pub?: string }).pub)],
+    ]),
   );
 };
 
@@ -107,8 +125,9 @@ export const signedRegistration = (input: {
     }),
   );
   const signedClientData = input.signatureMismatch === true ? "{}" : clientDataJSON;
+  const signedData = concat(authData, sha256(signedClientData));
   const signature = new Uint8Array(
-    createSign("sha256").update(concat(authData, sha256(signedClientData))).sign(privateKey),
+    sign(input.algorithm === "ML-DSA-44" ? null : "sha256", signedData, privateKey),
   );
   const attestationObject = cbor(
     new Map<CborValue, CborValue>([
@@ -145,8 +164,6 @@ export const signedRegistration = (input: {
   };
 };
 
-type KnownFailure = { readonly _tag: string; readonly "~wireStatus": number };
-
 export type VerificationOutcome =
   | {
       readonly accepted: {
@@ -182,11 +199,12 @@ export const verifyRegistrationResponseOf = async (
           },
         }),
       ),
-      Effect.catch((failure: KnownFailure) =>
-        Effect.succeed<VerificationOutcome>({
-          rejected: { tag: failure._tag, status: failure["~wireStatus"] },
-        }),
-      ),
+      Effect.catch((failure) => {
+        const clientFacing = parseClientFacingError(failure);
+        return Effect.succeed<VerificationOutcome>({
+          rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
+        });
+      }),
     ),
   );
 };
