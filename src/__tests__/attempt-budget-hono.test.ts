@@ -5,7 +5,7 @@ import { Hono } from "hono";
 import { buildApp as buildServerApp } from "../app";
 import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../attempt-budget";
 import { attemptBudgetMiddleware, attemptBudgetProgram } from "../handlers/attempt-budget-hono";
-import { mfaAttemptSubject } from "../handlers/attempt-budget-http-api";
+import { sessionAttemptSubject } from "../handlers/attempt-budget-http-api";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
 import { RateLimited } from "../failures";
 import { toRateWindowResult } from "../ttl-store";
@@ -119,11 +119,11 @@ describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () =
   });
 });
 
-describe("MFA の試行枠の subject", () => {
+describe("session ごとの試行枠の subject", () => {
   test("session 軸の subject は IP を変えても同じ枠で、cookie の値を鍵に含めない (鍵を認証情報にしない)", async () => {
     const headers = new Headers({ cookie: "__Secure-better-auth.session_token=tok.sig" });
-    const fromOneIp = await mfaAttemptSubject(headers, "203.0.113.1");
-    const fromAnotherIp = await mfaAttemptSubject(headers, "198.51.100.2");
+    const fromOneIp = await sessionAttemptSubject(headers, "203.0.113.1");
+    const fromAnotherIp = await sessionAttemptSubject(headers, "198.51.100.2");
     expect(fromOneIp).toBe(fromAnotherIp);
     expect(fromOneIp).toStartWith("session:");
     expect(fromOneIp).not.toContain("tok");
