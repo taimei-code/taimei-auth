@@ -14,6 +14,7 @@ import { IdGeneratorLive } from "./id-generator";
 import { InvitationRepoLive } from "./invitation/wiring";
 import { MembershipRepoLive } from "./membership/wiring";
 import { MfaLayers } from "./mfa/totp/wiring";
+import { PasskeyRepoLive } from "./passkey/wiring";
 import { TransactionLive } from "./transaction";
 
 export const appLayer = (
@@ -28,6 +29,7 @@ export const appLayer = (
     CompanyRepoLive,
     AuditLogLive,
     MfaLayers,
+    PasskeyRepoLive,
     TransactionLive,
     IdGeneratorLive,
     ttlStoreLayer(ttlStore),

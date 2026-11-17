@@ -41,6 +41,7 @@ export const ATTEMPT_BUDGETS = {
   mfaChallengeVerifyPerIp: perMinuteRouteBudget("rate-limit:mfa-challenge:ip", 10),
   mfaChallengeStatePerIp: perMinuteRouteBudget("rate-limit:mfa-challenge-status:ip", 30),
   mfaChangePerSession: perMinuteRouteBudget("rate-limit:mfa-attempt", 10),
+  passkeyManagementPerSession: perMinuteRouteBudget("rate-limit:passkey-management", 10),
   invitationsPerCompanyHour: {
     keyPrefix: "invitation_rate",
     windowSeconds: 60 * 60,

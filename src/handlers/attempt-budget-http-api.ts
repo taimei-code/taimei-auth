@@ -7,12 +7,13 @@ import {
   spendAttemptBudgetOrRateLimited,
 } from "../attempt-budget";
 import { ChallengeStateBudget, ChallengeVerifyBudget, MfaChangeBudget } from "../mfa/mfa-contract";
+import { PasskeyManagementBudget } from "../passkey/passkey-contract";
 import { getClientContext } from "../request-context";
 import type { SentryService } from "../sentry";
 import type { TtlStore } from "../ttl-store-service";
 import { headersOf } from "./request-http-api";
 
-export async function mfaAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
+export async function sessionAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
   const sessionToken = sessionCookieOf(headers);
   if (!sessionToken) return `ip:${fallbackIp}`;
   return `session:${await sha256Hex(sessionToken)}`;
@@ -52,6 +53,10 @@ export const AttemptBudgetsLive = Layer.mergeAll(
   ),
   Layer.effect(
     MfaChangeBudget,
-    budgetMiddleware(ATTEMPT_BUDGETS.mfaChangePerSession, mfaAttemptSubject),
+    budgetMiddleware(ATTEMPT_BUDGETS.mfaChangePerSession, sessionAttemptSubject),
+  ),
+  Layer.effect(
+    PasskeyManagementBudget,
+    budgetMiddleware(ATTEMPT_BUDGETS.passkeyManagementPerSession, sessionAttemptSubject),
   ),
 );

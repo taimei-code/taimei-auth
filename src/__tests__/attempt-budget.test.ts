@@ -117,6 +117,11 @@ test.each([
   [ATTEMPT_BUDGETS.mfaChangePerSession, "ip:203.0.113.1", "rate-limit:mfa-attempt:ip:203.0.113.1"],
   [ATTEMPT_BUDGETS.mfaChangePerSession, "session:abc", "rate-limit:mfa-attempt:session:abc"],
   [
+    ATTEMPT_BUDGETS.passkeyManagementPerSession,
+    "session:abc",
+    "rate-limit:passkey-management:session:abc",
+  ],
+  [
     ATTEMPT_BUDGETS.invitationsPerCompanyHour,
     "company-1:2026-10-14T09",
     "invitation_rate:company-1:2026-10-14T09",
