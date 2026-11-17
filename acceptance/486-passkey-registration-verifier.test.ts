@@ -225,7 +225,10 @@ describe("パスキーの登録の options", () => {
   test("RP ID は auth ホストの host で、受け付ける署名の方式は、実行環境が ML-DSA-44 を扱えても EdDSA、ES256、RS256 の 3 つ", async () => {
     const options = await registrationOptionsFor(user);
     expect(options.rp.id).toBe(authHost().hostname);
-    expect(options.pubKeyCredParams.map(({ alg }) => alg).toSorted()).toEqual([-8, -7, -257].toSorted());
+    const ascending = (left: number, right: number) => left - right;
+    expect(options.pubKeyCredParams.map(({ alg }) => alg).toSorted(ascending)).toEqual(
+      [-8, -7, -257].toSorted(ascending),
+    );
   });
 });
 
