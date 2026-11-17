@@ -1017,6 +1017,7 @@ const ROWS: readonly Row[] = [
         "effect(ChallengeVerifyBudget)",
         "effect(ChallengeStateBudget)",
         "effect(MfaChangeBudget)",
+        "effect(PasskeyManagementBudget)",
       ],
     },
     matchers: [
