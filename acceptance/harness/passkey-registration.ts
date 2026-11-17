@@ -101,8 +101,10 @@ export const signedRegistration = (input: {
   readonly origin?: string;
   readonly rpId?: string;
   readonly signatureMismatch?: true;
+  readonly transports?: readonly unknown[];
+  readonly credentialIdBytes?: number;
 }) => {
-  const credentialId = new Uint8Array(randomBytes(16));
+  const credentialId = new Uint8Array(randomBytes(input.credentialIdBytes ?? 16));
   const aaguid = new Uint8Array(randomBytes(16));
   const { publicKey, privateKey } = keyPairOf(input.algorithm);
   const coseKey = coseKeyOf(input.algorithm, publicKey.export({ format: "jwk" }));
@@ -152,7 +154,7 @@ export const signedRegistration = (input: {
       response: {
         clientDataJSON: base64url(clientDataJSON),
         attestationObject: base64url(attestationObject),
-        transports: [...TRANSPORTS],
+        transports: [...(input.transports ?? TRANSPORTS)] as Array<(typeof TRANSPORTS)[number]>,
       },
     },
     made: {
