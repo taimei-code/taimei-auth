@@ -5,7 +5,12 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { COSEALG } from "@simplewebauthn/server/helpers";
-import { type Cause, Effect, Exit } from "effect";
+import { type Cause, Effect, Exit, Schema } from "effect";
+import {
+  PASSKEY_CREDENTIAL_ID_MAX_BASE64URL_LENGTH,
+  PASSKEY_TRANSPORTS,
+  type PasskeyTransport,
+} from "@/db/enums";
 import { getAppName, getAppUrl } from "../email/client";
 import { PasskeyRejected } from "./errors";
 
@@ -21,6 +26,11 @@ class ChallengeCheckFailed<E> extends Error {
     this.name = "ChallengeCheckFailed";
   }
 }
+
+const isPasskeyTransport = Schema.is(Schema.Literals(PASSKEY_TRANSPORTS));
+
+const knownTransports = (received: ReadonlyArray<unknown> | undefined): PasskeyTransport[] =>
+  Array.isArray(received) ? [...new Set<unknown>(received)].filter(isPasskeyTransport) : [];
 
 const SIGNATURE_ALGORITHMS = [COSEALG.EdDSA, COSEALG.ES256, COSEALG.RS256];
 
@@ -74,5 +84,8 @@ export const verifyRegistration = <E, R>(input: {
     );
     if (!verified.verified) return yield* new PasskeyRejected();
     const { credential, aaguid } = verified.registrationInfo;
-    return { ...credential, aaguid };
+    if (credential.id.length > PASSKEY_CREDENTIAL_ID_MAX_BASE64URL_LENGTH) {
+      return yield* new PasskeyRejected();
+    }
+    return { ...credential, transports: knownTransports(credential.transports), aaguid };
   });
