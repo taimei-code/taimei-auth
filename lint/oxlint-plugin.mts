@@ -950,6 +950,15 @@ const ROWS: readonly Row[] = [
       "ログインの成立の手順 (establish-sign-in.ts) は資格情報を確かめずに session を発行するので、import するのは資格情報の検証を終えた complete-login-challenge.ts だけ",
   },
   {
+    name: "simplewebauthn-import-only-in-webauthn",
+    within: ["**"],
+    allowedIn: ["src/passkey/webauthn.ts"],
+    includesTestFiles: true,
+    matchers: [{ kind: "importTarget", target: /^@simplewebauthn\//, includesTypeImports: true }],
+    message:
+      "@simplewebauthn/* を import するのは検証の入口 src/passkey/webauthn.ts だけ (生体か PIN の確認の必須、期待する origin、RP ID、失敗の写し方をこの file が固定する。画面は library を使わず browser の WebAuthn の API を直接呼ぶ。ADR-0029)",
+  },
+  {
     name: "get-session-only-in-session-check",
     within: ["src/**"],
     allowedIn: ["src/auth-wiring.ts", "src/session-check.ts"],
@@ -1596,6 +1605,7 @@ const ROWS: readonly Row[] = [
       "src/auth.ts",
       "src/auth-plugins/primary-auth.ts",
       "src/ttl-store-better-auth.ts",
+      "src/passkey/webauthn.ts",
     ],
     matchers: [
       {
@@ -1614,7 +1624,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "Effect を走らせ、failure と defect を応答に変えるのは adapter (runRoute・runMiddleware・runRpc) だけ。ほかに走らせてよいのは、runtime の外から呼ばれる口 (transaction の callback、切り離した fiber、better-auth の hook) の file だけ。program は Effect を返す",
+      "Effect を走らせ、failure と defect を応答に変えるのは adapter (runRoute・runMiddleware・runRpc) だけ。ほかに走らせてよいのは、runtime の外から呼ばれる口 (transaction の callback、切り離した fiber、better-auth の hook、検証の library が呼ぶ challenge の照合) の file だけ。program は Effect を返す",
   },
   {
     name: "clock-and-id-only-in-services",
