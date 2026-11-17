@@ -174,7 +174,7 @@ user がログインしている状態。cookie (`taimei-code.com` の各サブ�
 _Avoid_: 認証状態 (より広義), Cookie (識別子に過ぎない)
 
 **TTL store**:
-有効期限のある短命な状態 (**session**、**Magic Link** の確認用の値、**試行枠** の計数、**MFA チャレンジ**) を置く保管先。すべての値が有効期限を持ち、期限が切れた値は保管先が消す。本番では DB に置かない。**試験の環境** では user の記録と同じ DB に置く (理由: ADR-0020 の Decision 6)。詳細: ADR-0019。
+有効期限のある短命な状態 (**session**、**Magic Link** の確認用の値、**試行枠** の計数、**MFA チャレンジ**、**パスキー** の登録に使う challenge) を置く保管先。すべての値が有効期限を持ち、期限が切れた値は保管先が消す。本番では DB に置かない。**試験の環境** では user の記録と同じ DB に置く (理由: ADR-0020 の Decision 6)。詳細: ADR-0019。
 _Avoid_: Redis (2026-09 に撤去した実装の名前), secondaryStorage (外部ライブラリの API の語), KV (結果整合を含意する別の製品と紛らわしい), cache (失うと session が消えるので cache ではない), 揮発 store (永続の実装もある)
 
 **session cookie**:
