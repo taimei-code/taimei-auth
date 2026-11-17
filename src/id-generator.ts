@@ -3,6 +3,7 @@ import { generateCompanyId } from "@/db/repositories/company";
 import { generateInvitationId, generateInvitationToken } from "@/db/repositories/invitation";
 import { generateMembershipId } from "@/db/repositories/membership";
 import { generateEnrollmentId, generateRecoveryCodeId } from "@/db/repositories/mfa-totp";
+import { generatePasskeyId } from "@/db/repositories/passkey";
 
 export class IdGenerator extends Context.Service<
   IdGenerator,
@@ -14,6 +15,7 @@ export class IdGenerator extends Context.Service<
     enrollmentId(): string;
     recoveryCodeId(index: number): string;
     loginChallengeId(): string;
+    passkeyId(): string;
   }
 >()("taimei/IdGenerator") {}
 
@@ -27,5 +29,6 @@ export const IdGeneratorLive = Layer.succeed(
     enrollmentId: generateEnrollmentId,
     recoveryCodeId: generateRecoveryCodeId,
     loginChallengeId: () => `mfa-lc-${crypto.randomUUID()}`,
+    passkeyId: generatePasskeyId,
   }),
 );

@@ -17,6 +17,7 @@
     "../../src/membership/role-label.ts",
     "../../src/mfa/errors.ts",
     "../../src/mfa/mfa-contract.ts",
+    "../../src/passkey/errors.ts",
     "../../src/passkey/passkey-contract.ts",
     "../../src/redirect-hosts.ts",
     "../../src/services.ts",
