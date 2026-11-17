@@ -22,3 +22,15 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
   .add(HttpApiEndpoint.get("list", "/api/account/passkeys", { success: PasskeyList }))
   .middleware(PasskeyManagementBudget)
   .middleware(Authenticated) {}
+
+type PasskeyEndpoint = HttpApiGroup.Endpoints<typeof PasskeyGroup>;
+
+export type PasskeyEndpointsLackingSessionBudget = [PasskeyEndpoint] extends [never]
+  ? "パスキーの群に endpoint が無い"
+  : PasskeyEndpoint extends infer Endpoint
+    ? Endpoint extends unknown
+      ? [PasskeyManagementBudget | Authenticated] extends [HttpApiEndpoint.Middleware<Endpoint>]
+        ? never
+        : Endpoint
+      : never
+    : never;
