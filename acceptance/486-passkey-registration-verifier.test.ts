@@ -3,6 +3,7 @@ import { readRepoText } from "./harness/repo-text";
 import { stoppingLintCodes } from "./harness/lint-probe";
 import {
   authHost,
+  COSE_ALGORITHM,
   registrationOptionsFor,
   signedRegistration,
   type SignatureAlgorithm,
@@ -227,7 +228,7 @@ describe("パスキーの登録の options", () => {
     expect(options.rp.id).toBe(authHost().hostname);
     const ascending = (left: number, right: number) => left - right;
     expect(options.pubKeyCredParams.map(({ alg }) => alg).toSorted(ascending)).toEqual(
-      [-8, -7, -257].toSorted(ascending),
+      [COSE_ALGORITHM.EdDSA, COSE_ALGORITHM.ES256, COSE_ALGORITHM.RS256].toSorted(ascending),
     );
   });
 });

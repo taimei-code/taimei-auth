@@ -43,13 +43,14 @@ const FLAG_USER_PRESENT = 0x01;
 const FLAG_USER_VERIFIED = 0x04;
 const FLAG_ATTESTED_CREDENTIAL = 0x40;
 
-export type SignatureAlgorithm = "ES256" | "RS256" | "ML-DSA-44";
-
-const COSE_ALGORITHM: Readonly<Record<SignatureAlgorithm, number>> = {
+export const COSE_ALGORITHM = {
+  EdDSA: -8,
   ES256: -7,
   RS256: -257,
   "ML-DSA-44": -48,
-};
+} as const;
+
+export type SignatureAlgorithm = Exclude<keyof typeof COSE_ALGORITHM, "EdDSA">;
 
 const keyPairOf = (algorithm: SignatureAlgorithm) => {
   if (algorithm === "ES256") return generateKeyPairSync("ec", { namedCurve: "P-256" });
