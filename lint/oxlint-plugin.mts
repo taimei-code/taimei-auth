@@ -1268,6 +1268,14 @@ const ROWS: readonly Row[] = [
       "MFA の verifiedAt を読む本番の code は src/mfa/policy.ts だけ (有効かの判定を 1 つの述語に集める)",
   },
   {
+    name: "passkey-transports-only-in-passkey-entry",
+    within: ["src/**", "db/**", "web/src/**", "management/**"],
+    allowedIn: ["db/enums.ts", "db/schema.ts", "src/passkey/webauthn.ts"],
+    matchers: [{ kind: "identifier", names: ["PASSKEY_TRANSPORTS"] }],
+    message:
+      "既知の transports で絞る判定は src/passkey/webauthn.ts の検証の入口だけが持つ (保存の前の判定を 1 か所に集める。DB の CHECK は db/schema.ts)",
+  },
+  {
     name: "listed-import-only-in-management",
     within: ["management/**"],
     allowedMatches: {

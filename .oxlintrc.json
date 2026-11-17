@@ -107,6 +107,7 @@
     "taimei/login-cookie-name-only-in-login-challenge": "error",
     "taimei/find-mfa-totp-only-in-listed-files": "error",
     "taimei/verified-at-only-in-mfa-policy": "error",
+    "taimei/passkey-transports-only-in-passkey-entry": "error",
     "taimei/listed-import-only-in-management": "error",
     "taimei/no-src-import-in-db": "error",
     "taimei/no-import-in-mfa-policy": "error",
