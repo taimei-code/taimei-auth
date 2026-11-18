@@ -959,6 +959,33 @@ const ROWS: readonly Row[] = [
       "@simplewebauthn/* を import するのは検証の入口 src/passkey/webauthn.ts だけ (生体か PIN の確認の必須、期待する origin、RP ID、失敗の写し方をこの file が固定する。画面は library を使わず browser の WebAuthn の API を直接呼ぶ。ADR-0029)",
   },
   {
+    name: "webauthn-call-only-in-passkey-webauthn",
+    within: ["web/src/**", "web/non-production/**"],
+    allowedIn: ["web/src/passkey/webauthn.ts"],
+    matchers: [
+      { kind: "identifier", names: ["PublicKeyCredential"] },
+      { kind: "literal", pattern: /^PublicKeyCredential$/ },
+      { kind: "member", paths: ["navigator.credentials"] },
+    ],
+    message:
+      "browser の WebAuthn の API (PublicKeyCredential、navigator.credentials) を呼ぶのは web/src/passkey/webauthn.ts だけ (対応の判定、取り消しと失敗の区別、応答の decode をこの file が固定する。ADR-0029)",
+  },
+  {
+    name: "no-webauthn-package-in-web",
+    within: ["web/**"],
+    includesTestFiles: true,
+    matchers: [
+      {
+        kind: "importTarget",
+        target: /^(?!(?:web|src|db|e2e|management|packages|testing)\/|\.).*(?:webauthn|passkey)/i,
+        includesTypeImports: true,
+      },
+      { kind: "identifier", names: ["passkeyClient"] },
+    ],
+    message:
+      "画面は WebAuthn の library も polyfill も import しない。browser の WebAuthn の API を web/src/passkey/webauthn.ts から直接呼び、JSON の補助の API を持たない browser は非対応にする (ADR-0029、#490)",
+  },
+  {
     name: "get-session-only-in-session-check",
     within: ["src/**"],
     allowedIn: ["src/auth-wiring.ts", "src/session-check.ts"],
