@@ -6,7 +6,8 @@ import { createPasskey, PasskeyCreation, type PasskeyCreationFailed } from "./we
 export type PasskeyFailure =
   | DeclaredFailure<"passkey", "list">
   | DeclaredFailure<"passkey", "registrationOptions">
-  | DeclaredFailure<"passkey", "register">;
+  | DeclaredFailure<"passkey", "register">
+  | DeclaredFailure<"passkey", "delete">;
 
 type PasskeyApi = SpaHttpClient["Service"]["passkey"];
 

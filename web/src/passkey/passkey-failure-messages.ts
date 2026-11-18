@@ -10,6 +10,7 @@ export const PASSKEY_FAILURE_MESSAGES: FailureMessages<PasskeyFailure> = {
   PasskeyRejected:
     "パスキーを登録できませんでした。時間が経ちすぎた可能性があります。もう一度登録してください。",
   PasskeyAlreadyRegistered: "このパスキーはすでに登録されています。",
+  NotFound: "このパスキーは見つかりませんでした。ページを再読み込みしてください。",
 };
 
 export const passkeyFailureText = (
