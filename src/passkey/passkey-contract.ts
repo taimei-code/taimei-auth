@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
-import { RateLimited } from "../failures";
+import { NotFound, RateLimited } from "../failures";
 import { Ok } from "../spa-contract-schemas";
 import { PasskeyAlreadyRegistered, PasskeyRejected, TotpRequired } from "./errors";
 
@@ -78,6 +78,11 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
       payload: RegistrationResponse,
       success: Ok,
       error: [PasskeyRejected, PasskeyAlreadyRegistered],
+    }),
+    HttpApiEndpoint.post("delete", "/api/account/passkeys/:passkeyId/delete", {
+      params: { passkeyId: Schema.String },
+      success: Ok,
+      error: [NotFound],
     }),
   )
   .middleware(PasskeyManagementBudget)

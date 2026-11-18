@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../client";
 import { passkey } from "../schema";
 import type { DbOrTx } from "../transaction";
@@ -29,5 +29,17 @@ export async function insertPasskey(
     .values(values)
     .onConflictDoNothing({ target: passkey.credentialId })
     .returning()
+    .then((rows) => rows.at(0));
+}
+
+export async function deletePasskey(
+  id: string,
+  userId: string,
+  txOrDb: DbOrTx = db,
+): Promise<Pick<PasskeyRow, "id"> | undefined> {
+  return txOrDb
+    .delete(passkey)
+    .where(and(eq(passkey.id, id), eq(passkey.userId, userId)))
+    .returning({ id: passkey.id })
     .then((rows) => rows.at(0));
 }
