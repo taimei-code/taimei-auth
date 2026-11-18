@@ -3,13 +3,9 @@ import { Data, Effect } from "effect";
 import type { DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { createPasskey, PasskeyCreation, type PasskeyCreationFailed } from "./webauthn";
 
-export type PasskeyFailure =
-  | DeclaredFailure<"passkey", "list">
-  | DeclaredFailure<"passkey", "registrationOptions">
-  | DeclaredFailure<"passkey", "register">
-  | DeclaredFailure<"passkey", "delete">;
-
 type PasskeyApi = SpaHttpClient["Service"]["passkey"];
+
+export type PasskeyFailure = DeclaredFailure<"passkey", keyof PasskeyApi>;
 
 type ApiFailure<Endpoint extends keyof PasskeyApi> = Effect.Error<ReturnType<PasskeyApi[Endpoint]>>;
 
