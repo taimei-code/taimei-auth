@@ -22,7 +22,15 @@ import { REPO_ROOT } from "./config-invariant-helpers";
 
 const WEB_SRC = join(REPO_ROOT, "web/src");
 
-const DOMAIN_ROOTS = new Set(["account", "auth", "company", "invitation", "membership", "mfa"]);
+const DOMAIN_ROOTS = new Set([
+  "account",
+  "auth",
+  "company",
+  "invitation",
+  "membership",
+  "mfa",
+  "passkey",
+]);
 
 const BOOTSTRAP_FILES = new Set(["index.css", "main.ts", "vite-env.d.ts"]);
 

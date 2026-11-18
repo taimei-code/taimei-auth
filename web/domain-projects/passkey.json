@@ -1,0 +1,13 @@
+{
+  "extends": "./base.json",
+  "include": ["../src/passkey/**/*.ts", "../src/passkey/**/*.tsx"],
+  "exclude": ["../src/passkey/pages", "../src/passkey/__tests__"],
+  "references": [
+    {
+      "path": "./shared.json"
+    },
+    {
+      "path": "./core.json"
+    }
+  ]
+}

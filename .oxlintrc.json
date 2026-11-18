@@ -85,6 +85,8 @@
     "taimei/issue-session-only-in-establish-sign-in": "error",
     "taimei/establish-sign-in-only-after-credential-check": "error",
     "taimei/simplewebauthn-import-only-in-webauthn": "error",
+    "taimei/webauthn-call-only-in-passkey-webauthn": "error",
+    "taimei/no-webauthn-package-in-web": "error",
     "taimei/get-session-only-in-session-check": "error",
     "taimei/api-error-shape-only-in-auth-wiring": "error",
     "taimei/db-import-in-src-tests-only-in-test-db": "error",

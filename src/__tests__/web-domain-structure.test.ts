@@ -66,6 +66,7 @@ describe("actual web/src structure", () => {
       "invitation",
       "membership",
       "mfa",
+      "passkey",
       "shared",
     ]);
     expect(result.violations).toEqual([]);

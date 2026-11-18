@@ -236,7 +236,7 @@ describe("high 未満の advisory が届く経路 (#452)", () => {
     );
   });
 
-  test("AC-006: CI の check job の依存の audit は high 以上で落ち、--ignore は GHSA-vfj7-8cjw-p6xm だけ (ADR-0009 §B)", () => {
+  test("AC-006: CI の check job の依存の audit は high 以上で落ち、--ignore は GHSA-vfj7-8cjw-p6xm と GHSA-fc5q-39xc-vjpf だけ (ADR-0009 §B)", () => {
     const ci = Bun.YAML.parse(read(join(WORKFLOWS_DIR, "ci.yml"))) as Workflow;
     const scripts = (JSON.parse(read("package.json")) as { scripts: Record<string, string> })
       .scripts;
@@ -252,6 +252,7 @@ describe("high 未満の advisory が届く経路 (#452)", () => {
     expect(audits[0]).toContain("--audit-level=high");
     expect([...(audits[0] ?? "").matchAll(/--ignore=(\S+)/g)].map(([, id]) => id)).toEqual([
       "GHSA-vfj7-8cjw-p6xm",
+      "GHSA-fc5q-39xc-vjpf",
     ]);
   });
 });

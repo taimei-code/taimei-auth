@@ -15,7 +15,9 @@ const PasskeyList = Schema.Struct({
   ),
 });
 
-const Transports = Schema.optional(Schema.Array(Schema.String));
+const Transports = Schema.optional(Schema.mutable(Schema.Array(Schema.String)));
+
+const Requirement = Schema.Literals(["discouraged", "preferred", "required"]);
 
 const CredentialDescriptor = Schema.Struct({
   id: Schema.String,
@@ -27,26 +29,26 @@ const RegistrationOptions = Schema.Struct({
   rp: Schema.Struct({ name: Schema.String, id: Schema.optional(Schema.String) }),
   user: Schema.Struct({ id: Schema.String, name: Schema.String, displayName: Schema.String }),
   challenge: Schema.String,
-  pubKeyCredParams: Schema.Array(
-    Schema.Struct({ alg: Schema.Finite, type: Schema.Literal("public-key") }),
+  pubKeyCredParams: Schema.mutable(
+    Schema.Array(Schema.Struct({ alg: Schema.Finite, type: Schema.Literal("public-key") })),
   ),
   timeout: Schema.optional(Schema.Finite),
-  excludeCredentials: Schema.optional(Schema.Array(CredentialDescriptor)),
+  excludeCredentials: Schema.optional(Schema.mutable(Schema.Array(CredentialDescriptor))),
   authenticatorSelection: Schema.optional(
     Schema.Struct({
-      authenticatorAttachment: Schema.optional(Schema.String),
+      authenticatorAttachment: Schema.optional(Schema.Literals(["platform", "cross-platform"])),
       requireResidentKey: Schema.optional(Schema.Boolean),
-      residentKey: Schema.optional(Schema.String),
-      userVerification: Schema.optional(Schema.String),
+      residentKey: Schema.optional(Requirement),
+      userVerification: Schema.optional(Requirement),
     }),
   ),
   attestation: Schema.optional(Schema.String),
   extensions: Schema.optional(Schema.Struct({ credProps: Schema.optional(Schema.Boolean) })),
-  hints: Schema.optional(Schema.Array(Schema.String)),
+  hints: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
 });
 export type RegistrationOptions = typeof RegistrationOptions.Type;
 
-const RegistrationResponse = Schema.Struct({
+export const RegistrationResponse = Schema.Struct({
   id: Schema.String,
   rawId: Schema.String,
   type: Schema.Literal("public-key"),
