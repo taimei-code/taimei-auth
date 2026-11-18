@@ -94,6 +94,9 @@ const TRANSPORTS = ["internal", "hybrid"] as const;
 
 export type Signer = { readonly algorithm: SignatureAlgorithm; readonly privateKey: KeyObject };
 
+const signWith = (signer: Signer, data: Uint8Array): Uint8Array =>
+  new Uint8Array(sign(signer.algorithm === "ML-DSA-44" ? null : "sha256", data, signer.privateKey));
+
 export const authHost = () => new URL(process.env.AUTH_SERVICE_URL ?? "");
 
 export const signedRegistration = (input: {
@@ -131,9 +134,7 @@ export const signedRegistration = (input: {
   );
   const signedClientData = input.signatureMismatch === true ? "{}" : clientDataJSON;
   const signedData = concat(authData, sha256(signedClientData));
-  const signature = new Uint8Array(
-    sign(input.algorithm === "ML-DSA-44" ? null : "sha256", signedData, privateKey),
-  );
+  const signature = signWith({ algorithm: input.algorithm, privateKey }, signedData);
   const attestationObject = cbor(
     new Map<CborValue, CborValue>([
       ["fmt", "packed"],
@@ -217,9 +218,6 @@ export const registrationOptionsFor = async (user: { readonly userId: string; re
   const { registrationOptions } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(registrationOptions(user));
 };
-
-const signWith = (signer: Signer, data: Uint8Array): Uint8Array =>
-  new Uint8Array(sign(signer.algorithm === "ML-DSA-44" ? null : "sha256", data, signer.privateKey));
 
 export const signedAuthentication = (input: {
   readonly credentialId: string;
