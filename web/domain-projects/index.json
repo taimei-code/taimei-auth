@@ -44,6 +44,12 @@
       "path": "./mfa.pages.json"
     },
     {
+      "path": "./passkey.json"
+    },
+    {
+      "path": "./passkey.pages.json"
+    },
+    {
       "path": "./shared.json"
     }
   ]

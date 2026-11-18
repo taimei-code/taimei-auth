@@ -1800,7 +1800,11 @@ const ROWS: readonly Row[] = [
   {
     name: "failure-messages-not-exported",
     within: ["web/src/**"],
-    allowedIn: ["web/src/shared/failure-message.ts", "web/src/mfa/mfa-failure-messages.ts"],
+    allowedIn: [
+      "web/src/shared/failure-message.ts",
+      "web/src/mfa/mfa-failure-messages.ts",
+      "web/src/passkey/passkey-failure-messages.ts",
+    ],
     matchers: [
       {
         kind: "custom",
@@ -1828,7 +1832,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "失敗の文言の表 (FailureMessages) は画面ごとに置き、export しない (同じ _tag でも画面ごとに意味が違う)。共有するのは MFA の表 (mfa/mfa-failure-messages.ts) だけ",
+      "失敗の文言の表 (FailureMessages) は画面ごとに置き、export しない (同じ _tag でも画面ごとに意味が違う)。共有するのは MFA の表 (mfa/mfa-failure-messages.ts) とパスキーの表 (passkey/passkey-failure-messages.ts) だけ",
   },
   {
     name: "dialog-visible-only-by-is-dialog-visible",

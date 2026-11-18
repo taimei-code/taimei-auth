@@ -25,6 +25,7 @@ route entryだけを各ドメインの `pages` に置き、page以外のドメ�
 allowlistはruntime importとtype-only importの両方へ適用し、TypeScript ASTからside-effect import、re-export、literal dynamic importを含めて抽出する。
 
 (2026-11-09 追記 (#403)) 上の 2 段落 (ドメイン間 import の allowlist と cycle の禁止) は TypeScript の project references ([ADR-0025](./0025-web-domain-project-references.md)) に置き換えた。
+(2026-11-18 追記 (#490)) 第1階層に `passkey` を足した。パスキーは account の画面 (登録) と auth の画面 (ログイン) の両方が使うので、`mfa` と同じく独立したドメインにする。
 
 account、company、membership、invitationが共有するroleとOrgCodeの型および表示labelは、browser-safeな `@core` moduleに定義し、各ドメインはそれを参照する。
 
