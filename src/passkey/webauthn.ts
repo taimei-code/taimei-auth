@@ -1,6 +1,9 @@
 import {
+  type AuthenticationResponseJSON,
+  generateAuthenticationOptions,
   generateRegistrationOptions,
   type RegistrationResponseJSON,
+  verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { COSEALG } from "@simplewebauthn/server/helpers";
@@ -12,7 +15,13 @@ import {
 } from "@/db/enums";
 import { getAppName, getAppUrl } from "../email/client";
 import { PasskeyRejected } from "./errors";
-import type { RegistrationOptions, RegistrationResponse } from "./passkey-contract";
+import type {
+  AuthenticationOptions,
+  AuthenticationResponse,
+  RegistrationOptions,
+  RegistrationResponse,
+} from "./passkey-contract";
+import { PasskeyRepo } from "./ports";
 
 export const CHALLENGE_TTL_SECONDS = 5 * 60;
 
@@ -157,4 +166,60 @@ export const verifyRegistration = <E, R>(input: {
       return yield* new PasskeyRejected();
     }
     return { ...credential, transports: knownTransports(credential.transports), aaguid };
+  });
+
+export const authenticationOptions = (): Effect.Effect<AuthenticationOptions> =>
+  Effect.promise(() =>
+    generateAuthenticationOptions({
+      rpID: authHost().hostname,
+      challenge: newChallenge(),
+      timeout: CEREMONY_TIMEOUT_MS,
+      userVerification: "required",
+    }),
+  );
+
+const toLibraryAuthenticationResponse = (
+  response: AuthenticationResponse,
+): AuthenticationResponseJSON => ({
+  id: response.id,
+  rawId: response.rawId,
+  type: response.type,
+  response: {
+    clientDataJSON: response.response.clientDataJSON,
+    authenticatorData: response.response.authenticatorData,
+    signature: response.response.signature,
+    userHandle: response.response.userHandle ?? undefined,
+  },
+  clientExtensionResults: response.clientExtensionResults,
+});
+
+export const verifyAuthentication = <E, R>(input: {
+  readonly response: AuthenticationResponse;
+  readonly matchesChallenge: (challenge: string) => Effect.Effect<boolean, E, R>;
+}) =>
+  Effect.gen(function* () {
+    const saved = yield* PasskeyRepo.use((repo) =>
+      repo.findPasskeyByCredentialId(input.response.id),
+    );
+    if (saved === undefined) return yield* new PasskeyRejected();
+    const verified = yield* verifiedByLibrary(
+      "authentication",
+      input.matchesChallenge,
+      verifyAuthenticationResponse,
+      {
+        response: toLibraryAuthenticationResponse(input.response),
+        credential: {
+          id: saved.credentialId,
+          publicKey: new Uint8Array(saved.publicKey),
+          counter: saved.counter,
+          transports: saved.transports,
+        },
+      },
+    );
+    if (!verified.verified) return yield* new PasskeyRejected();
+    return {
+      passkeyId: saved.id,
+      userId: saved.userId,
+      counter: verified.authenticationInfo.newCounter,
+    };
   });
