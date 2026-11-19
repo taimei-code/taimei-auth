@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Cause, Context, Data, Deferred, Effect, Exit, Fiber } from "effect";
+import { partial } from "../../__tests__/live-runner";
+import { DbError } from "../../errors";
 import { PasskeyRejected } from "../errors";
-import { verifyRegistration } from "../webauthn";
+import { PasskeyRepo } from "../ports";
+import { verifyAuthentication, verifyRegistration } from "../webauthn";
 
 class ChallengeStoreDown extends Data.TaggedError("ChallengeStoreDown") {}
 
@@ -93,5 +96,31 @@ describe("verifyRegistration の challenge の照合", () => {
         yield* Deferred.await(interrupted).pipe(Effect.timeout("1 second"));
       }),
     );
+  });
+});
+
+describe("verifyAuthentication の行の引き当て", () => {
+  test("行の引き当てが DB で失敗すると、不正な応答の失敗に変えず、その失敗のまま返す", async () => {
+    const failure = await Effect.runPromise(
+      verifyAuthentication({
+        response: {
+          id: "Y3JlZGVudGlhbA",
+          rawId: "Y3JlZGVudGlhbA",
+          type: "public-key",
+          clientExtensionResults: {},
+          response: { clientDataJSON: "", authenticatorData: "", signature: "" },
+        },
+        matchesChallenge: () => Effect.succeed(true),
+      }).pipe(
+        Effect.flip,
+        Effect.provideService(
+          PasskeyRepo,
+          partial<PasskeyRepo["Service"]>({
+            findPasskeyByCredentialId: () => Effect.fail(new DbError({ cause: "db down" })),
+          }),
+        ),
+      ),
+    );
+    expect(failure).toBeInstanceOf(DbError);
   });
 });

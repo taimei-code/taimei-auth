@@ -19,6 +19,8 @@ const Transports = Schema.optional(Schema.mutable(Schema.Array(Schema.String)));
 
 const Requirement = Schema.Literals(["discouraged", "preferred", "required"]);
 
+const Hints = Schema.optional(Schema.mutable(Schema.Array(Schema.String)));
+
 const CredentialDescriptor = Schema.Struct({
   id: Schema.String,
   type: Schema.String,
@@ -44,7 +46,7 @@ const RegistrationOptions = Schema.Struct({
   ),
   attestation: Schema.optional(Schema.String),
   extensions: Schema.optional(Schema.Struct({ credProps: Schema.optional(Schema.Boolean) })),
-  hints: Schema.optional(Schema.mutable(Schema.Array(Schema.String))),
+  hints: Hints,
 });
 export type RegistrationOptions = typeof RegistrationOptions.Type;
 
@@ -61,6 +63,31 @@ export const RegistrationResponse = Schema.Struct({
   authenticatorAttachment: Schema.optional(Schema.NullOr(Schema.String)),
 });
 export type RegistrationResponse = typeof RegistrationResponse.Type;
+
+const AuthenticationOptions = Schema.Struct({
+  challenge: Schema.String,
+  timeout: Schema.optional(Schema.Finite),
+  rpId: Schema.optional(Schema.String),
+  allowCredentials: Schema.optional(Schema.mutable(Schema.Array(CredentialDescriptor))),
+  userVerification: Schema.optional(Requirement),
+  hints: Hints,
+});
+export type AuthenticationOptions = typeof AuthenticationOptions.Type;
+
+const AuthenticationResponse = Schema.Struct({
+  id: Schema.String,
+  rawId: Schema.String,
+  type: Schema.Literal("public-key"),
+  response: Schema.Struct({
+    clientDataJSON: Schema.String,
+    authenticatorData: Schema.String,
+    signature: Schema.String,
+    userHandle: Schema.optional(Schema.NullOr(Schema.String)),
+  }),
+  clientExtensionResults: Schema.Record(Schema.String, Schema.Unknown),
+  authenticatorAttachment: Schema.optional(Schema.NullOr(Schema.String)),
+});
+export type AuthenticationResponse = typeof AuthenticationResponse.Type;
 
 export class PasskeyManagementBudget extends HttpApiMiddleware.Service<PasskeyManagementBudget>()(
   "taimei/PasskeyManagementBudget",

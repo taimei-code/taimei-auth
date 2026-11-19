@@ -1,4 +1,4 @@
-import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
+import { createHash, generateKeyPairSync, type KeyObject, randomBytes, sign } from "node:crypto";
 import { Effect } from "effect";
 import { parseClientFacingError } from "../../src/handlers/client-facing-error";
 
@@ -92,6 +92,11 @@ const coseKeyOf = (algorithm: SignatureAlgorithm, jwk: JsonWebKey): Uint8Array =
 
 const TRANSPORTS = ["internal", "hybrid"] as const;
 
+export type Signer = { readonly algorithm: SignatureAlgorithm; readonly privateKey: KeyObject };
+
+const signWith = (signer: Signer, data: Uint8Array): Uint8Array =>
+  new Uint8Array(sign(signer.algorithm === "ML-DSA-44" ? null : "sha256", data, signer.privateKey));
+
 export const authHost = () => new URL(process.env.AUTH_SERVICE_URL ?? "");
 
 export const signedRegistration = (input: {
@@ -129,9 +134,7 @@ export const signedRegistration = (input: {
   );
   const signedClientData = input.signatureMismatch === true ? "{}" : clientDataJSON;
   const signedData = concat(authData, sha256(signedClientData));
-  const signature = new Uint8Array(
-    sign(input.algorithm === "ML-DSA-44" ? null : "sha256", signedData, privateKey),
-  );
+  const signature = signWith({ algorithm: input.algorithm, privateKey }, signedData);
   const attestationObject = cbor(
     new Map<CborValue, CborValue>([
       ["fmt", "packed"],
@@ -146,6 +149,7 @@ export const signedRegistration = (input: {
     ]),
   );
   return {
+    signer: { algorithm: input.algorithm, privateKey } satisfies Signer,
     response: {
       id: base64url(credentialId),
       rawId: base64url(credentialId),
@@ -213,4 +217,108 @@ export const verifyRegistrationResponseOf = async (
 export const registrationOptionsFor = async (user: { readonly userId: string; readonly email: string }) => {
   const { registrationOptions } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(registrationOptions(user));
+};
+
+export const signedAuthentication = (input: {
+  readonly credentialId: string;
+  readonly signer: Signer;
+  readonly challenge: string;
+  readonly userVerified: boolean;
+  readonly counter: number;
+  readonly origin?: string;
+  readonly rpId?: string;
+}) => {
+  const flags = FLAG_USER_PRESENT | (input.userVerified ? FLAG_USER_VERIFIED : 0);
+  const authenticatorData = concat(
+    sha256(input.rpId ?? authHost().hostname),
+    Uint8Array.of(flags),
+    Uint8Array.of(
+      input.counter >>> 24,
+      (input.counter >> 16) & 0xff,
+      (input.counter >> 8) & 0xff,
+      input.counter & 0xff,
+    ),
+  );
+  const clientDataJSON = new TextEncoder().encode(
+    JSON.stringify({
+      type: "webauthn.get",
+      challenge: input.challenge,
+      origin: input.origin ?? authHost().origin,
+      crossOrigin: false,
+    }),
+  );
+  return {
+    id: input.credentialId,
+    rawId: input.credentialId,
+    type: "public-key" as const,
+    clientExtensionResults: {},
+    response: {
+      clientDataJSON: base64url(clientDataJSON),
+      authenticatorData: base64url(authenticatorData),
+      signature: base64url(signWith(input.signer, concat(authenticatorData, sha256(clientDataJSON)))),
+    },
+  };
+};
+
+export type AuthenticationOutcome =
+  | { readonly accepted: { readonly userId: string; readonly counter: number } }
+  | { readonly rejected: { readonly tag: string; readonly status: number } };
+
+export const verifyAuthenticationResponseOf = async (
+  response: ReturnType<typeof signedAuthentication>,
+  matchesChallenge: (challenge: string) => boolean,
+): Promise<AuthenticationOutcome> => {
+  const { verifyAuthentication } = await import("../../src/passkey/webauthn");
+  const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
+  return Effect.runPromise(
+    verifyAuthentication({
+      response,
+      matchesChallenge: (challenge: string) => Effect.sync(() => matchesChallenge(challenge)),
+    }).pipe(
+      Effect.map(
+        (verified): AuthenticationOutcome => ({
+          accepted: { userId: verified.userId, counter: verified.counter },
+        }),
+      ),
+      Effect.catch((failure) => {
+        const clientFacing = parseClientFacingError(failure);
+        return Effect.succeed<AuthenticationOutcome>({
+          rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
+        });
+      }),
+      Effect.provide(PasskeyRepoLive),
+    ),
+  );
+};
+
+export const authenticationOptionsFor = async () => {
+  const { authenticationOptions } = await import("../../src/passkey/webauthn");
+  return Effect.runPromise(authenticationOptions());
+};
+
+export type FoundPasskey = {
+  readonly userId: string;
+  readonly credentialId: string;
+  readonly publicKey: Uint8Array;
+  readonly counter: number;
+};
+
+export const passkeyFoundBy = async (credentialId: string): Promise<FoundPasskey | undefined> => {
+  const { findPasskeyByCredentialId } = await import("../../db/repositories/passkey");
+  const row = await findPasskeyByCredentialId(credentialId);
+  return row === undefined
+    ? undefined
+    : {
+        userId: row.userId,
+        credentialId: row.credentialId,
+        publicKey: new Uint8Array(row.publicKey),
+        counter: row.counter,
+      };
+};
+
+export const recordUse = async (credentialId: string, counter: number): Promise<void> => {
+  const { findPasskeyByCredentialId, recordPasskeyUse } = await import("../../db/repositories/passkey");
+  const row = await findPasskeyByCredentialId(credentialId);
+  if (row === undefined) throw new Error(`no passkey for ${credentialId}`);
+  await recordPasskeyUse(row.id, counter);
 };
