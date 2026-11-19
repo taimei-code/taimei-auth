@@ -9,7 +9,7 @@ import type { RegistrationResponse } from "./passkey-contract";
 import { PasskeyRepo } from "./ports";
 import {
   hasIssuedChallengeShape,
-  REGISTRATION_CHALLENGE_TTL_SECONDS,
+  CHALLENGE_TTL_SECONDS,
   registrationOptions,
   verifyRegistration,
 } from "./webauthn";
@@ -27,7 +27,7 @@ export const issueRegistrationOptions = Effect.fnUntraced(function* (
     excludeCredentials: registered,
   });
   yield* TtlStore.use((store) =>
-    store.set(challengeKey(options.challenge), actor.id, REGISTRATION_CHALLENGE_TTL_SECONDS),
+    store.set(challengeKey(options.challenge), actor.id, CHALLENGE_TTL_SECONDS),
   );
   return options;
 });
