@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { getTrustedOrigins } from "../env";
-import { SentryService } from "../sentry";
+import { getTrustedOrigins } from "./env";
+import { SentryService } from "./sentry";
 
 export const FALLBACK_REDIRECT = "/account";
 
@@ -27,15 +27,15 @@ function parseUrl(candidate: string): URL | null {
 
 const fallBackAndReport = Effect.fnUntraced(function* (rejected: string, reason: RejectionReason) {
   const sentry = yield* SentryService;
-  yield* sentry.captureMessage("mfa: challenge redirect rejected", {
+  yield* sentry.captureMessage("sign-in: redirect rejected", {
     level: "warning",
-    tags: { component: "mfa-redirect-guard", reason },
+    tags: { component: "sign-in-redirect-guard", reason },
     extra: { rejected },
   });
   return FALLBACK_REDIRECT;
 });
 
-export const validateChallengeRedirect = Effect.fnUntraced(function* (raw: string | undefined) {
+export const validateSignInRedirect = Effect.fnUntraced(function* (raw: string | undefined) {
   if (!raw) return FALLBACK_REDIRECT;
   if (raw.startsWith("/")) {
     return SAME_ORIGIN_PATH.test(raw)

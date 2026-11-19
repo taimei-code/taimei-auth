@@ -1228,7 +1228,6 @@ const ROWS: readonly Row[] = [
     within: ["src/auth-plugins/**"],
     allowedMatches: {
       "src/auth-plugins/mfa-challenge.ts": [
-        "../mfa/redirect-guard",
         "../mfa/totp/challenge-required",
         "../mfa/totp/login-challenge",
       ],
@@ -1236,7 +1235,7 @@ const ROWS: readonly Row[] = [
     },
     matchers: [{ kind: "valueImport", source: /(^|\/)mfa\// }],
     message:
-      "ログインの経路 (auth-plugins) が import してよい mfa の module は、決まった file の決まった 4 つだけ",
+      "ログインの経路 (auth-plugins) が import してよい mfa の module は、決まった file の決まった 3 つだけ",
   },
   {
     name: "mfa-kill-switch-env-only-in-primary-auth",
