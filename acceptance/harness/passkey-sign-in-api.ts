@@ -2,9 +2,8 @@ import { Effect, Layer } from "effect";
 import { Hono } from "hono";
 import * as passkeyRepository from "../../db/repositories/passkey";
 import { auth } from "../../src/auth";
-import { CLIENT_IP_HEADER } from "../../src/client-ip";
 import { auditRowsFor, dbTest } from "../../src/__tests__/live-runner";
-import { TEST_CLIENT_IP, TEST_USER_AGENT } from "../../src/__tests__/session-helpers";
+import { requestHeaders } from "../../src/__tests__/session-helpers";
 import { testTtlStore } from "../../src/__tests__/test-ttl-store";
 import { buildAppWith } from "../../src/handlers/__tests__/helpers";
 import { mountSpaApi } from "../../src/handlers/spa-http-api";
@@ -33,12 +32,11 @@ export {
 
 export type Credential = { readonly credentialId: string; readonly signer: Signer };
 
+const registeredKey = () =>
+  signedRegistration({ algorithm: "ES256", challenge: REGISTRATION_CHALLENGE, userVerified: true });
+
 export const savedCredentialOf = async (user: User, counter = 0): Promise<Credential> => {
-  const { made, signer } = signedRegistration({
-    algorithm: "ES256",
-    challenge: REGISTRATION_CHALLENGE,
-    userVerified: true,
-  });
+  const { made, signer } = registeredKey();
   const saved = await savePasskey(user.id, {
     credentialId: made.id,
     publicKey: made.publicKey,
@@ -51,11 +49,7 @@ export const savedCredentialOf = async (user: User, counter = 0): Promise<Creden
 };
 
 export const unsavedCredential = (): Credential => {
-  const { made, signer } = signedRegistration({
-    algorithm: "ES256",
-    challenge: REGISTRATION_CHALLENGE,
-    userVerified: true,
-  });
+  const { made, signer } = registeredKey();
   return { credentialId: made.id, signer };
 };
 
@@ -120,11 +114,10 @@ const outcomeOf = async (response: Response): Promise<Outcome> => ({
 });
 
 const anonymousHeaders = {
+  ...Object.fromEntries(requestHeaders()),
   accept: "application/json",
   "content-type": "application/json",
   "sec-fetch-site": "same-origin",
-  "user-agent": TEST_USER_AGENT,
-  [CLIENT_IP_HEADER]: TEST_CLIENT_IP,
 };
 
 const post = async (app: Hono, path: string, body: unknown) =>
