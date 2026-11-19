@@ -8,7 +8,8 @@ import {
   createMember,
   deletePasskey,
   type Flag,
-  flagWith,
+  type FlagRules,
+  flagsWith,
   forgetFlagScenario,
   listOf,
   registerThroughOptions,
@@ -34,8 +35,22 @@ const statusAndBody = (outcome: { status: number; body: unknown }) => ({
   body: outcome.body,
 });
 
+const released: FlagRules = { enabled: true, listedCompanies: [], everyone: true };
+
+const listedIn = (companies: string[]): FlagRules => ({
+  enabled: true,
+  listedCompanies: companies,
+  everyone: false,
+});
+
+const disabled: FlagRules = { enabled: false, listedCompanies: [], everyone: true };
+
 const listedOnly = (companies: string[]): Flag =>
-  flagWith({ enabled: true, listedCompanies: companies, everyone: false });
+  flagsWith({ registration: listedIn(companies), signIn: released });
+
+const bothReleased = (): Flag => flagsWith({ registration: released, signIn: released });
+
+const bothDisabled = (): Flag => flagsWith({ registration: disabled, signIn: disabled });
 
 const registrationRefusal = async (flag: Flag) => {
   const outsider = await createMember("outsider", await createCompany("unlisted"));
@@ -79,7 +94,7 @@ describe("事業所のリストで登録を公開する", () => {
     const options = await requestRegistrationOptions(session);
     const challenge = (options.body as { challenge: string }).challenge;
 
-    flag.rules = { ...flag.rules, listedCompanies: [] };
+    flag.registration = { ...flag.registration, listedCompanies: [] };
     const outcome = await registerWith(session, challenge);
 
     expect(statusAndBody(outcome)).toEqual(await registrationRefusal(flag));
@@ -115,7 +130,7 @@ describe("事業所のリストで登録を公開する", () => {
 
 describe("全体公開", () => {
   test("全体公開が on なら、リストに無い事業所の user も現在の事業所が無い user も登録できる", async () => {
-    const flag = flagWith({ enabled: true, listedCompanies: [], everyone: true });
+    const flag = flagsWith({ registration: released, signIn: disabled });
     const member = await createMember("anywhere", await createCompany("any"));
     const companyless = await createMember("nowhere", null);
 
@@ -154,44 +169,47 @@ describe("リストから外した事業所の user", () => {
 });
 
 describe("flag を無効にする", () => {
-  test("ログインの options は、未保存の credential の失敗と同じ状態と本文になる", async () => {
+  test("ログインの flag を無効にすると、ログインの options は、未保存の credential の失敗と同じ状態と本文になる", async () => {
     const enabledFailure = await unsavedCredentialFailure(listedOnly([]));
-    const disabled = flagWith({ enabled: false, listedCompanies: [], everyone: true });
+    const signInDisabled = flagsWith({ registration: released, signIn: disabled });
 
-    const outcome = await requestSignInOptions(await anonymousAppUnder(disabled));
+    const outcome = await requestSignInOptions(await anonymousAppUnder(signInDisabled));
 
     expect(statusAndBody(outcome)).toEqual(enabledFailure);
   });
 
-  test("options を取った後で無効にすると、保存したパスキーの検証は未保存の credential の失敗と同じになり、session cookie は出ない", async () => {
+  test("options を取った後でログインの flag を無効にすると、保存したパスキーの検証は未保存の credential の失敗と同じになり、session cookie は出ない", async () => {
     const enabledFailure = await unsavedCredentialFailure(listedOnly([]));
-    const flag = flagWith({ enabled: true, listedCompanies: [], everyone: true });
+    const flag = bothReleased();
     const member = await createMember("signing-in", null);
     const credential = await savedCredentialOf(member);
     const app = await anonymousAppUnder(flag);
     const challenge = challengeOf(await requestSignInOptions(app));
 
-    flag.rules = { ...flag.rules, enabled: false };
+    flag.signIn = { ...flag.signIn, enabled: false };
     const outcome = await sendSignIn(app, assertionBy(credential, challenge));
 
     expect(statusAndBody(outcome)).toEqual(enabledFailure);
     expect(sessionCookiesOf(outcome)).toEqual([]);
   });
 
-  test("全体公開とリストのルールが当たる user でも、無効にすると登録の options はリストに無い user と同じ失敗になる", async () => {
+  test("全体公開とリストのルールが当たる user でも、登録の flag を無効にすると登録の options はリストに無い user と同じ失敗になる", async () => {
     const listed = await createCompany("listed");
-    const flag = flagWith({ enabled: true, listedCompanies: [listed], everyone: true });
+    const flag = flagsWith({
+      registration: { enabled: true, listedCompanies: [listed], everyone: true },
+      signIn: released,
+    });
     const refusal = await registrationRefusal(listedOnly([listed]));
     const member = await createMember("listed-member", listed);
 
-    flag.rules = { ...flag.rules, enabled: false };
+    flag.registration = { ...flag.registration, enabled: false };
     const outcome = await requestRegistrationOptions(await signedInUnder(flag, member));
 
     expect(statusAndBody(outcome)).toEqual(refusal);
   });
 
-  test("無効にしても一覧と削除は使え、無効にする前にパスキーで発行した session は引ける", async () => {
-    const flag = flagWith({ enabled: true, listedCompanies: [], everyone: true });
+  test("両方の flag を無効にしても一覧と削除は使え、無効にする前にパスキーで発行した session は引ける", async () => {
+    const flag = bothReleased();
     const member = await createMember("kept-session", null);
     const credential = await savedCredentialOf(member);
     await savedCredentialOf(member);
@@ -201,7 +219,8 @@ describe("flag を無効にする", () => {
       assertionBy(credential, challengeOf(await requestSignInOptions(app))),
     );
 
-    flag.rules = { ...flag.rules, enabled: false };
+    flag.registration = { ...flag.registration, enabled: false };
+    flag.signIn = { ...flag.signIn, enabled: false };
     const session = await signedInUnder(flag, member);
     const listed = await listOf(session);
     const deleted = await deletePasskey(session, listed.passkeyIds[0] ?? "");
@@ -213,14 +232,38 @@ describe("flag を無効にする", () => {
   });
 });
 
+describe("登録とログインの flag は独立している", () => {
+  test("登録の flag だけを無効にしてもログインでき、ログインの flag だけを無効にしても登録できる", async () => {
+    const listed = await createCompany("listed");
+    const signer = await createMember("signer", null);
+    const credential = await savedCredentialOf(signer);
+    const registrant = await createMember("registrant", listed);
+    const registrationOff = flagsWith({ registration: disabled, signIn: released });
+    const signInOff = flagsWith({ registration: listedIn([listed]), signIn: disabled });
+
+    const app = await anonymousAppUnder(registrationOff);
+    const signedIn = await sendSignIn(
+      app,
+      assertionBy(credential, challengeOf(await requestSignInOptions(app))),
+    );
+    const registered = await registerThroughOptions(await signedInUnder(signInOff, registrant));
+
+    expect(signedIn.status).toBe(200);
+    expect(await sessionUserOf(signedIn)).toBe(signer.id);
+    expect(registered.status).toBe(200);
+    expect(await savedPasskeyCountOf(registrant)).toBe(1);
+  });
+});
+
 describe("flag を評価できない", () => {
   for (const trouble of ["binding-fails", "flag-missing"] as const) {
     test(`${trouble === "binding-fails" ? "binding の呼び出しが失敗する" : "flag が無い"}時は、ログインの options、登録の options、共通ログイン画面のパスキーの入口が、無効の時と同じになる`, async () => {
       const listed = await createCompany("listed");
       const member = await createMember("unevaluated", listed);
-      const disabled = flagWith({ enabled: false, listedCompanies: [listed], everyone: true });
+      const allDisabled = bothDisabled();
       const troubled: Flag = {
-        rules: { enabled: true, listedCompanies: [listed], everyone: true },
+        registration: { enabled: true, listedCompanies: [listed], everyone: true },
+        signIn: released,
         trouble,
       };
       const observe = async (flag: Flag) => ({
@@ -231,7 +274,7 @@ describe("flag を評価できない", () => {
         entry: await signInEntryShown(await anonymousAppUnder(flag)),
       });
 
-      const whenDisabled = await observe(disabled);
+      const whenDisabled = await observe(allDisabled);
       const whenTroubled = await observe(troubled);
 
       expect(whenDisabled.entry).toBe(false);
@@ -261,16 +304,20 @@ describe("画面が受け取る判断", () => {
     expect(views).toEqual(["no-row", "list-and-delete-only", "can-register", "can-register"]);
   });
 
-  test("session を持たずに、共通ログイン画面のパスキーの入口を出すかを受け取れる (有効なら出す、無効なら出さない)", async () => {
-    const enabled = flagWith({ enabled: true, listedCompanies: [], everyone: false });
-    const disabled = flagWith({ enabled: false, listedCompanies: [], everyone: true });
+  test("session を持たずに、共通ログイン画面のパスキーの入口を出すかを受け取れる (ログインの flag が全体公開なら出し、事業所のリストだけか無効なら出さない)", async () => {
+    const listed = await createCompany("listed");
+    const shownUnder = async (signIn: FlagRules) =>
+      signInEntryShown(
+        await anonymousAppUnder(flagsWith({ registration: listedIn([listed]), signIn })),
+      );
 
     const shown = [
-      await signInEntryShown(await anonymousAppUnder(enabled)),
-      await signInEntryShown(await anonymousAppUnder(disabled)),
+      await shownUnder(released),
+      await shownUnder(listedIn([listed])),
+      await shownUnder(disabled),
     ];
 
-    expect(shown).toEqual([true, false]);
+    expect(shown).toEqual([true, false, false]);
   });
 });
 

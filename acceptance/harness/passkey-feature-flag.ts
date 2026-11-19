@@ -28,7 +28,7 @@ export {
 } from "./passkey-sign-in-api";
 export type { Outcome, Session } from "./passkey-registration-api";
 
-const PASSKEY_FLAG_KEY = "passkey";
+const FLAG_KEYS = { registration: "passkey-registration", signIn: "passkey-sign-in" } as const;
 const LIST_PATH = "/api/account/passkeys";
 const SIGN_IN_ENTRY_PATH = "/api/passkey/sign-in/availability";
 const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
@@ -50,11 +50,15 @@ export type FlagRules = {
 type FlagTrouble = "none" | "binding-fails" | "flag-missing";
 
 export type Flag = {
-  rules: FlagRules;
+  registration: FlagRules;
+  signIn: FlagRules;
   trouble: FlagTrouble;
 };
 
-export const flagWith = (rules: FlagRules): Flag => ({ rules, trouble: "none" });
+export const flagsWith = (rules: { registration: FlagRules; signIn: FlagRules }): Flag => ({
+  ...rules,
+  trouble: "none",
+});
 
 type Details = {
   readonly flagKey: string;
@@ -63,12 +67,15 @@ type Details = {
   readonly errorCode?: string;
 };
 
-const FLAGSHIP_ENTRIES: readonly unknown[] = ["account", "login"];
-
 const ruleMatches = (rules: FlagRules, context: Record<string, unknown>): boolean =>
-  rules.listedCompanies.some((companyId) => companyId === context.companyId) ||
-  context.entry === "login" ||
-  (rules.everyone && FLAGSHIP_ENTRIES.includes(context.entry));
+  rules.listedCompanies.some((companyId) => companyId === context.companyId) || rules.everyone;
+
+const rulesOf = (flag: Flag, flagKey: string): FlagRules | undefined =>
+  flagKey === FLAG_KEYS.registration
+    ? flag.registration
+    : flagKey === FLAG_KEYS.signIn
+      ? flag.signIn
+      : undefined;
 
 const evaluate = (
   flag: Flag,
@@ -77,11 +84,12 @@ const evaluate = (
   context: Record<string, unknown>,
 ): Details => {
   if (flag.trouble === "binding-fails") throw new Error("flagship is unavailable");
-  if (flagKey !== PASSKEY_FLAG_KEY || flag.trouble === "flag-missing") {
+  const rules = rulesOf(flag, flagKey);
+  if (rules === undefined || flag.trouble === "flag-missing") {
     return { flagKey, value: defaultValue, reason: "ERROR", errorCode: "FLAG_NOT_FOUND" };
   }
-  if (!flag.rules.enabled) return { flagKey, value: false, reason: "DISABLED" };
-  return ruleMatches(flag.rules, context)
+  if (!rules.enabled) return { flagKey, value: false, reason: "DISABLED" };
+  return ruleMatches(rules, context)
     ? { flagKey, value: true, reason: "TARGETING_MATCH" }
     : { flagKey, value: false, reason: "DEFAULT" };
 };
