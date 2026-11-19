@@ -1275,20 +1275,12 @@ const ROWS: readonly Row[] = [
     message: "MFA チャレンジの cookie の名前の文字列は login-challenge.ts だけが持つ",
   },
   {
-    name: "registration-challenge-key-only-in-register-passkey",
+    name: "passkey-challenge-keys-only-in-webauthn",
     within: ["src/**", "web/src/**"],
-    allowedIn: ["src/ttl-key.ts", "src/passkey/register-passkey.ts"],
-    matchers: [{ kind: "literal", pattern: /^passkey:registration-challenge$/ }],
+    allowedIn: ["src/ttl-key.ts", "src/passkey/webauthn.ts"],
+    matchers: [{ kind: "literal", pattern: /^passkey:(registration|sign-in)-challenge$/ }],
     message:
-      "登録用の challenge の key の接頭辞は src/passkey/register-passkey.ts だけが使う (登録の検証は登録用の key だけを引き、ほかの経路が登録用の challenge を引いたり置いたりしない。#483)",
-  },
-  {
-    name: "issued-challenge-shape-only-in-register-passkey",
-    within: ["src/**", "web/src/**"],
-    allowedIn: ["src/passkey/webauthn.ts", "src/passkey/register-passkey.ts"],
-    matchers: [{ kind: "identifier", names: ["hasIssuedChallengeShape"] }],
-    message:
-      "発行した challenge の形の判定 hasIssuedChallengeShape を呼ぶのは、登録の challenge を TTL store から引く src/passkey/register-passkey.ts だけ (形の知識は challenge を作る src/passkey/webauthn.ts が持つ)",
+      "パスキーの challenge の key の接頭辞は検証の入口 src/passkey/webauthn.ts だけが使う (登録の検証は登録用の key だけを、ログインの検証はログイン用の key だけを引く。ログイン用の challenge で登録の TOTP の確認を迂回させない。#483)",
   },
   {
     name: "find-mfa-totp-only-in-listed-files",

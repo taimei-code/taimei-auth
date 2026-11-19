@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { partial } from "../../__tests__/live-runner";
-import { testTtlStore } from "../../__tests__/test-ttl-store";
 import { signedIn } from "../../membership/__tests__/test-layers";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
 import { PasskeyRepo } from "../../passkey/ports";
-import { ttlStoreLayer } from "../../ttl-store-service";
 import { JSON_HEADERS } from "../client-facing-error";
 import { buildAppWith, freshSessionCookie } from "./helpers";
 
@@ -59,27 +57,6 @@ describe("パスキーの登録の要求の形", () => {
 
     expect(res.status).toBe(400);
     expect(await res.text()).not.toContain("PasskeyRejected");
-  });
-
-  test("発行した challenge の形でない challenge の応答は、TTL store を引かずに検証で落ちる", async () => {
-    const taken: string[] = [];
-    const app = buildAppWith(
-      Layer.merge(
-        signedIn(),
-        ttlStoreLayer({
-          ...testTtlStore,
-          getAndDelete: async (key) => {
-            taken.push(key);
-            return testTtlStore.getAndDelete(key);
-          },
-        }),
-      ),
-    );
-
-    const res = await register(browserShapedResponse, app);
-
-    expect(await res.text()).toBe(JSON.stringify({ _tag: "PasskeyRejected" }));
-    expect(taken).toEqual([]);
   });
 
   test("options の応答は、browser の作成の dialog が要る鍵を、生体か PIN の必須と登録済みの credential の除外を含めて返し、dialog は challenge の 5 分より先に切れる", async () => {

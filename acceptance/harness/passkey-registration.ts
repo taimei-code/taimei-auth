@@ -1,6 +1,9 @@
 import { createHash, generateKeyPairSync, type KeyObject, randomBytes, sign } from "node:crypto";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
 import { parseClientFacingError } from "../../src/handlers/client-facing-error";
+import { MemoryKvStore } from "../../src/kv-store.memory";
+import { memoryBackend } from "../../src/ttl-store";
+import { ttlStoreLayer } from "../../src/ttl-store-service";
 
 type CborValue = number | string | Uint8Array | ReadonlyMap<CborValue, CborValue>;
 
@@ -55,6 +58,7 @@ export type SignatureAlgorithm = Exclude<keyof typeof COSE_ALGORITHM, "EdDSA">;
 const keyPairOf = (algorithm: SignatureAlgorithm) => {
   if (algorithm === "ES256") return generateKeyPairSync("ec", { namedCurve: "P-256" });
   if (algorithm === "RS256") return generateKeyPairSync("rsa", { modulusLength: 2048 });
+  // @ts-expect-error @types/node の generateKeyPairSync は ml-dsa-44 の overload を持たない
   return generateKeyPairSync("ml-dsa-44");
 };
 
@@ -171,6 +175,18 @@ export const signedRegistration = (input: {
   };
 };
 
+const ENTRUSTED_TO = "harness-user";
+
+const storeHolding = (issued: (challenge: string) => boolean, entrusted: string) => {
+  const backend = memoryBackend(new MemoryKvStore());
+  return ttlStoreLayer({
+    ...backend,
+    getAndDelete: async (key) => (issued(key.slice(key.lastIndexOf(":") + 1)) ? entrusted : null),
+  });
+};
+
+const freshStore = () => ttlStoreLayer(memoryBackend(new MemoryKvStore()));
+
 export type VerificationOutcome =
   | {
       readonly accepted: {
@@ -189,14 +205,11 @@ export const verifyRegistrationResponseOf = async (
 ): Promise<VerificationOutcome> => {
   const { verifyRegistration } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(
-    verifyRegistration({
-      response,
-      matchesChallenge: (challenge: string) => Effect.sync(() => matchesChallenge(challenge)),
-    }).pipe(
+    verifyRegistration({ userId: ENTRUSTED_TO, response }).pipe(
       Effect.map(
         (passkey): VerificationOutcome => ({
           accepted: {
-            id: passkey.id,
+            id: passkey.credentialId,
             publicKey: new Uint8Array(passkey.publicKey),
             counter: passkey.counter,
             aaguid: passkey.aaguid,
@@ -210,13 +223,17 @@ export const verifyRegistrationResponseOf = async (
           rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
         });
       }),
+      Effect.provide(storeHolding(matchesChallenge, ENTRUSTED_TO)),
     ),
   );
 };
 
 export const registrationOptionsFor = async (user: { readonly userId: string; readonly email: string }) => {
   const { registrationOptions } = await import("../../src/passkey/webauthn");
-  return Effect.runPromise(registrationOptions(user));
+  const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
+  return Effect.runPromise(
+    registrationOptions(user).pipe(Effect.provide(Layer.merge(PasskeyRepoLive, freshStore()))),
+  );
 };
 
 export const signedAuthentication = (input: {
@@ -270,15 +287,16 @@ export const verifyAuthenticationResponseOf = async (
 ): Promise<AuthenticationOutcome> => {
   const { verifyAuthentication } = await import("../../src/passkey/webauthn");
   const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
+  const { findPasskeyByCredentialId } = await import("../../db/repositories/passkey");
   return Effect.runPromise(
-    verifyAuthentication({
-      response,
-      matchesChallenge: (challenge: string) => Effect.sync(() => matchesChallenge(challenge)),
-    }).pipe(
-      Effect.map(
-        (verified): AuthenticationOutcome => ({
-          accepted: { userId: verified.userId, counter: verified.counter },
-        }),
+    verifyAuthentication({ response }).pipe(
+      Effect.flatMap((verified) =>
+        Effect.promise(async (): Promise<AuthenticationOutcome> => ({
+          accepted: {
+            userId: verified.userId,
+            counter: (await findPasskeyByCredentialId(response.id))?.counter ?? Number.NaN,
+          },
+        })),
       ),
       Effect.catch((failure) => {
         const clientFacing = parseClientFacingError(failure);
@@ -286,14 +304,16 @@ export const verifyAuthenticationResponseOf = async (
           rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
         });
       }),
-      Effect.provide(PasskeyRepoLive),
+      Effect.provide(Layer.merge(PasskeyRepoLive, storeHolding(matchesChallenge, "/account"))),
     ),
   );
 };
 
 export const authenticationOptionsFor = async () => {
   const { authenticationOptions } = await import("../../src/passkey/webauthn");
-  return Effect.runPromise(authenticationOptions());
+  return Effect.runPromise(
+    authenticationOptions({ redirectUrl: undefined }).pipe(Effect.provide(freshStore())),
+  );
 };
 
 export type FoundPasskey = {
