@@ -1,118 +1,126 @@
 import { describe, expect, test } from "bun:test";
-import { Cause, Context, Data, Deferred, Effect, Exit, Fiber } from "effect";
+import { Effect } from "effect";
 import { partial } from "../../__tests__/live-runner";
-import { DbError } from "../../errors";
+import { DbError, TtlStoreError } from "../../errors";
+import { TtlStore } from "../../ttl-store-service";
 import { PasskeyRejected } from "../errors";
 import { PasskeyRepo } from "../ports";
 import { verifyAuthentication, verifyRegistration } from "../webauthn";
 
-class ChallengeStoreDown extends Data.TaggedError("ChallengeStoreDown") {}
+const ISSUED = "Y2hhbGxlbmdlLWlzc3VlZC1ieS10aGUtb3B0aW9ucw";
 
-class IssuedChallenge extends Context.Service<IssuedChallenge, { readonly value: string }>()(
-  "test/IssuedChallenge",
-) {}
+const clientDataCarrying = (challenge: unknown) =>
+  Buffer.from(
+    JSON.stringify({ type: "webauthn.create", challenge, origin: "https://unused.example" }),
+  ).toString("base64url");
 
-const CHALLENGE = "Y2hhbGxlbmdl";
-
-const responseCarrying = (challenge: unknown) => ({
+const registrationCarrying = (challenge: unknown) => ({
   id: "Y3JlZGVudGlhbA",
   rawId: "Y3JlZGVudGlhbA",
   type: "public-key" as const,
   clientExtensionResults: {},
-  response: {
-    clientDataJSON: Buffer.from(
-      JSON.stringify({ type: "webauthn.create", challenge, origin: "https://unused.example" }),
-    ).toString("base64url"),
-    attestationObject: "",
-  },
+  response: { clientDataJSON: clientDataCarrying(challenge), attestationObject: "" },
 });
 
-const RESPONSE = responseCarrying(CHALLENGE);
+const authenticationCarrying = (challenge: unknown) => ({
+  id: "Y3JlZGVudGlhbA",
+  rawId: "Y3JlZGVudGlhbA",
+  type: "public-key" as const,
+  clientExtensionResults: {},
+  response: { clientDataJSON: clientDataCarrying(challenge), authenticatorData: "", signature: "" },
+});
 
-describe("verifyRegistration の challenge の照合", () => {
-  test("照合の関数自身の失敗は、不正な応答の失敗に変えず、そのまま呼び出し側に返す", async () => {
+const storeAnswering = (getAndDelete: TtlStore["Service"]["getAndDelete"]) =>
+  partial<TtlStore["Service"]>({ getAndDelete });
+
+const storeDown = storeAnswering(() => Effect.fail(new TtlStoreError({ cause: "store down" })));
+
+describe("登録の応答の challenge を TTL store から取り出す", () => {
+  test("TTL store の障害は、不正な応答の失敗に変えず、そのまま返す", async () => {
     const failure = await Effect.runPromise(
-      verifyRegistration({
-        response: RESPONSE,
-        matchesChallenge: () => Effect.fail(new ChallengeStoreDown()),
-      }).pipe(Effect.flip),
+      verifyRegistration({ userId: "u", response: registrationCarrying(ISSUED) }).pipe(
+        Effect.flip,
+        Effect.provideService(TtlStore, storeDown),
+      ),
     );
-    expect(failure).toBeInstanceOf(ChallengeStoreDown);
+    expect(failure).toBeInstanceOf(TtlStoreError);
   });
 
-  test("照合の関数は、呼び出し側が与えた service を読める", async () => {
-    const compared: string[] = [];
-    const failure = await Effect.runPromise(
-      verifyRegistration({
-        response: RESPONSE,
-        matchesChallenge: (challenge) =>
-          Effect.gen(function* () {
-            const issued = yield* IssuedChallenge;
-            compared.push(`${challenge}=${issued.value}`);
-            return challenge === issued.value;
-          }),
-      }).pipe(Effect.flip, Effect.provideService(IssuedChallenge, { value: CHALLENGE })),
-    );
-    expect(compared).toEqual([`${CHALLENGE}=${CHALLENGE}`]);
-    expect(failure).toBeInstanceOf(PasskeyRejected);
-  });
-
-  test("照合の関数の defect は、不正な応答の失敗に変えず defect のまま返す", async () => {
-    const exit = await Effect.runPromiseExit(
-      verifyRegistration({ response: RESPONSE, matchesChallenge: () => Effect.die("store bug") }),
-    );
-    expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true);
-  });
-
-  test("clientDataJSON の challenge が文字列でない応答は、照合の関数を呼ばずに不正な応答の失敗になる", async () => {
-    for (const challenge of [["Y2hhbGxlbmdl"], 42, null]) {
-      const compared: unknown[] = [];
+  test("base64url の 1〜128 文字でない challenge と文字列でない challenge は、TTL store を引かずに不正な応答の失敗になる", async () => {
+    for (const challenge of ["A".repeat(129), "a+b", "", ["Y2hhbGxlbmdl"], 42, null]) {
+      const looked: string[] = [];
       const failure = await Effect.runPromise(
-        verifyRegistration({
-          response: responseCarrying(challenge),
-          matchesChallenge: (received) => Effect.sync(() => compared.push(received) > 0),
-        }).pipe(Effect.flip),
+        verifyRegistration({ userId: "u", response: registrationCarrying(challenge) }).pipe(
+          Effect.flip,
+          Effect.provideService(
+            TtlStore,
+            storeAnswering((key) => Effect.sync(() => (looked.push(key), "u"))),
+          ),
+        ),
       );
-      expect(compared).toEqual([]);
+      expect(looked).toEqual([]);
       expect(failure).toBeInstanceOf(PasskeyRejected);
     }
   });
 
-  test("呼び出し側が検証を中断すると、照合の関数も中断される", async () => {
+  test("128 文字の challenge は TTL store を引く", async () => {
+    const looked: string[] = [];
     await Effect.runPromise(
-      Effect.gen(function* () {
-        const started = yield* Deferred.make<void>();
-        const interrupted = yield* Deferred.make<void>();
-        const verifying = yield* verifyRegistration({
-          response: RESPONSE,
-          matchesChallenge: () =>
-            Deferred.succeed(started, undefined).pipe(
-              Effect.andThen(Effect.never),
-              Effect.onInterrupt(() => Deferred.succeed(interrupted, undefined)),
-            ),
-        }).pipe(Effect.forkChild);
-        yield* Deferred.await(started);
-        yield* Fiber.interrupt(verifying);
-        yield* Deferred.await(interrupted).pipe(Effect.timeout("1 second"));
-      }),
+      verifyRegistration({ userId: "u", response: registrationCarrying("A".repeat(128)) }).pipe(
+        Effect.flip,
+        Effect.provideService(
+          TtlStore,
+          storeAnswering((key) => Effect.sync(() => (looked.push(key), null))),
+        ),
+      ),
     );
+    expect(looked).toHaveLength(1);
   });
 });
 
-describe("verifyAuthentication の行の引き当て", () => {
-  test("行の引き当てが DB で失敗すると、不正な応答の失敗に変えず、その失敗のまま返す", async () => {
+describe("認証の応答の challenge と行", () => {
+  test("TTL store の障害は、不正な応答の失敗に変えず、そのまま返す", async () => {
+    const failure = await Effect.runPromise(
+      verifyAuthentication({ response: authenticationCarrying(ISSUED) }).pipe(
+        Effect.flip,
+        Effect.provideService(TtlStore, storeDown),
+        Effect.provideService(PasskeyRepo, partial<PasskeyRepo["Service"]>({})),
+      ),
+    );
+    expect(failure).toBeInstanceOf(TtlStoreError);
+  });
+
+  test("base64url の文字でない credential の id の応答は、行を引かずに不正な応答の失敗になる", async () => {
+    const looked: string[] = [];
     const failure = await Effect.runPromise(
       verifyAuthentication({
-        response: {
-          id: "Y3JlZGVudGlhbA",
-          rawId: "Y3JlZGVudGlhbA",
-          type: "public-key",
-          clientExtensionResults: {},
-          response: { clientDataJSON: "", authenticatorData: "", signature: "" },
-        },
-        matchesChallenge: () => Effect.succeed(true),
+        response: { ...authenticationCarrying(ISSUED), id: "ab\u0000cd", rawId: "ab\u0000cd" },
       }).pipe(
         Effect.flip,
+        Effect.provideService(
+          TtlStore,
+          storeAnswering(() => Effect.succeed("/account")),
+        ),
+        Effect.provideService(
+          PasskeyRepo,
+          partial<PasskeyRepo["Service"]>({
+            findPasskeyByCredentialId: (id) => Effect.sync(() => (looked.push(id), undefined)),
+          }),
+        ),
+      ),
+    );
+    expect(looked).toEqual([]);
+    expect(failure).toBeInstanceOf(PasskeyRejected);
+  });
+
+  test("行の引き当てが DB で失敗すると、不正な応答の失敗に変えず、その失敗のまま返す", async () => {
+    const failure = await Effect.runPromise(
+      verifyAuthentication({ response: authenticationCarrying(ISSUED) }).pipe(
+        Effect.flip,
+        Effect.provideService(
+          TtlStore,
+          storeAnswering(() => Effect.succeed("/account")),
+        ),
         Effect.provideService(
           PasskeyRepo,
           partial<PasskeyRepo["Service"]>({

@@ -5,9 +5,9 @@ import { spaEndpointTable } from "../spa-contract-table";
 const BASE = "http://localhost:3110";
 
 describe("SPA の API 契約から、endpoint の path と宣言した失敗の status を引く", () => {
-  test("契約の 26 の endpoint を引き、verify の ChallengeExpired は 401 である", () => {
+  test("契約の 28 の endpoint を引き、verify の ChallengeExpired は 401 である", () => {
     const table = spaEndpointTable();
-    expect(table).toHaveLength(26);
+    expect(table).toHaveLength(28);
     const verify = table.find((endpoint) => endpoint.name === "mfaChallenge.verify");
     expect(verify?.failures.get("ChallengeExpired")).toBe(401);
   });

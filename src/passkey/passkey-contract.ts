@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { NotFound, RateLimited } from "../failures";
-import { Ok } from "../spa-contract-schemas";
+import { Ok, SignedIn } from "../spa-contract-schemas";
 import { PasskeyAlreadyRegistered, PasskeyRejected, TotpRequired } from "./errors";
 
 const PasskeyList = Schema.Struct({
@@ -122,6 +122,43 @@ export type PasskeyEndpointsLackingSessionBudget = [PasskeyEndpoint] extends [ne
   : PasskeyEndpoint extends infer Endpoint
     ? Endpoint extends unknown
       ? [PasskeyManagementBudget | Authenticated] extends [HttpApiEndpoint.Middleware<Endpoint>]
+        ? never
+        : Endpoint
+      : never
+    : never;
+
+const REDIRECT_URL_MAX_LENGTH = 2048;
+
+export class PasskeySignInBudget extends HttpApiMiddleware.Service<PasskeySignInBudget>()(
+  "taimei/PasskeySignInBudget",
+  { error: RateLimited },
+) {}
+
+export class PasskeySignInGroup extends HttpApiGroup.make("passkeySignIn")
+  .add(
+    HttpApiEndpoint.post("options", "/api/passkey/sign-in/options", {
+      payload: Schema.Struct({
+        redirect_url: Schema.optional(
+          Schema.String.check(Schema.isMaxLength(REDIRECT_URL_MAX_LENGTH)),
+        ),
+      }),
+      success: AuthenticationOptions,
+    }),
+    HttpApiEndpoint.post("verify", "/api/passkey/sign-in/verify", {
+      payload: AuthenticationResponse,
+      success: SignedIn,
+      error: [PasskeyRejected],
+    }),
+  )
+  .middleware(PasskeySignInBudget) {}
+
+type PasskeySignInEndpoint = HttpApiGroup.Endpoints<typeof PasskeySignInGroup>;
+
+export type PasskeySignInEndpointsLackingIpBudget = [PasskeySignInEndpoint] extends [never]
+  ? "パスキーのログインの群に endpoint が無い"
+  : PasskeySignInEndpoint extends infer Endpoint
+    ? Endpoint extends unknown
+      ? [PasskeySignInBudget] extends [HttpApiEndpoint.Middleware<Endpoint>]
         ? never
         : Endpoint
       : never

@@ -4,8 +4,10 @@ import { CurrentActor } from "../account/actor-contract";
 import { deleteOwnedPasskey } from "../passkey/delete-passkey";
 import { listOwnedPasskeys } from "../passkey/list-passkeys";
 import { issueRegistrationOptions, registerPasskey } from "../passkey/register-passkey";
+import { signInWithPasskey } from "../passkey/sign-in-with-passkey";
+import { authenticationOptions } from "../passkey/webauthn";
 import { SpaApi } from "../spa-contract";
-import { dieOnBoundary } from "./request-http-api";
+import { dieOnBoundary, forwardSetCookies, headersOf } from "./request-http-api";
 
 export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers) =>
   handlers.handleAll({
@@ -29,6 +31,18 @@ export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers
     delete: Effect.fnUntraced(function* ({ params }) {
       yield* deleteOwnedPasskey(yield* CurrentActor, params.passkeyId);
       return { ok: true as const };
+    }, dieOnBoundary),
+  }),
+);
+
+export const PasskeySignInHandlers = HttpApiBuilder.group(SpaApi, "passkeySignIn", (handlers) =>
+  handlers.handleAll({
+    options: ({ payload }) =>
+      authenticationOptions({ redirectUrl: payload.redirect_url }).pipe(dieOnBoundary),
+    verify: Effect.fnUntraced(function* ({ payload, request }) {
+      const signedIn = yield* signInWithPasskey(headersOf(request), payload);
+      yield* forwardSetCookies(signedIn.forwardedHeaders);
+      return { redirect_url: signedIn.redirectUrl };
     }, dieOnBoundary),
   }),
 );

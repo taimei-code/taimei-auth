@@ -1,9 +1,9 @@
 import { test, expect, describe } from "bun:test";
 import { validateRedirectUrl } from "../url-allowlist";
-import maliciousUrlsRaw from "./fixtures/malicious-redirect-urls.json";
+import urlAllowlistCasesRaw from "./fixtures/url-allowlist-cases.json";
 
 type Fixture = { name: string; url: string; expected: boolean };
-const maliciousUrls = maliciousUrlsRaw as Fixture[];
+const urlAllowlistCases = urlAllowlistCasesRaw as Fixture[];
 
 describe("validateRedirectUrl", () => {
   describe("基本動作", () => {
@@ -39,7 +39,7 @@ describe("validateRedirectUrl", () => {
   });
 
   describe("malicious URL fuzz (33 payloads)", () => {
-    test.each(maliciousUrls)("$name", ({ url, expected }: Fixture) => {
+    test.each(urlAllowlistCases)("$name", ({ url, expected }: Fixture) => {
       expect(validateRedirectUrl(url, "taimei")).toBe(expected);
     });
   });

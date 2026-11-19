@@ -106,7 +106,7 @@ const fakeRegistry = (mode: RegistryMode, packages: readonly FixturePackage[]) =
 const unreachableRegistry = () => {
   const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => new Response() });
   const url = `http://127.0.0.1:${server.port}/`;
-  server.stop(true);
+  void server.stop(true);
   return url;
 };
 

@@ -1,6 +1,6 @@
 import { Cause, Clock, Data, Effect, Ref } from "effect";
 import { AuthApi } from "../auth-service";
-import { FALLBACK_REDIRECT } from "../mfa/redirect-guard";
+import { FALLBACK_REDIRECT } from "../sign-in-redirect";
 import { mfaChallengeRequired } from "../mfa/totp/challenge-required";
 import { type LoginChallengeCookie, openLoginChallenge } from "../mfa/totp/login-challenge";
 import { captureCause, SentryService } from "../sentry";

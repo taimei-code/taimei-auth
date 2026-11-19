@@ -7,7 +7,7 @@ import {
   spendAttemptBudgetOrRateLimited,
 } from "../attempt-budget";
 import { ChallengeStateBudget, ChallengeVerifyBudget, MfaChangeBudget } from "../mfa/mfa-contract";
-import { PasskeyManagementBudget } from "../passkey/passkey-contract";
+import { PasskeyManagementBudget, PasskeySignInBudget } from "../passkey/passkey-contract";
 import { getClientContext } from "../request-context";
 import type { SentryService } from "../sentry";
 import type { TtlStore } from "../ttl-store-service";
@@ -28,14 +28,14 @@ async function sha256Hex(value: string): Promise<string> {
 
 const budgetMiddleware = (
   budget: AttemptBudget<"allow">,
-  subjectOf: (headers: Headers, ip: string) => string | Promise<string>,
+  subjectOf: (headers: Headers, ip: string, endpoint: string) => string | Promise<string>,
 ): Effect.Effect<MfaChangeBudget["Service"], never, TtlStore | SentryService> =>
   Effect.gen(function* () {
     const services = yield* Effect.context<TtlStore | SentryService>();
-    return Effect.fnUntraced(function* (httpEffect) {
+    return Effect.fnUntraced(function* (httpEffect, { endpoint }) {
       const headers = headersOf(yield* HttpServerRequest.HttpServerRequest);
       const subject = yield* Effect.promise(async () =>
-        subjectOf(headers, getClientContext(headers).ip),
+        subjectOf(headers, getClientContext(headers).ip, endpoint.identifier),
       );
       yield* spendAttemptBudgetOrRateLimited(budget, subject).pipe(Effect.provideContext(services));
       return yield* httpEffect;
@@ -58,5 +58,12 @@ export const AttemptBudgetsLive = Layer.mergeAll(
   Layer.effect(
     PasskeyManagementBudget,
     budgetMiddleware(ATTEMPT_BUDGETS.passkeyManagementPerSession, sessionAttemptSubject),
+  ),
+  Layer.effect(
+    PasskeySignInBudget,
+    budgetMiddleware(
+      ATTEMPT_BUDGETS.passkeySignInPerIp,
+      (_headers, ip, endpoint) => `${endpoint}:${ip}`,
+    ),
   ),
 );

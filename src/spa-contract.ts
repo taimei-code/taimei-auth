@@ -4,7 +4,7 @@ import { CompanyGroup } from "./company/company-contract";
 import { InvitationGroup } from "./invitation/invitation-contract";
 import { MembershipGroup } from "./membership/membership-contract";
 import { MfaChallengeGroup, MfaGroup } from "./mfa/mfa-contract";
-import { PasskeyGroup } from "./passkey/passkey-contract";
+import { PasskeyGroup, PasskeySignInGroup } from "./passkey/passkey-contract";
 
 export class SpaApi extends HttpApi.make("spa")
   .add(AccountGroup)
@@ -13,4 +13,5 @@ export class SpaApi extends HttpApi.make("spa")
   .add(InvitationGroup)
   .add(MfaGroup)
   .add(MfaChallengeGroup)
-  .add(PasskeyGroup) {}
+  .add(PasskeyGroup)
+  .add(PasskeySignInGroup) {}
