@@ -18,7 +18,7 @@ import { CompanyHandlers } from "./company-http-api";
 import { InvitationHandlers } from "./invitation-http-api";
 import { MembershipHandlers } from "./membership-http-api";
 import { MfaChallengeHandlers, MfaHandlers } from "./mfa-http-api";
-import { PasskeyHandlers } from "./passkey-http-api";
+import { PasskeyHandlers, PasskeySignInHandlers } from "./passkey-http-api";
 import { headersOf } from "./request-http-api";
 
 const AuthenticatedLive = Layer.effect(
@@ -73,6 +73,7 @@ const makeSpaApiHandler = (services: Layer.Layer<AppServices>) =>
         MfaHandlers,
         MfaChallengeHandlers,
         PasskeyHandlers,
+        PasskeySignInHandlers,
       ]),
       Layer.provide([AuthenticatedLive, AttemptBudgetsLive]),
       HttpRouter.provideRequest(services),

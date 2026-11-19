@@ -10,7 +10,7 @@ export type AuditLogEntry =
   | {
       eventType: "sign_in";
       userId: string;
-      payload: { method: "magic_link" | "github"; ip: string; userAgent: string };
+      payload: { method: "magic_link" | "github" | "passkey"; ip: string; userAgent: string };
     }
   | {
       eventType: "mfa_enabled";

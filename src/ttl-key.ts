@@ -10,6 +10,7 @@ export const OWN_KEY_PREFIXES = [
   "rate-limit:mfa-challenge-status:ip",
   "rate-limit:mfa-attempt",
   "rate-limit:passkey-management",
+  "rate-limit:passkey-sign-in:ip",
   "passkey:registration-challenge",
   "passkey:sign-in-challenge",
   "invitation_rate",

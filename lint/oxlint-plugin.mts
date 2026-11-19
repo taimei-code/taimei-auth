@@ -944,10 +944,10 @@ const ROWS: readonly Row[] = [
   {
     name: "establish-sign-in-only-after-credential-check",
     within: PRODUCTION_ROOTS,
-    allowedIn: ["src/mfa/totp/complete-login-challenge.ts"],
+    allowedIn: ["src/mfa/totp/complete-login-challenge.ts", "src/passkey/sign-in-with-passkey.ts"],
     matchers: [{ kind: "importTarget", target: /^src\/establish-sign-in(\.ts)?$/ }],
     message:
-      "ログインの成立の手順 (establish-sign-in.ts) は資格情報を確かめずに session を発行するので、import するのは資格情報の検証を終えた complete-login-challenge.ts だけ",
+      "ログインの成立の手順 (establish-sign-in.ts) は資格情報を確かめずに session を発行するので、import するのは資格情報の検証を終えた complete-login-challenge.ts と sign-in-with-passkey.ts だけ",
   },
   {
     name: "simplewebauthn-import-only-in-webauthn",
@@ -1045,6 +1045,7 @@ const ROWS: readonly Row[] = [
         "effect(ChallengeStateBudget)",
         "effect(MfaChangeBudget)",
         "effect(PasskeyManagementBudget)",
+        "effect(PasskeySignInBudget)",
       ],
     },
     matchers: [

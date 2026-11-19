@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import type { PasskeyEndpointsLackingSessionBudget } from "../passkey-contract";
+import type {
+  PasskeyEndpointsLackingSessionBudget,
+  PasskeySignInEndpointsLackingIpBudget,
+} from "../passkey-contract";
 
 const _everyEndpointHasSessionBudget: [PasskeyEndpointsLackingSessionBudget] extends [never]
   ? true
@@ -7,4 +10,12 @@ const _everyEndpointHasSessionBudget: [PasskeyEndpointsLackingSessionBudget] ext
 
 test("パスキーの群に .middleware の後から足した endpoint は、ログインと session ごとの試行枠を持たず型エラーになる (typecheck で検査する)", () => {
   expect(_everyEndpointHasSessionBudget).toBe(true);
+});
+
+const _everySignInEndpointHasIpBudget: [PasskeySignInEndpointsLackingIpBudget] extends [never]
+  ? true
+  : false = true;
+
+test("パスキーのログインの群に .middleware の後から足した endpoint は、IP ごとの試行枠を持たず型エラーになる (typecheck で検査する)", () => {
+  expect(_everySignInEndpointHasIpBudget).toBe(true);
 });
