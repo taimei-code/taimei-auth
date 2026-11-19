@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { Schema } from "effect";
 
-import { ChallengePassed, MfaEnrollment, MfaStatus } from "../mfa-contract";
+import { SignedIn } from "../../spa-contract-schemas";
+import { MfaEnrollment, MfaStatus } from "../mfa-contract";
 
 const decodes = Schema.is(MfaEnrollment);
 
@@ -26,7 +27,7 @@ describe("MFA の登録の応答", () => {
 });
 
 describe("MFA チャレンジの通過の応答", () => {
-  const passes = Schema.is(ChallengePassed);
+  const passes = Schema.is(SignedIn);
 
   test("redirect_url が空なら decode に失敗する (空の遷移先は今の URL に戻る)", () => {
     expect(passes({ redirect_url: "" })).toBe(false);

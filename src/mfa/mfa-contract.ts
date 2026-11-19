@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
 import { RateLimited } from "../failures";
-import { Ok } from "../spa-contract-schemas";
+import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
   AlreadyEnabled,
   ChallengeExpired,
@@ -21,14 +21,12 @@ export const MfaStatus = Schema.Struct({
   enabled: Schema.Boolean,
   recovery_codes_remaining: Schema.Finite,
 });
-export type MfaStatus = typeof MfaStatus.Type;
 
 export const MfaEnrollment = Schema.Struct({
   totp_uri: Schema.String.check(Schema.isMinLength(1)),
   recovery_codes: Schema.mutable(Schema.Array(Schema.String)).check(Schema.isMinLength(1)),
   enrollment_id: Schema.String.check(Schema.isMinLength(1)),
 });
-export type MfaEnrollment = typeof MfaEnrollment.Type;
 
 const ActivateRequest = Schema.Struct({
   code: Code,
@@ -36,9 +34,6 @@ const ActivateRequest = Schema.Struct({
 });
 const CodeWithKind = Schema.Struct({ code: Code, kind: CodeKind });
 const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
-export const ChallengePassed = Schema.Struct({
-  redirect_url: Schema.String.check(Schema.isMinLength(1)),
-});
 
 export class ChallengeVerifyBudget extends HttpApiMiddleware.Service<ChallengeVerifyBudget>()(
   "taimei/ChallengeVerifyBudget",
@@ -81,7 +76,7 @@ export class MfaChallengeGroup extends HttpApiGroup.make("mfaChallenge").add(
   ),
   HttpApiEndpoint.post("verify", "/api/mfa/challenge/verify", {
     payload: CodeWithKind,
-    success: ChallengePassed,
+    success: SignedIn,
     error: [InvalidCode, Locked, ChallengeExpired],
   }).middleware(ChallengeVerifyBudget),
 ) {}
