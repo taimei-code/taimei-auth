@@ -1,6 +1,6 @@
-import { PasskeyAlreadyRegistered } from "@core/passkey/errors";
+import { PasskeyAlreadyRegistered, PasskeyRejected } from "@core/passkey/errors";
 import { type RegistrationOptions, RegistrationResponse } from "@core/passkey/passkey-contract";
-import { Data, Effect, Predicate, Schema } from "effect";
+import { Clock, Data, Effect, Predicate, Schema } from "effect";
 
 export class PasskeyCreationFailed extends Data.TaggedError("PasskeyCreationFailed") {}
 
@@ -16,6 +16,12 @@ const decodeRegistrationResponse = Schema.decodeUnknownEffect(RegistrationRespon
 
 const DIALOG_DISMISSED = "NotAllowedError";
 const EXCLUDED_CREDENTIAL_FOUND = "InvalidStateError";
+const CEREMONY_TIMER_SLACK_MS = 1000;
+const NANOS_PER_MILLI = 1_000_000n;
+
+const ceremonyExpired = (options: RegistrationOptions, startedAt: bigint, endedAt: bigint) =>
+  options.timeout !== undefined &&
+  Number((endedAt - startedAt) / NANOS_PER_MILLI) >= options.timeout - CEREMONY_TIMER_SLACK_MS;
 
 const hasWebAuthnWithJsonApis = (): boolean =>
   "PublicKeyCredential" in globalThis &&
@@ -44,11 +50,12 @@ export const createPasskey = Effect.fnUntraced(
     options: RegistrationOptions,
   ): Effect.fn.Return<
     PasskeyCreation,
-    PasskeyAlreadyRegistered | PasskeyCreationFailed | DialogDismissed
+    PasskeyAlreadyRegistered | PasskeyCreationFailed | PasskeyRejected | DialogDismissed
   > {
     if (!(yield* isPasskeySupported)) {
       return yield* new PasskeyCreationFailed();
     }
+    const startedAt = yield* Clock.monotonicTimeNanos;
     const credential = yield* Effect.tryPromise({
       try: (signal) =>
         navigator.credentials.create({
@@ -56,7 +63,17 @@ export const createPasskey = Effect.fnUntraced(
           signal,
         }),
       catch: creationFailureOf,
-    });
+    }).pipe(
+      Effect.catchTag("DialogDismissed", (dismissed) =>
+        Effect.flatMap(
+          Clock.monotonicTimeNanos,
+          (endedAt): Effect.Effect<never, DialogDismissed | PasskeyRejected> =>
+            ceremonyExpired(options, startedAt, endedAt)
+              ? Effect.fail(new PasskeyRejected())
+              : Effect.fail(dismissed),
+        ),
+      ),
+    );
     if (!(credential instanceof PublicKeyCredential)) {
       return yield* new PasskeyCreationFailed();
     }
