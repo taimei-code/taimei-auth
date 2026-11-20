@@ -7,9 +7,6 @@ import {
   createCompany,
   createMember,
   deletePasskey,
-  type Flag,
-  type FlagRules,
-  flagWith,
   forgetFlagScenario,
   listOf,
   registerThroughOptions,
@@ -25,6 +22,7 @@ import {
   signInEntryShown,
   unsavedCredential,
 } from "./harness/passkey-feature-flag";
+import { type FakeFlagship, fakeFlagship } from "./harness/feature-flags";
 import { adrFiles, readRepoText } from "./harness/repo-text";
 
 afterEach(forgetFlagScenario);
@@ -34,18 +32,20 @@ const statusAndBody = (outcome: { status: number; body: unknown }) => ({
   body: outcome.body,
 });
 
-const releasedRules: FlagRules = { enabled: true, listedCompanies: [], everyone: true };
+const PASSKEY = "passkey";
 
-const released = (): Flag => flagWith(releasedRules);
-
-const disabled = (): Flag => flagWith({ ...releasedRules, enabled: false });
-
-const listedOnly = (companies: string[]): Flag =>
-  flagWith({ enabled: true, listedCompanies: companies, everyone: false });
-
-const disable = (flag: Flag) => {
-  flag.rules = { ...flag.rules, enabled: false };
+const flagshipWith = (setUp: (flags: FakeFlagship) => void): FakeFlagship => {
+  const flags = fakeFlagship();
+  setUp(flags);
+  return flags;
 };
+
+const released = () => flagshipWith((flags) => flags.on(PASSKEY));
+
+const disabled = () => flagshipWith((flags) => flags.off(PASSKEY));
+
+const listedOnly = (companies: string[]) =>
+  flagshipWith((flags) => flags.onlyFor(PASSKEY, companies));
 
 const registrationRefusal = async () => {
   const member = await createMember("refused", await createCompany("any"));
@@ -92,7 +92,7 @@ describe("登録を閉じる", () => {
     const options = await requestRegistrationOptions(session);
     const challenge = (options.body as { challenge: string }).challenge;
 
-    disable(flag);
+    flag.off(PASSKEY);
     const outcome = await registerWith(session, challenge);
 
     expect(statusAndBody(outcome)).toEqual(refusal);
@@ -130,7 +130,7 @@ describe("ログインを閉じる", () => {
     const app = await anonymousAppUnder(flag);
     const challenge = challengeOf(await requestSignInOptions(app));
 
-    disable(flag);
+    flag.off(PASSKEY);
     const outcome = await sendSignIn(app, assertionBy(credential, challenge));
 
     expect(statusAndBody(outcome)).toEqual(enabledFailure);
@@ -150,7 +150,7 @@ describe("無効にしても残るもの", () => {
       assertionBy(credential, challengeOf(await requestSignInOptions(app))),
     );
 
-    disable(flag);
+    flag.off(PASSKEY);
     const session = await signedInUnder(flag, member);
     const listed = await listOf(session);
     const deleted = await deletePasskey(session, listed.passkeyIds[0] ?? "");
@@ -166,8 +166,14 @@ describe("flag を評価できない", () => {
   for (const trouble of ["binding-fails", "flag-missing"] as const) {
     test(`${trouble === "binding-fails" ? "binding の呼び出しが失敗する" : "flag が無い"}時は、ログインの options、登録の options、共通ログイン画面のパスキーの入口が、無効の時と同じになる`, async () => {
       const member = await createMember("unevaluated", await createCompany("any"));
-      const troubled: Flag = { rules: releasedRules, trouble };
-      const observe = async (flag: Flag) => ({
+      const troubled =
+        trouble === "binding-fails"
+          ? flagshipWith((flags) => {
+              flags.on(PASSKEY);
+              flags.breakBinding();
+            })
+          : fakeFlagship();
+      const observe = async (flag: FakeFlagship) => ({
         signIn: statusAndBody(await requestSignInOptions(await anonymousAppUnder(flag))),
         registration: statusAndBody(
           await requestRegistrationOptions(await signedInUnder(flag, member)),
@@ -190,7 +196,7 @@ describe("画面が受け取る判断", () => {
     const one = await createMember("one", null);
     await savedCredentialOf(one);
 
-    const viewsUnder = (flag: Flag) =>
+    const viewsUnder = (flag: FakeFlagship) =>
       Promise.all(
         [none, one].map(async (member) => (await listOf(await signedInUnder(flag, member))).view),
       );
