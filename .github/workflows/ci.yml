@@ -114,6 +114,10 @@ jobs:
         working-directory: packages/auth-client
         run: bun run build
 
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+
       - name: Install Playwright browser
         run: bunx playwright install --with-deps chromium
 
@@ -122,6 +126,9 @@ jobs:
 
       - name: E2E test
         run: bun run test:e2e
+
+      - name: Acceptance test in the browser (built web with the SPA contract stubbed)
+        run: bunx playwright test --config acceptance/harness/playwright.config.ts
 
       - name: Build the staging bundle from the non-production entry
         run: bash scripts/build-staging-bundle.sh
