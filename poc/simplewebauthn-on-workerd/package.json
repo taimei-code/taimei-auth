@@ -1,0 +1,8 @@
+{
+  "name": "poc-simplewebauthn-on-workerd",
+  "private": true,
+  "trustedDependencies": [],
+  "dependencies": {
+    "@simplewebauthn/server": "14.1.0"
+  }
+}
