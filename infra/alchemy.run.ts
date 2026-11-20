@@ -1,6 +1,7 @@
 import * as Alchemy from "alchemy";
 import * as Cloudflare from "@alchemy.run/cloudflare";
 import { Effect } from "effect";
+import { FEATURE_FLAGS_BINDING } from "../src/feature-flags";
 import {
   DURABLE_OBJECT_BINDINGS,
   parseAccountId,
@@ -60,6 +61,9 @@ const Auth = Cloudflare.Worker(
         ...durableObjects,
         CF_VERSION_METADATA: Cloudflare.Workers.VersionMetadata(),
         HYPERDRIVE: Cloudflare.Hyperdrive.lookup("Hyperdrive", { name: stage.hyperdriveName }),
+        [FEATURE_FLAGS_BINDING]: Cloudflare.Flagship.App("FeatureFlags", {
+          name: stage.workerName,
+        }),
         ...stage.vars,
       },
     };

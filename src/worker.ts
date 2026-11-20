@@ -1,6 +1,7 @@
 import type { Layer } from "effect";
 import type { Hono } from "hono";
 import type { EmailSender } from "./email/ports";
+import { type FeatureFlags, type FeatureFlagsEnv, flagshipFeatureFlags } from "./feature-flags";
 import { runWithRequestPool } from "@/db/client";
 import { boot } from "./boot";
 import { KvStore as KvStoreBase } from "./kv-store.do";
@@ -15,12 +16,13 @@ import { withClientIp } from "./client-ip";
 import { resolveCloudflareClientIp } from "./request-context";
 import { resolveSecretsBeforeHandler } from "./secret-bindings";
 
-type Env = SentryEnv & {
-  HYPERDRIVE: { connectionString: string };
-  KV_STORE: KvStoreNamespace;
-  CF_VERSION_METADATA: WorkerVersionMetadata;
-  ASSETS: { fetch: (req: Request) => Promise<Response> };
-};
+type Env = SentryEnv &
+  FeatureFlagsEnv & {
+    HYPERDRIVE: { connectionString: string };
+    KV_STORE: KvStoreNamespace;
+    CF_VERSION_METADATA: WorkerVersionMetadata;
+    ASSETS: { fetch: (req: Request) => Promise<Response> };
+  };
 
 type ExecutionCtx = { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -28,6 +30,7 @@ const VITE_BASE = "/auth";
 
 type WorkerOptions = {
   emailSender?: Layer.Layer<EmailSender>;
+  featureFlags?: Layer.Layer<FeatureFlags>;
   extendBeforeStatic?: (app: Hono) => void;
   beforeFirstRequest?: () => Promise<void>;
 };
@@ -47,7 +50,7 @@ const bootstrapOnce = (options: WorkerOptions) => {
     copyEnvToProcess(env);
     initCloudflareSentry(process.env.SENTRY_DSN);
     ttlStore ??= durableObjectBackend(env.KV_STORE);
-    boot(ttlStore, options.emailSender);
+    boot(ttlStore, options.featureFlags ?? flagshipFeatureFlags(env), options.emailSender);
     bootstrappedApp = buildApp({
       mountStatic: (app) => {
         options.extendBeforeStatic?.(app);

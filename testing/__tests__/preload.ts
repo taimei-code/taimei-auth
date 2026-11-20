@@ -8,6 +8,7 @@ import {
   TEST_MFA_TOTP_ENCRYPTION_KEYS,
 } from "../../src/__tests__/test-env";
 import { testTtlStore } from "../../src/__tests__/test-ttl-store";
+import { fakeFlagship } from "../feature-flags";
 import { recordingEmailSender } from "../sent-links";
 
 if (process.env.DATABASE_URL) requireLocalDatabase(process.env.DATABASE_URL);
@@ -17,4 +18,4 @@ process.env.AUTH_SERVICE_URL ??= TEST_AUTH_SERVICE_URL;
 process.env.AUTH_TRUSTED_ORIGINS ??= TEST_AUTH_TRUSTED_ORIGINS;
 process.env.AUTH_SERVICE_KEY ??= TEST_AUTH_SERVICE_KEY;
 process.env.AUTH_SECRET ??= TEST_AUTH_SECRET;
-boot(testTtlStore, recordingEmailSender);
+boot(testTtlStore, fakeFlagship().layer, recordingEmailSender);

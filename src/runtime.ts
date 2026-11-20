@@ -3,6 +3,7 @@ import { UserRepoLive } from "./account/wiring";
 import { BackgroundLive } from "./background";
 import { EmailSenderLive } from "./email/wiring";
 import type { EmailSender } from "./email/ports";
+import type { FeatureFlags } from "./feature-flags";
 import { HealthRepoLive } from "./health/wiring";
 import { ttlStoreLayer } from "./ttl-store-service";
 import type { TtlStoreBackend } from "./ttl-store";
@@ -19,6 +20,7 @@ import { TransactionLive } from "./transaction";
 
 export const appLayer = (
   ttlStore: TtlStoreBackend,
+  featureFlags: Layer.Layer<FeatureFlags>,
   emailSender: Layer.Layer<EmailSender> = EmailSenderLive,
 ) =>
   Layer.mergeAll(
@@ -33,6 +35,7 @@ export const appLayer = (
     TransactionLive,
     IdGeneratorLive,
     ttlStoreLayer(ttlStore),
+    featureFlags,
     SentryLive,
     BackgroundLive,
     emailSender,
@@ -48,6 +51,7 @@ let runtimeTtlStore: TtlStoreBackend | undefined;
 
 export function initRuntime(
   ttlStore: TtlStoreBackend,
+  featureFlags: Layer.Layer<FeatureFlags>,
   emailSender?: Layer.Layer<EmailSender>,
 ): AppRuntime {
   if (runtimeTtlStore !== undefined && runtimeTtlStore !== ttlStore) {
@@ -56,7 +60,7 @@ export function initRuntime(
     );
   }
   runtimeTtlStore = ttlStore;
-  runtime ??= ManagedRuntime.make(appLayer(ttlStore, emailSender));
+  runtime ??= ManagedRuntime.make(appLayer(ttlStore, featureFlags, emailSender));
   return runtime;
 }
 

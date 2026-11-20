@@ -53,6 +53,7 @@
     "e2e/**/*.ts",
     "web/src/shared/landing-paths.ts",
     "testing/sent-links.ts",
+    "testing/feature-flags.ts",
     "testing/local-delivery-log.ts",
     "testing/redirect-hosts.ts",
     "playwright.config.ts"

@@ -4,7 +4,10 @@ import { boot } from "../boot";
 import { MemoryKvStore } from "../kv-store.memory";
 import { getRuntime, initRuntime } from "../runtime";
 import { memoryBackend } from "../ttl-store";
+import { fakeFlagship } from "../../testing/feature-flags";
 import { testTtlStore } from "./test-ttl-store";
+
+const flags = fakeFlagship().layer;
 
 describe("getRuntime", () => {
   test("2 回呼ぶと同一 object を返す (memo)", () => {
@@ -13,15 +16,15 @@ describe("getRuntime", () => {
 
   test("boot 後に initRuntime を呼んでも最初の runtime を返す (テストが Bun の entry を import しても preload の結線が残る)", () => {
     const booted = getRuntime();
-    expect(initRuntime(testTtlStore)).toBe(booted);
+    expect(initRuntime(testTtlStore, flags)).toBe(booted);
   });
 
   test("boot を別の TTL store で 2 回目に呼ぶと、黙って最初の結線を使わずに throw する", () => {
-    expect(() => boot(memoryBackend(new MemoryKvStore()))).toThrow("別の TTL store");
+    expect(() => boot(memoryBackend(new MemoryKvStore()), flags)).toThrow("別の TTL store");
   });
 
   test("boot を同じ TTL store で 2 回目に呼ぶと、最初の runtime を返す", () => {
-    expect(boot(testTtlStore)).toBe(getRuntime());
+    expect(boot(testTtlStore, flags)).toBe(getRuntime());
   });
 
   test("Effect を実行できる", async () => {

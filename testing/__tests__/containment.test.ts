@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { requireAuthHostOrigin } from "../auth-host-origin";
+import { fakeFlagship } from "../feature-flags";
 import { nonProductionRoutes } from "../non-production-routes";
 import { recordingEmail } from "../sent-links";
 
@@ -9,6 +10,7 @@ describe("本番以外の route の POST は、auth ホストの Origin を確�
     const routes = nonProductionRoutes({
       e2eLoginLinks: true,
       recordsEmailTo: recordingEmail.recordsEmailTo,
+      featureFlags: fakeFlagship(),
     })
       .flatMap((app) => app.routes)
       .filter((route) => route.method !== "GET");
@@ -22,6 +24,7 @@ describe("本番以外の route の POST は、auth ホストの Origin を確�
 
     expect(routesNotCheckingOrigin.sort()).toEqual([
       `POST ${TESTING_PATH}/current-company`,
+      `POST ${TESTING_PATH}/feature-flags`,
       `POST ${TESTING_PATH}/login-links`,
       `POST ${TESTING_PATH}/signed-in-users`,
     ]);

@@ -4,12 +4,17 @@ import { requestApp, responseJson } from "../../src/handlers/__tests__/helpers";
 import { createSessionFor } from "../../src/__tests__/session-helpers";
 import { Effect } from "effect";
 import { startBunServer } from "../bun-server";
+import { fakeFlagship } from "../feature-flags";
 import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { testKvStore, testTtlStore } from "../../src/__tests__/test-ttl-store";
 import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../../src/attempt-budget";
 
-const { app } = startBunServer({ ttlStore: testTtlStore, proxyTrust: { _tag: "Direct" } });
+const { app } = startBunServer({
+  ttlStore: testTtlStore,
+  featureFlags: fakeFlagship().layer,
+  proxyTrust: { _tag: "Direct" },
+});
 
 const P = "enum-test-";
 const { run } = dbTest(P);

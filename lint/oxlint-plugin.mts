@@ -1312,6 +1312,54 @@ const ROWS: readonly Row[] = [
       "既知の transports で絞る判定は src/passkey/webauthn.ts の検証の入口だけが持つ (保存の前の判定を 1 か所に集める。DB の CHECK は db/schema.ts)",
   },
   {
+    name: "flagship-binding-only-in-feature-flags",
+    within: ["src/**", "testing/**"],
+    allowedIn: ["src/feature-flags.ts"],
+    matchers: [
+      {
+        kind: "identifier",
+        names: ["Flagship", "FlagshipEvaluationContext", "FlagshipEvaluationDetails"],
+      },
+      {
+        kind: "member",
+        paths: [
+          ".getBooleanValue",
+          ".getBooleanDetails",
+          ".getStringValue",
+          ".getStringDetails",
+          ".getNumberValue",
+          ".getNumberDetails",
+          ".getObjectValue",
+          ".getObjectDetails",
+        ],
+      },
+      { kind: "literal", pattern: /^FLAGS$/ },
+    ],
+    message:
+      "Flagship の binding に触れるのは src/feature-flags.ts だけ (評価の失敗と flag が無い時を off に倒し、既定の値を常に off で渡す。ほかの file から呼ぶと失敗の扱いが散る。ADR-0030)",
+  },
+  {
+    name: "feature-flags-port-only-in-flag-decisions",
+    within: ["src/**"],
+    allowedIn: ["src/feature-flags.ts", "src/runtime.ts", "src/boot.ts", "src/worker.ts"],
+    matchers: [{ kind: "identifier", names: ["FeatureFlags"] }],
+    message:
+      "フィーチャーフラグは src/feature-flags.ts の enabled(flag, actor) で評価する。port を直接呼ぶと、現在の事業所以外の値や、FeatureFlagRegistry に登録していない flag の名前を渡せてしまう。flag の名前は使う機能の file で FeatureFlagRegistry に登録する (ADR-0030)",
+  },
+  {
+    name: "no-flag-decision-in-handlers-rpc-web",
+    within: ["src/handlers/**", "src/rpc/**", "web/src/**", "packages/auth-client/src/**"],
+    matchers: [
+      {
+        kind: "importTarget",
+        target: /^src\/(feature-flags|[^/]+\/availability)(\.ts)?$/,
+        includesTypeImports: true,
+      },
+    ],
+    message:
+      "handler、RPC、画面はフィーチャーフラグを参照しない。handler は use-case が返す判断を写すだけにし、RPC と auth-client には評価の結果を渡さない。画面は server が返す判断に従う (ADR-0030)",
+  },
+  {
     name: "listed-import-only-in-management",
     within: ["management/**"],
     allowedMatches: {
@@ -1743,6 +1791,14 @@ const ROWS: readonly Row[] = [
     matchers: [{ kind: "literal", pattern: /\.server\.log/ }],
     message:
       "送ったメールの URL は helpers.ts の sentLinkAfter で、その操作より後に log に出た行から読む (server の log は spec をまたいで残るので、同じ email の古い行を拾わないため)",
+  },
+  {
+    name: "feature-flag-switch-only-in-helpers",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/helpers.ts"],
+    matchers: [{ kind: "literal", pattern: /\/feature-flags/ }],
+    message:
+      "フィーチャーフラグは helpers.ts の featureFlags(request) の on・off・onlyFor で切り替える (試験 API の body の形を spec ごとに書かない)",
   },
   {
     name: "login-links-only-in-helpers",

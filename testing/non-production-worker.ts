@@ -1,4 +1,5 @@
 import { createWorker } from "../src/worker";
+import type { FakeFlagship } from "./feature-flags";
 import { mountNonProductionRoutes } from "./non-production-routes";
 import {
   usesNonProductionRedirectHosts,
@@ -9,9 +10,11 @@ import type { NonProductionEmail } from "./sent-links";
 
 export const nonProductionWorker = ({
   email,
+  featureFlags,
   beforeFirstRequest,
 }: {
   email: NonProductionEmail;
+  featureFlags?: FakeFlagship;
   beforeFirstRequest: () => Promise<void>;
 }) =>
   serveOnlyOutsideProduction(
@@ -19,8 +22,12 @@ export const nonProductionWorker = ({
       usesNonProductionRedirectHosts,
       createWorker({
         emailSender: email.sender,
+        featureFlags: featureFlags?.layer,
         beforeFirstRequest,
-        extendBeforeStatic: mountNonProductionRoutes(email),
+        extendBeforeStatic: mountNonProductionRoutes({
+          recordsEmailTo: email.recordsEmailTo,
+          featureFlags,
+        }),
       }),
     ),
   );
