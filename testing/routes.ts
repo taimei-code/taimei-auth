@@ -4,8 +4,13 @@ import { Hono } from "hono";
 import { runRoute } from "../src/handlers/run-route";
 import { createSignedInUser } from "./create-signed-in-user";
 import { decodeJsonBody } from "./decode-body";
+import type { FakeFlagship } from "./feature-flags";
 import { setCurrentCompany } from "./set-current-company";
-import { SetCurrentCompanyRequest, SignedInUserRequest } from "./testing-contract";
+import {
+  FeatureFlagSwitchRequest,
+  SetCurrentCompanyRequest,
+  SignedInUserRequest,
+} from "./testing-contract";
 
 export const testingApiRoutes = () =>
   new Hono()
@@ -27,3 +32,16 @@ export const testingApiRoutes = () =>
         }),
       ),
     );
+
+export const featureFlagRoutes = (featureFlags: FakeFlagship) =>
+  new Hono().post(`${TESTING_PATH}/feature-flags`, (c) =>
+    runRoute(
+      c,
+      Effect.gen(function* () {
+        const request = yield* decodeJsonBody(c, FeatureFlagSwitchRequest);
+        if (request.state === "onlyFor") featureFlags.onlyFor(request.flag, request.companyIds);
+        else featureFlags[request.state](request.flag);
+        return c.json({ ok: true as const });
+      }),
+    ),
+  );

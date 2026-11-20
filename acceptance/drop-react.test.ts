@@ -169,7 +169,7 @@ describe("Foldkit の lint は test の file にも効く", () => {
   });
 });
 
-const BASELINE_WEB_JS_BYTES = 840_000;
+const BASELINE_WEB_JS_BYTES = 841_000;
 
 const jsBytesUnder = (dir: string): number =>
   readdirSync(dir, { recursive: true, encoding: "utf8" })
@@ -177,7 +177,7 @@ const jsBytesUnder = (dir: string): number =>
     .reduce((total, path) => total + statSync(join(dir, path)).size, 0);
 
 test(
-  "AC-009: 本番の web を build した JS の合計は 840,000 B を超えない (移行前の 832,129 B に、#464 の form の検証の分を足した上限)",
+  "AC-009: 本番の web を build した JS の合計は 841,000 B を超えない (移行前の 832,129 B に、#464 の form の検証と #504 のフィーチャーフラグの契約の分を足した上限)",
   () => {
     const outDir = mkdtempSync(join(tmpdir(), "acceptance-396-web-dist-"));
     try {

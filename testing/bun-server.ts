@@ -2,6 +2,7 @@ import type { Layer } from "effect";
 import type { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 import type { EmailSender } from "../src/email/ports";
+import type { FeatureFlags } from "../src/feature-flags";
 import { initBunSentry } from "./sentry-bun";
 import { buildApp } from "../src/app";
 import { boot } from "../src/boot";
@@ -15,11 +16,12 @@ const WEB_DIST = "./web/dist";
 export const startBunServer = (options: {
   emailSender?: Layer.Layer<EmailSender>;
   ttlStore: TtlStoreBackend;
+  featureFlags: Layer.Layer<FeatureFlags>;
   proxyTrust: Exclude<ProxyTrust, { _tag: "Unconfigured" }>;
   extendBeforeStatic?: (app: Hono) => void;
 }) => {
   initBunSentry();
-  boot(options.ttlStore, options.emailSender);
+  boot(options.ttlStore, options.featureFlags, options.emailSender);
 
   const spaFallback = buildSpaFallbackHandler(`${WEB_DIST}/index.html`);
 

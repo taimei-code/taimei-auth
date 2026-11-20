@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page } from "@playwright/test";
+import { type APIRequestContext, expect, type Page } from "@playwright/test";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { sentLinkIn } from "../testing/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
@@ -14,6 +14,19 @@ export const BASE_URL = "http://localhost:3110";
 export const SWITCH_EMAIL = "e2e-switch@example.com";
 
 export const MFA_EMAIL = "e2e-mfa@example.com";
+
+export const featureFlags = (request: APIRequestContext) => {
+  const send = async (data: { flag: string; state: string; companyIds?: readonly string[] }) => {
+    const response = await request.post(`${TESTING_PATH}/feature-flags`, { data });
+    expect(response.status()).toBe(200);
+  };
+  return {
+    on: (flag: string) => send({ flag, state: "on" }),
+    off: (flag: string) => send({ flag, state: "off" }),
+    onlyFor: (flag: string, companyIds: readonly string[]) =>
+      send({ flag, state: "onlyFor", companyIds }),
+  };
+};
 
 export const mfaRow = (page: Page) =>
   page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });

@@ -46,6 +46,38 @@ const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
 
 const CASES: readonly Case[] = [
   {
+    name: "Flagship の binding の評価を src/feature-flags.ts の外から呼べない",
+    path: "src/passkey/FlagshipProbe.ts",
+    source:
+      'export const on = (flags: { getBooleanDetails: (key: string, fallback: boolean) => Promise<unknown> }) => flags.getBooleanDetails("example", false);',
+    expectedRules: ["taimei(flagship-binding-only-in-feature-flags)"],
+  },
+  {
+    name: "フィーチャーフラグの port を機能ごとの判定の file の外で使えない",
+    path: "src/passkey/FeatureFlagsProbe.ts",
+    source: 'import { FeatureFlags } from "../feature-flags";\nexport const port = FeatureFlags;',
+    expectedRules: ["taimei(feature-flags-port-only-in-flag-decisions)"],
+  },
+  {
+    name: "機能の code は、enabled に flag の名前を渡して評価できる",
+    path: "src/company/availability.ts",
+    source:
+      'import { enabled } from "../feature-flags";\nexport const open = () => enabled("example");',
+    expectedRules: [],
+  },
+  {
+    name: "e2e の spec はフィーチャーフラグの試験 API を直接呼べない",
+    path: "e2e/FlagSwitchProbe.e2e.ts",
+    source: "export const path = `/testing/v1/feature-flags`;",
+    expectedRules: ["taimei(feature-flag-switch-only-in-helpers)"],
+  },
+  {
+    name: "handler は機能のフィーチャーフラグの判定を import できない",
+    path: "src/handlers/OtherFlagDecisionProbe.ts",
+    source: 'import { open } from "../company/availability";\nexport const decided = open;',
+    expectedRules: ["taimei(no-flag-decision-in-handlers-rpc-web)"],
+  },
+  {
     name: "page は dialog を描くかどうかを dialog.isOpen で決められない",
     path: "web/src/account/pages/DialogVisibleProbe.ts",
     source:
@@ -919,11 +951,14 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
   };
   lintedFileCounts.push({ written: group.length + 1, linted: number_of_files });
   for (const testCase of group) {
-    rulesByCase.set(testCase, [
-      ...new Set(
-        diagnostics.filter(({ filename }) => filename === testCase.path).map(({ code }) => code),
-      ),
-    ]);
+    rulesByCase.set(
+      testCase,
+      [
+        ...new Set(
+          diagnostics.filter(({ filename }) => filename === testCase.path).map(({ code }) => code),
+        ),
+      ].toSorted(),
+    );
   }
 };
 
@@ -938,7 +973,7 @@ afterAll(() => {
 
 describe("lint の rule は、oxlint で決めた path に効く", () => {
   test.each([...CASES, ...TYPE_AWARE_CASES])("$name", (testCase: Case) => {
-    expect(rulesByCase.get(testCase)).toEqual([...testCase.expectedRules]);
+    expect(rulesByCase.get(testCase)).toEqual([...testCase.expectedRules].toSorted());
   });
 
   test("fixture の file はすべて oxlint に読まれるので、指摘の無い case は読み飛ばしで通らない", () => {

@@ -3,7 +3,12 @@ import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-ap
 import { Authenticated } from "../account/actor-contract";
 import { NotFound, RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
-import { PasskeyAlreadyRegistered, PasskeyRejected, TotpRequired } from "./errors";
+import {
+  PasskeyAlreadyRegistered,
+  PasskeyRegistrationUnavailable,
+  PasskeyRejected,
+  TotpRequired,
+} from "./errors";
 
 const PasskeyList = Schema.Struct({
   passkeys: Schema.Array(
@@ -13,6 +18,7 @@ const PasskeyList = Schema.Struct({
       last_used_at: Schema.NullOr(Schema.String),
     }),
   ),
+  can_register: Schema.Boolean,
 });
 
 const Transports = Schema.optional(Schema.mutable(Schema.Array(Schema.String)));
@@ -99,12 +105,12 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
     HttpApiEndpoint.get("list", "/api/account/passkeys", { success: PasskeyList }),
     HttpApiEndpoint.post("registrationOptions", "/api/account/passkeys/registration-options", {
       success: RegistrationOptions,
-      error: [TotpRequired],
+      error: [TotpRequired, PasskeyRegistrationUnavailable],
     }),
     HttpApiEndpoint.post("register", "/api/account/passkeys", {
       payload: RegistrationResponse,
       success: Ok,
-      error: [PasskeyRejected, PasskeyAlreadyRegistered],
+      error: [PasskeyRejected, PasskeyAlreadyRegistered, PasskeyRegistrationUnavailable],
     }),
     HttpApiEndpoint.post("delete", "/api/account/passkeys/:passkeyId/delete", {
       params: { passkeyId: Schema.String },
@@ -143,6 +149,7 @@ export class PasskeySignInGroup extends HttpApiGroup.make("passkeySignIn")
         ),
       }),
       success: AuthenticationOptions,
+      error: [PasskeyRejected],
     }),
     HttpApiEndpoint.post("verify", "/api/passkey/sign-in/verify", {
       payload: AuthenticationResponse,
@@ -163,3 +170,9 @@ export type PasskeySignInEndpointsLackingIpBudget = [PasskeySignInEndpoint] exte
         : Endpoint
       : never
     : never;
+
+export class PasskeySignInEntryGroup extends HttpApiGroup.make("passkeySignInEntry").add(
+  HttpApiEndpoint.get("availability", "/api/passkey/sign-in/availability", {
+    success: Schema.Struct({ available: Schema.Boolean }),
+  }),
+) {}

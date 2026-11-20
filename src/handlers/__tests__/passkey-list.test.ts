@@ -43,6 +43,7 @@ describe("パスキーの一覧の API の応答", () => {
         },
         { id: "pk-unused", created_at: "2026-11-01T00:00:00.000Z", last_used_at: null },
       ],
+      can_register: true,
     });
   });
 

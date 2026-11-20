@@ -4,6 +4,7 @@ import { postgresTtlStore } from "../db/testing/ttl-store";
 import { proxyTrustFromEnv } from "../src/request-context";
 import { mergeSessionIndex } from "../src/session-index";
 import { startBunServer } from "./bun-server";
+import { fakeFlagship } from "./feature-flags";
 import {
   usesNonProductionRedirectHosts,
   REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER,
@@ -40,9 +41,15 @@ const database = requireLocalDatabase(process.env.DATABASE_URL);
 await prepareNonProductionTables(database);
 const ttlStore = await postgresTtlStore(database, mergeSessionIndex);
 
+const featureFlags = fakeFlagship();
+
 export default startBunServer({
   emailSender: recordingEmail.sender,
   ttlStore,
+  featureFlags: featureFlags.layer,
   proxyTrust,
-  extendBeforeStatic: mountNonProductionRoutes(recordingEmail),
+  extendBeforeStatic: mountNonProductionRoutes({
+    recordsEmailTo: recordingEmail.recordsEmailTo,
+    featureFlags,
+  }),
 }).server;

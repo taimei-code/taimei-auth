@@ -26,6 +26,16 @@ export const LoginLinkRequest = Schema.Struct({
   returnTo: TrustedReturnTo,
 });
 
+export const FeatureFlagSwitchRequest = Schema.Union([
+  Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("on") }),
+  Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("off") }),
+  Schema.Struct({
+    flag: Schema.NonEmptyString,
+    state: Schema.Literal("onlyFor"),
+    companyIds: Schema.Array(Schema.String),
+  }),
+]);
+
 export const SetCurrentCompanyRequest = Schema.Struct({
   userId: Schema.String,
   companyId: Schema.String,

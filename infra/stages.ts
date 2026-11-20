@@ -1,3 +1,4 @@
+import { FEATURE_FLAGS_BINDING } from "../src/feature-flags";
 import { SECRET_BINDING_NAMES, type SecretBindingName } from "../src/secret-bindings";
 
 export type WranglerVarKey =
@@ -114,6 +115,7 @@ export const expectedBindings = (stageName: StageName): WorkerBinding[] => {
     { name: "ASSETS", type: "assets" },
     { name: "CF_VERSION_METADATA", type: "version_metadata" },
     { name: "HYPERDRIVE", type: "hyperdrive" },
+    { name: FEATURE_FLAGS_BINDING, type: "flagship" },
     ...Object.keys(DURABLE_OBJECT_BINDINGS).map((name) => ({
       name,
       type: "durable_object_namespace",

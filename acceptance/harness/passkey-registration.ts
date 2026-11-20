@@ -3,6 +3,7 @@ import { Effect, Layer } from "effect";
 import { parseClientFacingError } from "../../src/handlers/client-facing-error";
 import { MemoryKvStore } from "../../src/kv-store.memory";
 import { memoryBackend } from "../../src/ttl-store";
+import { fakeFlagship } from "../../testing/feature-flags";
 import { ttlStoreLayer } from "../../src/ttl-store-service";
 
 type CborValue = number | string | Uint8Array | ReadonlyMap<CborValue, CborValue>;
@@ -199,6 +200,8 @@ export type VerificationOutcome =
     }
   | { readonly rejected: { readonly tag: string; readonly status: number } };
 
+const passkeyOpen = () => fakeFlagship().layer;
+
 export const verifyRegistrationResponseOf = async (
   response: ReturnType<typeof signedRegistration>["response"],
   matchesChallenge: (challenge: string) => boolean,
@@ -223,7 +226,7 @@ export const verifyRegistrationResponseOf = async (
           rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
         });
       }),
-      Effect.provide(storeHolding(matchesChallenge, ENTRUSTED_TO)),
+      Effect.provide(Layer.merge(storeHolding(matchesChallenge, ENTRUSTED_TO), passkeyOpen())),
     ),
   );
 };
@@ -232,7 +235,9 @@ export const registrationOptionsFor = async (user: { readonly userId: string; re
   const { registrationOptions } = await import("../../src/passkey/webauthn");
   const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
   return Effect.runPromise(
-    registrationOptions(user).pipe(Effect.provide(Layer.merge(PasskeyRepoLive, freshStore()))),
+    registrationOptions(user).pipe(
+      Effect.provide(Layer.mergeAll(PasskeyRepoLive, freshStore(), passkeyOpen())),
+    ),
   );
 };
 
@@ -304,7 +309,9 @@ export const verifyAuthenticationResponseOf = async (
           rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
         });
       }),
-      Effect.provide(Layer.merge(PasskeyRepoLive, storeHolding(matchesChallenge, "/account"))),
+      Effect.provide(
+        Layer.mergeAll(PasskeyRepoLive, storeHolding(matchesChallenge, "/account"), passkeyOpen()),
+      ),
     ),
   );
 };
@@ -312,7 +319,9 @@ export const verifyAuthenticationResponseOf = async (
 export const authenticationOptionsFor = async () => {
   const { authenticationOptions } = await import("../../src/passkey/webauthn");
   return Effect.runPromise(
-    authenticationOptions({ redirectUrl: undefined }).pipe(Effect.provide(freshStore())),
+    authenticationOptions({ redirectUrl: undefined }).pipe(
+      Effect.provide(Layer.merge(freshStore(), passkeyOpen())),
+    ),
   );
 };
 

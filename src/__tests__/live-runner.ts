@@ -6,11 +6,12 @@ import { type AppServices, appLayer } from "../runtime";
 import { Transaction, TransactionLive } from "../transaction";
 import { TestDb, testDbLayer, testDbMigrations } from "./test-db";
 import { testTtlStore } from "./test-ttl-store";
+import { fakeFlagship } from "../../testing/feature-flags";
 import { recordingEmailSender } from "../../testing/sent-links";
 
 export type TestServices = AppServices | TestDb;
 
-const testAppLayer = appLayer(testTtlStore, recordingEmailSender);
+const testAppLayer = appLayer(testTtlStore, fakeFlagship().layer, recordingEmailSender);
 
 const MIGRATE_COMMANDS = "bun run db:migrate && bun run db:migrate-manual";
 

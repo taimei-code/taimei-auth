@@ -9,3 +9,9 @@ export class PasskeyAlreadyRegistered extends failure<PasskeyAlreadyRegistered>(
   {},
   409,
 ) {}
+
+export class PasskeyRegistrationUnavailable extends failure<PasskeyRegistrationUnavailable>()(
+  "PasskeyRegistrationUnavailable",
+  {},
+  403,
+) {}
