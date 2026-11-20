@@ -146,6 +146,11 @@ const MFA_FIXTURE: FixtureSpec = {
   members: [{ suffix: "mfa", name: "E2E Mfa", role: "OWNER" }],
 };
 
+const PASSKEY_FIXTURE: FixtureSpec = {
+  company: "passkey",
+  members: [{ suffix: "passkey", name: "E2E Passkey", role: "OWNER" }],
+};
+
 const INVITATION_TOKEN = "e2e-invitation-token";
 
 async function ensureInvitationFixture(): Promise<void> {
@@ -182,6 +187,7 @@ export const consumableFixtures: Record<ConsumableFixture, () => Promise<void>> 
   "delete-multi": ensureDeleteMultiFixture,
   invitation: ensureInvitationFixture,
   mfa: () => ensureFixture(MFA_FIXTURE),
+  passkey: () => ensureFixture(PASSKEY_FIXTURE),
   switch: ensureSwitchFixture,
 };
 
@@ -198,6 +204,7 @@ export async function resetAllFixtures(): Promise<void> {
   await ensureFixture(WITHDRAW_FIXTURE);
   await ensureDeleteMultiFixture();
   await ensureFixture(MFA_FIXTURE);
+  await ensureFixture(PASSKEY_FIXTURE);
   await ensureSwitchFixture();
   await ensureInvitationFixture();
 }

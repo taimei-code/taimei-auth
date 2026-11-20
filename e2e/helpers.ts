@@ -15,6 +15,30 @@ export const SWITCH_EMAIL = "e2e-switch@example.com";
 
 export const MFA_EMAIL = "e2e-mfa@example.com";
 
+export const PASSKEY_EMAIL = "e2e-passkey@example.com";
+
+export const addVirtualAuthenticator = async (
+  page: Page,
+  { userVerified }: { userVerified: boolean } = { userVerified: true },
+) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: {
+      protocol: "ctap2",
+      transport: "internal",
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: userVerified,
+      automaticPresenceSimulation: true,
+    },
+  });
+  return {
+    verifyUser: () =>
+      cdp.send("WebAuthn.setUserVerified", { authenticatorId, isUserVerified: true }),
+  };
+};
+
 export const featureFlags = (request: APIRequestContext) => {
   const send = async (data: { flag: string; state: string; companyIds?: readonly string[] }) => {
     const response = await request.post(`${TESTING_PATH}/feature-flags`, { data });

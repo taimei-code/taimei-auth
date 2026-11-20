@@ -79,10 +79,11 @@ const requestOfEnrollMfa = (commands: ReadonlyArray<{ name: string; args?: unkno
 const enrollmentDialogShowingSecret = (): Model => {
   const loaded = update(
     init(1).model,
-    Message.SucceededLoadMfaStatus({
+    Message.SucceededLoadSecuritySettings({
       visit: 1,
       refreshNumber: 0,
       mfa: { _tag: "Disabled" },
+      passkeyList: { _tag: "Hidden" },
       maybeTexts: Option.none(),
     }),
   ).model;

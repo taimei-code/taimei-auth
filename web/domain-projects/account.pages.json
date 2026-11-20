@@ -17,6 +17,9 @@
       "path": "./mfa.json"
     },
     {
+      "path": "./passkey.json"
+    },
+    {
       "path": "./shared.json"
     },
     {

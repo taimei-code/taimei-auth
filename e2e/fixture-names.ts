@@ -4,6 +4,7 @@ export const CONSUMABLE_FIXTURES = [
   "delete-multi",
   "invitation",
   "mfa",
+  "passkey",
   "switch",
   "withdraw",
 ] as const;

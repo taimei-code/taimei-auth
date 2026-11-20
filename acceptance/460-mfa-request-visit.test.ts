@@ -40,6 +40,9 @@ const clientWith = (mfaEnabled: boolean) => ({
     memberships: () =>
       Effect.succeed({ current_company_id: COMPANY.company_id, memberships: [COMPANY] }),
   },
+  passkey: {
+    list: () => Effect.succeed({ passkeys: [], can_register: false }),
+  },
   mfa: {
     status: () =>
       Effect.succeed(

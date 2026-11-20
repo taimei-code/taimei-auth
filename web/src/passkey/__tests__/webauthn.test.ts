@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { RegistrationOptions } from "@core/passkey/passkey-contract";
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 
 import { createPasskey } from "../webauthn";
 
@@ -106,5 +106,57 @@ describe("browser の作成の API の結果を写す", () => {
 
   test("WebAuthn の API の無い browser で呼ぶと、取り消しでなく失敗になる", async () => {
     expect(await failureTagOf()).toBe("PasskeyCreationFailed");
+  });
+});
+
+const FIVE_MINUTES_MS = 300_000;
+const NANOS_PER_MILLI = 1_000_000n;
+
+const clockReading = (...readingsMs: ReadonlyArray<number>): Clock.Clock => {
+  const remaining = readingsMs.map((ms) => BigInt(ms) * NANOS_PER_MILLI);
+  const next = () => remaining.shift() ?? 0n;
+  return {
+    currentTimeMillisUnsafe: () => 0,
+    currentTimeMillis: Effect.succeed(0),
+    currentTimeNanosUnsafe: () => 0n,
+    currentTimeNanos: Effect.succeed(0n),
+    monotonicTimeNanosUnsafe: next,
+    monotonicTimeNanos: Effect.sync(next),
+    sleep: () => Effect.void,
+  };
+};
+
+const outcomeAfter = (options: RegistrationOptions, elapsedMs: number) => {
+  installBrowser(() => Promise.reject(new DOMException("dismissed", "NotAllowedError")));
+  return Effect.runPromise(
+    createPasskey(options).pipe(
+      Effect.match({
+        onFailure: (failure) => failure._tag,
+        onSuccess: (creation) => creation._tag,
+      }),
+      Effect.provideService(Clock.Clock, clockReading(0, elapsedMs)),
+    ),
+  );
+};
+
+describe("browser の dialog が NotAllowedError で閉じた時に、取り消しと時間切れを経過時間で分ける", () => {
+  test("options の timeout を過ぎてから閉じると、時間切れとしてやり直しを促す失敗 (PasskeyRejected) になる", async () => {
+    expect(await outcomeAfter({ ...OPTIONS, timeout: FIVE_MINUTES_MS }, FIVE_MINUTES_MS)).toBe(
+      "PasskeyRejected",
+    );
+  });
+
+  test("browser の timer が 1 秒早く切れても、時間切れとして扱う", async () => {
+    expect(
+      await outcomeAfter({ ...OPTIONS, timeout: FIVE_MINUTES_MS }, FIVE_MINUTES_MS - 1_000),
+    ).toBe("PasskeyRejected");
+  });
+
+  test("timeout より前に閉じると、誤りを出さない取り消しになる", async () => {
+    expect(await outcomeAfter({ ...OPTIONS, timeout: FIVE_MINUTES_MS }, 10_000)).toBe("Cancelled");
+  });
+
+  test("timeout の無い options では、どれだけ経っても取り消しになる", async () => {
+    expect(await outcomeAfter(OPTIONS, FIVE_MINUTES_MS * 10)).toBe("Cancelled");
   });
 });

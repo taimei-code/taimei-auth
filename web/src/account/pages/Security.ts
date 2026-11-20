@@ -8,8 +8,10 @@ import { modifyFields } from "foldkit/struct";
 import { isDialogVisible } from "../../shared/ui/dialog-view";
 import * as MfaDisabling from "../../mfa/mfa-disabling";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import * as PasskeySettings from "../../passkey/passkey-settings";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { alertTextView } from "../../shared/ui/alert-text-view";
+import { settingRowView } from "../../shared/ui/setting-row-view";
 import { badgeVariants } from "../../shared/ui/class-names";
 import { listLoadingStatusView } from "../../shared/ui/icon-view";
 import { NoticeTone, ReloadTexts, staleNoticeOf } from "../../shared/ui/toast-view";
@@ -29,19 +31,22 @@ export const Model = Schema.Struct({
   refreshNumber: Schema.Int,
   enrollment: MfaEnrollment.Model,
   disabling: MfaDisabling.Model,
+  passkeyList: PasskeySettings.PasskeyList,
+  passkeySettings: PasskeySettings.Model,
 });
 export type Model = typeof Model.Type;
 
 const LoadFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
 
 export const Message = defineMessageUnion({
-  SucceededLoadMfaStatus: {
+  SucceededLoadSecuritySettings: {
     visit: Schema.Int,
     refreshNumber: Schema.Int,
     mfa: MfaState,
+    passkeyList: PasskeySettings.PasskeyList,
     maybeTexts: Schema.Option(ReloadTexts),
   },
-  FailedLoadMfaStatus: {
+  FailedLoadSecuritySettings: {
     visit: Schema.Int,
     refreshNumber: Schema.Int,
     failure: LoadFailure,
@@ -49,6 +54,7 @@ export const Message = defineMessageUnion({
   },
   GotMfaEnrollmentMessage: { message: MfaEnrollment.Message },
   GotMfaDisablingMessage: { message: MfaDisabling.Message },
+  GotPasskeySettingsMessage: { message: PasskeySettings.Message },
 });
 export type Message = typeof Message.Type;
 
@@ -70,9 +76,14 @@ const AFTER_DISABLING: ReloadTexts = {
   actionText: "多要素認証 (MFA) を無効にしました",
 };
 
+const AFTER_REGISTERING_PASSKEY: ReloadTexts = {
+  doneText: "パスキーを登録しました。",
+  actionText: "パスキーを登録しました",
+};
+
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
 
-const failedLoadMfaStatus =
+const failedLoadSecuritySettings =
   (
     visit: number,
     refreshNumber: number,
@@ -80,32 +91,41 @@ const failedLoadMfaStatus =
     failure: typeof LoadFailure.Type,
   ) =>
   () =>
-    Effect.succeed(Message.FailedLoadMfaStatus({ visit, refreshNumber, failure, maybeTexts }));
+    Effect.succeed(
+      Message.FailedLoadSecuritySettings({ visit, refreshNumber, failure, maybeTexts }),
+    );
 
-export const LoadMfaStatus = Command.define("LoadMfaStatus", {
+export const LoadSecuritySettings = Command.define("LoadSecuritySettings", {
   args: {
     visit: Schema.Int,
     refreshNumber: Schema.Int,
     maybeTexts: Schema.Option(ReloadTexts),
   },
-  messages: [Message.SucceededLoadMfaStatus, Message.FailedLoadMfaStatus],
+  messages: [Message.SucceededLoadSecuritySettings, Message.FailedLoadSecuritySettings],
   execute: ({ visit, refreshNumber, maybeTexts }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
-      const status = yield* client.mfa.status();
-      return Message.SucceededLoadMfaStatus({
+      const { status, passkeyList } = yield* Effect.all(
+        {
+          status: client.mfa.status(),
+          passkeyList: PasskeySettings.loadPasskeyList(client.passkey),
+        },
+        { concurrency: "unbounded" },
+      );
+      return Message.SucceededLoadSecuritySettings({
         visit,
         refreshNumber,
         maybeTexts,
+        passkeyList,
         mfa: status.enabled
           ? MfaState.Enabled({ recoveryCodesRemaining: status.recovery_codes_remaining })
           : MfaState.Disabled(),
       });
     }).pipe(
       Effect.catchTags({
-        Unauthorized: failedLoadMfaStatus(visit, refreshNumber, maybeTexts, "Unauthorized"),
-        HttpClientError: failedLoadMfaStatus(visit, refreshNumber, maybeTexts, "Unexpected"),
-        SchemaError: failedLoadMfaStatus(visit, refreshNumber, maybeTexts, "Unexpected"),
+        Unauthorized: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unauthorized"),
+        HttpClientError: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unexpected"),
+        SchemaError: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unexpected"),
       }),
     ),
 });
@@ -117,21 +137,23 @@ export const init = (visit: number): Update.Return<Model, Message, SpaHttpClient
     refreshNumber: 0,
     enrollment: MfaEnrollment.init(visit),
     disabling: MfaDisabling.init(visit),
+    passkeyList: PasskeySettings.PasskeyList.Hidden(),
+    passkeySettings: PasskeySettings.init(visit),
   },
-  commands: [LoadMfaStatus({ visit, refreshNumber: 0, maybeTexts: Option.none() })],
+  commands: [LoadSecuritySettings({ visit, refreshNumber: 0, maybeTexts: Option.none() })],
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 type Step = Update.StepWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
-const reloadMfaStatus =
+const reloadSecuritySettings =
   (texts: ReloadTexts): Step =>
   (model) => {
     const requested = modifyFields(model, { refreshNumber: Number.increment });
     return {
       model: requested,
       commands: [
-        LoadMfaStatus({
+        LoadSecuritySettings({
           visit: requested.visit,
           refreshNumber: requested.refreshNumber,
           maybeTexts: Option.some(texts),
@@ -166,6 +188,10 @@ const failLoad = (
         }),
       });
 
+const forwarding =
+  (outMessage: OutMessage): Step =>
+  (model) => ({ model, outMessage });
+
 const foldMfaEnrollment = Update.foldChild({
   update: MfaEnrollment.update,
   read: (model: Model) => Option.some(model.enrollment),
@@ -173,8 +199,8 @@ const foldMfaEnrollment = Update.foldChild({
     modifyFields(model, { enrollment: () => nextEnrollment }),
   toParentMessage: (message: MfaEnrollment.Message) => Message.GotMfaEnrollmentMessage({ message }),
   foldOutMessage: MfaEnrollment.OutMessage.match<Step>({
-    ClosedAfterEnabling: () => reloadMfaStatus(AFTER_ENABLING),
-    RequiredSignIn: () => (model) => ({ model, outMessage: OutMessage.RequiredSignIn() }),
+    ClosedAfterEnabling: () => reloadSecuritySettings(AFTER_ENABLING),
+    RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
   }),
 });
 
@@ -185,16 +211,32 @@ const foldMfaDisabling = Update.foldChild({
     modifyFields(model, { disabling: () => nextDisabling }),
   toParentMessage: (message: MfaDisabling.Message) => Message.GotMfaDisablingMessage({ message }),
   foldOutMessage: MfaDisabling.OutMessage.match<Step>({
-    Disabled: () => reloadMfaStatus(AFTER_DISABLING),
-    RequiredSignIn: () => (model) => ({ model, outMessage: OutMessage.RequiredSignIn() }),
+    Disabled: () => reloadSecuritySettings(AFTER_DISABLING),
+    RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
+  }),
+});
+
+const toPasskeySettingsMessage = (message: PasskeySettings.Message) =>
+  Message.GotPasskeySettingsMessage({ message });
+
+const foldPasskeySettings = Update.foldChild({
+  update: PasskeySettings.update,
+  read: (model: Model) => Option.some(model.passkeySettings),
+  write: (model: Model, nextPasskeys: PasskeySettings.Model) =>
+    modifyFields(model, { passkeySettings: () => nextPasskeys }),
+  toParentMessage: toPasskeySettingsMessage,
+  foldOutMessage: PasskeySettings.OutMessage.match<Step>({
+    Registered: () => reloadSecuritySettings(AFTER_REGISTERING_PASSKEY),
+    Notified: (notice) => forwarding(OutMessage.Notified(notice)),
+    RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
   }),
 });
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    SucceededLoadMfaStatus: ({ visit, refreshNumber, mfa, maybeTexts }) =>
+    SucceededLoadSecuritySettings: ({ visit, refreshNumber, mfa, passkeyList, maybeTexts }) =>
       forThisRefresh(model, visit, refreshNumber, () => {
-        const loaded = modifyFields(model, { mfa: () => mfa });
+        const loaded = modifyFields(model, { mfa: () => mfa, passkeyList: () => passkeyList });
         return Option.match(maybeTexts, {
           onNone: () => ({ model: loaded }),
           onSome: ({ doneText }) => ({
@@ -203,12 +245,14 @@ export const update = (model: Model, message: Message) =>
           }),
         });
       }),
-    FailedLoadMfaStatus: ({ visit, refreshNumber, failure, maybeTexts }) =>
+    FailedLoadSecuritySettings: ({ visit, refreshNumber, failure, maybeTexts }) =>
       forThisRefresh(model, visit, refreshNumber, () => failLoad(model, failure, maybeTexts)),
     GotMfaEnrollmentMessage: ({ message: enrollmentMessage }) =>
       foldMfaEnrollment(model, enrollmentMessage),
     GotMfaDisablingMessage: ({ message: disablingMessage }) =>
       foldMfaDisabling(model, disablingMessage),
+    GotPasskeySettingsMessage: ({ message: passkeySettingsMessage }) =>
+      foldPasskeySettings(model, passkeySettingsMessage),
   });
 
 const describeRecoveryCodeShortage = (remaining: number): string =>
@@ -243,66 +287,49 @@ const disablingView = (model: Model, h: HtmlBuilder<Message>): Html =>
   });
 
 const mfaRowView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<Message>): Html =>
-  h.li(
-    [h.Class("flex items-start justify-between gap-4 py-5")],
-    [
-      h.div(
-        [],
-        [
-          h.p([h.Class("font-medium")], ["多要素認証 (MFA)"]),
-          h.p(
-            [h.Class("mt-1 text-sm text-muted-foreground")],
-            ["認証アプリ (TOTP) を登録すると、ログイン時に確認コードの入力を求めます"],
-          ),
-          ...MfaState.matchOrElse(
-            registration,
-            {
-              Enabled: ({ recoveryCodesRemaining }) =>
-                recoveryCodesRemainingView(recoveryCodesRemaining, h),
-            },
-            () => [],
-          ),
-        ],
+  settingRowView(
+    {
+      title: "多要素認証 (MFA)",
+      description: "認証アプリ (TOTP) を登録すると、ログイン時に確認コードの入力を求めます",
+      details: MfaState.matchOrElse(
+        registration,
+        {
+          Enabled: ({ recoveryCodesRemaining }) =>
+            recoveryCodesRemainingView(recoveryCodesRemaining, h),
+        },
+        () => [],
       ),
-      h.div(
-        [h.Class("flex shrink-0 items-center gap-3")],
-        MfaState.matchOrElse(
-          registration,
-          {
-            Enabled: () => [
-              badgeView("有効", "default", h),
-              disablingView(model, h),
-              ...(isDialogVisible(model.enrollment.dialog) ? [enrollmentView(model, h)] : []),
-            ],
-          },
-          () => [badgeView("無効", "secondary", h), enrollmentView(model, h)],
-        ),
+      actions: MfaState.matchOrElse(
+        registration,
+        {
+          Enabled: () => [
+            badgeView("有効", "default", h),
+            disablingView(model, h),
+            ...(isDialogVisible(model.enrollment.dialog) ? [enrollmentView(model, h)] : []),
+          ],
+        },
+        () => [badgeView("無効", "secondary", h), enrollmentView(model, h)],
       ),
-    ],
+    },
+    h,
   );
 
-const passkeyRowView = (h: HtmlBuilder<Message>): Html =>
-  h.li(
-    [h.Class("flex items-start justify-between gap-4 py-5")],
-    [
-      h.div(
-        [],
-        [
-          h.p([h.Class("font-medium")], ["Passkey"]),
-          h.p(
-            [h.Class("mt-1 text-sm text-muted-foreground")],
-            ["指紋・顔認証・PIN でログインできます"],
-          ),
-        ],
-      ),
-      badgeView("実装予定", "secondary", h),
-    ],
-  );
+const passkeySettingsView = (model: Model, mfaEnabled: boolean, h: HtmlBuilder<Message>): Html =>
+  h.submodel({
+    slotId: "passkey-settings",
+    view: PasskeySettings.view,
+    model: model.passkeySettings,
+    viewInputs: { list: model.passkeyList, mfaEnabled },
+    toParentMessage: toPasskeySettingsMessage,
+  });
 
 const mfaListView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<Message>): Html =>
   h.ul(
     [h.Role("list"), h.Class("divide-y")],
-    [mfaRowView(model, registration, h), passkeyRowView(h)],
+    [
+      mfaRowView(model, registration, h),
+      passkeySettingsView(model, MfaState.guards.Enabled(registration), h),
+    ],
   );
 
 const mfaStateView = (model: Model, h: HtmlBuilder<Message>): Html =>

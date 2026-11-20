@@ -13,7 +13,7 @@ type PasskeyRegistration = Data.TaggedEnum<{
   Registered: {};
   Cancelled: {};
 }>;
-const PasskeyRegistration = Data.taggedEnum<PasskeyRegistration>();
+export const PasskeyRegistration = Data.taggedEnum<PasskeyRegistration>();
 
 export const registerPasskey = (
   passkeyApi: PasskeyApi,

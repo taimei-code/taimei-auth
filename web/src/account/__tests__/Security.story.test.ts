@@ -4,11 +4,19 @@ import { Command, expectOutMessage, given, message, model, story } from "foldkit
 
 import * as MfaDisabling from "../../mfa/mfa-disabling";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import * as PasskeySettings from "../../passkey/passkey-settings";
 import {
   FIRST_DIALOG_CLOSING_MESSAGES,
   FIRST_DIALOG_OPENING,
 } from "../../shared/__tests__/dialog-resolvers";
-import { init, LoadMfaStatus, Message, type Model, OutMessage, update } from "../pages/Security";
+import {
+  init,
+  LoadSecuritySettings,
+  Message,
+  type Model,
+  OutMessage,
+  update,
+} from "../pages/Security";
 
 const VISIT = 5;
 
@@ -27,7 +35,8 @@ const disablingMessage = (message: MfaDisabling.Message) =>
 const disabled = (): Model =>
   update(
     init(VISIT).model,
-    Message.SucceededLoadMfaStatus({
+    Message.SucceededLoadSecuritySettings({
+      passkeyList: { _tag: "Hidden" },
       visit: VISIT,
       refreshNumber: 0,
       mfa: { _tag: "Disabled" },
@@ -76,16 +85,18 @@ const disablingDialogClosed = disablingMessage(
   MfaDisabling.Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
 );
 
-const loadsStatus = (current: Model, next: Message) =>
-  (update(current, next).commands ?? []).some((command) => command.name === LoadMfaStatus.name);
+const loadsSettings = (current: Model, next: Message) =>
+  (update(current, next).commands ?? []).some(
+    (command) => command.name === LoadSecuritySettings.name,
+  );
 
 describe("セキュリティの画面を開く", () => {
   test("開くと MFA の状態を読み、失敗すると取得できなかった状態にする", () => {
-    expect(init(VISIT).commands).toMatchObject([{ name: LoadMfaStatus.name }]);
+    expect(init(VISIT).commands).toMatchObject([{ name: LoadSecuritySettings.name }]);
     expect(
       update(
         init(VISIT).model,
-        Message.FailedLoadMfaStatus({
+        Message.FailedLoadSecuritySettings({
           visit: VISIT,
           refreshNumber: 0,
           failure: "Unexpected",
@@ -134,22 +145,23 @@ describe("MFA の有効化", () => {
     const codes = showingRecoveryCodes();
     expect(codes.enrollment.step._tag).toBe("RecoveryCodes");
     expect(
-      loadsStatus(codes, enrollmentMessage(MfaEnrollment.Message.UpdatedCode({ value: "1" }))),
+      loadsSettings(codes, enrollmentMessage(MfaEnrollment.Message.UpdatedCode({ value: "1" }))),
     ).toBe(false);
     const closing = enrollmentMessage(MfaEnrollment.Message.ClickedCloseAfterSavingCodes());
-    expect(loadsStatus(codes, closing)).toBe(false);
+    expect(loadsSettings(codes, closing)).toBe(false);
     const closed = update(
       send(codes, closing, enrollmentDialogPaintedClosing),
       enrollmentDialogClosed,
     );
-    expect((closed.commands ?? []).some((command) => command.name === LoadMfaStatus.name)).toBe(
-      true,
-    );
+    expect(
+      (closed.commands ?? []).some((command) => command.name === LoadSecuritySettings.name),
+    ).toBe(true);
     story(
       update,
       given(closed.model),
       message(
-        Message.SucceededLoadMfaStatus({
+        Message.SucceededLoadSecuritySettings({
+          passkeyList: { _tag: "Hidden" },
           visit: VISIT,
           refreshNumber: 1,
           mfa: { _tag: "Enabled", recoveryCodesRemaining: 2 },
@@ -226,9 +238,9 @@ describe("MFA の無効化", () => {
     const succeeded = disablingMessage(
       MfaDisabling.Message.SucceededDisableMfa({ visit: VISIT, requestNumber: 1 }),
     );
-    expect(loadsStatus(first.model, succeeded)).toBe(false);
+    expect(loadsSettings(first.model, succeeded)).toBe(false);
     expect(
-      loadsStatus(
+      loadsSettings(
         send(first.model, succeeded, disablingDialogPaintedClosing),
         disablingDialogClosed,
       ),
@@ -238,7 +250,8 @@ describe("MFA の無効化", () => {
   test("古い状態の読み直しの結果は、新しい読み直しの後の状態を戻さない", () => {
     const enabled = update(
       disabled(),
-      Message.SucceededLoadMfaStatus({
+      Message.SucceededLoadSecuritySettings({
+        passkeyList: { _tag: "Hidden" },
         visit: VISIT,
         refreshNumber: 0,
         mfa: { _tag: "Enabled", recoveryCodesRemaining: 10 },
@@ -258,7 +271,8 @@ describe("MFA の無効化", () => {
     );
     const stale = update(
       reloaded,
-      Message.SucceededLoadMfaStatus({
+      Message.SucceededLoadSecuritySettings({
+        passkeyList: { _tag: "Hidden" },
         visit: VISIT,
         refreshNumber: 0,
         mfa: { _tag: "Enabled", recoveryCodesRemaining: 10 },
@@ -295,7 +309,7 @@ describe("session の切れた操作", () => {
     expect(
       update(
         init(VISIT).model,
-        Message.FailedLoadMfaStatus({
+        Message.FailedLoadSecuritySettings({
           visit: VISIT,
           refreshNumber: 0,
           failure: "Unauthorized",
@@ -430,7 +444,7 @@ describe("登録と状態の取得の失敗", () => {
       update,
       given({ ...disabled(), refreshNumber: 1 }),
       message(
-        Message.FailedLoadMfaStatus({
+        Message.FailedLoadSecuritySettings({
           visit: VISIT,
           refreshNumber: 1,
           failure: "Unexpected",
@@ -457,7 +471,8 @@ describe("登録と状態の取得の失敗", () => {
       update,
       given(init(VISIT).model),
       message(
-        Message.SucceededLoadMfaStatus({
+        Message.SucceededLoadSecuritySettings({
+          passkeyList: { _tag: "Hidden" },
           visit: VISIT - 1,
           refreshNumber: 0,
           mfa: { _tag: "Disabled" },
@@ -468,5 +483,61 @@ describe("登録と状態の取得の失敗", () => {
         expect(next.mfa._tag).toBe("Loading");
       }),
     );
+  });
+});
+
+describe("パスキーの登録の結果を画面に返す", () => {
+  const passkeyMessage = (message: PasskeySettings.Message) =>
+    Message.GotPasskeySettingsMessage({ message });
+
+  const registering = (): Model =>
+    send(disabled(), passkeyMessage(PasskeySettings.Message.ClickedRegister()));
+
+  test("登録できると一覧と MFA を読み直し、読めたら登録した旨を知らせる", () => {
+    const registered = update(
+      registering(),
+      passkeyMessage(
+        PasskeySettings.Message.SucceededRegisterPasskey({ visit: VISIT, requestNumber: 1 }),
+      ),
+    );
+    expect(registered.commands).toMatchObject([
+      {
+        name: LoadSecuritySettings.name,
+        args: {
+          refreshNumber: 1,
+          maybeTexts: Option.some({ doneText: "パスキーを登録しました。" }),
+        },
+      },
+    ]);
+  });
+
+  test("登録に失敗すると、その文言を error で知らせる", () => {
+    const failed = update(
+      registering(),
+      passkeyMessage(
+        PasskeySettings.Message.FailedRegisterPasskey({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "PasskeyAlreadyRegistered",
+        }),
+      ),
+    );
+    expect(failed.outMessage).toEqual(
+      OutMessage.Notified({ tone: "Error", text: "このパスキーはすでに登録されています。" }),
+    );
+  });
+
+  test("登録の途中で session が切れると、ログインし直しを頼む", () => {
+    const expired = update(
+      registering(),
+      passkeyMessage(
+        PasskeySettings.Message.FailedRegisterPasskey({
+          visit: VISIT,
+          requestNumber: 1,
+          failure: "Unauthorized",
+        }),
+      ),
+    );
+    expect(expired.outMessage).toEqual(OutMessage.RequiredSignIn());
   });
 });

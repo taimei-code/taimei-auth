@@ -1,16 +1,22 @@
 import { describe, test } from "bun:test";
 import { Option } from "effect";
-import { Command, expect, given, Mount, role, scene, text } from "foldkit/scene";
+import { all, Command, expect, expectAll, given, Mount, role, scene, text } from "foldkit/scene";
 
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
 import { pendingDialogTransitionResolvers } from "../../shared/__tests__/dialog-resolvers";
 import { Dialog } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, update, view } from "../pages/Security";
 
-const loaded = (mfa: Model["mfa"]): Model =>
+const loaded = (mfa: Model["mfa"], passkeyList: Model["passkeyList"] = { _tag: "Hidden" }): Model =>
   update(
     init(1).model,
-    Message.SucceededLoadMfaStatus({ visit: 1, refreshNumber: 0, mfa, maybeTexts: Option.none() }),
+    Message.SucceededLoadSecuritySettings({
+      passkeyList,
+      visit: 1,
+      refreshNumber: 0,
+      mfa,
+      maybeTexts: Option.none(),
+    }),
   ).model;
 
 describe("セキュリティの画面", () => {
@@ -53,7 +59,7 @@ describe("セキュリティの画面", () => {
       expect(text("無効")).toExist(),
       expect(role("button", { name: "有効にする" })).toExist(),
       expect(text("リカバリーコードの残り", { exact: false })).toBeAbsent(),
-      expect(text("実装予定")).toExist(),
+      expect(text("実装予定")).toBeAbsent(),
     );
   });
 
@@ -70,5 +76,72 @@ describe("セキュリティの画面", () => {
         ),
       ).toExist(),
     );
+  });
+
+  describe("パスキーの行", () => {
+    const USED = {
+      id: "passkey-1",
+      createdAt: "2026-03-04T03:00:00.000Z",
+      maybeLastUsedAt: Option.some("2026-05-06T03:00:00.000Z"),
+    };
+
+    test("登録できない 0 本の時は行を出さず、一覧は MFA の行だけになる", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, { _tag: "Hidden" })),
+        expect(text("パスキー", { exact: true })).toBeAbsent(),
+        expectAll(all.role("listitem")).toHaveCount(1),
+      );
+    });
+
+    test("登録できる 0 本の時は、無いことと「登録する」を出す", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, { _tag: "Shown", passkeys: [], registrable: true })),
+        expect(text("登録したパスキーはありません")).toExist(),
+        expect(role("button", { name: "登録する" })).toExist(),
+      );
+    });
+
+    test("MFA が有効なら、登録できても「登録する」を出さない", () => {
+      scene(
+        { update, view },
+        given(
+          loaded(
+            { _tag: "Enabled", recoveryCodesRemaining: 8 },
+            { _tag: "Shown", passkeys: [USED], registrable: true },
+          ),
+        ),
+        expect(text("未使用")).toBeAbsent(),
+        expect(role("button", { name: "登録する" })).toBeAbsent(),
+      );
+    });
+
+    test("使っていないパスキーは最後に使った日を「未使用」と出す", () => {
+      scene(
+        { update, view },
+        given(
+          loaded(
+            { _tag: "Disabled" },
+            {
+              _tag: "Shown",
+              passkeys: [{ ...USED, maybeLastUsedAt: Option.none() }],
+              registrable: false,
+            },
+          ),
+        ),
+        expect(text("最後に使った日 未使用")).toExist(),
+        expect(role("button", { name: "登録する" })).toBeAbsent(),
+      );
+    });
+
+    test("一覧を読めない時は、パスキーの行に取得できなかった旨を alert で出し、MFA の行は残す", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, { _tag: "Failed" })),
+        expect(role("alert")).toHaveText("パスキーの一覧を取得できませんでした。"),
+        expect(role("button", { name: "有効にする" })).toExist(),
+      );
+    });
   });
 });
