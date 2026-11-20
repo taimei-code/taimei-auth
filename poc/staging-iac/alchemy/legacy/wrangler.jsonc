@@ -1,0 +1,9 @@
+{
+  "name": "poc-iac-alc-legacy",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-31",
+  "durable_objects": {
+    "bindings": [{ "name": "COUNTER", "class_name": "Counter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Counter"] }]
+}
