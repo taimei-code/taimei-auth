@@ -1,6 +1,6 @@
 import { parseStage } from "./stages";
 
-const EFFECT_LOG_PREFIX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\] [A-Z]+ \(#\d+\)(?: [^:]+)?: /;
+const EFFECT_LOG_PREFIX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\] [A-Z]+(?: \(#\d+\))?(?: [^:]+)?: /;
 const OPERATION_LINE = /^\s*(\[[^\]]+\]\s+(\S+))(?:\s.*)?$/;
 const IN_SYNC_OPERATIONS = new Set(["noop", "unchanged"]);
 const NO_CHANGES = /\bno changes\b/i;
