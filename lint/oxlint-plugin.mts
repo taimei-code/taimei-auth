@@ -516,6 +516,14 @@ const ROWS: readonly Row[] = [
       "better-auth の一覧の読み出しは account/auth-client-read.ts だけが書く (失敗の応答を失敗にする読み手を 1 つにする)",
   },
   {
+    name: "passkey-list-only-in-passkey-settings",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/passkey/passkey-settings.ts"],
+    matchers: [{ kind: "member", paths: [".passkeys", ".can_register"] }],
+    message:
+      "パスキーの一覧の応答を読み、行を出すか・登録の操作を出すかを決めるのは passkey/passkey-settings.ts の loadPasskeyList だけ (画面は返った PasskeyList を match する)",
+  },
+  {
     name: "leave-spa-only-in-leave-spa",
     within: ["web/src/**"],
     allowedIn: ["web/src/shared/leave-spa.ts"],

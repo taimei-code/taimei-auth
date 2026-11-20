@@ -20,6 +20,7 @@ const PasskeyList = Schema.Struct({
   ),
   can_register: Schema.Boolean,
 });
+export type PasskeyListResponse = typeof PasskeyList.Type;
 
 const Transports = Schema.optional(Schema.mutable(Schema.Array(Schema.String)));
 

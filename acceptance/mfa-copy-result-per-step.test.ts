@@ -51,10 +51,11 @@ const enrollment = (message: MfaEnrollment.Message): Message =>
 const loadedDisabled = (): Model =>
   update(
     init(1).model,
-    Message.SucceededLoadMfaStatus({
+    Message.SucceededLoadSecuritySettings({
       visit: 1,
       refreshNumber: 0,
       mfa: { _tag: "Disabled" },
+      passkeyList: { _tag: "Hidden" },
       maybeTexts: Option.none(),
     }),
   ).model;
