@@ -35,3 +35,24 @@ test("CI の非対話の出力で、行の前に付く Effect の log の時刻�
 
   expect(differingOperationLines(output)).toEqual(["[Auth] update"]);
 });
+
+test("alchemy の CLI が fiber の番号を付けずに出す log の行は、時刻と level を外して読み、warning の文を差に数えない", () => {
+  const output = [
+    "[21:23:01.961] WARN: alchemy 2.0.0-beta.90 is available (you're on 2.0.0-beta.85). Run `bun add alchemy@2.0.0-beta.90` to upgrade.",
+    "[21:23:05.505] INFO: Plan: no changes",
+    "[21:23:05.505] INFO: [Auth] noop",
+    "[21:23:05.505] INFO: [Auth/KV_STORE] noop",
+    "[21:23:05.505] INFO: [Secrets] noop",
+  ].join("\n");
+
+  expect(differingOperationLines(output)).toEqual([]);
+});
+
+test("alchemy の CLI が fiber の番号を付けずに出す操作の行のうち、noop と unchanged 以外を差として報告する", () => {
+  const output = [
+    "[21:23:05.505] INFO: Plan: 1 to update",
+    "[21:23:05.505] INFO: [Auth] update",
+  ].join("\n");
+
+  expect(differingOperationLines(output)).toEqual(["[Auth] update"]);
+});
