@@ -22,7 +22,7 @@ import {
   signInEntryShown,
   unsavedCredential,
 } from "./harness/passkey-feature-flag";
-import { type FakeFlagship, fakeFlagship } from "./harness/feature-flags";
+import { type FakeFlagship, loadFakeFlagship } from "./harness/feature-flags";
 import { adrFiles, readRepoText } from "./harness/repo-text";
 
 afterEach(forgetFlagScenario);
@@ -34,8 +34,8 @@ const statusAndBody = (outcome: { status: number; body: unknown }) => ({
 
 const PASSKEY = "passkey";
 
-const flagshipWith = (setUp: (flags: FakeFlagship) => void): FakeFlagship => {
-  const flags = fakeFlagship();
+const flagshipWith = async (setUp: (flags: FakeFlagship) => void): Promise<FakeFlagship> => {
+  const flags = await loadFakeFlagship();
   setUp(flags);
   return flags;
 };
@@ -49,18 +49,18 @@ const listedOnly = (companies: string[]) =>
 
 const registrationRefusal = async () => {
   const member = await createMember("refused", await createCompany("any"));
-  return statusAndBody(await requestRegistrationOptions(await signedInUnder(disabled(), member)));
+  return statusAndBody(await requestRegistrationOptions(await signedInUnder(await disabled(), member)));
 };
 
 const unsavedCredentialFailure = async () => {
-  const app = await anonymousAppUnder(released());
+  const app = await anonymousAppUnder(await released());
   const challenge = challengeOf(await requestSignInOptions(app));
   return statusAndBody(await sendSignIn(app, assertionBy(unsavedCredential(), challenge)));
 };
 
 describe("全体公開で登録を開く", () => {
   test("全体公開なら、現在の事業所がある user も無い user も登録でき、パスキーが 1 本ずつ増える", async () => {
-    const flag = released();
+    const flag = await released();
     const member = await createMember("anywhere", await createCompany("any"));
     const companyless = await createMember("nowhere", null);
 
@@ -78,7 +78,7 @@ describe("登録を閉じる", () => {
   test("全体公開のルールを残したまま無効にすると、登録の options は 403 になり、challenge を置かない", async () => {
     const member = await createMember("closed", await createCompany("any"));
 
-    const outcome = await requestRegistrationOptions(await signedInUnder(disabled(), member));
+    const outcome = await requestRegistrationOptions(await signedInUnder(await disabled(), member));
 
     expect(outcome.status).toBe(403);
     expect(challengesIssuedTo(member)).toBe(0);
@@ -86,7 +86,7 @@ describe("登録を閉じる", () => {
 
   test("options を取った後で無効にすると、送った登録は無効の時の options と同じ失敗になり、パスキーは増えない", async () => {
     const refusal = await registrationRefusal();
-    const flag = released();
+    const flag = await released();
     const member = await createMember("disabled-later", await createCompany("any"));
     const session = await signedInUnder(flag, member);
     const options = await requestRegistrationOptions(session);
@@ -102,7 +102,7 @@ describe("登録を閉じる", () => {
   test("現在の事業所を事業所のリストに入れても、全体公開でなければ登録の options は無効の時と同じ失敗になり、ログイン画面の入口も出さない", async () => {
     const refusal = await registrationRefusal();
     const listed = await createCompany("listed");
-    const flag = listedOnly([listed]);
+    const flag = await listedOnly([listed]);
     const member = await createMember("listed-member", listed);
 
     const outcome = await requestRegistrationOptions(await signedInUnder(flag, member));
@@ -117,14 +117,14 @@ describe("ログインを閉じる", () => {
   test("無効にすると、ログインの options は、未保存の credential の失敗と同じ状態と本文になる", async () => {
     const enabledFailure = await unsavedCredentialFailure();
 
-    const outcome = await requestSignInOptions(await anonymousAppUnder(disabled()));
+    const outcome = await requestSignInOptions(await anonymousAppUnder(await disabled()));
 
     expect(statusAndBody(outcome)).toEqual(enabledFailure);
   });
 
   test("options を取った後で無効にすると、保存したパスキーの検証は未保存の credential の失敗と同じになり、session cookie は出ない", async () => {
     const enabledFailure = await unsavedCredentialFailure();
-    const flag = released();
+    const flag = await released();
     const member = await createMember("signing-in", null);
     const credential = await savedCredentialOf(member);
     const app = await anonymousAppUnder(flag);
@@ -140,7 +140,7 @@ describe("ログインを閉じる", () => {
 
 describe("無効にしても残るもの", () => {
   test("無効にしても一覧と削除は使え、無効にする前にパスキーで発行した session は引ける", async () => {
-    const flag = released();
+    const flag = await released();
     const member = await createMember("kept-session", null);
     const credential = await savedCredentialOf(member);
     await savedCredentialOf(member);
@@ -166,13 +166,11 @@ describe("flag を評価できない", () => {
   for (const trouble of ["binding-fails", "flag-missing"] as const) {
     test(`${trouble === "binding-fails" ? "binding の呼び出しが失敗する" : "flag が無い"}時は、ログインの options、登録の options、共通ログイン画面のパスキーの入口が、無効の時と同じになる`, async () => {
       const member = await createMember("unevaluated", await createCompany("any"));
-      const troubled =
-        trouble === "binding-fails"
-          ? flagshipWith((flags) => {
-              flags.on(PASSKEY);
-              flags.breakBinding();
-            })
-          : fakeFlagship();
+      const troubled = await flagshipWith((flags) => {
+        flags.on(PASSKEY);
+        if (trouble === "binding-fails") flags.breakBinding();
+        else flags.remove(PASSKEY);
+      });
       const observe = async (flag: FakeFlagship) => ({
         signIn: statusAndBody(await requestSignInOptions(await anonymousAppUnder(flag))),
         registration: statusAndBody(
@@ -181,7 +179,7 @@ describe("flag を評価できない", () => {
         entry: await signInEntryShown(await anonymousAppUnder(flag)),
       });
 
-      const whenDisabled = await observe(disabled());
+      const whenDisabled = await observe(await disabled());
       const whenTroubled = await observe(troubled);
 
       expect(whenDisabled.entry).toBe(false);
@@ -201,7 +199,7 @@ describe("画面が受け取る判断", () => {
         [none, one].map(async (member) => (await listOf(await signedInUnder(flag, member))).view),
       );
 
-    expect([...(await viewsUnder(disabled())), ...(await viewsUnder(released()))]).toEqual([
+    expect([...(await viewsUnder(await disabled())), ...(await viewsUnder(await released()))]).toEqual([
       "no-row",
       "list-and-delete-only",
       "can-register",
@@ -211,8 +209,8 @@ describe("画面が受け取る判断", () => {
 
   test("session を持たずに、共通ログイン画面のパスキーの入口を出すかを受け取れる (全体公開なら出し、無効なら出さない)", async () => {
     const shown = [
-      await signInEntryShown(await anonymousAppUnder(released())),
-      await signInEntryShown(await anonymousAppUnder(disabled())),
+      await signInEntryShown(await anonymousAppUnder(await released())),
+      await signInEntryShown(await anonymousAppUnder(await disabled())),
     ];
 
     expect(shown).toEqual([true, false]);

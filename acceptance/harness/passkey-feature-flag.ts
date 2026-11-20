@@ -41,7 +41,7 @@ export const forgetFlagScenario = async (): Promise<void> => {
 };
 
 export const anonymousAppUnder = async (flags: FakeFlagship): Promise<Hono> =>
-  buildAppWith(await flags.layer());
+  buildAppWith(flags.layer);
 
 export type Member = { readonly id: string; readonly email: string };
 
@@ -62,7 +62,7 @@ export const createMember = (name: string, current: string | null): Promise<Memb
 
 export const signedInUnder = async (flags: FakeFlagship, member: Member): Promise<Session> => ({
   user: member,
-  app: buildAppWith(Layer.merge(authLayer(() => sessionOf(member.id)), await flags.layer())),
+  app: buildAppWith(Layer.merge(authLayer(() => sessionOf(member.id)), flags.layer)),
   cookie: `${SESSION_COOKIE_NAME}=${crypto.randomUUID()}`,
 });
 
