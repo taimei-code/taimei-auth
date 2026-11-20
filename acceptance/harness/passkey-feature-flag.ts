@@ -4,7 +4,6 @@ import { dbTest } from "../../src/__tests__/live-runner";
 import { TestDb } from "../../src/__tests__/test-db";
 import { buildAppWith } from "../../src/handlers/__tests__/helpers";
 import { authLayer, sessionOf } from "../../src/membership/__tests__/test-layers";
-import { switchCurrentCompany as switchTo } from "../../src/membership/current-company";
 import {
   forgetScenario,
   type Outcome,
@@ -28,7 +27,7 @@ export {
 } from "./passkey-sign-in-api";
 export type { Outcome, Session } from "./passkey-registration-api";
 
-const FLAG_KEYS = { registration: "passkey-registration", signIn: "passkey-sign-in" } as const;
+const FLAG_KEY = "passkey";
 const LIST_PATH = "/api/account/passkeys";
 const SIGN_IN_ENTRY_PATH = "/api/passkey/sign-in/availability";
 const SESSION_COOKIE_NAME = "__Secure-better-auth.session_token";
@@ -50,15 +49,11 @@ export type FlagRules = {
 type FlagTrouble = "none" | "binding-fails" | "flag-missing";
 
 export type Flag = {
-  registration: FlagRules;
-  signIn: FlagRules;
+  rules: FlagRules;
   trouble: FlagTrouble;
 };
 
-export const flagsWith = (rules: { registration: FlagRules; signIn: FlagRules }): Flag => ({
-  ...rules,
-  trouble: "none",
-});
+export const flagWith = (rules: FlagRules): Flag => ({ rules, trouble: "none" });
 
 type Details = {
   readonly flagKey: string;
@@ -70,13 +65,6 @@ type Details = {
 const ruleMatches = (rules: FlagRules, context: Record<string, unknown>): boolean =>
   rules.listedCompanies.some((companyId) => companyId === context.companyId) || rules.everyone;
 
-const rulesOf = (flag: Flag, flagKey: string): FlagRules | undefined =>
-  flagKey === FLAG_KEYS.registration
-    ? flag.registration
-    : flagKey === FLAG_KEYS.signIn
-      ? flag.signIn
-      : undefined;
-
 const evaluate = (
   flag: Flag,
   flagKey: string,
@@ -84,12 +72,11 @@ const evaluate = (
   context: Record<string, unknown>,
 ): Details => {
   if (flag.trouble === "binding-fails") throw new Error("flagship is unavailable");
-  const rules = rulesOf(flag, flagKey);
-  if (rules === undefined || flag.trouble === "flag-missing") {
+  if (flagKey !== FLAG_KEY || flag.trouble === "flag-missing") {
     return { flagKey, value: defaultValue, reason: "ERROR", errorCode: "FLAG_NOT_FOUND" };
   }
-  if (!rules.enabled) return { flagKey, value: false, reason: "DISABLED" };
-  return ruleMatches(rules, context)
+  if (!flag.rules.enabled) return { flagKey, value: false, reason: "DISABLED" };
+  return ruleMatches(flag.rules, context)
     ? { flagKey, value: true, reason: "TARGETING_MATCH" }
     : { flagKey, value: false, reason: "DEFAULT" };
 };
@@ -127,25 +114,15 @@ const uniqueSuffix = (name: string) => `${name}-${crypto.randomUUID().slice(0, 8
 export const createCompany = (name: string): Promise<string> =>
   run(TestDb.use((testDb) => testDb.seedCompany(uniqueSuffix(name))));
 
-export const createMember = (
-  name: string,
-  current: string | null,
-  otherCompanies: readonly string[] = [],
-): Promise<Member> =>
+export const createMember = (name: string, current: string | null): Promise<Member> =>
   run(
     Effect.gen(function* () {
       const testDb = yield* TestDb;
       const seeded = yield* testDb.seedUser(uniqueSuffix(name), { lastUsedCompanyId: current });
-      for (const companyId of [...(current === null ? [] : [current]), ...otherCompanies]) {
-        yield* testDb.seedMembership(seeded.id, companyId);
-      }
+      if (current !== null) yield* testDb.seedMembership(seeded.id, current);
       return { id: seeded.id, email: seeded.email };
     }),
   );
-
-export const switchCurrentCompany = async (member: Member, companyId: string): Promise<void> => {
-  await run(switchTo({ userId: member.id, companyId }));
-};
 
 export const signedInUnder = async (flag: Flag, member: Member): Promise<Session> => ({
   user: member,
