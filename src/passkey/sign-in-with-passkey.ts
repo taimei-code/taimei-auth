@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 import { establishSignIn } from "../establish-sign-in";
+import { passkeyReleased } from "./availability";
 import type { AuthenticationResponse } from "./passkey-contract";
 import { verifyAuthentication } from "./webauthn";
 
@@ -14,3 +15,6 @@ export const signInWithPasskey = Effect.fnUntraced(function* (
     redirectUrl: verified.redirectUrl,
   });
 });
+
+export const passkeySignInAvailability = () =>
+  passkeyReleased().pipe(Effect.map((available) => ({ available })));

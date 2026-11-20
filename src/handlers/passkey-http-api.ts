@@ -4,7 +4,7 @@ import { CurrentActor } from "../account/actor-contract";
 import { deleteOwnedPasskey } from "../passkey/delete-passkey";
 import { listOwnedPasskeys } from "../passkey/list-passkeys";
 import { issueRegistrationOptions, registerPasskey } from "../passkey/register-passkey";
-import { signInWithPasskey } from "../passkey/sign-in-with-passkey";
+import { passkeySignInAvailability, signInWithPasskey } from "../passkey/sign-in-with-passkey";
 import { authenticationOptions } from "../passkey/webauthn";
 import { SpaApi } from "../spa-contract";
 import { dieOnBoundary, forwardSetCookies, headersOf } from "./request-http-api";
@@ -12,13 +12,14 @@ import { dieOnBoundary, forwardSetCookies, headersOf } from "./request-http-api"
 export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers) =>
   handlers.handleAll({
     list: Effect.fnUntraced(function* () {
-      const passkeys = yield* listOwnedPasskeys(yield* CurrentActor);
+      const owned = yield* listOwnedPasskeys(yield* CurrentActor);
       return {
-        passkeys: passkeys.map((passkey) => ({
+        passkeys: owned.passkeys.map((passkey) => ({
           id: passkey.id,
           created_at: passkey.createdAt.toISOString(),
           last_used_at: passkey.lastUsedAt?.toISOString() ?? null,
         })),
+        can_register: owned.canRegister,
       };
     }, dieOnBoundary),
     registrationOptions: Effect.fnUntraced(function* () {
@@ -45,4 +46,11 @@ export const PasskeySignInHandlers = HttpApiBuilder.group(SpaApi, "passkeySignIn
       return { redirect_url: signedIn.redirectUrl };
     }, dieOnBoundary),
   }),
+);
+
+export const PasskeySignInEntryHandlers = HttpApiBuilder.group(
+  SpaApi,
+  "passkeySignInEntry",
+  (handlers) =>
+    handlers.handle("availability", () => passkeySignInAvailability().pipe(dieOnBoundary)),
 );

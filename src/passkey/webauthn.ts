@@ -14,6 +14,7 @@ import {
   type PasskeyTransport,
 } from "@/db/enums";
 import { getAppName, getAppUrl } from "../email/client";
+import { passkeyReleased, requireRegistrationOpen } from "./availability";
 import { PasskeyRejected } from "./errors";
 import type {
   AuthenticationOptions,
@@ -82,6 +83,10 @@ const rejected = (ceremony: Ceremony, reason: string) =>
     Effect.andThen(Effect.fail(new PasskeyRejected())),
   );
 
+const requireSignInOpen = Effect.fnUntraced(function* () {
+  if (!(yield* passkeyReleased())) return yield* rejected("authentication", "sign-in closed");
+});
+
 const authHost = () => new URL(getAppUrl());
 
 const isPasskeyTransport = Schema.is(Schema.Literals(PASSKEY_TRANSPORTS));
@@ -95,6 +100,7 @@ export const registrationOptions = Effect.fnUntraced(function* (user: {
   readonly userId: string;
   readonly email: string;
 }) {
+  yield* requireRegistrationOpen();
   const registered = yield* PasskeyRepo.use((repo) => repo.listPasskeys(user.userId));
   const options: RegistrationOptions = yield* Effect.promise(() =>
     generateRegistrationOptions({
@@ -163,6 +169,7 @@ export const verifyRegistration = Effect.fnUntraced(function* (input: {
   readonly userId: string;
   readonly response: RegistrationResponse;
 }) {
+  yield* requireRegistrationOpen();
   const taken = yield* takeEntrusted("registration", input.response.response.clientDataJSON);
   if (taken === undefined || taken.entrusted !== input.userId) {
     return yield* rejected("registration", "challenge not issued to the user");
@@ -190,6 +197,7 @@ export const verifyRegistration = Effect.fnUntraced(function* (input: {
 export const authenticationOptions = Effect.fnUntraced(function* (signIn: {
   readonly redirectUrl: string | undefined;
 }) {
+  yield* requireSignInOpen();
   const options: AuthenticationOptions = yield* Effect.promise(() =>
     generateAuthenticationOptions({
       rpID: authHost().hostname,
@@ -220,6 +228,7 @@ const toLibraryAuthenticationResponse = (
 export const verifyAuthentication = Effect.fnUntraced(function* (input: {
   readonly response: AuthenticationResponse;
 }) {
+  yield* requireSignInOpen();
   const taken = yield* takeEntrusted("authentication", input.response.response.clientDataJSON);
   if (taken === undefined) return yield* rejected("authentication", "challenge not issued");
   if (!isStorableCredentialId(input.response.id)) {
