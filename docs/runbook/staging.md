@@ -99,7 +99,7 @@ Access の application と policy は定義 (`infra/alchemy.run.ts` の `access`
 次の順で行う。順を守れば本番の deploy は止まらない。
 
 1. Environment `staging` を作り、使える branch を `main` に絞る。次の secret を入れる
-   - `CLOUDFLARE_API_TOKEN`: staging のアカウントの token (Workers Scripts・Secrets Store・Access の apps と policies の Edit、Hyperdrive と Account Settings の Read)
+   - `CLOUDFLARE_API_TOKEN`: staging のアカウントの token (Workers Scripts・Secrets Store・Access の apps と policies・Flagship の Edit、Hyperdrive と Account Settings の Read)
    - `CLOUDFLARE_ACCOUNT_ID`: staging のアカウントの ID
    - `DATABASE_URL`: 2 の owner の接続文字列
    - `ACCESS_CLIENT_ID`・`ACCESS_CLIENT_SECRET`: 6 の service token
@@ -120,7 +120,13 @@ gate の経路 (0% で upload して smoke する) は、100% の version が無
 
 Durable Object の追加・改名・削除も 0% では出せないので、3 の workflow で出す。
 
-## 9. 消して作り直す
+## 9. フィーチャーフラグ
+
+app (`taimei-auth-staging`) と binding は alchemy が作る。flag とルールは staging のアカウントの dashboard で作る。作り方、全体公開、全体を止める手順は、本番の runbook の「[フィーチャーフラグ](./production.md#フィーチャーフラグ)」と同じである。
+
+- 載せない理由: dashboard で切り替えるため (ADR-0030)
+
+## 10. 消して作り直す
 
 定義から作り直せることを確かめる時と、staging が壊れて戻せない時に行う。
 

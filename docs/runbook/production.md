@@ -4,7 +4,7 @@
 
 ## 前提
 
-- 本番のアカウント (`taimei-production`) の token の権限: Workers Scripts Edit、Secrets Store Edit、Workers Routes Edit (custom domain)、Zone Read、Hyperdrive Read、Account Settings Read。Environment `production` の `CLOUDFLARE_API_TOKEN` もこの権限にする
+- 本番のアカウント (`taimei-production`) の token の権限: Workers Scripts Edit、Secrets Store Edit、Workers Routes Edit (custom domain)、Flagship Edit、Zone Read、Hyperdrive Read、Account Settings Read。Environment `production` の `CLOUDFLARE_API_TOKEN` もこの権限にする
 - 手元で本番の token を使うのは「1 回だけの手順」の間だけにする。短い期限の token を作り、終わったら消す。手元の `ALCHEMY_HOME` は一時 dir にし、終わったら消す (state の置き場の token が cache される)
 
 ## 1 回だけの手順
@@ -90,6 +90,40 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 5. `https://auth.taimei-code.com/health` の DB が ok であることを確かめ、10 分以内に、owner で `SELECT usename, count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() GROUP BY 1` が `taimei_auth_worker` を含み、`<owner>` を含まないことを見る。`<owner>` の行が残る時は、`client_addr`・`application_name`・`backend_start` で接続元 (CI の migrate、Neon の画面、切り替え前の Hyperdrive の接続) を見て判断する。接続の一覧だけを理由に戻さない (`/health` は `SELECT 1` しか流さないので、権限は手順 3 と QA で確かめる)。続けて QA-MR-01・QA-MR-06・QA-MR-10 を行う (QA-MR-10 は事業所の作成の書き込みと、その直後の読み取りを確かめる)
 6. `/health` の DB が error か、QA-MR-01・QA-MR-06・QA-MR-10 のどれかが通らなければ、すぐ owner に戻す: `bunx wrangler hyperdrive update <id> --origin-user neondb_owner --origin-password "$OWNER_PASSWORD"` (`read -rs OWNER_PASSWORD` で owner の password を読む。GitHub の secret は読み返せないので、Neon の画面の接続情報から取る)
 
+## フィーチャーフラグ
+
+判断の理由は [ADR-0030](../adr/0030-feature-flags-by-flagship.md) にある。app (`taimei-auth`) と Worker の binding (`FLAGS`) は alchemy が作る。flag とルールは dashboard の Flagship で作り、定義には書かない。
+
+### 最初の 1 回
+
+1. Environment `production` の `CLOUDFLARE_API_TOKEN` に Flagship Edit の権限を足す (無いと deploy の alchemy が app を作れずに止まる)
+2. 権限を足した後に、app と binding を定義に足した PR を merge し、Deploy で app と binding を出す。flag を作るまでは flag が無いので off になり、パスキーの登録とログインは止まる (一覧と削除は使える)
+3. 下の「flag を作る」で flag を作る
+
+### flag を作る
+
+1. app `taimei-auth` に、型が boolean の flag を作る。key は code が評価に使う名前と同じにする。パスキーの key は `passkey` である
+2. 値は `on` (true) と `off` (false) の 2 つにし、既定の値を `off` にする (理由は ADR-0030 の Decision 4)
+3. ルールは次の 2 つから選び、両方を作る時はこの順に並べる。属性の名前は code が渡す名前と同じにする
+
+| 順 | 条件 | 値 | 意味 |
+|---|---|---|---|
+| 1 | `companyId` が事業所の id のリストのどれか | on | 事業所ごとに公開する。actor を渡して評価する flag だけに当たる |
+| 2 | 条件なし | on | 全体に公開する。ログイン前のように事業所を渡さない評価が on になるのは、このルールがある時だけ |
+
+4. パスキーは actor を渡さずに評価するので、ルール 2 だけを作る
+5. 公開するまでは flag を無効のままにする
+
+### 全体に公開する
+
+- flag を有効にする。パスキーは、全員が登録とログインをできるようになる
+- 反映まで最大で約 30 秒かかる
+
+### 全体を止める
+
+- flag を無効にする。パスキーは、全員のパスキーでのログインと登録が止まる。一覧と削除、発行済みの session は残る
+- 戻す時は flag を有効にする。ルールはそのまま残る
+
 ## 日々の変更
 
 - 資源と binding の変更は `infra/` の定義を変える PR で行い、main の push の Deploy が staging、本番の順に出す
@@ -110,4 +144,5 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 | zone `taimei-code.com` の custom domain 以外の DNS と、Resend の送信 domain | Worker の資源ではなく、taimei と共有している |
 | GitHub の Environment と Cloudflare の token | token を作る権限を CI に渡さない |
 | `wrangler.jsonc` | local の開発 (`wrangler dev`) と、本番の bundle の build (`wrangler versions upload --dry-run`) に使う。本番の token は Environment `production` にだけあり、手元に置かないので、この設定で本番に出す経路は人の手作業だけになる |
+| Flagship の flag とルール | dashboard で切り替えるため。定義に書くと切り替えが drift になる (ADR-0030)。手順は「フィーチャーフラグ」 |
 | alchemy の state の置き場 (Worker `alchemy-state-store-taimei-auth`) | 最初の deploy が作る。消すと state を失う |
