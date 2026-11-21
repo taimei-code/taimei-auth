@@ -168,7 +168,16 @@
     "taimei/page-request-only-in-page-request": "error",
     "taimei/form-only-in-form-view": "error",
     "taimei/no-external-font-host": "error",
-    "taimei/sdk-import-only-peer-dependencies": "error"
+    "taimei/no-effect-die-in-web": "error",
+    "taimei/no-hand-rolled-page-builders": "error",
+    "taimei/no-hand-written-current-marker": "error",
+    "taimei/mfa-failure-text-only-in-mfa-failure-messages": "error",
+    "taimei/redirect-allowlist-not-in-web": "error",
+    "taimei/no-fixme-in-e2e": "error",
+    "taimei/no-build-env-in-runtime-selection": "error",
+    "taimei/sdk-import-only-peer-dependencies": "error",
+    "taimei/no-react-outside-web": "error",
+    "taimei/no-process-cwd-in-e2e": "error"
   },
   "overrides": [
     {

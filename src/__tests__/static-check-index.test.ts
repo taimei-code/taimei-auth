@@ -109,3 +109,17 @@ describe("規則の正本は違反した時の message と test 名で、CLAUDE.
     ).toEqual([]);
   });
 });
+
+describe("import の禁止は lint の表の行が持ち、.oxlintrc.json に写しを書かない (ADR-0026)", () => {
+  const oxlintConfigText = () => readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8");
+
+  test(".oxlintrc.json は drizzle-orm・pg・@/db/ の禁止を書かない (db の外から DB に触れる import は行 db-import-only-in-db が止める)", () => {
+    expect(oxlintConfigText().match(/drizzle-orm|"pg"|@\/db\//g) ?? []).toEqual([]);
+  });
+
+  test(".oxlintrc.json は SDK の禁止 package の一覧を書かない (SDK の import は行 sdk-import-only-peer-dependencies が peerDependencies から決める)", () => {
+    expect(
+      oxlintConfigText().match(/"name": "(next|next\/[a-z]+|@connectrpc\/connect-web)"/g) ?? [],
+    ).toEqual([]);
+  });
+});

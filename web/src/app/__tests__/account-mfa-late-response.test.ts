@@ -1,19 +1,29 @@
-import { describe, expect, test } from "bun:test";
-import { Effect, Exit, Layer, Option } from "effect";
+import { describe, test } from "bun:test";
+import { Effect, Exit, Option } from "effect";
 import type { Command } from "foldkit";
-import { given as givenScene, scene, tap } from "foldkit/scene";
+import {
+  Command as SceneCommand,
+  expect as expectScene,
+  given as givenScene,
+  Mount,
+  scene,
+  text,
+} from "foldkit/scene";
 import { fromString } from "foldkit/url";
 
-import * as Security from "../web/src/account/pages/Security";
-import { init, Message, type Model, update, view } from "../web/src/app/account/main";
-import * as MfaDisabling from "../web/src/mfa/mfa-disabling";
-import * as MfaEnrollment from "../web/src/mfa/mfa-enrollment";
-import { SpaHttpClient } from "../web/src/shared/spa-http-client";
+import * as Security from "../../account/pages/Security";
+import * as MfaDisabling from "../../mfa/mfa-disabling";
+import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import { SpaHttpClient } from "../../shared/spa-http-client";
+import { FIRST_DIALOG_OPENING_RESOLVERS } from "../../shared/__tests__/dialog-resolvers";
+import { Dialog } from "../../shared/ui/dialog-view";
+import { init, Message, type Model, update, view } from "../account/main";
 
 const ORIGIN = "https://auth.taimei-code.com";
 const SECURITY = `${ORIGIN}/account/security`;
 const PROFILE = `${ORIGIN}/account`;
-const QR_STEP_TEXT = /認証アプリで QR コードを読み取ってください/;
+const QR_STEP_TEXT =
+  "認証アプリで QR コードを読み取ってください。読み取れない場合は、次の secret を手入力します。";
 const INVALID_CODE_TEXT = "入力されたコードが正しくありません。";
 
 const urlOf = (href: string) =>
@@ -49,7 +59,7 @@ const clientWith = (mfaEnabled: boolean) => ({
         mfaEnabled ? { enabled: true, recovery_codes_remaining: 8 } : { enabled: false },
       ),
     enroll: () => Effect.succeed(ENROLLMENT),
-    disable: () => Effect.succeed(undefined),
+    disable: () => Effect.void,
   },
 });
 
@@ -66,7 +76,7 @@ type FakeClient = ReturnType<typeof clientWith> | typeof rejectingDisable;
 const executed = async (command: AnyCommand, client: FakeClient) => {
   const exit = await Effect.runPromiseExit(
     (command.effect as Effect.Effect<Message, unknown, SpaHttpClient>).pipe(
-      Effect.provide(Layer.succeed(SpaHttpClient, client as never)),
+      Effect.provideService(SpaHttpClient, client as never),
       Effect.timeout("200 millis"),
     ),
   );
@@ -118,83 +128,70 @@ const requestEnrollment = (model: Model): Step =>
 
 const submitDisabling = (model: Model): Step => {
   const opened = dispatch(model, disabling(MfaDisabling.Message.ClickedDisable())).model;
-  const typed = dispatch(opened, disabling(MfaDisabling.Message.UpdatedCode({ value: "123456" })))
-    .model;
+  const typed = dispatch(
+    opened,
+    disabling(MfaDisabling.Message.UpdatedCode({ value: "123456" })),
+  ).model;
   return dispatch(typed, disabling(MfaDisabling.Message.SubmittedCode()));
 };
 
-type VNodeLike = { text?: string; children?: ReadonlyArray<VNodeLike | string> };
+const dialogMounted = Mount.resolve(
+  Dialog.AcquireResources,
+  Dialog.Message.SucceededAcquireResources(),
+);
 
-const textOf = (node: VNodeLike | string | undefined): string =>
-  typeof node === "string"
-    ? node
-    : `${node?.text ?? ""}${(node?.children ?? []).map((child) => textOf(child)).join("")}`;
+const dialogOpened = SceneCommand.resolveAll(...FIRST_DIALOG_OPENING_RESOLVERS);
 
-const STOP_AFTER_RENDER = new Error("rendered");
+const expectShown = (model: Model, label: string) =>
+  scene(
+    { update, view },
+    givenScene(model),
+    dialogMounted,
+    dialogOpened,
+    expectScene(text(label)).toExist(),
+  );
 
-const renderedText = (model: Model): string => {
-  let rendered = "";
-  try {
-    scene(
-      { update, view },
-      givenScene(model),
-      tap(({ html }) => {
-        rendered = textOf(html as VNodeLike);
-        throw STOP_AFTER_RENDER;
-      }),
-    );
-  } catch (error) {
-    if (error !== STOP_AFTER_RENDER) throw error;
-  }
-  return rendered;
-};
+const expectHidden = (model: Model, label: string) =>
+  scene(
+    { update, view },
+    givenScene(model),
+    dialogMounted,
+    dialogOpened,
+    expectScene(text(label)).toBeAbsent(),
+  );
 
-const expectText = (model: Model, target: string | RegExp, present: boolean) => {
-  const rendered = renderedText(model);
-  const found = typeof target === "string" ? rendered.includes(target) : target.test(rendered);
-  expect(found).toBe(present);
-};
-
-describe("MFA の dialog が、作り直す前の page の応答を受けない (#460)", () => {
-  test("AC-001: 有効化の要求の後に「戻る」「進む」でセキュリティを作り直し、新しい page で有効化を要求した後に前の page の応答が届いても、新しい dialog は QR コードの段に進まない", async () => {
+describe("MFA の dialog が、作り直す前の page の応答を受けない", () => {
+  test("有効化の要求の後に「戻る」「進む」でセキュリティを作り直し、新しい page で有効化を要求した後に前の page の応答が届いても、新しい dialog は QR コードの段に進まない", async () => {
     const client = clientWith(false);
     const first = requestEnrollment(await securityPage(client));
     const rebuilt = await rebuiltByBackAndForward(first.model, client);
     const second = requestEnrollment(rebuilt);
 
-    const afterOldResponse = await deliver(second.model, first.commands, client);
-
-    expectText(afterOldResponse, QR_STEP_TEXT, false);
+    expectHidden(await deliver(second.model, first.commands, client), QR_STEP_TEXT);
   });
 
-  test("AC-002: 同じ page で要求した有効化の応答が届くと、dialog は QR コードの段に進む", async () => {
+  test("同じ page で要求した有効化の応答が届くと、dialog は QR コードの段に進む", async () => {
     const client = clientWith(false);
     const first = requestEnrollment(await securityPage(client));
     const rebuilt = await rebuiltByBackAndForward(first.model, client);
     const second = requestEnrollment(rebuilt);
 
-    const afterOwnResponse = await deliver(second.model, second.commands, client);
-
-    expectText(afterOwnResponse, QR_STEP_TEXT, true);
+    expectShown(await deliver(second.model, second.commands, client), QR_STEP_TEXT);
   });
 
-  test("AC-003: 無効化を送った後に「戻る」「進む」でセキュリティを作り直し、新しい page で無効化を送った後に前の page の失敗の応答が届いても、新しい dialog に誤りの文言は出ない", async () => {
+  test("無効化を送った後に「戻る」「進む」でセキュリティを作り直し、新しい page で無効化を送った後に前の page の失敗の応答が届いても、新しい dialog に誤りの文言は出ない", async () => {
     const first = submitDisabling(await securityPage(rejectingDisable));
     const rebuilt = await rebuiltByBackAndForward(first.model, clientWith(true));
     const second = submitDisabling(rebuilt);
 
-    const afterOldResponse = await deliver(second.model, first.commands, rejectingDisable);
-
-    expectText(afterOldResponse, INVALID_CODE_TEXT, false);
+    expectHidden(await deliver(second.model, first.commands, rejectingDisable), INVALID_CODE_TEXT);
   });
 
-  test("AC-004: 同じ page で送った無効化の失敗の応答が届くと、dialog に誤りの文言が出る", async () => {
+  test("同じ page で送った無効化の失敗の応答が届くと、dialog に誤りの文言が出る", async () => {
     const first = submitDisabling(await securityPage(rejectingDisable));
     const rebuilt = await rebuiltByBackAndForward(first.model, rejectingDisable);
     const second = submitDisabling(rebuilt);
 
-    const afterOwnResponse = await deliver(second.model, second.commands, rejectingDisable);
-
-    expectText(afterOwnResponse, INVALID_CODE_TEXT, true);
+    expectShown(await deliver(second.model, second.commands, rejectingDisable), INVALID_CODE_TEXT);
   });
 });

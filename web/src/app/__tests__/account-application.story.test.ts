@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { Option } from "effect";
-import { expect as expectScene, given as givenScene, role, scene, text } from "foldkit/scene";
+import {
+  expect as expectScene,
+  given as givenScene,
+  role,
+  scene,
+  tap,
+  text,
+  within,
+} from "foldkit/scene";
 import { Command, given, message, model, story } from "foldkit/story";
 import { fromString } from "foldkit/url";
 
@@ -63,13 +71,22 @@ const stateWithCurrent = (companyId: string) => ({
   memberships: [COMPANY_A, COMPANY_B],
 });
 
-const ready = (path = "/account"): Model =>
-  update(
-    opened(path).model,
-    Message.SucceededLoadCompanyState({ state: stateWithCurrent(COMPANY_A.companyId) }),
-  ).model;
+const ready = (
+  path = "/account",
+  state: CurrentCompany.CompanyMemberships = stateWithCurrent(COMPANY_A.companyId),
+): Model => update(opened(path).model, Message.SucceededLoadCompanyState({ state })).model;
 
 describe("アカウント管理画面の入口の確認", () => {
+  test("開いた直後は status を出し、プロフィールの見出しとログアウトのボタンを出さない", () => {
+    scene(
+      { update, view },
+      givenScene(opened().model),
+      expectScene(role("status")).toExist(),
+      expectScene(role("heading", { name: "プロフィール" })).toBeAbsent(),
+      expectScene(role("button", { name: "ログアウト" })).toBeAbsent(),
+    );
+  });
+
   test("開くと事業状態を 1 回だけ読む", () => {
     expect(opened().commands).toMatchObject([{ name: LoadCompanyState.name }]);
   });
@@ -550,7 +567,7 @@ describe("page から頼まれる事業所の操作", () => {
   });
 });
 
-const companiesWithSelf = (memberships: ReadonlyArray<typeof COMPANY_A | typeof COMPANY_B>) =>
+const companiesWithSelf = (memberships: ReadonlyArray<CurrentCompany.Membership>) =>
   update(
     update(
       opened("/account/companies").model,
@@ -643,6 +660,188 @@ describe("事業所から抜けた後の読み直しまで", () => {
       expectScene(role("button", { name: "抜ける" })).toBeEnabled(),
     );
   });
+
+  test("読み直しで抜けた行が消えると、残った行の「抜ける」と「切替」を押せる", () => {
+    const companyC = {
+      companyId: "company-c",
+      companyName: "事業所C",
+      orgCode: "PERSONAL",
+      role: "ADMIN",
+    } as const;
+    const left = update(
+      update(
+        companiesWithSelf([COMPANY_B, COMPANY_A, companyC]),
+        Message.GotCompaniesMessage({
+          message: Companies.Message.ClickedLeaveCompany({ membership: COMPANY_B }),
+        }),
+      ).model,
+      Message.GotCompaniesMessage({
+        message: Companies.Message.SucceededLeaveCompany({
+          visit: 1,
+          companyName: COMPANY_B.companyName,
+        }),
+      }),
+    ).model;
+    const refreshed = update(
+      left,
+      currentCompanyMessage(
+        CurrentCompany.Message.SucceededRefreshCompanyState({
+          refreshNumber: 1,
+          state: {
+            maybeCurrentCompanyId: Option.some(COMPANY_A.companyId),
+            memberships: [COMPANY_A, companyC],
+          },
+          maybeDoneText: Option.some(`「${COMPANY_B.companyName}」から抜けました。`),
+        }),
+      ),
+    ).model;
+    scene(
+      { update, view },
+      givenScene(refreshed),
+      expectScene(role("button", { name: "抜ける" })).toBeEnabled(),
+      expectScene(role("button", { name: "切替" })).toBeEnabled(),
+    );
+  });
+});
+
+describe("事業所を変える操作の応答が、page を離れた後に届く", () => {
+  const leaveToProfile = Message.ChangedUrl({ url: urlOf(`${ORIGIN}/account`) });
+
+  const after = (start: Model, messages: ReadonlyArray<Message>): Model =>
+    messages.reduce((current, each) => update(current, each).model, start);
+
+  const refreshesIn = (model: Model, next: Message): number =>
+    (update(model, next).commands ?? []).filter(
+      ({ name }) => name === CurrentCompany.RefreshCompanyState.name,
+    ).length;
+
+  test("事業所設定の保存の成功が、別の page へ URL が替わった後に届くと、事業所の状態の読み直しを 1 つ出す", () => {
+    const settings = ready("/account/company-settings");
+    const left = after(settings, [
+      companySettingsMessage(CompanySettings.Message.SubmittedCompanyForm()),
+      leaveToProfile,
+    ]);
+
+    expect(
+      refreshesIn(
+        left,
+        companySettingsMessage(
+          CompanySettings.Message.SucceededUpdateCompany({ visit: settings.pageVisit }),
+        ),
+      ),
+    ).toBe(1);
+  });
+
+  test("事業所から抜けるの成功が、別の page へ URL が替わった後に届くと、事業所の状態の読み直しを 1 つ出す", () => {
+    const companies = ready("/account/companies");
+    const left = after(companies, [
+      Message.GotCompaniesMessage({
+        message: Companies.Message.CompletedReadSignedInUserId({
+          visit: companies.pageVisit,
+          maybeUserId: Option.some("user-self"),
+        }),
+      }),
+      Message.GotCompaniesMessage({
+        message: Companies.Message.ClickedLeaveCompany({ membership: COMPANY_B }),
+      }),
+      leaveToProfile,
+    ]);
+
+    expect(
+      refreshesIn(
+        left,
+        Message.GotCompaniesMessage({
+          message: Companies.Message.SucceededLeaveCompany({
+            visit: companies.pageVisit,
+            companyName: COMPANY_B.companyName,
+          }),
+        }),
+      ),
+    ).toBe(1);
+  });
+
+  test("事業所の削除の失敗が、別の page へ URL が替わった後に届いても、事業所の状態を読み直さない", () => {
+    const settings = ready("/account/company-settings");
+    const left = after(settings, [
+      deletionMessage({ _tag: "ClickedDeleteCompany" }),
+      deletionMessage({ _tag: "ClickedConfirmDeletion", companyName: COMPANY_A.companyName }),
+      leaveToProfile,
+    ]);
+
+    expect(
+      refreshesIn(
+        left,
+        deletionMessage({
+          _tag: "FailedDeleteCompany",
+          visit: settings.pageVisit,
+          failure: "Forbidden",
+        }),
+      ),
+    ).toBe(0);
+  });
+
+  test("自分の user id の読み取りが、別の page へ URL が替わった後に届いても、事業所の状態を読み直さない", () => {
+    const companies = ready("/account/companies");
+    const left = after(companies, [leaveToProfile]);
+
+    expect(
+      refreshesIn(
+        left,
+        Message.GotCompaniesMessage({
+          message: Companies.Message.CompletedReadSignedInUserId({
+            visit: companies.pageVisit,
+            maybeUserId: Option.some("user-self"),
+          }),
+        }),
+      ),
+    ).toBe(0);
+  });
+});
+
+describe("事業所の状態の読み直しで役割だけが変わる", () => {
+  const NOT_OWNER_TEXT = "事業所設定の編集はオーナーのみ可能です。";
+
+  const stateOf = (
+    current: CurrentCompany.Membership,
+    memberships: ReadonlyArray<CurrentCompany.Membership>,
+  ): CurrentCompany.CompanyMemberships => ({
+    maybeCurrentCompanyId: Option.some(current.companyId),
+    memberships,
+  });
+
+  test("事業所設定の page で、現在の事業所が同じまま役割だけが OWNER から ADMIN になる読み直しが届くと、オーナーのみの案内が出て事業所名の入力欄が無くなる", () => {
+    const owner = ready("/account/company-settings");
+    scene(
+      { update, view },
+      givenScene(owner),
+      expectScene(role("textbox", { name: "事業所名" })).toExist(),
+    );
+
+    const demotedA = { ...COMPANY_A, role: "ADMIN" } as const;
+    scene(
+      { update, view },
+      givenScene(refreshedWith(owner, stateOf(demotedA, [demotedA, COMPANY_B]))),
+      expectScene(text(NOT_OWNER_TEXT)).toExist(),
+      expectScene(role("textbox", { name: "事業所名" })).toBeAbsent(),
+    );
+  });
+
+  test("メンバーの page で、現在の事業所が同じまま役割だけが ADMIN から MEMBER になる読み直しが届くと、「メンバーを招待」が無くなる", () => {
+    const adminB = { ...COMPANY_B, role: "ADMIN" } as const;
+    const admin = ready("/account/members", stateOf(adminB, [COMPANY_A, adminB]));
+    scene(
+      { update, view },
+      givenScene(admin),
+      expectScene(role("region", { name: "メンバーを招待" })).toExist(),
+    );
+
+    const demotedB = { ...COMPANY_B, role: "MEMBER" } as const;
+    scene(
+      { update, view },
+      givenScene(refreshedWith(admin, stateOf(demotedB, [COMPANY_A, demotedB]))),
+      expectScene(role("region", { name: "メンバーを招待" })).toBeAbsent(),
+    );
+  });
 });
 
 describe("事業所の設定の送信中の切り替え", () => {
@@ -697,6 +896,52 @@ describe("事業所の設定の送信中の切り替え", () => {
         ),
       ).commands ?? [],
     ).toEqual([]);
+  });
+
+  const SWITCHES = (commands: ReadonlyArray<{ readonly name: string }> | undefined) =>
+    (commands ?? []).some((command) => command.name === CurrentCompany.SwitchCompany.name);
+
+  const selectOther = currentCompanyMessage(
+    CurrentCompany.Message.SelectedCompany({ companyId: COMPANY_B.companyId }),
+  );
+
+  const savedAndRefreshed = (): Model => {
+    const submitting = saving();
+    const saved = update(
+      submitting,
+      companySettingsMessage(
+        CompanySettings.Message.SucceededUpdateCompany({ visit: submitting.pageVisit }),
+      ),
+    );
+    const refresh = (saved.commands ?? []).find(
+      (command) => command.name === CurrentCompany.RefreshCompanyState.name,
+    ) as unknown as {
+      readonly args: {
+        readonly refreshNumber: number;
+        readonly texts: { readonly maybeDoneText: Option.Option<string> };
+      };
+    };
+    return update(
+      saved.model,
+      currentCompanyMessage(
+        CurrentCompany.Message.SucceededRefreshCompanyState({
+          refreshNumber: refresh.args.refreshNumber,
+          state: stateWithCurrent(COMPANY_A.companyId),
+          maybeDoneText: refresh.args.texts.maybeDoneText,
+        }),
+      ),
+    ).model;
+  };
+
+  test("保存の送信中に別の事業所を選んでも、保存の成功が届けば完了を通知する", () => {
+    expect(SWITCHES(update(saving(), selectOther).commands)).toBe(false);
+    expect(savedAndRefreshed().toast.entries.map((entry) => entry.payload.text)).toContain(
+      "事業所情報を更新しました。",
+    );
+  });
+
+  test("保存の成功が届いた後は、枠の select で別の事業所を選ぶと切り替えを送る", () => {
+    expect(SWITCHES(update(savedAndRefreshed(), selectOther).commands)).toBe(true);
   });
 });
 
@@ -784,6 +1029,52 @@ describe("メンバーの画面の送信中の切り替え", () => {
     );
   });
 
+  const ROLE_CHANGED_TEXT = "メンバー太郎 の役割を管理者に変更しました。";
+
+  const roleChangeSucceeded = (model: Model): Model => {
+    const changed = update(
+      model,
+      membersMessage(
+        Members.Message.SucceededChangeRole({
+          visit: model.pageVisit,
+          texts: { doneText: ROLE_CHANGED_TEXT, actionText: "役割を変更しました" },
+        }),
+      ),
+    );
+    const reload = (changed.commands ?? []).find(
+      (command) => command.name === Members.LoadMembers.name,
+    ) as unknown as {
+      readonly args: {
+        readonly visit: number;
+        readonly reload: Parameters<typeof Members.Message.SucceededLoadMembers>[0]["reload"];
+      };
+    };
+    return update(
+      changed.model,
+      membersMessage(
+        Members.Message.SucceededLoadMembers({
+          visit: reload.args.visit,
+          members: [{ ...MEMBER, role: "ADMIN" }],
+          reload: reload.args.reload,
+        }),
+      ),
+    ).model;
+  };
+
+  test("役割の変更の送信中に別の事業所を選んでも、変更の成功と一覧の読み直しが届けば完了を通知する", () => {
+    const changing = changingRole();
+    expect(update(changing, selectB).commands ?? []).toEqual([]);
+    expect(
+      roleChangeSucceeded(changing).toast.entries.map((entry) => entry.payload.text),
+    ).toContain(ROLE_CHANGED_TEXT);
+  });
+
+  test("役割の変更の成功と一覧の読み直しが届いた後は、枠で選ぶと切り替えを送る", () => {
+    expect(update(roleChangeSucceeded(changingRole()), selectB).commands).toContainEqual(
+      expect.objectContaining({ name: CurrentCompany.SwitchCompany.name }),
+    );
+  });
+
   test("枠の切り替えが済むまでは、役割の select と削除と招待のボタンを押せない", () => {
     scene(
       { update, view },
@@ -796,6 +1087,129 @@ describe("メンバーの画面の送信中の切り替え", () => {
       expectScene(role("combobox", { name: "member@example.com の役割" })).toBeDisabled(),
       expectScene(role("button", { name: "削除" })).toBeDisabled(),
       expectScene(role("button", { name: "招待する" })).toBeDisabled(),
+    );
+  });
+});
+
+const SIDEBAR_LINKS: Array<{ name: string; path: string }> = [
+  { name: "所属事業所", path: "/account/companies" },
+  { name: "メンバー", path: "/account/members" },
+  { name: "事業所設定", path: "/account/company-settings" },
+  { name: "プロフィール", path: "/account" },
+  { name: "セキュリティ", path: "/account/security" },
+  { name: "セッション", path: "/account/sessions" },
+  { name: "連携アカウント", path: "/account/connections" },
+];
+
+const BASE_LINK_CLASSES = [
+  "flex",
+  "items-center",
+  "gap-2",
+  "rounded-md",
+  "px-3",
+  "py-2",
+  "text-sm",
+  "font-medium",
+  "text-muted-foreground",
+  "transition-colors",
+  "hover:bg-accent",
+  "hover:text-accent-foreground",
+  "[&_svg]:size-4",
+];
+
+const CURRENT_LINK_CLASSES = [
+  ...BASE_LINK_CLASSES,
+  "bg-accent",
+  "font-semibold",
+  "text-accent-foreground",
+];
+
+type VNodeLike = {
+  data?: {
+    class?: Record<string, boolean>;
+    attrs?: Record<string, unknown>;
+    props?: Record<string, unknown>;
+  };
+};
+
+const attributeOf = (vnode: VNodeLike, name: string): string | undefined => {
+  const value = vnode.data?.attrs?.[name] ?? vnode.data?.props?.[name];
+  return typeof value === "string" ? value : undefined;
+};
+
+const VARIANT = /^(data|aria)-\[([a-z-]+)(?:=([^\]]+))?\]:(.+)$/;
+
+const appliedClasses = (vnode: VNodeLike): string[] =>
+  Object.entries(vnode.data?.class ?? {})
+    .filter(([, isActive]) => isActive)
+    .map(([token]) => token)
+    .flatMap((token) => {
+      const variant = VARIANT.exec(token);
+      if (variant === null) {
+        return [token];
+      }
+      const [, kind, key, expected, utility] = variant;
+      const actual = attributeOf(vnode, `${kind}-${key}`);
+      const holds = actual !== undefined && (expected === undefined || actual === expected);
+      return holds && utility !== undefined ? [utility] : [];
+    })
+    .sort();
+
+describe("サイドバーの nav", () => {
+  test.each(SIDEBAR_LINKS)("$path を開くと、7 つのリンクが aria-label の付いた nav の中にある", ({
+    path,
+  }) => {
+    scene(
+      { update, view },
+      givenScene(ready(path)),
+      expectScene(role("navigation")).toHaveAttr("aria-label"),
+      tap(({ html }) => {
+        expect(
+          Option.getOrUndefined(
+            Option.flatMap(role("navigation")(html), (nav) =>
+              Option.some(attributeOf(nav as VNodeLike, "aria-label") ?? ""),
+            ),
+          ),
+        ).not.toBe("");
+      }),
+      ...SIDEBAR_LINKS.map((link) =>
+        expectScene(within(role("navigation"), role("link", { name: link.name }))).toExist(),
+      ),
+    );
+  });
+
+  test.each(SIDEBAR_LINKS)("$path を開くと、$name のリンクだけが aria-current=page を持つ", ({
+    path,
+    name,
+  }) => {
+    scene(
+      { update, view },
+      givenScene(ready(path)),
+      ...SIDEBAR_LINKS.map((link) =>
+        link.name === name
+          ? expectScene(role("link", { name: link.name })).toHaveAttr("aria-current", "page")
+          : expectScene(role("link", { name: link.name })).not.toHaveAttr("aria-current"),
+      ),
+    );
+  });
+
+  test.each(
+    SIDEBAR_LINKS,
+  )("$path を開くと、表示中と表示中でないリンクに当たる class が今と同じである (表示中は色に加えて太さでも示す)", ({
+    path,
+    name,
+  }) => {
+    scene(
+      { update, view },
+      givenScene(ready(path)),
+      tap(({ html }) => {
+        for (const link of SIDEBAR_LINKS) {
+          const vnode = Option.getOrThrow(role("link", { name: link.name })(html)) as VNodeLike;
+          expect(appliedClasses(vnode)).toEqual(
+            [...(link.name === name ? CURRENT_LINK_CLASSES : BASE_LINK_CLASSES)].sort(),
+          );
+        }
+      }),
     );
   });
 });

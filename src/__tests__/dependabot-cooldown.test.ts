@@ -11,7 +11,7 @@ const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const readUpdates = () =>
   (
     Bun.YAML.parse(read(".github/dependabot.yml")) as {
-      updates: { "package-ecosystem": string; cooldown?: unknown }[];
+      updates: { "package-ecosystem": string; directory?: string; cooldown?: unknown }[];
     }
   ).updates;
 
@@ -35,7 +35,34 @@ describe("Dependabot の cooldown invariant", () => {
     expect(readMinimumReleaseAge()).toBe(7 * SECONDS_PER_DAY);
   });
 
+  test("bun の update が、repo の root の directory (/) を対象にする", () => {
+    expect(
+      readUpdates()
+        .filter((update) => update["package-ecosystem"] === "bun")
+        .map((update) => update.directory),
+    ).toContain("/");
+  });
+
   test("npm の update を置かない。Dependabot の npm は package.json だけを変え、bun.lock を変えないので、CI の frozen-lockfile の install を通らない (ADR-0009)", () => {
     expect(readUpdates().map((update) => update["package-ecosystem"])).not.toContain("npm");
+  });
+});
+
+describe("依存の追加の守り", () => {
+  test("lifecycle script を許す依存は無く、検証の library を公開から 7 日の待ちの例外にしていない", () => {
+    const manifest: { trustedDependencies?: unknown } = JSON.parse(read("package.json"));
+    expect(manifest.trustedDependencies).toEqual([]);
+
+    const bunfig = Bun.TOML.parse(read("bunfig.toml")) as {
+      install?: { minimumReleaseAgeExcludes?: readonly string[] };
+    };
+    expect(bunfig.install?.minimumReleaseAgeExcludes ?? []).not.toContain("@simplewebauthn/server");
+  });
+
+  test("bunfig.toml は、公開から 7 日の待ちの例外 (minimumReleaseAgeExcludes) を持たない (ADR-0009)", () => {
+    const bunfig = Bun.TOML.parse(read("bunfig.toml")) as {
+      install?: { minimumReleaseAgeExcludes?: readonly string[] };
+    };
+    expect(bunfig.install?.minimumReleaseAgeExcludes ?? []).toEqual([]);
   });
 });

@@ -8,3 +8,10 @@ test("web/tsconfig.json の @core/* は ./src/* を先に、../src/* を後に�
     compilerOptions: { paths: { "@core/*": ["./src/*", "../src/*"] } },
   });
 });
+
+test("web/tsconfig.json は JSX を有効にしない (画面は Foldkit の view で書く。.tsx に JSX を書くと型エラーになる)", () => {
+  const { compilerOptions } = parseJsonc(
+    readFileSync(join(REPO_ROOT, "web/tsconfig.json"), "utf8"),
+  ) as { compilerOptions: { jsx?: unknown } };
+  expect(compilerOptions.jsx).toBeNull();
+});

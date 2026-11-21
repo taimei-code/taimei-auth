@@ -169,6 +169,30 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
+  test("一次認証の方法が github のチャレンジを TOTP で通過すると、方法 github と IP と userAgent でログインを 1 件だけ記録する", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("pass-github");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: "/account/security",
+          method: "github",
+        });
+
+        yield* verify(challenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        const audits = yield* auditRowsFor(user.id, "sign_in");
+        expect(audits.map((audit) => audit.payload)).toEqual([
+          { method: "github", ip: TEST_CLIENT_IP, userAgent: TEST_USER_AGENT },
+        ]);
+      }),
+    ));
+
   test("リカバリーコードで通過すると成功し、残数が減る", () =>
     run(
       Effect.gen(function* () {

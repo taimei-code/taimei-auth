@@ -26,6 +26,8 @@ export const FIRST_DIALOG_OPENING = [
   ),
 ] as const;
 
+export const FIRST_DIALOG_OPENING_RESOLVERS = transitionResolvers(FIRST_OPENING_GENERATION);
+
 export const FIRST_DIALOG_CLOSING_MESSAGES = [
   Dialog.Message.GotAnimationMessage({
     message: Animation.Message.CompletedWaitForPaint({ generation: FIRST_CLOSING_GENERATION }),

@@ -19,7 +19,7 @@ export const PASSKEY_EMAIL = "e2e-passkey@example.com";
 
 export const addVirtualAuthenticator = async (
   page: Page,
-  { userVerified }: { userVerified: boolean } = { userVerified: true },
+  { userVerified = true, presence = true }: { userVerified?: boolean; presence?: boolean } = {},
 ) => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
@@ -30,7 +30,7 @@ export const addVirtualAuthenticator = async (
       hasResidentKey: true,
       hasUserVerification: true,
       isUserVerified: userVerified,
-      automaticPresenceSimulation: true,
+      automaticPresenceSimulation: presence,
     },
   });
   return {

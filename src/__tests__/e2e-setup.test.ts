@@ -36,6 +36,11 @@ describe("e2e の起動設定", () => {
     expect(fallback).toBe(TEST_AUTH_SECRET);
   });
 
+  test("playwright.config.ts は、起動済みの server を使い回す設定 (reuseExistingServer) を true や式にしない", () => {
+    const config = readFileSync(join(REPO_ROOT, "playwright.config.ts"), "utf8");
+    expect(config).not.toMatch(/reuseExistingServer: *(true|!|process)/);
+  });
+
   test("e2e のファイル名は bun test が拾う形 (.test. / .spec. / _test. / _spec.) にしない", () => {
     const pickedByBunTest = readdirSync(join(REPO_ROOT, "e2e")).filter((name) =>
       /[._](test|spec)\.[cm]?[jt]sx?$/.test(name),

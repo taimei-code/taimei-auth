@@ -1,14 +1,11 @@
 import { createHash, generateKeyPairSync, type KeyObject, randomBytes, sign } from "node:crypto";
-import { Effect, Layer } from "effect";
-import { parseClientFacingError } from "../../src/handlers/client-facing-error";
-import { MemoryKvStore } from "../../src/kv-store.memory";
-import { memoryBackend } from "../../src/ttl-store";
-import { fakeFlagship } from "../../testing/feature-flags";
-import { ttlStoreLayer } from "../../src/ttl-store-service";
+import { Effect } from "effect";
+import { PasskeyRepo } from "../ports";
 
 type CborValue = number | string | Uint8Array | ReadonlyMap<CborValue, CborValue>;
 
-const concat = (...parts: readonly Uint8Array[]): Uint8Array => new Uint8Array(Buffer.concat(parts));
+const concat = (...parts: readonly Uint8Array[]): Uint8Array =>
+  new Uint8Array(Buffer.concat(parts));
 
 const cborHead = (major: number, length: number): Uint8Array => {
   if (length < 24) return Uint8Array.of((major << 5) | length);
@@ -30,7 +27,10 @@ const cbor = (value: CborValue): Uint8Array => {
     return concat(cborHead(3, bytes.length), bytes);
   }
   if (value instanceof Uint8Array) return concat(cborHead(2, value.length), value);
-  return concat(cborHead(5, value.size), ...[...value].flatMap(([key, entry]) => [cbor(key), cbor(entry)]));
+  return concat(
+    cborHead(5, value.size),
+    ...[...value].flatMap(([key, entry]) => [cbor(key), cbor(entry)]),
+  );
 };
 
 const base64url = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64url");
@@ -40,14 +40,20 @@ const sha256 = (bytes: Uint8Array | string): Uint8Array =>
 
 const aaguidText = (bytes: Uint8Array) => {
   const hex = Buffer.from(bytes).toString("hex");
-  return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join("-");
 };
 
 const FLAG_USER_PRESENT = 0x01;
 const FLAG_USER_VERIFIED = 0x04;
 const FLAG_ATTESTED_CREDENTIAL = 0x40;
 
-export const COSE_ALGORITHM = {
+const COSE_ALGORITHM = {
   EdDSA: -8,
   ES256: -7,
   RS256: -257,
@@ -64,7 +70,8 @@ const keyPairOf = (algorithm: SignatureAlgorithm) => {
 };
 
 const coseKeyOf = (algorithm: SignatureAlgorithm, jwk: JsonWebKey): Uint8Array => {
-  const bytes = (field: string | undefined) => new Uint8Array(Buffer.from(field ?? "", "base64url"));
+  const bytes = (field: string | undefined) =>
+    new Uint8Array(Buffer.from(field ?? "", "base64url"));
   if (algorithm === "ES256") {
     return cbor(
       new Map<CborValue, CborValue>([
@@ -176,71 +183,6 @@ export const signedRegistration = (input: {
   };
 };
 
-const ENTRUSTED_TO = "harness-user";
-
-const storeHolding = (issued: (challenge: string) => boolean, entrusted: string) => {
-  const backend = memoryBackend(new MemoryKvStore());
-  return ttlStoreLayer({
-    ...backend,
-    getAndDelete: async (key) => (issued(key.slice(key.lastIndexOf(":") + 1)) ? entrusted : null),
-  });
-};
-
-const freshStore = () => ttlStoreLayer(memoryBackend(new MemoryKvStore()));
-
-export type VerificationOutcome =
-  | {
-      readonly accepted: {
-        readonly id: string;
-        readonly publicKey: Uint8Array;
-        readonly counter: number;
-        readonly aaguid: string;
-        readonly transports: readonly string[] | undefined;
-      };
-    }
-  | { readonly rejected: { readonly tag: string; readonly status: number } };
-
-const passkeyOpen = () => fakeFlagship().layer;
-
-export const verifyRegistrationResponseOf = async (
-  response: ReturnType<typeof signedRegistration>["response"],
-  matchesChallenge: (challenge: string) => boolean,
-): Promise<VerificationOutcome> => {
-  const { verifyRegistration } = await import("../../src/passkey/webauthn");
-  return Effect.runPromise(
-    verifyRegistration({ userId: ENTRUSTED_TO, response }).pipe(
-      Effect.map(
-        (passkey): VerificationOutcome => ({
-          accepted: {
-            id: passkey.credentialId,
-            publicKey: new Uint8Array(passkey.publicKey),
-            counter: passkey.counter,
-            aaguid: passkey.aaguid,
-            transports: passkey.transports,
-          },
-        }),
-      ),
-      Effect.catch((failure) => {
-        const clientFacing = parseClientFacingError(failure);
-        return Effect.succeed<VerificationOutcome>({
-          rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
-        });
-      }),
-      Effect.provide(Layer.merge(storeHolding(matchesChallenge, ENTRUSTED_TO), passkeyOpen())),
-    ),
-  );
-};
-
-export const registrationOptionsFor = async (user: { readonly userId: string; readonly email: string }) => {
-  const { registrationOptions } = await import("../../src/passkey/webauthn");
-  const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
-  return Effect.runPromise(
-    registrationOptions(user).pipe(
-      Effect.provide(Layer.mergeAll(PasskeyRepoLive, freshStore(), passkeyOpen())),
-    ),
-  );
-};
-
 export const signedAuthentication = (input: {
   readonly credentialId: string;
   readonly signer: Signer;
@@ -277,77 +219,50 @@ export const signedAuthentication = (input: {
     response: {
       clientDataJSON: base64url(clientDataJSON),
       authenticatorData: base64url(authenticatorData),
-      signature: base64url(signWith(input.signer, concat(authenticatorData, sha256(clientDataJSON)))),
+      signature: base64url(
+        signWith(input.signer, concat(authenticatorData, sha256(clientDataJSON))),
+      ),
     },
   };
 };
 
-export type AuthenticationOutcome =
-  | { readonly accepted: { readonly userId: string; readonly counter: number } }
-  | { readonly rejected: { readonly tag: string; readonly status: number } };
-
-export const verifyAuthenticationResponseOf = async (
-  response: ReturnType<typeof signedAuthentication>,
-  matchesChallenge: (challenge: string) => boolean,
-): Promise<AuthenticationOutcome> => {
-  const { verifyAuthentication } = await import("../../src/passkey/webauthn");
-  const { PasskeyRepoLive } = await import("../../src/passkey/wiring");
-  const { findPasskeyByCredentialId } = await import("../../db/repositories/passkey");
-  return Effect.runPromise(
-    verifyAuthentication({ response }).pipe(
-      Effect.flatMap((verified) =>
-        Effect.promise(async (): Promise<AuthenticationOutcome> => ({
-          accepted: {
-            userId: verified.userId,
-            counter: (await findPasskeyByCredentialId(response.id))?.counter ?? Number.NaN,
-          },
-        })),
-      ),
-      Effect.catch((failure) => {
-        const clientFacing = parseClientFacingError(failure);
-        return Effect.succeed<AuthenticationOutcome>({
-          rejected: { tag: clientFacing?.tag ?? "", status: clientFacing?.status ?? 0 },
-        });
-      }),
-      Effect.provide(
-        Layer.mergeAll(PasskeyRepoLive, storeHolding(matchesChallenge, "/account"), passkeyOpen()),
-      ),
-    ),
-  );
-};
-
-export const authenticationOptionsFor = async () => {
-  const { authenticationOptions } = await import("../../src/passkey/webauthn");
-  return Effect.runPromise(
-    authenticationOptions({ redirectUrl: undefined }).pipe(
-      Effect.provide(Layer.merge(freshStore(), passkeyOpen())),
-    ),
-  );
-};
-
-export type FoundPasskey = {
-  readonly userId: string;
+export type PasskeyToSave = {
   readonly credentialId: string;
   readonly publicKey: Uint8Array;
   readonly counter: number;
+  readonly aaguid: string;
+  readonly transports: Array<"internal" | "hybrid" | "usb">;
 };
 
-export const passkeyFoundBy = async (credentialId: string): Promise<FoundPasskey | undefined> => {
-  const { findPasskeyByCredentialId } = await import("../../db/repositories/passkey");
-  const row = await findPasskeyByCredentialId(credentialId);
-  return row === undefined
-    ? undefined
-    : {
-        userId: row.userId,
+type SavedPasskey = PasskeyToSave & {
+  readonly registeredAt: Date;
+  readonly lastUsedAt: Date | null;
+};
+
+export const passkeyToSave = (): PasskeyToSave => ({
+  credentialId: randomBytes(16).toString("base64url"),
+  publicKey: new Uint8Array(randomBytes(77)),
+  counter: 7,
+  aaguid: "adce0002-35bc-c60a-648b-0b25f1f05503",
+  transports: ["internal", "hybrid"],
+});
+
+export const savePasskey = (userId: string, passkey: PasskeyToSave) =>
+  PasskeyRepo.use((repo) =>
+    repo.insertPasskey({ id: crypto.randomUUID(), userId, ...passkey }),
+  ).pipe(Effect.map((saved) => saved !== undefined));
+
+export const passkeysOf = (userId: string) =>
+  PasskeyRepo.use((repo) => repo.listPasskeys(userId)).pipe(
+    Effect.map((rows): SavedPasskey[] =>
+      rows.map((row) => ({
         credentialId: row.credentialId,
         publicKey: new Uint8Array(row.publicKey),
         counter: row.counter,
-      };
-};
-
-export const recordUse = async (credentialId: string, counter: number): Promise<void> => {
-  const { findPasskeyByCredentialId, recordPasskeyUse } = await import("../../db/repositories/passkey");
-  const row = await findPasskeyByCredentialId(credentialId);
-  if (row === undefined) throw new Error(`no passkey for ${credentialId}`);
-  await recordPasskeyUse(row.id, counter);
-};
+        aaguid: row.aaguid,
+        transports: [...row.transports] as PasskeyToSave["transports"],
+        registeredAt: row.createdAt,
+        lastUsedAt: row.lastUsedAt,
+      })),
+    ),
+  );
