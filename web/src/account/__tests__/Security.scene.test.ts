@@ -186,6 +186,49 @@ describe("セキュリティの画面", () => {
       );
     });
 
+    const LIMIT_NOTICE =
+      "登録できるパスキーの数の上限に達しています。不要なパスキーを削除すると、新しく登録できます。";
+
+    const listing = (count: number, registrable: boolean): Model["passkeyList"] => ({
+      _tag: "Shown",
+      passkeys: Array.from({ length: count }, (_, index) => ({ ...USED, id: `passkey-${index}` })),
+      registrable,
+    });
+
+    test("10 本ある時は「登録する」を押せず、理由と削除を促す文言を出して「登録する」の説明に結ぶ", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, listing(10, true))),
+        expect(role("button", { name: "登録する" })).toBeDisabled(),
+        expect(role("button", { name: "登録する" })).toHaveAccessibleDescription(LIMIT_NOTICE),
+        expect(text(LIMIT_NOTICE)).toExist(),
+      );
+    });
+
+    test("9 本の時は「登録する」を押せ、上限の文言を出さない", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, listing(9, true))),
+        expect(role("button", { name: "登録する" })).toBeEnabled(),
+        expect(text(LIMIT_NOTICE)).toBeAbsent(),
+      );
+    });
+
+    test("10 本あっても、登録できない時と MFA が有効な時は、「登録する」も上限の文言も出さない", () => {
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Disabled" }, listing(10, false))),
+        expect(role("button", { name: "登録する" })).toBeAbsent(),
+        expect(text(LIMIT_NOTICE)).toBeAbsent(),
+      );
+      scene(
+        { update, view },
+        given(loaded({ _tag: "Enabled", recoveryCodesRemaining: 8 }, listing(10, true))),
+        expect(role("button", { name: "登録する" })).toBeAbsent(),
+        expect(text(LIMIT_NOTICE)).toBeAbsent(),
+      );
+    });
+
     test("一覧を読めない時は、パスキーの行に取得できなかった旨を alert で出し、MFA の行は残す", () => {
       scene(
         { update, view },

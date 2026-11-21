@@ -250,7 +250,7 @@ export const passkeyToSave = (): PasskeyToSave => ({
 export const savePasskey = (userId: string, passkey: PasskeyToSave) =>
   PasskeyRepo.use((repo) =>
     repo.insertPasskey({ id: crypto.randomUUID(), userId, ...passkey }),
-  ).pipe(Effect.map((saved) => saved !== undefined));
+  ).pipe(Effect.map((saved) => typeof saved !== "string"));
 
 export const passkeysOf = (userId: string) =>
   PasskeyRepo.use((repo) => repo.listPasskeys(userId)).pipe(

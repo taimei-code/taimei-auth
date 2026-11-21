@@ -5,6 +5,7 @@ import { NotFound, RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
   PasskeyAlreadyRegistered,
+  PasskeyLimitReached,
   PasskeyRegistrationUnavailable,
   PasskeyRejected,
   TotpRequired,
@@ -106,12 +107,17 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
     HttpApiEndpoint.get("list", "/api/account/passkeys", { success: PasskeyList }),
     HttpApiEndpoint.post("registrationOptions", "/api/account/passkeys/registration-options", {
       success: RegistrationOptions,
-      error: [TotpRequired, PasskeyRegistrationUnavailable],
+      error: [TotpRequired, PasskeyRegistrationUnavailable, PasskeyLimitReached],
     }),
     HttpApiEndpoint.post("register", "/api/account/passkeys", {
       payload: RegistrationResponse,
       success: Ok,
-      error: [PasskeyRejected, PasskeyAlreadyRegistered, PasskeyRegistrationUnavailable],
+      error: [
+        PasskeyRejected,
+        PasskeyAlreadyRegistered,
+        PasskeyRegistrationUnavailable,
+        PasskeyLimitReached,
+      ],
     }),
     HttpApiEndpoint.post("delete", "/api/account/passkeys/:passkeyId/delete", {
       params: { passkeyId: Schema.String },

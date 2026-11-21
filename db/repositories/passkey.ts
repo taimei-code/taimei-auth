@@ -1,6 +1,7 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../client";
-import { passkey } from "../schema";
+import { PASSKEY_LIMIT } from "../enums";
+import { passkey, user } from "../schema";
 import type { DbOrTx } from "../transaction";
 
 export type PasskeyRow = typeof passkey.$inferSelect;
@@ -44,16 +45,43 @@ export async function recordPasskeyUse(
     .then((rows) => rows.at(0));
 }
 
+export type PasskeySavingRefusal = "CredentialTaken" | "LimitReached";
+
 export async function insertPasskey(
   values: NewPasskey,
   txOrDb: DbOrTx = db,
-): Promise<PasskeyRow | undefined> {
-  return txOrDb
+): Promise<PasskeyRow | PasskeySavingRefusal> {
+  const saved = await txOrDb
     .insert(passkey)
-    .values(values)
+    .select((qb) =>
+      qb
+        .select({
+          id: sql`${values.id}`.as("id"),
+          userId: user.id,
+          credentialId: sql`${values.credentialId}`.as("credential_id"),
+          publicKey: sql`${sql.param(values.publicKey, passkey.publicKey)}`.as("public_key"),
+          counter: sql`${values.counter}`.as("counter"),
+          aaguid: sql`${values.aaguid}`.as("aaguid"),
+          transports: sql`${sql.param(values.transports ?? [], passkey.transports)}`.as(
+            "transports",
+          ),
+          createdAt: sql`now()`.as("created_at"),
+          lastUsedAt: sql`null`.as("last_used_at"),
+        })
+        .from(user)
+        .where(
+          and(
+            eq(user.id, values.userId),
+            sql`(select count(*) from ${passkey} where ${passkey.userId} = ${values.userId}) < ${PASSKEY_LIMIT}`,
+          ),
+        ),
+    )
     .onConflictDoNothing({ target: passkey.credentialId })
     .returning()
     .then((rows) => rows.at(0));
+  if (saved !== undefined) return saved;
+  const taken = await findPasskeyByCredentialId(values.credentialId, txOrDb);
+  return taken === undefined ? "LimitReached" : "CredentialTaken";
 }
 
 export async function deletePasskey(

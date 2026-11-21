@@ -15,3 +15,9 @@ export class PasskeyRegistrationUnavailable extends failure<PasskeyRegistrationU
   {},
   403,
 ) {}
+
+export class PasskeyLimitReached extends failure<PasskeyLimitReached>()(
+  "PasskeyLimitReached",
+  {},
+  409,
+) {}

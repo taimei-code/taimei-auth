@@ -9,8 +9,11 @@ const seed = createSeed("passkey-table-test-");
 const createUser = async (name: string): Promise<string> =>
   (await seed.seedUser(`${name}-${crypto.randomUUID()}`)).id;
 
+const savingOf = (userId: string, passkey: PasskeyToSave) =>
+  insertPasskey({ id: generatePasskeyId(), userId, ...passkey });
+
 const savePasskey = async (userId: string, passkey: PasskeyToSave): Promise<boolean> =>
-  (await insertPasskey({ id: generatePasskeyId(), userId, ...passkey })) !== undefined;
+  typeof (await savingOf(userId, passkey)) !== "string";
 
 const credentialIdsOf = async (userId: string): Promise<string[]> =>
   (await listPasskeys(userId)).map(({ credentialId }) => credentialId);
@@ -77,5 +80,41 @@ describe("パスキーの保存と一覧", () => {
 
     expect(await listPasskeys(owner)).toEqual([]);
     expect(await savePasskey(next, passkey)).toBe(true);
+  });
+
+  const saveMany = async (userId: string, count: number) => {
+    for (let i = 0; i < count; i++) await savePasskey(userId, passkeyToSave());
+  };
+
+  test("10 本ある user の 11 本目は上限で拒まれ、一覧は 10 本のまま増えない", async () => {
+    const owner = await createUser("owner");
+    await saveMany(owner, 10);
+
+    expect(await savingOf(owner, passkeyToSave())).toBe("LimitReached");
+    expect(await listPasskeys(owner)).toHaveLength(10);
+  });
+
+  test("9 本ある user の 10 本目は保存でき、ほかの user が 10 本持っていても数えない", async () => {
+    const owner = await createUser("owner");
+    const other = await createUser("other");
+    await saveMany(other, 10);
+    await saveMany(owner, 9);
+
+    expect(await savePasskey(owner, passkeyToSave())).toBe(true);
+    expect(await listPasskeys(owner)).toHaveLength(10);
+  });
+
+  test("保存済みの credential の id は、上限に達していてもいなくても「登録済み」で拒まれる", async () => {
+    const roomy = await createUser("roomy");
+    const full = await createUser("full");
+    const roomyPasskey = passkeyToSave();
+    const fullPasskey = passkeyToSave();
+    await savePasskey(roomy, roomyPasskey);
+    await savePasskey(full, fullPasskey);
+    await saveMany(full, 9);
+
+    expect(await savingOf(roomy, roomyPasskey)).toBe("CredentialTaken");
+    expect(await savingOf(full, fullPasskey)).toBe("CredentialTaken");
+    expect(await listPasskeys(full)).toHaveLength(10);
   });
 });

@@ -45,6 +45,7 @@ type SubmitValue = Readonly<{ name: string; value: string }>;
 export type ButtonViewConfig<Message> = Readonly<{
   label: string;
   accessibleNamePrefix?: string;
+  describedBy?: string;
   type: "button" | "submit";
   look: ButtonLook;
   submission: Submission;
@@ -98,6 +99,7 @@ export const buttonView = <Message>(
           [
             ...attributes.button,
             h.Class(CLASS_BY_LOOK[config.look]),
+            ...(config.describedBy === undefined ? [] : [h.AriaDescribedBy(config.describedBy)]),
             ...(config.submitValue === undefined
               ? []
               : [

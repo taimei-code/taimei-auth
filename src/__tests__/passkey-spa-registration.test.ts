@@ -149,6 +149,7 @@ const PASSKEY_TAGS = {
   PasskeyRejected: true,
   PasskeyAlreadyRegistered: true,
   PasskeyRegistrationUnavailable: true,
+  PasskeyLimitReached: true,
   NotFound: true,
 } as const;
 

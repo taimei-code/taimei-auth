@@ -19,6 +19,7 @@
     "../../src/mfa/mfa-contract.ts",
     "../../src/passkey/errors.ts",
     "../../src/passkey/passkey-contract.ts",
+    "../../src/passkey/policy.ts",
     "../../src/redirect-hosts.ts",
     "../../src/services.ts",
     "../../src/sign-in-params.ts",

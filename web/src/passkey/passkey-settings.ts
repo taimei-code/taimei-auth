@@ -1,4 +1,5 @@
 import type { PasskeyListResponse } from "@core/passkey/passkey-contract";
+import { isPasskeyLimitReached } from "@core/passkey/policy";
 import { Array, Effect, Option, Schema } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
@@ -101,6 +102,7 @@ const RegistrationFailure = Schema.Literals([
   "PasskeyRejected",
   "PasskeyAlreadyRegistered",
   "PasskeyRegistrationUnavailable",
+  "PasskeyLimitReached",
   "Unauthorized",
   "Unexpected",
 ]);
@@ -148,6 +150,7 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
         PasskeyRejected: failedRegister(request, "PasskeyRejected"),
         PasskeyAlreadyRegistered: failedRegister(request, "PasskeyAlreadyRegistered"),
         PasskeyRegistrationUnavailable: failedRegister(request, "PasskeyRegistrationUnavailable"),
+        PasskeyLimitReached: failedRegister(request, "PasskeyLimitReached"),
         Unauthorized: failedRegister(request, "Unauthorized"),
         PasskeyCreationFailed: failedRegister(request, "Unexpected"),
         HttpClientError: failedRegister(request, "Unexpected"),
@@ -342,14 +345,25 @@ const passkeyRowView = (
     h,
   );
 
-const registerButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
+const LIMIT_NOTICE_ID = "passkey-limit-notice";
+
+const limitNoticeView = (h: HtmlBuilder<Message>): Html =>
+  h.p(
+    [h.Id(LIMIT_NOTICE_ID), h.Class("mt-2 text-sm text-muted-foreground")],
+    [
+      "登録できるパスキーの数の上限に達しています。不要なパスキーを削除すると、新しく登録できます。",
+    ],
+  );
+
+const registerButtonView = (model: Model, limitReached: boolean, h: HtmlBuilder<Message>): Html =>
   buttonView(
     {
       label: "登録する",
       type: "button",
       look: "outlineSmall",
       submission: submissionWhile(isRegistering(model)),
-      isBlocked: isDeleting(model),
+      isBlocked: isDeleting(model) || limitReached,
+      describedBy: limitReached ? LIMIT_NOTICE_ID : undefined,
       onClick: Message.ClickedRegister(),
     },
     h,
@@ -410,11 +424,18 @@ export const view = Submodel.defineView<
       isDialogVisible(model.dialog) ? passkeyRowView([deletionDialogView(model, h)], [], h) : null,
     Failed: () =>
       passkeyRowView([alertTextView(LIST_UNAVAILABLE, h), deletionDialogView(model, h)], [], h),
-    Shown: ({ passkeys, registrable }) =>
-      passkeyRowView(
-        [passkeysView(model, passkeys, h), deletionDialogView(model, h)],
-        registrable && !mfaEnabled ? [registerButtonView(model, h)] : [],
+    Shown: ({ passkeys, registrable }) => {
+      const offersRegistration = registrable && !mfaEnabled;
+      const limitReached = offersRegistration && isPasskeyLimitReached(passkeys.length);
+      return passkeyRowView(
+        [
+          limitReached ? limitNoticeView(h) : null,
+          passkeysView(model, passkeys, h),
+          deletionDialogView(model, h),
+        ],
+        offersRegistration ? [registerButtonView(model, limitReached, h)] : [],
         h,
-      ),
+      );
+    },
   }),
 );
