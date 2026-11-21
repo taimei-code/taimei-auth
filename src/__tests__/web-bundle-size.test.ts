@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { REPO_ROOT } from "./source-scan";
 
-const BASELINE_WEB_JS_BYTES = 851_000;
+const BASELINE_WEB_JS_BYTES = 855_000;
 
 const BUILD_TIMEOUT_MS = 120_000;
 
@@ -17,7 +17,7 @@ const jsBytesUnder = (directory: string): number =>
     .reduce((total, path) => total + statSync(join(directory, path)).size, 0);
 
 test(
-  "本番の web を build した JS の合計は 851,000 B を超えない (React を外した後の 832,129 B に、form の検証、フィーチャーフラグの契約、パスキーの登録と一覧の画面の分を足した上限)",
+  "本番の web を build した JS の合計は 855,000 B を超えない (React を外した後の 832,129 B に、form の検証、フィーチャーフラグの契約、パスキーの登録と一覧と削除の画面の分を足した上限)",
   () => {
     const outDirectory = mkdtempSync(join(tmpdir(), "web-bundle-size-"));
     try {

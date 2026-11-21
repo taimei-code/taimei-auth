@@ -81,6 +81,11 @@ const AFTER_REGISTERING_PASSKEY: ReloadTexts = {
   actionText: "パスキーを登録しました",
 };
 
+const AFTER_DELETING_PASSKEY: ReloadTexts = {
+  doneText: "パスキーを削除しました。",
+  actionText: "パスキーを削除しました",
+};
+
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
 
 const failedLoadSecuritySettings =
@@ -227,6 +232,7 @@ const foldPasskeySettings = Update.foldChild({
   toParentMessage: toPasskeySettingsMessage,
   foldOutMessage: PasskeySettings.OutMessage.match<Step>({
     Registered: () => reloadSecuritySettings(AFTER_REGISTERING_PASSKEY),
+    Deleted: () => reloadSecuritySettings(AFTER_DELETING_PASSKEY),
     Notified: (notice) => forwarding(OutMessage.Notified(notice)),
     RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
   }),

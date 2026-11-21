@@ -32,6 +32,9 @@ const enrollmentMessage = (message: MfaEnrollment.Message) =>
 const disablingMessage = (message: MfaDisabling.Message) =>
   Message.GotMfaDisablingMessage({ message });
 
+const passkeyMessage = (message: PasskeySettings.Message) =>
+  Message.GotPasskeySettingsMessage({ message });
+
 const disabled = (): Model =>
   update(
     init(VISIT).model,
@@ -83,6 +86,13 @@ const disablingDialogPaintedClosing = disablingMessage(
 );
 const disablingDialogClosed = disablingMessage(
   MfaDisabling.Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
+);
+
+const passkeyDialogPaintedClosing = passkeyMessage(
+  PasskeySettings.Message.GotDialogMessage({ message: DIALOG_PAINTED_CLOSING }),
+);
+const passkeyDialogClosed = passkeyMessage(
+  PasskeySettings.Message.GotDialogMessage({ message: DIALOG_ENDED_CLOSING }),
 );
 
 const loadsSettings = (current: Model, next: Message) =>
@@ -487,9 +497,6 @@ describe("登録と状態の取得の失敗", () => {
 });
 
 describe("パスキーの登録の結果を画面に返す", () => {
-  const passkeyMessage = (message: PasskeySettings.Message) =>
-    Message.GotPasskeySettingsMessage({ message });
-
   const registering = (): Model =>
     send(disabled(), passkeyMessage(PasskeySettings.Message.ClickedRegister()));
 
@@ -539,5 +546,37 @@ describe("パスキーの登録の結果を画面に返す", () => {
       ),
     );
     expect(expired.outMessage).toEqual(OutMessage.RequiredSignIn());
+  });
+});
+
+describe("パスキーの削除の結果を画面に返す", () => {
+  const PASSKEY = {
+    id: "passkey-1",
+    createdAt: "2026-03-04T03:00:00.000Z",
+    maybeLastUsedAt: Option.none(),
+  };
+
+  test("削除できると、dialog が閉じ切ってから一覧と MFA を読み直し、読めたら削除した旨を知らせる", () => {
+    const deleting = send(
+      disabled(),
+      passkeyMessage(PasskeySettings.Message.ClickedDelete({ passkey: PASSKEY })),
+      passkeyMessage(PasskeySettings.Message.ClickedConfirmDeletion()),
+    );
+    const succeeded = passkeyMessage(
+      PasskeySettings.Message.SucceededDeletePasskey({ visit: VISIT, requestNumber: 1 }),
+    );
+    expect(loadsSettings(deleting, succeeded)).toBe(false);
+    const closed = update(
+      send(deleting, succeeded, passkeyDialogPaintedClosing),
+      passkeyDialogClosed,
+    );
+    expect(
+      (closed.commands ?? []).find((command) => command.name === LoadSecuritySettings.name),
+    ).toMatchObject({
+      args: {
+        refreshNumber: 1,
+        maybeTexts: Option.some({ doneText: "パスキーを削除しました。" }),
+      },
+    });
   });
 });

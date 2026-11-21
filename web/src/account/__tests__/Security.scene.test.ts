@@ -17,6 +17,7 @@ import {
 
 import * as CopyResult from "../../mfa/copy-result";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import * as PasskeySettings from "../../passkey/passkey-settings";
 import {
   DIALOG_RESOURCES_RELEASED_RESOLVER,
   FIRST_DIALOG_CLOSING_RESOLVERS,
@@ -26,17 +27,17 @@ import {
 import { Dialog } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, update, view } from "../pages/Security";
 
+const succeededLoad = (mfa: Model["mfa"], passkeyList: Model["passkeyList"]): Message =>
+  Message.SucceededLoadSecuritySettings({
+    passkeyList,
+    visit: 1,
+    refreshNumber: 0,
+    mfa,
+    maybeTexts: Option.none(),
+  });
+
 const loaded = (mfa: Model["mfa"], passkeyList: Model["passkeyList"] = { _tag: "Hidden" }): Model =>
-  update(
-    init(1).model,
-    Message.SucceededLoadSecuritySettings({
-      passkeyList,
-      visit: 1,
-      refreshNumber: 0,
-      mfa,
-      maybeTexts: Option.none(),
-    }),
-  ).model;
+  update(init(1).model, succeededLoad(mfa, passkeyList)).model;
 
 describe("セキュリティの画面", () => {
   test("「有効にする」を押すと MFA の有効化の dialog を開き、登録の応答を待つ間は読み込み中を出す", () => {
@@ -193,6 +194,68 @@ describe("セキュリティの画面", () => {
         expect(role("button", { name: "有効にする" })).toExist(),
       );
     });
+  });
+});
+
+describe("パスキーの削除", () => {
+  const PASSKEY = {
+    id: "passkey-1",
+    createdAt: "2026-03-04T12:00:00.000Z",
+    maybeLastUsedAt: Option.none(),
+  };
+  const LISTED: Model["passkeyList"] = { _tag: "Shown", passkeys: [PASSKEY], registrable: false };
+  const DELETE_BUTTON = role("button", {
+    name: "登録日 2026/03/04、最後に使った日 未使用 のパスキーを削除",
+  });
+  const DELETION_TITLE = role("heading", { name: "パスキーの削除" });
+
+  const confirming = (mfa: Model["mfa"]): Model =>
+    update(
+      loaded(mfa, LISTED),
+      Message.GotPasskeySettingsMessage({
+        message: PasskeySettings.Message.ClickedDelete({ passkey: PASSKEY }),
+      }),
+    ).model;
+
+  test("MFA が有効で登録できない時も、各項目に登録日と最後に使った日を名前に含む「削除」を出す", () => {
+    scene(
+      { update, view },
+      given(loaded({ _tag: "Enabled", recoveryCodesRemaining: 8 }, LISTED)),
+      expect(DELETE_BUTTON).toExist(),
+      expect(role("button", { name: "登録する" })).toBeAbsent(),
+    );
+  });
+
+  test("「削除」を押すと、登録日と最後に使った日で対象を示す確認の dialog を出す", () => {
+    const opened = confirming({ _tag: "Disabled" });
+    scene(
+      { update, view },
+      given(opened),
+      Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...pendingDialogTransitionResolvers(opened.passkeySettings.dialog)),
+      expect(DELETION_TITLE).toExist(),
+      expect(
+        text(
+          "登録日 2026/03/04、最後に使った日 未使用 のパスキーを削除します。削除すると、このパスキーではログインできなくなります。",
+        ),
+      ).toExist(),
+      expect(role("button", { name: "キャンセル" })).toExist(),
+      expect(role("button", { name: "削除する" })).toExist(),
+    );
+  });
+
+  test("確認の dialog が見えている間に一覧が行を出さない状態になっても、dialog を描き続ける", () => {
+    const rowHidden = update(
+      confirming({ _tag: "Disabled" }),
+      succeededLoad({ _tag: "Disabled" }, { _tag: "Hidden" }),
+    ).model;
+    scene(
+      { update, view },
+      given(rowHidden),
+      Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...pendingDialogTransitionResolvers(rowHidden.passkeySettings.dialog)),
+      expect(DELETION_TITLE).toExist(),
+    );
   });
 });
 
