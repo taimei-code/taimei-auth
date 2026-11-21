@@ -1320,6 +1320,14 @@ const ROWS: readonly Row[] = [
       "既知の transports で絞る判定は src/passkey/webauthn.ts の検証の入口だけが持つ (保存の前の判定を 1 か所に集める。DB の CHECK は db/schema.ts)",
   },
   {
+    name: "passkey-limit-only-in-passkey-policy",
+    within: ["src/**", "db/**", "web/src/**", "management/**"],
+    allowedIn: ["db/enums.ts", "db/repositories/passkey.ts", "src/passkey/policy.ts"],
+    matchers: [{ kind: "identifier", names: ["PASSKEY_LIMIT"] }],
+    message:
+      "パスキーの数の上限 (PASSKEY_LIMIT) と比べるのは、保存の文 db/repositories/passkey.ts と述語 src/passkey/policy.ts の isPasskeyLimitReached だけ (server の options と画面は述語を呼ぶ。上限は目安で、同時の登録で超えうるので、比較は「以上」に揃える。#494)",
+  },
+  {
     name: "flagship-binding-only-in-feature-flags",
     within: ["src/**", "testing/**"],
     allowedIn: ["src/feature-flags.ts"],

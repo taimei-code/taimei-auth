@@ -95,7 +95,7 @@ describe("パスキーの一覧の API の応答を、保存したパスキー�
         repo.insertPasskey({ id: crypto.randomUUID(), userId, ...material }),
       ),
     );
-    if (row === undefined) throw new Error("パスキーを保存できなかった");
+    if (typeof row === "string") throw new Error(`パスキーを保存できなかった: ${row}`);
     return {
       id: row.id,
       credentialId: row.credentialId,

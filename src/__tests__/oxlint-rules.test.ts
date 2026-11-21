@@ -1708,6 +1708,18 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "パスキーの数の上限と比べるのは保存の文と述語だけ: 画面に書くと lint が止める",
+    path: "web/src/passkey/Probe494.ts",
+    source: "export const full = (count: number) => count >= PASSKEY_LIMIT;",
+    expectedRules: ["taimei(passkey-limit-only-in-passkey-policy)"],
+  },
+  {
+    name: "パスキーの数の上限と比べるのは保存の文と述語だけ: src/passkey/policy.ts では lint が止めない",
+    path: "src/passkey/policy.ts",
+    source: "export const full = (count: number) => count >= PASSKEY_LIMIT;",
+    expectedRules: [],
+  },
+  {
     name: "management/ の import 面は全列挙で固定する: management に書くと lint が止める",
     path: "management/Probe094.ts",
     source: 'import { db } from "../db/client"; export const d = db;',

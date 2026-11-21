@@ -143,6 +143,41 @@ describe("パスキーの登録の要求の形", () => {
     });
     expect(body.timeout).toBeLessThan(5 * 60 * 1000);
   });
+  test("同時の登録で 11 本になった user の options も、上限の失敗になる", async () => {
+    const app = buildAppWith(
+      Layer.mergeAll(
+        signedIn("u-over-limit", "owner@example.com"),
+        Layer.succeed(
+          PasskeyRepo,
+          partial<PasskeyRepo["Service"]>({
+            listPasskeys: () =>
+              Effect.succeed(
+                Array.from({ length: 11 }, (_, index) => ({
+                  id: `pk-${index}`,
+                  userId: "u-over-limit",
+                  credentialId: `credential-${index}`,
+                  transports: ["internal"] as Array<"internal">,
+                  publicKey: new Uint8Array([1]),
+                  counter: 0,
+                  aaguid: "00000000-0000-0000-0000-000000000000",
+                  createdAt: new Date(),
+                  lastUsedAt: null,
+                })),
+              ),
+          }),
+        ),
+      ),
+    );
+
+    const res = await app.request("/api/account/passkeys/registration-options", {
+      method: "POST",
+      headers: { ...JSON_HEADERS, "sec-fetch-site": "same-origin", ...freshSessionCookie() },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.text()).toBe(JSON.stringify({ _tag: "PasskeyLimitReached" }));
+  });
 });
 
 const ATTEMPTS_PER_MINUTE = 10;
@@ -509,5 +544,86 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
 
     expect(enrollment.status).not.toBe(429);
     expect(enrollment.status).toBeLessThan(500);
+  });
+  const saveCredentials = async (user: { readonly id: string }, count: number) => {
+    for (let i = 0; i < count; i++) await saveSomeCredential(user);
+  };
+
+  test("パスキーが 10 本ある user の options は既知の失敗になり、challenge を返さず、TTL store にもその user の challenge を置かない", async () => {
+    const owner = await createUser("owner");
+    await saveCredentials(owner, 10);
+    const heldBefore = ttlValuesHolding(owner.id);
+
+    const outcome = await requestRegistrationOptions(signedInSession(owner));
+
+    expectKnownClientFailure(outcome);
+    expect(outcome.body).not.toHaveProperty("challenge");
+    expect(ttlValuesHolding(owner.id)).toBe(heldBefore);
+  });
+
+  test("9 本の時に取った challenge で署名した応答を、10 本になった後に送ると既知の失敗になり、行は 10 本のまま増えない", async () => {
+    const owner = await createUser("owner");
+    await saveCredentials(owner, 9);
+    const session = signedInSession(owner);
+    const challenge = challengeOf(await requestRegistrationOptions(session));
+    await saveCredentials(owner, 1);
+    const savedBefore = await savedCredentialIdsOf(owner);
+
+    const outcome = await sendRegistration(session, signedRegistrationFor(challenge).response);
+
+    expectKnownClientFailure(outcome);
+    expect(savedBefore).toHaveLength(10);
+    expect(await savedCredentialIdsOf(owner)).toEqual(savedBefore);
+  });
+
+  test("パスキーが 9 本ある user は、options を取って署名した応答を送ると登録でき、10 本になる", async () => {
+    const owner = await createUser("owner");
+    await saveCredentials(owner, 9);
+    const session = signedInSession(owner);
+
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+    const outcome = await sendRegistration(session, signed.response);
+
+    expect(outcome.status).toBe(200);
+    const saved = await savedCredentialIdsOf(owner);
+    expect(saved).toHaveLength(10);
+    expect(saved).toContain(signed.made.id);
+  });
+
+  const LIMIT_REACHED = { status: 409, body: { _tag: "PasskeyLimitReached" } };
+
+  test("MFA が有効な user も、10 本あれば options の失敗は上限を表す", async () => {
+    const owner = await createMfaEnabledUser("mfa-owner");
+    await saveCredentials(owner, 10);
+
+    const outcome = await requestRegistrationOptions(signedInSession(owner));
+
+    expect(statusAndBody(outcome)).toEqual(LIMIT_REACHED);
+  });
+
+  test("10 本になった後に送った新しい credential の応答の失敗は上限を表し、9 本以下で送った保存済みの credential の応答の失敗は登録済みを表す", async () => {
+    const full = await createUser("full");
+    const roomy = await createUser("roomy");
+    await saveCredentials(full, 9);
+    const fullSession = signedInSession(full);
+    const roomySession = signedInSession(roomy);
+    const fullChallenge = challengeOf(await requestRegistrationOptions(fullSession));
+    const duplicate = signedRegistrationFor(
+      challengeOf(await requestRegistrationOptions(roomySession)),
+    );
+    await saveCredentials(full, 1);
+    await saveCredential(roomy, duplicate.made.id);
+
+    const refusedByLimit = await sendRegistration(
+      fullSession,
+      signedRegistrationFor(fullChallenge).response,
+    );
+    const refusedAsDuplicate = await sendRegistration(roomySession, duplicate.response);
+
+    expect(statusAndBody(refusedByLimit)).toEqual(LIMIT_REACHED);
+    expect(statusAndBody(refusedAsDuplicate)).toEqual({
+      status: 409,
+      body: { _tag: "PasskeyAlreadyRegistered" },
+    });
   });
 });

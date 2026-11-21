@@ -11,6 +11,8 @@ export const PASSKEY_FAILURE_MESSAGES: FailureMessages<PasskeyFailure> = {
     "パスキーを登録できませんでした。時間が経ちすぎた可能性があります。もう一度登録してください。",
   PasskeyAlreadyRegistered: "このパスキーはすでに登録されています。",
   PasskeyRegistrationUnavailable: "パスキーはまだ登録できません。ページを再読み込みしてください。",
+  PasskeyLimitReached:
+    "登録できるパスキーの数の上限に達しています。ページを再読み込みして、不要なパスキーを削除してください。",
   NotFound: "このパスキーは見つかりませんでした。ページを再読み込みしてください。",
 };
 

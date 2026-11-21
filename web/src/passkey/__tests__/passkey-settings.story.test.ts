@@ -92,6 +92,19 @@ describe("パスキーを登録する", () => {
     });
   });
 
+  test("古い一覧から押して上限で拒まれると、再読み込みと削除を促す文言を error で知らせ、押せる状態へ戻る", () => {
+    const failed = update(
+      registering(),
+      Message.FailedRegisterPasskey({ ...CURRENT, failure: "PasskeyLimitReached" }),
+    );
+    expect(failed.outMessage).toMatchObject({
+      _tag: "Notified",
+      tone: "Error",
+      text: expect.stringMatching(/上限.*再読み込み.*削除/),
+    });
+    expect(failed.model.busy._tag).toBe("Idle");
+  });
+
   test("session が切れていると、ログインし直しを頼む", () => {
     const failed = update(
       registering(),

@@ -102,6 +102,7 @@ const RegistrationFailure = Schema.Literals([
   "PasskeyAlreadyRegistered",
   "PasskeyRegistrationUnavailable",
   "Unauthorized",
+  "PasskeyLimitReached",
   "Unexpected",
 ]);
 type RegistrationFailure = typeof RegistrationFailure.Type;
@@ -149,6 +150,7 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
         PasskeyAlreadyRegistered: failedRegister(request, "PasskeyAlreadyRegistered"),
         PasskeyRegistrationUnavailable: failedRegister(request, "PasskeyRegistrationUnavailable"),
         Unauthorized: failedRegister(request, "Unauthorized"),
+        PasskeyLimitReached: failedRegister(request, "PasskeyLimitReached"),
         PasskeyCreationFailed: failedRegister(request, "Unexpected"),
         HttpClientError: failedRegister(request, "Unexpected"),
         SchemaError: failedRegister(request, "Unexpected"),

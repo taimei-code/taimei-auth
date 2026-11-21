@@ -45,7 +45,7 @@ describe("パスキーの削除の API", () => {
         repo.insertPasskey({ id: crypto.randomUUID(), userId: user.id, ...passkeyToSave() }),
       ),
     );
-    if (row === undefined) throw new Error("パスキーを保存できなかった");
+    if (typeof row === "string") throw new Error(`パスキーを保存できなかった: ${row}`);
     return row.id;
   };
 
