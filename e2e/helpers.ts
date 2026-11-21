@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { type APIRequestContext, expect, type Page } from "@playwright/test";
+import { type APIRequestContext, expect, type Locator, type Page } from "@playwright/test";
 import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { sentLinkIn } from "../testing/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
+import { routeEndpoint } from "./contract-mock";
 import type { ConsumableFixture } from "./fixture-names";
 
 const REPO_ROOT = join(__dirname, "..");
@@ -140,4 +141,48 @@ export const signInThroughMagicLinkForm = async (page: Page, email: string): Pro
   const link = await sendMagicLinkFromForm(page, email);
   await page.goto(link);
   return link;
+};
+
+export type ListedPasskey = { id: string; created_at: string; last_used_at: string | null };
+
+export const openSecurityListing = async (
+  page: Page,
+  passkeys: ReadonlyArray<ListedPasskey>,
+  { canRegister = true }: { canRegister?: boolean } = {},
+) => {
+  const listed = { passkeys };
+  await routeEndpoint(page, "passkey.list", (route) =>
+    route.fulfill({ json: { passkeys: listed.passkeys, can_register: canRegister } }),
+  );
+  await signInWithMagicLink(page, PASSKEY_EMAIL);
+  await page.goto("/account/security");
+  await expect(passkeyItems(page)).toHaveCount(passkeys.length);
+  return listed;
+};
+
+export const acceptPasskeyDeletions = (
+  page: Page,
+  listed: { passkeys: ReadonlyArray<ListedPasskey> },
+) =>
+  routeEndpoint(page, "passkey.delete", async (route) => {
+    const deletedId = new URL(route.request().url()).pathname.split("/").at(-2);
+    listed.passkeys = listed.passkeys.filter((passkey) => passkey.id !== deletedId);
+    await route.fulfill({ json: { ok: true } });
+  });
+
+export const confirmationDialog = (page: Page) => page.getByRole("dialog");
+
+export const confirmDeletionButton = (page: Page) =>
+  confirmationDialog(page).getByRole("button", { name: /削除/ });
+
+export const openConfirmationOf = async (page: Page, item: Locator) => {
+  const deleteButton = item.getByRole("button", { name: /削除/ });
+  await expect(deleteButton).toBeVisible();
+  await deleteButton.click();
+  await expect(confirmationDialog(page)).toBeVisible();
+};
+
+export const confirmDeletionOf = async (page: Page, item: Locator) => {
+  await openConfirmationOf(page, item);
+  await confirmDeletionButton(page).click();
 };

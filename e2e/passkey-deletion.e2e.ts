@@ -1,9 +1,16 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { declaredFailure, endpointPattern, routeEndpoint } from "./contract-mock";
 import {
+  acceptPasskeyDeletions,
   addVirtualAuthenticator,
+  confirmationDialog,
+  confirmDeletionButton,
+  confirmDeletionOf,
   featureFlags,
+  type ListedPasskey,
   mfaRow,
+  openConfirmationOf,
+  openSecurityListing,
   PASSKEY_EMAIL,
   passkeyItems,
   passkeyRow,
@@ -16,8 +23,6 @@ import {
 const PASSKEY = "passkey";
 const FAILURE_NOTICE = /失敗|できません|見つかりません|上限/;
 const DELETION_URL = endpointPattern("passkey.delete");
-
-type ListedPasskey = { id: string; created_at: string; last_used_at: string | null };
 
 const OLDER: ListedPasskey = {
   id: "passkey-older",
@@ -48,23 +53,6 @@ const sentDeletionPaths = (page: Page): string[] => {
   return paths;
 };
 
-const confirmationDialog = (page: Page) => page.getByRole("dialog");
-
-const confirmDeletionButton = (page: Page) =>
-  confirmationDialog(page).getByRole("button", { name: /削除/ });
-
-const openConfirmationOf = async (page: Page, item: Locator) => {
-  const deleteButton = item.getByRole("button", { name: /削除/ });
-  await expect(deleteButton).toBeVisible();
-  await deleteButton.click();
-  await expect(confirmationDialog(page)).toBeVisible();
-};
-
-const confirmDeletionOf = async (page: Page, item: Locator) => {
-  await openConfirmationOf(page, item);
-  await confirmDeletionButton(page).click();
-};
-
 const openSecurityWithRegisteredPasskey = async (page: Page) => {
   reseedFixture("passkey");
   await addVirtualAuthenticator(page);
@@ -73,24 +61,6 @@ const openSecurityWithRegisteredPasskey = async (page: Page) => {
   await registerPasskeyButton(page).click();
   await expect(passkeyItems(page)).toHaveCount(1);
 };
-
-const openSecurityListing = async (page: Page, passkeys: ReadonlyArray<ListedPasskey>) => {
-  const listed = { passkeys };
-  await routeEndpoint(page, "passkey.list", (route) =>
-    route.fulfill({ json: { passkeys: listed.passkeys, can_register: true } }),
-  );
-  await signInWithMagicLink(page, PASSKEY_EMAIL);
-  await page.goto("/account/security");
-  await expect(passkeyItems(page)).toHaveCount(passkeys.length);
-  return listed;
-};
-
-const acceptDeletions = (page: Page, listed: { passkeys: ReadonlyArray<ListedPasskey> }) =>
-  routeEndpoint(page, "passkey.delete", async (route) => {
-    const deletedId = new URL(route.request().url()).pathname.split("/").at(-2);
-    listed.passkeys = listed.passkeys.filter((passkey) => passkey.id !== deletedId);
-    await route.fulfill({ json: { ok: true } });
-  });
 
 test("登録したパスキーの「削除」から確認の dialog で削除を選ぶと、その行が一覧から消える", async ({
   page,
@@ -108,7 +78,7 @@ test("2 本のうち 1 本の削除を確定すると、削除の API にその�
 }) => {
   const deletions = sentDeletionPaths(page);
   const listed = await openSecurityListing(page, [OLDER, NEWER]);
-  await acceptDeletions(page, listed);
+  await acceptPasskeyDeletions(page, listed);
 
   await confirmDeletionOf(page, passkeyItems(page).filter({ hasText: OLDER_ITEM_TEXT }));
 
@@ -123,7 +93,7 @@ test("MFA が有効な user も、一覧の「削除」からパスキーを削�
   );
   const deletions = sentDeletionPaths(page);
   const listed = await openSecurityListing(page, [OLDER]);
-  await acceptDeletions(page, listed);
+  await acceptPasskeyDeletions(page, listed);
 
   await confirmDeletionOf(page, passkeyItems(page));
 
@@ -192,7 +162,7 @@ for (const { cause, response } of FAILED_DELETIONS) {
 
 test("最後の 1 本を削除すると、パスキーが無いことを述べる表示になる", async ({ page }) => {
   const listed = await openSecurityListing(page, [OLDER]);
-  await acceptDeletions(page, listed);
+  await acceptPasskeyDeletions(page, listed);
 
   await confirmDeletionOf(page, passkeyItems(page));
 
