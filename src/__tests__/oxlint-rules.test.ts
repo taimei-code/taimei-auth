@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { repoFiles } from "./source-scan";
 
 const REPO_ROOT = join(import.meta.dir, "../..");
 const OXLINT = join(REPO_ROOT, "node_modules/.bin/oxlint");
@@ -888,6 +889,1598 @@ const CASES: readonly Case[] = [
       'import { Effect } from "effect";\nexport const probe = (publicKey: unknown) => Effect.tryPromise(() => Promise.resolve(publicKey));',
     expectedRules: [],
   },
+  {
+    name: "fetch を書かない: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe001.ts",
+    source: 'export const load = () => fetch("/x");',
+    expectedRules: ["taimei(no-fetch-in-web)"],
+  },
+  {
+    name: "SpaHttpClient は Foldkit の file と application の entry だけ: web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe002.ts",
+    source: 'import { SpaHttpClient } from "./spa-http-client"; export const c = SpaHttpClient;',
+    expectedRules: ["taimei(spa-http-client-only-in-foldkit-files)"],
+  },
+  {
+    name: "SpaHttpClient は Foldkit の file と application の entry だけ: web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe003.ts",
+    source:
+      'import { SpaHttpClient } from "./spa-http-client"; import { Command } from "foldkit"; export const c = [SpaHttpClient, Command];',
+    expectedRules: [],
+  },
+  {
+    name: "SpaHttpClient は Foldkit の file と application の entry だけ: web/src/app/probe では lint が止めない",
+    path: "web/src/app/probe/entry.ts",
+    source:
+      'import { SpaHttpClient } from "../../shared/spa-http-client"; export const c = SpaHttpClient;',
+    expectedRules: [],
+  },
+  {
+    name: "SpaHttpClient は Foldkit の file と application の entry だけ: web/src/company では lint が止めない",
+    path: "web/src/company/Probe004.ts",
+    source:
+      'import type { SpaHttpClient } from "../shared/spa-http-client"; export type C = SpaHttpClient;',
+    expectedRules: [],
+  },
+  {
+    name: "effect/http の値の import は書かない: web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe005.ts",
+    source: 'import { HttpClient } from "effect/http"; export const c = HttpClient;',
+    expectedRules: ["taimei(no-effect-http-value-import-in-web)"],
+  },
+  {
+    name: "effect/http の値の import は書かない: web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe006.ts",
+    source:
+      'import type { HttpClientError } from "effect/http"; export type E = HttpClientError.HttpClientError;',
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の一覧の読み出しは auth-client-read.ts だけ: web/src/account に書くと lint が止める",
+    path: "web/src/account/Probe007.ts",
+    source: "export const f = (client: { listSessions(): void }) => client.listSessions();",
+    expectedRules: ["taimei(auth-client-list-only-in-auth-client-read)"],
+  },
+  {
+    name: "better-auth の一覧の読み出しは auth-client-read.ts だけ: web/src/account では lint が止めない",
+    path: "web/src/account/auth-client-read.ts",
+    source: "export const f = (client: { listSessions(): void }) => client.listSessions();",
+    expectedRules: [],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load): web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe008.ts",
+    source: "export const go = (url: string) => window.location.replace(url);",
+    expectedRules: ["taimei(leave-spa-only-in-leave-spa)"],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load): web/src/shared では lint が止めない",
+    path: "web/src/shared/leave-spa.ts",
+    source: "export const go = (url: string) => window.location.replace(url);",
+    expectedRules: [],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load): web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe009.ts",
+    source: "export const here = window.location.href;",
+    expectedRules: [],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load) (location.href への代入): web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe010.ts",
+    source: "export const go = (url: string) => { window.location.href = url; };",
+    expectedRules: ["taimei(leave-spa-only-in-leave-spa)"],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load) (location.href への代入): web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe011.ts",
+    source: "export const same = (a: string) => window.location.href === a;",
+    expectedRules: [],
+  },
+  {
+    name: "SPA を離れる遷移 (location.replace / assign、Navigation.load) (foldkit/navigation の load の import): web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe012.ts",
+    source: 'import { load } from "foldkit/navigation"; export const go = load;',
+    expectedRules: ["taimei(leave-spa-only-in-leave-spa)"],
+  },
+  {
+    name: "cause を捨てる onFailure: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe013.ts",
+    source: "export const handlers = { onSuccess: () => 1, onFailure: () => 0 };",
+    expectedRules: ["taimei(no-ignored-cause-in-web)"],
+  },
+  {
+    name: "cause を捨てる onFailure: web/src/company では lint が止めない",
+    path: "web/src/company/Probe014.ts",
+    source: "export const handlers = { onFailure: (cause: unknown) => String(cause) };",
+    expectedRules: [],
+  },
+  {
+    name: "orElseSucceed を書かない: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe015.ts",
+    source: "export const r = Effect.orElseSucceed;",
+    expectedRules: ["taimei(no-or-else-succeed)"],
+  },
+  {
+    name: "sign-out は auth/sign-out.ts だけ: web/src/account に書くと lint が止める",
+    path: "web/src/account/Probe016.ts",
+    source: "export const f = (client: { signOut(): void }) => client.signOut();",
+    expectedRules: ["taimei(sign-out-only-in-sign-out)"],
+  },
+  {
+    name: "sign-out は auth/sign-out.ts だけ: web/src/account では lint が止めない",
+    path: "web/src/account/Probe017.ts",
+    source: "export const f = (model: { signOut: number }) => model.signOut;",
+    expectedRules: [],
+  },
+  {
+    name: "失敗の _tag の判定は failure-message.ts に集める: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe018.ts",
+    source: "export const f = (c: Cause.Cause<unknown>) => Cause.findErrorOption(c);",
+    expectedRules: ["taimei(cause-lookup-only-in-failure-message)"],
+  },
+  {
+    name: "失敗の _tag の判定は failure-message.ts に集める: web/src/shared では lint が止めない",
+    path: "web/src/shared/failure-message.ts",
+    source: "export const f = (c: Cause.Cause<unknown>) => Cause.findErrorOption(c);",
+    expectedRules: [],
+  },
+  {
+    name: "src で APP_ENV を読むのは sentry-options.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe019.ts",
+    source: 'export const secure = process.env.APP_ENV === "production";',
+    expectedRules: ["taimei(app-env-only-in-sentry-options)"],
+  },
+  {
+    name: "src で APP_ENV を読むのは sentry-options.ts だけ: src では lint が止めない",
+    path: "src/sentry-options.ts",
+    source: 'export const secure = process.env.APP_ENV === "production";',
+    expectedRules: [],
+  },
+  {
+    name: "web/src は vite の build の mode を読まない: web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe020.ts",
+    source: "export const isProduction = import.meta.env.PROD;",
+    expectedRules: ["taimei(no-build-mode-in-web)"],
+  },
+  {
+    name: "web/src は vite の build の mode を読まない: web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe021.ts",
+    source: "export const token = import.meta.env.VITE_CANARY_TOKEN_ID;",
+    expectedRules: [],
+  },
+  {
+    name: "handlers に runInTransaction が出ない: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe022.ts",
+    source: "export const r = () => runInTransaction(async () => 1);",
+    expectedRules: ["taimei(run-in-transaction-only-in-transaction)"],
+  },
+  {
+    name: "handlers に runInTransaction が出ない: src では lint が止めない",
+    path: "src/transaction.ts",
+    source: "export const r = () => runInTransaction(async () => 1);",
+    expectedRules: [],
+  },
+  {
+    name: "SPA の API (/api/account、/api/mfa) を Hono に直接登録しない: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe023.ts",
+    source:
+      'export const register = (app: { get(path: string): void }) => app.get("/api/account/memberships");',
+    expectedRules: ["taimei(spa-api-path-only-in-contract)"],
+  },
+  {
+    name: "SPA の API (/api/account、/api/mfa) を Hono に直接登録しない: src/account では lint が止めない",
+    path: "src/account/Probe024-contract.ts",
+    source: 'export const path = "/api/account/memberships";',
+    expectedRules: [],
+  },
+  {
+    name: "HttpApi の handler は HttpServerResponse を直接組まない: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe025-http-api.ts",
+    source:
+      'import { HttpServerResponse } from "effect/http"; export const r = HttpServerResponse.json({});',
+    expectedRules: ["taimei(no-raw-http-response-in-handlers)"],
+  },
+  {
+    name: "HttpApi の handler は HttpServerResponse を直接組まない: src/handlers では lint が止めない",
+    path: "src/handlers/Probe026-http-api.ts",
+    source:
+      'import { HttpServerResponse } from "effect/http"; export const r = HttpServerResponse.mergeCookies;',
+    expectedRules: [],
+  },
+  {
+    name: "SPA の handler は repository の port を値として import しない: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe027-http-api.ts",
+    source: 'import { AccountPorts } from "../account/ports"; export const p = AccountPorts;',
+    expectedRules: ["taimei(port-import-only-in-reading-transport)"],
+  },
+  {
+    name: "SPA の handler は repository の port を値として import しない: src/handlers では lint が止めない",
+    path: "src/handlers/Probe028-http-api.ts",
+    source: 'import type { AccountPorts } from "../account/ports"; export type P = AccountPorts;',
+    expectedRules: [],
+  },
+  {
+    name: "db/ は effect を import しない: db/repositories に書くと lint が止める",
+    path: "db/repositories/Probe029.ts",
+    source: 'import { Effect } from "effect"; export const e = Effect;',
+    expectedRules: ["taimei(no-effect-in-db)"],
+  },
+  {
+    name: "db/ は effect を import しない: db/repositories に書くと lint が止める",
+    path: "db/repositories/Probe030.ts",
+    source: 'import type { Effect } from "effect"; export type E = Effect<void>;',
+    expectedRules: ["taimei(no-effect-in-db)"],
+  },
+  {
+    name: "web/src の effect の subpath は http・crypto・persistence だけ: web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe031.ts",
+    source: 'import { Schema } from "effect/Schema"; export const s = Schema;',
+    expectedRules: ["eslint(no-restricted-imports)"],
+  },
+  {
+    name: "web/src の effect の subpath は http・crypto・persistence だけ: web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe032.ts",
+    source:
+      'import type { HttpClientError } from "effect/http"; export type E = HttpClientError.HttpClientError;',
+    expectedRules: [],
+  },
+  {
+    name: "effect/http-api は SpaHttpClient の file だけ: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe033.ts",
+    source: 'import { HttpApiClient } from "effect/http-api"; export const c = HttpApiClient;',
+    expectedRules: ["eslint(no-restricted-imports)"],
+  },
+  {
+    name: "effect/http-api は SpaHttpClient の file だけ: web/src/shared では lint が止めない",
+    path: "web/src/shared/spa-http-client.ts",
+    source:
+      '// oxlint-disable-next-line no-restricted-imports -- Foldkit の画面の Command が SPA の API の契約から client を作るのはこの file だけ\nimport { HttpApiClient } from "effect/http-api"; export const c = HttpApiClient;',
+    expectedRules: [],
+  },
+  {
+    name: "db/repositories と db/transaction の runtime import は限る: src/membership に書くと lint が止める",
+    path: "src/membership/Probe034.ts",
+    source: 'import * as repo from "@/db/repositories/membership"; export const r = repo;',
+    expectedRules: ["taimei(repository-import-only-in-wiring)"],
+  },
+  {
+    name: "db/repositories と db/transaction の runtime import は限る: src/membership では lint が止めない",
+    path: "src/membership/wiring.ts",
+    source: 'import * as repo from "@/db/repositories/membership"; export const r = repo;',
+    expectedRules: [],
+  },
+  {
+    name: "db/repositories と db/transaction の runtime import は限る: src/membership では lint が止めない",
+    path: "src/membership/Probe035.ts",
+    source:
+      'import type { MembershipRow } from "@/db/repositories/membership"; export type R = MembershipRow;',
+    expectedRules: [],
+  },
+  {
+    name: "runInTransaction の直呼びは transaction.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe036.ts",
+    source: "export const r = () => runInTransaction(async () => 1);",
+    expectedRules: ["taimei(run-in-transaction-only-in-transaction)"],
+  },
+  {
+    name: "runInTransaction の直呼びは transaction.ts だけ: src では lint が止めない",
+    path: "src/transaction.ts",
+    source: "export const r = () => runInTransaction(async () => 1);",
+    expectedRules: [],
+  },
+  {
+    name: "Promise.all の直呼びが 0: src/membership に書くと lint が止める",
+    path: "src/membership/Probe037.ts",
+    source: "export const r = () => Promise.all([1, 2]);",
+    expectedRules: ["taimei(no-promise-all)"],
+  },
+  {
+    name: "runBackground は background.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe038.ts",
+    source: "export const r = () => runBackground(1);",
+    expectedRules: ["taimei(run-background-only-in-background)"],
+  },
+  {
+    name: "runBackground は background.ts だけ: src では lint が止めない",
+    path: "src/background.ts",
+    source: "export const r = () => runBackground(1);",
+    expectedRules: [],
+  },
+  {
+    name: "Sentry facade の直呼びは sentry.ts と client-facing-error.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe039.ts",
+    source: "export const r = (e: unknown) => Sentry.captureException(e);",
+    expectedRules: ["taimei(sentry-capture-only-in-sentry-facade)"],
+  },
+  {
+    name: "Sentry facade の直呼びは sentry.ts と client-facing-error.ts だけ: src では lint が止めない",
+    path: "src/sentry.ts",
+    source: "export const r = (e: unknown) => Sentry.captureException(e);",
+    expectedRules: [],
+  },
+  {
+    name: "audit log の書き込みは audit/append.ts だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe040.ts",
+    source: "export const r = (repo: { appendAuditLog(): void }) => repo.appendAuditLog();",
+    expectedRules: ["taimei(audit-append-only-in-append)"],
+  },
+  {
+    name: "audit log の書き込みは audit/append.ts だけ: src/audit では lint が止めない",
+    path: "src/audit/append.ts",
+    source: "export const r = (repo: { appendAuditLog(): void }) => repo.appendAuditLog();",
+    expectedRules: [],
+  },
+  {
+    name: "silent な fold: orElseSucceed: src/membership に書くと lint が止める",
+    path: "src/membership/Probe041.ts",
+    source: "export const r = Effect.orElseSucceed;",
+    expectedRules: ["taimei(no-or-else-succeed)"],
+  },
+  {
+    name: "silent な fold: Effect.ignore: src/membership に書くと lint が止める",
+    path: "src/membership/Probe042.ts",
+    source: "export const r = Effect.ignore;",
+    expectedRules: ["taimei(no-effect-ignore)"],
+  },
+  {
+    name: "silent な fold: Effect.ignore: src/membership では lint が止めない",
+    path: "src/membership/Probe043.ts",
+    source: "export const r = Effect.ignoreLogged;",
+    expectedRules: [],
+  },
+  {
+    name: "Effect.logError は email/client.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe044.ts",
+    source: 'export const r = Effect.logError("x");',
+    expectedRules: ["taimei(log-error-only-in-email-client)"],
+  },
+  {
+    name: "Effect.logError は email/client.ts だけ: src/email では lint が止めない",
+    path: "src/email/client.ts",
+    source: 'export const r = Effect.logError("x");',
+    expectedRules: [],
+  },
+  {
+    name: "captureCause の直呼びは fail-closed / void の 11 file だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe045.ts",
+    source: "export const r = captureCause({ cause: 1 });",
+    expectedRules: ["taimei(capture-cause-only-in-listed-files)"],
+  },
+  {
+    name: "captureCause の直呼びは fail-closed / void の 11 file だけ: src/membership では lint が止めない",
+    path: "src/membership/Probe046.ts",
+    source: "export const r = captureCauseAs(null, {});",
+    expectedRules: [],
+  },
+  {
+    name: "incrementRateWindow は attempt-budget だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe047.ts",
+    source: 'export const r = incrementRateWindow("k");',
+    expectedRules: ["taimei(increment-rate-window-only-in-attempt-budget)"],
+  },
+  {
+    name: "incrementRateWindow は attempt-budget だけ: src では lint が止めない",
+    path: "src/ttl-store.ts",
+    source: 'export const r = incrementRateWindow("k");',
+    expectedRules: [],
+  },
+  {
+    name: "membership 行の増減と role 変更は apply-change だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe048.ts",
+    source: "export const r = (repo: { insertMembership(): void }) => repo.insertMembership();",
+    expectedRules: ["taimei(membership-write-only-in-apply-change)"],
+  },
+  {
+    name: "membership 行の増減と role 変更は apply-change だけ: src/membership では lint が止めない",
+    path: "src/membership/apply-change.ts",
+    source: "export const r = (repo: { insertMembership(): void }) => repo.insertMembership();",
+    expectedRules: [],
+  },
+  {
+    name: "現在の事業所の書き込みは current-company だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe049.ts",
+    source:
+      "export const r = (repo: { updateUserLastUsedCompany(): void }) => repo.updateUserLastUsedCompany();",
+    expectedRules: ["taimei(last-used-company-write-only-in-current-company)"],
+  },
+  {
+    name: "現在の事業所の書き込みは current-company だけ: src/membership では lint が止めない",
+    path: "src/membership/current-company.ts",
+    source:
+      "export const r = (repo: { updateUserLastUsedCompany(): void }) => repo.updateUserLastUsedCompany();",
+    expectedRules: [],
+  },
+  {
+    name: "settleCause / captureThrown は adapter と better-auth の結線だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe050.ts",
+    source: "export const r = settleCause(1);",
+    expectedRules: ["taimei(settle-cause-only-in-adapters)"],
+  },
+  {
+    name: "settleCause / captureThrown は adapter と better-auth の結線だけ: src/handlers では lint が止めない",
+    path: "src/handlers/run-route.ts",
+    source: "export const r = settleCause(1);",
+    expectedRules: [],
+  },
+  {
+    name: "authApiLayer は run-route.ts だけ (識別子): src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe051.ts",
+    source: "export const layer = authApiLayer;",
+    expectedRules: ["taimei(auth-api-layer-only-in-run-route)"],
+  },
+  {
+    name: "authApiLayer は run-route.ts だけ (識別子): src/handlers では lint が止めない",
+    path: "src/handlers/run-route.ts",
+    source: "export const layer = authApiLayer;",
+    expectedRules: [],
+  },
+  {
+    name: "authApiLayer を production で set しない (key の文字列): src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe052.ts",
+    source:
+      'export const set = (c: { set(k: string, v: unknown): void }) => c.set("authApiLayer", 1);',
+    expectedRules: ["taimei(auth-api-layer-only-in-run-route)"],
+  },
+  {
+    name: "authApiLayer を production で set しない (key の文字列): src/handlers では lint が止めない",
+    path: "src/handlers/run-route.ts",
+    source: 'export const get = (c: { get(k: string): unknown }) => c.get("authApiLayer");',
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の auth instance を値で import するのは app.ts と auth-wiring.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe053.ts",
+    source: 'import { auth } from "../auth"; export const a = auth;',
+    expectedRules: [
+      "taimei(auth-instance-import-only-in-app-and-auth-wiring)",
+      "taimei(auth-module-import-only-in-entry-files)",
+    ],
+  },
+  {
+    name: "better-auth の auth instance を値で import するのは app.ts と auth-wiring.ts だけ: src では lint が止めない",
+    path: "src/boot.ts",
+    source: 'import { initAuth } from "./auth"; export const a = initAuth;',
+    expectedRules: [],
+  },
+  {
+    name: "auth module を値で import するのは app.ts・auth-wiring.ts・boot.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe054.ts",
+    source: 'import { initAuth } from "../auth"; export const a = initAuth;',
+    expectedRules: ["taimei(auth-module-import-only-in-entry-files)"],
+  },
+  {
+    name: "auth module を値で import するのは app.ts・auth-wiring.ts・boot.ts だけ: src/membership では lint が止めない",
+    path: "src/membership/Probe055.ts",
+    source: 'import type { Auth } from "../auth"; export type A = Auth;',
+    expectedRules: [],
+  },
+  {
+    name: "initRuntime と initAuth を呼ぶのは boot.ts だけ: management に書くと lint が止める",
+    path: "management/Probe056.ts",
+    source: "export const r = initRuntime(1);",
+    expectedRules: ["taimei(init-runtime-only-in-boot)"],
+  },
+  {
+    name: "initRuntime と initAuth を呼ぶのは boot.ts だけ: src では lint が止めない",
+    path: "src/boot.ts",
+    source: "export const r = initRuntime(1);",
+    expectedRules: [],
+  },
+  {
+    name: "AuthApi.issueSession はログインの成立の手順 establish-sign-in.ts だけ: src/mfa に書くと lint が止める",
+    path: "src/mfa/Probe057.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "ログインの成立の手順を import するのは資格情報の検証を終えた complete-login-challenge.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe058.ts",
+    source:
+      'import { establishSignIn } from "../establish-sign-in"; export const r = establishSignIn;',
+    expectedRules: ["taimei(establish-sign-in-only-after-credential-check)"],
+  },
+  {
+    name: "ログインの成立の手順を import するのは資格情報の検証を終えた complete-login-challenge.ts だけ: src/passkey に書くと lint が止める",
+    path: "src/passkey/Probe059.ts",
+    source: 'export const load = () => import("../establish-sign-in");',
+    expectedRules: ["taimei(establish-sign-in-only-after-credential-check)"],
+  },
+  {
+    name: "ログインの成立の手順を import するのは資格情報の検証を終えた complete-login-challenge.ts だけ: testing に書くと lint が止める",
+    path: "testing/Probe060.ts",
+    source: 'import * as signIn from "../src/establish-sign-in"; export const r = signIn;',
+    expectedRules: ["taimei(establish-sign-in-only-after-credential-check)"],
+  },
+  {
+    name: "ログインの成立の手順を import するのは資格情報の検証を終えた complete-login-challenge.ts だけ: src/mfa/totp では lint が止めない",
+    path: "src/mfa/totp/complete-login-challenge.ts",
+    source:
+      'import { establishSignIn } from "../../establish-sign-in"; export const r = establishSignIn;',
+    expectedRules: [],
+  },
+  {
+    name: "AuthApi.getSession は session-check.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe061.ts",
+    source: "export const r = (api: { getSession(): void }) => api.getSession();",
+    expectedRules: ["taimei(get-session-only-in-session-check)"],
+  },
+  {
+    name: "AuthApi.getSession は session-check.ts だけ: src では lint が止めない",
+    path: "src/session-check.ts",
+    source: "export const r = (api: { getSession(): void }) => api.getSession();",
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の APIError の形を読むのは auth-wiring.ts だけ (member): src/membership に書くと lint が止める",
+    path: "src/membership/Probe062.ts",
+    source: "export const code = (cause: { body: { code: string } }) => cause.body.code;",
+    expectedRules: ["taimei(api-error-shape-only-in-auth-wiring)"],
+  },
+  {
+    name: "better-auth の APIError の形を読むのは auth-wiring.ts だけ (member): src では lint が止めない",
+    path: "src/auth-wiring.ts",
+    source: "export const code = (cause: { body: { code: string } }) => cause.body.code;",
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の APIError の形を読むのは auth-wiring.ts だけ (member) (UNAUTHORIZED の文字列): src/membership に書くと lint が止める",
+    path: "src/membership/Probe063.ts",
+    source: 'export const code = "UNAUTHORIZED";',
+    expectedRules: ["taimei(api-error-shape-only-in-auth-wiring)"],
+  },
+  {
+    name: "better-auth の APIError の形を読むのは auth-wiring.ts だけ (member) (UNAUTHORIZED の文字列): src では lint が止めない",
+    path: "src/auth-wiring.ts",
+    source: 'export const code = "UNAUTHORIZED";',
+    expectedRules: [],
+  },
+  {
+    name: "src の test の @/db runtime import は test-db.ts だけ: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe064.ts",
+    source: 'import { db } from "@/db/client"; export const d = db;',
+    expectedRules: [
+      "taimei(db-import-in-src-tests-only-in-test-db)",
+      "taimei(db-value-import-only-in-db-in-tests)",
+    ],
+  },
+  {
+    name: "src の test の @/db runtime import は test-db.ts だけ: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe065.ts",
+    source: 'import type { UserRow } from "@/db/schema"; export type U = UserRow;',
+    expectedRules: [],
+  },
+  {
+    name: "e2e の @/db runtime import は db/testing/* だけ: e2e に書くと lint が止める",
+    path: "e2e/Probe066.ts",
+    source: 'import { db } from "@/db/client"; export const d = db;',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e の @/db runtime import は db/testing/* だけ: e2e では lint が止めない",
+    path: "e2e/fixtures.ts",
+    source: 'import { createSeed } from "@/db/testing/seed"; export const s = createSeed;',
+    expectedRules: [],
+  },
+  {
+    name: "e2e の @/db runtime import は fixtures.ts だけ: e2e に書くと lint が止める",
+    path: "e2e/Probe067.ts",
+    source: 'import { createSeed } from "@/db/testing/seed"; export const s = createSeed;',
+    expectedRules: ["taimei(db-testing-import-only-in-listed-files)"],
+  },
+  {
+    name: "e2e の @/db runtime import は fixtures.ts だけ: e2e では lint が止めない",
+    path: "e2e/fixtures.ts",
+    source: 'import { createSeed } from "@/db/testing/seed"; export const s = createSeed;',
+    expectedRules: [],
+  },
+  {
+    name: "src の Layer constructor は succeed / mergeAll / provide と決まった 2 file だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe068.ts",
+    source: "export const l = Layer.effect(Service, make);",
+    expectedRules: ["taimei(no-failing-layer-constructor-in-src)"],
+  },
+  {
+    name: "src の Layer constructor は succeed / mergeAll / provide と決まった 2 file だけ: src/membership では lint が止めない",
+    path: "src/membership/Probe069.ts",
+    source: "export const l = Layer.succeed(Service, value);",
+    expectedRules: [],
+  },
+  {
+    name: "src の Layer constructor は succeed / mergeAll / provide と決まった 2 file だけ: src/membership では lint が止めない",
+    path: "src/membership/Probe070.ts",
+    source: "export const m = Layer.mergeAll(a, b);",
+    expectedRules: [],
+  },
+  {
+    name: "directive 以外のコメントが 0 件: src/membership に書くと lint が止める",
+    path: "src/membership/Probe071.ts",
+    source: "export const x = 1; // note",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "directive 以外のコメントが 0 件: src/membership では lint が止めない",
+    path: "src/membership/Probe072.ts",
+    source: 'export const url = "http://example.com";',
+    expectedRules: [],
+  },
+  {
+    name: "directive 以外のコメントが 0 件: src/membership では lint が止めない",
+    path: "src/membership/Probe073.ts",
+    source: '/// <reference types="vite/client" />',
+    expectedRules: [],
+  },
+  {
+    name: "directive 以外のコメントが 0 件: src/membership では lint が止めない",
+    path: "src/membership/Probe074.ts",
+    source: "// oxlint-disable-next-line no-unused-vars -- 理由\nconst y = 1;",
+    expectedRules: [],
+  },
+  {
+    name: "directive 以外のコメントが 0 件: web/src/shared では lint が止めない",
+    path: "web/src/shared/Probe075.ts",
+    source: 'export const v = import(/* @vite-ignore */ "x");',
+    expectedRules: [],
+  },
+  {
+    name: "test 名と .each の行ラベルに設計書の番号が無い: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe076.test.ts",
+    source: 'test("AC-001: 失敗を返す", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "test 名と .each の行ラベルに設計書の番号が無い: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe077.test.ts",
+    source: 'test("QA-MR-02 の手順で確かめる", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "test 名と .each の行ラベルに設計書の番号が無い: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe078.test.ts",
+    source: 'test.each(["AC-001: x"])("振る舞いの文 %s", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "AUTH_TRUSTED_PROXY_HOPS を読む production file は request-context.ts だけ: src/audit に書くと lint が止める",
+    path: "src/audit/Probe079.ts",
+    source: "export const hops = process.env.AUTH_TRUSTED_PROXY_HOPS;",
+    expectedRules: ["taimei(proxy-hops-env-only-in-request-context)"],
+  },
+  {
+    name: "AUTH_TRUSTED_PROXY_HOPS を読む production file は request-context.ts だけ: src では lint が止めない",
+    path: "src/request-context.ts",
+    source: "export const hops = process.env.AUTH_TRUSTED_PROXY_HOPS;",
+    expectedRules: [],
+  },
+  {
+    name: "app に request を渡す (app.fetch) のは 2 つの入口だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe080.ts",
+    source: "export const r = (req: Request) => app.fetch(req);",
+    expectedRules: ["taimei(app-fetch-only-in-entry-files)"],
+  },
+  {
+    name: "app に request を渡す (app.fetch) のは 2 つの入口だけ: testing では lint が止めない",
+    path: "testing/bun-server.ts",
+    source: "export const r = (req: Request) => app.fetch(req);",
+    expectedRules: [],
+  },
+  {
+    name: "AUTH_SERVICE_KEY の読み手は service-key.ts と testing/server.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe081.ts",
+    source: "export const key = process.env.AUTH_SERVICE_KEY;",
+    expectedRules: ["taimei(service-key-env-only-in-service-key)"],
+  },
+  {
+    name: "AUTH_SERVICE_KEY の読み手は service-key.ts と testing/server.ts だけ: src では lint が止めない",
+    path: "src/service-key.ts",
+    source: "export const key = process.env.AUTH_SERVICE_KEY;",
+    expectedRules: [],
+  },
+  {
+    name: "鍵の比較に includes を使わない: src に書くと lint が止める",
+    path: "src/service-key.ts",
+    source: "export const ok = (keys: string[], presented: string) => keys.includes(presented);",
+    expectedRules: ["taimei(service-key-compare-only-in-timing-safe-equal)"],
+  },
+  {
+    name: "鍵の比較に === を使わない: src に書くと lint が止める",
+    path: "src/service-key.ts",
+    source: "export const ok = (key: string, presented: string) => key === presented;",
+    expectedRules: ["taimei(service-key-compare-only-in-timing-safe-equal)"],
+  },
+  {
+    name: "X-Service-Key header の読み手は app.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe082.ts",
+    source:
+      'export const h = (c: { req: { header(name: string): string } }) => c.req.header("X-Service-Key");',
+    expectedRules: ["taimei(service-key-header-only-in-app)"],
+  },
+  {
+    name: "X-Service-Key header の読み手は app.ts だけ: src では lint が止めない",
+    path: "src/app.ts",
+    source:
+      'export const h = (c: { req: { header(name: string): string } }) => c.req.header("X-Service-Key");',
+    expectedRules: [],
+  },
+  {
+    name: "手書きの応答 body (c.json({ error:) が無い: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe083.ts",
+    source: 'export const r = (c: { json(body: unknown): unknown }) => c.json({ error: "x" });',
+    expectedRules: ["taimei(no-hand-written-error-body)"],
+  },
+  {
+    name: "手書きの応答 body (c.json({ error:) が無い: src/handlers では lint が止めない",
+    path: "src/handlers/Probe084.ts",
+    source:
+      "export const r = (c: { json(body: unknown, status: number): unknown }, report: object) => c.json({ ...report }, 200);",
+    expectedRules: [],
+  },
+  {
+    name: "Sentry の SDK を import するのは runtime ごとの初期化 file と worker.ts だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe085.ts",
+    source: 'import * as Sentry from "@sentry/bun"; export const s = Sentry;',
+    expectedRules: ["taimei(sentry-sdk-import-only-in-init-files)"],
+  },
+  {
+    name: "Sentry の SDK を import するのは runtime ごとの初期化 file と worker.ts だけ: src/membership では lint が止めない",
+    path: "src/membership/Probe086.ts",
+    source: 'import type { Event } from "@sentry/core"; export type E = Event;',
+    expectedRules: [],
+  },
+  {
+    name: "auth-plugins が import してよい mfa の module は 3 つに限る: src/auth-plugins に書くと lint が止める",
+    path: "src/auth-plugins/Probe087.ts",
+    source: 'import { enroll } from "../mfa/totp"; export const e = enroll;',
+    expectedRules: ["taimei(listed-mfa-import-only-in-auth-plugins)"],
+  },
+  {
+    name: "auth-plugins が import してよい mfa の module は 3 つに限る: src/auth-plugins では lint が止めない",
+    path: "src/auth-plugins/mfa-challenge.ts",
+    source: 'import { guard } from "../mfa/totp/challenge-required"; export const g = guard;',
+    expectedRules: [],
+  },
+  {
+    name: "kill switch の env を読むのは一次認証の after-hook だけ: src/mfa に書くと lint が止める",
+    path: "src/mfa/Probe088.ts",
+    source: "export const on = process.env.MFA_CHALLENGE_ENABLED;",
+    expectedRules: ["taimei(mfa-kill-switch-env-only-in-primary-auth)"],
+  },
+  {
+    name: "kill switch の env を読むのは一次認証の after-hook だけ: src/auth-plugins では lint が止めない",
+    path: "src/auth-plugins/primary-auth.ts",
+    source: "export const on = process.env.MFA_CHALLENGE_ENABLED;",
+    expectedRules: [],
+  },
+  {
+    name: "cookie の属性を手で書かない: src/mfa/totp に書くと lint が止める",
+    path: "src/mfa/totp/Probe089.ts",
+    source: 'export const cookie = "sid=1; HttpOnly";',
+    expectedRules: ["taimei(no-hand-written-cookie-attribute)"],
+  },
+  {
+    name: "db/repositories/mfa-totp を import する production code は決まった file だけ: src/auth-plugins に書くと lint が止める",
+    path: "src/auth-plugins/Probe090.ts",
+    source:
+      'import type { MfaTotpRow } from "@/db/repositories/mfa-totp"; export type R = MfaTotpRow;',
+    expectedRules: ["taimei(mfa-totp-repo-only-in-listed-files)"],
+  },
+  {
+    name: "db/repositories/mfa-totp を import する production code は決まった file だけ: src/mfa/totp では lint が止めない",
+    path: "src/mfa/totp/ports.ts",
+    source:
+      'import type { MfaTotpRow } from "@/db/repositories/mfa-totp"; export type R = MfaTotpRow;',
+    expectedRules: [],
+  },
+  {
+    name: "チャレンジの cookie 名の文字列は login-challenge.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe091.ts",
+    source: 'export const name = "mfa_login_challenge";',
+    expectedRules: ["taimei(login-cookie-name-only-in-login-challenge)"],
+  },
+  {
+    name: "チャレンジの cookie 名の文字列は login-challenge.ts だけ: src/mfa/totp では lint が止めない",
+    path: "src/mfa/totp/login-challenge.ts",
+    source: 'export const name = "mfa_login_challenge";',
+    expectedRules: [],
+  },
+  {
+    name: "secret を返す findMfaTotp を使う code は決まった file だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe092.ts",
+    source: 'export const r = findMfaTotp("u");',
+    expectedRules: ["taimei(find-mfa-totp-only-in-listed-files)"],
+  },
+  {
+    name: "secret を返す findMfaTotp を使う code は決まった file だけ: src/mfa/totp では lint が止めない",
+    path: "src/mfa/totp/verify-code.ts",
+    source: 'export const r = findMfaTotp("u");',
+    expectedRules: [],
+  },
+  {
+    name: "verifiedAt を読む production code は policy.ts だけ: src/mfa に書くと lint が止める",
+    path: "src/mfa/Probe093.ts",
+    source: "export const at = (row: { verifiedAt: Date }) => row.verifiedAt;",
+    expectedRules: ["taimei(verified-at-only-in-mfa-policy)"],
+  },
+  {
+    name: "verifiedAt を読む production code は policy.ts だけ: src/mfa では lint が止めない",
+    path: "src/mfa/policy.ts",
+    source: "export const at = (row: { verifiedAt: Date }) => row.verifiedAt;",
+    expectedRules: [],
+  },
+  {
+    name: "management/ の import 面は全列挙で固定する: management に書くと lint が止める",
+    path: "management/Probe094.ts",
+    source: 'import { db } from "../db/client"; export const d = db;',
+    expectedRules: ["taimei(db-import-only-in-db)", "taimei(listed-import-only-in-management)"],
+  },
+  {
+    name: "management/ の import 面は全列挙で固定する: management では lint が止めない",
+    path: "management/disable-user-mfa.ts",
+    source: 'import { boot } from "../src/boot"; export const b = boot;',
+    expectedRules: [],
+  },
+  {
+    name: "db/ は src/ を import しない: db/repositories に書くと lint が止める",
+    path: "db/repositories/Probe095.ts",
+    source: 'import { failure } from "../../src/failures"; export const f = failure;',
+    expectedRules: ["taimei(no-src-import-in-db)"],
+  },
+  {
+    name: "policy.ts は import 0 件: src/mfa に書くと lint が止める",
+    path: "src/mfa/policy.ts",
+    source: 'import { Effect } from "effect"; export const x = Effect;',
+    expectedRules: ["taimei(no-import-in-mfa-policy)"],
+  },
+  {
+    name: "guard/*.ts・policy.ts・accept.ts は型も値も hono を import しない: src/membership/guard に書くと lint が止める",
+    path: "src/membership/guard/Probe096.ts",
+    source: 'import type { Context } from "hono"; export type C = Context;',
+    expectedRules: ["taimei(no-hono-in-guard)"],
+  },
+  {
+    name: "Verified への cast は guard の中だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe097.ts",
+    source: "export const v = {} as Verified<object>;",
+    expectedRules: ["taimei(verified-only-in-guard)"],
+  },
+  {
+    name: "Verified への cast は guard の中だけ: src/membership/guard では lint が止めない",
+    path: "src/membership/guard/Probe098.ts",
+    source: "export const v = {} as Verified<object>;",
+    expectedRules: [],
+  },
+  {
+    name: "印を付ける verified を呼ぶのは guard の中だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe099.ts",
+    source: "export const v = verified({});",
+    expectedRules: ["taimei(verified-only-in-guard)"],
+  },
+  {
+    name: "印を付ける verified を呼ぶのは guard の中だけ: src/membership/guard では lint が止めない",
+    path: "src/membership/guard/Probe100.ts",
+    source: "export const v = verified({});",
+    expectedRules: [],
+  },
+  {
+    name: "sole OWNER の検査と OWNER 行の lock は delete-account.ts だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe101.ts",
+    source: 'export const r = findCompaniesBlockingUserDeletion("u");',
+    expectedRules: ["taimei(account-deletion-only-in-delete-account)"],
+  },
+  {
+    name: "sole OWNER の検査と OWNER 行の lock は delete-account.ts だけ: src/account では lint が止めない",
+    path: "src/account/delete-account.ts",
+    source: 'export const r = findCompaniesBlockingUserDeletion("u");',
+    expectedRules: [],
+  },
+  {
+    name: "deleteAccount を呼ぶのは delete-account.ts と orphan.ts だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe102.ts",
+    source: 'export const r = deleteAccount("u");',
+    expectedRules: ["taimei(delete-account-only-in-delete-account-and-orphan)"],
+  },
+  {
+    name: "deleteAccount を呼ぶのは delete-account.ts と orphan.ts だけ: src/account では lint が止めない",
+    path: "src/account/orphan.ts",
+    source: 'export const r = deleteAccount("u");',
+    expectedRules: [],
+  },
+  {
+    name: ".deleteUser は delete-account.ts だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe103.ts",
+    source: "export const r = (api: { deleteUser(): void }) => api.deleteUser();",
+    expectedRules: ["taimei(account-deletion-only-in-delete-account)"],
+  },
+  {
+    name: ".deleteUser は delete-account.ts だけ: src/account では lint が止めない",
+    path: "src/account/delete-account.ts",
+    source: "export const r = (api: { deleteUser(): void }) => api.deleteUser();",
+    expectedRules: [],
+  },
+  {
+    name: "OWNER 行の lock は全て id 順に取る: db/repositories に書くと lint が止める",
+    path: "db/repositories/membership.ts",
+    source: "export const q = sql`SELECT id FROM membership WHERE role = 'OWNER' FOR UPDATE`;",
+    expectedRules: ["taimei(no-unordered-owner-lock)"],
+  },
+  {
+    name: "OWNER 行の lock は全て id 順に取る: db/repositories では lint が止めない",
+    path: "db/repositories/membership.ts",
+    source:
+      "export const q = sql`SELECT id FROM membership WHERE role = 'OWNER' ORDER BY id FOR UPDATE`;",
+    expectedRules: [],
+  },
+  {
+    name: "better-auth の退会 endpoint を有効にしない: src に書くと lint が止める",
+    path: "src/auth.ts",
+    source: "export const config = { user: { deleteUser: { enabled: true } } };",
+    expectedRules: ["taimei(no-better-auth-delete-user)"],
+  },
+  {
+    name: "deleteUserSessions を呼ぶのは delete-sessions.ts と auth-wiring.ts だけ: src/account に書くと lint が止める",
+    path: "src/account/Probe104.ts",
+    source:
+      "export const r = (store: { deleteUserSessions(): void }) => store.deleteUserSessions();",
+    expectedRules: ["taimei(delete-user-sessions-only-in-delete-sessions)"],
+  },
+  {
+    name: "deleteUserSessions を呼ぶのは delete-sessions.ts と auth-wiring.ts だけ: src/account では lint が止めない",
+    path: "src/account/delete-sessions.ts",
+    source:
+      "export const r = (store: { deleteUserSessions(): void }) => store.deleteUserSessions();",
+    expectedRules: [],
+  },
+  {
+    name: "deleteSessionsOf を呼ぶのは delete-account.ts だけ: src/company に書くと lint が止める",
+    path: "src/company/Probe105.ts",
+    source: 'export const r = deleteSessionsOf("u");',
+    expectedRules: ["taimei(account-deletion-only-in-delete-account)"],
+  },
+  {
+    name: "deleteSessionsOf を呼ぶのは delete-account.ts だけ: src/account では lint が止めない",
+    path: "src/account/delete-account.ts",
+    source: 'export const r = deleteSessionsOf("u");',
+    expectedRules: [],
+  },
+  {
+    name: "一次認証 route と provider の literal 比較は primary-auth-routes.ts だけ: src/auth-plugins に書くと lint が止める",
+    path: "src/auth-plugins/Probe106.ts",
+    source: 'export const path = "/magic-link/verify";',
+    expectedRules: ["taimei(route-literals-only-in-primary-auth-routes)"],
+  },
+  {
+    name: "一次認証 route と provider の literal 比較は primary-auth-routes.ts だけ: src/auth-plugins では lint が止めない",
+    path: "src/auth-plugins/primary-auth-routes.ts",
+    source: 'export const path = "/magic-link/verify";',
+    expectedRules: [],
+  },
+  {
+    name: "DisplayText への cast は sanitize.ts の toDisplayText だけ: src/email に書くと lint が止める",
+    path: "src/email/Probe107.ts",
+    source: 'export const t = "raw" as DisplayText;',
+    expectedRules: ["taimei(display-text-cast-only-in-sanitize)"],
+  },
+  {
+    name: "DisplayText への cast は sanitize.ts の toDisplayText だけ: src/email では lint が止めない",
+    path: "src/email/sanitize.ts",
+    source: 'export const t = "raw" as DisplayText;',
+    expectedRules: [],
+  },
+  {
+    name: "probe の呼び手は probe.ts だけ: src/handlers に書くと lint が止める",
+    path: "src/handlers/Probe108.ts",
+    source: "export const r = (db: { ping(): void }) => db.ping();",
+    expectedRules: ["taimei(health-ping-only-in-probe)"],
+  },
+  {
+    name: "probe の呼び手は probe.ts だけ: src/health では lint が止めない",
+    path: "src/health/probe.ts",
+    source: "export const r = (db: { ping(): void }) => db.ping();",
+    expectedRules: [],
+  },
+  {
+    name: "repository と driver は失敗を握らない (catch が無い): db/repositories に書くと lint が止める",
+    path: "db/repositories/health.ts",
+    source:
+      "export const ping = async () => { try { await Promise.resolve(); } catch { return; } };",
+    expectedRules: ["taimei(no-catch-in-health-drivers)"],
+  },
+  {
+    name: 'app.ts に `app.get("/health"` を書かない: src に書くと lint が止める',
+    path: "src/app.ts",
+    source: 'export const r = (app: { get(path: string): void }) => app.get("/health");',
+    expectedRules: ["taimei(health-route-only-in-health-handler)"],
+  },
+  {
+    name: "app.ts は health/ports と ttl-store-service を直接触らない: src に書くと lint が止める",
+    path: "src/app.ts",
+    source: 'import { HealthPorts } from "./health/ports"; export const p = HealthPorts;',
+    expectedRules: ["taimei(health-route-only-in-health-handler)"],
+  },
+  {
+    name: "handlers/health.ts は runtime を直接呼ばない: src/handlers に書くと lint が止める",
+    path: "src/handlers/health.ts",
+    source: "export const r = () => Effect.runPromise(program);",
+    expectedRules: [
+      "taimei(effect-run-only-in-listed-files)",
+      "taimei(no-direct-runtime-in-health-handler)",
+    ],
+  },
+  {
+    name: "local の host の集合で判定するのは local-database.ts だけ: db に書くと lint が止める",
+    path: "db/Probe109.ts",
+    source: "export const local = (host: string) => LOCAL_DATABASE_HOSTNAMES.has(host);",
+    expectedRules: ["taimei(local-hostname-check-only-in-local-database)"],
+  },
+  {
+    name: "local の host の集合で判定するのは local-database.ts だけ: db/testing では lint が止めない",
+    path: "db/testing/local-database.ts",
+    source: "export const local = (host: string) => LOCAL_DATABASE_HOSTNAMES.has(host);",
+    expectedRules: [],
+  },
+  {
+    name: "DATABASE_URL を URL として読む file が無い: db に書くと lint が止める",
+    path: "db/Probe110.ts",
+    source: "export const host = new URL(process.env.DATABASE_URL!).hostname;",
+    expectedRules: ["taimei(local-hostname-check-only-in-local-database)"],
+  },
+  {
+    name: "AuthApi.createUser を呼ぶのは試験の利用者を作る use-case だけ: src/membership に書くと lint が止める",
+    path: "src/membership/Probe111.ts",
+    source: "export const r = (api: { createUser(): void }) => api.createUser();",
+    expectedRules: ["taimei(create-user-only-in-test-user-use-case)"],
+  },
+  {
+    name: "AuthApi.createUser を呼ぶのは試験の利用者を作る use-case だけ: testing では lint が止めない",
+    path: "testing/create-signed-in-user.ts",
+    source: "export const r = (api: { createUser(): void }) => api.createUser();",
+    expectedRules: [],
+  },
+  {
+    name: "testing/ で APP_ENV を読むのは判定の file と isOutsideProduction に渡す行だけ: testing に書くと lint が止める",
+    path: "testing/Probe112.ts",
+    source: 'export const production = process.env.APP_ENV === "production";',
+    expectedRules: ["taimei(app-env-only-in-outside-production-check)"],
+  },
+  {
+    name: "testing/ で APP_ENV を読むのは判定の file と isOutsideProduction に渡す行だけ: testing では lint が止めない",
+    path: "testing/server.ts",
+    source: "if (!isOutsideProduction(process.env.APP_ENV)) { process.exit(1); }",
+    expectedRules: [],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: src に書くと lint が止める",
+    path: "src/runtime.ts",
+    source: 'import { Pool } from "pg"; export const p = Pool;',
+    expectedRules: ["taimei(db-import-only-in-db)", "taimei(no-io-resource-import-in-runtime)"],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: src では lint が止めない",
+    path: "src/runtime.ts",
+    source: 'import type { Pool } from "pg"; export type P = Pool;',
+    expectedRules: [],
+  },
+  {
+    name: "試験の module で現在の事業所を書き換えるのは 2 つの use-case だけ: testing に書くと lint が止める",
+    path: "testing/Probe113.ts",
+    source: 'export const r = switchCurrentCompany({ userId: "u", companyId: "c" });',
+    expectedRules: ["taimei(current-company-write-only-in-testing-use-cases)"],
+  },
+  {
+    name: "試験の module で現在の事業所を書き換えるのは 2 つの use-case だけ: testing では lint が止めない",
+    path: "testing/set-current-company.ts",
+    source: 'export const r = switchCurrentCompany({ userId: "u", companyId: "c" });',
+    expectedRules: [],
+  },
+  {
+    name: "directive 以外のコメント: src/membership に書くと lint が止める",
+    path: "src/membership/Probe114.ts",
+    source: "export const a = 1; // trailing",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "directive 以外のコメント: src/membership に書くと lint が止める",
+    path: "src/membership/Probe115.ts",
+    source: "/* block */\nexport const b = 1;",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "directive 以外のコメント: src/membership に書くと lint が止める",
+    path: "src/membership/Probe116.ts",
+    source: "export const t = (x: number) => `a$" + "{/* inner */ x}`;",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "directive 以外のコメント: src/membership に書くと lint が止める",
+    path: "src/membership/Probe117.ts",
+    source: "// eslint-disable-next-line no-console\nexport const c = 1;",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "directive 以外のコメント: src/membership に書くと lint が止める",
+    path: "src/membership/Probe118.ts",
+    source: "// biome-ignore lint/style: x\nexport const d = 1;",
+    expectedRules: ["taimei(no-code-comment)"],
+  },
+  {
+    name: "文字列・正規表現・template・除算と directive: src/membership では lint が止めない",
+    path: "src/membership/Probe119.ts",
+    source: "export const re = /\\/\\//g;",
+    expectedRules: [],
+  },
+  {
+    name: "文字列・正規表現・template・除算と directive: src/membership では lint が止めない",
+    path: "src/membership/Probe120.ts",
+    source: "export const t = `a // b`;",
+    expectedRules: [],
+  },
+  {
+    name: "文字列・正規表現・template・除算と directive: src/membership では lint が止めない",
+    path: "src/membership/Probe121.ts",
+    source: "export const q = (a: number, b: number, c: number) => a / b / c;",
+    expectedRules: [],
+  },
+  {
+    name: "文字列・正規表現・template・除算と directive: src/membership では lint が止めない",
+    path: "src/membership/Probe122.ts",
+    source: '// @ts-expect-error 型の検査\nexport const e: number = "x";',
+    expectedRules: [],
+  },
+  {
+    name: "文字列・正規表現・template・除算と directive: src/membership では lint が止めない",
+    path: "src/membership/Probe123.ts",
+    source: '/// <reference types="vite/client" />\nexport const r = 1;',
+    expectedRules: [],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe124.test.ts",
+    source: 'test("QA-H-02 事業所を切り替える", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe125.test.ts",
+    source: 'test("F-1 失敗の宣言", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe126.test.ts",
+    source: 'test("G1: token が無い", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe127.test.ts",
+    source: 'test("T1 発行した cookie を読む", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe128.test.ts",
+    source: 'test("Stage 2 ゲート", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "設計書の番号: src/membership/__tests__ に書くと lint が止める",
+    path: "src/membership/__tests__/Probe129.test.ts",
+    source: 'test("Hono の route の登録 (#52)", () => {});',
+    expectedRules: ["taimei(no-design-number-in-test-name)"],
+  },
+  {
+    name: "repo に定義のある番号と一般の用語: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe130.test.ts",
+    source: 'test("ADR-0017 の境界を守る", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "repo に定義のある番号と一般の用語: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe131.test.ts",
+    source: 'test("C0 制御文字の上端", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "repo に定義のある番号と一般の用語: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe132.test.ts",
+    source: 'test("UTF-8 の文字列", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "repo に定義のある番号と一般の用語: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe133.test.ts",
+    source: 'test("SHA-256 の digest", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "repo に定義のある番号と一般の用語: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe134.test.ts",
+    source: 'test("RFC 6265 の cookie", () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "-api.ts の名前でも fetch: web/src/mfa に書くと lint が止める",
+    path: "web/src/mfa/mfa-api.ts",
+    source: 'export const f = () => fetch("/x");',
+    expectedRules: ["taimei(no-fetch-in-web)"],
+  },
+  {
+    name: "cause を捨てる onFailure: web/src/company/pages に書くと lint が止める",
+    path: "web/src/company/pages/ExitMatchProbe.ts",
+    source:
+      "export const r = (exit: unknown, Exit: { match: (e: unknown, h: unknown) => number }) => Exit.match(exit, { onSuccess: () => 1, onFailure: () => 0 });",
+    expectedRules: ["taimei(no-ignored-cause-in-web)"],
+  },
+  {
+    name: "e2e の @/db の値の import: e2e に書くと lint が止める",
+    path: "e2e/Probe135.ts",
+    source: 'import {\n  db,\n  schema,\n} from "@/db/client";\nexport const d = [db, schema];',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e の @/db の値の import: e2e に書くと lint が止める",
+    path: "e2e/Probe136.ts",
+    source: 'export const load = () => import("@/db/client");',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e の @/db の値の import: e2e に書くと lint が止める",
+    path: "e2e/Probe137.ts",
+    source: 'import "@/db/client";',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e の @/db の値の import: e2e に書くと lint が止める",
+    path: "e2e/Probe138.ts",
+    source: 'import db from "@/db/client";\nexport const d = db;',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e の @/db の値の import: e2e に書くと lint が止める",
+    path: "e2e/Probe139.ts",
+    source: 'export { db } from "@/db/client";',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "src の test の @/db の型の import: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe140.ts",
+    source: 'import type {\n  UserRow,\n} from "@/db/schema";\nexport type U = UserRow;',
+    expectedRules: [],
+  },
+  {
+    name: "src の test の @/db の型の import: src/membership/__tests__ では lint が止めない",
+    path: "src/membership/__tests__/Probe141.ts",
+    source: 'export type { DbTx } from "@/db/transaction";',
+    expectedRules: [],
+  },
+  {
+    name: "Effect.catchIf で _tag を比べる: web/src/company に書くと lint が止める",
+    path: "web/src/company/Probe142.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (program: Effect.Effect<number, { readonly _tag: string }>) =>\n  program.pipe(Effect.catchIf((error) => error._tag === "Forbidden", () => Effect.succeed(0)));',
+    expectedRules: ["taimei(no-tag-comparison-in-web)"],
+  },
+  {
+    name: "PushUrl に /auth の router の path を渡す: web/src/app/account に書くと lint が止める",
+    path: "web/src/app/account/Probe143.ts",
+    source:
+      'import * as DocumentNavigation from "../document-navigation";\nimport { signInRouter } from "../auth/route";\nexport const go = () => DocumentNavigation.PushUrl({ href: signInRouter({}) });',
+    expectedRules: ["taimei(client-navigation-uses-own-routes)"],
+  },
+  {
+    name: "foldkit の pushUrl に /auth の router の path を渡す: web/src/app/account に書くと lint が止める",
+    path: "web/src/app/account/Probe144.ts",
+    source:
+      'import { pushUrl } from "foldkit/navigation";\nimport { signInRouter } from "../auth/route";\nexport const go = () => pushUrl(signInRouter({}));',
+    expectedRules: ["taimei(client-navigation-uses-own-routes)"],
+  },
+  {
+    name: "PushUrl に自分の application の router の path を渡す: web/src/app/account では lint が止めない",
+    path: "web/src/app/account/Probe145.ts",
+    source:
+      'import * as DocumentNavigation from "../document-navigation";\nimport { companiesRouter } from "./route";\nexport const go = () => DocumentNavigation.PushUrl({ href: companiesRouter() });',
+    expectedRules: [],
+  },
+  {
+    name: "web/src に h.InnerHTML: web/src/shared に書くと lint が止める",
+    path: "web/src/shared/Probe146.ts",
+    source:
+      'import type { HtmlBuilder } from "foldkit/html";\nexport const raw = <Message>(h: HtmlBuilder<Message>) => h.div([h.InnerHTML("<b>x</b>")], []);',
+    expectedRules: ["foldkit(no-empty-children-array)", "taimei(no-inner-html-in-web)"],
+  },
+  {
+    name: "web/non-production に h.InnerHTML: web/non-production に書くと lint が止める",
+    path: "web/non-production/Probe147.ts",
+    source:
+      'import type { HtmlBuilder } from "foldkit/html";\nexport const raw = <Message>(h: HtmlBuilder<Message>) => h.div([h.InnerHTML("<b>x</b>")], []);',
+    expectedRules: ["foldkit(no-empty-children-array)", "taimei(no-inner-html-in-web)"],
+  },
+  {
+    name: "本番以外の shell の Foldkit の file は module の階層に let を置けない",
+    path: "web/non-production/ModuleLetProbe.ts",
+    source: 'import { Command } from "foldkit";\nexport let counter = 0;\nexport { Command };',
+    expectedRules: ["foldkit(no-module-level-mutable-state)"],
+  },
+  {
+    name: "本番以外の shell は shared/ui の部品を使い、h.button を直に書けない",
+    path: "web/non-production/RawButtonProbe.ts",
+    source:
+      "type Builder = { readonly button: (attributes: unknown[], children: unknown[]) => unknown };\nexport const view = (h: Builder) => h.button([], []);",
+    expectedRules: ["taimei(no-raw-form-element)"],
+  },
+  {
+    name: "Foldkit の file は Math.random を使えない",
+    path: "web/src/mfa/RandomProbe.ts",
+    source:
+      'import { Command } from "foldkit";\nexport const pick = () => [Math.random(), Command];',
+    expectedRules: [
+      "foldkit(no-impure-call-at-decision-time)",
+      "taimei(no-timer-clock-random-in-foldkit)",
+    ],
+  },
+  {
+    name: "web の画面は Effect を実行せずに組み立てられる",
+    path: "web/src/mfa/EffectBuildProbe.ts",
+    source: 'import { Effect } from "effect";\nexport const run = () => Effect.void;',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の file は時刻も乱数も使わずに書ける",
+    path: "web/src/mfa/PureProbe.ts",
+    source: 'import { Command } from "foldkit";\nexport const now = () => [0, Command];',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の file は *-atom 以外の module を import できる",
+    path: "web/src/mfa/PlainImportProbe.ts",
+    source:
+      'import { Command } from "foldkit";\nimport { mfaStatus } from "./mfa-status";\nexport { Command, mfaStatus };',
+    expectedRules: [],
+  },
+  {
+    name: "画面は h.input を直に書けない",
+    path: "web/src/mfa/RawInputProbe.ts",
+    source:
+      "type Builder = { readonly input: (attributes: unknown[]) => unknown };\nexport const view = (h: Builder) => h.input([]);",
+    expectedRules: ["taimei(no-raw-form-element)"],
+  },
+  {
+    name: "画面は h.textarea を直に書けない",
+    path: "web/src/mfa/RawTextareaProbe.ts",
+    source:
+      "type Builder = { readonly textarea: (attributes: unknown[], children: unknown[]) => unknown };\nexport const view = (h: Builder) => h.textarea([], []);",
+    expectedRules: ["taimei(no-raw-form-element)"],
+  },
+  {
+    name: "画面は h.select を直に書けない",
+    path: "web/src/mfa/RawSelectProbe.ts",
+    source:
+      "type Builder = { readonly select: (attributes: unknown[], children: unknown[]) => unknown };\nexport const view = (h: Builder) => h.select([], []);",
+    expectedRules: ["taimei(no-raw-form-element)"],
+  },
+  {
+    name: "domain の file は Runtime.makeApplication を呼べない",
+    path: "web/src/mfa/MakeApplicationProbe.ts",
+    source:
+      'import { Runtime } from "foldkit";\nexport const make = (config: Parameters<typeof Runtime.makeApplication>[0]) => Runtime.makeApplication(config);',
+    expectedRules: ["taimei(no-direct-application-start)"],
+  },
+  {
+    name: "domain の file は application を起動する関数を呼ばずに書ける",
+    path: "web/src/mfa/NoStartProbe.ts",
+    source: 'import { Command } from "foldkit";\nexport { Command };',
+    expectedRules: [],
+  },
+  {
+    name: "web は相対 import で書ける",
+    path: "web/src/shared/RelativeImportProbe.ts",
+    source: 'import { cn } from "./utils";\nexport { cn };',
+    expectedRules: [],
+  },
+  {
+    name: "route は app/*/route.ts の外で foldkit の Route を import できない",
+    path: "web/src/mfa/RouteClassProbe.ts",
+    source: 'import { Route } from "foldkit";\nexport { Route };',
+    expectedRules: ["eslint(no-restricted-imports)"],
+  },
+  {
+    name: "app/*/route.ts も sonner は import できない",
+    path: "web/src/app/account/route.ts",
+    source:
+      'import { literal } from "foldkit/route";\nimport { toast } from "sonner";\nexport { literal, toast };',
+    expectedRules: ["eslint(no-restricted-imports)"],
+  },
+  {
+    name: "Foldkit の file は sonner を import できない",
+    path: "web/src/mfa/SonnerProbe.ts",
+    source:
+      'import { Command } from "foldkit";\nimport { toast } from "sonner";\nexport { Command, toast };',
+    expectedRules: ["eslint(no-restricted-imports)"],
+  },
+  {
+    name: "web の if は braces を付ければ書ける",
+    path: "web/src/shared/IfWithBracesProbe.ts",
+    source:
+      "export const sign = (value: number) => {\n  if (value > 0) {\n    return 1;\n  }\n  return -1;\n};",
+    expectedRules: [],
+  },
+  {
+    name: "web の test は型の cast を書ける",
+    path: "web/src/shared/__tests__/CastProbe.ts",
+    source: "export const asText = (value: unknown) => value as string;",
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit の file は module の階層に const を置ける",
+    path: "web/src/mfa/ModuleConstProbe.ts",
+    source: 'import { Command } from "foldkit";\nexport const counter = 0;\nexport { Command };',
+    expectedRules: [],
+  },
+  {
+    name: "web の test の file でも、Message の _tag で switch できない",
+    path: "web/src/mfa/__tests__/SwitchProbe.test.ts",
+    source:
+      'type Message = { readonly _tag: "A" } | { readonly _tag: "B" };\nexport const probe = (message: Message) => {\n  switch (message._tag) {\n    case "A":\n      return 1;\n    case "B":\n      return 2;\n  }\n};',
+    expectedRules: ["foldkit(no-switch-on-message-tag)"],
+  },
+  {
+    name: "web の画面の file は Message の _tag で switch できない",
+    path: "web/src/mfa/SwitchProbe.ts",
+    source:
+      'type Message = { readonly _tag: "A" } | { readonly _tag: "B" };\nexport const probe = (message: Message) => {\n  switch (message._tag) {\n    case "A":\n      return 1;\n    case "B":\n      return 2;\n  }\n};',
+    expectedRules: ["foldkit(no-switch-on-message-tag)", "taimei(no-tag-comparison-in-web)"],
+  },
+  {
+    name: "web の画面は Effect.die で期待される失敗を欠陥にできない",
+    path: "web/src/company/DieProbe.ts",
+    source: 'import { Effect } from "effect";\nexport const fail = () => Effect.die("x");',
+    expectedRules: ["taimei(no-effect-die-in-web)"],
+  },
+  {
+    name: "web の画面は Effect.orDie で期待される失敗を欠陥にできない",
+    path: "web/src/membership/OrDieProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const fail = (effect: Effect.Effect<number, string>) => effect.pipe(Effect.orDie);',
+    expectedRules: ["taimei(no-effect-die-in-web)"],
+  },
+  {
+    name: "本番以外の shell も Effect.orDie で失敗を欠陥にできない",
+    path: "web/non-production/OrDieProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const fail = (effect: Effect.Effect<number, string>) => Effect.orDie(effect);',
+    expectedRules: ["taimei(no-effect-die-in-web)"],
+  },
+  {
+    name: "web の test は Effect.die を使える",
+    path: "web/src/company/__tests__/DieProbe.ts",
+    source: 'import { Effect } from "effect";\nexport const fail = () => Effect.die("x");',
+    expectedRules: [],
+  },
+  {
+    name: "web の画面は失敗を型付きの失敗として返せる",
+    path: "web/src/company/FailProbe.ts",
+    source: 'import { Effect } from "effect";\nexport const fail = () => Effect.fail("x");',
+    expectedRules: [],
+  },
+  {
+    name: "web に page を作る独自の関数を書けない",
+    path: "web/src/company/DefinePageProbe.ts",
+    source: "export const definePage = <Model>(model: Model) => model;",
+    expectedRules: ["taimei(no-hand-rolled-page-builders)"],
+  },
+  {
+    name: "web に application を起動する独自の関数を書けない",
+    path: "web/non-production/StartRoutingProbe.ts",
+    source: "export const startRoutingApplication = () => 1;",
+    expectedRules: ["taimei(no-hand-rolled-page-builders)"],
+  },
+  {
+    name: "web で表示中の印の aria-current を AriaCurrent で手書きできない",
+    path: "web/src/shared/AriaCurrentProbe.ts",
+    source:
+      'export const mark = (h: { AriaCurrent: (value: string) => unknown }) => h.AriaCurrent("page");',
+    expectedRules: ["taimei(no-hand-written-current-marker)"],
+  },
+  {
+    name: "web で表示中の印の data-status を手書きできない",
+    path: "web/src/shared/DataStatusProbe.ts",
+    source: 'export const mark = { "data-status": "active" };',
+    expectedRules: ["taimei(no-hand-written-current-marker)"],
+  },
+  {
+    name: 'web で表示中の印を DataAttribute("status") で手書きできない',
+    path: "web/src/shared/DataAttributeProbe.ts",
+    source:
+      'export const mark = (h: { DataAttribute: (name: string, value: string) => unknown }) => h.DataAttribute("status", "active");',
+    expectedRules: ["taimei(no-hand-written-current-marker)"],
+  },
+  {
+    name: "web の link は aria-current 以外の DataAttribute を書ける",
+    path: "web/src/shared/OtherDataAttributeProbe.ts",
+    source:
+      'export const mark = (h: { DataAttribute: (name: string, value: string) => unknown }) => h.DataAttribute("kind", "nav");',
+    expectedRules: [],
+  },
+  {
+    name: "MFA の失敗の文言を mfa-failure-messages.ts の外に書けない",
+    path: "web/src/company/MfaTextProbe.ts",
+    source: 'export const text = "入力されたコードが正しくありません。";',
+    expectedRules: ["taimei(mfa-failure-text-only-in-mfa-failure-messages)"],
+  },
+  {
+    name: "MFA の失敗の文言は mfa-failure-messages.ts に書ける",
+    path: "web/src/mfa/mfa-failure-messages.ts",
+    source: 'export const text = "入力されたコードが正しくありません。";',
+    expectedRules: [],
+  },
+  {
+    name: "MFA の失敗の文言を template の中にも書けない",
+    path: "web/src/mfa/MfaTemplateProbe.ts",
+    source: "export const text = (name: string) => `$" + "{name}はすでに有効です。`;",
+    expectedRules: ["taimei(mfa-failure-text-only-in-mfa-failure-messages)"],
+  },
+  {
+    name: "web に redirect の許可の検査を import できない",
+    path: "web/src/auth/AllowlistImportProbe.ts",
+    source:
+      'import { isAllowedRedirect } from "@core/url-allowlist";\nexport { isAllowedRedirect };',
+    expectedRules: ["taimei(redirect-allowlist-not-in-web)"],
+  },
+  {
+    name: "web に validateRedirectUrl を書けない",
+    path: "web/src/auth/ValidateRedirectProbe.ts",
+    source: "export const validateRedirectUrl = (url: string) => url;",
+    expectedRules: ["taimei(redirect-allowlist-not-in-web)"],
+  },
+  {
+    name: "web は redirect の許可の検査と関係のない module を import できる",
+    path: "web/src/auth/PlainAuthProbe.ts",
+    source:
+      'import { signInParamsSchema } from "@core/sign-in-params";\nexport { signInParamsSchema };',
+    expectedRules: [],
+  },
+  {
+    name: "e2e の spec に test.fixme を書けない",
+    path: "e2e/FixmeProbe.e2e.ts",
+    source: 'import { test } from "@playwright/test";\ntest.fixme("x", async () => {});',
+    expectedRules: ["taimei(no-fixme-in-e2e)"],
+  },
+  {
+    name: "e2e の spec は test を書ける",
+    path: "e2e/PlainProbe.e2e.ts",
+    source: 'import { test } from "@playwright/test";\ntest("x", async () => {});',
+    expectedRules: [],
+  },
+  {
+    name: "application の選択は build の環境の値を読めない",
+    path: "web/src/app/runtime-for-path.ts",
+    source: "export const isDev = import.meta.env.VITE_FLAG;",
+    expectedRules: ["taimei(no-build-env-in-runtime-selection)"],
+  },
+  {
+    name: "起動の入口 main.ts も build の環境の値を読めない",
+    path: "web/src/main.ts",
+    source: "export const mode = import.meta.env.PROD;",
+    expectedRules: ["taimei(no-build-env-in-runtime-selection)", "taimei(no-build-mode-in-web)"],
+  },
+  {
+    name: "runtime の選択の外の file は import.meta.env の設定値を読める",
+    path: "web/src/shared/EnvValueProbe.ts",
+    source: "export const token = import.meta.env.VITE_CANARY_TOKEN_ID;",
+    expectedRules: [],
+  },
+  {
+    name: "page は leave-spa を import して、document を離れる遷移を自分で起こせない",
+    path: "web/src/membership/LeaveSpaImportProbe.ts",
+    source: 'import { leaveSpaToSignIn } from "../shared/leave-spa";\nexport { leaveSpaToSignIn };',
+    expectedRules: ["taimei(leave-spa-import-only-in-app)"],
+  },
+  {
+    name: "application は leave-spa を import して、document を離れる遷移を起こせる",
+    path: "web/src/app/LeaveSpaImportProbe.ts",
+    source: 'import { leaveSpaToSignIn } from "../shared/leave-spa";\nexport { leaveSpaToSignIn };',
+    expectedRules: [],
+  },
 ];
 
 const TYPE_AWARE_CASES: readonly Case[] = [
@@ -919,6 +2512,12 @@ const TYPE_AWARE_CASES: readonly Case[] = [
     name: "型を使う lint: Promise を待たずに捨てられない (no-floating-promises)",
     path: "src/type-aware/no-floating-promises.ts",
     source: "export const start = () => {\n  Promise.resolve(1);\n};",
+    expectedRules: ["typescript(no-floating-promises)"],
+  },
+  {
+    name: "型を使う lint: web/src でも Promise を待たずに捨てられない (no-floating-promises)",
+    path: "web/src/type-aware/NoFloatingPromises.ts",
+    source: "export const probe = () => {\n  Promise.resolve(1);\n};",
     expectedRules: ["typescript(no-floating-promises)"],
   },
   {
@@ -1116,5 +2715,111 @@ describe("lint の rule は、oxlint で決めた path に効く", () => {
     expect(lintedFileCounts.map(({ linted }) => linted)).toEqual(
       lintedFileCounts.map(({ written }) => written),
     );
+  });
+});
+
+type PackageScripts = { readonly scripts: Readonly<Record<string, string>> };
+
+type OxlintRuleInfo = {
+  readonly value: string;
+  readonly category: string;
+  readonly type_aware: boolean;
+};
+
+type RuleSetting = string | number | readonly unknown[];
+
+type OxlintConfig = {
+  readonly categories?: Readonly<Record<string, string>>;
+  readonly rules?: Readonly<Record<string, RuleSetting>>;
+  readonly overrides?: ReadonlyArray<{ readonly rules?: Readonly<Record<string, RuleSetting>> }>;
+};
+
+const ruleNameOf = (key: string) => key.split("/").at(-1) ?? key;
+
+const isOff = (setting: RuleSetting) => {
+  const level = Array.isArray(setting) ? setting[0] : setting;
+  return level === "off" || level === 0 || level === "allow";
+};
+
+const oxlintRuleInfos = (): OxlintRuleInfo[] =>
+  JSON.parse(spawnSync(OXLINT, ["--rules", "--format", "json"], { encoding: "utf8" }).stdout);
+
+const typeAwareRuleNames = () =>
+  new Set(
+    oxlintRuleInfos()
+      .filter((rule) => rule.type_aware)
+      .map((rule) => rule.value),
+  );
+
+const enabledTypeAwareRuleNames = (): string[] => {
+  const config: OxlintConfig = JSON.parse(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8"));
+  const typeAwareRules = oxlintRuleInfos().filter((rule) => rule.type_aware);
+  const topLevel = config.rules ?? {};
+  const offAtTopLevel = new Set(
+    Object.entries(topLevel)
+      .filter(([, setting]) => isOff(setting))
+      .map(([key]) => ruleNameOf(key)),
+  );
+  const byCategory = typeAwareRules
+    .filter(
+      (rule) =>
+        config.categories?.[rule.category] !== undefined &&
+        config.categories[rule.category] !== "off" &&
+        !offAtTopLevel.has(rule.value),
+    )
+    .map((rule) => rule.value);
+  const typeAware = new Set(typeAwareRules.map((rule) => rule.value));
+  const explicit = [topLevel, ...(config.overrides ?? []).map((override) => override.rules ?? {})]
+    .flatMap((settings) => Object.entries(settings))
+    .filter(([key, setting]) => typeAware.has(ruleNameOf(key)) && !isOff(setting))
+    .map(([key]) => ruleNameOf(key));
+  return [...new Set([...byCategory, ...explicit])].toSorted();
+};
+
+describe("型を使う lint は、CI の lint で走り、有効な rule ごとに fixture を持つ", () => {
+  test("package.json の lint は、oxlint に --type-aware を渡す", () => {
+    const { scripts }: PackageScripts = JSON.parse(
+      readFileSync(join(REPO_ROOT, "package.json"), "utf8"),
+    );
+    const oxlintArguments = (scripts.lint ?? "").split("&&")[0]?.trim().split(/\s+/) ?? [];
+    expect(oxlintArguments[0]).toBe("oxlint");
+    expect(oxlintArguments).toContain("--type-aware");
+  });
+
+  test("有効にした型を使う rule は、どれもこの file の fixture に名前がある", () => {
+    const enabled = enabledTypeAwareRuleNames();
+    expect(enabled.length).toBeGreaterThan(0);
+    const fixtures = readFileSync(import.meta.path, "utf8");
+    expect(enabled.filter((rule) => !fixtures.includes(`typescript(${rule})`))).toEqual([]);
+  });
+
+  test("型を使う rule を止める oxlint-disable の directive は、理由を書く", () => {
+    const typeAware = typeAwareRuleNames();
+    const directivePattern = /\/\/\s*oxlint-disable[^\n]*/g;
+    const withoutReason = repoFiles(
+      "src",
+      "web",
+      "db",
+      "e2e",
+      "testing",
+      "management",
+      "infra",
+      "packages",
+      "lint",
+      "scripts",
+    )
+      .filter((file) => /\.(ts|tsx|mts)$/.test(file))
+      .flatMap((file) =>
+        (readFileSync(join(REPO_ROOT, file), "utf8").match(directivePattern) ?? [])
+          .filter((directive) => {
+            const [rules = ""] = directive.split(" -- ");
+            return (
+              !directive.includes(" -- ") &&
+              rules.split(/[\s,]+/).some((token) => typeAware.has(ruleNameOf(token)))
+            );
+          })
+          .map((directive) => `${file}: ${directive}`),
+      );
+    expect(withoutReason).toEqual([]);
   });
 });

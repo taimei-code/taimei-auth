@@ -32,7 +32,7 @@ oxlint 1.90.0 で確かめた振る舞いは次のとおりである。
 ## Consequences
 
 - lint の rule は `oxlint-disable-next-line` で黙らせられる。test は黙らせられない。directive は書いた人が意図して書くもので diff に残るので、受け入れる
-- 表の行の fixture (違反と許す例) は `src/__tests__/oxlint-rules.test.ts` に置く。#398 で移した行の fixture は、受け入れテスト `acceptance/lint-rules-members-switch.test.ts` にある
+- 表の行の fixture (違反と許す例) は `src/__tests__/oxlint-rules.test.ts` に置く。#398 で移した行の fixture もそこにある
 - 移せなかった検査の一覧と理由は #398 の PR に書いた
 - #398 より前からある taimei の rule 6 本 (`no-effect-run-in-web` ほか) は、範囲を `.oxlintrc.json` の override で決めたままにしている。表の行に移せば範囲の決め方が 1 つになる
 

@@ -37,7 +37,7 @@
 - hono の既定から 3 つの値を変える。`Strict-Transport-Security` は `max-age=86400` で `includeSubDomains` を付けない (長い max-age は誤った時に browser の cache が切れるまで戻せないので、短く始めて様子を見る)。`Cross-Origin-Opener-Policy` は `same-origin-allow-popups` (GitHub の OAuth のような、画面が開く popup を壊さない)。`Permissions-Policy` は camera・microphone・geolocation・payment・usb を止める (画面が使わない)。document の `<meta name="referrer">` は、header と同じ値を 2 か所に持たないよう外した
 - `Cross-Origin-Resource-Policy` は付けない (hono の既定の `same-origin` を外す)。ほかの origin が `/auth/assets/*` や canary の icon を読んでいないかを確かめていないためで、#477 で決める
 - sign-out の成功の応答には `Clear-Site-Data: "cache", "storage"` を付ける。`"cookies"` は応答の登録 domain 全体 (consumer の subdomain を含む) の cookie を消すので入れない。session の cookie は better-auth の sign-out が `Set-Cookie` で消す
-- zod 4 は schema を作る時に `Function("")` で eval を使えるかを試し、CSP の下ではこれが違反として報告される。SPA の 2 つの application の entry (`web/src/app/*/entry.ts`) の最初で `web/src/shared/zod-jitless.ts` を import し、schema を作る前に試しを止める。bundle の root (`web/src/main.ts`) に置くと zod の一部が entry の chunk に写り、本番の JS が `acceptance/drop-react.test.ts` の AC-009 の上限を超える
+- zod 4 は schema を作る時に `Function("")` で eval を使えるかを試し、CSP の下ではこれが違反として報告される。SPA の 2 つの application の entry (`web/src/app/*/entry.ts`) の最初で `web/src/shared/zod-jitless.ts` を import し、schema を作る前に試しを止める。bundle の root (`web/src/main.ts`) に置くと zod の一部が entry の chunk に写り、本番の JS が `src/__tests__/web-bundle-size.test.ts` の上限を超える
 
 ## Why
 

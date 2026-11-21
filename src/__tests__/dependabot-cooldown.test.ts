@@ -50,4 +50,11 @@ describe("依存の追加の守り", () => {
     };
     expect(bunfig.install?.minimumReleaseAgeExcludes ?? []).not.toContain("@simplewebauthn/server");
   });
+
+  test("bunfig.toml は、公開から 7 日の待ちの例外 (minimumReleaseAgeExcludes) を持たない (ADR-0009)", () => {
+    const bunfig = Bun.TOML.parse(read("bunfig.toml")) as {
+      install?: { minimumReleaseAgeExcludes?: readonly string[] };
+    };
+    expect(bunfig.install?.minimumReleaseAgeExcludes ?? []).toEqual([]);
+  });
 });

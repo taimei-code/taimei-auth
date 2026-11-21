@@ -1,13 +1,29 @@
+import { buildCompanySignupUrl } from "@taimei-code/auth-client";
 import { describe, expect, test } from "bun:test";
 import { Option } from "effect";
 import { UrlRequest } from "foldkit/navigation";
+import {
+  expect as expectScene,
+  given as givenScene,
+  label,
+  role,
+  scene,
+  text,
+} from "foldkit/scene";
 import { Command, given, message, model, story } from "foldkit/story";
 import { fromString, type Url } from "foldkit/url";
 
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
-import { init, Message, type Model, RedirectToInvalidRedirectUrlError, update } from "../auth/main";
+import {
+  init,
+  Message,
+  type Model,
+  RedirectToInvalidRedirectUrlError,
+  update,
+  view,
+} from "../auth/main";
 import {
   LeaveToSignIn,
   LoadDocument,
@@ -327,6 +343,111 @@ describe("application の中の link", () => {
       ),
       Command.expectExact(LoadDocument({ href: `${ORIGIN}/account` })),
       Command.resolve(LoadDocument, NavigationMessage.CompletedLoadDocument()),
+    );
+  });
+});
+
+describe("共通ログイン画面と共通サインアップ画面を開くと出る文言", () => {
+  const DISALLOWED_SEARCH = new URLSearchParams({
+    service_name: "taimei",
+    redirect_url: "https://evil.example.com/",
+  }).toString();
+
+  test.each([
+    "/auth",
+    "/auth/",
+  ])("%s のログイン画面は見出し、説明、入力欄、2 つのボタン、URL の注意を出す", (path) => {
+    scene(
+      { update, view },
+      givenScene(modelAt(`${path}?${SEARCH}`)),
+      expectScene(text("taimei にログイン")).toExist(),
+      expectScene(text("Magic Link または GitHub アカウントでログイン")).toExist(),
+      expectScene(label("メールアドレス")).toExist(),
+      expectScene(role("button", { name: "Magic Link を送信" })).toExist(),
+      expectScene(role("button", { name: "GitHub でログイン" })).toExist(),
+      expectScene(text("URL が auth.taimei-code.com であることを確認してください")).toExist(),
+    );
+  });
+
+  test("新規登録画面は見出し、説明、お名前とメールアドレスの入力欄、2 つのボタンを出す", () => {
+    scene(
+      { update, view },
+      givenScene(modelAt(`/auth/signup?${SEARCH}`)),
+      expectScene(text("taimei に登録")).toExist(),
+      expectScene(text("Magic Link または GitHub で新規登録")).toExist(),
+      expectScene(label("お名前")).toExist(),
+      expectScene(label("メールアドレス")).toExist(),
+      expectScene(role("button", { name: "Magic Link で登録" })).toExist(),
+      expectScene(role("button", { name: "GitHub で登録" })).toExist(),
+    );
+  });
+
+  test("ログイン画面と新規登録画面の間の link は、宣言した search だけを引き継ぐ", () => {
+    scene(
+      { update, view },
+      givenScene(modelAt(`/auth?${SEARCH}&error=signin_failed`)),
+      expectScene(role("link", { name: "新規登録" })).toHaveAttr("href", `/auth/signup?${SEARCH}`),
+    );
+    scene(
+      { update, view },
+      givenScene(modelAt(`/auth/signup?${SEARCH}&error=signin_failed`)),
+      expectScene(role("link", { name: "ログイン" })).toHaveAttr("href", `/auth?${SEARCH}`),
+    );
+  });
+
+  test.each([
+    ["/auth", "Magic Link を送信"],
+    ["/auth/signup", "Magic Link で登録"],
+  ])("許可されない redirect_url の %s は入力欄と送信のボタンを出さない (許可された URL では出す)", (path, submitName) => {
+    scene(
+      { update, view },
+      givenScene(modelAt(`${path}?${SEARCH}`)),
+      expectScene(role("button", { name: submitName })).toExist(),
+    );
+    scene(
+      { update, view },
+      givenScene(modelAt(`${path}?${DISALLOWED_SEARCH}`)),
+      expectScene(role("button", { name: submitName })).toBeAbsent(),
+      expectScene(label("メールアドレス")).toBeAbsent(),
+    );
+  });
+});
+
+describe("事業所の登録の画面を開くと確認の間の status を出す", () => {
+  const checkingBeforeForm = [
+    expectScene(role("status")).toExist(),
+    expectScene(label("事業所名")).toBeAbsent(),
+    expectScene(role("button", { name: "事業所を作成" })).toBeAbsent(),
+  ];
+
+  test.each([
+    [
+      "許可されない redirect_url",
+      `?${new URLSearchParams({ service_name: "taimei", redirect_url: "https://evil.example.com/" })}`,
+    ],
+    ["search の無い URL", ""],
+  ])("%s で開いても、エラー画面でなく確認の間の status を出す", (_, search) => {
+    scene(
+      { update, view },
+      givenScene(modelAt(`/auth/signup/company${search}`)),
+      ...checkingBeforeForm,
+      expectScene(text("不正なリダイレクト URL")).toBeAbsent(),
+      expectScene(text("エラーが発生しました")).toBeAbsent(),
+    );
+  });
+
+  test("auth-client が組む事業所作成画面の URL を開くと、確認の間の status を出す", () => {
+    const url = new URL(
+      buildCompanySignupUrl({
+        authBaseUrl: ORIGIN,
+        service: "taimei",
+        returnTo: "https://app.taimei-code.com/",
+      }),
+    );
+    scene(
+      { update, view },
+      givenScene(modelAt(`${url.pathname}${url.search}`)),
+      ...checkingBeforeForm,
     );
   });
 });

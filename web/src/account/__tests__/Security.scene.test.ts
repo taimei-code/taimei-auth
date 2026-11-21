@@ -1,9 +1,28 @@
-import { describe, test } from "bun:test";
-import { Option } from "effect";
-import { all, Command, expect, expectAll, given, Mount, role, scene, text } from "foldkit/scene";
+import { afterAll, beforeAll, describe, expect as expectBun, test } from "bun:test";
+import { Effect, Fiber, Option, Redacted } from "effect";
+// oxlint-disable-next-line no-restricted-imports -- コピーの結果を隠す 3 秒の待ちを、仮想の時計 (TestClock) で進めて確かめる
+import { TestClock } from "effect/testing";
+import {
+  all,
+  click,
+  Command,
+  expect,
+  expectAll,
+  given,
+  Mount,
+  role,
+  scene,
+  text,
+} from "foldkit/scene";
 
+import * as CopyResult from "../../mfa/copy-result";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
-import { pendingDialogTransitionResolvers } from "../../shared/__tests__/dialog-resolvers";
+import {
+  DIALOG_RESOURCES_RELEASED_RESOLVER,
+  FIRST_DIALOG_CLOSING_RESOLVERS,
+  FIRST_DIALOG_OPENING_RESOLVERS,
+  pendingDialogTransitionResolvers,
+} from "../../shared/__tests__/dialog-resolvers";
 import { Dialog } from "../../shared/ui/dialog-view";
 import { init, Message, type Model, update, view } from "../pages/Security";
 
@@ -174,5 +193,356 @@ describe("セキュリティの画面", () => {
         expect(role("button", { name: "有効にする" })).toExist(),
       );
     });
+  });
+});
+
+const ENROLLMENT = {
+  enrollmentId: "enrollment-1",
+  totpUri: Redacted.make("otpauth://totp/taimei:me?secret=JBSWY3DPEHPK3PXP"),
+  recoveryCodes: Redacted.make(["aaaaa-11111", "bbbbb-22222"]),
+};
+
+const enrollment = (message: MfaEnrollment.Message): Message =>
+  Message.GotMfaEnrollmentMessage({ message });
+
+const requestedEnrollMfa = (commands: ReadonlyArray<{ name: string; args?: unknown }>) => {
+  const found = commands.find((command) => command.name === MfaEnrollment.EnrollMfa.name);
+  if (found === undefined) {
+    throw new Error("EnrollMfa was not requested");
+  }
+  const { visit, requestNumber } = found.args as { visit: number; requestNumber: number };
+  return { visit, requestNumber };
+};
+
+const DIALOG_TITLE = "多要素認証 (MFA) を有効にする";
+
+describe("MFA の有効化の dialog を閉じる animation", () => {
+  test("dialog を閉じる操作の後、閉じる animation が終わるまで中身を描き、終わると消す", () => {
+    const opened = update(
+      loaded({ _tag: "Disabled" }),
+      enrollment(MfaEnrollment.Message.ClickedEnable()),
+    );
+    const showingSecret = update(
+      opened.model,
+      enrollment(
+        MfaEnrollment.Message.SucceededEnrollMfa({
+          ...requestedEnrollMfa(opened.commands ?? []),
+          enrollment: ENROLLMENT,
+        }),
+      ),
+    ).model;
+    scene(
+      { update, view },
+      given(showingSecret),
+      Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+      Command.resolveAll(...FIRST_DIALOG_OPENING_RESOLVERS),
+      expect(role("heading", { name: DIALOG_TITLE })).toExist(),
+      click(role("button", { name: "閉じる" })),
+      expect(role("heading", { name: DIALOG_TITLE })).toExist(),
+      Command.resolveAll(...FIRST_DIALOG_CLOSING_RESOLVERS, DIALOG_RESOURCES_RELEASED_RESOLVER),
+      expect(role("heading", { name: DIALOG_TITLE })).toBeAbsent(),
+      Mount.expectEnded(Dialog.AcquireResources),
+    );
+  });
+});
+
+type Running = { model: Model; waits: Array<Fiber.Fiber<unknown, unknown>> };
+
+type AnyCommand = {
+  name: string;
+  args?: unknown;
+  effect: Effect.Effect<unknown, unknown, unknown>;
+};
+
+const COPIED = "コピーしました";
+const NOT_COPIED = "コピーできませんでした";
+
+const send = (
+  running: Running,
+  message: Message,
+): Effect.Effect<{ running: Running; commands: ReadonlyArray<AnyCommand> }, unknown, never> =>
+  Effect.gen(function* () {
+    const result = update(running.model, message);
+    const commands = (result.commands ?? []) as ReadonlyArray<AnyCommand>;
+    let next: Running = { model: result.model, waits: running.waits };
+    for (const command of commands) {
+      if (command.name === CopyResult.WaitBeforeHidingCopyResult.name) {
+        const fiber = yield* Effect.forkChild(
+          command.effect as Effect.Effect<unknown, unknown, never>,
+        );
+        next = { ...next, waits: [...next.waits, fiber] };
+      } else if (command.name === CopyResult.CopyText.name) {
+        const copied = (yield* command.effect as Effect.Effect<unknown, unknown, never>) as Message;
+        next = (yield* send(next, copied)).running;
+      }
+    }
+    yield* Effect.yieldNow;
+    return { running: next, commands };
+  });
+
+const deliverFinishedWaits = (running: Running): Effect.Effect<Running, unknown, never> =>
+  Effect.gen(function* () {
+    let next: Running = running;
+    for (const fiber of running.waits) {
+      if (fiber.pollUnsafe() !== undefined) {
+        next = { ...next, waits: next.waits.filter((each) => each !== fiber) };
+        const message = (yield* Fiber.join(fiber)) as Message;
+        next = (yield* send(next, message)).running;
+      }
+    }
+    return next;
+  });
+
+const advance = (running: Running, millis: number): Effect.Effect<Running, unknown, never> =>
+  Effect.gen(function* () {
+    yield* TestClock.adjust(millis);
+    yield* Effect.yieldNow;
+    return yield* deliverFinishedWaits(running);
+  });
+
+const sendAll = (running: Running, ...messages: ReadonlyArray<Message>) =>
+  Effect.gen(function* () {
+    let next = running;
+    for (const each of messages) {
+      next = (yield* send(next, each)).running;
+    }
+    return next;
+  });
+
+const openScanStep = (): Effect.Effect<Running, unknown, never> =>
+  Effect.gen(function* () {
+    const opened = yield* send(
+      { model: loaded({ _tag: "Disabled" }), waits: [] },
+      enrollment(MfaEnrollment.Message.ClickedEnable()),
+    );
+    return yield* sendAll(
+      opened.running,
+      enrollment(
+        MfaEnrollment.Message.SucceededEnrollMfa({
+          ...requestedEnrollMfa(opened.commands),
+          enrollment: ENROLLMENT,
+        }),
+      ),
+    );
+  });
+
+const copy = (running: Running) =>
+  sendAll(
+    running,
+    enrollment(
+      MfaEnrollment.Message.GotCopyResultMessage({
+        message: CopyResult.Message.ClickedCopy({ text: Redacted.make("copied text") }),
+      }),
+    ),
+  );
+
+const nextThenBack = (running: Running) =>
+  sendAll(
+    running,
+    enrollment(MfaEnrollment.Message.ClickedNext()),
+    enrollment(MfaEnrollment.Message.ClickedBack()),
+  );
+
+const closeThenReopen = (running: Running) =>
+  Effect.gen(function* () {
+    const closed = yield* sendAll(
+      running,
+      enrollment(MfaEnrollment.Message.GotDialogMessage({ message: { _tag: "RequestedClose" } })),
+    );
+    return (yield* send(closed, enrollment(MfaEnrollment.Message.ClickedEnable()))).running;
+  });
+
+const activate = (running: Running) =>
+  Effect.gen(function* () {
+    const typed = yield* sendAll(
+      running,
+      enrollment(MfaEnrollment.Message.ClickedNext()),
+      enrollment(MfaEnrollment.Message.UpdatedCode({ value: "123456" })),
+    );
+    const submitted = yield* send(typed, enrollment(MfaEnrollment.Message.SubmittedCode()));
+    return yield* sendAll(
+      submitted.running,
+      enrollment(
+        MfaEnrollment.Message.SucceededActivateMfa(requestedActivation(submitted.commands)),
+      ),
+    );
+  });
+
+const requestedActivation = (commands: ReadonlyArray<AnyCommand>) => {
+  const found = commands.find((command) => command.name === MfaEnrollment.ActivateMfa.name);
+  if (found === undefined) {
+    throw new Error("ActivateMfa was not requested");
+  }
+  const { visit, requestNumber } = found.args as { visit: number; requestNumber: number };
+  return { visit, requestNumber };
+};
+
+const runWithTestClock = <A>(effect: Effect.Effect<A, unknown, never>): Promise<A> =>
+  Effect.runPromise(Effect.scoped(effect).pipe(Effect.provide(TestClock.layer())));
+
+const showsDialogText = (model: Model, label: string, present: boolean) =>
+  scene(
+    { update, view },
+    given(model),
+    Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+    Command.resolveAll(...pendingDialogTransitionResolvers(model.enrollment.dialog)),
+    expect(role("heading", { name: DIALOG_TITLE })).toExist(),
+    present ? expect(text(label)).toExist() : expect(text(label)).toBeAbsent(),
+  );
+
+const shows = (model: Model, label: string) => showsDialogText(model, label, true);
+
+const hides = (model: Model, label: string) => showsDialogText(model, label, false);
+
+describe("MFA の有効化の dialog のコピーの結果の表示", () => {
+  let clipboardWrites: () => Promise<void> = () => Promise.resolve();
+  const originalClipboard = Object.getOwnPropertyDescriptor(globalThis.navigator, "clipboard");
+
+  beforeAll(() => {
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => clipboardWrites() },
+    });
+  });
+
+  afterAll(() => {
+    if (originalClipboard === undefined) {
+      Reflect.deleteProperty(globalThis.navigator, "clipboard");
+    } else {
+      Object.defineProperty(globalThis.navigator, "clipboard", originalClipboard);
+    }
+  });
+
+  test("QR の段階でコピーに成功した後に次へと戻るを押すと、「コピーしました」が出ていない", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const returned = await runWithTestClock(
+      Effect.gen(function* () {
+        const copied = yield* copy(yield* openScanStep());
+        shows(copied.model, COPIED);
+        return (yield* nextThenBack(yield* advance(copied, 1000))).model;
+      }),
+    );
+    expectBun(returned.enrollment.step._tag).toBe("Scan");
+    hides(returned, COPIED);
+  });
+
+  test("QR の段階でコピーに失敗した後に次へと戻るを押すと、「コピーできませんでした」が出ていない", async () => {
+    clipboardWrites = () => Promise.reject(new Error("denied"));
+    const returned = await runWithTestClock(
+      Effect.gen(function* () {
+        const failed = yield* copy(yield* openScanStep());
+        shows(failed.model, NOT_COPIED);
+        return (yield* nextThenBack(yield* advance(failed, 1000))).model;
+      }),
+    );
+    clipboardWrites = () => Promise.resolve();
+    expectBun(returned.enrollment.step._tag).toBe("Scan");
+    hides(returned, NOT_COPIED);
+  });
+
+  test("QR の段階でコピーに成功した後に有効化が通ると、リカバリーコードの段階に「コピーしました」が出ていない", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const activated = await runWithTestClock(
+      Effect.gen(function* () {
+        const copied = yield* copy(yield* openScanStep());
+        return (yield* activate(yield* advance(copied, 1000))).model;
+      }),
+    );
+    expectBun(activated.enrollment.step._tag).toBe("RecoveryCodes");
+    shows(activated, "リカバリーコードをコピー");
+    hides(activated, COPIED);
+  });
+
+  test("リカバリーコードの段階でコピーした後に閉じて開き直すと、読み込み中と QR の段階に「コピーしました」が出ていない", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const result = await runWithTestClock(
+      Effect.gen(function* () {
+        const activated = yield* activate(yield* openScanStep());
+        const copied = yield* copy(activated);
+        shows(copied.model, COPIED);
+        const closed = yield* sendAll(
+          yield* advance(copied, 1000),
+          enrollment(MfaEnrollment.Message.ClickedCloseAfterSavingCodes()),
+        );
+        const reopened = yield* send(closed, enrollment(MfaEnrollment.Message.ClickedEnable()));
+        const scanned = yield* sendAll(
+          reopened.running,
+          enrollment(
+            MfaEnrollment.Message.SucceededEnrollMfa({
+              ...requestedEnrollMfa(reopened.commands),
+              enrollment: ENROLLMENT,
+            }),
+          ),
+        );
+        return { starting: reopened.running.model, scanned: scanned.model };
+      }),
+    );
+    expectBun(result.starting.enrollment.step._tag).toBe("Starting");
+    hides(result.starting, COPIED);
+    expectBun(result.scanned.enrollment.step._tag).toBe("Scan");
+    hides(result.scanned, COPIED);
+  });
+
+  test("コピーから 3 秒たつ直前は「コピーしました」が出ていて、3 秒たった直後は出ていない", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const result = await runWithTestClock(
+      Effect.gen(function* () {
+        const copied = yield* copy(yield* openScanStep());
+        const justBefore = yield* advance(copied, 2999);
+        const justAfter = yield* advance(justBefore, 2);
+        return { justBefore: justBefore.model, justAfter: justAfter.model };
+      }),
+    );
+    shows(result.justBefore, COPIED);
+    hides(result.justAfter, COPIED);
+  });
+
+  test("2 回コピーすると、1 回目から 3 秒たっても出ていて、2 回目から 3 秒たつと消える", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const result = await runWithTestClock(
+      Effect.gen(function* () {
+        const first = yield* copy(yield* openScanStep());
+        const second = yield* copy(yield* advance(first, 1000));
+        const afterFirst = yield* advance(second, 2001);
+        const afterSecond = yield* advance(afterFirst, 1000);
+        return { afterFirst: afterFirst.model, afterSecond: afterSecond.model };
+      }),
+    );
+    shows(result.afterFirst, COPIED);
+    hides(result.afterSecond, COPIED);
+  });
+
+  test("次へと戻るの後にもう一度コピーすると、1 回目から 3 秒たっても出ていて、2 回目から 3 秒たつと消える", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const result = await runWithTestClock(
+      Effect.gen(function* () {
+        const first = yield* copy(yield* openScanStep());
+        const returned = yield* nextThenBack(yield* advance(first, 500));
+        const second = yield* copy(yield* advance(returned, 500));
+        const afterFirst = yield* advance(second, 2001);
+        const afterSecond = yield* advance(afterFirst, 1000);
+        return { afterFirst: afterFirst.model, afterSecond: afterSecond.model };
+      }),
+    );
+    expectBun(result.afterFirst.enrollment.step._tag).toBe("Scan");
+    shows(result.afterFirst, COPIED);
+    hides(result.afterSecond, COPIED);
+  });
+
+  test("閉じて開き直した QR の段階でもう一度コピーすると、1 回目から 3 秒たっても出ていて、2 回目から 3 秒たつと消える", async () => {
+    clipboardWrites = () => Promise.resolve();
+    const result = await runWithTestClock(
+      Effect.gen(function* () {
+        const first = yield* copy(yield* openScanStep());
+        const reopened = yield* closeThenReopen(yield* advance(first, 500));
+        const second = yield* copy(yield* advance(reopened, 500));
+        const afterFirst = yield* advance(second, 2001);
+        const afterSecond = yield* advance(afterFirst, 1000);
+        return { afterFirst: afterFirst.model, afterSecond: afterSecond.model };
+      }),
+    );
+    expectBun(result.afterFirst.enrollment.step._tag).toBe("Scan");
+    shows(result.afterFirst, COPIED);
+    hides(result.afterSecond, COPIED);
   });
 });

@@ -1,4 +1,6 @@
-import { describe, test } from "bun:test";
+import { describe, expect as expectBun, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Option } from "effect";
 import { expect, given, role, scene } from "foldkit/scene";
 import { fromString } from "foldkit/url";
@@ -59,5 +61,29 @@ describe("エラー画面は理由ごとの文言を alert で出す", () => {
       given(modelAt(href)),
       expect(role("alert")).toContainText("エラーが発生しました"),
     );
+  });
+});
+
+describe("エラー画面の document", () => {
+  test("title は「エラー | taimei-auth」で、canonical と og:url を持たない。html の既定の title は「taimei-auth」で、canonical も og:url も持たない", () => {
+    const rendered: Array<ReturnType<typeof view>> = [];
+    scene(
+      {
+        update,
+        view: (model, h) => {
+          const document = view(model, h);
+          rendered.push(document);
+          return document;
+        },
+      },
+      given(modelAt("https://auth.example.com/auth/error?reason=signin_failed")),
+    );
+    const html = readFileSync(join(import.meta.dir, "../../../index.html"), "utf8");
+
+    expectBun(rendered[0]?.title).toBe("エラー | taimei-auth");
+    expectBun(rendered[0]?.canonical).toBeUndefined();
+    expectBun(rendered[0]?.ogUrl).toBeUndefined();
+    expectBun(html).toContain("<title>taimei-auth</title>");
+    expectBun(html).not.toMatch(/canonical|og:url/);
   });
 });

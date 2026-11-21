@@ -2009,6 +2009,82 @@ const ROWS: readonly Row[] = [
     message:
       "SDK が import できる外部 package は packages/auth-client/package.json の peerDependencies だけ (型の import も .d.ts に出る)。consumer の framework (Next.js・React・Node) と transport に依存させない (ADR-0028)",
   },
+  {
+    name: "no-effect-die-in-web",
+    within: ["web/src/**", "web/non-production/**"],
+    matchers: [{ kind: "member", paths: ["Effect.die", "Effect.orDie"] }],
+    message:
+      "期待される失敗は型付きの失敗として返し、Effect.die・Effect.orDie で欠陥にしない。画面は失敗を Message に直して表示する (ADR-0023)",
+  },
+  {
+    name: "no-hand-rolled-page-builders",
+    within: ["web/src/**", "web/non-production/**"],
+    matchers: [
+      { kind: "identifier", names: ["definePage", "defineElement", "startRoutingApplication"] },
+    ],
+    message:
+      "page や application を作る独自の関数を書かない。page は Model・Message・init・update・view を直接 export し、起動は startApplication だけが行う (ADR-0023)",
+  },
+  {
+    name: "no-hand-written-current-marker",
+    within: ["web/src/**"],
+    matchers: [
+      { kind: "identifier", names: ["AriaCurrent"], callOnly: true },
+      { kind: "literal", pattern: /data-status|status=active/ },
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          CallExpression: (node) => {
+            if (
+              calleeNameOf(node.callee) === "DataAttribute" &&
+              stringOf(node.arguments?.[0]) === "status"
+            ) {
+              report(node);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "表示中の link の印 (aria-current・data-status) を手で付けない。Foldkit の部品が付ける (ADR-0023)",
+  },
+  {
+    name: "mfa-failure-text-only-in-mfa-failure-messages",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/mfa/mfa-failure-messages.ts"],
+    matchers: [
+      {
+        kind: "literal",
+        pattern:
+          /入力されたコードが正しくありません。|試行回数が上限に達したか|登録情報が更新されました。|はすでに有効です。/,
+      },
+    ],
+    message:
+      "MFA の失敗の文言は web/src/mfa/mfa-failure-messages.ts だけが持つ。同じ失敗に同じ文言を出すために 1 か所に置く",
+  },
+  {
+    name: "redirect-allowlist-not-in-web",
+    within: ["web/src/**"],
+    matchers: [
+      { kind: "identifier", names: ["validateRedirectUrl"] },
+      { kind: "valueImport", source: /url-allowlist/ },
+    ],
+    message:
+      "web は redirect の許可の検査を書かない。許可は server が検査する (ADR-0003)。画面は route の parser が読んだ値を使う",
+  },
+  {
+    name: "no-fixme-in-e2e",
+    within: ["e2e/**"],
+    matchers: [{ kind: "member", paths: ["test.fixme"] }],
+    message: "e2e の spec に test.fixme を書かない。直すか消す",
+  },
+  {
+    name: "no-build-env-in-runtime-selection",
+    within: ["web/src/main.ts", "web/src/app/runtime-for-path.ts"],
+    matchers: [{ kind: "member", paths: ["import.meta.env"] }],
+    message:
+      "どの application を起動するかは URL の path だけで決める。build の mode や環境の値を読まない (ADR-0021)",
+  },
 ];
 
 const BROWSER_GLOBALS = new Set([

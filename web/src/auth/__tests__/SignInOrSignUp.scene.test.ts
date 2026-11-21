@@ -110,6 +110,54 @@ describe("ログイン画面", () => {
   });
 });
 
+describe("必須の欄", () => {
+  test("ログインで、メールアドレスが空のまま送信のボタンを押すと、「メールアドレスを入力してください。」が出て、入力欄が aria-invalid になる", () => {
+    scene(
+      { update, view },
+      given(pageOf("SignIn")),
+      click(role("button", { name: "Magic Link を送信" })),
+      expect(text("メールアドレスを入力してください。")).toExist(),
+      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "true"),
+      Command.resolve(FocusMagicLinkField, Message.CompletedFocusField()),
+    );
+  });
+
+  test("ログインで、空白だけのメールアドレスで送信すると、空と同じ誤りを示す", () => {
+    scene(
+      { update, view },
+      given(pageOf("SignIn")),
+      type(label("メールアドレス"), "   "),
+      click(role("button", { name: "Magic Link を送信" })),
+      expect(text("メールアドレスを入力してください。")).toExist(),
+      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "true"),
+      Command.resolve(FocusMagicLinkField, Message.CompletedFocusField()),
+    );
+  });
+
+  test("触る前の入力欄は aria-invalid が false である", () => {
+    scene(
+      { update, view },
+      given(pageOf("SignIn")),
+      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "false"),
+    );
+    scene(
+      { update, view },
+      given(pageOf("SignUp")),
+      expect(label("お名前")).toHaveAttr("aria-invalid", "false"),
+      expect(label("メールアドレス")).toHaveAttr("aria-invalid", "false"),
+    );
+  });
+
+  test("必須の欄は label の隣に印を持ち、form は印が必須を表すことを説明する", () => {
+    scene(
+      { update, view },
+      given(pageOf("SignIn")),
+      expect(text("*")).toExist(),
+      expect(text("* は必須の項目です。")).toExist(),
+    );
+  });
+});
+
 describe("新規登録画面", () => {
   test("お名前の欄を出し、お名前が空のまま送ると、お名前の欄に誤りを示す", () => {
     scene(
