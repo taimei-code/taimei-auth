@@ -19,7 +19,6 @@
       "!packages/auth-client/api",
       "!bun.lock",
       "!web/src/index.css",
-      "!acceptance",
       "!repos"
     ]
   },

@@ -25,7 +25,9 @@ import {
   WEB_ONLY_DEP_MESSAGE,
   webOnlyBanViolations,
   webOnlyGroups,
+  workspacePackageNames,
 } from "./config-invariant-helpers";
+import { repoFiles } from "./source-scan";
 
 const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
   "@alchemy.run/cloudflare":
@@ -214,5 +216,30 @@ describe("WebAuthn の検証の library の固定", () => {
   test(`${PACKAGE} が ${VERSION} に固定して dependencies に足され、bun.lock がその版を解決している`, () => {
     expect(readPackageJson().dependencies?.[PACKAGE]).toBe(VERSION);
     expect(readFileSync(join(REPO_ROOT, "bun.lock"), "utf8")).toContain(`"${PACKAGE}@${VERSION}"`);
+  });
+});
+
+describe("repo は React に依存しない", () => {
+  const REACT_DEPENDENCY = /"(react|react-dom|@types\/react|@react-email\/[^"]+)"\s*:/;
+  const SOURCE_DIRS = ["src", "web", "testing", "e2e", "packages"];
+
+  test("package.json に react・react-dom・@types/react・@react-email の依存が無い", () => {
+    const manifests = [
+      "package.json",
+      ...workspacePackageNames().map((name) => `packages/${name}/package.json`),
+    ];
+    expect(
+      manifests.filter((path) =>
+        REACT_DEPENDENCY.test(readFileSync(join(REPO_ROOT, path), "utf8")),
+      ),
+    ).toEqual([]);
+  });
+
+  test("source に JSX を書く .tsx の file が無い", () => {
+    expect(repoFiles(...SOURCE_DIRS.map((dir) => `:(glob)${dir}/**/*.tsx`))).toEqual([]);
+  });
+
+  test("起動時に初期化される prismjs が lockfile に無い", () => {
+    expect(readFileSync(join(REPO_ROOT, "bun.lock"), "utf8")).not.toContain('"prismjs@');
   });
 });

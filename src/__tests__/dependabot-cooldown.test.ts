@@ -11,7 +11,7 @@ const read = (path: string) => readFileSync(join(REPO_ROOT, path), "utf8");
 const readUpdates = () =>
   (
     Bun.YAML.parse(read(".github/dependabot.yml")) as {
-      updates: { "package-ecosystem": string; cooldown?: unknown }[];
+      updates: { "package-ecosystem": string; directory?: string; cooldown?: unknown }[];
     }
   ).updates;
 
@@ -33,6 +33,14 @@ describe("Dependabot の cooldown invariant", () => {
 
   test("minimumReleaseAge は 7 日である。悪性の版は公開から 7 日以内に yank されてきた (ADR-0009)", () => {
     expect(readMinimumReleaseAge()).toBe(7 * SECONDS_PER_DAY);
+  });
+
+  test("bun の update が、repo の root の directory (/) を対象にする", () => {
+    expect(
+      readUpdates()
+        .filter((update) => update["package-ecosystem"] === "bun")
+        .map((update) => update.directory),
+    ).toContain("/");
   });
 
   test("npm の update を置かない。Dependabot の npm は package.json だけを変え、bun.lock を変えないので、CI の frozen-lockfile の install を通らない (ADR-0009)", () => {

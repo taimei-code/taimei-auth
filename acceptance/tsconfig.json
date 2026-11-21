@@ -1,7 +1,0 @@
-{
-  "extends": "../tsconfig.json",
-  "compilerOptions": {
-    "composite": false
-  },
-  "include": ["../worker-configuration.d.ts", "**/*.ts"]
-}

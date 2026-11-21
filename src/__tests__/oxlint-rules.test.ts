@@ -2481,6 +2481,505 @@ const CASES: readonly Case[] = [
     source: 'import { leaveSpaToSignIn } from "../shared/leave-spa";\nexport { leaveSpaToSignIn };',
     expectedRules: [],
   },
+  {
+    name: "src が drizzle-orm の subpath を import すると、lint が止める",
+    path: "src/company/DrizzleProbe.ts",
+    source: 'import { sql } from "drizzle-orm/sql";\nexport const s = sql;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "src が pg を import すると、lint が止める",
+    path: "src/handlers/PgProbe.ts",
+    source: 'import { Pool } from "pg";\nexport const p = Pool;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "src が @core/ から db/client を import すると、lint が止める",
+    path: "src/company/CoreProbe.ts",
+    source: 'import { db } from "@core/../db/client";\nexport const d = db;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "src の test が相対 path で db/client を import すると、lint が止める",
+    path: "src/__tests__/DbProbe.ts",
+    source: 'import { db } from "../../db/client";\nexport const d = db;',
+    expectedRules: [
+      "taimei(db-import-in-src-tests-only-in-test-db)",
+      "taimei(db-value-import-only-in-db-in-tests)",
+    ],
+  },
+  {
+    name: "testing が相対 path で db/client を import すると、lint が止める",
+    path: "testing/DbProbe.ts",
+    source: 'import { db } from "../db/client";\nexport const d = db;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "testing の test が drizzle-orm を import すると、lint が止める",
+    path: "testing/__tests__/DrizzleProbe.ts",
+    source: 'import { drizzle } from "drizzle-orm/node-postgres";\nexport const d = drizzle;',
+    expectedRules: ["taimei(db-value-import-only-in-db-in-tests)"],
+  },
+  {
+    name: "web が相対 path で db/client を import すると、lint が止める",
+    path: "web/src/company/DbProbe.ts",
+    source: 'import { db } from "../../../db/client";\nexport const d = db;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "SDK が相対 path で db/schema を import すると、lint が止める",
+    path: "packages/auth-client/src/DbProbe.ts",
+    source: 'import * as schema from "../../../db/schema";\nexport const s = schema;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "infra が pg を import すると、lint が止める",
+    path: "infra/PgProbe.ts",
+    source: 'import { Pool } from "pg";\nexport const p = Pool;',
+    expectedRules: ["taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "e2e が相対 path で db/client を import すると、lint が止める",
+    path: "e2e/DbProbe.ts",
+    source: 'import { db } from "../db/client";\nexport const d = db;',
+    expectedRules: ["taimei(db-import-in-e2e-only-db-testing)", "taimei(db-import-only-in-db)"],
+  },
+  {
+    name: "db/client.ts の外の db の file が pg を import すると、lint が止める",
+    path: "db/repositories/PgProbe.ts",
+    source: 'import { Pool } from "pg";\nexport const p = Pool;',
+    expectedRules: ["taimei(pg-import-only-in-db-client)"],
+  },
+  {
+    name: "db/client.ts は pg を import できる",
+    path: "db/client.ts",
+    source: 'import { Pool } from "pg";\nexport const p = Pool;',
+    expectedRules: [],
+  },
+  {
+    name: "src/worker.ts は directive 無しで db/client を import できる",
+    path: "src/worker.ts",
+    source:
+      'import { runWithRequestPool } from "@/db/client";\nexport const pooled = runWithRequestPool;',
+    expectedRules: [],
+  },
+  {
+    name: "test-db.ts は db/testing を import できる",
+    path: "src/__tests__/test-db.ts",
+    source: 'import * as seed from "@/db/testing/seed";\nexport const s = seed;',
+    expectedRules: [],
+  },
+  {
+    name: "testing は db/testing を import できる",
+    path: "testing/SeedProbe.ts",
+    source: 'import * as seed from "../db/testing/seed";\nexport const s = seed;',
+    expectedRules: [],
+  },
+  {
+    name: "testing の test は db/testing を import できる",
+    path: "testing/__tests__/SeedProbe.ts",
+    source: 'import * as seed from "../../db/testing/seed";\nexport const s = seed;',
+    expectedRules: [],
+  },
+  {
+    name: "src は db/repositories を型で import できる",
+    path: "src/company/TypeProbe.ts",
+    source:
+      'import type { CompanyRow } from "../../db/repositories/company";\nexport type C = CompanyRow;',
+    expectedRules: [],
+  },
+  {
+    name: "src は db/enums を import できる",
+    path: "src/company/EnumProbe.ts",
+    source: 'import { ROLES } from "../../db/enums";\nexport const r = ROLES;',
+    expectedRules: [],
+  },
+  {
+    name: "status を書かずに Schema.TaggedError を宣言すると、lint が止める",
+    path: "src/company/FailureProbe.ts",
+    source:
+      'import { Schema } from "effect";\nexport class Probe extends Schema.TaggedError<Probe>()("Probe", {}) {}',
+    expectedRules: ["taimei(tagged-error-only-in-failure)"],
+  },
+  {
+    name: "src/errors.ts の外で EmailError を new すると、lint が止める",
+    path: "src/email/BoundaryProbe.ts",
+    source:
+      'import { EmailError } from "../errors";\nexport const failed = new EmailError({ cause: 1 });',
+    expectedRules: ["taimei(boundary-error-construction-only-in-errors)"],
+  },
+  {
+    name: "src/errors.ts の外で DbError を new すると、lint が止める",
+    path: "src/company/BoundaryProbe.ts",
+    source:
+      'import { DbError } from "../errors";\nexport const failed = new DbError({ cause: 1 });',
+    expectedRules: ["taimei(boundary-error-construction-only-in-errors)"],
+  },
+  {
+    name: "src/errors.ts は境界の失敗を new できる",
+    path: "src/errors.ts",
+    source:
+      "class DbError {\n  constructor(readonly fields: { readonly cause: unknown }) {}\n}\nexport const failed = new DbError({ cause: 1 });",
+    expectedRules: [],
+  },
+  {
+    name: "一覧に無い file が runPromise を呼ぶと、lint が止める",
+    path: "src/company/RunProbe.ts",
+    source:
+      "export const run = (runtime: { runPromise: (effect: unknown) => unknown }, effect: unknown) => runtime.runPromise(effect);",
+    expectedRules: ["taimei(effect-run-only-in-listed-files)"],
+  },
+  {
+    name: "Date.now() を呼ぶと、lint が止める",
+    path: "src/company/ClockProbe.ts",
+    source: "export const now = () => Date.now();",
+    expectedRules: ["taimei(clock-and-id-only-in-services)"],
+  },
+  {
+    name: "crypto.randomUUID() を呼ぶと、lint が止める",
+    path: "src/company/IdProbe.ts",
+    source: "export const id = () => crypto.randomUUID();",
+    expectedRules: ["taimei(clock-and-id-only-in-services)"],
+  },
+  {
+    name: "entry の外が TTL store の driver を import すると、lint が止める",
+    path: "src/company/DriverProbe.ts",
+    source: 'import * as driver from "../kv-store.memory";\nexport const d = driver;',
+    expectedRules: ["taimei(ttl-store-driver-import-only-in-entry-files)"],
+  },
+  {
+    name: "email の外が send-* を import すると、lint が止める",
+    path: "src/company/EmailProbe.ts",
+    source: 'import * as welcome from "../email/send-welcome";\nexport const w = welcome;',
+    expectedRules: ["taimei(email-send-only-in-email-wiring)"],
+  },
+  {
+    name: "background.ts の外が Effect.forkDetach を書くと、lint が止める",
+    path: "src/company/ForkProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const forked = Effect.forkDetach(Effect.void);',
+    expectedRules: ["taimei(run-background-only-in-background)"],
+  },
+  {
+    name: "run-rpc.ts の外が ConnectError を書くと、lint が止める",
+    path: "src/rpc/ConnectProbe.ts",
+    source:
+      'import { Code, ConnectError } from "@connectrpc/connect";\nexport const failed = new ConnectError("x", Code.Internal);',
+    expectedRules: ["taimei(connect-error-only-in-run-rpc)"],
+  },
+  {
+    name: "HttpApiSchema.WithHeaders を書くと、lint が止める",
+    path: "src/handlers/HeadersProbe.ts",
+    source:
+      "declare const HttpApiSchema: { readonly WithHeaders: unknown };\nexport const headers = HttpApiSchema.WithHeaders;",
+    expectedRules: ["taimei(no-with-headers-in-http-api)"],
+  },
+  {
+    name: "Transport が policy を import すると、lint が止める",
+    path: "src/handlers/PolicyProbe.ts",
+    source: 'import * as policy from "../membership/policy";\nexport const p = policy;',
+    expectedRules: ["taimei(no-policy-or-transaction-in-transport)"],
+  },
+  {
+    name: "Transport が transaction を import すると、lint が止める",
+    path: "src/rpc/TxProbe.ts",
+    source: 'import * as transaction from "../transaction";\nexport const t = transaction;',
+    expectedRules: ["taimei(no-policy-or-transaction-in-transport)"],
+  },
+  {
+    name: "一覧に無い Transport の file が port を import すると、lint が止める",
+    path: "src/rpc/PortProbe.ts",
+    source: 'import * as ports from "../company/ports";\nexport const p = ports;',
+    expectedRules: ["taimei(port-import-only-in-reading-transport)"],
+  },
+  {
+    name: "Guard が hono/cookie を import すると、lint が止める",
+    path: "src/membership/guard/HonoProbe.ts",
+    source: 'import { getCookie } from "hono/cookie";\nexport const g = getCookie;',
+    expectedRules: ["taimei(no-hono-in-guard)"],
+  },
+  {
+    name: "契約の外の file が /api/company の path を書くと、lint が止める",
+    path: "src/company/PathProbe.ts",
+    source: 'export const path = "/api/company/settings";',
+    expectedRules: ["taimei(spa-api-path-only-in-contract)"],
+  },
+  {
+    name: "services/ に file を置くと、lint が止める",
+    path: "src/company/services/Probe.ts",
+    source: "export const x = 1;",
+    expectedRules: ["taimei(no-services-or-utils-dir)"],
+  },
+  {
+    name: "utils/ に file を置くと、lint が止める",
+    path: "src/utils/Probe.ts",
+    source: "export const x = 1;",
+    expectedRules: ["taimei(no-services-or-utils-dir)"],
+  },
+  {
+    name: "adapter は runPromise を呼べる",
+    path: "src/handlers/run-route.ts",
+    source:
+      "export const run = (runtime: { runPromise: (effect: unknown) => unknown }, effect: unknown) => runtime.runPromise(effect);",
+    expectedRules: [],
+  },
+  {
+    name: "background.ts は Effect.forkDetach を書ける",
+    path: "src/background.ts",
+    source:
+      'import { Effect } from "effect";\nexport const forked = Effect.forkDetach(Effect.void);',
+    expectedRules: [],
+  },
+  {
+    name: "run-rpc.ts は ConnectError を書ける",
+    path: "src/rpc/run-rpc.ts",
+    source:
+      'import { Code, ConnectError } from "@connectrpc/connect";\nexport const failed = new ConnectError("x", Code.Internal);',
+    expectedRules: [],
+  },
+  {
+    name: "boot.ts は TTL store の driver を import できる",
+    path: "src/boot.ts",
+    source: 'import * as driver from "./kv-store.memory";\nexport const d = driver;',
+    expectedRules: [],
+  },
+  {
+    name: "/api/auth の path は書ける",
+    path: "src/company/AuthPathProbe.ts",
+    source: 'export const path = "/api/auth/sign-out";',
+    expectedRules: [],
+  },
+  {
+    name: "spec が ./fixtures を import すると、lint が止める",
+    path: "e2e/FixturesProbe.e2e.ts",
+    source: 'import * as fixtures from "./fixtures";\nexport const f = fixtures;',
+    expectedRules: ["taimei(fixtures-import-only-in-seed)"],
+  },
+  {
+    name: "spec が page.route を呼ぶと、lint が止める",
+    path: "e2e/RouteProbe.e2e.ts",
+    source:
+      'export const mock = (page: { route: (url: string, handler: () => void) => unknown }) => page.route("**/x", () => {});',
+    expectedRules: ["taimei(page-route-only-in-contract-mock)"],
+  },
+  {
+    name: "spec が .server.log を書くと、lint が止める",
+    path: "e2e/LogProbe.e2e.ts",
+    source: 'export const log = "e2e/.server.log";',
+    expectedRules: ["taimei(server-log-only-in-helpers)"],
+  },
+  {
+    name: "spec が /login-links を書くと、lint が止める",
+    path: "e2e/LoginProbe.e2e.ts",
+    source: 'export const path = "/testing/v1/login-links";',
+    expectedRules: ["taimei(login-links-only-in-helpers)"],
+  },
+  {
+    name: "spec が _tag を key に書くと、lint が止める",
+    path: "e2e/TagProbe.e2e.ts",
+    source: 'export const body = { _tag: "LastOwner" };',
+    expectedRules: ["taimei(declared-failure-only-in-contract-mock)"],
+  },
+  {
+    name: "spec は ./fixture-names を import できる",
+    path: "e2e/NamesProbe.e2e.ts",
+    source: 'import * as names from "./fixture-names";\nexport const n = names;',
+    expectedRules: [],
+  },
+  {
+    name: "helpers.ts は .server.log と /login-links を書ける",
+    path: "e2e/helpers.ts",
+    source: 'export const log = "e2e/.server.log";\nexport const path = "/testing/v1/login-links";',
+    expectedRules: [],
+  },
+  {
+    name: "contract-mock.ts は page.route と _tag を書ける",
+    path: "e2e/contract-mock.ts",
+    source:
+      'export const mock = (page: { route: (url: string, handler: () => void) => unknown }) => page.route("**/x", () => {});\nexport const body = { _tag: "LastOwner" };',
+    expectedRules: [],
+  },
+  {
+    name: "page が shared/leave-spa を import すると、lint が止める",
+    path: "web/src/account/pages/LeaveProbe.ts",
+    source:
+      'import { leaveSpaTo } from "../../shared/leave-spa";\nexport const leave = leaveSpaTo;',
+    expectedRules: ["taimei(leave-spa-import-only-in-app)"],
+  },
+  {
+    name: "application の file は shared/leave-spa を import できる",
+    path: "web/src/app/account/LeaveProbe.ts",
+    source:
+      'import { leaveSpaTo } from "../../shared/leave-spa";\nexport const leave = leaveSpaTo;',
+    expectedRules: [],
+  },
+  {
+    name: "FailureMessages 型の表を export すると、lint が止める",
+    path: "web/src/company/TableProbe.ts",
+    source:
+      'import type { FailureMessages } from "../shared/failure-message";\nexport const MESSAGES: FailureMessages<{ readonly _tag: "A" }> = { A: "a", Unexpected: "u" };\nexport const text = MESSAGES.A;',
+    expectedRules: ["taimei(failure-messages-not-exported)"],
+  },
+  {
+    name: "export しない表は書ける",
+    path: "web/src/company/LocalTableProbe.ts",
+    source:
+      'import type { FailureMessages } from "../shared/failure-message";\nconst MESSAGES: FailureMessages<{ readonly _tag: "A" }> = { A: "a", Unexpected: "u" };\nexport const text = MESSAGES.A;',
+    expectedRules: [],
+  },
+  {
+    name: "mfa の外が MFA の表を import すると、lint が止める",
+    path: "web/src/account/MfaTableProbe.ts",
+    source:
+      'import { mfaFailureText } from "../mfa/mfa-failure-messages";\nexport const text = mfaFailureText;',
+    expectedRules: ["taimei(mfa-failure-messages-import-only-in-mfa)"],
+  },
+  {
+    name: "mfa の file は MFA の表を import できる",
+    path: "web/src/mfa/MfaTableProbe.ts",
+    source:
+      'import { mfaFailureText } from "./mfa-failure-messages";\nexport const text = mfaFailureText;',
+    expectedRules: [],
+  },
+  {
+    name: "SDK が effect を import すると、lint が止める",
+    path: "packages/auth-client/src/EffectProbe.ts",
+    source: 'import { Option } from "effect";\nexport const o = Option;',
+    expectedRules: ["taimei(sdk-import-only-peer-dependencies)"],
+  },
+  {
+    name: "SDK が hono を型で import すると、lint が止める",
+    path: "packages/auth-client/src/HonoProbe.ts",
+    source: 'import type { Context } from "hono";\nexport type C = Context;',
+    expectedRules: ["taimei(sdk-import-only-peer-dependencies)"],
+  },
+  {
+    name: "SDK が next/link を import すると、lint が止める",
+    path: "packages/auth-client/src/NextProbe.ts",
+    source: 'import Link from "next/link";\nexport const l = Link;',
+    expectedRules: ["taimei(sdk-import-only-peer-dependencies)"],
+  },
+  {
+    name: "SDK が node:buffer を import すると、lint が止める",
+    path: "packages/auth-client/src/NodeProbe.ts",
+    source: 'import { Buffer } from "node:buffer";\nexport const b = Buffer;',
+    expectedRules: ["taimei(sdk-import-only-peer-dependencies)"],
+  },
+  {
+    name: "SDK は peerDependencies の package を import できる",
+    path: "packages/auth-client/src/ConnectProbe.ts",
+    source: 'import { Code } from "@connectrpc/connect";\nexport const c = Code;',
+    expectedRules: [],
+  },
+  {
+    name: "SDK は peerDependencies の package の subpath を import できる",
+    path: "packages/auth-client/src/ProtobufProbe.ts",
+    source: 'import { fileDesc } from "@bufbuild/protobuf/codegenv2";\nexport const f = fileDesc;',
+    expectedRules: [],
+  },
+  {
+    name: "SDK は相対 path を import できる",
+    path: "packages/auth-client/src/RelativeProbe.ts",
+    source: 'import * as types from "./types";\nexport const t = types;',
+    expectedRules: [],
+  },
+  {
+    name: "scripts は依存を install する前に走るので、package を型でも import できない",
+    path: "scripts/PackageTypeImport.ts",
+    source: 'import type { Effect } from "effect";\nexport type Used = Effect.Effect<1>;',
+    expectedRules: ["taimei(scripts-import-only-node-builtins)"],
+  },
+  {
+    name: "scripts は依存を install する前に走るので、package を再 export できない",
+    path: "scripts/PackageReExport.ts",
+    source: 'export { Effect } from "effect";',
+    expectedRules: ["taimei(scripts-import-only-node-builtins)"],
+  },
+  {
+    name: "scripts は依存を install する前に走るので、相対 path の file を import できない",
+    path: "scripts/RelativeImport.ts",
+    source: 'import { sibling } from "./sibling";\nexport const used = sibling;',
+    expectedRules: ["taimei(scripts-import-only-node-builtins)"],
+  },
+  {
+    name: "server のメールは react-dom を import できない",
+    path: "src/email/ReactDomImport.ts",
+    source:
+      'import { renderToString } from "react-dom/server";\nexport const render = renderToString;',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "server は react を型でも import できない",
+    path: "src/handlers/ReactTypeImport.ts",
+    source: 'import type { ReactNode } from "react";\nexport type Node = ReactNode;',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "server のメールは @react-email の package を import できない",
+    path: "src/email/ReactEmailImport.ts",
+    source: 'import { Html } from "@react-email/components";\nexport const html = Html;',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "src の test も react を import できない",
+    path: "src/__tests__/ReactImport.ts",
+    source: 'import "react";',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "本番以外の entry も react を import できない",
+    path: "testing/ReactImport.ts",
+    source: 'import "react";',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "e2e も react を import できない",
+    path: "e2e/ReactImport.ts",
+    source: 'import "react";',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "db も react を import できない",
+    path: "db/ReactImport.ts",
+    source: 'import "react";',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "management も react を import できない",
+    path: "management/ReactImport.ts",
+    source: 'import "react";',
+    expectedRules: ["taimei(no-react-outside-web)"],
+  },
+  {
+    name: "react の名前で始まるだけの package は、react として止めない",
+    path: "src/email/ReactIsImport.ts",
+    source: 'import "react-is";',
+    expectedRules: [],
+  },
+  {
+    name: "e2e は process.cwd() から path を組めない",
+    path: "e2e/CwdProbe.ts",
+    source: 'import { join } from "node:path";\nexport const root = join(process.cwd(), "e2e");',
+    expectedRules: ["taimei(no-process-cwd-in-e2e)"],
+  },
+  {
+    name: "playwright.config.ts は process.cwd() を呼べない",
+    path: "playwright.config.ts",
+    source: "export const root = process.cwd();",
+    expectedRules: ["taimei(no-process-cwd-in-e2e)"],
+  },
+  {
+    name: "e2e は実行する dir に依らない import.meta.dirname から path を組める",
+    path: "e2e/DirnameProbe.ts",
+    source: "export const root = import.meta.dirname;",
+    expectedRules: [],
+  },
+  {
+    name: "e2e の外では process.cwd() を呼べる",
+    path: "scripts/CwdProbe.ts",
+    source: "export const root = process.cwd();",
+    expectedRules: [],
+  },
 ];
 
 const TYPE_AWARE_CASES: readonly Case[] = [

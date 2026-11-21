@@ -15,7 +15,7 @@ Accepted (2026-11-09)。判断主体は maintainer。実装は taimei-code/taime
 1. メールの本文は、`src/email/layout.ts` が定める決まった部品 (段落・ボタン・URL の段落・強調・link・改行) と、見出し・導入・本文・末尾の欄を持つデータで書く。template は部品と style の名前を選ぶだけで、markup と CSS を書く場所を持たない。
 2. 1 つの関数が同じデータから HTML と plain text の両方を作る。文字と属性の値は、この関数が必ず escape する。escape しない HTML を渡す部品は作らない。
 3. 画面と違い、メールに Foldkit は使わない。メールには view の状態も Message も無く、状態と処理を置く場所が決まるという Foldkit の利点は、メールでは役に立たない。
-4. 件名・HTML・text は移す前の react-email の出力と同じにした。HTML は、React が文字の境目に差し込む表示されない comment (`<!-- -->` など) だけを除けば byte で同じである。区切り線の後の著作権表示、Outlook 向けの comment、text の見出しの大文字化と連続した空白を 1 つにする処理も、移す前の出力に合わせた。比べる試験は `acceptance/email-without-react.test.ts`。著作権表示の年は送った時刻の UTC の年にした (本番の workerd は前から UTC で動くので、本番の表示は変わらない)
+4. 件名・HTML・text は移す前の react-email の出力と同じにした。HTML は、React が文字の境目に差し込む表示されない comment (`<!-- -->` など) だけを除けば byte で同じである。区切り線の後の著作権表示、Outlook 向けの comment、text の見出しの大文字化と連続した空白を 1 つにする処理も、移す前の出力に合わせた。比べる試験は `src/email/__tests__/templates.test.ts`。著作権表示の年は送った時刻の UTC の年にした (本番の workerd は前から UTC で動くので、本番の表示は変わらない)
 
 ## Considered Options
 
@@ -30,5 +30,5 @@ Accepted (2026-11-09)。判断主体は maintainer。実装は taimei-code/taime
 
 - `react`・`react-dom`・`@types/react`・`@react-email/*` を repo の依存から外した。`wrangler deploy --dry-run` の `worker.js` は 7,557,558 B から 6,328,429 B に減った。
 - 部品を足す時は、`layout.ts` の HTML と text の両方の変換に足す。switch が部品を網羅していないと型検査が失敗する。
-- メールの見た目を変える時は、移す前の出力と比べる試験 (`acceptance/email-without-react.test.ts`) の期待値の file (`acceptance/email-without-react/`) も、同じ変更で書き換える。
+- メールの見た目を変える時は、移す前の出力と比べる試験 (`src/email/__tests__/templates.test.ts`) の期待値の file (`src/email/__tests__/__fixtures__/expected/`) も、同じ変更で書き換える。
 - link は react-email と同じく `target="_blank"` だけを付け、`rel` を付けない。行き先は自分の auth ホスト、`mailto:`、自社の security の page で、受け手はメール client で開く。

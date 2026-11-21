@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { REPO_ROOT, workflowFileNames } from "./config-invariant-helpers";
+import { readWorkflow, REPO_ROOT, workflowFileNames } from "./config-invariant-helpers";
 
 const REPOSITORY = "owner/repo";
 const ISSUES_PATH = `/repos/${REPOSITORY}/issues`;
@@ -54,8 +54,10 @@ const audit = (...entries: [string, string, string][]) =>
     ),
   );
 
-const report = async (url: string, stdin: string) => {
-  const child = Bun.spawn(["bun", "scripts/report-advisories.ts"], {
+const REPORT_SCRIPT_COMMAND = ["bun", "scripts/report-advisories.ts"];
+
+const report = async (url: string, stdin: string, command = REPORT_SCRIPT_COMMAND) => {
+  const child = Bun.spawn(command, {
     cwd: REPO_ROOT,
     env: { ...shellEnv, GITHUB_API_URL: url, GITHUB_REPOSITORY: REPOSITORY, GITHUB_TOKEN: "t" },
     stdin: new Blob([stdin]),
@@ -66,9 +68,9 @@ const report = async (url: string, stdin: string) => {
 
 const commentsIn = (writes: Write[]) => writes.filter(({ path }) => path.endsWith("/comments"));
 
-const reportedOnce = async (stdin: string) => {
+const reportedOnce = async (stdin: string, run = report) => {
   const github = fakeGitHub([]);
-  await report(github.url, stdin);
+  await run(github.url, stdin);
   github.issues.push({ number: 1, body: String(github.writes[0]?.body.body) });
   github.writes.length = 0;
   return github;
@@ -179,5 +181,121 @@ describe("bun audit の --ignore の置き場所 (ADR-0009 §B)", () => {
       "ci.yml": "run: bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm",
     };
     expect(workflowsWithAuditIgnore(["ci.yml"], (name) => texts[name] ?? "")).toEqual(["ci.yml"]);
+  });
+});
+
+interface WorkflowJob {
+  permissions?: Record<string, string>;
+  steps?: { run?: string }[];
+}
+
+interface Workflow {
+  on?: Record<string, unknown>;
+  permissions?: Record<string, string>;
+  jobs: Record<string, WorkflowJob>;
+}
+
+const AUDIT_PIPE = /bun audit --json\s*\|\s*(.+)$/m;
+
+const writesIssues = (workflow: Workflow) =>
+  workflow.permissions?.issues === "write" ||
+  Object.values(workflow.jobs).some((job) => job.permissions?.issues === "write");
+
+const scheduledIssueWorkflows = () =>
+  workflowFileNames()
+    .map((name) => readWorkflow<Workflow>(name))
+    .filter((workflow) => workflow.on?.schedule !== undefined && writesIssues(workflow));
+
+const workflowReportCommand = (): string[] => {
+  const commands = scheduledIssueWorkflows()
+    .flatMap((workflow) => Object.values(workflow.jobs))
+    .flatMap((job) => job.steps ?? [])
+    .flatMap((step) => {
+      const piped = step.run?.match(AUDIT_PIPE)?.[1];
+      return piped === undefined ? [] : [piped.trim()];
+    });
+  if (commands.length !== 1) {
+    throw new Error(`bun audit --json を受ける step が 1 つでない: ${JSON.stringify(commands)}`);
+  }
+  return ["bash", "-c", commands[0] as string];
+};
+
+const reportThroughWorkflow = (url: string, stdin: string) =>
+  report(url, stdin, workflowReportCommand());
+
+const MODERATE = "GHSA-aaaa-bbbb-cccc";
+const LOW = "GHSA-dddd-eeee-ffff";
+const ADDED = "GHSA-gggg-hhhh-jjjj";
+
+const TWO_ADVISORIES = audit(["fixture-a", MODERATE, "moderate"], ["fixture-b", LOW, "low"]);
+const THREE_ADVISORIES = audit(
+  ["fixture-a", MODERATE, "moderate"],
+  ["fixture-b", LOW, "low"],
+  ["fixture-c", ADDED, "moderate"],
+);
+
+describe("high 未満の advisory が、毎日走る workflow から issue に届く", () => {
+  test("schedule で起動し、issues に書ける permission を持つ workflow がある", () => {
+    expect(scheduledIssueWorkflows().length).toBeGreaterThan(0);
+  });
+
+  test("open の issue が無い時、moderate と low の advisory だけの出力から issue を 1 つ作り、本文がすべての id を含む", async () => {
+    const github = fakeGitHub([]);
+
+    const { exitCode } = await reportThroughWorkflow(github.url, TWO_ADVISORIES);
+
+    expect(exitCode).toBe(0);
+    expect(github.writes.map(({ method, path }) => `${method} ${path}`)).toEqual([
+      `POST ${ISSUES_PATH}`,
+    ]);
+    expect(github.writes[0]?.body.body).toContain(MODERATE);
+    expect(github.writes[0]?.body.body).toContain(LOW);
+  });
+
+  test("前回の本文の issue があり advisory が 1 件増えると、増えた id だけを含む comment を 1 つ出す", async () => {
+    const github = await reportedOnce(TWO_ADVISORIES, reportThroughWorkflow);
+
+    const { exitCode } = await reportThroughWorkflow(github.url, THREE_ADVISORIES);
+
+    expect(exitCode).toBe(0);
+    const commentBodies = commentsIn(github.writes).map(({ body }) => body.body ?? "");
+    expect(commentBodies).toHaveLength(1);
+    expect(commentBodies[0]).toContain(ADDED);
+    expect(commentBodies[0]).not.toContain(MODERATE);
+    expect(commentBodies[0]).not.toContain(LOW);
+  });
+
+  test("JSON として読めない出力では 0 以外で終わり、GitHub に書き込まない", async () => {
+    const github = fakeGitHub([]);
+
+    const { exitCode } = await reportThroughWorkflow(
+      github.url,
+      "error: could not reach the advisory database",
+    );
+
+    expect(exitCode).not.toBe(0);
+    expect(github.writes).toEqual([]);
+  });
+});
+
+describe("CI の依存の audit (ADR-0009 §B)", () => {
+  test("check job の依存の audit は high 以上で落ち、--ignore は GHSA-vfj7-8cjw-p6xm と GHSA-fc5q-39xc-vjpf だけ", () => {
+    const { scripts } = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    const resolve = (run: string) => {
+      const viaScript = run.trim().match(/^bun run (\S+)$/);
+      return viaScript?.[1] === undefined ? run : (scripts[viaScript[1]] ?? run);
+    };
+    const audits = (readWorkflow<Workflow>("ci.yml").jobs.check?.steps ?? [])
+      .flatMap((step) => (step.run === undefined ? [] : [resolve(step.run)]))
+      .filter((run) => /^\s*bun audit\b/.test(run));
+
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toContain("--audit-level=high");
+    expect([...(audits[0] ?? "").matchAll(/--ignore=(\S+)/g)].map(([, id]) => id)).toEqual([
+      "GHSA-vfj7-8cjw-p6xm",
+      "GHSA-fc5q-39xc-vjpf",
+    ]);
   });
 });

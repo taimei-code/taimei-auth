@@ -1625,7 +1625,7 @@ const ROWS: readonly Row[] = [
   },
   {
     name: "db-value-import-only-in-db-in-tests",
-    within: ["**/__tests__/**", "acceptance/**"],
+    within: ["**/__tests__/**"],
     allowedIn: ["db/**"],
     includesTestFiles: true,
     matchers: [
@@ -1946,6 +1946,27 @@ const ROWS: readonly Row[] = [
     matchers: [{ kind: "literal", pattern: /fonts\.(googleapis|gstatic)\.com/ }],
     message:
       "外部の font (Google Fonts) を読まない。書体は Tailwind の既定の system の font を使う。外部の stylesheet は描画を止め、画面とメールを開いた事実を第三者に送る",
+  },
+  {
+    name: "no-react-outside-web",
+    within: ["src/**", "db/**", "management/**", "e2e/**", "testing/**"],
+    includesTestFiles: true,
+    matchers: [
+      {
+        kind: "importTarget",
+        target: /^(react|react-dom|@react-email\/[^/]+)(\/|$)/,
+        includesTypeImports: true,
+      },
+    ],
+    message:
+      "React と react-email を import しない。メールは src/email/layout.ts の部品のデータで書き (ADR-0024)、画面は Foldkit で書く (ADR-0023)。React は起動時の CPU と JS の大きさを増やす",
+  },
+  {
+    name: "no-process-cwd-in-e2e",
+    within: ["e2e/**", "playwright.config.ts"],
+    matchers: [{ kind: "member", paths: ["process.cwd"], callOnly: true }],
+    message:
+      "e2e の path は process.cwd() から組まない。実行する dir に依らない path で書く (起動する process の cwd は repo の root と限らない)",
   },
   {
     name: "form-only-in-form-view",
