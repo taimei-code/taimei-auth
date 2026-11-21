@@ -8,6 +8,9 @@ export const Submission = defineTaggedUnion({
 });
 export type Submission = typeof Submission.Type;
 
+export const submissionWhile = (isSubmitting: boolean): Submission =>
+  isSubmitting ? Submission.Submitting() : Submission.Idle();
+
 export const withoutRejection = (submission: Submission): Submission =>
   Submission.guards.Rejected(submission) ? Submission.Idle() : submission;
 

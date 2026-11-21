@@ -14,7 +14,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
-import { Submission } from "../shared/submission";
+import { Submission, submissionWhile } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
@@ -259,8 +259,7 @@ const candidateRowView = (model: Model, candidate: Candidate, h: HtmlBuilder<Mes
           submission: Transferring.matchOrElse(
             model.transferring,
             {
-              Transferring: ({ userId }) =>
-                userId === candidate.userId ? Submission.Submitting() : Submission.Idle(),
+              Transferring: ({ userId }) => submissionWhile(userId === candidate.userId),
             },
             () => Submission.Idle(),
           ),
