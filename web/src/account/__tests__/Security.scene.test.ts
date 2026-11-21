@@ -123,17 +123,31 @@ describe("セキュリティの画面", () => {
       );
     });
 
-    test("MFA が有効なら、登録できても「登録する」を出さない", () => {
+    test("MFA が有効でも、登録できれば「登録する」を出し、押すと確認コードの入力の dialog を出す", () => {
+      const listed = loaded(
+        { _tag: "Enabled", recoveryCodesRemaining: 8 },
+        { _tag: "Shown", passkeys: [USED], registrable: true },
+      );
+      const opened = update(
+        listed,
+        Message.GotPasskeySettingsMessage({
+          message: PasskeySettings.Message.ClickedRegisterWithTotp(),
+        }),
+      ).model;
       scene(
         { update, view },
-        given(
-          loaded(
-            { _tag: "Enabled", recoveryCodesRemaining: 8 },
-            { _tag: "Shown", passkeys: [USED], registrable: true },
-          ),
-        ),
-        expect(text("未使用")).toBeAbsent(),
-        expect(role("button", { name: "登録する" })).toBeAbsent(),
+        given(listed),
+        expect(role("button", { name: "登録する" })).toBeEnabled(),
+      );
+      scene(
+        { update, view },
+        given(opened),
+        Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
+        Command.resolveAll(...pendingDialogTransitionResolvers(opened.passkeySettings.dialog)),
+        expect(role("heading", { name: "パスキーを登録する" })).toExist(),
+        expect(role("textbox", { name: "確認コード" })).toExist(),
+        expect(role("button", { name: "次へ" })).toExist(),
+        expect(role("button", { name: "リカバリーコードを使う" })).toBeAbsent(),
       );
     });
 
@@ -214,7 +228,7 @@ describe("セキュリティの画面", () => {
       );
     });
 
-    test("10 本あっても、登録できない時と MFA が有効な時は、「登録する」も上限の文言も出さない", () => {
+    test("10 本あっても、登録できない時は「登録する」も上限の文言も出さず、MFA が有効な時は「登録する」を押せずに上限の文言を出す", () => {
       scene(
         { update, view },
         given(loaded({ _tag: "Disabled" }, listing(10, false))),
@@ -224,8 +238,8 @@ describe("セキュリティの画面", () => {
       scene(
         { update, view },
         given(loaded({ _tag: "Enabled", recoveryCodesRemaining: 8 }, listing(10, true))),
-        expect(role("button", { name: "登録する" })).toBeAbsent(),
-        expect(text(LIMIT_NOTICE)).toBeAbsent(),
+        expect(role("button", { name: "登録する" })).toBeDisabled(),
+        expect(text(LIMIT_NOTICE)).toExist(),
       );
     });
 

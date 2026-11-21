@@ -53,12 +53,15 @@ test("登録が止まっている時は、パスキーが 10 本あっても「�
   expect(await registerPasskeyButton(page).count()).toBe(0);
 });
 
-test("MFA が有効な user には、パスキーが 10 本あっても「登録する」が出ない", async ({ page }) => {
+test("MFA が有効な user も、パスキーが 10 本ある時は「登録する」を押せず、不要なパスキーの削除を促す文言が出る", async ({
+  page,
+}) => {
   await routeEndpoint(page, "mfa.status", (route) =>
     route.fulfill({ json: { enabled: true, recovery_codes_remaining: 8 } }),
   );
 
   await openSecurityListing(page, passkeys(10));
 
-  expect(await registerPasskeyButton(page).count()).toBe(0);
+  await expect(registerPasskeyButton(page)).toBeDisabled();
+  await expect(passkeyRow(page).getByText(DELETION_PROMPT)).toBeVisible();
 });

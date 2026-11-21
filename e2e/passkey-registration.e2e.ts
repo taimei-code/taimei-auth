@@ -259,14 +259,14 @@ test("PublicKeyCredential の無い browser では、一覧は出るが、パス
   expect(await registerButton(page).count()).toBe(0);
 });
 
-test("MFA が有効な user には、一覧は出るが、パスキーの行に登録の操作が出ない", async ({ page }) => {
+test("MFA が有効な user にも、一覧とパスキーの行の登録の操作が出る", async ({ page }) => {
   await routeEndpoint(page, "mfa.status", (route) =>
     route.fulfill({ json: { enabled: true, recovery_codes_remaining: 8 } }),
   );
 
   await openSecurityListingUsedPasskey(page);
 
-  expect(await registerButton(page).count()).toBe(0);
+  await expect(registerButton(page)).toBeEnabled();
 });
 
 test("パスキーが 0 本で登録できない時は、MFA の応答が一覧より後でも、セキュリティの画面の一覧が MFA の行だけになる", async ({
