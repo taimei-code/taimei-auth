@@ -99,6 +99,9 @@ export type Model = typeof Model.Type;
 const RegistrationFailure = Schema.Literals([
   "RateLimited",
   "TotpRequired",
+  "InvalidCode",
+  "Locked",
+  "NotEnabled",
   "PasskeyRejected",
   "PasskeyAlreadyRegistered",
   "PasskeyRegistrationUnavailable",
@@ -147,6 +150,9 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
       Effect.catchTags({
         RateLimited: failedRegister(request, "RateLimited"),
         TotpRequired: failedRegister(request, "TotpRequired"),
+        InvalidCode: failedRegister(request, "InvalidCode"),
+        Locked: failedRegister(request, "Locked"),
+        NotEnabled: failedRegister(request, "NotEnabled"),
         PasskeyRejected: failedRegister(request, "PasskeyRejected"),
         PasskeyAlreadyRegistered: failedRegister(request, "PasskeyAlreadyRegistered"),
         PasskeyRegistrationUnavailable: failedRegister(request, "PasskeyRegistrationUnavailable"),

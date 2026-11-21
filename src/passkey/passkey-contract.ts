@@ -1,6 +1,8 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated } from "../account/actor-contract";
+import { InvalidCode, Locked, NotEnabled } from "../mfa/errors";
+import { MfaCode } from "../mfa/mfa-contract";
 import { NotFound, RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
@@ -106,8 +108,16 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
   .add(
     HttpApiEndpoint.get("list", "/api/account/passkeys", { success: PasskeyList }),
     HttpApiEndpoint.post("registrationOptions", "/api/account/passkeys/registration-options", {
+      payload: Schema.Struct({ totp_code: Schema.optional(MfaCode) }),
       success: RegistrationOptions,
-      error: [TotpRequired, PasskeyRegistrationUnavailable, PasskeyLimitReached],
+      error: [
+        TotpRequired,
+        InvalidCode,
+        Locked,
+        NotEnabled,
+        PasskeyRegistrationUnavailable,
+        PasskeyLimitReached,
+      ],
     }),
     HttpApiEndpoint.post("register", "/api/account/passkeys", {
       payload: RegistrationResponse,

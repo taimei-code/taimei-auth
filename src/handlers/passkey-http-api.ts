@@ -22,8 +22,8 @@ export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers
         can_register: owned.canRegister,
       };
     }, dieOnBoundary),
-    registrationOptions: Effect.fnUntraced(function* () {
-      return yield* issueRegistrationOptions(yield* CurrentActor);
+    registrationOptions: Effect.fnUntraced(function* ({ payload }) {
+      return yield* issueRegistrationOptions(yield* CurrentActor, payload.totp_code);
     }, dieOnBoundary),
     register: Effect.fnUntraced(function* ({ payload }) {
       yield* registerPasskey(yield* CurrentActor, payload);

@@ -54,6 +54,7 @@
     "web/src/shared/landing-paths.ts",
     "web/src/shared/spa-http-client.ts",
     "web/src/shared/failure-message.ts",
+    "web/src/mfa/mfa-failure-messages.ts",
     "web/src/passkey/webauthn.ts",
     "web/src/passkey/passkey-registration.ts",
     "web/src/passkey/passkey-failure-messages.ts",
