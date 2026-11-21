@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   CONNECT_NODE,
   classificationDiff,
@@ -14,6 +16,7 @@ import {
   parseJsonc,
   readOxlintConfig,
   readPackageJson,
+  REPO_ROOT,
   REPRESENTATIVE_DB_FILE,
   REPRESENTATIVE_MANAGEMENT_FILE,
   REPRESENTATIVE_SERVER_FILE,
@@ -201,5 +204,15 @@ describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", 
     expect(parseJsonc('{ "overrides": [{ "includes": ["https://x//y"] }] }')).toEqual({
       overrides: [{ includes: ["https://x//y"] }],
     });
+  });
+});
+
+describe("WebAuthn の検証の library の固定", () => {
+  const PACKAGE = "@simplewebauthn/server";
+  const VERSION = "14.1.0";
+
+  test(`${PACKAGE} が ${VERSION} に固定して dependencies に足され、bun.lock がその版を解決している`, () => {
+    expect(readPackageJson().dependencies?.[PACKAGE]).toBe(VERSION);
+    expect(readFileSync(join(REPO_ROOT, "bun.lock"), "utf8")).toContain(`"${PACKAGE}@${VERSION}"`);
   });
 });

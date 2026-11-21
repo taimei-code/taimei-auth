@@ -1,38 +1,39 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { cleanupMfaChallengeFixtures, passMfaChallenge } from "./harness/mfa-challenge-pass";
+import { Effect, Layer } from "effect";
+import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
+import { TestDb } from "../../__tests__/test-db";
+import { ttlStoreWithoutCounting } from "../../__tests__/test-ttl-store";
 import {
-  forgetScenario,
-  openSession,
-  optionsOf,
-  requestOptions,
-  savedCredentialIdsOf,
-  sendRegistration,
-  signedResponse,
-} from "./harness/passkey-registration-api";
+  cleanupIssuedChallenges,
+  enableMfaFor,
+  issueTestChallenge,
+  totpCode,
+} from "../../mfa/__tests__/helpers";
+import { passkeysOf } from "../../passkey/__tests__/helpers";
+import { PasskeyRepo } from "../../passkey/ports";
+import { PasskeyRepoLive } from "../../passkey/wiring";
+import { JSON_HEADERS } from "../client-facing-error";
 import {
-  appLosingPasskeyBeforeRecordingUse,
   assertionBy,
+  buildAppWith,
   challengeOf,
-  cookieShapeOf,
-  createMfaEnabledUser,
-  createUser,
-  forgetSavedCredential,
-  forgetSignInScenario,
-  listedWith,
+  type Credential,
   liveApp,
-  mfaChallengeCookiesOf,
   type Outcome,
+  outcomeOf,
+  requestRegistrationOptions,
   requestSignInOptions,
-  savedCredentialOf,
+  restoreKvStoreAfterEach,
+  savedCredentialFor,
+  sendRegistration,
   sendSignIn,
   sessionCookiesOf,
   sessionUserOf,
-  signInAuditsOf,
-  signInWith,
-  storedLastUsedOf,
-  uncountableApp,
+  signedInSession,
+  signedRegistrationFor,
+  statusAndBody,
   unsavedCredential,
-} from "./harness/passkey-sign-in-api";
+} from "./helpers";
 
 const TRUSTED_REDIRECT = "/account/security";
 const UNTRUSTED_REDIRECT = "https://evil.example.net/steal";
@@ -41,6 +42,7 @@ const CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
 const ONE_SECOND_MS = 1000;
 const ATTEMPTS_PER_MINUTE = 10;
 const RATE_LIMITED = { status: 429, body: { _tag: "RateLimited" } };
+const MFA_CHALLENGE_COOKIE_NAME = "__Host-mfa_login_challenge";
 
 const expectKnownClientFailure = (outcome: Outcome) => {
   expect(outcome.status).toBeGreaterThanOrEqual(400);
@@ -49,14 +51,143 @@ const expectKnownClientFailure = (outcome: Outcome) => {
   expect(sessionCookiesOf(outcome)).toEqual([]);
 };
 
-const statusAndBody = (outcome: Outcome) => ({ status: outcome.status, body: outcome.body });
+type CookieShape = {
+  readonly tokenLength: number;
+  readonly signatureLength: number;
+  readonly percentEncoded: boolean;
+  readonly attributes: readonly string[];
+};
 
-afterEach(async () => {
-  setSystemTime();
-  await forgetSignInScenario();
-});
+const cookieShapeOf = (setCookie: string): CookieShape => {
+  const [pair = "", ...attributes] = setCookie.split(";").map((part) => part.trim());
+  const value = pair.slice(pair.indexOf("=") + 1);
+  const decoded = decodeURIComponent(value);
+  const separator = decoded.lastIndexOf(".");
+  return {
+    tokenLength: separator,
+    signatureLength: decoded.length - separator - 1,
+    percentEncoded: value === encodeURIComponent(decoded),
+    attributes: attributes
+      .map((attribute) => {
+        const [name = "", ...rest] = attribute.split("=");
+        return [name.toLowerCase(), ...rest].join("=");
+      })
+      .toSorted(),
+  };
+};
 
 describe("パスキーのログイン", () => {
+  const { run, cleanup } = dbTest("passkey-sign-in-test-");
+  restoreKvStoreAfterEach();
+  afterEach(async () => {
+    setSystemTime();
+    await run(cleanupIssuedChallenges());
+    await cleanup();
+  });
+
+  const createUser = (name: string) =>
+    run(TestDb.use((db) => db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`)));
+
+  const createMfaEnabledUser = (name: string) =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) =>
+          db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`),
+        );
+        yield* enableMfaFor(user);
+        return user;
+      }),
+    );
+
+  const savedCredentialOf = (user: { readonly id: string }, counter = 0): Promise<Credential> =>
+    run(savedCredentialFor(user.id, counter));
+
+  const forgetSavedCredential = (user: { readonly id: string }, credential: Credential) =>
+    run(
+      PasskeyRepo.use((repo) =>
+        repo.findPasskeyByCredentialId(credential.credentialId).pipe(
+          Effect.flatMap((row) => repo.deletePasskey(row?.id ?? "", user.id)),
+          Effect.flatMap((deleted) =>
+            deleted === undefined ? Effect.die(new Error("パスキーを消せなかった")) : Effect.void,
+          ),
+        ),
+      ),
+    );
+
+  const appLosingPasskeyBeforeRecordingUse = (user: { readonly id: string }) =>
+    buildAppWith(
+      Layer.effect(
+        PasskeyRepo,
+        Effect.map(PasskeyRepo, (live) =>
+          PasskeyRepo.of({
+            ...live,
+            recordPasskeyUse: (id, counter) =>
+              live
+                .deletePasskey(id, user.id)
+                .pipe(Effect.andThen(live.recordPasskeyUse(id, counter))),
+          }),
+        ),
+      ).pipe(Layer.provide(PasskeyRepoLive)),
+    );
+
+  const signInWith = async (
+    app: ReturnType<typeof liveApp>,
+    credential: Credential,
+    redirectUrl: string,
+    overrides: Parameters<typeof assertionBy>[2] = {},
+  ): Promise<Outcome> => {
+    const challenge = challengeOf(await requestSignInOptions(app, redirectUrl));
+    return sendSignIn(app, assertionBy(credential, challenge, overrides));
+  };
+
+  const signInAuditsOf = async (user: { readonly id: string }): Promise<unknown[]> =>
+    (await run(auditRowsFor(user.id, "sign_in"))).map((row) => row.payload);
+
+  const sessionCookieOfMfaChallengePass = () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) => db.seedUser("pass"));
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: TRUSTED_REDIRECT,
+          method: "magic_link",
+        });
+        const code = yield* totpCode(enabled.secret);
+        return yield* Effect.promise(async () =>
+          outcomeOf(
+            await liveApp().request("/api/mfa/challenge/verify", {
+              method: "POST",
+              headers: {
+                ...Object.fromEntries(challenge.headers),
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ code, kind: "totp" }),
+            }),
+          ),
+        );
+      }),
+    );
+
+  const listedWith = async (outcome: Outcome, user: { readonly id: string }) => {
+    const [setCookie] = sessionCookiesOf(outcome);
+    if (setCookie === undefined) throw new Error("session cookie が無い");
+    const response = await liveApp().request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, cookie: setCookie.split(";", 1)[0] ?? "" },
+    });
+    const body = (await response.json()) as {
+      passkeys: Array<{ id: string; last_used_at: string | null }>;
+    };
+    const rows = await run(PasskeyRepo.use((repo) => repo.listPasskeys(user.id)));
+    const credentialIdOf = new Map(rows.map((row) => [row.id, row.credentialId]));
+    return body.passkeys.map((listed) => ({
+      credentialId: credentialIdOf.get(listed.id) ?? "",
+      lastUsedAt: listed.last_used_at,
+    }));
+  };
+
+  const uncountableApp = () => buildAppWith(ttlStoreWithoutCounting);
+
   test("MFA を有効にしていない user が保存したパスキーで、session を持たずに options の challenge に署名した応答を送ると、options に渡した遷移先が返り、その user の session cookie が発行される", async () => {
     const user = await createUser("plain");
     const credential = await savedCredentialOf(user);
@@ -73,8 +204,7 @@ describe("パスキーのログイン", () => {
     const user = await createUser("shape");
     const credential = await savedCredentialOf(user);
     const viaPasskey = await signInWith(liveApp(), credential, TRUSTED_REDIRECT);
-    const viaChallenge = await passMfaChallenge({ redirectUrl: TRUSTED_REDIRECT, method: "magic_link" });
-    await cleanupMfaChallengeFixtures();
+    const viaChallenge = await sessionCookieOfMfaChallengePass();
 
     const [passkeyCookie] = sessionCookiesOf(viaPasskey);
     const [challengeCookie] = sessionCookiesOf(viaChallenge);
@@ -91,7 +221,9 @@ describe("パスキーのログイン", () => {
 
     expect(outcome.status).toBe(200);
     expect(outcome.body).toEqual({ redirect_url: TRUSTED_REDIRECT });
-    expect(mfaChallengeCookiesOf(outcome)).toEqual([]);
+    expect(
+      outcome.setCookies.filter((cookie) => cookie.startsWith(`${MFA_CHALLENGE_COOKIE_NAME}=`)),
+    ).toEqual([]);
     expect(await sessionUserOf(outcome)).toBe(user.id);
   });
 
@@ -104,7 +236,9 @@ describe("パスキーのログイン", () => {
 
     const after = await signInAuditsOf(user);
     expect(after).toHaveLength(before.length + 1);
-    expect(after.filter((payload) => (payload as { method?: unknown }).method === "passkey")).toHaveLength(1);
+    expect(
+      after.filter((payload) => (payload as { method?: unknown }).method === "passkey"),
+    ).toHaveLength(1);
   });
 
   test("options に信頼していない origin の遷移先を渡してログインすると、遷移先は /account になる", async () => {
@@ -116,9 +250,7 @@ describe("パスキーのログイン", () => {
     expect(outcome.status).toBe(200);
     expect(outcome.body).toEqual({ redirect_url: DEFAULT_REDIRECT });
   });
-});
 
-describe("ログインの challenge", () => {
   test("ログインに成功した応答をもう一度送ると既知の失敗になり、session cookie は発行されない", async () => {
     const user = await createUser("replay");
     const credential = await savedCredentialOf(user);
@@ -127,7 +259,9 @@ describe("ログインの challenge", () => {
     const response = assertionBy(credential, challenge, { counter: 1 });
 
     expect((await sendSignIn(app, response)).status).toBe(200);
-    expectKnownClientFailure(await sendSignIn(app, assertionBy(credential, challenge, { counter: 2 })));
+    expectKnownClientFailure(
+      await sendSignIn(app, assertionBy(credential, challenge, { counter: 2 })),
+    );
   });
 
   test("options の発行から 5 分の 1 秒前に送った応答は通り、5 分の 1 秒後に送った応答は既知の失敗になる", async () => {
@@ -138,7 +272,9 @@ describe("ログインの challenge", () => {
     const issuedEarly = Date.now();
     const early = challengeOf(await requestSignInOptions(app, TRUSTED_REDIRECT));
     setSystemTime(new Date(issuedEarly + CHALLENGE_LIFETIME_MS - ONE_SECOND_MS));
-    expect((await sendSignIn(app, assertionBy(credential, early, { counter: 1 }))).status).toBe(200);
+    expect((await sendSignIn(app, assertionBy(credential, early, { counter: 1 }))).status).toBe(
+      200,
+    );
 
     setSystemTime();
     const issuedLate = Date.now();
@@ -150,26 +286,29 @@ describe("ログインの challenge", () => {
   test("パスキーの登録の options が返した challenge で署名した認証の応答は、ログインの検証で既知の失敗になる", async () => {
     const user = await createUser("cross-sign-in");
     const credential = await savedCredentialOf(user);
-    const registrationChallenge = optionsOf(await requestOptions(openSession(user))).challenge;
+    const registrationChallenge = challengeOf(
+      await requestRegistrationOptions(signedInSession(user)),
+    );
 
-    expectKnownClientFailure(await sendSignIn(liveApp(), assertionBy(credential, registrationChallenge)));
-    await forgetScenario();
+    expectKnownClientFailure(
+      await sendSignIn(liveApp(), assertionBy(credential, registrationChallenge)),
+    );
   });
 
   test("ログインの options が返した challenge で署名した登録の応答は、登録の API で既知の失敗になり、パスキーは増えない", async () => {
     const user = await createUser("cross-register");
     const signInChallenge = challengeOf(await requestSignInOptions(liveApp(), TRUSTED_REDIRECT));
 
-    const outcome = await sendRegistration(openSession(user), signedResponse(signInChallenge).response);
+    const outcome = await sendRegistration(
+      signedInSession(user),
+      signedRegistrationFor(signInChallenge).response,
+    );
 
     expect(outcome.status).toBeGreaterThanOrEqual(400);
     expect(outcome.status).toBeLessThan(500);
-    expect(await savedCredentialIdsOf(user)).toEqual([]);
-    await forgetScenario();
+    expect(await run(passkeysOf(user.id))).toEqual([]);
   });
-});
 
-describe("ログインの失敗", () => {
   test("未保存の credential、削除したパスキー、生体か PIN の確認が無い応答、保存した別のパスキーの鍵で署名した応答は、どれも session cookie を発行せず、同じ状態と本文の既知の失敗になる", async () => {
     const user = await createUser("failures");
     const app = liveApp();
@@ -198,7 +337,9 @@ describe("ログインの失敗", () => {
     const signInAt = async (counter: number, target = credential) =>
       sendSignIn(
         app,
-        assertionBy(target, challengeOf(await requestSignInOptions(app, TRUSTED_REDIRECT)), { counter }),
+        assertionBy(target, challengeOf(await requestSignInOptions(app, TRUSTED_REDIRECT)), {
+          counter,
+        }),
       );
 
     const unsaved = statusAndBody(await signInAt(1, unsavedCredential()));
@@ -211,25 +352,27 @@ describe("ログインの失敗", () => {
     expect(statusAndBody(lower)).toEqual(unsaved);
     expect((await signInAt(6)).status).toBe(200);
   });
-});
 
-describe("検証と記録の間に消えたパスキー", () => {
   test("応答の検証を通った後、使った事実を記録する前にパスキーが消えると、ログインは既知の失敗になり session cookie は発行されない", async () => {
     const user = await createUser("vanished");
     const credential = await savedCredentialOf(user);
 
-    const outcome = await signInWith(appLosingPasskeyBeforeRecordingUse(user), credential, TRUSTED_REDIRECT);
+    const outcome = await signInWith(
+      appLosingPasskeyBeforeRecordingUse(user),
+      credential,
+      TRUSTED_REDIRECT,
+    );
 
     expectKnownClientFailure(outcome);
   });
-});
 
-describe("ログインと最後に使った日時", () => {
   test("ログインすると、一覧で使ったパスキーの最後に使った日時がログインの前後の間になり、使っていないパスキーは変わらない", async () => {
     const user = await createUser("last-used");
     const used = await savedCredentialOf(user);
     const unused = await savedCredentialOf(user);
-    const unusedBefore = (await storedLastUsedOf(user)).get(unused.credentialId);
+    const storedLastUsed = async () =>
+      new Map((await run(passkeysOf(user.id))).map((row) => [row.credentialId, row.lastUsedAt]));
+    const unusedBefore = (await storedLastUsed()).get(unused.credentialId);
 
     const before = Date.now();
     const outcome = await signInWith(liveApp(), used, TRUSTED_REDIRECT);
@@ -243,9 +386,7 @@ describe("ログインと最後に使った日時", () => {
     expect(usedAt).toBeLessThanOrEqual(after);
     expect(unusedListed?.lastUsedAt ?? null).toBe(unusedBefore?.toISOString() ?? null);
   });
-});
 
-describe("ログインの試行枠", () => {
   test("同じ IP から 1 分の間に、options は 10 回目まで通って 11 回目が既存の API と同じ失敗になり、10 回の後でも検証の 1 回目は止まらない", async () => {
     const app = liveApp();
     for (let attempt = 1; attempt <= ATTEMPTS_PER_MINUTE; attempt++) {
@@ -253,14 +394,15 @@ describe("ログインの試行枠", () => {
     }
 
     expect(statusAndBody(await requestSignInOptions(app, TRUSTED_REDIRECT))).toEqual(RATE_LIMITED);
-    expect((await sendSignIn(app, assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"))).status).not.toBe(
-      RATE_LIMITED.status,
-    );
+    expect(
+      (await sendSignIn(app, assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"))).status,
+    ).not.toBe(RATE_LIMITED.status);
   });
 
   test("同じ IP から 1 分の間に、検証は 10 回目まで試行枠で止まらず、11 回目が既存の API と同じ失敗になる", async () => {
     const app = liveApp();
-    const attempt = () => sendSignIn(app, assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"));
+    const attempt = () =>
+      sendSignIn(app, assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"));
     for (let count = 1; count <= ATTEMPTS_PER_MINUTE; count++) {
       expect((await attempt()).status).not.toBe(RATE_LIMITED.status);
     }
@@ -276,7 +418,10 @@ describe("ログインの試行枠", () => {
     }
 
     expect((await requestSignInOptions(app, TRUSTED_REDIRECT)).status).toBe(200);
-    const verified = await sendSignIn(app, assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"));
+    const verified = await sendSignIn(
+      app,
+      assertionBy(unsavedCredential(), "c2lnbi1pbi1jaGFsbGVuZ2U"),
+    );
     expect(verified.status).not.toBe(RATE_LIMITED.status);
     expectKnownClientFailure(verified);
   });

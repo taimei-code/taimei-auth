@@ -39,3 +39,15 @@ describe("Dependabot の cooldown invariant", () => {
     expect(readUpdates().map((update) => update["package-ecosystem"])).not.toContain("npm");
   });
 });
+
+describe("依存の追加の守り", () => {
+  test("lifecycle script を許す依存は無く、検証の library を公開から 7 日の待ちの例外にしていない", () => {
+    const manifest: { trustedDependencies?: unknown } = JSON.parse(read("package.json"));
+    expect(manifest.trustedDependencies).toEqual([]);
+
+    const bunfig = Bun.TOML.parse(read("bunfig.toml")) as {
+      install?: { minimumReleaseAgeExcludes?: readonly string[] };
+    };
+    expect(bunfig.install?.minimumReleaseAgeExcludes ?? []).not.toContain("@simplewebauthn/server");
+  });
+});

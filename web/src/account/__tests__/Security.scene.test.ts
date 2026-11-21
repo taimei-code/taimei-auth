@@ -117,6 +117,37 @@ describe("セキュリティの画面", () => {
       );
     });
 
+    test("一覧の各項目に登録日と最後に使った日を出し、使っていないパスキーは最後に使った日を「未使用」と出す", () => {
+      scene(
+        { update, view },
+        given(
+          loaded(
+            { _tag: "Disabled" },
+            {
+              _tag: "Shown",
+              passkeys: [
+                {
+                  id: "passkey-used",
+                  createdAt: "2026-03-04T12:00:00.000Z",
+                  maybeLastUsedAt: Option.some("2026-05-06T12:00:00.000Z"),
+                },
+                {
+                  id: "passkey-unused",
+                  createdAt: "2026-07-08T12:00:00.000Z",
+                  maybeLastUsedAt: Option.none(),
+                },
+              ],
+              registrable: true,
+            },
+          ),
+        ),
+        expect(text("登録日 2026/03/04")).toExist(),
+        expect(text("最後に使った日 2026/05/06")).toExist(),
+        expect(text("登録日 2026/07/08")).toExist(),
+        expect(text("最後に使った日 未使用")).toExist(),
+      );
+    });
+
     test("使っていないパスキーは最後に使った日を「未使用」と出す", () => {
       scene(
         { update, view },

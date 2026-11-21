@@ -1,5 +1,8 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { requestApp, responseJson } from "./helpers";
+import { buildAppWith, requestApp, responseJson } from "./helpers";
+import { auth } from "../../auth";
+import { AuthApiError } from "../../errors";
+import { authApiWith } from "../../__tests__/test-layers";
 import { Effect } from "effect";
 import { Hono } from "hono";
 import {
@@ -11,11 +14,12 @@ import {
 } from "../../mfa/__tests__/helpers";
 import {
   attributeSet,
+  browserCookieHeaders,
   requestHeaders,
   tamperCookieSignature,
 } from "../../__tests__/session-helpers";
 import { challengeKey } from "../../mfa/totp/login-challenge";
-import { dbTest } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mountSpaApi } from "../spa-http-api";
 import { testKvStore } from "../../__tests__/test-ttl-store";
@@ -78,6 +82,48 @@ describe("MFA チャレンジ API", () => {
             .filter((cookie) => cookie.startsWith("__Host-mfa_login_challenge="))
             .map((cookie) => attributeSet(cookie).has("Secure")),
         ).toEqual([true]);
+        expect(
+          res.headers
+            .getSetCookie()
+            .filter((cookie) => cookie.startsWith("__Host-mfa_login_challenge="))
+            .every((cookie) => /max-age=0(;|$)/i.test(cookie)),
+        ).toBe(true);
+        const session = yield* Effect.promise(() =>
+          auth.api.getSession({ headers: browserCookieHeaders(res) }),
+        );
+        expect(session?.user.id).toBe(user.id);
+      }),
+    ));
+
+  test("session を発行できなかった通過の試みは成功を返さず、ログインを記録しない", () =>
+    run(
+      Effect.gen(function* () {
+        const db = yield* TestDb;
+        const user = yield* db.seedUser("h04-issue-fail");
+        const enabled = yield* enableMfaFor(user);
+        const challenge = yield* issueTestChallenge({
+          userId: user.id,
+          redirectUrl: "/account/security",
+          method: "magic_link",
+        });
+        const sessionStoreDown = buildAppWith(
+          authApiWith(() => ({
+            issueSession: () =>
+              Effect.fail(new AuthApiError({ cause: new Error("session store down") })),
+          })),
+        );
+
+        const res = yield* verifyWith(sessionStoreDown, challenge.headers, {
+          code: yield* totpCode(enabled.secret),
+          kind: "totp",
+        });
+
+        expect(res.status).not.toBe(200);
+        const session = yield* Effect.promise(() =>
+          auth.api.getSession({ headers: browserCookieHeaders(res) }),
+        );
+        expect(session).toBeNull();
+        expect(yield* auditRowsFor(user.id, "sign_in")).toEqual([]);
       }),
     ));
 

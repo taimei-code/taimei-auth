@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { RegistrationOptions } from "@core/passkey/passkey-contract";
 import { Clock, Effect } from "effect";
 
-import { createPasskey } from "../webauthn";
+import { createPasskey, isPasskeySupported } from "../webauthn";
 
 const OPTIONS: RegistrationOptions = {
   rp: { name: "taimei", id: "auth.example.test" },
@@ -13,9 +13,30 @@ const OPTIONS: RegistrationOptions = {
 
 const originalCredentials = Object.getOwnPropertyDescriptor(globalThis.navigator, "credentials");
 
+type BrowserPart =
+  | "PublicKeyCredential"
+  | "navigator.credentials"
+  | "parseCreationOptionsFromJSON"
+  | "parseRequestOptionsFromJSON"
+  | "toJSON";
+
+type BrowserRecord = {
+  readonly parsedOptions: unknown[];
+  readonly parsedResults: unknown[];
+  readonly createdWith: unknown[];
+};
+
 const installBrowser = (
   create: () => Promise<unknown>,
-  { withoutRequestOptionsParser = false } = {},
+  {
+    withoutRequestOptionsParser = false,
+    without = [],
+    record,
+  }: {
+    withoutRequestOptionsParser?: boolean;
+    without?: readonly BrowserPart[];
+    record?: BrowserRecord;
+  } = {},
 ) => {
   class StubPublicKeyCredential {
     constructor(readonly json: unknown) {}
@@ -26,27 +47,46 @@ const installBrowser = (
       return this.json;
     }
     static parseCreationOptionsFromJSON(json: unknown) {
-      return json;
+      if (record === undefined) {
+        return json;
+      }
+      const parsed = { parsedFrom: json };
+      record.parsedOptions.push(json);
+      record.parsedResults.push(parsed);
+      return parsed;
     }
     static parseRequestOptionsFromJSON(json: unknown) {
       return json;
     }
   }
-  if (withoutRequestOptionsParser) {
+  if (withoutRequestOptionsParser || without.includes("parseRequestOptionsFromJSON")) {
     Reflect.deleteProperty(StubPublicKeyCredential, "parseRequestOptionsFromJSON");
   }
-  Object.defineProperty(globalThis, "PublicKeyCredential", {
-    configurable: true,
-    writable: true,
-    value: StubPublicKeyCredential,
-  });
-  Object.defineProperty(globalThis.navigator, "credentials", {
-    configurable: true,
-    value: {
-      create: async () => new StubPublicKeyCredential(await create()),
-      get: () => Promise.resolve(null),
-    },
-  });
+  if (without.includes("parseCreationOptionsFromJSON")) {
+    Reflect.deleteProperty(StubPublicKeyCredential, "parseCreationOptionsFromJSON");
+  }
+  if (without.includes("toJSON")) {
+    Reflect.deleteProperty(StubPublicKeyCredential.prototype, "toJSON");
+  }
+  if (!without.includes("PublicKeyCredential")) {
+    Object.defineProperty(globalThis, "PublicKeyCredential", {
+      configurable: true,
+      writable: true,
+      value: StubPublicKeyCredential,
+    });
+  }
+  if (!without.includes("navigator.credentials")) {
+    Object.defineProperty(globalThis.navigator, "credentials", {
+      configurable: true,
+      value: {
+        create: async (options: { readonly publicKey?: unknown }) => {
+          record?.createdWith.push(options.publicKey);
+          return new StubPublicKeyCredential(await create());
+        },
+        get: () => Promise.resolve(null),
+      },
+    });
+  }
 };
 
 afterEach(() => {
@@ -107,6 +147,66 @@ describe("browser の作成の API の結果を写す", () => {
   test("WebAuthn の API の無い browser で呼ぶと、取り消しでなく失敗になる", async () => {
     expect(await failureTagOf()).toBe("PasskeyCreationFailed");
   });
+});
+
+describe("browser の作成の API を呼ぶ", () => {
+  test("browser の作成の API には、server の options を parseCreationOptionsFromJSON で変換した値が渡る", async () => {
+    const record: BrowserRecord = { parsedOptions: [], parsedResults: [], createdWith: [] };
+    installBrowser(() => Promise.resolve({ id: "only-id" }), { record });
+
+    await failureTagOf();
+
+    expect(record.parsedOptions).toEqual([OPTIONS]);
+    expect(record.createdWith).toHaveLength(1);
+    expect(record.createdWith[0]).toBe(record.parsedResults[0]);
+  });
+});
+
+describe("browser がパスキーに対応しているかの判定", () => {
+  const supported = () => Effect.runPromise(isPasskeySupported);
+
+  const missingWebAuthn: readonly BrowserPart[] = ["PublicKeyCredential", "navigator.credentials"];
+  for (const part of missingWebAuthn) {
+    test(`${part} が無い browser では、対応していないと判定する`, async () => {
+      installBrowser(() => Promise.resolve({}), { without: [part] });
+      expect(await supported()).toBe(false);
+    });
+  }
+
+  const missingJsonHelpers: readonly BrowserPart[] = [
+    "parseCreationOptionsFromJSON",
+    "parseRequestOptionsFromJSON",
+    "toJSON",
+  ];
+  for (const part of missingJsonHelpers) {
+    test(`WebAuthn の API はあるが ${part} が無い browser では、対応していないと判定する`, async () => {
+      installBrowser(() => Promise.resolve({}), { without: [part] });
+      expect(await supported()).toBe(false);
+    });
+  }
+
+  test("WebAuthn の API と JSON の補助の API が揃った browser では、対応していると判定する", async () => {
+    installBrowser(() => Promise.resolve({}));
+    expect(await supported()).toBe(true);
+  });
+});
+
+describe("dialog の取り消しと失敗", () => {
+  test("browser が NotAllowedError で拒んだ時 (dialog の取り消し) は、失敗でなく取り消しとして返る", async () => {
+    installBrowser(() =>
+      Promise.reject(
+        new DOMException("The operation either timed out or was not allowed.", "NotAllowedError"),
+      ),
+    );
+    expect(await failureTagOf()).toBe("Cancelled");
+  });
+
+  for (const name of ["SecurityError", "UnknownError"]) {
+    test(`browser が ${name} で拒んだ時は、取り消しでなく失敗として返る`, async () => {
+      installBrowser(() => Promise.reject(new DOMException(`rejected: ${name}`, name)));
+      expect(await failureTagOf()).toBe("PasskeyCreationFailed");
+    });
+  }
 });
 
 const FIVE_MINUTES_MS = 300_000;

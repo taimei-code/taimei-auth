@@ -752,6 +752,142 @@ const CASES: readonly Case[] = [
     source: "export const codes = { UNAUTHORIZED: 1 };",
     expectedRules: ["taimei(api-error-shape-only-in-auth-wiring)"],
   },
+  {
+    name: "src/mfa の file で AuthApi.issueSession を呼べない",
+    path: "src/mfa/IssueSessionProbe.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "src/mfa/totp の file で AuthApi.issueSession を呼べない",
+    path: "src/mfa/totp/IssueSessionProbe.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "src/handlers の file で AuthApi.issueSession を呼べない",
+    path: "src/handlers/IssueSessionProbe.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "src/passkey の file で AuthApi.issueSession を呼べない",
+    path: "src/passkey/IssueSessionProbe.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "src 直下 の file で AuthApi.issueSession を呼べない",
+    path: "src/IssueSessionProbe.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "MFA チャレンジの通過の file で AuthApi.issueSession を呼べない",
+    path: "src/mfa/totp/complete-login-challenge.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: ["taimei(issue-session-only-in-establish-sign-in)"],
+  },
+  {
+    name: "ログインの成立の手順の file は AuthApi.issueSession を呼べる",
+    path: "src/establish-sign-in.ts",
+    source: "export const r = (api: { issueSession(): void }) => api.issueSession();",
+    expectedRules: [],
+  },
+  {
+    name: "src/passkey の file は @simplewebauthn/server の値の import を書けない",
+    path: "src/passkey/SimpleWebauthnValueProbe.ts",
+    source:
+      'import { verifyRegistrationResponse } from "@simplewebauthn/server";\nexport const probe = verifyRegistrationResponse;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "src/passkey の file は @simplewebauthn/server の型の import を書けない",
+    path: "src/passkey/SimpleWebauthnTypeProbe.ts",
+    source:
+      'import type { RegistrationResponseJSON } from "@simplewebauthn/server";\nexport type Probe = RegistrationResponseJSON;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "src/passkey の file は @simplewebauthn/server の subpath の値の import を書けない",
+    path: "src/passkey/SimpleWebauthnSubpathProbe.ts",
+    source:
+      'import { isoBase64URL } from "@simplewebauthn/server/helpers";\nexport const probe = isoBase64URL;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "src/handlers の file は @simplewebauthn/server の値の import を書けない",
+    path: "src/handlers/SimpleWebauthnValueProbe.ts",
+    source:
+      'import { verifyRegistrationResponse } from "@simplewebauthn/server";\nexport const probe = verifyRegistrationResponse;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "src/handlers の file は @simplewebauthn/server の型の import を書けない",
+    path: "src/handlers/SimpleWebauthnTypeProbe.ts",
+    source:
+      'import type { RegistrationResponseJSON } from "@simplewebauthn/server";\nexport type Probe = RegistrationResponseJSON;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "web/src の file は @simplewebauthn/server の値の import を書けない",
+    path: "web/src/SimpleWebauthnValueProbe.ts",
+    source:
+      'import { verifyRegistrationResponse } from "@simplewebauthn/server";\nexport const probe = verifyRegistrationResponse;',
+    expectedRules: [
+      "taimei(no-webauthn-package-in-web)",
+      "taimei(simplewebauthn-import-only-in-webauthn)",
+    ],
+  },
+  {
+    name: "src/passkey/__tests__ の file は @simplewebauthn/server の値の import を書けない",
+    path: "src/passkey/__tests__/SimpleWebauthnValueProbe.test.ts",
+    source:
+      'import { verifyRegistrationResponse } from "@simplewebauthn/server";\nexport const probe = verifyRegistrationResponse;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "src/passkey/__tests__ の file は @simplewebauthn/server の型の import を書けない",
+    path: "src/passkey/__tests__/SimpleWebauthnTypeProbe.test.ts",
+    source:
+      'import type { RegistrationResponseJSON } from "@simplewebauthn/server";\nexport type Probe = RegistrationResponseJSON;',
+    expectedRules: ["taimei(simplewebauthn-import-only-in-webauthn)"],
+  },
+  {
+    name: "検証の入口 src/passkey/webauthn.ts は @simplewebauthn/server を import できる",
+    path: "src/passkey/webauthn.ts",
+    source:
+      'import { verifyRegistrationResponse } from "@simplewebauthn/server";\nexport const probe = verifyRegistrationResponse;',
+    expectedRules: [],
+  },
+  {
+    name: "web/src の別の file で PublicKeyCredential.parseCreationOptionsFromJSON を呼べない",
+    path: "web/src/account/ParseCreationOptionsProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const probe = (json: PublicKeyCredentialCreationOptionsJSON) => Effect.sync(() => PublicKeyCredential.parseCreationOptionsFromJSON(json));',
+    expectedRules: ["taimei(webauthn-call-only-in-passkey-webauthn)"],
+  },
+  {
+    name: "web/src の別の file は、PublicKeyCredential.parseCreationOptionsFromJSON の呼び出しを除いた同じ形なら書ける",
+    path: "web/src/account/ParseCreationOptionsWithoutCallProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const probe = (json: unknown) => Effect.sync(() => json);',
+    expectedRules: [],
+  },
+  {
+    name: "web/src の別の file で navigator.credentials.create を呼べない",
+    path: "web/src/account/CreateCredentialProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const probe = (publicKey: PublicKeyCredentialCreationOptions) => Effect.tryPromise(() => navigator.credentials.create({ publicKey }));',
+    expectedRules: ["taimei(webauthn-call-only-in-passkey-webauthn)"],
+  },
+  {
+    name: "web/src の別の file は、navigator.credentials.create の呼び出しを除いた同じ形なら書ける",
+    path: "web/src/account/CreateCredentialWithoutCallProbe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const probe = (publicKey: unknown) => Effect.tryPromise(() => Promise.resolve(publicKey));',
+    expectedRules: [],
+  },
 ];
 
 const TYPE_AWARE_CASES: readonly Case[] = [

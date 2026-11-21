@@ -22,3 +22,18 @@ export const storedSessionOf = (userId: string, token: string) =>
 
 export const storedSessionsOf = (sessions: readonly { userId: string; token: string }[]) =>
   Effect.forEach(sessions, ({ userId, token }) => storedSessionOf(userId, token));
+
+const storeDown = () => Promise.reject(new Error("ttl store down"));
+
+export const ttlStoreWithoutCounting = ttlStoreLayer({
+  ...testTtlStore,
+  incrementRateWindow: storeDown,
+});
+
+export const ttlStoreWithoutChallengeLookup = ttlStoreLayer({
+  ...testTtlStore,
+  getAndDelete: storeDown,
+});
+
+export const ttlValuesHolding = (value: string): number =>
+  testKvStore.keys("").filter((key) => testKvStore.get(key as TtlKey) === value).length;
