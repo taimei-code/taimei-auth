@@ -13,7 +13,7 @@ import {
   NotEnabled,
 } from "./errors";
 
-const Code = Schema.String.check(Schema.isBetweenLength(1, 64));
+export const MfaCode = Schema.String.check(Schema.isBetweenLength(1, 64));
 const CodeKind = Schema.Literals(["totp", "recovery_code"]);
 export type MfaCodeKind = typeof CodeKind.Type;
 
@@ -29,10 +29,10 @@ export const MfaEnrollment = Schema.Struct({
 });
 
 const ActivateRequest = Schema.Struct({
-  code: Code,
+  code: MfaCode,
   enrollment_id: Schema.String.check(Schema.isMinLength(1)),
 });
-const CodeWithKind = Schema.Struct({ code: Code, kind: CodeKind });
+const CodeWithKind = Schema.Struct({ code: MfaCode, kind: CodeKind });
 const ChallengeState = Schema.Struct({ pending: Schema.Boolean });
 
 export class ChallengeVerifyBudget extends HttpApiMiddleware.Service<ChallengeVerifyBudget>()(

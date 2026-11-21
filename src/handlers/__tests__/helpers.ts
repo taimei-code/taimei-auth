@@ -152,15 +152,40 @@ export const challengeOf = (outcome: Outcome): string => {
   return (outcome.body as { challenge: string }).challenge;
 };
 
-export const requestRegistrationOptions = async (session: SignedInSession): Promise<Outcome> =>
+export const requestRegistrationOptionsWith = async (
+  session: SignedInSession,
+  payload: unknown,
+): Promise<Outcome> =>
   outcomeOf(
     await postJson(
       session.app,
       "/api/account/passkeys/registration-options",
       sameOriginHeaders(session.cookie),
-      "{}",
+      JSON.stringify(payload),
     ),
   );
+
+export const requestRegistrationOptions = (session: SignedInSession): Promise<Outcome> =>
+  requestRegistrationOptionsWith(session, {});
+
+export const sendMfaDisable = async (session: SignedInSession, code: string): Promise<Outcome> =>
+  outcomeOf(
+    await postJson(
+      session.app,
+      "/api/account/mfa/disable",
+      sameOriginHeaders(session.cookie),
+      JSON.stringify({ code, kind: "totp" }),
+    ),
+  );
+
+export const readMfaStatus = async (
+  session: SignedInSession,
+): Promise<{ enabled: boolean; recovery_codes_remaining: number }> => {
+  const response = await session.app.request("/api/account/mfa", {
+    headers: { ...JSON_HEADERS, cookie: session.cookie },
+  });
+  return (await response.json()) as { enabled: boolean; recovery_codes_remaining: number };
+};
 
 export const sendRegistration = async (
   session: SignedInSession,

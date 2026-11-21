@@ -2012,10 +2012,10 @@ const ROWS: readonly Row[] = [
   {
     name: "mfa-failure-messages-import-only-in-mfa",
     within: ["web/src/**"],
-    allowedIn: ["web/src/mfa/**"],
+    allowedIn: ["web/src/mfa/**", "web/src/passkey/passkey-failure-messages.ts"],
     matchers: [{ kind: "valueImport", source: /(^|\/)mfa-failure-messages$/ }],
     message:
-      "MFA の失敗の文言の表 (mfa/mfa-failure-messages.ts) を使うのは MFA の画面 (web/src/mfa/**) だけ。同じ失敗に同じ文言を出すために共有している",
+      "MFA の失敗の文言の表 (mfa/mfa-failure-messages.ts) を使うのは MFA の画面 (web/src/mfa/**) と、登録の前に MFA のコードを確かめるパスキーの文言の表 (passkey/passkey-failure-messages.ts) だけ。同じ失敗に同じ文言を出すために共有している",
   },
   {
     name: "sdk-import-only-peer-dependencies",

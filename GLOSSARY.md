@@ -162,7 +162,7 @@ _Avoid_: enrollment generation (実装方式を表す語), two_factor ID (保存
 _Avoid_: 強制解除 (何を強制するか曖昧), force disable (コードの識別子としてだけ使う), 救済スクリプト (実装形態の名前)
 
 **試行枠**:
-一定の時間内に試せる回数の上限。**auth ホスト** が **TTL store** で回数を数えて守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコードの確認 (ログイン時のチャレンジと無効化)。fail-open にするのは、経路ごとの IP や session 単位の上限 (**Magic Link**、**canary token**、**MFA チャレンジ** の API、MFA の状態の変更、**パスキー** の管理とログイン) と、**事業所** 単位の招待の上限である。code の名前は attempt budget で、別名は上限に達した時に client へ返す失敗の `RateLimited` だけである (SPA の契約の `_tag` で、client が読むので変えない)。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
+一定の時間内に試せる回数の上限。**auth ホスト** が **TTL store** で回数を数えて守る防御で、数えられない時に拒否と通過のどちらにするか (**fail-closed / fail-open**) を経路ごとに明示して決め、暗黙の既定を持たない。fail-closed にするのは **多要素認証 (MFA)** のコードの確認 (ログイン時のチャレンジ、無効化、**パスキー** の登録の前。無効化と登録の前の確認は 1 つの試行枠を共有する)。fail-open にするのは、経路ごとの IP や session 単位の上限 (**Magic Link**、**canary token**、**MFA チャレンジ** の API、MFA の状態の変更、**パスキー** の管理とログイン) と、**事業所** 単位の招待の上限である。code の名前は attempt budget で、別名は上限に達した時に client へ返す失敗の `RateLimited` だけである (SPA の契約の `_tag` で、client が読むので変えない)。MFA だけを fail-closed にする理由は ADR-0013 Consequences (ADR-0016 が引き継ぐ)。
 _Avoid_: rate limit (以前の code の名前), throttling (より広義)
 
 **fail-closed / fail-open**:

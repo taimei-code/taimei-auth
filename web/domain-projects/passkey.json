@@ -8,6 +8,9 @@
     },
     {
       "path": "./core.json"
+    },
+    {
+      "path": "./mfa.json"
     }
   ]
 }

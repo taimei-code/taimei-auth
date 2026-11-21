@@ -1,19 +1,16 @@
-import { base32 } from "@better-auth/utils/base32";
-import { createOTP } from "@better-auth/utils/otp";
 import { expect, test, type Page } from "@playwright/test";
-import {
-  TOTP_DIGITS,
-  TOTP_PERIOD_SECONDS,
-  TOTP_WINDOW_STEPS,
-} from "../src/mfa/totp/totp-parameters";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
 import {
+  decodeTotpSecret,
+  enableMfaViaApi,
   MFA_EMAIL,
   mfaRow,
   reseedFixture,
   signInWithMagicLink,
+  totpCode,
   watchMainFrameNavigations,
+  wrongTotpCode,
 } from "./helpers";
 
 const challengePending = (page: Page) =>
@@ -24,61 +21,6 @@ test.describe.configure({ timeout: 90_000 });
 test.beforeEach(() => {
   reseedFixture("mfa");
 });
-
-const decodeTotpSecret = (encoded: string): string =>
-  new TextDecoder().decode(base32.decode(encoded));
-
-const secretFromTotpUri = (totpUri: string): string => {
-  const encoded = new URL(totpUri).searchParams.get("secret");
-  if (!encoded) throw new Error(`otpauth URI に secret が無い: ${totpUri}`);
-  return decodeTotpSecret(encoded);
-};
-
-const totpCode = (secret: string, stepOffset = 0): Promise<string> => {
-  const otp = createOTP(secret, { period: TOTP_PERIOD_SECONDS, digits: TOTP_DIGITS });
-  if (stepOffset === 0) return otp.totp();
-  return otp.hotp(Math.floor(Date.now() / (TOTP_PERIOD_SECONDS * 1000)) + stepOffset);
-};
-
-const wrongTotpCode = async (secret: string): Promise<string> => {
-  const acceptedOffsets = Array.from(
-    { length: TOTP_WINDOW_STEPS * 2 + 1 },
-    (_, i) => i - TOTP_WINDOW_STEPS,
-  );
-  const accepted = await Promise.all(acceptedOffsets.map((offset) => totpCode(secret, offset)));
-  for (let candidate = 0; candidate < 1000; candidate++) {
-    const code = String(candidate).padStart(TOTP_DIGITS, "0");
-    if (!accepted.includes(code)) return code;
-  }
-  throw new Error("検証窓の外にある誤コードを作れなかった");
-};
-
-const PREVIOUS_STEP_LEAVING_CURRENT_UNUSED = -1;
-
-type EnabledMfa = { secret: string; recoveryCodes: string[] };
-
-const enableMfaViaApi = async (page: Page): Promise<EnabledMfa> => {
-  const enrolled = await page.request.post("/api/account/mfa/enroll", {
-    headers: { "content-type": "application/json" },
-  });
-  expect(enrolled.status()).toBe(200);
-  const enrollment = (await enrolled.json()) as {
-    totp_uri: string;
-    recovery_codes: string[];
-    enrollment_id: string;
-  };
-
-  const secret = secretFromTotpUri(enrollment.totp_uri);
-  const activated = await page.request.post("/api/account/mfa/activate", {
-    data: {
-      code: await totpCode(secret, PREVIOUS_STEP_LEAVING_CURRENT_UNUSED),
-      enrollment_id: enrollment.enrollment_id,
-    },
-  });
-  expect(activated.status()).toBe(200);
-
-  return { secret, recoveryCodes: enrollment.recovery_codes };
-};
 
 const signOutAndReachChallenge = async (page: Page): Promise<void> => {
   await page.getByRole("button", { name: "ログアウト" }).click();

@@ -1,6 +1,6 @@
 import type { PasskeyListResponse } from "@core/passkey/passkey-contract";
 import { isPasskeyLimitReached } from "@core/passkey/policy";
-import { Array, Effect, Option, Schema } from "effect";
+import { Array, Effect, Option, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -15,12 +15,19 @@ import {
   pageRequestOf,
   withNextPageRequest,
 } from "../shared/page-request";
+import {
+  MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+  MFA_CODE_TEXTS,
+  normalizeMfaCode,
+} from "../mfa/mfa-code";
+import { focusField, requiredErrorText } from "../shared/required-field";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission, submissionWhile } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
 import {
   Dialog,
+  type DialogContent,
   type DialogMessage,
   ReportingDialog,
   dialogFooterView,
@@ -28,6 +35,8 @@ import {
   isDialogVisible,
   reportingDialogFoldsOf,
 } from "../shared/ui/dialog-view";
+import { formView } from "../shared/ui/form-view";
+import { inputView } from "../shared/ui/input-view";
 import { settingRowView } from "../shared/ui/setting-row-view";
 import { NoticeTone } from "../shared/ui/toast-view";
 import { passkeyFailureText } from "./passkey-failure-messages";
@@ -88,10 +97,16 @@ export const OutMessage = defineMessageUnion({
 });
 export type OutMessage = typeof OutMessage.Type;
 
+const DialogSubject = defineTaggedUnion({
+  Deletion: { passkey: ListedPasskey },
+  TotpEntry: { code: Schema.String, maybeRejection: Schema.Option(Schema.String) },
+});
+type DialogSubject = typeof DialogSubject.Type;
+
 export const Model = Schema.Struct({
   busy: Busy,
   dialog: ReportingDialog.Model(OutMessage),
-  maybeDeletionTarget: Schema.Option(ListedPasskey),
+  maybeDialogSubject: Schema.Option(DialogSubject),
   ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
@@ -99,6 +114,9 @@ export type Model = typeof Model.Type;
 const RegistrationFailure = Schema.Literals([
   "RateLimited",
   "TotpRequired",
+  "InvalidCode",
+  "Locked",
+  "NotEnabled",
   "PasskeyRejected",
   "PasskeyAlreadyRegistered",
   "PasskeyRegistrationUnavailable",
@@ -113,6 +131,11 @@ type DeletionFailure = typeof DeletionFailure.Type;
 
 export const Message = defineMessageUnion({
   ClickedRegister: {},
+  ClickedRegisterWithTotp: {},
+  UpdatedTotpCode: { value: Schema.String },
+  SubmittedTotpCode: {},
+  ClickedCancelTotpEntry: {},
+  CompletedFocusTotpCode: {},
   SucceededRegisterPasskey: PageRequestFields,
   CancelledRegisterPasskey: PageRequestFields,
   FailedRegisterPasskey: { ...PageRequestFields, failure: RegistrationFailure },
@@ -129,16 +152,19 @@ const failedRegister = (request: PageRequest, failure: RegistrationFailure) => (
   Effect.succeed(Message.FailedRegisterPasskey({ ...request, failure }));
 
 export const RegisterPasskey = Command.define("RegisterPasskey", {
-  args: PageRequestFields,
+  args: { ...PageRequestFields, maybeTotpCode: Schema.Option(Schema.String) },
   messages: [
     Message.SucceededRegisterPasskey,
     Message.CancelledRegisterPasskey,
     Message.FailedRegisterPasskey,
   ],
-  execute: (request) =>
+  execute: ({ maybeTotpCode, ...request }) =>
     Effect.gen(function* () {
       const client = yield* SpaHttpClient;
-      const registration = yield* registerPasskey(client.passkey);
+      const registration = yield* registerPasskey(
+        client.passkey,
+        Option.getOrUndefined(maybeTotpCode),
+      );
       return PasskeyRegistration.$match(registration, {
         Registered: () => Message.SucceededRegisterPasskey(request),
         Cancelled: () => Message.CancelledRegisterPasskey(request),
@@ -147,6 +173,9 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
       Effect.catchTags({
         RateLimited: failedRegister(request, "RateLimited"),
         TotpRequired: failedRegister(request, "TotpRequired"),
+        InvalidCode: failedRegister(request, "InvalidCode"),
+        Locked: failedRegister(request, "Locked"),
+        NotEnabled: failedRegister(request, "NotEnabled"),
         PasskeyRejected: failedRegister(request, "PasskeyRejected"),
         PasskeyAlreadyRegistered: failedRegister(request, "PasskeyAlreadyRegistered"),
         PasskeyRegistrationUnavailable: failedRegister(request, "PasskeyRegistrationUnavailable"),
@@ -183,10 +212,17 @@ export const DeletePasskey = Command.define("DeletePasskey", {
 
 const DIALOG_ID = "passkey-deletion-dialog";
 
+const TOTP_CODE_INPUT_ID = "passkey-totp-code";
+
+const FocusTotpCode = Command.define("FocusTotpCode", {
+  messages: [Message.CompletedFocusTotpCode],
+  execute: focusField(TOTP_CODE_INPUT_ID).pipe(Effect.as(Message.CompletedFocusTotpCode())),
+});
+
 export const init = (visit: number): Model => ({
   busy: Busy.Idle(),
   dialog: ReportingDialog.init({ id: DIALOG_ID }),
-  maybeDeletionTarget: Option.none(),
+  maybeDialogSubject: Option.none(),
   ...firstPageRequest(visit),
 });
 
@@ -198,56 +234,116 @@ const isRegistering = (model: Model) => Busy.guards.Registering(model.busy);
 
 const isDeleting = (model: Model) => Busy.guards.Deleting(model.busy);
 
+const isBusy = (model: Model) => !isIdle(model);
+
 const backToIdle = (model: Model): Model => modifyFields(model, { busy: () => Busy.Idle() });
 
 const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
 
 const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
-  isClosingBlocked: isDeleting,
+  isClosingBlocked: isBusy,
   toParentMessage: toDialogMessage,
-  whenClosed: (model) => (isDeleting(model) ? backToIdle(model) : model),
+  whenClosed: (model) =>
+    modifyFields(isDeleting(model) ? backToIdle(model) : model, {
+      maybeDialogSubject: () => Option.none(),
+    }),
 });
 
 const whileIdle = (model: Model, next: () => UpdateReturn): UpdateReturn =>
   isIdle(model) ? next() : { model };
 
-const startRegistration = (model: Model): UpdateReturn =>
+const startRegistration = (model: Model, maybeTotpCode: Option.Option<string>): UpdateReturn =>
   whileIdle(model, () => {
     const requested = withNextPageRequest(modifyFields(model, { busy: () => Busy.Registering() }));
-    return { model: requested, commands: [RegisterPasskey(pageRequestOf(requested))] };
+    return {
+      model: requested,
+      commands: [RegisterPasskey({ ...pageRequestOf(requested), maybeTotpCode })],
+    };
   });
+
+const maybeOpenSubject = (model: Model): Option.Option<DialogSubject> =>
+  Option.filter(model.maybeDialogSubject, () => model.dialog.isOpen);
+
+const maybeOpenTotpEntry = (model: Model) =>
+  Option.filter(maybeOpenSubject(model), DialogSubject.guards.TotpEntry);
+
+const withTotpEntry = (model: Model, code: string, maybeRejection: Option.Option<string>): Model =>
+  modifyFields(model, {
+    maybeDialogSubject: () => Option.some(DialogSubject.TotpEntry({ code, maybeRejection })),
+  });
+
+const openWith = (model: Model, subject: DialogSubject): UpdateReturn =>
+  whileIdle(model, () => {
+    const opened = dialogFolds.open(model);
+    return {
+      ...opened,
+      model: modifyFields(opened.model, { maybeDialogSubject: () => Option.some(subject) }),
+    };
+  });
+
+const openTotpEntry = (model: Model): UpdateReturn =>
+  openWith(model, DialogSubject.TotpEntry({ code: "", maybeRejection: Option.none() }));
+
+const updateTotpCode = (model: Model, value: string): UpdateReturn =>
+  whileIdle(model, () =>
+    Option.match(maybeOpenTotpEntry(model), {
+      onNone: () => ({ model }),
+      onSome: () => ({ model: withTotpEntry(model, value, Option.none()) }),
+    }),
+  );
+
+const submitTotpCode = (model: Model): UpdateReturn =>
+  whileIdle(model, () =>
+    Option.match(maybeOpenTotpEntry(model), {
+      onNone: () => ({ model }),
+      onSome: (entry) => {
+        const code = normalizeMfaCode(entry.code, "totp");
+        return String.isEmpty(code)
+          ? {
+              model: withTotpEntry(
+                model,
+                entry.code,
+                Option.some(requiredErrorText(MFA_CODE_TEXTS.totp.label)),
+              ),
+              commands: [FocusTotpCode()],
+            }
+          : startRegistration(model, Option.some(code));
+      },
+    }),
+  );
 
 const confirmDeletion = (model: Model): UpdateReturn =>
   whileIdle(model, () =>
-    Option.match(
-      Option.filter(model.maybeDeletionTarget, () => model.dialog.isOpen),
-      {
-        onNone: () => ({ model }),
-        onSome: (passkey) => {
-          const requested = withNextPageRequest(
-            modifyFields(model, { busy: () => Busy.Deleting() }),
-          );
-          return {
-            model: requested,
-            commands: [DeletePasskey({ ...pageRequestOf(requested), passkeyId: passkey.id })],
-          };
-        },
+    Option.match(Option.filter(maybeOpenSubject(model), DialogSubject.guards.Deletion), {
+      onNone: () => ({ model }),
+      onSome: ({ passkey }) => {
+        const requested = withNextPageRequest(modifyFields(model, { busy: () => Busy.Deleting() }));
+        return {
+          model: requested,
+          commands: [DeletePasskey({ ...pageRequestOf(requested), passkeyId: passkey.id })],
+        };
       },
-    ),
+    }),
   );
 
 const settleRegistration = (
   model: Model,
   response: PageRequest,
+  settle: (settled: Model) => UpdateReturn,
+): UpdateReturn =>
+  isCurrentPageRequest(model, response) && isRegistering(model)
+    ? settle(backToIdle(model))
+    : { model };
+
+const reportRegistration = (
+  model: Model,
   maybeOutMessage: Option.Option<OutMessage>,
 ): UpdateReturn => {
-  if (!(isCurrentPageRequest(model, response) && isRegistering(model))) {
-    return { model };
-  }
-  const settled = backToIdle(model);
+  const isTotpEntryOpen = Option.isSome(maybeOpenTotpEntry(model));
   return Option.match(maybeOutMessage, {
-    onNone: () => ({ model: settled }),
-    onSome: (outMessage) => ({ model: settled, outMessage }),
+    onNone: () => (isTotpEntryOpen ? dialogFolds.close(model) : { model }),
+    onSome: (outMessage) =>
+      isTotpEntryOpen ? dialogFolds.closeThen(model, outMessage) : { model, outMessage },
   });
 };
 
@@ -255,6 +351,20 @@ const outMessageOfFailure = (failure: RegistrationFailure | DeletionFailure): Ou
   failure === "Unauthorized"
     ? OutMessage.RequiredSignIn()
     : OutMessage.Notified({ tone: "Error", text: passkeyFailureText(failure) });
+
+const failRegistration = (model: Model, failure: RegistrationFailure): UpdateReturn => {
+  const maybeEntry = maybeOpenTotpEntry(model);
+  return (failure === "InvalidCode" || failure === "Locked") && Option.isSome(maybeEntry)
+    ? {
+        model: withTotpEntry(
+          model,
+          maybeEntry.value.code,
+          Option.some(passkeyFailureText(failure)),
+        ),
+        commands: [FocusTotpCode()],
+      }
+    : reportRegistration(model, Option.some(outMessageOfFailure(failure)));
+};
 
 const closeDeletionThen = (
   model: Model,
@@ -267,16 +377,21 @@ const closeDeletionThen = (
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
-    ClickedRegister: () => startRegistration(model),
+    ClickedRegister: () => startRegistration(model, Option.none()),
+    ClickedRegisterWithTotp: () => openTotpEntry(model),
+    UpdatedTotpCode: ({ value }) => updateTotpCode(model, value),
+    SubmittedTotpCode: () => submitTotpCode(model),
+    ClickedCancelTotpEntry: () => whileIdle(model, () => dialogFolds.close(model)),
+    CompletedFocusTotpCode: () => ({ model }),
     SucceededRegisterPasskey: (response) =>
-      settleRegistration(model, response, Option.some(OutMessage.Registered())),
-    CancelledRegisterPasskey: (response) => settleRegistration(model, response, Option.none()),
-    FailedRegisterPasskey: ({ failure, ...response }) =>
-      settleRegistration(model, response, Option.some(outMessageOfFailure(failure))),
-    ClickedDelete: ({ passkey }) =>
-      whileIdle(model, () =>
-        dialogFolds.open(modifyFields(model, { maybeDeletionTarget: () => Option.some(passkey) })),
+      settleRegistration(model, response, (settled) =>
+        reportRegistration(settled, Option.some(OutMessage.Registered())),
       ),
+    CancelledRegisterPasskey: (response) =>
+      settleRegistration(model, response, (settled) => reportRegistration(settled, Option.none())),
+    FailedRegisterPasskey: ({ failure, ...response }) =>
+      settleRegistration(model, response, (settled) => failRegistration(settled, failure)),
+    ClickedDelete: ({ passkey }) => openWith(model, DialogSubject.Deletion({ passkey })),
     ClickedCancelDeletion: () => whileIdle(model, () => dialogFolds.close(model)),
     ClickedConfirmDeletion: () => confirmDeletion(model),
     GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
@@ -315,7 +430,7 @@ const passkeyItemView = (model: Model, passkey: ListedPasskey, h: HtmlBuilder<Me
           type: "button",
           look: "ghostSmall",
           submission: Submission.Idle(),
-          isBlocked: !isIdle(model),
+          isBlocked: isBusy(model),
           onClick: Message.ClickedDelete({ passkey }),
         },
         h,
@@ -355,7 +470,11 @@ const limitNoticeView = (h: HtmlBuilder<Message>): Html =>
     ],
   );
 
-const registerButtonView = (model: Model, limitReached: boolean, h: HtmlBuilder<Message>): Html =>
+const registerButtonView = (
+  model: Model,
+  { limitReached, mfaEnabled }: Readonly<{ limitReached: boolean; mfaEnabled: boolean }>,
+  h: HtmlBuilder<Message>,
+): Html =>
   buttonView(
     {
       label: "登録する",
@@ -364,53 +483,144 @@ const registerButtonView = (model: Model, limitReached: boolean, h: HtmlBuilder<
       submission: submissionWhile(isRegistering(model)),
       isBlocked: isDeleting(model) || limitReached,
       describedBy: limitReached ? LIMIT_NOTICE_ID : undefined,
-      onClick: Message.ClickedRegister(),
+      onClick: mfaEnabled ? Message.ClickedRegisterWithTotp() : Message.ClickedRegister(),
     },
     h,
   );
 
-const deletionDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
-  dialogView(
-    model.dialog,
-    toDialogMessage,
-    {
-      title: "パスキーの削除",
-      description: Option.match(model.maybeDeletionTarget, {
-        onNone: () => "",
-        onSome: (passkey) =>
-          `${passkeyText(passkey)} のパスキーを削除します。削除すると、このパスキーではログインできなくなります。`,
-      }),
-      body: [
-        dialogFooterView(
-          [
-            buttonView(
-              {
-                label: "キャンセル",
-                type: "button",
-                look: "outlineInline",
-                submission: Submission.Idle(),
-                isBlocked: isDeleting(model),
-                onClick: Message.ClickedCancelDeletion(),
-              },
-              h,
-            ),
-            buttonView(
-              {
-                label: "削除する",
-                type: "button",
-                look: "destructive",
-                submission: submissionWhile(isDeleting(model)),
-                isBlocked: false,
-                onClick: Message.ClickedConfirmDeletion(),
-              },
-              h,
-            ),
-          ],
+const deletionContent = (
+  model: Model,
+  maybePasskey: Option.Option<ListedPasskey>,
+  h: HtmlBuilder<Message>,
+): DialogContent => ({
+  title: "パスキーの削除",
+  description: Option.match(maybePasskey, {
+    onNone: () => "",
+    onSome: (passkey) =>
+      `${passkeyText(passkey)} のパスキーを削除します。削除すると、このパスキーではログインできなくなります。`,
+  }),
+  body: [
+    dialogFooterView(
+      [
+        buttonView(
+          {
+            label: "キャンセル",
+            type: "button",
+            look: "outlineInline",
+            submission: Submission.Idle(),
+            isBlocked: isBusy(model),
+            onClick: Message.ClickedCancelDeletion(),
+          },
+          h,
+        ),
+        buttonView(
+          {
+            label: "削除する",
+            type: "button",
+            look: "destructive",
+            submission: submissionWhile(isDeleting(model)),
+            isBlocked: false,
+            onClick: Message.ClickedConfirmDeletion(),
+          },
           h,
         ),
       ],
-      isClosingBlocked: isDeleting(model),
-    },
+      h,
+    ),
+  ],
+  isClosingBlocked: isBusy(model),
+});
+
+const totpSubmissionOf = (model: Model, maybeRejection: Option.Option<string>): Submission =>
+  isRegistering(model)
+    ? Submission.Submitting()
+    : Option.match(maybeRejection, {
+        onNone: () => Submission.Idle(),
+        onSome: (message) => Submission.Rejected({ message }),
+      });
+
+const totpEntryContent = (
+  model: Model,
+  { code, maybeRejection }: Readonly<{ code: string; maybeRejection: Option.Option<string> }>,
+  h: HtmlBuilder<Message>,
+): DialogContent => {
+  const texts = MFA_CODE_TEXTS.totp;
+  const submission = totpSubmissionOf(model, maybeRejection);
+  return {
+    title: "パスキーを登録する",
+    description:
+      "本人確認のため、認証アプリの確認コードを入力してください。認証アプリを使えない時は、リカバリーコードで多要素認証 (MFA) を無効にしてから登録してください。",
+    body: [
+      formView(
+        {
+          onSubmit: Message.SubmittedTotpCode(),
+          attributes: [h.Class("space-y-4")],
+          children: [
+            inputView(
+              {
+                id: TOTP_CODE_INPUT_ID,
+                label: texts.label,
+                type: "text",
+                value: code,
+                onInput: (value) => Message.UpdatedTotpCode({ value }),
+                submission,
+                placeholder: texts.placeholder,
+                autocomplete: "one-time-code",
+                inputMode: texts.inputMode,
+                maxLength: MFA_CODE_PASTE_TOLERANT_MAX_LENGTH,
+                isAutoCorrectionOff: true,
+                hint: texts.hint,
+                maybeErrorMessage: maybeRejection,
+                enterKeyHint: "go",
+              },
+              h,
+            ),
+            dialogFooterView(
+              [
+                buttonView(
+                  {
+                    label: "キャンセル",
+                    type: "button",
+                    look: "outlineInline",
+                    submission: Submission.Idle(),
+                    isBlocked: isBusy(model),
+                    onClick: Message.ClickedCancelTotpEntry(),
+                  },
+                  h,
+                ),
+                buttonView(
+                  {
+                    label: "次へ",
+                    type: "submit",
+                    look: "primaryInline",
+                    submission,
+                    isBlocked: false,
+                  },
+                  h,
+                ),
+              ],
+              h,
+            ),
+          ],
+        },
+        h,
+      ),
+    ],
+    isClosingBlocked: isBusy(model),
+  };
+};
+
+const subjectDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  dialogView(
+    model.dialog,
+    toDialogMessage,
+    Option.match(model.maybeDialogSubject, {
+      onNone: () => deletionContent(model, Option.none(), h),
+      onSome: DialogSubject.match({
+        Deletion: ({ passkey }) => deletionContent(model, Option.some(passkey), h),
+        TotpEntry: (entry) => totpEntryContent(model, entry, h),
+      }),
+    }),
     h,
   );
 
@@ -421,19 +631,18 @@ export const view = Submodel.defineView<
 >((model, { list, mfaEnabled }, h) =>
   PasskeyList.match(list, {
     Hidden: () =>
-      isDialogVisible(model.dialog) ? passkeyRowView([deletionDialogView(model, h)], [], h) : null,
+      isDialogVisible(model.dialog) ? passkeyRowView([subjectDialogView(model, h)], [], h) : null,
     Failed: () =>
-      passkeyRowView([alertTextView(LIST_UNAVAILABLE, h), deletionDialogView(model, h)], [], h),
+      passkeyRowView([alertTextView(LIST_UNAVAILABLE, h), subjectDialogView(model, h)], [], h),
     Shown: ({ passkeys, registrable }) => {
-      const offersRegistration = registrable && !mfaEnabled;
-      const limitReached = offersRegistration && isPasskeyLimitReached(passkeys.length);
+      const limitReached = registrable && isPasskeyLimitReached(passkeys.length);
       return passkeyRowView(
         [
           limitReached ? limitNoticeView(h) : null,
           passkeysView(model, passkeys, h),
-          deletionDialogView(model, h),
+          subjectDialogView(model, h),
         ],
-        offersRegistration ? [registerButtonView(model, limitReached, h)] : [],
+        registrable ? [registerButtonView(model, { limitReached, mfaEnabled }, h)] : [],
         h,
       );
     },

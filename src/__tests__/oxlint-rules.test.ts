@@ -2847,6 +2847,13 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(mfa-failure-messages-import-only-in-mfa)"],
   },
   {
+    name: "パスキーの文言の表は、登録の前の MFA のコードの失敗に同じ文言を出すために MFA の表を import できる",
+    path: "web/src/passkey/passkey-failure-messages.ts",
+    source:
+      'import { mfaFailureText } from "../mfa/mfa-failure-messages";\nexport const text = mfaFailureText;',
+    expectedRules: [],
+  },
+  {
     name: "mfa の file は MFA の表を import できる",
     path: "web/src/mfa/MfaTableProbe.ts",
     source:

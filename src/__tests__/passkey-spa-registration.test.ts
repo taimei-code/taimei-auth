@@ -146,12 +146,15 @@ const registrationThroughSpa = async (session: SignedInSession) => {
 const PASSKEY_TAGS = {
   RateLimited: true,
   TotpRequired: true,
+  InvalidCode: true,
+  Locked: true,
+  NotEnabled: true,
   PasskeyRejected: true,
   PasskeyAlreadyRegistered: true,
   PasskeyRegistrationUnavailable: true,
   PasskeyLimitReached: true,
   NotFound: true,
-} as const;
+} as const satisfies Record<keyof typeof PASSKEY_FAILURE_MESSAGES, true>;
 
 describe("画面の登録の手順を、実際の登録の API につなげる", () => {
   const { run, cleanup } = dbTest("passkey-spa-registration-test-");
