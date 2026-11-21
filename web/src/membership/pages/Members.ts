@@ -19,7 +19,7 @@ import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as MemberInvitations from "../../invitation/member-invitations";
 import type { FailureMessages } from "../../shared/failure-message";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
-import { Submission } from "../../shared/submission";
+import { Submission, submissionWhile } from "../../shared/submission";
 import { alertTextView } from "../../shared/ui/alert-text-view";
 import { buttonView } from "../../shared/ui/button-view";
 import {
@@ -655,9 +655,7 @@ const removalDialogView = (
                 label: "削除する",
                 type: "button",
                 look: "destructive",
-                submission: Busy.guards.Removing(listing.busy)
-                  ? Submission.Submitting()
-                  : Submission.Idle(),
+                submission: submissionWhile(Busy.guards.Removing(listing.busy)),
                 isBlocked: isCompanyChanging,
                 onClick: Message.ClickedConfirmRemoval(),
               },

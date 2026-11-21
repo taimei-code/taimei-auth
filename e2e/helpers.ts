@@ -55,6 +55,16 @@ export const featureFlags = (request: APIRequestContext) => {
 export const mfaRow = (page: Page) =>
   page.getByRole("main").getByRole("listitem").filter({ hasText: "多要素認証 (MFA)" });
 
+export const securityRows = (page: Page) => page.getByRole("main").getByRole("listitem");
+
+export const passkeyRow = (page: Page) =>
+  securityRows(page).filter({ has: page.getByText("パスキー", { exact: true }) });
+
+export const passkeyItems = (page: Page) => passkeyRow(page).getByRole("listitem");
+
+export const registerPasskeyButton = (page: Page) =>
+  passkeyRow(page).getByRole("button", { name: "登録する" });
+
 export const companySwitcher = (page: Page) =>
   page.getByRole("combobox", { name: "事業所を切り替え" });
 

@@ -13,7 +13,7 @@ import { pageTitleView, separatorView } from "../../account/account-page-header-
 import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as OwnershipTransfer from "../../membership/ownership-transfer";
 import { SpaHttpClient } from "../../shared/spa-http-client";
-import { Submission } from "../../shared/submission";
+import { Submission, submissionWhile } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
 import { iconView } from "../../shared/ui/icon-view";
 import { NoticeTone } from "../../shared/ui/toast-view";
@@ -286,8 +286,7 @@ const switchButtonView = (
       submission: CurrentCompany.Switching.matchOrElse(
         currentCompany.switching,
         {
-          Switching: ({ companyId }) =>
-            companyId === membership.companyId ? Submission.Submitting() : Submission.Idle(),
+          Switching: ({ companyId }) => submissionWhile(companyId === membership.companyId),
         },
         () => Submission.Idle(),
       ),

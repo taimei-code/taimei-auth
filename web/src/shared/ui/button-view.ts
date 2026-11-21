@@ -44,6 +44,7 @@ type SubmitValue = Readonly<{ name: string; value: string }>;
 
 export type ButtonViewConfig<Message> = Readonly<{
   label: string;
+  accessibleNamePrefix?: string;
   type: "button" | "submit";
   look: ButtonLook;
   submission: Submission;
@@ -105,7 +106,13 @@ export const buttonView = <Message>(
                   h.Disabled(config.isBlocked),
                 ]),
           ],
-          [...leadingIconView(config.submission, config.icon, h), ...labelContentOf(config, h)],
+          [
+            ...leadingIconView(config.submission, config.icon, h),
+            ...(config.accessibleNamePrefix === undefined
+              ? []
+              : [h.span([h.Class("sr-only")], [config.accessibleNamePrefix])]),
+            ...labelContentOf(config, h),
+          ],
         ),
     },
     h,

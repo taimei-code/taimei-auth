@@ -9,7 +9,7 @@ import { Github, Mail } from "lucide";
 import { acceptInvitationPath } from "@core/invitation/accept-path";
 import { SERVICE_NAMES, TAIMEI_SERVICES } from "@core/services";
 
-import { maybeRejectedMessage, Submission } from "../../shared/submission";
+import { maybeRejectedMessage, Submission, submissionWhile } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
 import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
@@ -320,9 +320,6 @@ const sentView = (model: Model, h: HtmlBuilder<Message>): Html =>
     [h.strong([h.Class("font-medium text-foreground")], [model.email]), TEXTS[model.kind].sentTail],
   );
 
-const busySubmission = (model: Model): Submission =>
-  isBusy(model) ? Submission.Submitting() : Submission.Idle();
-
 const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
   formView(
     {
@@ -342,7 +339,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
                     value: model.name,
                   }),
                   onInput: (value) => Message.UpdatedName({ value }),
-                  submission: busySubmission(model),
+                  submission: submissionWhile(isBusy(model)),
                   placeholder: "山田 太郎",
                   autocomplete: "name",
                 },
@@ -362,7 +359,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
               isEmail: true,
             }),
             onInput: (value) => Message.UpdatedEmail({ value }),
-            submission: busySubmission(model),
+            submission: submissionWhile(isBusy(model)),
             placeholder: "you@example.com",
             autocomplete: "username",
           },

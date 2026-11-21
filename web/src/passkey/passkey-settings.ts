@@ -15,9 +15,18 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
-import { Submission } from "../shared/submission";
+import { Submission, submissionWhile } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
+import {
+  Dialog,
+  type DialogMessage,
+  ReportingDialog,
+  dialogFooterView,
+  dialogView,
+  isDialogVisible,
+  reportingDialogFoldsOf,
+} from "../shared/ui/dialog-view";
 import { settingRowView } from "../shared/ui/setting-row-view";
 import { NoticeTone } from "../shared/ui/toast-view";
 import { passkeyFailureText } from "./passkey-failure-messages";
@@ -64,8 +73,24 @@ export const loadPasskeyList = (passkeyApi: PasskeyApi) =>
     }),
   );
 
+const Busy = defineTaggedUnion({
+  Idle: {},
+  Registering: {},
+  Deleting: {},
+});
+
+export const OutMessage = defineMessageUnion({
+  Registered: {},
+  Deleted: {},
+  Notified: { tone: NoticeTone, text: Schema.String },
+  RequiredSignIn: {},
+});
+export type OutMessage = typeof OutMessage.Type;
+
 export const Model = Schema.Struct({
-  registration: Submission,
+  busy: Busy,
+  dialog: ReportingDialog.Model(OutMessage),
+  maybeDeletionTarget: Schema.Option(ListedPasskey),
   ...PageRequestFields,
 });
 export type Model = typeof Model.Type;
@@ -81,20 +106,22 @@ const RegistrationFailure = Schema.Literals([
 ]);
 type RegistrationFailure = typeof RegistrationFailure.Type;
 
+const DeletionFailure = Schema.Literals(["RateLimited", "NotFound", "Unauthorized", "Unexpected"]);
+type DeletionFailure = typeof DeletionFailure.Type;
+
 export const Message = defineMessageUnion({
   ClickedRegister: {},
   SucceededRegisterPasskey: PageRequestFields,
   CancelledRegisterPasskey: PageRequestFields,
   FailedRegisterPasskey: { ...PageRequestFields, failure: RegistrationFailure },
+  ClickedDelete: { passkey: ListedPasskey },
+  ClickedCancelDeletion: {},
+  ClickedConfirmDeletion: {},
+  GotDialogMessage: { message: Dialog.Message },
+  SucceededDeletePasskey: PageRequestFields,
+  FailedDeletePasskey: { ...PageRequestFields, failure: DeletionFailure },
 });
 export type Message = typeof Message.Type;
-
-export const OutMessage = defineMessageUnion({
-  Registered: {},
-  Notified: { tone: NoticeTone, text: Schema.String },
-  RequiredSignIn: {},
-});
-export type OutMessage = typeof OutMessage.Type;
 
 const failedRegister = (request: PageRequest, failure: RegistrationFailure) => () =>
   Effect.succeed(Message.FailedRegisterPasskey({ ...request, failure }));
@@ -129,24 +156,82 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
     ),
 });
 
+const failedDelete = (request: PageRequest, failure: DeletionFailure) => () =>
+  Effect.succeed(Message.FailedDeletePasskey({ ...request, failure }));
+
+export const DeletePasskey = Command.define("DeletePasskey", {
+  args: { ...PageRequestFields, passkeyId: Schema.String },
+  messages: [Message.SucceededDeletePasskey, Message.FailedDeletePasskey],
+  execute: ({ passkeyId, ...request }) =>
+    Effect.gen(function* () {
+      const client = yield* SpaHttpClient;
+      yield* client.passkey.delete({ params: { passkeyId } });
+      return Message.SucceededDeletePasskey(request);
+    }).pipe(
+      Effect.catchTags({
+        RateLimited: failedDelete(request, "RateLimited"),
+        NotFound: failedDelete(request, "NotFound"),
+        Unauthorized: failedDelete(request, "Unauthorized"),
+        HttpClientError: failedDelete(request, "Unexpected"),
+        SchemaError: failedDelete(request, "Unexpected"),
+      }),
+    ),
+});
+
+const DIALOG_ID = "passkey-deletion-dialog";
+
 export const init = (visit: number): Model => ({
-  registration: Submission.Idle(),
+  busy: Busy.Idle(),
+  dialog: ReportingDialog.init({ id: DIALOG_ID }),
+  maybeDeletionTarget: Option.none(),
   ...firstPageRequest(visit),
 });
 
 type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
-const isRegistering = (model: Model) => Submission.guards.Submitting(model.registration);
+const isIdle = (model: Model) => Busy.guards.Idle(model.busy);
 
-const startRegistration = (model: Model): UpdateReturn => {
-  if (isRegistering(model)) {
-    return { model };
-  }
-  const requested = withNextPageRequest(
-    modifyFields(model, { registration: () => Submission.Submitting() }),
+const isRegistering = (model: Model) => Busy.guards.Registering(model.busy);
+
+const isDeleting = (model: Model) => Busy.guards.Deleting(model.busy);
+
+const backToIdle = (model: Model): Model => modifyFields(model, { busy: () => Busy.Idle() });
+
+const toDialogMessage = (message: DialogMessage) => Message.GotDialogMessage({ message });
+
+const dialogFolds = reportingDialogFoldsOf<OutMessage>()({
+  isClosingBlocked: isDeleting,
+  toParentMessage: toDialogMessage,
+  whenClosed: (model) => (isDeleting(model) ? backToIdle(model) : model),
+});
+
+const whileIdle = (model: Model, next: () => UpdateReturn): UpdateReturn =>
+  isIdle(model) ? next() : { model };
+
+const startRegistration = (model: Model): UpdateReturn =>
+  whileIdle(model, () => {
+    const requested = withNextPageRequest(modifyFields(model, { busy: () => Busy.Registering() }));
+    return { model: requested, commands: [RegisterPasskey(pageRequestOf(requested))] };
+  });
+
+const confirmDeletion = (model: Model): UpdateReturn =>
+  whileIdle(model, () =>
+    Option.match(
+      Option.filter(model.maybeDeletionTarget, () => model.dialog.isOpen),
+      {
+        onNone: () => ({ model }),
+        onSome: (passkey) => {
+          const requested = withNextPageRequest(
+            modifyFields(model, { busy: () => Busy.Deleting() }),
+          );
+          return {
+            model: requested,
+            commands: [DeletePasskey({ ...pageRequestOf(requested), passkeyId: passkey.id })],
+          };
+        },
+      },
+    ),
   );
-  return { model: requested, commands: [RegisterPasskey(pageRequestOf(requested))] };
-};
 
 const settleRegistration = (
   model: Model,
@@ -156,17 +241,26 @@ const settleRegistration = (
   if (!(isCurrentPageRequest(model, response) && isRegistering(model))) {
     return { model };
   }
-  const settled = modifyFields(model, { registration: () => Submission.Idle() });
+  const settled = backToIdle(model);
   return Option.match(maybeOutMessage, {
     onNone: () => ({ model: settled }),
     onSome: (outMessage) => ({ model: settled, outMessage }),
   });
 };
 
-const outMessageOfFailure = (failure: RegistrationFailure): OutMessage =>
+const outMessageOfFailure = (failure: RegistrationFailure | DeletionFailure): OutMessage =>
   failure === "Unauthorized"
     ? OutMessage.RequiredSignIn()
     : OutMessage.Notified({ tone: "Error", text: passkeyFailureText(failure) });
+
+const closeDeletionThen = (
+  model: Model,
+  response: PageRequest,
+  outMessage: OutMessage,
+): UpdateReturn =>
+  isCurrentPageRequest(model, response) && isDeleting(model)
+    ? dialogFolds.closeThen(model, outMessage)
+    : { model };
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
@@ -176,6 +270,16 @@ export const update = (model: Model, message: Message) =>
     CancelledRegisterPasskey: (response) => settleRegistration(model, response, Option.none()),
     FailedRegisterPasskey: ({ failure, ...response }) =>
       settleRegistration(model, response, Option.some(outMessageOfFailure(failure))),
+    ClickedDelete: ({ passkey }) =>
+      whileIdle(model, () =>
+        dialogFolds.open(modifyFields(model, { maybeDeletionTarget: () => Option.some(passkey) })),
+      ),
+    ClickedCancelDeletion: () => whileIdle(model, () => dialogFolds.close(model)),
+    ClickedConfirmDeletion: () => confirmDeletion(model),
+    GotDialogMessage: ({ message: dialogMessage }) => dialogFolds.fold(model, dialogMessage),
+    SucceededDeletePasskey: (response) => closeDeletionThen(model, response, OutMessage.Deleted()),
+    FailedDeletePasskey: ({ failure, ...response }) =>
+      closeDeletionThen(model, response, outMessageOfFailure(failure)),
   });
 
 const LIST_UNAVAILABLE = "パスキーの一覧を取得できませんでした。";
@@ -184,25 +288,47 @@ const dayFormatter = new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" });
 
 const dayOf = (iso: string): string => dayFormatter.format(new Date(iso));
 
-const passkeyItemView = (passkey: ListedPasskey, h: HtmlBuilder<Message>): Html =>
-  h.li(
-    [h.Class("flex flex-wrap gap-x-4 gap-y-1 py-2 text-sm text-muted-foreground")],
+const registeredOnText = (passkey: ListedPasskey): string => `登録日 ${dayOf(passkey.createdAt)}`;
+
+const lastUsedOnText = (passkey: ListedPasskey): string =>
+  `最後に使った日 ${Option.match(passkey.maybeLastUsedAt, { onNone: () => "未使用", onSome: dayOf })}`;
+
+const passkeyText = (passkey: ListedPasskey): string =>
+  `${registeredOnText(passkey)}、${lastUsedOnText(passkey)}`;
+
+const passkeyItemView = (model: Model, passkey: ListedPasskey, h: HtmlBuilder<Message>): Html =>
+  h.keyed("li")(
+    passkey.id,
+    [h.Class("flex items-center justify-between gap-3 py-2 text-sm text-muted-foreground")],
     [
-      h.span([], [`登録日 ${dayOf(passkey.createdAt)}`]),
-      h.span(
-        [],
-        [
-          `最後に使った日 ${Option.match(passkey.maybeLastUsedAt, { onNone: () => "未使用", onSome: dayOf })}`,
-        ],
+      h.div(
+        [h.Class("flex flex-wrap gap-x-4 gap-y-1")],
+        [h.span([], [registeredOnText(passkey)]), h.span([], [lastUsedOnText(passkey)])],
+      ),
+      buttonView(
+        {
+          label: "削除",
+          accessibleNamePrefix: `${passkeyText(passkey)} のパスキーを`,
+          type: "button",
+          look: "ghostSmall",
+          submission: Submission.Idle(),
+          isBlocked: !isIdle(model),
+          onClick: Message.ClickedDelete({ passkey }),
+        },
+        h,
       ),
     ],
   );
 
-const passkeysView = (passkeys: ReadonlyArray<ListedPasskey>, h: HtmlBuilder<Message>): Html =>
+const passkeysView = (
+  model: Model,
+  passkeys: ReadonlyArray<ListedPasskey>,
+  h: HtmlBuilder<Message>,
+): Html =>
   Array.isReadonlyArrayNonEmpty(passkeys)
     ? h.ul(
         [h.Role("list"), h.Class("mt-2 divide-y")],
-        passkeys.map((passkey) => passkeyItemView(passkey, h)),
+        passkeys.map((passkey) => passkeyItemView(model, passkey, h)),
       )
     : h.p([h.Class("mt-2 text-sm text-muted-foreground")], ["登録したパスキーはありません"]);
 
@@ -222,9 +348,54 @@ const registerButtonView = (model: Model, h: HtmlBuilder<Message>): Html =>
       label: "登録する",
       type: "button",
       look: "outlineSmall",
-      submission: model.registration,
-      isBlocked: false,
+      submission: submissionWhile(isRegistering(model)),
+      isBlocked: isDeleting(model),
       onClick: Message.ClickedRegister(),
+    },
+    h,
+  );
+
+const deletionDialogView = (model: Model, h: HtmlBuilder<Message>): Html =>
+  dialogView(
+    model.dialog,
+    toDialogMessage,
+    {
+      title: "パスキーの削除",
+      description: Option.match(model.maybeDeletionTarget, {
+        onNone: () => "",
+        onSome: (passkey) =>
+          `${passkeyText(passkey)} のパスキーを削除します。削除すると、このパスキーではログインできなくなります。`,
+      }),
+      body: [
+        dialogFooterView(
+          [
+            buttonView(
+              {
+                label: "キャンセル",
+                type: "button",
+                look: "outlineInline",
+                submission: Submission.Idle(),
+                isBlocked: isDeleting(model),
+                onClick: Message.ClickedCancelDeletion(),
+              },
+              h,
+            ),
+            buttonView(
+              {
+                label: "削除する",
+                type: "button",
+                look: "destructive",
+                submission: submissionWhile(isDeleting(model)),
+                isBlocked: false,
+                onClick: Message.ClickedConfirmDeletion(),
+              },
+              h,
+            ),
+          ],
+          h,
+        ),
+      ],
+      isClosingBlocked: isDeleting(model),
     },
     h,
   );
@@ -235,11 +406,13 @@ export const view = Submodel.defineView<
   Readonly<{ list: PasskeyList; mfaEnabled: boolean }>
 >((model, { list, mfaEnabled }, h) =>
   PasskeyList.match(list, {
-    Hidden: () => null,
-    Failed: () => passkeyRowView([alertTextView(LIST_UNAVAILABLE, h)], [], h),
+    Hidden: () =>
+      isDialogVisible(model.dialog) ? passkeyRowView([deletionDialogView(model, h)], [], h) : null,
+    Failed: () =>
+      passkeyRowView([alertTextView(LIST_UNAVAILABLE, h), deletionDialogView(model, h)], [], h),
     Shown: ({ passkeys, registrable }) =>
       passkeyRowView(
-        [passkeysView(passkeys, h)],
+        [passkeysView(model, passkeys, h), deletionDialogView(model, h)],
         registrable && !mfaEnabled ? [registerButtonView(model, h)] : [],
         h,
       ),

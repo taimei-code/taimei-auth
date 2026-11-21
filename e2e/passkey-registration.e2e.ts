@@ -6,7 +6,11 @@ import {
   featureFlags,
   mfaRow,
   PASSKEY_EMAIL,
+  passkeyItems,
+  passkeyRow,
+  registerPasskeyButton as registerButton,
   reseedFixture,
+  securityRows,
   signInWithMagicLink,
 } from "./helpers";
 
@@ -70,18 +74,6 @@ const settledCreations = (page: Page): Promise<number> =>
 
 const screenFeedback = (page: Page): Promise<string[]> =>
   page.evaluate(() => [...(window as unknown as { __screenFeedback: string[] }).__screenFeedback]);
-
-const securityRows = (page: Page) => page.getByRole("main").getByRole("listitem");
-
-const passkeyRow = (page: Page) =>
-  page
-    .getByRole("main")
-    .getByRole("listitem")
-    .filter({ has: page.getByText("パスキー", { exact: true }) });
-
-const registerButton = (page: Page) => passkeyRow(page).getByRole("button", { name: "登録する" });
-
-const passkeyItems = (page: Page) => passkeyRow(page).getByRole("listitem");
 
 const newJapanesePage = async (browser: Browser) => {
   const context = await browser.newContext({
