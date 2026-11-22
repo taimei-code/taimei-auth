@@ -33,15 +33,20 @@ const installBrowser = (
     without = [],
     record,
     get = () => Promise.resolve(null),
+    extensionResults = () => ({}),
   }: {
     withoutRequestOptionsParser?: boolean;
     without?: readonly BrowserPart[];
     record?: BrowserRecord;
     get?: () => Promise<unknown>;
+    extensionResults?: () => unknown;
   } = {},
 ) => {
   class StubPublicKeyCredential {
     constructor(readonly json: unknown) {}
+    getClientExtensionResults() {
+      return extensionResults();
+    }
     toJSON() {
       if (this.json instanceof Error) {
         throw this.json;
@@ -100,6 +105,20 @@ afterEach(() => {
   }
 });
 
+const REGISTRATION_JSON_WITHOUT_EXTENSION_RESULTS = {
+  id: "Y3JlZGVudGlhbA",
+  rawId: "Y3JlZGVudGlhbA",
+  type: "public-key",
+  response: { clientDataJSON: "e30", attestationObject: "YXR0" },
+};
+
+const CRED_PROPS = { credProps: { rk: true } };
+
+const createdExtensionResults = async () => {
+  const creation = await Effect.runPromise(createPasskey(OPTIONS));
+  return creation._tag === "Created" ? creation.response.clientExtensionResults : creation._tag;
+};
+
 const failureTagOf = async () =>
   Effect.runPromise(
     createPasskey(OPTIONS).pipe(
@@ -114,6 +133,25 @@ describe("browser の作成の API の結果を写す", () => {
   test("除外に挙げたパスキーがこの端末にあると (InvalidStateError)、登録済みの失敗になる", async () => {
     installBrowser(() => Promise.reject(new DOMException("excluded", "InvalidStateError")));
     expect(await failureTagOf()).toBe("PasskeyAlreadyRegistered");
+  });
+
+  test("1Password のように toJSON が clientExtensionResults を返さなくても、getClientExtensionResults の値で補って作成できる", async () => {
+    installBrowser(() => Promise.resolve(REGISTRATION_JSON_WITHOUT_EXTENSION_RESULTS), {
+      extensionResults: () => CRED_PROPS,
+    });
+    expect(await createdExtensionResults()).toEqual(CRED_PROPS);
+  });
+
+  test("toJSON が clientExtensionResults を返す browser では、getClientExtensionResults でなく toJSON の値を送る", async () => {
+    installBrowser(
+      () =>
+        Promise.resolve({
+          ...REGISTRATION_JSON_WITHOUT_EXTENSION_RESULTS,
+          clientExtensionResults: CRED_PROPS,
+        }),
+      { extensionResults: () => ({}) },
+    );
+    expect(await createdExtensionResults()).toEqual(CRED_PROPS);
   });
 
   test("browser が返した JSON が登録の API の形でないと、失敗になる", async () => {
@@ -299,6 +337,31 @@ const assertionOutcome = (get: () => Promise<unknown>, elapsedMs = 0) => {
 describe("browser の認証の API の結果を写す", () => {
   test("browser が返した応答の JSON は、ログインの API に送れる形で返る", async () => {
     installBrowser(() => Promise.resolve({}), { get: () => Promise.resolve(ASSERTION_JSON) });
+    const assertion = await Effect.runPromise(getPasskey(AUTHENTICATION_OPTIONS));
+    expect(assertion).toMatchObject({ _tag: "Asserted", response: ASSERTION_JSON });
+  });
+
+  test("1Password のように toJSON が clientExtensionResults を返さなくても、getClientExtensionResults の値で補ってログインの API に送れる", async () => {
+    const { clientExtensionResults: _, ...withoutExtensionResults } = ASSERTION_JSON;
+    installBrowser(() => Promise.resolve({}), {
+      get: () => Promise.resolve(withoutExtensionResults),
+      extensionResults: () => CRED_PROPS,
+    });
+    const assertion = await Effect.runPromise(getPasskey(AUTHENTICATION_OPTIONS));
+    expect(assertion).toMatchObject({ _tag: "Asserted" });
+    expect(assertion._tag === "Asserted" && assertion.response.clientExtensionResults).toEqual(
+      CRED_PROPS,
+    );
+  });
+
+  test("toJSON が clientExtensionResults を返さず getClientExtensionResults も投げる credential でも、拡張の結果を空にしてログインの API に送れる", async () => {
+    const { clientExtensionResults: _, ...withoutExtensionResults } = ASSERTION_JSON;
+    installBrowser(() => Promise.resolve({}), {
+      get: () => Promise.resolve(withoutExtensionResults),
+      extensionResults: () => {
+        throw new TypeError("Illegal invocation");
+      },
+    });
     const assertion = await Effect.runPromise(getPasskey(AUTHENTICATION_OPTIONS));
     expect(assertion).toMatchObject({ _tag: "Asserted", response: ASSERTION_JSON });
   });
