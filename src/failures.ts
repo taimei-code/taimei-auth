@@ -7,7 +7,8 @@ export class Forbidden extends failure<Forbidden>()("Forbidden", {}, 403) {}
 
 export class NotFound extends failure<NotFound>()("NotFound", {}, 404) {}
 
-export const orNotFound = Effect.filterOrFail(Predicate.isNotUndefined, () => new NotFound());
+export const orNotFound = <A, E, R>(self: Effect.Effect<A | undefined, E, R>) =>
+  Effect.filterOrFail(self, Predicate.isNotUndefined, () => new NotFound());
 
 export class InvalidArgument extends failure<InvalidArgument>()(
   "InvalidArgument",
