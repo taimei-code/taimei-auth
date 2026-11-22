@@ -103,13 +103,13 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 ### flag を作る
 
 1. app `taimei-auth` に、型が boolean の flag を作る。key は code が評価に使う名前と同じにする。パスキーの key は `passkey` である
-2. 値は `on` (true) と `off` (false) の 2 つにし、既定の値を `off` にする (理由は ADR-0030 の Decision 4)
-3. ルールは次の 2 つから選び、両方を作る時はこの順に並べる。属性の名前は code が渡す名前と同じにする
+2. Variants は `on` (true) と `off` (false) の 2 つにし、Default を `off` にする (理由は ADR-0030 の Decision 4)
+3. ルールは次の 2 つから選ぶ。属性の名前は code が渡す名前と同じにする
 
-| 順 | 条件 | 値 | 意味 |
-|---|---|---|---|
-| 1 | `companyId` が事業所の id のリストのどれか | on | 事業所ごとに公開する。actor を渡して評価する flag だけに当たる |
-| 2 | 条件なし | on | 全体に公開する。ログイン前のように事業所を渡さない評価が on になるのは、このルールがある時だけ |
+| 順 | 条件 | 値 | 意味 | dashboard での作り方 |
+|---|---|---|---|---|
+| 1 | `companyId` が事業所の id のリストのどれか | on | 事業所ごとに公開する。actor を渡して評価する flag だけに当たる | Targeting Rules に足す |
+| 2 | 条件なし | on | 全体に公開する。ログイン前のように事業所を渡さない評価が on になるのは、このルールがある時だけ | Targeting Rules には属性の無いルールを足せない (「Attribute cannot be empty」で保存できない)。「When no rules match, serve」を percentage にし、`on` を 100、`off` を 0 にする。Targeting Rules のどれにも当たらなかった評価に当たるので、ルール 1 の後に評価される |
 
 4. パスキーは actor を渡さずに評価するので、ルール 2 だけを作る
 5. 公開するまでは flag を無効のままにする
@@ -118,10 +118,12 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 
 - flag を有効にする。パスキーは、全員が登録とログインをできるようになる
 - 反映まで最大で約 30 秒かかる
+- 共通ログイン画面に「パスキーでログイン」が出ることと、flag の Analytics の Evaluation reason に `TARGETING_MATCH` が増え、値が `on` であることを確かめる。Analytics の集計は数分遅れる
 
 ### 全体を止める
 
 - flag を無効にする。パスキーは、全員のパスキーでのログインと登録が止まる。一覧と削除、発行済みの session は残る
+- 無効にした flag は Default (`off`) を返し、Analytics の Evaluation reason は `DISABLED` になる
 - 戻す時は flag を有効にする。ルールはそのまま残る
 
 ## 日々の変更
