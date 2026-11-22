@@ -11,9 +11,20 @@ const signOutReturning = (status: 200 | 401) => {
   return app.request("http://localhost/api/auth/sign-out", { method: "POST" });
 };
 
+const clearedOnSuccessfulSignOut = async () =>
+  ((await signOutReturning(200)).headers.get("Clear-Site-Data") ?? "")
+    .split(",")
+    .map((directive) => directive.trim());
+
 describe("sign-out の Clear-Site-Data", () => {
-  test("成功した sign-out は cache と storage だけを消す。cookies を足すと consumer の subdomain の cookie まで消える", async () => {
-    expect((await signOutReturning(200)).headers.get("Clear-Site-Data")).toBe('"cache", "storage"');
+  test("成功した sign-out は storage だけを消し、cache を消さない。cache を足すと browser が HTTP cache 全体を消し終えるまで応答を page に渡さず、ログアウトの後に画面が十数秒移らない", async () => {
+    expect(await clearedOnSuccessfulSignOut()).toEqual(['"storage"']);
+  });
+
+  test("成功した sign-out は cookies を消さない。cookies か * を足すと consumer の subdomain の cookie まで消える", async () => {
+    const cleared = await clearedOnSuccessfulSignOut();
+    expect(cleared).not.toContain('"cookies"');
+    expect(cleared).not.toContain('"*"');
   });
 
   test("失敗した sign-out は何も消さない。session が残ったまま画面の状態だけが消える", async () => {
