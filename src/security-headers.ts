@@ -32,6 +32,6 @@ export const securityHeaders = secureHeaders({
 export const clearSiteDataOnSignOut = createMiddleware(async (c, next) => {
   await next();
   if (c.res.ok) {
-    c.header("Clear-Site-Data", '"cache", "storage"');
+    c.header("Clear-Site-Data", '"storage"');
   }
 });

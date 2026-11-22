@@ -80,6 +80,22 @@ describe("パスキーの一覧の API の応答", () => {
     ]);
   });
 
+  test("1Password が公開した aaguid のパスキーは、一覧の項目に提供元の名前として 1Password が含まれる", async () => {
+    const app = buildAppWith(
+      Layer.mergeAll(
+        signedIn(),
+        passkeyRepoWith([{ ...USED, aaguid: "bada5566-a7aa-401f-bd96-45619a55120d" }]),
+      ),
+    );
+
+    const res = await app.request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+    });
+
+    const body = await res.json<{ passkeys: Array<{ provider_name: unknown }> }>();
+    expect(body.passkeys.map(({ provider_name }) => provider_name)).toEqual(["1Password"]);
+  });
+
   test("aaguid が全 0 のパスキーは、どの提供元とも言えないので名前を返さない", async () => {
     const app = buildAppWith(
       Layer.mergeAll(

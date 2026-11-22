@@ -34,6 +34,12 @@ export const PASSKEY_PROVIDERS: ReadonlyArray<PasskeyProvider> = [
     name: "Bitwarden",
     source: "https://github.com/bitwarden/sdk-internal/blob/main/crates/bitwarden-fido/src/lib.rs",
   },
+  {
+    aaguid: "bada5566-a7aa-401f-bd96-45619a55120d",
+    name: "1Password",
+    source:
+      "https://www.1password.community/1password-at-home-31/how-does-an-app-know-that-the-passkey-is-saved-in-1password-11063",
+  },
 ];
 
 const PROVIDER_NAMES = new Map(PASSKEY_PROVIDERS.map(({ aaguid, name }) => [aaguid, name]));

@@ -12,7 +12,7 @@ import { PASSKEY_PROVIDERS } from "../passkey/passkey-providers";
 import { readWorkflow, REPO_ROOT } from "./config-invariant-helpers";
 
 const GPM = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
-const UNLISTED = "bada5566-a7aa-401f-bd96-45619a55120d";
+const UNLISTED = "6f0c3e2a-1b4d-4c8e-9a7f-2d5b8e1c4a90";
 const SOURCE = "https://example.com/aaguids";
 const provider = { aaguid: GPM, name: "Google パスワードマネージャー", source: SOURCE } as const;
 

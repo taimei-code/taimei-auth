@@ -314,6 +314,55 @@ describe("MFA の無効化", () => {
   });
 });
 
+describe("MFA の有効化と無効化の後の知らせ", () => {
+  test("有効化の後にリカバリーコードを閉じると、有効にした旨の知らせと、表示の更新の失敗の時の文言を添えて読み直す", () => {
+    const closed = update(
+      send(
+        showingRecoveryCodes(),
+        enrollmentMessage(MfaEnrollment.Message.ClickedCloseAfterSavingCodes()),
+        enrollmentDialogPaintedClosing,
+      ),
+      enrollmentDialogClosed,
+    );
+    expect(
+      (closed.commands ?? []).find((command) => command.name === LoadSecuritySettings.name),
+    ).toMatchObject({
+      args: {
+        maybeTexts: Option.some({
+          doneText: "多要素認証 (MFA) を有効にしました。",
+          actionText: "多要素認証 (MFA) を有効にしました",
+        }),
+      },
+    });
+  });
+
+  test("無効化に成功して dialog が閉じると、無効にした旨の知らせと、表示の更新の失敗の時の文言を添えて読み直す", () => {
+    const closed = update(
+      send(
+        disabled(),
+        disablingMessage(MfaDisabling.Message.ClickedDisable()),
+        disablingMessage(MfaDisabling.Message.UpdatedCode({ value: "654321" })),
+        disablingMessage(MfaDisabling.Message.SubmittedCode()),
+        disablingMessage(
+          MfaDisabling.Message.SucceededDisableMfa({ visit: VISIT, requestNumber: 1 }),
+        ),
+        disablingDialogPaintedClosing,
+      ),
+      disablingDialogClosed,
+    );
+    expect(
+      (closed.commands ?? []).find((command) => command.name === LoadSecuritySettings.name),
+    ).toMatchObject({
+      args: {
+        maybeTexts: Option.some({
+          doneText: "多要素認証 (MFA) を無効にしました。",
+          actionText: "多要素認証 (MFA) を無効にしました",
+        }),
+      },
+    });
+  });
+});
+
 describe("session の切れた操作", () => {
   test("状態の取得・有効化・無効化が Unauthorized を受けると、ログインを求める", () => {
     expect(
