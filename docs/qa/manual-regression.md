@@ -148,7 +148,7 @@
 - **契機**: パスキーの登録、ログイン、削除の server の処理か、パスキーの画面 (共通ログイン画面の入口、`/account/security` のパスキーの欄) を触る PR。staging は main からしか deploy しないので、この項目は merge の前には行えない
 - **契機の path**: `src/passkey/**`、`src/handlers/passkey-http-api.ts`、`web/src/passkey/**`
 - **前提**: staging (`https://taimei-auth-staging.taimei-staging.workers.dev`) で、フィーチャーフラグ `passkey` を全体に公開している (`docs/runbook/staging.md` の「9. フィーチャーフラグ」)。登録、ログイン、削除の流れは `e2e/passkey-*.e2e.ts` が browser の virtual authenticator で自動化済みで、ここで見るのは実機の OS と browser が WebAuthn の呼び出しにどう応えるかである
-- **機材**: Mac の Touch ID (Chrome と Safari) と iPhone (Safari) は必須。Windows Hello と Android は機材がある時だけ行う
+- **機材**: Mac の Touch ID (Chrome と Safari)、iPhone (Safari)、Mac の Chrome に入れた 1Password の拡張は必須。1Password の拡張は browser の WebAuthn の API を自前の実装に差し替え、仕様と違う形の応答を返すことがある (#555)。Windows Hello と Android は機材がある時だけ行う
 - **手順**: 1〜4 は機材ごとに、MFA を有効にしていない user と有効にした user を 1 人ずつ用意して行う
   1. 多要素認証 (MFA) を有効にしていない user でログインし、`/account/security` でパスキーを登録する
   2. ログアウトし、`/login` から開いた共通ログイン画面で「パスキーでログイン」を押し、1 のパスキーでログインする
