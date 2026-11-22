@@ -819,6 +819,20 @@ const ROWS: readonly Row[] = [
       "Sentry の facade を直接呼ぶのは src/sentry.ts と settleCause (client-facing-error.ts) だけ。ほかは SentryService を使う",
   },
   {
+    name: "security-notification-only-in-notifiers",
+    within: ["src/**"],
+    allowedIn: ["src/mfa/notification-adapter.ts", "src/passkey/notify-passkey-change.ts"],
+    matchers: [
+      {
+        kind: "member",
+        paths: [".sendMfaEnabled", ".sendMfaDisabled", ".sendPasskeyChanged"],
+        callOnly: true,
+      },
+    ],
+    message:
+      "MFA とパスキーの通知メールを送るのは src/mfa/notification-adapter.ts と src/passkey/notify-passkey-change.ts だけ (要求の応答は notifyInBackground で送信を待たず、送れなかった時は Sentry に残す)",
+  },
+  {
     name: "audit-append-only-in-append",
     within: ["src/**"],
     allowedIn: ["src/audit/append.ts"],

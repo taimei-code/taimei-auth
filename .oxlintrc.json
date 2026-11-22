@@ -73,6 +73,7 @@
     "taimei/run-background-only-in-background": "error",
     "taimei/sentry-capture-only-in-sentry-facade": "error",
     "taimei/audit-append-only-in-append": "error",
+    "taimei/security-notification-only-in-notifiers": "error",
     "taimei/no-effect-ignore": "error",
     "taimei/log-error-only-in-email-client": "error",
     "taimei/capture-cause-only-in-listed-files": "error",

@@ -1228,6 +1228,19 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "MFA とパスキーの通知メールは notifier だけが送る: passkey の use case に書くと lint が止める",
+    path: "src/passkey/Probe498.ts",
+    source:
+      "export const r = (sender: { sendPasskeyChanged(): void }) => sender.sendPasskeyChanged();",
+    expectedRules: ["taimei(security-notification-only-in-notifiers)"],
+  },
+  {
+    name: "MFA とパスキーの通知メールは notifier だけが送る: MFA の notifier では lint が止めない",
+    path: "src/mfa/notification-adapter.ts",
+    source: "export const r = (sender: { sendMfaEnabled(): void }) => sender.sendMfaEnabled();",
+    expectedRules: [],
+  },
+  {
     name: "audit log の書き込みは audit/append.ts だけ: src/company に書くと lint が止める",
     path: "src/company/Probe040.ts",
     source: "export const r = (repo: { appendAuditLog(): void }) => repo.appendAuditLog();",
