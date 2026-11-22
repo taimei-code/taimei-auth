@@ -3,7 +3,7 @@ import { Background } from "../background";
 import { captureCause, type SentryService } from "../sentry";
 import { EmailSender } from "./ports";
 
-export type NotificationComponent = "mfa-notification";
+export type NotificationComponent = "mfa-notification" | "passkey-notification";
 
 export const notifyInBackground = (
   component: NotificationComponent,

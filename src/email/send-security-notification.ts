@@ -10,6 +10,7 @@ import {
 import type { EmailBody } from "./layout";
 import { mfaDisabledEmail } from "./mfa-disabled";
 import { mfaEnabledEmail } from "./mfa-enabled";
+import { type PasskeyChangedEmailParams, passkeyChangedEmail } from "./passkey-changed";
 
 const SECURITY_PAGE_PATH = "/account/security";
 
@@ -38,3 +39,10 @@ export const sendMfaEnabledEmail = (email: string) =>
 
 export const sendMfaDisabledEmail = (email: string) =>
   sendSecurityNotification({ email, buildBody: mfaDisabledEmail, kind: "mfa disabled" });
+
+export const sendPasskeyChangedEmail = ({ email, ...detail }: PasskeyChangedEmailParams) =>
+  sendSecurityNotification({
+    email,
+    buildBody: (props) => passkeyChangedEmail({ ...props, ...detail }),
+    kind: `passkey ${detail.change}`,
+  });

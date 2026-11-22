@@ -5,6 +5,7 @@ import {
   invitationLogLine,
   magicLinkLogLine,
   mfaNotificationLogLine,
+  passkeyNotificationLogLine,
   WELCOME_EMAIL_LOG,
 } from "./local-delivery-log";
 
@@ -53,6 +54,7 @@ export const recordingEmailSenderService = EmailSender.of({
     ),
   sendMfaEnabled: (email) => logLine(mfaNotificationLogLine("enabled", email)),
   sendMfaDisabled: (email) => logLine(mfaNotificationLogLine("disabled", email)),
+  sendPasskeyChanged: ({ change, email }) => logLine(passkeyNotificationLogLine(change, email)),
 });
 
 export const recordingEmailSender: Layer.Layer<EmailSender> = Layer.succeed(

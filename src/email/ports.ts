@@ -3,6 +3,7 @@ import { Context } from "effect";
 import type { EmailError } from "../errors";
 import type { DisplayText } from "./sanitize";
 import type { InvitationEmailParams } from "./send-invitation";
+import type { PasskeyChangedEmailParams } from "./passkey-changed";
 
 export class EmailSender extends Context.Service<
   EmailSender,
@@ -12,5 +13,6 @@ export class EmailSender extends Context.Service<
     sendInvitation(params: InvitationEmailParams): Effect.Effect<void, EmailError>;
     sendMfaEnabled(email: string): Effect.Effect<void, EmailError>;
     sendMfaDisabled(email: string): Effect.Effect<void, EmailError>;
+    sendPasskeyChanged(params: PasskeyChangedEmailParams): Effect.Effect<void, EmailError>;
   }
 >()("taimei/EmailSender") {}

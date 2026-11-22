@@ -140,6 +140,30 @@ const EMAILS: {
     subject: "[taimei] 多要素認証 (MFA) を無効にしました",
     use: (sender) => sender.sendMfaDisabled("user@example.com"),
   },
+  {
+    name: "パスキーの登録の通知",
+    fixture: "passkey-registered",
+    to: "user@example.com",
+    subject: "[taimei] パスキーを登録しました",
+    use: (sender) =>
+      sender.sendPasskeyChanged({
+        change: "registered",
+        email: "user@example.com",
+        providerName: "Google パスワードマネージャー",
+      }),
+  },
+  {
+    name: "提供元が表に無いパスキーの削除の通知",
+    fixture: "passkey-deleted-unknown-provider",
+    to: "user@example.com",
+    subject: "[taimei] パスキーを削除しました",
+    use: (sender) =>
+      sender.sendPasskeyChanged({
+        change: "deleted",
+        email: "user@example.com",
+        providerName: null,
+      }),
+  },
 ];
 
 describe("各メールは、期待の file と同じ件名・宛先・HTML・text を送る", () => {
@@ -168,6 +192,19 @@ describe("利用者の入力はエスケープして本文に出す", () => {
       expect(payload.html).not.toContain(raw);
       expect(payload.text).toContain(raw);
     }
+  });
+
+  test("パスキーの通知の提供元の名前の tag は HTML に tag のまま出ず、text には文字として出る", async () => {
+    const payload = await send((sender) =>
+      sender.sendPasskeyChanged({
+        change: "registered",
+        email: "user@example.com",
+        providerName: "<b>提供元</b>",
+      }),
+    );
+
+    expect(payload.html).not.toContain("<b>提供元</b>");
+    expect(payload.text).toContain("<b>提供元</b>");
   });
 
   test("welcome の表示名の tag は HTML に tag のまま出ない", async () => {

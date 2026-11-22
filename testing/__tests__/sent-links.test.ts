@@ -71,7 +71,14 @@ describe("試験の環境で送ったメールの URL を、宛先と戻り先�
 
 test("記録用の sender は本番のメールの送信を呼ばない", async () => {
   const liveSends = (
-    ["sendWelcome", "sendMagicLink", "sendInvitation", "sendMfaEnabled", "sendMfaDisabled"] as const
+    [
+      "sendWelcome",
+      "sendMagicLink",
+      "sendInvitation",
+      "sendMfaEnabled",
+      "sendMfaDisabled",
+      "sendPasskeyChanged",
+    ] as const
   ).map((method) => spyOn(emailSenderLive, method));
   try {
     await Effect.runPromise(
@@ -85,9 +92,14 @@ test("記録用の sender は本番のメールの送信を呼ばない", async 
         } as InvitationEmailParams);
         yield* sender.sendMfaEnabled(EMAIL);
         yield* sender.sendMfaDisabled(EMAIL);
+        yield* sender.sendPasskeyChanged({
+          change: "registered",
+          email: EMAIL,
+          providerName: null,
+        });
       }).pipe(Effect.provide(recordingEmailSender)),
     );
-    expect(liveSends.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0, 0, 0]);
+    expect(liveSends.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0, 0, 0, 0]);
   } finally {
     for (const spy of liveSends) spy.mockRestore();
   }

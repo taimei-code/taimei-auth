@@ -12,27 +12,33 @@ import {
 import { signedIn } from "../../membership/__tests__/test-layers";
 import { enableMfaFor, totpCode, wrongTotpCode } from "../../mfa/__tests__/helpers";
 import { MfaTotpRepo } from "../../mfa/totp/ports";
+import { EmailSenderLive } from "../../email/wiring";
 import { passkeysOf, passkeyToSave, savePasskey } from "../../passkey/__tests__/helpers";
 import { PasskeyRepo } from "../../passkey/ports";
 import { JSON_HEADERS } from "../client-facing-error";
 import {
+  awaitingBackground,
   buildAppWith,
   challengeOf,
   CLIENT_IP,
   CLIENT_USER_AGENT,
   clientHeaders,
   freshSessionCookie,
+  inBackgroundScope,
   listedPasskeyIds,
   type Outcome,
   postJson,
   readMfaStatus,
   requestRegistrationOptions,
   requestRegistrationOptionsWith,
+  resendOutbox,
   restoreKvStoreAfterEach,
+  SECURITY_PAGE_URL,
   sameOriginHeaders,
   sendMfaDisable,
   sendRegistration,
   type SignedInSession,
+  type SignedInUser,
   signedInSession,
   signedRegistrationFor,
   statusAndBody,
@@ -692,6 +698,131 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
     await sendRegistration(session, signed.response);
 
     expect(sentry.auditFailureEvents()).toEqual(["passkey_registered"]);
+  });
+
+  describe("通知メール", () => {
+    const resend = resendOutbox();
+    const GOOGLE_PROVIDER_AAGUID = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
+
+    const mailingSession = (user: SignedInUser, layer: Layer.Layer<never> = Layer.empty) =>
+      signedInSession(user, { layer: Layer.merge(EmailSenderLive, layer) });
+
+    const signedFor = async (session: SignedInSession, aaguid?: string) =>
+      signedRegistrationFor(
+        challengeOf(await requestRegistrationOptions(session)),
+        aaguid === undefined ? {} : { aaguid },
+      );
+
+    const register = async (
+      session: SignedInSession,
+      overrides: { readonly aaguid?: string; readonly headers?: Record<string, string> } = {},
+    ) => {
+      const signed = await signedFor(session, overrides.aaguid);
+      return awaitingBackground(() =>
+        sendRegistration(session, signed.response, overrides.headers),
+      );
+    };
+
+    test("パスキーを登録すると、登録した user のメールアドレスへ通知メールが 1 通だけ送られる", async () => {
+      const owner = await createUser("owner");
+
+      const outcome = await register(mailingSession(owner));
+
+      expect(outcome.status).toBe(200);
+      expect(resend.recipients()).toEqual([owner.email]);
+    });
+
+    test("自分が既に保存した credential を送って登録を拒否された時は、通知メールを送らない", async () => {
+      const owner = await createUser("owner");
+      const session = mailingSession(owner);
+      const signed = await signedFor(session);
+      await saveCredential(owner, signed.made.id);
+
+      const outcome = await awaitingBackground(() => sendRegistration(session, signed.response));
+
+      expectKnownClientFailure(outcome);
+      expect(resend.delivered).toEqual([]);
+    });
+
+    test("パスキーが 10 本になった後に新しい credential を送って登録を拒否された時は、通知メールを送らない", async () => {
+      const owner = await createUser("owner");
+      const session = mailingSession(owner);
+      const signed = await signedFor(session);
+      await saveCredentials(owner, 10);
+
+      const outcome = await awaitingBackground(() => sendRegistration(session, signed.response));
+
+      expect(statusAndBody(outcome)).toEqual(LIMIT_REACHED);
+      expect(resend.delivered).toEqual([]);
+    });
+
+    test("audit の記帳が失敗する時も、登録した user へ通知メールが 1 通送られる", async () => {
+      const owner = await createUser("owner");
+
+      const outcome = await register(mailingSession(owner, failingAudit));
+
+      expect(outcome.status).toBe(200);
+      expect(resend.recipients()).toEqual([owner.email]);
+    });
+
+    test("提供元の表にある credential を登録した通知メールには、提供元の名前と、セキュリティの画面で削除する手順がある", async () => {
+      const owner = await createUser("owner");
+
+      await register(mailingSession(owner), { aaguid: GOOGLE_PROVIDER_AAGUID });
+
+      const [mail] = resend.delivered;
+      expect(mail?.html).toContain("Google パスワードマネージャー");
+      expect(mail?.text).toContain("Google パスワードマネージャー");
+      expect(mail?.text).toContain(SECURITY_PAGE_URL);
+      expect(mail?.text).toContain("削除してください");
+    });
+
+    test("User-Agent に HTML の tag を含む要求で登録しても、通知メールの HTML に tag がそのまま出ない", async () => {
+      const owner = await createUser("owner");
+      const tag = "<script>alert(1)</script>";
+
+      await register(mailingSession(owner), { headers: { "user-agent": tag } });
+
+      expect(resend.delivered).toHaveLength(1);
+      expect(resend.delivered[0]?.html).not.toContain(tag);
+    });
+
+    test("Resend への送信が終わらないうちに登録の応答が成功で返り、送信が終わると通知メールが 1 通届く", async () => {
+      const owner = await createUser("owner");
+      const session = mailingSession(owner);
+      const signed = await signedFor(session);
+      const release = resend.held();
+
+      const { result: outcome, settled } = await inBackgroundScope(() =>
+        sendRegistration(session, signed.response),
+      );
+
+      expect(outcome.status).toBe(200);
+      expect(resend.delivered).toEqual([]);
+      release();
+      await settled();
+      expect(resend.recipients()).toEqual([owner.email]);
+    });
+
+    test("Resend への送信が失敗する時も、登録の応答は成功で、パスキーは一覧に出る", async () => {
+      const owner = await createUser("owner");
+      const session = mailingSession(owner);
+      resend.failing();
+
+      const outcome = await register(session);
+
+      expect(outcome.status).toBe(200);
+      expect(await listedPasskeyIds(session)).toHaveLength(1);
+    });
+
+    test("Resend への送信が失敗した登録は、Sentry に warning として 1 件送られる", async () => {
+      const owner = await createUser("owner");
+      resend.failing();
+
+      await register(mailingSession(owner));
+
+      expect(sentry.warnings()).toHaveLength(1);
+    });
   });
 });
 

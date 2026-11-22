@@ -1139,22 +1139,29 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 登録の use case に書くと lint が止める",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 登録の use case に書くと lint が止める",
     path: "src/passkey/Probe495.ts",
     source:
       'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
-    expectedRules: ["taimei(passkey-provider-only-in-listing)"],
+    expectedRules: ["taimei(passkey-provider-only-for-display)"],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 型だけの import も lint が止める",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 型だけの import も lint が止める",
     path: "src/handlers/Probe496.ts",
     source:
       'import type { passkeyProviderNameOf } from "../passkey/passkey-providers"; export type N = typeof passkeyProviderNameOf;',
-    expectedRules: ["taimei(passkey-provider-only-in-listing)"],
+    expectedRules: ["taimei(passkey-provider-only-for-display)"],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 一覧の use case では lint が止めない",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 一覧の use case では lint が止めない",
     path: "src/passkey/list-passkeys.ts",
+    source:
+      'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
+    expectedRules: [],
+  },
+  {
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 通知では lint が止めない",
+    path: "src/passkey/notify-passkey-change.ts",
     source:
       'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
     expectedRules: [],

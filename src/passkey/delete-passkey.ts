@@ -2,10 +2,11 @@ import { Effect } from "effect";
 import type { Actor } from "../account/actor-contract";
 import { appendAuditBestEffort, passkeyEntry } from "../audit/append";
 import { orNotFound } from "../failures";
+import { notifyPasskeyChanged } from "./notify-passkey-change";
 import { PasskeyRepo } from "./ports";
 
 export const deleteOwnedPasskey = Effect.fnUntraced(function* (
-  actor: Pick<Actor, "id">,
+  actor: Pick<Actor, "id" | "email">,
   passkeyId: string,
   headers: Headers,
 ) {
@@ -13,4 +14,5 @@ export const deleteOwnedPasskey = Effect.fnUntraced(function* (
     orNotFound,
   );
   yield* appendAuditBestEffort(passkeyEntry("passkey_deleted", actor.id, deleted, headers));
+  yield* notifyPasskeyChanged({ change: "deleted", email: actor.email, aaguid: deleted.aaguid });
 });

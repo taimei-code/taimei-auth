@@ -5,11 +5,13 @@ import { browserCookieHeaders, loginWithMagicLink } from "../../__tests__/sessio
 import { TestDb } from "../../__tests__/test-db";
 import { auditFailingLayer } from "../../__tests__/test-layers";
 import { ttlStoreWithoutCounting } from "../../__tests__/test-ttl-store";
+import { EmailSenderLive } from "../../email/wiring";
 import { signedOut } from "../../membership/__tests__/test-layers";
 import { passkeyToSave } from "../../passkey/__tests__/helpers";
 import { PasskeyRepo } from "../../passkey/ports";
 import { checkSession } from "../../session-check";
 import {
+  awaitingBackground,
   buildAppWith,
   CLIENT_IP,
   CLIENT_USER_AGENT,
@@ -19,9 +21,12 @@ import {
   type Outcome,
   outcomeOf,
   postJson,
+  resendOutbox,
   restoreKvStoreAfterEach,
+  SECURITY_PAGE_URL,
   sameOriginHeaders,
   type SignedInSession,
+  type SignedInUser,
   signedInSession,
   statusAndBody,
 } from "./helpers";
@@ -309,5 +314,91 @@ describe("パスキーの削除の API", () => {
     await sendDeletion(signedInSession(owner, { layer: failingAudit }), passkey);
 
     expect(sentry.auditFailureEvents()).toEqual(["passkey_deleted"]);
+  });
+
+  describe("通知メール", () => {
+    const resend = resendOutbox();
+
+    const mailingSession = (user: SignedInUser) =>
+      signedInSession(user, { layer: EmailSenderLive });
+
+    const deleteAndAwaitMail = (session: SignedInSession, passkeyId: string) =>
+      awaitingBackground(() => sendDeletion(session, passkeyId));
+
+    test("自分のパスキーを削除すると、削除した user のメールアドレスへ通知メールが 1 通だけ送られる", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+
+      const outcome = await deleteAndAwaitMail(mailingSession(owner), passkey);
+
+      expect(outcome.status).toBe(200);
+      expect(resend.recipients()).toEqual([owner.email]);
+    });
+
+    test("存在しない id を削除しようとした時は、通知メールを送らない", async () => {
+      const owner = await createUser("owner");
+
+      const outcome = await deleteAndAwaitMail(mailingSession(owner), missingPasskeyId());
+
+      expect(outcome.status).toBe(404);
+      expect(resend.delivered).toEqual([]);
+    });
+
+    test("ほかの user のパスキーの id を削除しようとした時は、どちらの user にも通知メールを送らない", async () => {
+      const owner = await createUser("owner");
+      const other = await createUser("other");
+      const others = await storePasskey(other);
+
+      const outcome = await deleteAndAwaitMail(mailingSession(owner), others);
+
+      expect(outcome.status).toBe(404);
+      expect(resend.delivered).toEqual([]);
+    });
+
+    test("同じパスキーの id を 2 回削除しようとすると、通知メールは 1 通だけ送られる", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+      const session = mailingSession(owner);
+
+      await deleteAndAwaitMail(session, passkey);
+      await deleteAndAwaitMail(session, passkey);
+
+      expect(resend.recipients()).toEqual([owner.email]);
+    });
+
+    test("提供元の表にあるパスキーを削除した通知メールには、提供元の名前と、セキュリティの画面で削除する手順がある", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+
+      await deleteAndAwaitMail(mailingSession(owner), passkey);
+
+      const [mail] = resend.delivered;
+      expect(mail?.html).toContain("Chrome (Mac)");
+      expect(mail?.text).toContain("Chrome (Mac)");
+      expect(mail?.text).toContain(SECURITY_PAGE_URL);
+      expect(mail?.text).toContain("削除してください");
+    });
+
+    test("Resend への送信が失敗する時も、削除の応答は成功で、パスキーは一覧から消える", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+      const session = mailingSession(owner);
+      resend.failing();
+
+      const outcome = await deleteAndAwaitMail(session, passkey);
+
+      expect(outcome.status).toBe(200);
+      expect(await listedPasskeyIds(session)).toEqual([]);
+    });
+
+    test("Resend への送信が失敗した削除は、Sentry に warning として 1 件送られる", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+      resend.failing();
+
+      await deleteAndAwaitMail(mailingSession(owner), passkey);
+
+      expect(sentry.warnings()).toHaveLength(1);
+    });
   });
 });

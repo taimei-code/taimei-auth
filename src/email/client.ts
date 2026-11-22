@@ -10,7 +10,9 @@ export type EmailKind =
   | "welcome"
   | "invitation"
   | "mfa enabled"
-  | "mfa disabled";
+  | "mfa disabled"
+  | "passkey registered"
+  | "passkey deleted";
 
 export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   from: string;

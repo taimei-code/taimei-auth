@@ -8,6 +8,7 @@ import { readOwnedMfaStatus } from "../mfa/totp";
 import { consumeMatchedCode, matchOwnedCode } from "../mfa/totp/verify-code";
 import { PasskeyAlreadyRegistered, PasskeyLimitReached, TotpRequired } from "./errors";
 import type { RegistrationResponse } from "./passkey-contract";
+import { notifyPasskeyChanged } from "./notify-passkey-change";
 import { isPasskeyLimitReached } from "./policy";
 import { PasskeyRepo } from "./ports";
 import { registrationOptions, verifyRegistration } from "./webauthn";
@@ -36,7 +37,7 @@ const FAILURE_BY_SAVING_REFUSAL = {
 } satisfies Record<PasskeySavingRefusal, unknown>;
 
 export const registerPasskey = Effect.fnUntraced(function* (
-  actor: Pick<Actor, "id">,
+  actor: Pick<Actor, "id" | "email">,
   response: RegistrationResponse,
   headers: Headers,
 ) {
@@ -55,4 +56,5 @@ export const registerPasskey = Effect.fnUntraced(function* (
   );
   if (typeof saved === "string") return yield* new FAILURE_BY_SAVING_REFUSAL[saved]();
   yield* appendAuditBestEffort(passkeyEntry("passkey_registered", actor.id, saved, headers));
+  yield* notifyPasskeyChanged({ change: "registered", email: actor.email, aaguid: saved.aaguid });
 });
