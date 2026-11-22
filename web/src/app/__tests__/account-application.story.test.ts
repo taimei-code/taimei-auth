@@ -191,20 +191,24 @@ describe("枠の遷移とログアウト", () => {
     expect(clicked(`${ORIGIN}/auth/`)).toMatchObject([{ name: LoadDocument.name }]);
   });
 
-  test("ログアウトに成功したら / へ document を置き換え、二重の click では 1 回だけ送る", () => {
+  test("ログアウトに成功したら知らせを出さずに / へ document を置き換え、二重の click では 1 回だけ送る", () => {
     const first = update(ready(), Message.ClickedSignOut());
     const second = update(first.model, Message.ClickedSignOut());
     expect(first.commands).toMatchObject([{ name: SignOut.name }]);
     expect(second.commands ?? []).toEqual([]);
-    expect(update(first.model, Message.SucceededSignOut()).commands).toMatchObject([
-      { name: ReplaceDocument.name, args: { href: "/" } },
-    ]);
+    const succeeded = update(first.model, Message.SucceededSignOut());
+    expect(succeeded.model.toast.entries).toEqual([]);
+    expect(succeeded.commands).toMatchObject([{ name: ReplaceDocument.name, args: { href: "/" } }]);
   });
 
-  test("ログアウトに失敗したら通知を出し、押し直せる", () => {
+  test("ログアウトに失敗したら、しばらくしてから再度試すよう知らせ、押し直せる", () => {
     const failed = update(update(ready(), Message.ClickedSignOut()).model, Message.FailedSignOut());
-    expect(failed.model.signOut._tag).toBe("Idle");
-    expect(failed.model.toast.entries.length).toBe(1);
+    expect(failed.model.toast.entries.map((entry) => entry.payload.text)).toEqual([
+      "ログアウトに失敗しました。しばらくしてから再度お試しください。",
+    ]);
+    expect(update(failed.model, Message.ClickedSignOut()).commands).toMatchObject([
+      { name: SignOut.name },
+    ]);
   });
 });
 
@@ -445,20 +449,28 @@ type CompanyDeletionMessage = Parameters<
 const deletionMessage = (message: CompanyDeletionMessage) =>
   companySettingsMessage(CompanySettings.Message.GotCompanyDeletionMessage({ message }));
 
+const deletedCompanyA = () => {
+  const deleting = [
+    deletionMessage({ _tag: "ClickedDeleteCompany" }),
+    deletionMessage({ _tag: "ClickedConfirmDeletion", companyName: "事業所A" }),
+  ].reduce((current, each) => update(current, each).model, ready("/account/company-settings"));
+  const visit = Option.match(deleting.maybePage, {
+    onNone: () => 0,
+    onSome: (page) => (page._tag === "CompanySettings" ? page.model.visit : 0),
+  });
+  return {
+    deleting,
+    succeeded: deletionMessage({ _tag: "SucceededDeleteCompany", visit, companyName: "事業所A" }),
+  };
+};
+
 describe("page から頼まれる事業所の操作", () => {
   test("所属が残る事業所の削除の後は、一覧へ移り事業所の状態を読み直す", () => {
-    const deleting = [
-      deletionMessage({ _tag: "ClickedDeleteCompany" }),
-      deletionMessage({ _tag: "ClickedConfirmDeletion", companyName: "事業所A" }),
-    ].reduce((current, each) => update(current, each).model, ready("/account/company-settings"));
-    const visit = Option.match(deleting.maybePage, {
-      onNone: () => 0,
-      onSome: (page) => (page._tag === "CompanySettings" ? page.model.visit : 0),
-    });
+    const { deleting, succeeded } = deletedCompanyA();
     story(
       update,
       given(deleting),
-      message(deletionMessage({ _tag: "SucceededDeleteCompany", visit, companyName: "事業所A" })),
+      message(succeeded),
       Command.expectExact(Animation.WaitForPaint),
       ...FIRST_DIALOG_CLOSING,
       Command.expectHas(PushUrl, CurrentCompany.RefreshCompanyState, Dialog.CloseDialog),
@@ -478,6 +490,39 @@ describe("page から頼まれる事業所の操作", () => {
       model((next) => {
         expect(next.toast.entries.map((entry) => entry.payload.text)).toEqual([
           "「事業所A」を削除しました。",
+        ]);
+      }),
+      Toast.test.drainEntry({ entryId: "account-notices-entry-0" }),
+    );
+  });
+
+  test("事業所の削除の後の読み直しが失敗すると、削除したが表示の更新に失敗した旨を知らせる", () => {
+    const { deleting, succeeded } = deletedCompanyA();
+    story(
+      update,
+      given(deleting),
+      message(succeeded),
+      Command.expectExact(Animation.WaitForPaint),
+      ...FIRST_DIALOG_CLOSING,
+      DIALOG_RESOURCES_RELEASED,
+      Command.resolve(PushUrl, DocumentNavigationMessage.CompletedPushUrl()),
+      Command.resolve(
+        CurrentCompany.RefreshCompanyState({
+          refreshNumber: 1,
+          texts: {
+            maybeDoneText: Option.some("「事業所A」を削除しました。"),
+            actionText: "事業所を削除しました",
+          },
+        }),
+        CurrentCompany.Message.FailedRefreshCompanyState({
+          refreshNumber: 1,
+          failure: "Unexpected",
+          actionText: "事業所を削除しました",
+        }),
+      ),
+      model((next) => {
+        expect(next.toast.entries.map((entry) => entry.payload.text)).toEqual([
+          "事業所を削除しましたが、表示の更新に失敗しました。ページを再読み込みしてください。",
         ]);
       }),
       Toast.test.drainEntry({ entryId: "account-notices-entry-0" }),
@@ -534,6 +579,31 @@ describe("page から頼まれる事業所の操作", () => {
       model((next) => {
         expect(next.toast.entries.map((entry) => entry.payload.text)).toEqual([
           "事業所を切り替えられませんでした。",
+        ]);
+      }),
+      Toast.test.drainEntry({ entryId: "account-notices-entry-0" }),
+    );
+  });
+
+  test("切り替えの後の読み直しが失敗すると、切り替えたが表示の更新に失敗した旨を知らせる", () => {
+    story(
+      update,
+      given(ready()),
+      message(currentCompanyMessage(CurrentCompany.Message.SucceededSwitchCompany())),
+      Command.resolve(
+        CurrentCompany.RefreshCompanyState({
+          refreshNumber: 1,
+          texts: { maybeDoneText: Option.none(), actionText: "事業所を切り替えました" },
+        }),
+        CurrentCompany.Message.FailedRefreshCompanyState({
+          refreshNumber: 1,
+          failure: "Unexpected",
+          actionText: "事業所を切り替えました",
+        }),
+      ),
+      model((next) => {
+        expect(next.toast.entries.map((entry) => entry.payload.text)).toEqual([
+          "事業所を切り替えましたが、表示の更新に失敗しました。ページを再読み込みしてください。",
         ]);
       }),
       Toast.test.drainEntry({ entryId: "account-notices-entry-0" }),
