@@ -51,6 +51,24 @@ const hasWebAuthnWithJsonApis = (): boolean =>
   Predicate.hasProperty(navigator.credentials, "create") &&
   Predicate.hasProperty(navigator.credentials, "get");
 
+const NO_EXTENSION_RESULTS: AuthenticationExtensionsClientOutputs = {};
+
+const extensionResultsOf = (credential: PublicKeyCredential) => {
+  try {
+    return credential.getClientExtensionResults();
+  } catch {
+    return NO_EXTENSION_RESULTS;
+  }
+};
+
+const toJSONWithExtensionResults = (credential: PublicKeyCredential): unknown => {
+  const json = credential.toJSON();
+  return {
+    ...json,
+    clientExtensionResults: json.clientExtensionResults ?? extensionResultsOf(credential),
+  };
+};
+
 export const isPasskeySupported: Effect.Effect<boolean> = Effect.sync(hasWebAuthnWithJsonApis);
 
 const nameOf = (cause: unknown) => (Predicate.hasProperty(cause, "name") ? cause.name : undefined);
@@ -108,7 +126,7 @@ export const createPasskey = Effect.fnUntraced(
       return yield* new PasskeyCreationFailed();
     }
     const json = yield* Effect.try({
-      try: () => credential.toJSON(),
+      try: () => toJSONWithExtensionResults(credential),
       catch: () => new PasskeyCreationFailed(),
     });
     const response = yield* decodeRegistrationResponse(json).pipe(
@@ -144,7 +162,7 @@ export const getPasskey = Effect.fnUntraced(
       return yield* new PasskeyAssertionFailed();
     }
     const json = yield* Effect.try({
-      try: () => credential.toJSON(),
+      try: () => toJSONWithExtensionResults(credential),
       catch: () => new PasskeyAssertionFailed(),
     });
     const response = yield* decodeAuthenticationResponse(json).pipe(
