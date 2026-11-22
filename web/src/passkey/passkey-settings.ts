@@ -45,10 +45,13 @@ import { isPasskeySupported } from "./webauthn";
 
 type PasskeyApi = SpaHttpClient["Service"]["passkey"];
 
+const UNKNOWN_PROVIDER_NAME = "パスキー";
+
 const ListedPasskey = Schema.Struct({
   id: Schema.String,
   createdAt: Schema.DateTimeUtc,
   maybeLastUsedAt: Schema.Option(Schema.DateTimeUtc),
+  providerName: Schema.String,
 });
 type ListedPasskey = typeof ListedPasskey.Type;
 
@@ -67,6 +70,7 @@ const passkeyListOf = (wire: PasskeyListResponse, browserSupported: boolean): Pa
           id: passkey.id,
           createdAt: passkey.created_at,
           maybeLastUsedAt: Option.fromNullishOr(passkey.last_used_at),
+          providerName: passkey.provider_name ?? UNKNOWN_PROVIDER_NAME,
         })),
         registrable: wire.can_register && browserSupported,
       });
@@ -412,7 +416,7 @@ const lastUsedOnText = (passkey: ListedPasskey): string =>
   `最後に使った日 ${Option.match(passkey.maybeLastUsedAt, { onNone: () => "未使用", onSome: dayOf })}`;
 
 const passkeyText = (passkey: ListedPasskey): string =>
-  `${registeredOnText(passkey)}、${lastUsedOnText(passkey)}`;
+  `${passkey.providerName}、${registeredOnText(passkey)}、${lastUsedOnText(passkey)}`;
 
 const passkeyItemView = (model: Model, passkey: ListedPasskey, h: HtmlBuilder<Message>): Html =>
   h.keyed("li")(
@@ -420,8 +424,14 @@ const passkeyItemView = (model: Model, passkey: ListedPasskey, h: HtmlBuilder<Me
     [h.Class("flex items-center justify-between gap-3 py-2 text-sm text-muted-foreground")],
     [
       h.div(
-        [h.Class("flex flex-wrap gap-x-4 gap-y-1")],
-        [h.span([], [registeredOnText(passkey)]), h.span([], [lastUsedOnText(passkey)])],
+        [h.Class("min-w-0")],
+        [
+          h.p([h.Class("font-medium text-foreground")], [passkey.providerName]),
+          h.p(
+            [h.Class("mt-1 flex flex-wrap gap-x-4 gap-y-1")],
+            [h.span([], [registeredOnText(passkey)]), h.span([], [lastUsedOnText(passkey)])],
+          ),
+        ],
       ),
       buttonView(
         {

@@ -19,6 +19,7 @@ export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers
           created_at: DateTime.fromDateUnsafe(passkey.createdAt),
           last_used_at:
             passkey.lastUsedAt === null ? null : DateTime.fromDateUnsafe(passkey.lastUsedAt),
+          provider_name: passkey.providerName,
         })),
         can_register: owned.canRegister,
       };

@@ -17,6 +17,7 @@ const passkeys = (count: number): ReadonlyArray<ListedPasskey> =>
     id: `passkey-${index + 1}`,
     created_at: "2026-03-04T03:00:00.000Z",
     last_used_at: null,
+    provider_name: null,
   }));
 
 test("パスキーが 10 本ある時、「登録する」は押せず、不要なパスキーの削除を促す文言が出る", async ({

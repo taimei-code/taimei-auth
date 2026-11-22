@@ -22,6 +22,7 @@ const USED_PASSKEY = {
   id: "passkey-used",
   created_at: "2026-03-04T03:00:00.000Z",
   last_used_at: "2026-05-06T03:00:00.000Z",
+  provider_name: null,
 };
 
 const recordScreenFeedback = () => {

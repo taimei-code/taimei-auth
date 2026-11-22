@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { Actor } from "../account/actor-contract";
 import { passkeyReleased } from "./availability";
+import { passkeyProviderNameOf } from "./passkey-providers";
 import { PasskeyRepo } from "./ports";
 
 export const listOwnedPasskeys = Effect.fnUntraced(function* (actor: Pick<Actor, "id">) {
@@ -12,7 +13,12 @@ export const listOwnedPasskeys = Effect.fnUntraced(function* (actor: Pick<Actor,
     { concurrency: "unbounded" },
   );
   return {
-    passkeys: rows.map(({ id, createdAt, lastUsedAt }) => ({ id, createdAt, lastUsedAt })),
+    passkeys: rows.map(({ id, createdAt, lastUsedAt, aaguid }) => ({
+      id,
+      createdAt,
+      lastUsedAt,
+      providerName: passkeyProviderNameOf(aaguid),
+    })),
     canRegister,
   };
 });

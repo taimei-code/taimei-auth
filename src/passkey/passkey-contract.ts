@@ -19,6 +19,7 @@ const PasskeyList = Schema.Struct({
       id: Schema.String,
       created_at: IsoDateTime,
       last_used_at: Schema.NullOr(IsoDateTime),
+      provider_name: Schema.NullOr(Schema.String),
     }),
   ),
   can_register: Schema.Boolean,

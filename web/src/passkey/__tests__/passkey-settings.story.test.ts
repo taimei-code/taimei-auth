@@ -41,6 +41,7 @@ describe("一覧を読む", () => {
             id: "p1",
             created_at: DateTime.makeUnsafe("2026-01-02T03:04:05.000Z"),
             last_used_at: null,
+            provider_name: null,
           },
         ],
         can_register: false,
@@ -129,6 +130,7 @@ const PASSKEY = {
   id: "passkey-1",
   createdAt: DateTime.makeUnsafe("2026-03-04T03:00:00.000Z"),
   maybeLastUsedAt: Option.none(),
+  providerName: "パスキー",
 };
 
 const send = (current: Model, ...messages: ReadonlyArray<Message>): Model =>

@@ -554,6 +554,7 @@ describe("パスキーの削除の結果を画面に返す", () => {
     id: "passkey-1",
     createdAt: DateTime.makeUnsafe("2026-03-04T03:00:00.000Z"),
     maybeLastUsedAt: Option.none(),
+    providerName: "パスキー",
   };
 
   test("削除できると、dialog が閉じ切ってから一覧と MFA を読み直し、読めたら削除した旨を知らせる", () => {

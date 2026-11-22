@@ -66,7 +66,7 @@ export const mfaRow = (page: Page) =>
 export const securityRows = (page: Page) => page.getByRole("main").getByRole("listitem");
 
 export const passkeyRow = (page: Page) =>
-  securityRows(page).filter({ has: page.getByText("パスキー", { exact: true }) });
+  securityRows(page).filter({ hasText: "指紋・顔認証・PIN でログインできます" });
 
 export const passkeyItems = (page: Page) => passkeyRow(page).getByRole("listitem");
 
@@ -150,7 +150,12 @@ export const signInThroughMagicLinkForm = async (page: Page, email: string): Pro
   return link;
 };
 
-export type ListedPasskey = { id: string; created_at: string; last_used_at: string | null };
+export type ListedPasskey = {
+  id: string;
+  created_at: string;
+  last_used_at: string | null;
+  provider_name: string | null;
+};
 
 export const openSecurityListing = async (
   page: Page,
