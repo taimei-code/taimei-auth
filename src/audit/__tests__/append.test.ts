@@ -62,6 +62,14 @@ const _payloadKeysReadByMonitoringQueries: {
   sign_in: true satisfies Exactly<PayloadKeys<"sign_in">, "method" | "ip" | "userAgent">,
   mfa_enabled: true satisfies Exactly<PayloadKeys<"mfa_enabled">, "ip" | "userAgent">,
   mfa_disabled: true satisfies Exactly<PayloadKeys<"mfa_disabled">, "ip" | "userAgent">,
+  passkey_registered: true satisfies Exactly<
+    PayloadKeys<"passkey_registered">,
+    "passkey_id" | "aaguid" | "ip" | "userAgent"
+  >,
+  passkey_deleted: true satisfies Exactly<
+    PayloadKeys<"passkey_deleted">,
+    "passkey_id" | "aaguid" | "ip" | "userAgent"
+  >,
   account_delete: true satisfies Exactly<PayloadKeys<"account_delete">, string>,
   company_created: true satisfies Exactly<
     PayloadKeys<"company_created">,

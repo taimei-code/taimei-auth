@@ -17,6 +17,10 @@ import { transferOwnership } from "../../membership/transfer-ownership";
 import { enableMfaFor, totpCode } from "../../mfa/__tests__/helpers";
 import { loginWithMagicLink } from "../../__tests__/session-helpers";
 import { disable } from "../../mfa/totp";
+import { passkeyToSave, signedRegistration } from "../../passkey/__tests__/helpers";
+import { deleteOwnedPasskey } from "../../passkey/delete-passkey";
+import { PasskeyRepo } from "../../passkey/ports";
+import { issueRegistrationOptions, registerPasskey } from "../../passkey/register-passkey";
 import type { AppServices } from "../../runtime";
 import {
   acceptGrantForTest,
@@ -64,7 +68,7 @@ const seedInvitationTo = (
     return { db, owner, companyId, invitee, invitation, invitationId: seeded.id };
   });
 
-const WRITTEN_BEFORE_REFACTOR = {
+const PAYLOAD_KEYS_BY_EVENT = {
   sign_in: {
     keys: ["method", "ip", "userAgent"],
     drive: Effect.gen(function* () {
@@ -94,6 +98,32 @@ const WRITTEN_BEFORE_REFACTOR = {
           kind: "totp",
         }),
       );
+      return user.id;
+    }),
+  },
+  passkey_registered: {
+    keys: ["passkey_id", "aaguid", "ip", "userAgent"],
+    drive: Effect.gen(function* () {
+      const user = yield* TestDb.use((db) => db.seedUser("passkey-registered"));
+      const options = yield* issueRegistrationOptions(user, undefined);
+      const signed = signedRegistration({
+        algorithm: "ES256",
+        challenge: options.challenge,
+        userVerified: true,
+      });
+      yield* registerPasskey(user, signed.response, new Headers());
+      return user.id;
+    }),
+  },
+  passkey_deleted: {
+    keys: ["passkey_id", "aaguid", "ip", "userAgent"],
+    drive: Effect.gen(function* () {
+      const user = yield* TestDb.use((db) => db.seedUser("passkey-deleted"));
+      const saved = yield* PasskeyRepo.use((repo) =>
+        repo.insertPasskey({ id: crypto.randomUUID(), userId: user.id, ...passkeyToSave() }),
+      );
+      if (typeof saved === "string") return yield* Effect.die(new Error("seed failed"));
+      yield* deleteOwnedPasskey(user, saved.id, new Headers());
       return user.id;
     }),
   },
@@ -260,13 +290,13 @@ describe("監査ログの payload の key 集合", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("変更前の key 集合の表は 15 種の event を持つ", () => {
-    expect(Object.keys(WRITTEN_BEFORE_REFACTOR)).toHaveLength(15);
+  test("key 集合の表は 17 種の event を持つ", () => {
+    expect(Object.keys(PAYLOAD_KEYS_BY_EVENT)).toHaveLength(17);
   });
 
   test.each(
-    Object.entries(WRITTEN_BEFORE_REFACTOR),
-  )("%s を use-case から記帳した行の payload は、変更前の record* が書いた key 集合と一致する", (eventType, {
+    Object.entries(PAYLOAD_KEYS_BY_EVENT),
+  )("%s を use-case から記帳した行の payload は、監視の問い合わせが読む key 集合と一致する", (eventType, {
     keys,
     drive,
   }) =>

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { Effect, Layer } from "effect";
-import { dbTest, partial } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest, partial } from "../../__tests__/live-runner";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { TestDb } from "../../__tests__/test-db";
+import { auditFailingLayer } from "../../__tests__/test-layers";
 import {
   ttlStoreWithoutChallengeLookup,
   ttlStoreWithoutCounting,
@@ -16,6 +18,9 @@ import { JSON_HEADERS } from "../client-facing-error";
 import {
   buildAppWith,
   challengeOf,
+  CLIENT_IP,
+  CLIENT_USER_AGENT,
+  clientHeaders,
   freshSessionCookie,
   listedPasskeyIds,
   type Outcome,
@@ -198,11 +203,18 @@ const expectKnownClientFailure = (outcome: Outcome) => {
 
 describe("パスキーの登録の API を、保存した行と challenge の寿命から確かめる", () => {
   const { run, cleanup } = dbTest("passkey-registration-test-");
+  const sentry = recordSentry();
   restoreKvStoreAfterEach();
   afterEach(async () => {
     setSystemTime();
+    sentry.reset();
     await cleanup();
   });
+
+  const registeredAuditsOf = async (user: { readonly id: string }) =>
+    (await run(auditRowsFor(user.id, "passkey_registered"))).map((row) => row.payload);
+
+  const failingAudit = auditFailingLayer(new Error("audit store unavailable"));
 
   const createUser = (name: string) =>
     run(TestDb.use((db) => db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`)));
@@ -628,6 +640,58 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
       status: 409,
       body: { _tag: "PasskeyAlreadyRegistered" },
     });
+  });
+
+  test("要求の IP と userAgent を付けてパスキーを登録すると、登録の記録が 1 件だけ増え、一覧に出たパスキーの id、送った credential の aaguid、要求の IP と userAgent を持つ", async () => {
+    const owner = await createUser("owner");
+    const session = signedInSession(owner);
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+
+    const outcome = await sendRegistration(session, signed.response, clientHeaders);
+
+    expect(outcome.status).toBe(200);
+    const [listed] = await listedPasskeyIds(session);
+    expect(await registeredAuditsOf(owner)).toEqual([
+      {
+        passkey_id: listed,
+        aaguid: signed.made.aaguid,
+        ip: CLIENT_IP,
+        userAgent: CLIENT_USER_AGENT,
+      },
+    ]);
+  });
+
+  test("自分が既に保存した credential を送って登録を拒否された時は、登録の記録が増えない", async () => {
+    const owner = await createUser("owner");
+    const session = signedInSession(owner);
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+    await saveCredential(owner, signed.made.id);
+
+    const outcome = await sendRegistration(session, signed.response);
+
+    expectKnownClientFailure(outcome);
+    expect(await registeredAuditsOf(owner)).toEqual([]);
+  });
+
+  test("audit の記帳が失敗する時も、登録の応答は成功で、パスキーは一覧に出る", async () => {
+    const owner = await createUser("owner");
+    const session = signedInSession(owner, { layer: failingAudit });
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+
+    const outcome = await sendRegistration(session, signed.response);
+
+    expect(outcome.status).toBe(200);
+    expect(await listedPasskeyIds(session)).toHaveLength(1);
+  });
+
+  test("audit の記帳が失敗した登録は、登録の event として Sentry に送られる", async () => {
+    const owner = await createUser("owner");
+    const session = signedInSession(owner, { layer: failingAudit });
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+
+    await sendRegistration(session, signed.response);
+
+    expect(sentry.auditFailureEvents()).toEqual(["passkey_registered"]);
   });
 });
 

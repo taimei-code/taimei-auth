@@ -1,8 +1,7 @@
 import { Effect, Layer } from "effect";
-import { AuditLog } from "../../audit/ports";
 import { AuthApi, type SessionRejected } from "../../auth-service";
 import { EmailSender } from "../../email/ports";
-import { type AuthApiError, DbError } from "../../errors";
+import type { AuthApiError } from "../../errors";
 import { partial } from "../../__tests__/live-runner";
 import { authApiWith } from "../../__tests__/test-layers";
 
@@ -26,10 +25,4 @@ export const mfaMailRecorderLayer = (sent: string[]): Layer.Layer<EmailSender> =
     }),
   );
 
-export const auditFailingLayer = (cause: unknown): Layer.Layer<AuditLog> =>
-  Layer.succeed(
-    AuditLog,
-    partial<AuditLog["Service"]>({
-      appendAuditLog: () => Effect.fail(new DbError({ cause })),
-    }),
-  );
+export { auditFailingLayer } from "../../__tests__/test-layers";

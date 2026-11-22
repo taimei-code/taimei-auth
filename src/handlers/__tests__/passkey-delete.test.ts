@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { dbTest } from "../../__tests__/live-runner";
+import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
+import { recordSentry } from "../../__tests__/sentry-recorder";
 import { browserCookieHeaders, loginWithMagicLink } from "../../__tests__/session-helpers";
 import { TestDb } from "../../__tests__/test-db";
+import { auditFailingLayer } from "../../__tests__/test-layers";
 import { ttlStoreWithoutCounting } from "../../__tests__/test-ttl-store";
 import { signedOut } from "../../membership/__tests__/test-layers";
 import { passkeyToSave } from "../../passkey/__tests__/helpers";
@@ -9,6 +11,9 @@ import { PasskeyRepo } from "../../passkey/ports";
 import { checkSession } from "../../session-check";
 import {
   buildAppWith,
+  CLIENT_IP,
+  CLIENT_USER_AGENT,
+  clientHeaders,
   liveApp,
   listedPasskeyIds,
   type Outcome,
@@ -30,9 +35,11 @@ const deletionPath = (passkeyId: string) =>
 
 describe("パスキーの削除の API", () => {
   const { run, cleanup } = dbTest("passkey-delete-test-");
+  const sentry = recordSentry();
   restoreKvStoreAfterEach();
   afterEach(async () => {
     setSystemTime();
+    sentry.reset();
     await cleanup();
   });
 
@@ -51,10 +58,24 @@ describe("パスキーの削除の API", () => {
 
   const missingPasskeyId = (): string => crypto.randomUUID();
 
-  const sendDeletion = async (session: SignedInSession, passkeyId: string): Promise<Outcome> =>
+  const sendDeletion = async (
+    session: SignedInSession,
+    passkeyId: string,
+    headers: Record<string, string> = {},
+  ): Promise<Outcome> =>
     outcomeOf(
-      await postJson(session.app, deletionPath(passkeyId), sameOriginHeaders(session.cookie), "{}"),
+      await postJson(
+        session.app,
+        deletionPath(passkeyId),
+        { ...sameOriginHeaders(session.cookie), ...headers },
+        "{}",
+      ),
     );
+
+  const deletedAuditsOf = async (user: { readonly id: string }) =>
+    (await run(auditRowsFor(user.id, "passkey_deleted"))).map((row) => row.payload);
+
+  const failingAudit = auditFailingLayer(new Error("audit store unavailable"));
 
   const deleteMissingTimes = async (session: SignedInSession, n: number) => {
     const statuses: number[] = [];
@@ -218,5 +239,75 @@ describe("パスキーの削除の API", () => {
     await sendDeletion(signedInSession(owner), own);
 
     expect((await listedPasskeyIds(signedInSession(other))).toSorted()).toEqual(others);
+  });
+
+  test("要求の IP と userAgent を付けて自分のパスキーを削除すると、削除の記録が 1 件だけ増え、削除したパスキーの id、その aaguid、要求の IP と userAgent を持つ", async () => {
+    const owner = await createUser("owner");
+    const passkey = await storePasskey(owner);
+
+    const outcome = await sendDeletion(signedInSession(owner), passkey, clientHeaders);
+
+    expect(outcome.status).toBe(200);
+    expect(await deletedAuditsOf(owner)).toEqual([
+      {
+        passkey_id: passkey,
+        aaguid: passkeyToSave().aaguid,
+        ip: CLIENT_IP,
+        userAgent: CLIENT_USER_AGENT,
+      },
+    ]);
+  });
+
+  test("存在しない id の削除を送った時は、削除の記録が増えない", async () => {
+    const owner = await createUser("owner");
+    await storePasskey(owner);
+
+    const outcome = await sendDeletion(signedInSession(owner), missingPasskeyId());
+
+    expect(outcome.status).not.toBe(200);
+    expect(await deletedAuditsOf(owner)).toEqual([]);
+  });
+
+  test("ほかの user のパスキーの id の削除を送った時は、どちらの user にも削除の記録が増えない", async () => {
+    const owner = await createUser("owner");
+    const other = await createUser("other");
+    const others = await storePasskey(other);
+
+    const outcome = await sendDeletion(signedInSession(owner), others);
+
+    expect(outcome.status).not.toBe(200);
+    expect(await deletedAuditsOf(owner)).toEqual([]);
+    expect(await deletedAuditsOf(other)).toEqual([]);
+  });
+
+  test("同じパスキーの id の削除を 2 回送ると、削除の記録は 1 件だけ増える", async () => {
+    const owner = await createUser("owner");
+    const passkey = await storePasskey(owner);
+    const session = signedInSession(owner);
+
+    await sendDeletion(session, passkey);
+    await sendDeletion(session, passkey);
+
+    expect(await deletedAuditsOf(owner)).toHaveLength(1);
+  });
+
+  test("audit の記帳が失敗する時も、削除の応答は成功で、パスキーは一覧から消える", async () => {
+    const owner = await createUser("owner");
+    const passkey = await storePasskey(owner);
+    const session = signedInSession(owner, { layer: failingAudit });
+
+    const outcome = await sendDeletion(session, passkey);
+
+    expect(outcome.status).toBe(200);
+    expect(await listedPasskeyIds(session)).toEqual([]);
+  });
+
+  test("audit の記帳が失敗した削除は、削除の event として Sentry に送られる", async () => {
+    const owner = await createUser("owner");
+    const passkey = await storePasskey(owner);
+
+    await sendDeletion(signedInSession(owner, { layer: failingAudit }), passkey);
+
+    expect(sentry.auditFailureEvents()).toEqual(["passkey_deleted"]);
   });
 });

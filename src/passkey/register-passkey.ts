@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import type { PasskeySavingRefusal } from "@/db/repositories/passkey";
 import type { Actor } from "../account/actor-contract";
+import { appendAuditBestEffort, passkeyEntry } from "../audit/append";
 import { IdGenerator } from "../id-generator";
 import { resetDisableAttempts, spendDisableAttempt } from "../mfa/disable-attempt-budget";
 import { readOwnedMfaStatus } from "../mfa/totp";
@@ -37,6 +38,7 @@ const FAILURE_BY_SAVING_REFUSAL = {
 export const registerPasskey = Effect.fnUntraced(function* (
   actor: Pick<Actor, "id">,
   response: RegistrationResponse,
+  headers: Headers,
 ) {
   const verified = yield* verifyRegistration({ userId: actor.id, response });
   const id = (yield* IdGenerator).passkeyId();
@@ -52,4 +54,5 @@ export const registerPasskey = Effect.fnUntraced(function* (
     }),
   );
   if (typeof saved === "string") return yield* new FAILURE_BY_SAVING_REFUSAL[saved]();
+  yield* appendAuditBestEffort(passkeyEntry("passkey_registered", actor.id, saved, headers));
 });
