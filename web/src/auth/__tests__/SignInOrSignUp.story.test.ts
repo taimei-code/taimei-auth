@@ -1,14 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import { Option } from "effect";
-import { Command, given, message, model, story } from "foldkit/story";
+import {
+  Command,
+  expectNoOutMessage,
+  expectOutMessage,
+  given,
+  message,
+  model,
+  story,
+} from "foldkit/story";
 
+import { PASSKEY_SIGN_IN_FAILED_MESSAGE, PasskeySignIn } from "../../passkey/passkey-sign-in";
 import {
   FocusMagicLinkField,
   init,
+  LoadPasskeyEntry,
   Message,
+  OutMessage,
   type Model,
   type Params,
   SendMagicLink,
+  SignInWithPasskey,
   type SignKind,
   StartGitHubSignIn,
   update,
@@ -192,6 +204,167 @@ describe("GitHub での認証", () => {
       model((next) => {
         expect(next.gitHub._tag).toBe("Submitting");
       }),
+    );
+  });
+});
+
+const commandNamesOf = (kind: SignKind, params: Params = PARAMS) =>
+  (
+    init({ kind, params, origin: ORIGIN, otherPageHref: "/other", visit: VISIT }).commands ?? []
+  ).map((command) => command.name);
+
+const withPasskeyEntry = (kind: SignKind = "SignIn"): Model =>
+  update(pageOf(kind), Message.CompletedLoadPasskeyEntry({ visit: VISIT, isShown: true })).model;
+
+describe("パスキーのログインの入口", () => {
+  test("ログイン画面は、開いた時にパスキーの入口を出すかを問い合わせる", () => {
+    expect(commandNamesOf("SignIn")).toContain(LoadPasskeyEntry.name);
+  });
+
+  test("新規登録画面と招待の token を受けたログイン画面は、パスキーの入口を問い合わせない", () => {
+    expect(commandNamesOf("SignUp")).not.toContain(LoadPasskeyEntry.name);
+    expect(commandNamesOf("SignIn", { ...PARAMS, invitation_token: "token-1" })).not.toContain(
+      LoadPasskeyEntry.name,
+    );
+  });
+
+  test("問い合わせの答えが偽なら、入口を出さない", () => {
+    story(
+      update,
+      given(pageOf("SignIn")),
+      message(Message.CompletedLoadPasskeyEntry({ visit: VISIT, isShown: false })),
+      model((next) => {
+        expect(next.passkey._tag).toBe("Hidden");
+      }),
+    );
+  });
+
+  test("古い画面の問い合わせの答えは、今の画面に入口を出さない", () => {
+    story(
+      update,
+      given(pageOf("SignIn")),
+      message(Message.CompletedLoadPasskeyEntry({ visit: VISIT - 1, isShown: true })),
+      model((next) => {
+        expect(next.passkey._tag).toBe("Hidden");
+      }),
+    );
+  });
+});
+
+describe("パスキーでのログイン", () => {
+  test("押すと redirect_url を渡してログインし、成功で遷移先を application に渡し、移るまで送信中のままにする", () => {
+    story(
+      update,
+      given(withPasskeyEntry()),
+      message(Message.ClickedPasskeySignIn()),
+      Command.expectExact(
+        SignInWithPasskey({ visit: VISIT, redirectUrl: "https://app.taimei-code.com/" }),
+      ),
+      Command.resolve(
+        SignInWithPasskey,
+        Message.CompletedSignInWithPasskey({
+          visit: VISIT,
+          result: PasskeySignIn.SignedIn({ redirectUrl: "https://app.taimei-code.com/next" }),
+        }),
+      ),
+      model((next) => {
+        expect(next.passkey).toEqual({ _tag: "Shown", submission: { _tag: "Submitting" } });
+      }),
+      expectOutMessage(
+        OutMessage.SignedInWithPasskey({ redirectUrl: "https://app.taimei-code.com/next" }),
+      ),
+    );
+  });
+
+  test("送信中にもう一度押しても、Magic Link や GitHub を始めても、二重には送らない", () => {
+    story(
+      update,
+      given(
+        update({ ...withPasskeyEntry(), email: "user@example.com" }, Message.ClickedPasskeySignIn())
+          .model,
+      ),
+      message(Message.ClickedPasskeySignIn()),
+      Command.expectNone(),
+      message(Message.SubmittedMagicLinkForm()),
+      Command.expectNone(),
+      message(Message.ClickedGitHubSignIn()),
+      Command.expectNone(),
+    );
+  });
+
+  test("取り消しは誤りを出さずに戻し、失敗は理由を区別しない文言を出し、Magic Link を始めると消える", () => {
+    story(
+      update,
+      given({ ...withPasskeyEntry(), email: "user@example.com" }),
+      message(Message.ClickedPasskeySignIn()),
+      Command.resolve(
+        SignInWithPasskey,
+        Message.CompletedSignInWithPasskey({ visit: VISIT, result: PasskeySignIn.Cancelled() }),
+      ),
+      model((next) => {
+        expect(next.passkey).toEqual({ _tag: "Shown", submission: { _tag: "Idle" } });
+      }),
+      expectNoOutMessage(),
+      message(Message.ClickedPasskeySignIn()),
+      Command.resolve(
+        SignInWithPasskey,
+        Message.CompletedSignInWithPasskey({ visit: VISIT, result: PasskeySignIn.Failed() }),
+      ),
+      model((next) => {
+        expect(next.passkey).toEqual({
+          _tag: "Shown",
+          submission: { _tag: "Rejected", message: PASSKEY_SIGN_IN_FAILED_MESSAGE },
+        });
+      }),
+      message(Message.SubmittedMagicLinkForm()),
+      Command.resolve(SendMagicLink, Message.SucceededSendMagicLink({ visit: VISIT })),
+      model((next) => {
+        expect(next.passkey).toEqual({ _tag: "Shown", submission: { _tag: "Idle" } });
+        expect(next.form._tag).toBe("SentMagicLink");
+      }),
+    );
+  });
+
+  test("古い画面の取り消しと失敗は、今の画面の状態を変えない", () => {
+    for (const result of [PasskeySignIn.Cancelled(), PasskeySignIn.Failed()]) {
+      story(
+        update,
+        given(withPasskeyEntry()),
+        message(Message.ClickedPasskeySignIn()),
+        Command.resolve(
+          SignInWithPasskey,
+          Message.CompletedSignInWithPasskey({ visit: VISIT - 1, result }),
+        ),
+        model((next) => {
+          expect(next.passkey).toEqual({ _tag: "Shown", submission: { _tag: "Submitting" } });
+        }),
+        expectNoOutMessage(),
+      );
+    }
+  });
+
+  test("ログインの途中で別の訪問に移っても、成功したログインは遷移先を application に渡す", () => {
+    story(
+      update,
+      given(pageOf("SignUp")),
+      message(
+        Message.CompletedSignInWithPasskey({
+          visit: VISIT - 1,
+          result: PasskeySignIn.SignedIn({ redirectUrl: "https://app.taimei-code.com/" }),
+        }),
+      ),
+      expectOutMessage(
+        OutMessage.SignedInWithPasskey({ redirectUrl: "https://app.taimei-code.com/" }),
+      ),
+    );
+  });
+
+  test("入口が出ていない時に押しても、ログインを始めない", () => {
+    story(
+      update,
+      given(pageOf("SignIn")),
+      message(Message.ClickedPasskeySignIn()),
+      Command.expectNone(),
     );
   });
 });

@@ -11,6 +11,9 @@
       "path": "./auth.json"
     },
     {
+      "path": "./passkey.json"
+    },
+    {
       "path": "./shared.json"
     },
     {

@@ -524,6 +524,14 @@ const ROWS: readonly Row[] = [
       "パスキーの一覧の応答を読み、行を出すか・登録の操作を出すかを決めるのは passkey/passkey-settings.ts の loadPasskeyList だけ (画面は返った PasskeyList を match する)",
   },
   {
+    name: "passkey-sign-in-only-in-passkey-sign-in",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/passkey/passkey-sign-in.ts"],
+    matchers: [{ kind: "member", paths: [".passkeySignIn", ".passkeySignInEntry"] }],
+    message:
+      "パスキーのログインの API を呼び、入口を出すかとログインの結果を決めるのは passkey/passkey-sign-in.ts だけ (入口は server の判断と browser の対応の両方が真の時だけ出し、失敗は理由を区別しない 1 種類にする。画面は返った真偽と PasskeySignIn を match する)",
+  },
+  {
     name: "leave-spa-only-in-leave-spa",
     within: ["web/src/**"],
     allowedIn: ["web/src/shared/leave-spa.ts"],

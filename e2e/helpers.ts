@@ -44,6 +44,8 @@ export const addVirtualAuthenticator = async (
   return {
     verifyUser: () =>
       cdp.send("WebAuthn.setUserVerified", { authenticatorId, isUserVerified: true }),
+    refuseUser: () =>
+      cdp.send("WebAuthn.setUserVerified", { authenticatorId, isUserVerified: false }),
   };
 };
 

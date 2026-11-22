@@ -52,6 +52,7 @@
     "taimei/no-effect-http-value-import-in-web": "error",
     "taimei/auth-client-list-only-in-auth-client-read": "error",
     "taimei/passkey-list-only-in-passkey-settings": "error",
+    "taimei/passkey-sign-in-only-in-passkey-sign-in": "error",
     "taimei/leave-spa-only-in-leave-spa": "error",
     "taimei/no-ignored-cause-in-web": "error",
     "taimei/no-or-else-succeed": "error",

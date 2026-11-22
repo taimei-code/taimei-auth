@@ -85,7 +85,7 @@ const AuthenticationOptions = Schema.Struct({
 });
 export type AuthenticationOptions = typeof AuthenticationOptions.Type;
 
-const AuthenticationResponse = Schema.Struct({
+export const AuthenticationResponse = Schema.Struct({
   id: Schema.String,
   rawId: Schema.String,
   type: Schema.Literal("public-key"),

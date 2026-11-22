@@ -68,6 +68,13 @@ export const RedirectToInvalidRedirectUrlError = Command.define(
   },
 );
 
+const leaveTo =
+  ({ redirectUrl }: Readonly<{ redirectUrl: string }>): Update.Step<Model, Message> =>
+  (model) => ({
+    model,
+    commands: [navigate(DocumentNavigation.ReplaceDocument({ href: redirectUrl }))],
+  });
+
 const withPage = (model: Model, page: AuthPage): Model =>
   modifyFields(model, { maybePage: (): Option.Option<AuthPage> => Option.some(page) });
 
@@ -215,15 +222,13 @@ const foldSignInOrSignUp = Update.foldChild({
   write: (model: Model, nextSignInOrSignUp: SignInOrSignUp.Model) =>
     withPage(model, AuthPage.SignInOrSignUp({ model: nextSignInOrSignUp })),
   toParentMessage: (message) => Message.GotSignInOrSignUpMessage({ message }),
+  foldOutMessage: SignInOrSignUp.OutMessage.match<Update.Step<Model, Message>>({
+    SignedInWithPasskey: leaveTo,
+  }),
 });
 
 const foldSignUpCompanyOutMessage = SignUpCompany.OutMessage.match<Update.Step<Model, Message>>({
-  ConfirmedCompanyMembership:
-    ({ redirectUrl }) =>
-    (model) => ({
-      model,
-      commands: [navigate(DocumentNavigation.ReplaceDocument({ href: redirectUrl }))],
-    }),
+  ConfirmedCompanyMembership: leaveTo,
   RequiredSignIn: () => (model) => ({
     model,
     commands: [navigate(DocumentNavigation.LeaveToSignIn())],
@@ -253,12 +258,7 @@ const foldSignUpCompany = Update.foldChild({
 const foldAcceptInvitationOutMessage = AcceptInvitation.OutMessage.match<
   Update.Step<Model, Message>
 >({
-  AcceptedInvitation:
-    ({ redirectUrl }) =>
-    (model) => ({
-      model,
-      commands: [navigate(DocumentNavigation.ReplaceDocument({ href: redirectUrl }))],
-    }),
+  AcceptedInvitation: leaveTo,
   RequiredSignIn: () => (model) => ({
     model,
     commands: [navigate(DocumentNavigation.LeaveToSignIn())],
@@ -291,29 +291,21 @@ const foldMfaChallenge = Update.foldChild({
     withPage(model, AuthPage.MfaChallenge({ model: nextMfaChallenge })),
   toParentMessage: (message) => Message.GotMfaChallengeMessage({ message }),
   foldOutMessage: MfaChallenge.OutMessage.match<Update.Step<Model, Message>>({
-    PassedChallenge:
-      ({ redirectUrl }) =>
-      (model) => ({
-        model,
-        commands: [navigate(DocumentNavigation.ReplaceDocument({ href: redirectUrl }))],
-      }),
+    PassedChallenge: leaveTo,
   }),
+});
+
+const isAuthRouteUrl = (url: Url): boolean => !AuthRoute.guards.NotFound(urlToAuthRoute(url));
+
+const followLink = (model: Model, request: UrlRequest): UpdateReturn => ({
+  model,
+  commands: [navigate(DocumentNavigation.commandForLink(request, isAuthRouteUrl))],
 });
 
 export const update = (model: Model, message: Message) =>
   Message.match<UpdateReturn>(message, {
     GotDocumentNavigationMessage: () => ({ model }),
-    ClickedLink: ({ request }) => ({
-      model,
-      commands: [
-        navigate(
-          DocumentNavigation.commandForLink(
-            request,
-            (url) => !AuthRoute.guards.NotFound(urlToAuthRoute(url)),
-          ),
-        ),
-      ],
-    }),
+    ClickedLink: ({ request }) => followLink(model, request),
     ChangedUrl: ({ url }) =>
       enterIfNewRoute(
         modifyFields(model, { route: () => urlToAuthRoute(url) }),
