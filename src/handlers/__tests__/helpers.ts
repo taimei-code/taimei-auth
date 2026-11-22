@@ -1,8 +1,10 @@
-import { afterEach, beforeEach } from "bun:test";
+import { afterEach, beforeEach, type Mock, spyOn } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
 import { mountSpaApi } from "../spa-http-api";
 import { auth } from "../../auth";
+import { withWaitUntil } from "../../background";
+import { drained } from "../../__tests__/live-runner";
 import { AuthApi } from "../../auth-service";
 import { requestHeaders } from "../../__tests__/session-helpers";
 import { authApiWith } from "../../__tests__/test-layers";
@@ -99,6 +101,71 @@ export const restoreKvStoreAfterEach = (): void => {
     }
   });
 };
+
+type ResendDelivery = { readonly to: string; readonly html: string; readonly text: string };
+
+const resendAccepts = async () => Response.json({ id: "sent" });
+
+const resendFails = async () =>
+  Response.json(
+    { name: "application_error", message: "resend down", statusCode: 500 },
+    { status: 500 },
+  );
+
+export const SECURITY_PAGE_URL = `${process.env.AUTH_SERVICE_URL}/account/security`;
+
+export const resendOutbox = () => {
+  const delivered: ResendDelivery[] = [];
+  let reply = resendAccepts;
+  let resendApi: Mock<typeof fetch> | undefined;
+  const keyBefore = process.env.AUTH_RESEND_KEY;
+  beforeEach(() => {
+    process.env.AUTH_RESEND_KEY = "re_test";
+    delivered.length = 0;
+    reply = resendAccepts;
+    const passThrough = globalThis.fetch;
+    resendApi = spyOn(globalThis, "fetch").mockImplementation((async (
+      input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      const body = init?.body;
+      if (!url.endsWith("/emails") || typeof body !== "string") return passThrough(input, init);
+      const response = await reply();
+      if (response.ok) delivered.push(JSON.parse(body) as ResendDelivery);
+      return response;
+    }) as typeof fetch);
+  });
+  afterEach(() => {
+    resendApi?.mockRestore();
+    if (keyBefore === undefined) delete process.env.AUTH_RESEND_KEY;
+    else process.env.AUTH_RESEND_KEY = keyBefore;
+  });
+  return {
+    delivered,
+    recipients: () => delivered.map(({ to }) => to),
+    failing: () => {
+      reply = resendFails;
+    },
+    held: () => {
+      const gate = Promise.withResolvers<void>();
+      reply = async () => {
+        await gate.promise;
+        return resendAccepts();
+      };
+      return gate.resolve;
+    },
+  };
+};
+
+export const inBackgroundScope = async <T>(request: () => Promise<T>) => {
+  const pending: Promise<unknown>[] = [];
+  const result = await withWaitUntil((promise) => void pending.push(promise), request);
+  return { result, settled: () => Promise.allSettled(pending) };
+};
+
+export const awaitingBackground = <T>(request: () => Promise<T>): Promise<T> =>
+  Effect.runPromise(drained(Effect.promise(request)));
 
 export type Outcome = {
   readonly status: number;
@@ -208,13 +275,18 @@ export const sendRegistration = async (
 
 export const signedRegistrationFor = (
   challenge: string,
-  overrides: { readonly userVerified?: boolean; readonly origin?: string } = {},
+  overrides: {
+    readonly userVerified?: boolean;
+    readonly origin?: string;
+    readonly aaguid?: string;
+  } = {},
 ) =>
   signedRegistration({
     algorithm: "ES256",
     challenge,
     userVerified: overrides.userVerified ?? true,
     ...(overrides.origin === undefined ? {} : { origin: overrides.origin }),
+    ...(overrides.aaguid === undefined ? {} : { aaguid: overrides.aaguid }),
   });
 
 export type Credential = { readonly credentialId: string; readonly signer: Signer };

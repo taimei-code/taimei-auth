@@ -1139,22 +1139,29 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 登録の use case に書くと lint が止める",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 登録の use case に書くと lint が止める",
     path: "src/passkey/Probe495.ts",
     source:
       'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
-    expectedRules: ["taimei(passkey-provider-only-in-listing)"],
+    expectedRules: ["taimei(passkey-provider-only-for-display)"],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 型だけの import も lint が止める",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 型だけの import も lint が止める",
     path: "src/handlers/Probe496.ts",
     source:
       'import type { passkeyProviderNameOf } from "../passkey/passkey-providers"; export type N = typeof passkeyProviderNameOf;',
-    expectedRules: ["taimei(passkey-provider-only-in-listing)"],
+    expectedRules: ["taimei(passkey-provider-only-for-display)"],
   },
   {
-    name: "パスキーの提供元の表は一覧の表示だけが読む: 一覧の use case では lint が止めない",
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 一覧の use case では lint が止めない",
     path: "src/passkey/list-passkeys.ts",
+    source:
+      'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
+    expectedRules: [],
+  },
+  {
+    name: "パスキーの提供元の表は一覧と通知の表示だけが読む: 通知では lint が止めない",
+    path: "src/passkey/notify-passkey-change.ts",
     source:
       'import { passkeyProviderNameOf } from "./passkey-providers"; export const n = passkeyProviderNameOf;',
     expectedRules: [],
@@ -1218,6 +1225,19 @@ const CASES: readonly Case[] = [
     name: "Sentry facade の直呼びは sentry.ts と client-facing-error.ts だけ: src では lint が止めない",
     path: "src/sentry.ts",
     source: "export const r = (e: unknown) => Sentry.captureException(e);",
+    expectedRules: [],
+  },
+  {
+    name: "MFA とパスキーの通知メールは notifier だけが送る: passkey の use case に書くと lint が止める",
+    path: "src/passkey/Probe498.ts",
+    source:
+      "export const r = (sender: { sendPasskeyChanged(): void }) => sender.sendPasskeyChanged();",
+    expectedRules: ["taimei(security-notification-only-in-notifiers)"],
+  },
+  {
+    name: "MFA とパスキーの通知メールは notifier だけが送る: MFA の notifier では lint が止めない",
+    path: "src/mfa/notification-adapter.ts",
+    source: "export const r = (sender: { sendMfaEnabled(): void }) => sender.sendMfaEnabled();",
     expectedRules: [],
   },
   {

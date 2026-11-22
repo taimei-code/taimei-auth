@@ -774,9 +774,9 @@ const ROWS: readonly Row[] = [
       "Use-case は Repository を ports 経由で使う。db/repositories と db/transaction を値で import するのは wiring.ts・id-generator.ts・transaction.ts・auth.ts だけ",
   },
   {
-    name: "passkey-provider-only-in-listing",
+    name: "passkey-provider-only-for-display",
     within: ["src/**", "web/src/**", "management/**"],
-    allowedIn: ["src/passkey/list-passkeys.ts"],
+    allowedIn: ["src/passkey/list-passkeys.ts", "src/passkey/notify-passkey-change.ts"],
     matchers: [
       {
         kind: "importTarget",
@@ -785,7 +785,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "パスキーの提供元の表 (src/passkey/passkey-providers) を import するのは一覧の use case (src/passkey/list-passkeys.ts) だけ。提供元は一覧の表示に使い、登録やログインの許可と拒否の判定に使わない (aaguid は attestation の無い登録では偽れる)",
+      "パスキーの提供元の表 (src/passkey/passkey-providers) を import するのは一覧の use case (src/passkey/list-passkeys.ts) と通知 (src/passkey/notify-passkey-change.ts) だけ。提供元は一覧と通知メールの表示に使い、登録やログインの許可と拒否の判定に使わない (aaguid は attestation の無い登録では偽れる)",
   },
   {
     name: "no-promise-all",
@@ -819,6 +819,20 @@ const ROWS: readonly Row[] = [
       "Sentry の facade を直接呼ぶのは src/sentry.ts と settleCause (client-facing-error.ts) だけ。ほかは SentryService を使う",
   },
   {
+    name: "security-notification-only-in-notifiers",
+    within: ["src/**"],
+    allowedIn: ["src/mfa/notification-adapter.ts", "src/passkey/notify-passkey-change.ts"],
+    matchers: [
+      {
+        kind: "member",
+        paths: [".sendMfaEnabled", ".sendMfaDisabled", ".sendPasskeyChanged"],
+        callOnly: true,
+      },
+    ],
+    message:
+      "MFA とパスキーの通知メールを送るのは src/mfa/notification-adapter.ts と src/passkey/notify-passkey-change.ts だけ (要求の応答は notifyInBackground で送信を待たず、送れなかった時は Sentry に残す)",
+  },
+  {
     name: "audit-append-only-in-append",
     within: ["src/**"],
     allowedIn: ["src/audit/append.ts"],
@@ -848,9 +862,9 @@ const ROWS: readonly Row[] = [
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
       "src/invitation/create.ts",
+      "src/email/notify-in-background.ts",
       "src/membership/guard/core.ts",
       "src/mfa/disable-attempt-budget.ts",
-      "src/mfa/notification-adapter.ts",
       "src/mfa/totp/login-challenge.ts",
       "src/rpc/auth-handler.ts",
       "src/sentry.ts",

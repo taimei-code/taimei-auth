@@ -21,6 +21,7 @@ export const emailSenderByRecipient = (
     sendInvitation: (params) => senderFor(params.inviteeEmail).sendInvitation(params),
     sendMfaEnabled: (email) => senderFor(email).sendMfaEnabled(email),
     sendMfaDisabled: (email) => senderFor(email).sendMfaDisabled(email),
+    sendPasskeyChanged: (params) => senderFor(params.email).sendPasskeyChanged(params),
   });
 };
 

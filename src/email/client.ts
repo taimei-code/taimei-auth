@@ -5,12 +5,21 @@ import { type EmailBody, renderEmail } from "./layout";
 
 let resendInstance: Resend | null = null;
 
+export type EmailKind =
+  | "magic link"
+  | "welcome"
+  | "invitation"
+  | "mfa enabled"
+  | "mfa disabled"
+  | "passkey registered"
+  | "passkey deleted";
+
 export const renderAndSendEmail = Effect.fnUntraced(function* (params: {
   from: string;
   to: string;
   subject: string;
   body: EmailBody;
-  kind: "magic link" | "welcome" | "invitation" | "mfa enabled" | "mfa disabled";
+  kind: EmailKind;
 }) {
   const sentAt = new Date(yield* Clock.currentTimeMillis);
   const { html, text } = renderEmail(params.body, sentAt.getUTCFullYear());

@@ -1,3 +1,5 @@
+import type { PasskeyChange } from "../src/email/passkey-changed";
+
 const magicLinkLogPrefix = (email: string): string => `[TEST] Magic Link for ${email}: `;
 
 const invitationLogPrefix = (email: string): string => `[TEST] Invitation email for ${email}: `;
@@ -6,6 +8,9 @@ export const WELCOME_EMAIL_LOG = "[TEST] Welcome email for";
 
 export const mfaNotificationLogLine = (kind: "enabled" | "disabled", email: string): string =>
   `[TEST] mfa ${kind} email for ${email}`;
+
+export const passkeyNotificationLogLine = (change: PasskeyChange, email: string): string =>
+  `[TEST] passkey ${change} email for ${email}`;
 
 export const magicLinkLogLine = (email: string, url: string): string =>
   `${magicLinkLogPrefix(email)}${url}`;

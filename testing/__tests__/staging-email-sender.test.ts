@@ -14,6 +14,8 @@ const spySender = (deliveries: Delivery[]) =>
       Effect.sync(() => void deliveries.push(["invitation", inviteeEmail])),
     sendMfaEnabled: (email) => Effect.sync(() => void deliveries.push(["mfa-enabled", email])),
     sendMfaDisabled: (email) => Effect.sync(() => void deliveries.push(["mfa-disabled", email])),
+    sendPasskeyChanged: ({ change, email }) =>
+      Effect.sync(() => void deliveries.push([`passkey-${change}`, email])),
   });
 
 const sendAllKindsTo = (email: string) => {
@@ -34,18 +36,28 @@ const sendAllKindsTo = (email: string) => {
       }),
       sender.sendMfaEnabled(email),
       sender.sendMfaDisabled(email),
+      sender.sendPasskeyChanged({ change: "registered", email, providerName: "Windows Hello" }),
+      sender.sendPasskeyChanged({ change: "deleted", email, providerName: null }),
     ]),
   );
   return { recorded: recorded.map(([kind]) => kind), sent: sent.map(([kind]) => kind) };
 };
 
-const ALL_KINDS = ["welcome", "magic-link", "invitation", "mfa-enabled", "mfa-disabled"];
+const ALL_KINDS = [
+  "welcome",
+  "magic-link",
+  "invitation",
+  "mfa-enabled",
+  "mfa-disabled",
+  "passkey-registered",
+  "passkey-deleted",
+];
 
 describe("staging のメールは、届かない domain の開発用アカウント宛てだけを記録し、ほかは送る", () => {
   test.each([
     "dev-owner@example.com",
     "Dev-Owner@Example.COM",
-  ])("%s 宛ての 5 種のメールは記録し、送り手に渡さない", (email) => {
+  ])(`%s 宛ての ${ALL_KINDS.length} 種のメールは記録し、送り手に渡さない`, (email) => {
     expect(sendAllKindsTo(email)).toEqual({ recorded: ALL_KINDS, sent: [] });
   });
 
@@ -53,7 +65,7 @@ describe("staging のメールは、届かない domain の開発用アカウン
     "someone@example.org",
     "someone@sub.example.com",
     "example.com@example.org",
-  ])("%s 宛ての 5 種のメールは送り手に渡し、記録しない", (email) => {
+  ])(`%s 宛ての ${ALL_KINDS.length} 種のメールは送り手に渡し、記録しない`, (email) => {
     expect(sendAllKindsTo(email)).toEqual({ recorded: [], sent: ALL_KINDS });
   });
 });

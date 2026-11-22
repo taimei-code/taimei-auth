@@ -111,6 +111,12 @@ const signWith = (signer: Signer, data: Uint8Array): Uint8Array =>
 
 export const authHost = () => new URL(process.env.AUTH_SERVICE_URL ?? "");
 
+const aaguidBytes = (aaguid: string): Buffer => {
+  const hex = aaguid.replaceAll("-", "");
+  if (!/^[0-9a-f]{32}$/i.test(hex)) throw new Error(`aaguid が 16 byte の hex でない: ${aaguid}`);
+  return Buffer.from(hex, "hex");
+};
+
 export const signedRegistration = (input: {
   readonly algorithm: SignatureAlgorithm;
   readonly challenge: string;
@@ -120,9 +126,12 @@ export const signedRegistration = (input: {
   readonly signatureMismatch?: true;
   readonly transports?: readonly unknown[];
   readonly credentialIdBytes?: number;
+  readonly aaguid?: string;
 }) => {
   const credentialId = new Uint8Array(randomBytes(input.credentialIdBytes ?? 16));
-  const aaguid = new Uint8Array(randomBytes(16));
+  const aaguid = new Uint8Array(
+    input.aaguid === undefined ? randomBytes(16) : aaguidBytes(input.aaguid),
+  );
   const { publicKey, privateKey } = keyPairOf(input.algorithm);
   const coseKey = coseKeyOf(input.algorithm, publicKey.export({ format: "jwk" }));
   const flags =
