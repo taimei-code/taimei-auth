@@ -4,7 +4,7 @@ import { Authenticated } from "../account/actor-contract";
 import { InvalidCode, Locked, NotEnabled } from "../mfa/errors";
 import { MfaCode } from "../mfa/mfa-contract";
 import { NotFound, RateLimited } from "../failures";
-import { Ok, SignedIn } from "../spa-contract-schemas";
+import { IsoDateTime, Ok, SignedIn } from "../spa-contract-schemas";
 import {
   PasskeyAlreadyRegistered,
   PasskeyLimitReached,
@@ -17,8 +17,9 @@ const PasskeyList = Schema.Struct({
   passkeys: Schema.Array(
     Schema.Struct({
       id: Schema.String,
-      created_at: Schema.String,
-      last_used_at: Schema.NullOr(Schema.String),
+      created_at: IsoDateTime,
+      last_used_at: Schema.NullOr(IsoDateTime),
+      provider_name: Schema.NullOr(Schema.String),
     }),
   ),
   can_register: Schema.Boolean,

@@ -767,6 +767,20 @@ const ROWS: readonly Row[] = [
       "Use-case は Repository を ports 経由で使う。db/repositories と db/transaction を値で import するのは wiring.ts・id-generator.ts・transaction.ts・auth.ts だけ",
   },
   {
+    name: "passkey-provider-only-in-listing",
+    within: ["src/**", "web/src/**", "management/**"],
+    allowedIn: ["src/passkey/list-passkeys.ts"],
+    matchers: [
+      {
+        kind: "importTarget",
+        target: /^src\/passkey\/passkey-providers(\.ts)?$/,
+        includesTypeImports: true,
+      },
+    ],
+    message:
+      "パスキーの提供元の表 (src/passkey/passkey-providers) を import するのは一覧の use case (src/passkey/list-passkeys.ts) だけ。提供元は一覧の表示に使い、登録やログインの許可と拒否の判定に使わない (aaguid は attestation の無い登録では偽れる)",
+  },
+  {
     name: "no-promise-all",
     within: ["src/**"],
     matchers: [{ kind: "member", paths: ["Promise.all"], callOnly: true }],

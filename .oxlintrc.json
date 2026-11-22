@@ -68,6 +68,7 @@
     "taimei/port-import-only-in-reading-transport": "error",
     "taimei/no-effect-in-db": "error",
     "taimei/repository-import-only-in-wiring": "error",
+    "taimei/passkey-provider-only-in-listing": "error",
     "taimei/no-promise-all": "error",
     "taimei/run-background-only-in-background": "error",
     "taimei/sentry-capture-only-in-sentry-facade": "error",

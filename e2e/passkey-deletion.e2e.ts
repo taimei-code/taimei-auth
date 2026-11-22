@@ -28,12 +28,14 @@ const OLDER: ListedPasskey = {
   id: "passkey-older",
   created_at: "2026-03-04T03:00:00.000Z",
   last_used_at: null,
+  provider_name: null,
 };
 
 const NEWER: ListedPasskey = {
   id: "passkey-newer",
   created_at: "2026-07-08T03:00:00.000Z",
   last_used_at: null,
+  provider_name: null,
 };
 
 const OLDER_ITEM_TEXT = "登録日 2026/03/04";

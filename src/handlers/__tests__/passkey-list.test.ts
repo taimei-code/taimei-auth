@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
+import { afterEach, describe, expect, setSystemTime, spyOn, test } from "bun:test";
 import { dbTest, partial } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { ttlStoreWithoutCounting } from "../../__tests__/test-ttl-store";
@@ -30,6 +30,7 @@ const USED = {
   lastUsedAt: new Date("2026-11-02T03:04:05.678Z") as Date | null,
 };
 const UNUSED = { ...USED, id: "pk-unused", lastUsedAt: null };
+const GOOGLE_PM_AAGUID = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
 
 const passkeyRepoWith = (rows: (typeof USED)[]) =>
   Layer.succeed(
@@ -51,11 +52,87 @@ describe("パスキーの一覧の API の応答", () => {
           id: "pk-used",
           created_at: "2026-11-01T00:00:00.000Z",
           last_used_at: "2026-11-02T03:04:05.678Z",
+          provider_name: null,
         },
-        { id: "pk-unused", created_at: "2026-11-01T00:00:00.000Z", last_used_at: null },
+        {
+          id: "pk-unused",
+          created_at: "2026-11-01T00:00:00.000Z",
+          last_used_at: null,
+          provider_name: null,
+        },
       ],
       can_register: true,
     });
+  });
+
+  test("Google パスワードマネージャーが公開した aaguid のパスキーは、一覧の項目に提供元の名前が含まれる", async () => {
+    const app = buildAppWith(
+      Layer.mergeAll(signedIn(), passkeyRepoWith([{ ...USED, aaguid: GOOGLE_PM_AAGUID }])),
+    );
+
+    const res = await app.request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+    });
+
+    const body = await res.json<{ passkeys: Array<Record<string, unknown>> }>();
+    expect(body.passkeys.map((item) => Object.values(item))).toEqual([
+      expect.arrayContaining(["Google パスワードマネージャー"]),
+    ]);
+  });
+
+  test("aaguid が全 0 のパスキーは、どの提供元とも言えないので名前を返さない", async () => {
+    const app = buildAppWith(
+      Layer.mergeAll(
+        signedIn(),
+        passkeyRepoWith([{ ...USED, aaguid: "00000000-0000-0000-0000-000000000000" }]),
+      ),
+    );
+
+    const res = await app.request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+    });
+
+    const body = await res.json<{ passkeys: Array<{ provider_name: unknown }> }>();
+    expect(body.passkeys.map(({ provider_name }) => provider_name)).toEqual([null]);
+  });
+
+  test("提供元を引く時に外部へ通信せず、fetch が失敗する状態でも名前が返る", async () => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockRejectedValue(new Error("外部への通信"));
+    try {
+      const app = buildAppWith(
+        Layer.mergeAll(signedIn(), passkeyRepoWith([{ ...USED, aaguid: GOOGLE_PM_AAGUID }])),
+      );
+
+      const res = await app.request("/api/account/passkeys", {
+        headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+      });
+
+      const body = await res.json<{ passkeys: Array<Record<string, unknown>> }>();
+      expect(body.passkeys.flatMap((item) => Object.values(item))).toContain(
+        "Google パスワードマネージャー",
+      );
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  test("一覧の日時は、保存した日時の ISO 8601 の文字列と、未使用の時の null のまま返る", async () => {
+    const app = buildAppWith(Layer.mergeAll(signedIn(), passkeyRepoWith([USED, UNUSED])));
+
+    const res = await app.request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+    });
+
+    const body = await res.json<{
+      passkeys: Array<{ created_at: unknown; last_used_at: unknown }>;
+    }>();
+    expect(
+      body.passkeys.map(({ created_at, last_used_at }) => ({ created_at, last_used_at })),
+    ).toEqual([
+      { created_at: "2026-11-01T00:00:00.000Z", last_used_at: "2026-11-02T03:04:05.678Z" },
+      { created_at: "2026-11-01T00:00:00.000Z", last_used_at: null },
+    ]);
   });
 
   test("未ログインの要求は試行枠を数える前に 401 になり、同じ IP から 11 回送っても 429 にならない", async () => {
@@ -155,6 +232,30 @@ describe("パスキーの一覧の API の応答を、保存したパスキー�
       expect(byId.get(stored.id)?.registeredAt.getTime()).toBe(stored.registeredAt.getTime());
       expect(byId.get(stored.id)?.lastUsedAt).toBeNull();
     }
+  });
+
+  test("名前を渡さずに保存した Google パスワードマネージャーの aaguid のパスキーを読むと、提供元の名前が返る", async () => {
+    const owner = await createUser("owner");
+    const saved = await run(
+      PasskeyRepo.use((repo) =>
+        repo.insertPasskey({
+          id: crypto.randomUUID(),
+          userId: owner.id,
+          ...passkeyToSave(),
+          aaguid: GOOGLE_PM_AAGUID,
+        }),
+      ),
+    );
+    if (typeof saved === "string") throw new Error(`パスキーを保存できなかった: ${saved}`);
+
+    const outcome = await read(signedInSession(owner));
+
+    expect(outcome.status).toBe(200);
+    const listed = (JSON.parse(outcome.bodyText) as { passkeys: Array<Record<string, unknown>> })
+      .passkeys;
+    expect(listed.flatMap((item) => Object.values(item))).toContain(
+      "Google パスワードマネージャー",
+    );
   });
 
   test("一覧には、ほかの user が保存したパスキーが出ない", async () => {
