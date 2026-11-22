@@ -12,7 +12,7 @@ const NON_PRODUCTION_PATHS = [
   "packages/auth-client/src/testing.ts",
 ];
 
-type Case = { readonly id: string; readonly globs: readonly string[] };
+type Case = { readonly id: string; readonly globs: readonly string[]; readonly body: string };
 
 const casesIn = (document: string): Case[] =>
   document
@@ -23,6 +23,7 @@ const casesIn = (document: string): Case[] =>
       globs: [...(TRIGGER_PATHS_LINE.exec(section)?.[1] ?? "").matchAll(/`([^`]+)`/g)].map(
         ([, glob]) => glob ?? "",
       ),
+      body: section,
     }));
 
 const matchesAny = (globs: readonly string[], path: string) =>
@@ -66,7 +67,41 @@ describe("手動回帰の契機は path の一覧で書き、漏れと古くな�
   });
 
   test("どの file にも当たらない契機の path は、古くなった path として報告される", () => {
-    const stale: Case = { id: "QA-MR-99", globs: ["renamed/away.ts"] };
+    const stale: Case = { id: "QA-MR-99", globs: ["renamed/away.ts"], body: "" };
     expect(globsMatchingNothing([...cases, stale], trackedFiles)).toEqual(["renamed/away.ts"]);
+  });
+});
+
+const EQUIPMENT_LINE = /^- \*\*機材\*\*: (.+)$/m;
+const passkeyFiles = trackedFiles.filter(
+  (file) =>
+    /^((web\/)?src\/passkey\/|src\/handlers\/passkey-)/.test(file) && !file.includes("/__tests__/"),
+);
+const passkeyDeviceCase = cases.find(
+  ({ globs, body }) =>
+    EQUIPMENT_LINE.test(body) && passkeyFiles.some((file) => matchesAny(globs, file)),
+);
+
+describe("パスキーの実機の確認は、パスキーの file を契機にする手動回帰に書く", () => {
+  test("パスキーの server と画面の file は、どれも何かの QA-MR の契機の path に当たる", () => {
+    expect(passkeyFiles.length).toBeGreaterThan(10);
+    expect(filesNoCaseCovers(cases, passkeyFiles)).toEqual([]);
+  });
+
+  test("パスキーの file を契機にする QA-MR は、機材に Mac の Touch ID (Chrome と Safari)、iPhone、Windows Hello、Android を挙げる", () => {
+    expect(passkeyDeviceCase).toBeDefined();
+    const equipment = EQUIPMENT_LINE.exec(passkeyDeviceCase?.body ?? "")?.[1] ?? "";
+    for (const device of ["Touch ID", "Chrome", "Safari", "iPhone", "Windows Hello", "Android"]) {
+      expect(equipment).toContain(device);
+    }
+  });
+
+  test("パスキーの file を契機にする QA-MR は staging で、登録、ログイン、削除と、パスキーに対応していない browser を確かめる", () => {
+    const body = passkeyDeviceCase?.body ?? "";
+    expect(body).toContain("staging");
+    const steps = body.slice(body.indexOf("- **手順**"));
+    for (const topic of ["登録", "ログイン", "削除", "パスキーに対応していない browser"]) {
+      expect(steps).toContain(topic);
+    }
   });
 });
