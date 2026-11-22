@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 import { HttpApiBuilder } from "effect/http-api";
 import { CurrentActor } from "../account/actor-contract";
 import { deleteOwnedPasskey } from "../passkey/delete-passkey";
@@ -16,8 +16,9 @@ export const PasskeyHandlers = HttpApiBuilder.group(SpaApi, "passkey", (handlers
       return {
         passkeys: owned.passkeys.map((passkey) => ({
           id: passkey.id,
-          created_at: passkey.createdAt.toISOString(),
-          last_used_at: passkey.lastUsedAt?.toISOString() ?? null,
+          created_at: DateTime.fromDateUnsafe(passkey.createdAt),
+          last_used_at:
+            passkey.lastUsedAt === null ? null : DateTime.fromDateUnsafe(passkey.lastUsedAt),
         })),
         can_register: owned.canRegister,
       };

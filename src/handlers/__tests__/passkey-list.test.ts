@@ -58,6 +58,24 @@ describe("パスキーの一覧の API の応答", () => {
     });
   });
 
+  test("一覧の日時は、保存した日時の ISO 8601 の文字列と、未使用の時の null のまま返る", async () => {
+    const app = buildAppWith(Layer.mergeAll(signedIn(), passkeyRepoWith([USED, UNUSED])));
+
+    const res = await app.request("/api/account/passkeys", {
+      headers: { ...JSON_HEADERS, ...freshSessionCookie() },
+    });
+
+    const body = await res.json<{
+      passkeys: Array<{ created_at: unknown; last_used_at: unknown }>;
+    }>();
+    expect(
+      body.passkeys.map(({ created_at, last_used_at }) => ({ created_at, last_used_at })),
+    ).toEqual([
+      { created_at: "2026-11-01T00:00:00.000Z", last_used_at: "2026-11-02T03:04:05.678Z" },
+      { created_at: "2026-11-01T00:00:00.000Z", last_used_at: null },
+    ]);
+  });
+
   test("未ログインの要求は試行枠を数える前に 401 になり、同じ IP から 11 回送っても 429 にならない", async () => {
     const app = buildAppWith(signedOut());
     const ip = `2001:db8::${crypto.randomUUID().slice(0, 4)}`;

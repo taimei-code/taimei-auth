@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect as expectBun, test } from "bun:test";
-import { Effect, Fiber, Option, Redacted } from "effect";
+import { DateTime, Effect, Fiber, Option, Redacted } from "effect";
 // oxlint-disable-next-line no-restricted-imports -- コピーの結果を隠す 3 秒の待ちを、仮想の時計 (TestClock) で進めて確かめる
 import { TestClock } from "effect/testing";
 import {
@@ -101,8 +101,8 @@ describe("セキュリティの画面", () => {
   describe("パスキーの行", () => {
     const USED = {
       id: "passkey-1",
-      createdAt: "2026-03-04T03:00:00.000Z",
-      maybeLastUsedAt: Option.some("2026-05-06T03:00:00.000Z"),
+      createdAt: DateTime.makeUnsafe("2026-03-04T03:00:00.000Z"),
+      maybeLastUsedAt: Option.some(DateTime.makeUnsafe("2026-05-06T03:00:00.000Z")),
     };
 
     test("登録できない 0 本の時は行を出さず、一覧は MFA の行だけになる", () => {
@@ -162,14 +162,14 @@ describe("セキュリティの画面", () => {
               passkeys: [
                 {
                   id: "passkey-used",
-                  createdAt: "2026-03-04T12:00:00.000Z",
-                  maybeLastUsedAt: Option.some("2026-05-06T12:00:00.000Z"),
-                },
+                  createdAt: DateTime.makeUnsafe("2026-03-04T12:00:00.000Z"),
+                  maybeLastUsedAt: Option.some(DateTime.makeUnsafe("2026-05-06T12:00:00.000Z")),
+                            },
                 {
                   id: "passkey-unused",
-                  createdAt: "2026-07-08T12:00:00.000Z",
+                  createdAt: DateTime.makeUnsafe("2026-07-08T12:00:00.000Z"),
                   maybeLastUsedAt: Option.none(),
-                },
+                            },
               ],
               registrable: true,
             },
@@ -257,7 +257,7 @@ describe("セキュリティの画面", () => {
 describe("パスキーの削除", () => {
   const PASSKEY = {
     id: "passkey-1",
-    createdAt: "2026-03-04T12:00:00.000Z",
+    createdAt: DateTime.makeUnsafe("2026-03-04T12:00:00.000Z"),
     maybeLastUsedAt: Option.none(),
   };
   const LISTED: Model["passkeyList"] = { _tag: "Shown", passkeys: [PASSKEY], registrable: false };

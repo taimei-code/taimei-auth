@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Option, Redacted } from "effect";
+import { DateTime, Option, Redacted } from "effect";
 import { Command, expectOutMessage, given, message, model, story } from "foldkit/story";
 
 import * as MfaDisabling from "../../mfa/mfa-disabling";
@@ -552,7 +552,7 @@ describe("パスキーの登録の結果を画面に返す", () => {
 describe("パスキーの削除の結果を画面に返す", () => {
   const PASSKEY = {
     id: "passkey-1",
-    createdAt: "2026-03-04T03:00:00.000Z",
+    createdAt: DateTime.makeUnsafe("2026-03-04T03:00:00.000Z"),
     maybeLastUsedAt: Option.none(),
   };
 

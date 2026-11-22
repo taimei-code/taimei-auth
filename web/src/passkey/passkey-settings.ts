@@ -1,6 +1,6 @@
 import type { PasskeyListResponse } from "@core/passkey/passkey-contract";
 import { isPasskeyLimitReached } from "@core/passkey/policy";
-import { Array, Effect, Option, Schema, String } from "effect";
+import { Array, DateTime, Effect, Option, Schema, String } from "effect";
 import { Command, Submodel, Update } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -47,8 +47,8 @@ type PasskeyApi = SpaHttpClient["Service"]["passkey"];
 
 const ListedPasskey = Schema.Struct({
   id: Schema.String,
-  createdAt: Schema.String,
-  maybeLastUsedAt: Schema.Option(Schema.String),
+  createdAt: Schema.DateTimeUtc,
+  maybeLastUsedAt: Schema.Option(Schema.DateTimeUtc),
 });
 type ListedPasskey = typeof ListedPasskey.Type;
 
@@ -404,7 +404,7 @@ const LIST_UNAVAILABLE = "パスキーの一覧を取得できませんでした
 
 const dayFormatter = new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium" });
 
-const dayOf = (iso: string): string => dayFormatter.format(new Date(iso));
+const dayOf = (dateTime: DateTime.Utc): string => dayFormatter.format(DateTime.toDateUtc(dateTime));
 
 const registeredOnText = (passkey: ListedPasskey): string => `登録日 ${dayOf(passkey.createdAt)}`;
 

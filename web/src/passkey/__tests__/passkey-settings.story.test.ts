@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Option } from "effect";
+import { DateTime, Effect, Option } from "effect";
 
 import { RateLimited } from "@core/failures";
+import type { PasskeyListResponse } from "@core/passkey/passkey-contract";
 import { FIRST_DIALOG_CLOSING_MESSAGES } from "../../shared/__tests__/dialog-resolvers";
 import {
   DeletePasskey,
@@ -22,12 +23,7 @@ const registering = (): Model => clicked().model;
 
 const CURRENT = { visit: VISIT, requestNumber: 1 };
 
-type ListResponse = {
-  passkeys: ReadonlyArray<{ id: string; created_at: string; last_used_at: string | null }>;
-  can_register: boolean;
-};
-
-const listedBy = (list: Effect.Effect<ListResponse, RateLimited>) =>
+const listedBy = (list: Effect.Effect<PasskeyListResponse, RateLimited>) =>
   Effect.runPromise(loadPasskeyList({ list: () => list } as never));
 
 describe("一覧を読む", () => {
@@ -40,7 +36,13 @@ describe("一覧を読む", () => {
   test("1 本以上なら、登録できなくても一覧を出す状態になる", async () => {
     const list = await listedBy(
       Effect.succeed({
-        passkeys: [{ id: "p1", created_at: "2026-01-02T03:04:05.000Z", last_used_at: null }],
+        passkeys: [
+          {
+            id: "p1",
+            created_at: DateTime.makeUnsafe("2026-01-02T03:04:05.000Z"),
+            last_used_at: null,
+          },
+        ],
         can_register: false,
       }),
     );
@@ -125,7 +127,7 @@ describe("パスキーを登録する", () => {
 
 const PASSKEY = {
   id: "passkey-1",
-  createdAt: "2026-03-04T03:00:00.000Z",
+  createdAt: DateTime.makeUnsafe("2026-03-04T03:00:00.000Z"),
   maybeLastUsedAt: Option.none(),
 };
 
