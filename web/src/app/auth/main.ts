@@ -222,6 +222,9 @@ const foldSignInOrSignUp = Update.foldChild({
   write: (model: Model, nextSignInOrSignUp: SignInOrSignUp.Model) =>
     withPage(model, AuthPage.SignInOrSignUp({ model: nextSignInOrSignUp })),
   toParentMessage: (message) => Message.GotSignInOrSignUpMessage({ message }),
+  foldOutMessage: SignInOrSignUp.OutMessage.match<Update.Step<Model, Message>>({
+    SignedInWithPasskey: leaveTo,
+  }),
 });
 
 const foldSignUpCompanyOutMessage = SignUpCompany.OutMessage.match<Update.Step<Model, Message>>({

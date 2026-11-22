@@ -16,6 +16,7 @@ import { fromString, type Url } from "foldkit/url";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import * as SignUpCompany from "../../company/pages/SignUpCompany";
 import * as MfaChallenge from "../../mfa/pages/MfaChallenge";
+import { PasskeySignIn } from "../../passkey/passkey-sign-in";
 import {
   init,
   Message,
@@ -448,6 +449,26 @@ describe("事業所の登録の画面を開くと確認の間の status を出�
       { update, view },
       givenScene(modelAt(`${url.pathname}${url.search}`)),
       ...checkingBeforeForm,
+    );
+  });
+});
+
+describe("共通ログイン画面のパスキーでのログインの出方", () => {
+  test("パスキーでログインすると、server の返した遷移先へ document を置き換える", () => {
+    const opened = modelAt(`/auth?${SEARCH}`);
+    story(
+      update,
+      given(opened),
+      message(
+        Message.GotSignInOrSignUpMessage({
+          message: SignInOrSignUp.Message.CompletedSignInWithPasskey({
+            visit: opened.pageVisit,
+            result: PasskeySignIn.SignedIn({ redirectUrl: "https://app.taimei-code.com/next" }),
+          }),
+        }),
+      ),
+      Command.expectExact(ReplaceDocument({ href: "https://app.taimei-code.com/next" })),
+      Command.resolve(ReplaceDocument, NavigationMessage.CompletedReplaceDocument()),
     );
   });
 });

@@ -12,12 +12,14 @@ import {
   type,
 } from "foldkit/scene";
 
+import { PASSKEY_SIGN_IN_FAILED_MESSAGE, PasskeySignIn } from "../../passkey/passkey-sign-in";
 import {
   FocusMagicLinkField,
   init,
   Message,
   type Params,
   SendMagicLink,
+  SignInWithPasskey,
   type SignKind,
   StartGitHubSignIn,
   update,
@@ -182,6 +184,51 @@ describe("新規登録画面", () => {
       Command.expectExact(StartGitHubSignIn),
       Command.resolve(StartGitHubSignIn, Message.SucceededStartGitHubSignIn()),
       expect(role("button", { name: "GitHub で登録" })).toBeDisabled(),
+    );
+  });
+});
+
+const withPasskeyEntry = () =>
+  update(pageOf("SignIn"), Message.CompletedLoadPasskeyEntry({ visit: 1, isShown: true })).model;
+
+describe("パスキーでログイン", () => {
+  test("入口を出さない答えの前は、「パスキーでログイン」を出さない", () => {
+    scene(
+      { update, view },
+      given(pageOf("SignIn")),
+      expect(role("button", { name: "パスキーでログイン" })).toBeAbsent(),
+    );
+  });
+
+  test("ログインの間はほかの経路を止め、失敗すると理由を区別しない文言を alert に出して、また押せる", () => {
+    scene(
+      { update, view },
+      given(withPasskeyEntry()),
+      click(role("button", { name: "パスキーでログイン" })),
+      expect(role("button", { name: "パスキーでログイン" })).toBeDisabled(),
+      expect(role("button", { name: "Magic Link を送信" })).toBeDisabled(),
+      expect(role("button", { name: "GitHub でログイン" })).toBeDisabled(),
+      Command.resolve(
+        SignInWithPasskey,
+        Message.CompletedSignInWithPasskey({ visit: 1, result: PasskeySignIn.Failed() }),
+      ),
+      expect(role("alert")).toHaveText(PASSKEY_SIGN_IN_FAILED_MESSAGE),
+      expect(role("button", { name: "パスキーでログイン" })).toBeEnabled(),
+      expect(role("button", { name: "Magic Link を送信" })).toBeEnabled(),
+    );
+  });
+
+  test("取り消すと alert を出さずに、また押せる", () => {
+    scene(
+      { update, view },
+      given(withPasskeyEntry()),
+      click(role("button", { name: "パスキーでログイン" })),
+      Command.resolve(
+        SignInWithPasskey,
+        Message.CompletedSignInWithPasskey({ visit: 1, result: PasskeySignIn.Cancelled() }),
+      ),
+      expect(role("alert")).toBeAbsent(),
+      expect(role("button", { name: "パスキーでログイン" })).toBeEnabled(),
     );
   });
 });

@@ -4,12 +4,24 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 import { modifyFields } from "foldkit/struct";
-import { Github, Mail } from "lucide";
+import { Github, KeyRound, Mail } from "lucide";
 
 import { acceptInvitationPath } from "@core/invitation/accept-path";
 import { SERVICE_NAMES, TAIMEI_SERVICES } from "@core/services";
 
-import { maybeRejectedMessage, Submission, submissionWhile } from "../../shared/submission";
+import {
+  loadPasskeySignInEntry,
+  PASSKEY_SIGN_IN_FAILED_MESSAGE,
+  PasskeySignIn,
+  signInWithPasskey,
+} from "../../passkey/passkey-sign-in";
+import { SpaHttpClient } from "../../shared/spa-http-client";
+import {
+  maybeRejectedMessage,
+  Submission,
+  submissionWhile,
+  withoutRejection,
+} from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
 import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
@@ -46,6 +58,12 @@ const Form = defineTaggedUnion({
   SentMagicLink: {},
 });
 
+const PasskeyEntry = defineTaggedUnion({
+  Hidden: {},
+  Shown: { submission: Submission },
+});
+type PasskeyEntry = typeof PasskeyEntry.Type;
+
 export const Model = Schema.Struct({
   kind: SignKind,
   params: Params,
@@ -57,6 +75,7 @@ export const Model = Schema.Struct({
   form: Form,
   magicLink: Submission,
   gitHub: Submission,
+  passkey: PasskeyEntry,
   showsRequiredErrors: Schema.Boolean,
 });
 export type Model = typeof Model.Type;
@@ -73,8 +92,18 @@ export const Message = defineMessageUnion({
   CompletedAddCanaryIcon: {},
   CompletedRemoveCanaryIcon: {},
   CompletedFocusField: {},
+  CompletedLoadPasskeyEntry: { visit: Schema.Int, isShown: Schema.Boolean },
+  ClickedPasskeySignIn: {},
+  CompletedSignInWithPasskey: { visit: Schema.Int, result: PasskeySignIn },
 });
 export type Message = typeof Message.Type;
+
+export const OutMessage = defineMessageUnion({
+  SignedInWithPasskey: { redirectUrl: Schema.String },
+});
+export type OutMessage = typeof OutMessage.Type;
+
+type UpdateReturn = Update.ReturnWithOutMessage<Model, Message, OutMessage, SpaHttpClient>;
 
 type SignTexts = Readonly<{
   title: (serviceName: string) => string;
@@ -123,8 +152,27 @@ const callbackUrlOf = (model: Model): string =>
     onSome: (token) => `${model.origin}${acceptInvitationPath(token)}`,
   });
 
+const maybePasskeySubmission = (model: Model): Option.Option<Submission> =>
+  PasskeyEntry.matchOrElse(
+    model.passkey,
+    { Shown: ({ submission }) => Option.some(submission) },
+    () => Option.none(),
+  );
+
+const isPasskeySubmitting = (model: Model): boolean =>
+  Option.exists(maybePasskeySubmission(model), Submission.guards.Submitting);
+
 const isBusy = (model: Model): boolean =>
-  Submission.guards.Submitting(model.magicLink) || Submission.guards.Submitting(model.gitHub);
+  Submission.guards.Submitting(model.magicLink) ||
+  Submission.guards.Submitting(model.gitHub) ||
+  isPasskeySubmitting(model);
+
+const withoutPasskeyRejection = (entry: PasskeyEntry): PasskeyEntry =>
+  PasskeyEntry.matchOrElse(
+    entry,
+    { Shown: ({ submission }) => PasskeyEntry.Shown({ submission: withoutRejection(submission) }) },
+    () => entry,
+  );
 
 const NAME_FIELD = { id: "name", label: "お名前" } as const;
 const EMAIL_FIELD = { id: "email", label: "メールアドレス" } as const;
@@ -141,7 +189,11 @@ export const FocusMagicLinkField = Command.define("FocusMagicLinkField", {
 });
 
 const maybeRejectedMessageOf = (model: Model): Option.Option<string> =>
-  Option.orElse(maybeRejectedMessage(model.magicLink), () => maybeRejectedMessage(model.gitHub));
+  Option.firstSomeOf([
+    maybeRejectedMessage(model.magicLink),
+    maybeRejectedMessage(model.gitHub),
+    Option.flatMap(maybePasskeySubmission(model), maybeRejectedMessage),
+  ]);
 
 const AddCanaryIcon = Command.define("AddCanaryIcon", {
   args: { tokenId: Schema.String },
@@ -214,6 +266,29 @@ export const StartGitHubSignIn = Command.define("StartGitHubSignIn", {
     ),
 });
 
+export const LoadPasskeyEntry = Command.define("LoadPasskeyEntry", {
+  args: { visit: Schema.Int },
+  messages: [Message.CompletedLoadPasskeyEntry],
+  execute: ({ visit }) =>
+    Effect.gen(function* () {
+      const isShown = yield* loadPasskeySignInEntry(yield* SpaHttpClient);
+      return Message.CompletedLoadPasskeyEntry({ visit, isShown });
+    }),
+});
+
+export const SignInWithPasskey = Command.define("SignInWithPasskey", {
+  args: { visit: Schema.Int, redirectUrl: Schema.String },
+  messages: [Message.CompletedSignInWithPasskey],
+  execute: ({ visit, redirectUrl }) =>
+    Effect.gen(function* () {
+      const result = yield* signInWithPasskey(yield* SpaHttpClient, redirectUrl);
+      return Message.CompletedSignInWithPasskey({ visit, result });
+    }),
+});
+
+const offersPasskey = (kind: SignKind, params: Params): boolean =>
+  kind === "SignIn" && params.invitation_token === undefined;
+
 export const init = (
   start: Readonly<{
     kind: SignKind;
@@ -222,7 +297,7 @@ export const init = (
     otherPageHref: string;
     visit: number;
   }>,
-): Update.Return<Model, Message> => ({
+): Update.Return<Model, Message, SpaHttpClient> => ({
   model: {
     ...start,
     email: "",
@@ -230,12 +305,16 @@ export const init = (
     form: Form.Editing(),
     magicLink: Submission.Idle(),
     gitHub: Submission.Idle(),
+    passkey: PasskeyEntry.Hidden(),
     showsRequiredErrors: false,
   },
-  commands: Option.match(maybeCanaryTokenId, {
-    onNone: () => [],
-    onSome: (tokenId) => [AddCanaryIcon({ tokenId })],
-  }),
+  commands: [
+    ...Option.match(maybeCanaryTokenId, {
+      onNone: () => [],
+      onSome: (tokenId) => [AddCanaryIcon({ tokenId })],
+    }),
+    ...(offersPasskey(start.kind, start.params) ? [LoadPasskeyEntry({ visit: start.visit })] : []),
+  ],
 });
 
 const submitMagicLink = (model: Model): Update.Return<Model, Message> =>
@@ -253,6 +332,7 @@ const sendMagicLink = (model: Model): Update.Return<Model, Message> => ({
   model: modifyFields(model, {
     magicLink: () => Submission.Submitting(),
     gitHub: () => Submission.Idle(),
+    passkey: withoutPasskeyRejection,
   }),
   commands: [
     SendMagicLink({
@@ -271,6 +351,7 @@ const startGitHubSignIn = (model: Model): Update.Return<Model, Message> =>
         model: modifyFields(model, {
           gitHub: () => Submission.Submitting(),
           magicLink: () => Submission.Idle(),
+          passkey: withoutPasskeyRejection,
         }),
         commands: [
           StartGitHubSignIn({
@@ -281,14 +362,47 @@ const startGitHubSignIn = (model: Model): Update.Return<Model, Message> =>
         ],
       };
 
-const forThisVisit = (
-  model: Model,
-  visit: number,
-  next: () => Update.Return<Model, Message>,
-): Update.Return<Model, Message> => (visit === model.visit ? next() : { model });
+const startPasskeySignIn = (model: Model): UpdateReturn =>
+  isBusy(model) || PasskeyEntry.guards.Hidden(model.passkey)
+    ? { model }
+    : {
+        model: modifyFields(model, {
+          passkey: () => PasskeyEntry.Shown({ submission: Submission.Submitting() }),
+          magicLink: () => Submission.Idle(),
+          gitHub: () => Submission.Idle(),
+        }),
+        commands: [
+          SignInWithPasskey({ visit: model.visit, redirectUrl: model.params.redirect_url }),
+        ],
+      };
+
+const withPasskeySubmission = (model: Model, submission: Submission): Model =>
+  modifyFields(model, { passkey: () => PasskeyEntry.Shown({ submission }) });
+
+const forThisVisit = (model: Model, visit: number, next: () => UpdateReturn): UpdateReturn =>
+  visit === model.visit ? next() : { model };
+
+const finishPasskeySignIn = (model: Model, visit: number, result: PasskeySignIn): UpdateReturn =>
+  PasskeySignIn.match<UpdateReturn>(result, {
+    SignedIn: ({ redirectUrl }) => ({
+      model,
+      outMessage: OutMessage.SignedInWithPasskey({ redirectUrl }),
+    }),
+    Cancelled: () =>
+      forThisVisit(model, visit, () => ({
+        model: withPasskeySubmission(model, Submission.Idle()),
+      })),
+    Failed: () =>
+      forThisVisit(model, visit, () => ({
+        model: withPasskeySubmission(
+          model,
+          Submission.Rejected({ message: PASSKEY_SIGN_IN_FAILED_MESSAGE }),
+        ),
+      })),
+  });
 
 export const update = (model: Model, message: Message) =>
-  Message.match<Update.Return<Model, Message>>(message, {
+  Message.match<UpdateReturn>(message, {
     UpdatedEmail: ({ value }) => ({ model: modifyFields(model, { email: () => value }) }),
     UpdatedName: ({ value }) => ({ model: modifyFields(model, { name: () => value }) }),
     SubmittedMagicLinkForm: () => submitMagicLink(model),
@@ -312,6 +426,15 @@ export const update = (model: Model, message: Message) =>
       })),
     CompletedAddCanaryIcon: () => ({ model }),
     CompletedRemoveCanaryIcon: () => ({ model }),
+    CompletedLoadPasskeyEntry: ({ visit, isShown }) =>
+      forThisVisit(model, visit, () => ({
+        model: modifyFields(model, {
+          passkey: () =>
+            isShown ? PasskeyEntry.Shown({ submission: Submission.Idle() }) : PasskeyEntry.Hidden(),
+        }),
+      })),
+    ClickedPasskeySignIn: () => startPasskeySignIn(model),
+    CompletedSignInWithPasskey: ({ visit, result }) => finishPasskeySignIn(model, visit, result),
   });
 
 const sentView = (model: Model, h: HtmlBuilder<Message>): Html =>
@@ -371,7 +494,7 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
             type: "submit",
             look: "primary",
             submission: model.magicLink,
-            isBlocked: Submission.guards.Submitting(model.gitHub),
+            isBlocked: Submission.guards.Submitting(model.gitHub) || isPasskeySubmitting(model),
             icon: Mail,
           },
           h,
@@ -380,6 +503,27 @@ const magicLinkFormView = (model: Model, h: HtmlBuilder<Message>): Html =>
     },
     h,
   );
+
+const passkeySignInView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
+  Option.match(maybePasskeySubmission(model), {
+    onNone: () => [],
+    onSome: (submission) => [
+      buttonView(
+        {
+          label: "パスキーでログイン",
+          type: "button",
+          look: "outline",
+          submission,
+          isBlocked:
+            Submission.guards.Submitting(model.magicLink) ||
+            Submission.guards.Submitting(model.gitHub),
+          onClick: Message.ClickedPasskeySignIn(),
+          icon: KeyRound,
+        },
+        h,
+      ),
+    ],
+  });
 
 const socialSignInView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
   model.params.invitation_token === undefined
@@ -403,12 +547,13 @@ const socialSignInView = (model: Model, h: HtmlBuilder<Message>): ReadonlyArray<
             type: "button",
             look: "outline",
             submission: model.gitHub,
-            isBlocked: Submission.guards.Submitting(model.magicLink),
+            isBlocked: Submission.guards.Submitting(model.magicLink) || isPasskeySubmitting(model),
             onClick: Message.ClickedGitHubSignIn(),
             icon: Github,
           },
           h,
         ),
+        ...passkeySignInView(model, h),
       ]
     : [
         h.p(
