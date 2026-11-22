@@ -942,6 +942,27 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(auth-client-list-only-in-auth-client-read)"],
   },
   {
+    name: "パスキーのログインの API は passkey-sign-in.ts だけ: web/src/auth に書くと lint が止める",
+    path: "web/src/auth/PasskeySignInProbe.ts",
+    source:
+      "export const f = (client: { passkeySignInEntry: { availability(): void } }) => client.passkeySignInEntry.availability();",
+    expectedRules: ["taimei(passkey-sign-in-only-in-passkey-sign-in)"],
+  },
+  {
+    name: "パスキーのログインの options と verify は passkey-sign-in.ts だけ: web/src/auth に書くと lint が止める",
+    path: "web/src/auth/PasskeySignInOptionsProbe.ts",
+    source:
+      "export const f = (client: { passkeySignIn: { options(): void } }) => client.passkeySignIn.options();",
+    expectedRules: ["taimei(passkey-sign-in-only-in-passkey-sign-in)"],
+  },
+  {
+    name: "パスキーのログインの API は passkey-sign-in.ts だけ: web/src/passkey/passkey-sign-in.ts では lint が止めない",
+    path: "web/src/passkey/passkey-sign-in.ts",
+    source:
+      "export const f = (client: { passkeySignInEntry: { availability(): void } }) => client.passkeySignInEntry.availability();",
+    expectedRules: [],
+  },
+  {
     name: "better-auth の一覧の読み出しは auth-client-read.ts だけ: web/src/account では lint が止めない",
     path: "web/src/account/auth-client-read.ts",
     source: "export const f = (client: { listSessions(): void }) => client.listSessions();",
