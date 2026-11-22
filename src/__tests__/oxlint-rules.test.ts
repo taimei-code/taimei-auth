@@ -2714,6 +2714,24 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(no-policy-or-transaction-in-transport)"],
   },
   {
+    name: "Transport が audit の記帳の入口を import すると、lint が止める",
+    path: "src/handlers/AuditProbe.ts",
+    source: 'import * as audit from "../audit/append";\nexport const a = audit;',
+    expectedRules: ["taimei(no-audit-in-transport)"],
+  },
+  {
+    name: "Transport が audit の port を import すると、port を読み出しに使ってよい file でも lint が止める",
+    path: "src/handlers/spa-http-api.ts",
+    source: 'import { AuditLog } from "../audit/ports";\nexport const a = AuditLog;',
+    expectedRules: ["taimei(no-audit-in-transport)"],
+  },
+  {
+    name: "use-case が audit の記帳の入口を import しても、lint は止めない",
+    path: "src/passkey/AuditProbe.ts",
+    source: 'import * as audit from "../audit/append";\nexport const a = audit;',
+    expectedRules: [],
+  },
+  {
     name: "Transport が transaction を import すると、lint が止める",
     path: "src/rpc/TxProbe.ts",
     source: 'import * as transaction from "../transaction";\nexport const t = transaction;',

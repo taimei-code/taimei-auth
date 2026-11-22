@@ -88,10 +88,10 @@ export async function deletePasskey(
   id: string,
   userId: string,
   txOrDb: DbOrTx = db,
-): Promise<Pick<PasskeyRow, "id"> | undefined> {
+): Promise<Pick<PasskeyRow, "id" | "aaguid"> | undefined> {
   return txOrDb
     .delete(passkey)
     .where(and(eq(passkey.id, id), eq(passkey.userId, userId)))
-    .returning({ id: passkey.id })
+    .returning({ id: passkey.id, aaguid: passkey.aaguid })
     .then((rows) => rows.at(0));
 }

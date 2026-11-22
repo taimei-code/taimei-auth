@@ -6,6 +6,7 @@ export type SentryMessage = { message: string; context?: CaptureContext };
 export function recordSentry(): {
   exceptions: Array<[unknown, CaptureContext | undefined]>;
   messages: SentryMessage[];
+  auditFailureEvents(): unknown[];
   reset(): void;
 } {
   const exceptions: Array<[unknown, CaptureContext | undefined]> = [];
@@ -24,6 +25,10 @@ export function recordSentry(): {
   return {
     exceptions,
     messages,
+    auditFailureEvents: () =>
+      exceptions
+        .filter(([, context]) => context?.tags?.component === "audit-log")
+        .map(([, context]) => context?.tags?.event),
     reset: () => {
       exceptions.length = 0;
       messages.length = 0;

@@ -3,7 +3,7 @@ import { AuditLog } from "../audit/ports";
 import { AuditLogLive } from "../audit/wiring";
 import { AuthApi } from "../auth-service";
 import { authApiLive } from "../auth-wiring";
-import { AuthApiError, TtlStoreError } from "../errors";
+import { AuthApiError, DbError, TtlStoreError } from "../errors";
 import { HealthRepo } from "../health/ports";
 import type { RateWindowResult } from "../ttl-store";
 import { TtlStore } from "../ttl-store-service";
@@ -34,6 +34,14 @@ export const ttlStorePingLayer = (ping: TtlStore["Service"]["ping"]): Layer.Laye
 export const authApiWith = (
   override: (live: AuthApi["Service"]) => Partial<AuthApi["Service"]>,
 ): Layer.Layer<AuthApi> => Layer.succeed(AuthApi, { ...authApiLive, ...override(authApiLive) });
+
+export const auditFailingLayer = (cause: unknown): Layer.Layer<AuditLog> =>
+  Layer.succeed(
+    AuditLog,
+    partial<AuditLog["Service"]>({
+      appendAuditLog: () => Effect.fail(new DbError({ cause })),
+    }),
+  );
 
 export const auditLogWith = (
   override: (live: AuditLog["Service"]) => Partial<AuditLog["Service"]>,

@@ -27,6 +27,17 @@ export const signInEntry = (
   return { eventType: "sign_in", userId, payload: { method, ip, userAgent } };
 };
 
+export const passkeyEntry = (
+  eventType: "passkey_registered" | "passkey_deleted",
+  userId: string,
+  passkey: { id: string; aaguid: string },
+  headers: Headers,
+): AuditLogEntry => ({
+  eventType,
+  userId,
+  payload: { passkey_id: passkey.id, aaguid: passkey.aaguid, ...getClientContext(headers) },
+});
+
 type RemovedMembership = { companyId: string; userId: string; role: Role };
 
 export const membershipRemovedEntry = (

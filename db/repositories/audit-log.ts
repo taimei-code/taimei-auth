@@ -6,6 +6,8 @@ import type { InviterSeen } from "./membership";
 
 export type RejectReason = "double_accept" | "inviter_not_owner_or_missing";
 
+type PasskeyChange = { passkey_id: string; aaguid: string; ip: string; userAgent: string };
+
 export type AuditLogEntry =
   | {
       eventType: "sign_in";
@@ -21,6 +23,16 @@ export type AuditLogEntry =
       eventType: "mfa_disabled";
       userId: string;
       payload: { ip: string | null; userAgent: string };
+    }
+  | {
+      eventType: "passkey_registered";
+      userId: string;
+      payload: PasskeyChange;
+    }
+  | {
+      eventType: "passkey_deleted";
+      userId: string;
+      payload: PasskeyChange;
     }
   | {
       eventType: "account_delete";

@@ -14,6 +14,7 @@ import {
   signedRegistration,
   type Signer,
 } from "../../passkey/__tests__/helpers";
+import { CLIENT_IP_HEADER } from "../../client-ip";
 import type { AppServices } from "../../runtime";
 import { JSON_HEADERS } from "../client-facing-error";
 import { runtimeServices } from "../spa-http-api";
@@ -119,6 +120,10 @@ export const sameOriginHeaders = (cookie: string) => ({
   "sec-fetch-site": "same-origin",
 });
 
+export const CLIENT_IP = "203.0.113.7";
+export const CLIENT_USER_AGENT = "handler-test-client/1.0";
+export const clientHeaders = { "user-agent": CLIENT_USER_AGENT, [CLIENT_IP_HEADER]: CLIENT_IP };
+
 export const postJson = (app: Hono, path: string, headers: Record<string, string>, body: string) =>
   app.request(path, { method: "POST", headers, body });
 
@@ -190,12 +195,13 @@ export const readMfaStatus = async (
 export const sendRegistration = async (
   session: SignedInSession,
   response: unknown,
+  headers: Record<string, string> = {},
 ): Promise<Outcome> =>
   outcomeOf(
     await postJson(
       session.app,
       "/api/account/passkeys",
-      sameOriginHeaders(session.cookie),
+      { ...sameOriginHeaders(session.cookie), ...headers },
       JSON.stringify(response),
     ),
   );
