@@ -751,6 +751,13 @@ const ROWS: readonly Row[] = [
       "Transport (handlers/・rpc/) は policy 述語と transaction を持たない。認可は Guard、transaction は Use-case が受け持つ (ADR-0012)",
   },
   {
+    name: "no-audit-in-transport",
+    within: ["src/handlers/**", "src/rpc/**"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)audit\/(append|ports)$/ }],
+    message:
+      "Transport (handlers/・rpc/) は audit event を記帳しない。記帳は操作の成立を知る use-case が受け持ち、handler は要求の header を渡すだけ (ADR-0012)",
+  },
+  {
     name: "no-effect-in-db",
     within: ["db/**"],
     includesTestFiles: true,

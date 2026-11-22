@@ -139,6 +139,7 @@
     "taimei/no-io-resource-import-in-runtime": "error",
     "taimei/current-company-write-only-in-testing-use-cases": "error",
     "taimei/no-policy-or-transaction-in-transport": "error",
+    "taimei/no-audit-in-transport": "error",
     "taimei/db-import-only-in-db": "error",
     "taimei/db-value-import-only-in-db-in-tests": "error",
     "taimei/db-testing-import-only-in-listed-files": "error",
