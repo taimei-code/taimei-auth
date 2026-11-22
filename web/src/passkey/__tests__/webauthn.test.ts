@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { RegistrationOptions } from "@core/passkey/passkey-contract";
+import type { AuthenticationOptions, RegistrationOptions } from "@core/passkey/passkey-contract";
 import { Clock, Effect } from "effect";
 
-import { createPasskey, isPasskeySupported } from "../webauthn";
+import { createPasskey, getPasskey, isPasskeySupported } from "../webauthn";
 
 const OPTIONS: RegistrationOptions = {
   rp: { name: "taimei", id: "auth.example.test" },
@@ -32,10 +32,12 @@ const installBrowser = (
     withoutRequestOptionsParser = false,
     without = [],
     record,
+    get = () => Promise.resolve(null),
   }: {
     withoutRequestOptionsParser?: boolean;
     without?: readonly BrowserPart[];
     record?: BrowserRecord;
+    get?: () => Promise<unknown>;
   } = {},
 ) => {
   class StubPublicKeyCredential {
@@ -83,7 +85,7 @@ const installBrowser = (
           record?.createdWith.push(options.publicKey);
           return new StubPublicKeyCredential(await create());
         },
-        get: () => Promise.resolve(null),
+        get: async () => new StubPublicKeyCredential(await get()),
       },
     });
   }
@@ -258,5 +260,88 @@ describe("browser の dialog が NotAllowedError で閉じた時に、取り消�
 
   test("timeout の無い options では、どれだけ経っても取り消しになる", async () => {
     expect(await outcomeAfter(OPTIONS, FIVE_MINUTES_MS * 10)).toBe("Cancelled");
+  });
+});
+
+const AUTHENTICATION_OPTIONS: AuthenticationOptions = {
+  challenge: "Y2hhbGxlbmdl",
+  timeout: FIVE_MINUTES_MS,
+  rpId: "auth.example.test",
+  userVerification: "required",
+};
+
+const ASSERTION_JSON = {
+  id: "Y3JlZGVudGlhbA",
+  rawId: "Y3JlZGVudGlhbA",
+  type: "public-key",
+  response: {
+    clientDataJSON: "e30",
+    authenticatorData: "YXV0aA",
+    signature: "c2ln",
+    userHandle: "dXNlcg",
+  },
+  clientExtensionResults: {},
+};
+
+const assertionOutcome = (get: () => Promise<unknown>, elapsedMs = 0) => {
+  installBrowser(() => Promise.resolve({}), { get });
+  return Effect.runPromise(
+    getPasskey(AUTHENTICATION_OPTIONS).pipe(
+      Effect.match({
+        onFailure: (failure) => failure._tag,
+        onSuccess: (assertion) => assertion._tag,
+      }),
+      Effect.provideService(Clock.Clock, clockReading(0, elapsedMs)),
+    ),
+  );
+};
+
+describe("browser の認証の API の結果を写す", () => {
+  test("browser が返した応答の JSON は、ログインの API に送れる形で返る", async () => {
+    installBrowser(() => Promise.resolve({}), { get: () => Promise.resolve(ASSERTION_JSON) });
+    const assertion = await Effect.runPromise(getPasskey(AUTHENTICATION_OPTIONS));
+    expect(assertion).toMatchObject({ _tag: "Asserted", response: ASSERTION_JSON });
+  });
+
+  test("timeout より前に NotAllowedError で閉じると、誤りを出さない取り消しになる", async () => {
+    expect(
+      await assertionOutcome(
+        () => Promise.reject(new DOMException("dismissed", "NotAllowedError")),
+        10_000,
+      ),
+    ).toBe("Cancelled");
+  });
+
+  test("options の timeout を過ぎてから NotAllowedError で閉じると、取り消しでなく失敗になる", async () => {
+    expect(
+      await assertionOutcome(
+        () => Promise.reject(new DOMException("dismissed", "NotAllowedError")),
+        FIVE_MINUTES_MS,
+      ),
+    ).toBe("PasskeyAssertionFailed");
+  });
+
+  test("browser が SecurityError で拒むと、取り消しでなく失敗になる", async () => {
+    expect(
+      await assertionOutcome(() => Promise.reject(new DOMException("rejected", "SecurityError"))),
+    ).toBe("PasskeyAssertionFailed");
+  });
+
+  test("browser が返した JSON がログインの API の形でないと、失敗になる", async () => {
+    expect(await assertionOutcome(() => Promise.resolve({ id: "only-id" }))).toBe(
+      "PasskeyAssertionFailed",
+    );
+  });
+
+  test("WebAuthn の API の無い browser で呼ぶと、取り消しでなく失敗になる", async () => {
+    const outcome = await Effect.runPromise(
+      getPasskey(AUTHENTICATION_OPTIONS).pipe(
+        Effect.match({
+          onFailure: (failure) => failure._tag,
+          onSuccess: (assertion) => assertion._tag,
+        }),
+      ),
+    );
+    expect(outcome).toBe("PasskeyAssertionFailed");
   });
 });

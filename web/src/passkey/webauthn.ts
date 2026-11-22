@@ -1,8 +1,15 @@
 import { PasskeyAlreadyRegistered, PasskeyRejected } from "@core/passkey/errors";
-import { type RegistrationOptions, RegistrationResponse } from "@core/passkey/passkey-contract";
+import {
+  AuthenticationResponse,
+  type AuthenticationOptions,
+  type RegistrationOptions,
+  RegistrationResponse,
+} from "@core/passkey/passkey-contract";
 import { Clock, Data, Effect, Predicate, Schema } from "effect";
 
 export class PasskeyCreationFailed extends Data.TaggedError("PasskeyCreationFailed") {}
+
+class PasskeyAssertionFailed extends Data.TaggedError("PasskeyAssertionFailed") {}
 
 class DialogDismissed extends Data.TaggedError("DialogDismissed") {}
 
@@ -12,14 +19,26 @@ type PasskeyCreation = Data.TaggedEnum<{
 }>;
 export const PasskeyCreation = Data.taggedEnum<PasskeyCreation>();
 
+type PasskeyAssertion = Data.TaggedEnum<{
+  Asserted: { readonly response: AuthenticationResponse };
+  Cancelled: {};
+}>;
+export const PasskeyAssertion = Data.taggedEnum<PasskeyAssertion>();
+
 const decodeRegistrationResponse = Schema.decodeUnknownEffect(RegistrationResponse);
+
+const decodeAuthenticationResponse = Schema.decodeUnknownEffect(AuthenticationResponse);
 
 const DIALOG_DISMISSED = "NotAllowedError";
 const EXCLUDED_CREDENTIAL_FOUND = "InvalidStateError";
 const CEREMONY_TIMER_SLACK_MS = 1000;
 const NANOS_PER_MILLI = 1_000_000n;
 
-const ceremonyExpired = (options: RegistrationOptions, startedAt: bigint, endedAt: bigint) =>
+const ceremonyExpired = (
+  options: { readonly timeout?: number },
+  startedAt: bigint,
+  endedAt: bigint,
+) =>
   options.timeout !== undefined &&
   Number((endedAt - startedAt) / NANOS_PER_MILLI) >= options.timeout - CEREMONY_TIMER_SLACK_MS;
 
@@ -34,8 +53,10 @@ const hasWebAuthnWithJsonApis = (): boolean =>
 
 export const isPasskeySupported: Effect.Effect<boolean> = Effect.sync(hasWebAuthnWithJsonApis);
 
+const nameOf = (cause: unknown) => (Predicate.hasProperty(cause, "name") ? cause.name : undefined);
+
 const creationFailureOf = (cause: unknown) => {
-  const name = Predicate.hasProperty(cause, "name") ? cause.name : undefined;
+  const name = nameOf(cause);
   if (name === DIALOG_DISMISSED) {
     return new DialogDismissed();
   }
@@ -44,6 +65,20 @@ const creationFailureOf = (cause: unknown) => {
   }
   return new PasskeyCreationFailed();
 };
+
+const assertionFailureOf = (cause: unknown) =>
+  nameOf(cause) === DIALOG_DISMISSED ? new DialogDismissed() : new PasskeyAssertionFailed();
+
+const dismissedWithin =
+  <Expired>(options: { readonly timeout?: number }, startedAt: bigint, expired: () => Expired) =>
+  (dismissed: DialogDismissed) =>
+    Effect.flatMap(
+      Clock.monotonicTimeNanos,
+      (endedAt): Effect.Effect<never, DialogDismissed | Expired> =>
+        ceremonyExpired(options, startedAt, endedAt)
+          ? Effect.fail(expired())
+          : Effect.fail(dismissed),
+    );
 
 export const createPasskey = Effect.fnUntraced(
   function* (
@@ -64,14 +99,9 @@ export const createPasskey = Effect.fnUntraced(
         }),
       catch: creationFailureOf,
     }).pipe(
-      Effect.catchTag("DialogDismissed", (dismissed) =>
-        Effect.flatMap(
-          Clock.monotonicTimeNanos,
-          (endedAt): Effect.Effect<never, DialogDismissed | PasskeyRejected> =>
-            ceremonyExpired(options, startedAt, endedAt)
-              ? Effect.fail(new PasskeyRejected())
-              : Effect.fail(dismissed),
-        ),
+      Effect.catchTag(
+        "DialogDismissed",
+        dismissedWithin(options, startedAt, () => new PasskeyRejected()),
       ),
     );
     if (!(credential instanceof PublicKeyCredential)) {
@@ -87,4 +117,40 @@ export const createPasskey = Effect.fnUntraced(
     return PasskeyCreation.Created({ response });
   },
   Effect.catchTag("DialogDismissed", () => Effect.succeed(PasskeyCreation.Cancelled())),
+);
+
+export const getPasskey = Effect.fnUntraced(
+  function* (
+    options: AuthenticationOptions,
+  ): Effect.fn.Return<PasskeyAssertion, PasskeyAssertionFailed | DialogDismissed> {
+    if (!(yield* isPasskeySupported)) {
+      return yield* new PasskeyAssertionFailed();
+    }
+    const startedAt = yield* Clock.monotonicTimeNanos;
+    const credential = yield* Effect.tryPromise({
+      try: (signal) =>
+        navigator.credentials.get({
+          publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options),
+          signal,
+        }),
+      catch: assertionFailureOf,
+    }).pipe(
+      Effect.catchTag(
+        "DialogDismissed",
+        dismissedWithin(options, startedAt, () => new PasskeyAssertionFailed()),
+      ),
+    );
+    if (!(credential instanceof PublicKeyCredential)) {
+      return yield* new PasskeyAssertionFailed();
+    }
+    const json = yield* Effect.try({
+      try: () => credential.toJSON(),
+      catch: () => new PasskeyAssertionFailed(),
+    });
+    const response = yield* decodeAuthenticationResponse(json).pipe(
+      Effect.mapError(() => new PasskeyAssertionFailed()),
+    );
+    return PasskeyAssertion.Asserted({ response });
+  },
+  Effect.catchTag("DialogDismissed", () => Effect.succeed(PasskeyAssertion.Cancelled())),
 );
