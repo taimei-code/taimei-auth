@@ -3,7 +3,7 @@ import { EmailError, timeoutAsBoundary } from "../errors";
 import { EmailSender } from "./ports";
 import { sendInvitationEmail } from "./send-invitation";
 import { sendMagicLinkEmail } from "./send-magic-link";
-import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "./send-mfa-notification";
+import { sendMfaDisabledEmail, sendMfaEnabledEmail } from "./send-security-notification";
 import { sendWelcomeEmail } from "./send-welcome";
 
 const withEmailTimeout = timeoutAsBoundary(EmailError, "10 seconds");
