@@ -3,11 +3,11 @@
 自動化できない回帰ケース (実ブラウザと実ドメイン、外部サービスとの実連携、実 workerd、別 repo の build context のいずれかが必要なもの) の台帳である。
 
 - **ID 体系**: `QA-MR-*` はこの文書専用の体系である。自動テストの名前に書いてよい番号は、lint の `taimei/no-design-number-in-test-name` が決める
-- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。「契機の path」は、変えた file がその glob に当たれば契機に当たることを示す。本番以外の file がどれかの glob に当たることと、どの glob も実在の file に当たることは `src/__tests__/manual-regression-triggers.test.ts` が固定する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する
+- **実行契機**: 各ケースの「契機」に書いたイベントが起きる PR のマージ前に実施する。「契機の path」は、変えた file がその glob に当たれば契機に当たることを示す。本番以外の file がどれかの glob に当たることと、どの glob も実在の file に当たることは `src/__tests__/manual-regression-triggers.test.ts` が固定する。加えて本番デプロイ後のスモークとして QA-MR-01 / QA-MR-03 を実施する。QA-MR-12 は merge の後、staging の deploy が済んでから実施する (理由は QA-MR-12 の「契機」)
 - **担当**: 該当 PR の作者 (デプロイ後のスモークはデプロイ実施者)
 - **記帳**: 実施したら PR コメントに `QA-MR-xx: PASS/FAIL (日付)` を残す
 
-自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / 招待受諾 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否 / 多要素認証 (MFA) の有効化 → チャレンジ通過 → リカバリーコード) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため、この台帳の対象外である。
+自動化済みの認証動線 (magic link sign-in / sign-up → 事業所作成 / 招待受諾 / MEMBER 権限 UI / 唯一 OWNER の退会中断 / 使用済み link 拒否 / 多要素認証 (MFA) の有効化 → チャレンジ通過 → リカバリーコード / パスキーの登録 → ログイン → 削除 (browser の virtual authenticator)) は `e2e/*.e2e.ts` (`bun run test:e2e`) がカバーするため、この台帳の対象外である。
 
 ---
 
@@ -15,7 +15,7 @@
 
 - **契機**: `AUTH_COOKIE_DOMAIN` / `AUTH_TRUSTED_ORIGINS` / better-auth `advanced.crossSubDomainCookies` の周辺を触る PR、および本番デプロイ後
 - **契機の path**: `src/cookie-domain.ts`、`src/auth.ts`、`src/env.ts`、`wrangler.jsonc`
-- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済みで、ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有である。session cookie の発行者は 2 つあり ([GLOSSARY.md「session cookie」](../../GLOSSARY.md))、MFA チャレンジ通過後に発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済みである。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
+- **前提**: production (または *.taimei-code.com を持つ staging)。判定ロジック自体は `src/__tests__/cookie-domain.test.ts` が自動検証済みで、ここで見るのは実ブラウザの Set-Cookie 属性と実ドメイン間の共有である。session cookie の発行者は 2 つで、発行する経路は 3 つある ([GLOSSARY.md「session cookie」](../../GLOSSARY.md))。MFA チャレンジの通過後とパスキーのログインで発行される分の属性が通常ログインと一致することは `src/__tests__/session-cookie-contract.test.ts` が自動検証済みである。ここでは MFA 無効の user でログインし、通常ログインの発行だけを見る
 - **手順**:
   1. ブラウザで `https://auth.taimei-code.com` に **MFA 無効の user で** ログインする
   2. DevTools → Application → Cookies で session cookie の `Domain` が `.taimei-code.com`、`Secure` / `HttpOnly` が付与されていることを確認する
@@ -142,3 +142,17 @@
   3. `/account/members` で自分以外の member の役割を 1 段変えて戻す (use-case の tx が request の ALS pool で commit することの観測。変更は元に戻す)
   4. Sentry に `handler: spaApi` / `runRoute` / `runMiddleware` / `runRpc` tag の新規 event が出ていないことを確認する
 - **期待結果**: 1 が緑、2〜3 が期待どおり、4 に新規 event が無い (用語は ADR-0017 の Decision)
+
+## QA-MR-12: 実機のパスキーの登録・ログイン・削除
+
+- **契機**: パスキーの登録、ログイン、削除の server の処理か、パスキーの画面 (共通ログイン画面の入口、`/account/security` のパスキーの欄) を触る PR。staging は main からしか deploy しないので、この項目は merge の前には行えない
+- **契機の path**: `src/passkey/**`、`src/handlers/passkey-http-api.ts`、`web/src/passkey/**`
+- **前提**: staging (`https://taimei-auth-staging.taimei-staging.workers.dev`) で、フィーチャーフラグ `passkey` を全体に公開している (`docs/runbook/staging.md` の「9. フィーチャーフラグ」)。登録、ログイン、削除の流れは `e2e/passkey-*.e2e.ts` が browser の virtual authenticator で自動化済みで、ここで見るのは実機の OS と browser が WebAuthn の呼び出しにどう応えるかである
+- **機材**: Mac の Touch ID (Chrome と Safari) と iPhone (Safari) は必須。Windows Hello と Android は機材がある時だけ行う
+- **手順**: 1〜4 は機材ごとに、MFA を有効にしていない user と有効にした user を 1 人ずつ用意して行う
+  1. 多要素認証 (MFA) を有効にしていない user でログインし、`/account/security` でパスキーを登録する
+  2. ログアウトし、`/login` から開いた共通ログイン画面で「パスキーでログイン」を押し、1 のパスキーでログインする
+  3. `/account/security` で 1 のパスキーを削除し、ログアウトして 2 をもう一度行う
+  4. 多要素認証 (MFA) を有効にした user で 1〜2 を行う
+  5. パスキーに対応していない browser (例: Firefox の `about:config` で `security.webauth.webauthn` を `false` にしたもの) で、`/login` から開いた共通ログイン画面と `/account/security` を開く
+- **期待結果**: 1 で一覧に提供元の名前 (同梱の表に無い提供元は「パスキー」) が出る。2 で `/account` に移る。3 で削除したパスキーではログインできず、共通ログイン画面に失敗の文言が出て、そのまま Magic Link を送れる。4 で登録の前に TOTP のコードを求められ、ログインは MFA チャレンジの画面 (`/auth/mfa`) を経ずに `/account` へ移る。5 で共通ログイン画面に Magic Link の入力欄が出て「パスキーでログイン」は出ず、`/account/security` にも登録の入口が出ない。FAIL の時は本番のフラグ `passkey` を止める (`docs/runbook/production.md` の「フィーチャーフラグ」)
