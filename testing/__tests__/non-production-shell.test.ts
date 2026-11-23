@@ -15,6 +15,7 @@ const shell = async () =>
       destination: { _tag: "AccountPage" },
       signInAction: "/sign-in",
       signOutAction: "/sign-out",
+      featureFlagsHref: null,
     }),
   );
 

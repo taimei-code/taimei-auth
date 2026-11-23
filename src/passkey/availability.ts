@@ -4,7 +4,7 @@ import { PasskeyRegistrationUnavailable } from "./errors";
 
 declare module "../feature-flags" {
   interface FeatureFlagRegistry {
-    readonly passkey: true;
+    readonly passkey: "everyone";
   }
 }
 

@@ -1,7 +1,7 @@
 import { createTestingClient, DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
 import { expect, type Page, test } from "@playwright/test";
 import { routeOutsideContract } from "./contract-mock";
-import { BASE_URL } from "./helpers";
+import { BASE_URL, featureFlags, passkeySignInEntryShown } from "./helpers";
 
 const OWNER = { id: "dev-account-owner", email: "dev-owner@example.com" };
 const ADMIN_EMAIL = "dev-admin@example.com";
@@ -170,4 +170,25 @@ test("キーボードで戻り先の link、利用者のボタンの順に移れ
   await page.keyboard.press("Tab");
   await expect(accountButton(page, OWNER.email)).toBeFocused();
   expect(await focusIsVisible(page)).toBe(true);
+});
+
+test.describe("開発者ホームのフィーチャーフラグのページ", () => {
+  test.afterEach(({ request }) => featureFlags(request).on("passkey"));
+
+  test("開発者ホームの link からフィーチャーフラグのページを開き、passkey を全体 off にすると共通ログイン画面のパスキーの入口が閉じ、全体 on にすると開く", async ({
+    page,
+  }) => {
+    await page.goto(DEV_HOME_PATH);
+    await page.getByRole("link", { name: "フィーチャーフラグ", exact: true }).click();
+
+    await page.getByRole("button", { name: "passkey を 全体 off にする" }).click();
+    await expect(page.getByRole("status").first()).toHaveText(
+      "passkey を全体 off に切り替えました",
+    );
+    expect(await passkeySignInEntryShown(page.request)).toBe(false);
+
+    await page.getByRole("button", { name: "passkey を 全体 on にする" }).click();
+    await expect(page.getByRole("status").first()).toHaveText("passkey を全体 on に切り替えました");
+    expect(await passkeySignInEntryShown(page.request)).toBe(true);
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import {
+  enabled,
   FEATURE_FLAGS_BINDING,
   FeatureFlags,
   type FlagContext,
@@ -63,5 +64,14 @@ describe("Flagship での評価", () => {
   test("binding の呼び出しが失敗すると、失敗を返さずに off にする", async () => {
     const { env } = bindingAnswering(() => Promise.reject(new Error("flagship is down")));
     expect(await evaluate(env)).toBe(false);
+  });
+});
+
+describe("機能の code は、フラグの評価の対象どおりに enabled を呼ぶ", () => {
+  test("ログイン前にも評価するフラグに actor を渡すと、型検査で落ちる", () => {
+    // @ts-expect-error passkey は actor を渡さずに評価する
+    const withActor = enabled("passkey", { lastUsedCompanyId: "c1" });
+
+    expect(Effect.isEffect(withActor)).toBe(true);
   });
 });

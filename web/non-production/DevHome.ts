@@ -1,8 +1,7 @@
-import { Array, Effect, Option, Schema } from "effect";
+import { Array, Option, Schema } from "effect";
 import type { Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
-import { modifyFields } from "foldkit/struct";
 
 import { ACCOUNT_HOME_PATH } from "../src/shared/landing-paths";
 import { Submission } from "../src/shared/submission";
@@ -11,26 +10,18 @@ import { buttonLinkView, buttonView } from "../src/shared/ui/button-view";
 import { alertVariants, badgeVariants, cardClassNames } from "../src/shared/ui/class-names";
 import { searchInputView } from "../src/shared/ui/input-view";
 import { cn } from "../src/shared/utils";
-import { accountsMatching, FILTER_SHOWN_ABOVE_ACCOUNT_COUNT } from "./accounts-matching";
+import { accountsMatching, FILTER_SHOWN_ABOVE_ITEM_COUNT, withQuery } from "./list-filter";
+import { nonProductionBannerView } from "./non-production-banner-view";
 import {
   type Destination,
   DevHomeProps,
-  PAGE_PROPS_ELEMENT_ID,
   PAGE_TITLES,
   type PageAccount,
-  PagePropsFromJson,
   type Viewer,
 } from "./page-props";
 
 export const Flags = Schema.Option(DevHomeProps);
 export type Flags = typeof Flags.Type;
-
-export const flags: Effect.Effect<Flags> = Effect.sync(
-  () => document.getElementById(PAGE_PROPS_ELEMENT_ID)?.textContent,
-).pipe(
-  Effect.flatMap((text) => Schema.decodeUnknownEffect(PagePropsFromJson)(text)),
-  Effect.option,
-);
 
 export const Model = Schema.Struct({
   maybeProps: Flags,
@@ -49,7 +40,7 @@ export const init = (maybeProps: Flags): Update.Return<Model, Message> => ({
 
 export const update = (model: Model, message: Message) =>
   Message.match<Update.Return<Model, Message>>(message, {
-    UpdatedQuery: ({ query }) => ({ model: modifyFields(model, { query: () => query }) }),
+    UpdatedQuery: ({ query }) => ({ model: withQuery(model, query) }),
   });
 
 const ACCOUNTS_FORM_ID = "accounts";
@@ -244,7 +235,7 @@ const accountListView = (props: DevHomeProps, query: string, h: HtmlBuilder<Mess
   const shownDevAccounts = accountsMatching(props.devAccounts, query);
   const shownBrowserAccounts = accountsMatching(props.browserAccounts, query);
   const isFilterShown =
-    props.devAccounts.length + props.browserAccounts.length > FILTER_SHOWN_ABOVE_ACCOUNT_COUNT;
+    props.devAccounts.length + props.browserAccounts.length > FILTER_SHOWN_ABOVE_ITEM_COUNT;
   const isNothingShown = shownDevAccounts.length + shownBrowserAccounts.length === 0;
 
   return h.section(
@@ -338,6 +329,24 @@ const devHomeCardView = (props: DevHomeProps, query: string, h: HtmlBuilder<Mess
     ],
   );
 
+const featureFlagsLinkView = (props: DevHomeProps, h: HtmlBuilder<Message>): ReadonlyArray<Html> =>
+  props.featureFlagsHref !== null
+    ? [
+        h.nav(
+          [h.Class("w-full max-w-sm md:w-auto md:pt-2"), h.AriaLabel("ほかの開発用のページ")],
+          [
+            h.a(
+              [
+                h.Href(props.featureFlagsHref),
+                h.Class("inline-block py-1 text-sm font-medium underline underline-offset-4"),
+              ],
+              ["フィーチャーフラグ"],
+            ),
+          ],
+        ),
+      ]
+    : [];
+
 const unreadablePropsView = (h: HtmlBuilder<Message>): Html =>
   alertTextView("開発者ホームの情報を読めませんでした。ページを再読み込みしてください。", h);
 
@@ -346,26 +355,20 @@ export const view = (model: Model, h: HtmlBuilder<Message>): Document => ({
   body: h.div(
     [],
     [
-      h.header(
-        [h.Class("bg-primary px-6 py-2 text-sm text-primary-foreground")],
+      nonProductionBannerView(h),
+      h.main(
         [
-          h.p(
-            [],
-            [
-              h.strong([h.Class("font-semibold")], ["本番以外の環境"]),
-              "の画面です。本番の auth ホストにはありません。",
-            ],
+          h.Class(
+            "flex flex-col items-center gap-6 p-6 md:flex-row md:items-start md:justify-center md:p-10",
           ),
         ],
-      ),
-      h.main(
-        [h.Class("flex flex-col items-center gap-6 p-6 md:p-10")],
-        [
-          Option.match(model.maybeProps, {
-            onNone: () => unreadablePropsView(h),
-            onSome: (props) => devHomeCardView(props, model.query, h),
-          }),
-        ],
+        Option.match(model.maybeProps, {
+          onNone: () => [unreadablePropsView(h)],
+          onSome: (props) => [
+            devHomeCardView(props, model.query, h),
+            ...featureFlagsLinkView(props, h),
+          ],
+        }),
       ),
     ],
   ),

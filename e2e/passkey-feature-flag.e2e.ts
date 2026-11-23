@@ -1,5 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
-import { featureFlags, reseedFixture, SWITCH_EMAIL, signInWithMagicLink } from "./helpers";
+import {
+  featureFlags,
+  passkeySignInEntryShown,
+  reseedFixture,
+  SWITCH_EMAIL,
+  signInWithMagicLink,
+} from "./helpers";
 
 const PASSKEY = "passkey";
 
@@ -7,10 +13,10 @@ const decisionsSeenBy = async (page: Page) => {
   const listed = (await (await page.request.get("/api/account/passkeys")).json()) as {
     can_register: boolean;
   };
-  const entry = (await (await page.request.get("/api/passkey/sign-in/availability")).json()) as {
-    available: boolean;
+  return {
+    canRegister: listed.can_register,
+    signInEntryShown: await passkeySignInEntryShown(page.request),
   };
-  return { canRegister: listed.can_register, signInEntryShown: entry.available };
 };
 
 test.beforeEach(() => reseedFixture("switch"));

@@ -49,6 +49,13 @@ export const addVirtualAuthenticator = async (
   };
 };
 
+export const passkeySignInEntryShown = async (request: APIRequestContext) =>
+  (
+    (await (await request.get("/api/passkey/sign-in/availability")).json()) as {
+      available: boolean;
+    }
+  ).available;
+
 export const featureFlags = (request: APIRequestContext) => {
   const send = async (data: { flag: string; state: string; companyIds?: readonly string[] }) => {
     const response = await request.post(`${TESTING_PATH}/feature-flags`, { data });

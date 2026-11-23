@@ -3,9 +3,15 @@ import type { Actor } from "./account/actor-contract";
 
 export const FEATURE_FLAGS_BINDING = "FLAGS";
 
+export type FlagAudience = "everyone" | "companies";
+
 export interface FeatureFlagRegistry {}
 
 export type FeatureFlag = Extract<keyof FeatureFlagRegistry, string>;
+
+type FlagsEvaluatedFor<Audience extends FlagAudience> = {
+  [F in FeatureFlag]: FeatureFlagRegistry[F] extends Audience ? F : never;
+}[FeatureFlag];
 
 export type FlagActor = Pick<Actor, "lastUsedCompanyId">;
 
@@ -21,7 +27,13 @@ export class FeatureFlags extends Context.Service<
   { readonly isOn: (flag: string, context: FlagContext) => Effect.Effect<boolean> }
 >()("taimei/FeatureFlags") {}
 
-export const enabled = (flag: FeatureFlag, actor?: FlagActor) =>
+export const enabled: {
+  (flag: FlagsEvaluatedFor<"everyone">): Effect.Effect<boolean, never, FeatureFlags>;
+  (
+    flag: FlagsEvaluatedFor<"companies">,
+    actor: FlagActor,
+  ): Effect.Effect<boolean, never, FeatureFlags>;
+} = (flag: FeatureFlag, actor?: FlagActor) =>
   FeatureFlags.use((flags) => flags.isOn(flag, flagContextOf(actor)));
 
 export type FeatureFlagsEnv = { readonly [FEATURE_FLAGS_BINDING]: Flagship };
