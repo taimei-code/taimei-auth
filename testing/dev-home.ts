@@ -130,11 +130,13 @@ const featureFlagsPage = (featureFlags: FakeFlagship, catalog: FeatureFlagCatalo
         c,
         nonProductionPage(c, (url) =>
           Effect.gen(function* () {
-            const flags = Object.entries(catalog).map(([name, audience]) => ({
-              name,
-              audience,
-              ...featureFlags.stateOf(name),
-            }));
+            const flags = yield* Effect.forEach(Object.entries(catalog), ([name, audience]) =>
+              Effect.promise(async () => ({
+                name,
+                audience,
+                ...(await featureFlags.stateOf(name)),
+              })),
+            );
             const names = yield* Effect.promise(() =>
               companyNamesByIds(flags.flatMap(({ companyIds }) => companyIds)),
             );
@@ -168,7 +170,7 @@ const featureFlagsPage = (featureFlags: FakeFlagship, catalog: FeatureFlagCatalo
           const decision = yield* flagSwitchOf(form, audience);
           if (decision._tag === "Rejected") noticeFlag(c, decision.notice);
           else {
-            featureFlags.switchFlag(decision.request);
+            yield* Effect.promise(() => featureFlags.switchFlag(decision.request));
             noticeFlag(c, { _tag: "Switched", flag: form.flag, state: form.state });
           }
           return c.redirect(`${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}`, 303);
