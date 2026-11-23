@@ -8,6 +8,11 @@ import { ShieldCheck } from "lucide";
 
 import { authPageCardView } from "../../auth/auth-page-card-view";
 import { SpaHttpClient } from "../../shared/spa-http-client";
+import {
+  contractFailure,
+  messageOnFailure,
+  UndistinguishedFailure,
+} from "../../shared/spa-contract-failure";
 import { maybeRejectedMessage, Submission, withoutRejection } from "../../shared/submission";
 import { buttonLinkView, buttonView } from "../../shared/ui/button-view";
 import { textLinkClassName } from "../../shared/ui/class-names";
@@ -24,13 +29,7 @@ import {
 } from "../mfa-code";
 import { mfaFailureText } from "../mfa-failure-messages";
 
-const VerifyFailure = Schema.Literals([
-  "ChallengeExpired",
-  "InvalidCode",
-  "Locked",
-  "RateLimited",
-  "Unexpected",
-]);
+const VerifyFailure = contractFailure(["ChallengeExpired", "InvalidCode", "Locked", "RateLimited"]);
 type VerifyFailure = typeof VerifyFailure.Type;
 
 const Phase = defineTaggedUnion({
@@ -82,16 +81,13 @@ export const LoadChallengeState = Command.define("LoadChallengeState", {
       const { pending } = yield* client.mfaChallenge.state();
       return Message.SucceededLoadChallengeState({ visit, isPending: pending });
     }).pipe(
-      Effect.catchTags({
-        RateLimited: () => Effect.succeed(Message.FailedLoadChallengeState({ visit })),
-        HttpClientError: () => Effect.succeed(Message.FailedLoadChallengeState({ visit })),
-        SchemaError: () => Effect.succeed(Message.FailedLoadChallengeState({ visit })),
+      messageOnFailure({
+        failure: UndistinguishedFailure,
+        asUnexpected: ["RateLimited"],
+        toMessage: () => Message.FailedLoadChallengeState({ visit }),
       }),
     ),
 });
-
-const failedVerify = (visit: number, failure: VerifyFailure) => () =>
-  Effect.succeed(Message.FailedVerifyCode({ visit, failure }));
 
 export const VerifyCode = Command.define("VerifyCode", {
   args: { visit: Schema.Int, code: Schema.String, kind: MfaCodeKindSchema },
@@ -102,13 +98,10 @@ export const VerifyCode = Command.define("VerifyCode", {
       const { redirect_url } = yield* client.mfaChallenge.verify({ payload: { code, kind } });
       return Message.SucceededVerifyCode({ visit, redirectUrl: redirect_url });
     }).pipe(
-      Effect.catchTags({
-        ChallengeExpired: failedVerify(visit, "ChallengeExpired"),
-        InvalidCode: failedVerify(visit, "InvalidCode"),
-        Locked: failedVerify(visit, "Locked"),
-        RateLimited: failedVerify(visit, "RateLimited"),
-        HttpClientError: failedVerify(visit, "Unexpected"),
-        SchemaError: failedVerify(visit, "Unexpected"),
+      messageOnFailure({
+        failure: VerifyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedVerifyCode({ visit, failure }),
       }),
     ),
 });
