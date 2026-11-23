@@ -4,7 +4,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { mountSpaApi } from "../spa-http-api";
 import { auth } from "../../auth";
 import { withWaitUntil } from "../../background";
-import { drained } from "../../__tests__/live-runner";
+import { drained, partial } from "../../__tests__/live-runner";
 import { AuthApi } from "../../auth-service";
 import { requestHeaders } from "../../__tests__/session-helpers";
 import { authApiWith } from "../../__tests__/test-layers";
@@ -17,6 +17,7 @@ import {
   type Signer,
 } from "../../passkey/__tests__/helpers";
 import { CLIENT_IP_HEADER } from "../../client-ip";
+import { EmailSender } from "../../email/ports";
 import type { AppServices } from "../../runtime";
 import { JSON_HEADERS } from "../client-facing-error";
 import { runtimeServices } from "../spa-http-api";
@@ -52,9 +53,19 @@ export const provideAuthApi =
     return next();
   };
 
+export const defectDuringPasskeyMail: Layer.Layer<EmailSender> = Layer.succeed(
+  EmailSender,
+  partial<EmailSender["Service"]>({
+    sendPasskeyChanged: () => Effect.die(new Error("通知メールの組み立てで例外")),
+  }),
+);
+
 export const freshSessionCookie = () => ({
   cookie: `__Secure-better-auth.session_token=${crypto.randomUUID()}`,
 });
+
+export const signedLookingSessionValue = () =>
+  `${crypto.randomUUID()}.c2lnbmF0dXJl+/c2lnbmF0dXJl+/c2lnbmF0dXJl=`;
 
 export function buildAppWith<A extends AppServices>(overrides: Layer.Layer<A>): Hono {
   const app = new Hono();

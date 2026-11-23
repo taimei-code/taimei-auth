@@ -37,7 +37,7 @@ maintainer は採用の基準を「誰が書いても、どの agent が書い�
    - `update`・`view`・`init` の中の `Effect.run*`・`window` などと、Foldkit の file の中の timer・時刻・乱数は、この repo の lint が止める
    - 送信中と失敗の表し方は共有の型にし、`shared/ui/` の部品は `@foldkit/ui` を中で使い、この型を受ける
    - web が使う `effect` の subpath に、Foldkit の標準の形が使う `effect/crypto` (`SecureRandom`)・`effect/persistence` (`KeyValueStore`) を足す
-   - Foldkit の lint (`@foldkit/oxlint-plugin`) の `recommended` は `web/src` と `web/non-production` に効かせ、test の file は recommended 自身の test の override のとおりに緩める (#396 までは test の file を外していた)。oxlint の `overrides` は `extends` を受け付けないので、`recommended.json` の rule を web の override に写す。写しが `recommended.json` と一致することは `src/__tests__/foldkit-lint-preset.test.ts` が固定し、版を上げて rule が増減すると落ちる。この repo の rule (`lint/oxlint-plugin.mts`) の一覧と `.oxlintrc.json` の一致は `src/__tests__/oxlint-plugin.test.ts` が固定する
+   - Foldkit の lint (`@foldkit/oxlint-plugin`) の `recommended` は `web/src` と `web/non-production` に効かせ、test の file は recommended 自身の test の override のとおりに緩める (#396 までは test の file を外していた)。oxlint の `overrides` は `extends` を受け付けないので、`recommended.json` の rule を web の override に写す。写しが `recommended.json` と一致することは `src/__tests__/foldkit-lint-preset.test.ts` が固定し、版を上げて rule が増減すると落ちる。この repo の rule (`lint/oxlint-plugin.mts`) の一覧と `.oxlintrc.json` の一致は `src/__tests__/static-check-index.test.ts` が固定する
 6. 期待される失敗 (session の切れ、通信の失敗、Schema の失敗) は Message にし、`update` が次を決める。session が切れたときは、page が OutMessage で application に伝え、application の `update` だけが **共通ログイン画面** へ移る Command を返す。Command が失敗を Message にし忘れると型エラーになる
 
 ## Considered Options

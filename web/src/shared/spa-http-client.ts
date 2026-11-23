@@ -1,7 +1,6 @@
 import { SpaApi } from "@core/spa-contract";
 import { Context, type Effect, Layer, type Schema } from "effect";
 import type { HttpClientError } from "effect/http";
-// oxlint-disable-next-line no-restricted-imports -- Foldkit の画面の Command が SPA の API の契約から client を作るのはこの file だけ
 import { HttpApiClient } from "effect/http-api";
 import { Http } from "foldkit";
 

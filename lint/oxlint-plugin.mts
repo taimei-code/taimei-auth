@@ -60,7 +60,7 @@ type Report = (node: unknown, matchedText?: string) => void;
 type Matcher =
   | { readonly kind: "identifier"; readonly names: readonly string[]; readonly callOnly?: true }
   | { readonly kind: "member"; readonly paths: readonly string[]; readonly callOnly?: true }
-  | { readonly kind: "valueImport"; readonly source: RegExp }
+  | { readonly kind: "valueImport"; readonly source: RegExp; readonly includesTypeImports?: true }
   | { readonly kind: "importTarget"; readonly target: RegExp; readonly includesTypeImports?: true }
   | { readonly kind: "typeAssertion"; readonly typePrefix: string }
   | { readonly kind: "literal"; readonly pattern: RegExp }
@@ -258,6 +258,51 @@ const importTargetVisitors = (
     report,
   );
 
+const importedNameOf = (specifier: AstNode): string | undefined => {
+  const imported = specifier.type === "ExportSpecifier" ? specifier.local : specifier.imported;
+  return imported?.name ?? stringOf(imported);
+};
+
+const namedImport = (source: string, names: readonly string[]): Matcher => ({
+  kind: "custom",
+  visitors: (report) => {
+    const check = (node: AstNode) => {
+      if (
+        stringOf(node.source) === source &&
+        (node.type === "ExportAllDeclaration" ||
+          (node.specifiers ?? []).some(
+            (specifier) =>
+              specifier.type === "ImportNamespaceSpecifier" ||
+              names.includes(importedNameOf(specifier) ?? ""),
+          ))
+      ) {
+        report(node);
+      }
+    };
+    return {
+      ImportDeclaration: check,
+      ExportNamedDeclaration: check,
+      ExportAllDeclaration: check,
+    };
+  },
+});
+
+const importOrTypeImport = (source: RegExp): Matcher => ({
+  kind: "valueImport",
+  source,
+  includesTypeImports: true,
+});
+
+const valueImportVisitors = (
+  matcher: Extract<Matcher, { kind: "valueImport" }>,
+  report: Report,
+): Visitors =>
+  importVisitors(
+    (source) => (matcher.source.test(source) ? source : undefined),
+    matcher.includesTypeImports === true ? "valueAndType" : "valueOnly",
+    report,
+  );
+
 const visitorsOf = (
   matcher: Matcher,
   report: Report,
@@ -294,11 +339,7 @@ const visitorsOf = (
         },
       };
     case "valueImport":
-      return importVisitors(
-        (source) => (matcher.source.test(source) ? source : undefined),
-        "valueOnly",
-        report,
-      );
+      return valueImportVisitors(matcher, report);
     case "importTarget":
       return importTargetVisitors(matcher, context.filename, report);
     case "literal": {
@@ -480,6 +521,31 @@ export const packageNameOf = (specifier: string): string =>
     .split("/")
     .slice(0, specifier.startsWith("@") ? 2 : 1)
     .join("/");
+
+export const WEB_ONLY_DEPENDENCIES = [
+  "class-variance-authority",
+  "clsx",
+  "@effect/platform-browser",
+  "@foldkit/ui",
+  "foldkit",
+  "lucide",
+  "qrcode",
+  "tailwind-merge",
+] as const;
+
+const SERVER_RUNTIME_DIRS = ["src", "db", "management", "testing"];
+
+const SERVER_RUNTIME_ROOTS = SERVER_RUNTIME_DIRS.map((dir) => `${dir}/**`);
+
+const CONTRACT_FILES = ["src/**/*-contract.ts", "src/spa-contract-table.ts"];
+
+const HTTP_API_HANDLER_FILES = ["src/handlers/*-http-api.ts"];
+
+const EFFECT_FROM_ROOT_MESSAGE =
+  "effect は root から import する。effect/http や effect/sql などの area module は @stability unstable で、minor で breaking し得る (docs/adr/0017-effect-v4-full-adoption.md)";
+
+const DECIDED_EFFECT_SUBPATHS_MESSAGE =
+  "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)";
 
 const ROWS: readonly Row[] = [
   {
@@ -895,6 +961,7 @@ const ROWS: readonly Row[] = [
       "src/audit/append.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
+      "src/background.ts",
       "src/invitation/create.ts",
       "src/email/notify-in-background.ts",
       "src/membership/guard/core.ts",
@@ -2193,6 +2260,148 @@ const ROWS: readonly Row[] = [
     matchers: [{ kind: "member", paths: ["import.meta.env"] }],
     message:
       "どの application を起動するかは URL の path だけで決める。build の mode や環境の値を読まない (ADR-0021)",
+  },
+  {
+    name: "no-web-only-dependency-in-server",
+    within: SERVER_RUNTIME_ROOTS,
+    includesTestFiles: true,
+    matchers: [
+      importOrTypeImport(
+        new RegExp(`^(${WEB_ONLY_DEPENDENCIES.join("|").replaceAll(".", "\\.")})$`),
+      ),
+    ],
+    message:
+      "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)",
+  },
+  {
+    name: "no-connect-node",
+    within: SERVER_RUNTIME_ROOTS,
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^@connectrpc\/connect-node$/)],
+    message: "削除済み依存。再導入しない (ADR-0011 / ADR-0014)",
+  },
+  {
+    name: "no-effect-subpath-in-server",
+    within: SERVER_RUNTIME_ROOTS,
+    allowedIn: [...CONTRACT_FILES, ...HTTP_API_HANDLER_FILES],
+    matchers: [importOrTypeImport(/^effect\//)],
+    message: EFFECT_FROM_ROOT_MESSAGE,
+  },
+  {
+    name: "no-effect-subpath-in-server-tests",
+    within: SERVER_RUNTIME_DIRS.map((dir) => `${dir}/**/__tests__/**`),
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^effect\//)],
+    message: EFFECT_FROM_ROOT_MESSAGE,
+  },
+  {
+    name: "effect-subpath-in-contract-only-http-api",
+    within: CONTRACT_FILES,
+    matchers: [importOrTypeImport(/^effect\/(?!http-api$)/)],
+    message: DECIDED_EFFECT_SUBPATHS_MESSAGE,
+  },
+  {
+    name: "effect-subpath-in-http-api-handlers-only-http",
+    within: HTTP_API_HANDLER_FILES,
+    matchers: [importOrTypeImport(/^effect\/(?!(http-api|http)$)/)],
+    message: DECIDED_EFFECT_SUBPATHS_MESSAGE,
+  },
+  {
+    name: "raw-session-cookie-only-in-entry-redirects",
+    within: ["src/**"],
+    allowedIn: [
+      "src/session-cookie.ts",
+      "src/handlers/auth-entry-redirect.ts",
+      "src/handlers/login-shortcut.ts",
+    ],
+    matchers: [
+      {
+        kind: "identifier",
+        names: [
+          "sessionCookieOf",
+          "extractSessionTokenFromCookieHeader",
+          "getSessionToken",
+          "hasAuthCookie",
+        ],
+      },
+    ],
+    message:
+      "session cookie の生の値を読むのは、cookie の有無だけを見る入口 (auth-entry-redirect.ts・login-shortcut.ts) だけ。session ごとの鍵 (試行枠の主体など) は、better-auth が session を引く時と同じ読み方の sessionTokenAsBetterAuthReads から作る (表記の違う同じ session を別の鍵にしない。#514)",
+  },
+  {
+    name: "get-session-cookie-only-in-auth",
+    within: ["src/**", "testing/**"],
+    allowedIn: ["src/auth.ts"],
+    matchers: [namedImport("better-auth/cookies", ["getSessionCookie"])],
+    message:
+      "session cookie は src/session-cookie.ts の sessionCookieOf で読む (cookie の名前は SDK の 1 か所が持つ)",
+  },
+  {
+    name: "no-server-implementation-in-contract",
+    within: CONTRACT_FILES,
+    matchers: [namedImport("effect/http-api", ["HttpApiBuilder", "HttpApiTest"])],
+    message:
+      "契約の module は web と共有するため、server の実装 (HttpApiBuilder) を import しない。実装は src/handlers/*-http-api.ts に置く",
+  },
+  {
+    name: "no-effect-in-e2e",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/fixtures.ts"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^effect(\/|$)/)],
+    message:
+      "e2e は effect を直接 import しない。モックの path と失敗の応答は e2e/contract-mock.ts で契約から作る (docs/adr/0017-effect-v4-full-adoption.md)",
+  },
+  {
+    name: "no-sonner-in-web",
+    within: ["web/**"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^sonner$/)],
+    message:
+      "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)",
+  },
+  {
+    name: "no-react-in-web",
+    within: ["web/**"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^(react|react-dom)(\/|$)/)],
+    message: "web は React を使わない。画面は Foldkit で書く (docs/adr/0023-web-foldkit.md)",
+  },
+  {
+    name: "no-root-alias-in-web",
+    within: ["web/**"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^@\//)],
+    message: "web の domain の内部は相対 import で書く",
+  },
+  {
+    name: "effect-subpath-in-web-only-listed",
+    within: ["web/**"],
+    includesTestFiles: true,
+    allowedMatches: {
+      "web/src/shared/spa-http-client.ts": ["effect/http-api"],
+      "web/src/account/__tests__/Security.scene.test.ts": ["effect/testing"],
+    },
+    matchers: [importOrTypeImport(/^effect\/(?!(http|crypto|persistence)$)/)],
+    message:
+      "web で使える effect の subpath は effect/http・effect/crypto・effect/persistence だけ (docs/adr/0017-effect-v4-full-adoption.md、docs/adr/0023-web-foldkit.md)。例外は、SPA の API の契約から client を作る web/src/shared/spa-http-client.ts の effect/http-api と、コピーの結果を隠す待ちを仮想の時計で進める Security.scene.test.ts の effect/testing だけ",
+  },
+  {
+    name: "route-only-in-route-files",
+    within: ["web/**"],
+    allowedIn: ["web/src/app/*/route.ts"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^foldkit\/route$/), namedImport("foldkit", ["Route"])],
+    message: "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)",
+  },
+  {
+    name: "foldkit-dialog-only-in-dialog-view",
+    within: ["web/**"],
+    allowedIn: ["web/src/shared/ui/dialog-view.ts"],
+    includesTestFiles: true,
+    matchers: [namedImport("@foldkit/ui", ["Dialog"])],
+    message:
+      "dialog は web/src/shared/ui/dialog-view.ts の dialogView と Dialog で書く (class を受け取らない house の dialog。docs/adr/0023-web-foldkit.md)",
   },
 ];
 

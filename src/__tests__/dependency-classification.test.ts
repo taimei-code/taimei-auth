@@ -1,30 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { WEB_ONLY_DEPENDENCIES } from "../../lint/oxlint-plugin.mjs";
 import {
-  CONNECT_NODE,
   classificationDiff,
   classificationViolations,
-  effectiveOverride,
-  effectiveWebOnlyGroup,
-  EXPECTED_CONNECT_NODE_COPY_COUNT,
-  EXPECTED_WEB_ONLY_COPY_COUNT,
-  hasConnectNodeBan,
-  type OxlintConfig,
-  type OxlintOverride,
-  overrideMatches,
   parseJsonc,
   readOxlintConfig,
   readPackageJson,
   REPO_ROOT,
-  REPRESENTATIVE_DB_FILE,
-  REPRESENTATIVE_MANAGEMENT_FILE,
-  REPRESENTATIVE_SERVER_FILE,
-  type RestrictedPattern,
-  restrictedPatterns,
-  WEB_ONLY_DEP_MESSAGE,
-  webOnlyBanViolations,
-  webOnlyGroups,
   workspacePackageNames,
 } from "./config-invariant-helpers";
 import { repoFiles } from "./source-scan";
@@ -66,15 +50,10 @@ const ALLOWED_DEV_DEPENDENCIES: Record<string, string> = {
 };
 
 describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", () => {
-  test("web 専用 ban の全 copy で group 集合が一致する", () => {
-    expect(webOnlyBanViolations(readOxlintConfig())).toEqual([]);
-  });
-
   test("devDependencies − 許可リスト == web 専用 group (両方向)", () => {
-    const config = readOxlintConfig();
     const pkg = readPackageJson();
     const devDeps = Object.keys(pkg.devDependencies ?? {});
-    const group = webOnlyGroups(config)[0] as string[];
+    const group = [...WEB_ONLY_DEPENDENCIES];
 
     expect(
       classificationViolations(classificationDiff(devDeps, ALLOWED_DEV_DEPENDENCIES, group)),
@@ -90,40 +69,10 @@ describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", 
     );
   });
 
-  test("@connectrpc/connect-node は依存から不在かつ全 copy で ban 済み", () => {
-    const config = readOxlintConfig();
-    const pkg = readPackageJson();
-
-    expect(Object.keys(pkg.dependencies ?? {}).includes(CONNECT_NODE)).toBe(false);
-    expect(Object.keys(pkg.devDependencies ?? {}).includes(CONNECT_NODE)).toBe(false);
-
-    const bans = (config.overrides ?? []).filter(hasConnectNodeBan);
-    expect(bans.length).toBe(EXPECTED_CONNECT_NODE_COPY_COUNT);
-
-    const effective = effectiveOverride(config, REPRESENTATIVE_SERVER_FILE);
-    expect(effective).not.toBeNull();
-    expect(hasConnectNodeBan(effective as OxlintOverride)).toBe(true);
-  });
-
-  test("片方の override だけに追記すると group 集合の不一致で落ちる", () => {
-    const config = readOxlintConfig();
-    const patched = readOxlintConfig();
-    const firstGroup = webOnlyGroups(patched)[0] as string[];
-    firstGroup.push("react-day-picker");
-
-    const groups = webOnlyGroups(patched).map((group) => [...group].sort());
-    expect(groups.length).toBe(EXPECTED_WEB_ONLY_COPY_COUNT);
-    expect(groups[0]).not.toEqual(groups[1] as string[]);
-
-    const original = webOnlyGroups(config).map((group) => [...group].sort());
-    expect(original[0]).toEqual(original[1] as string[]);
-  });
-
   test("web 専用 devDependency を足して ban 未追記だと差分が列挙される", () => {
-    const config = readOxlintConfig();
     const pkg = readPackageJson();
     const devDeps = [...Object.keys(pkg.devDependencies ?? {}), "react-day-picker"];
-    const group = webOnlyGroups(config)[0] as string[];
+    const group = [...WEB_ONLY_DEPENDENCIES];
 
     const diff = classificationDiff(devDeps, ALLOWED_DEV_DEPENDENCIES, group);
     expect(diff.missingFromBan).toEqual(["react-day-picker"]);
@@ -131,62 +80,15 @@ describe("依存分類 (oxlint の ban ↔ package.json) の config invariant", 
     const violations = classificationViolations(diff);
     expect(violations.length).toBe(1);
     expect(violations[0]).toContain("react-day-picker");
-    expect(violations[0]).toContain(".oxlintrc.json の override の group");
+    expect(violations[0]).toContain("WEB_ONLY_DEPENDENCIES");
     expect(violations[0]).toContain("ALLOWED_DEV_DEPENDENCIES");
   });
 
-  test("selector の出現回数 0 / 1 / 3 と後置 override は loud fail する", () => {
-    const withCopies = (count: number): OxlintConfig => ({
-      overrides: Array.from({ length: count }, () => ({
-        files: ["src/**", "db/**", "management/**"],
-        rules: {
-          "no-restricted-imports": [
-            "error",
-            { patterns: [{ group: ["lucide"], message: WEB_ONLY_DEP_MESSAGE }] },
-          ],
-        },
-      })),
-    });
-
-    for (const count of [0, 1, 3]) {
-      expect(webOnlyBanViolations(withCopies(count)).join("\n")).toContain(
-        `web 専用 ban の copy 数が ${count} 個`,
-      );
-    }
-    expect(webOnlyBanViolations(withCopies(EXPECTED_WEB_ONLY_COPY_COUNT))).toEqual([]);
-
-    const renamed = withCopies(EXPECTED_WEB_ONLY_COPY_COUNT);
-    for (const override of renamed.overrides ?? []) {
-      const patterns = restrictedPatterns(override);
-      (patterns[0] as RestrictedPattern).message = `${WEB_ONLY_DEP_MESSAGE} (改稿)`;
-    }
-    expect(webOnlyGroups(renamed).length).toBe(0);
-
-    for (const [scope, path] of [
-      ["src/**", REPRESENTATIVE_SERVER_FILE],
-      ["db/**", REPRESENTATIVE_DB_FILE],
-      ["management/**", REPRESENTATIVE_MANAGEMENT_FILE],
-    ] as const) {
-      const shadowed = withCopies(EXPECTED_WEB_ONLY_COPY_COUNT);
-      (shadowed.overrides ?? []).push({
-        files: [scope],
-        rules: { "no-restricted-imports": ["error", { patterns: [] }] },
-      });
-      expect(webOnlyGroups(shadowed).length).toBe(EXPECTED_WEB_ONLY_COPY_COUNT);
-      expect(effectiveWebOnlyGroup(shadowed, path)).toBeNull();
-      expect(webOnlyBanViolations(shadowed).join("\n")).toContain(path);
-    }
-  });
-
-  test("overrideMatches は files のどれかに当たり excludeFiles のどれにも当たらない path を対象にする", () => {
-    const matches = (files: string[], excludeFiles: string[], path: string) =>
-      overrideMatches({ files, excludeFiles }, path);
-
-    expect(matches(["src/**"], [], "src/handlers/account-company.ts")).toBe(true);
-    expect(matches(["src/**"], ["src/auth.ts"], "src/auth.ts")).toBe(false);
-    expect(matches(["src/**", "db/**"], ["src/auth.ts"], "db/schema.ts")).toBe(true);
-    expect(matches(["db/**"], [], "src/auth.ts")).toBe(false);
-    expect(matches([], [], "src/auth.ts")).toBe(false);
+  test("@connectrpc/connect-node は dependencies にも devDependencies にも無い (import の禁止は lint の表の行が持つ)", () => {
+    const { dependencies, devDependencies } = readPackageJson();
+    expect(Object.keys({ ...dependencies, ...devDependencies })).not.toContain(
+      "@connectrpc/connect-node",
+    );
   });
 
   test("oxlint は files の否定の glob を黙って無視するので、override の files に ! で始まる glob を書かない (除外は excludeFiles に書く)", () => {

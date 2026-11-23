@@ -1,11 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import { Cause, Effect } from "effect";
+import { beforeEach, describe, expect, test } from "bun:test";
+import { Cause, Effect, Layer } from "effect";
 import { Background, BackgroundLive, withWaitUntil } from "../background";
 import { TtlStoreError, timeoutAsBoundary, tryTtlStore } from "../errors";
 import { HealthRepo } from "../health/ports";
 import { HealthRepoLive } from "../health/wiring";
+import { SentryLive } from "../sentry";
 import { TtlStore } from "../ttl-store-service";
 import { ownKey } from "../ttl-key";
+import { recordSentry } from "./sentry-recorder";
 import { testKvStore, testTtlStore, testTtlStoreLayer } from "./test-ttl-store";
 
 describe("TtlStore service (live)", () => {
@@ -72,13 +74,55 @@ describe("Background service", () => {
                 }),
               ),
             ),
-            BackgroundLive,
+            Layer.mergeAll(BackgroundLive, SentryLive),
           ),
         ),
     );
     expect(collected.length).toBe(1);
     await collected[0];
     expect(ran).toBe(true);
+  });
+
+  describe("切り離した処理の落ち方と Sentry", () => {
+    const sentry = recordSentry();
+    beforeEach(sentry.reset);
+    const settled = async (effect: Effect.Effect<unknown>) => {
+      const collected: Promise<unknown>[] = [];
+      await withWaitUntil(
+        (promise) => void collected.push(promise),
+        () =>
+          Effect.runPromise(
+            Effect.provide(
+              Background.use((bg) => bg.run(effect)),
+              Layer.mergeAll(BackgroundLive, SentryLive),
+            ),
+          ),
+      );
+      await Promise.all(collected);
+      return collected.length;
+    };
+
+    test("型の無い例外で落ちても run は成功し、waitUntil に渡した 1 件の完了までに Sentry に warning が 1 件残る", async () => {
+      const defect = new Error("切り離した処理で例外");
+
+      expect(await settled(Effect.die(defect))).toBe(1);
+
+      expect(sentry.warnings()).toEqual([
+        [defect, { level: "warning", tags: { component: "background" } }],
+      ]);
+    });
+
+    test("成功した処理は Sentry に何も残さない", async () => {
+      await settled(Effect.void);
+
+      expect(sentry.exceptions).toEqual([]);
+    });
+
+    test("中断された処理は落ちたのではないので、Sentry に何も残さない", async () => {
+      await settled(Effect.interrupt);
+
+      expect(sentry.exceptions).toEqual([]);
+    });
   });
 });
 describe("HealthRepo (live)", () => {

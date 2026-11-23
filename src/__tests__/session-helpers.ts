@@ -37,6 +37,12 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   return headers;
 }
 
+export const cookieValueNotations = (value: string) => ({
+  plain: value,
+  percentEncoded: encodeURIComponent(value),
+  quoted: `"${value}"`,
+});
+
 export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;
 
 export type TestSession = { token: string; headers: Headers };

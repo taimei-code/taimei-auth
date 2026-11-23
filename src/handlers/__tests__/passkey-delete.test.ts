@@ -1,7 +1,12 @@
+import { buildSessionCookieHeader } from "@taimei-code/auth-client/cookie";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
 import { recordSentry } from "../../__tests__/sentry-recorder";
-import { browserCookieHeaders, loginWithMagicLink } from "../../__tests__/session-helpers";
+import {
+  browserCookieHeaders,
+  cookieValueNotations,
+  loginWithMagicLink,
+} from "../../__tests__/session-helpers";
 import { TestDb } from "../../__tests__/test-db";
 import { auditFailingLayer } from "../../__tests__/test-layers";
 import { ttlStoreWithoutCounting } from "../../__tests__/test-ttl-store";
@@ -16,6 +21,7 @@ import {
   CLIENT_IP,
   CLIENT_USER_AGENT,
   clientHeaders,
+  defectDuringPasskeyMail,
   liveApp,
   listedPasskeyIds,
   type Outcome,
@@ -24,6 +30,7 @@ import {
   resendOutbox,
   restoreKvStoreAfterEach,
   SECURITY_PAGE_URL,
+  signedLookingSessionValue,
   sameOriginHeaders,
   type SignedInSession,
   type SignedInUser,
@@ -172,6 +179,32 @@ describe("パスキーの削除の API", () => {
 
     expect(statuses.filter((status) => status === RATE_LIMITED.status)).toEqual([]);
     expect(statusAndBody(eleventh)).toEqual(RATE_LIMITED);
+  });
+
+  test("同じ session の cookie を、そのまま、percent-encode、前後を引用符で囲んだ表記で順に送っても、合わせて 10 回目までは試行枠の失敗にならず、11 回目は表記によらず試行枠を超えた時と同じ失敗になる", async () => {
+    const owner = await createUser("owner");
+    const cookies = Object.values(cookieValueNotations(signedLookingSessionValue())).map(
+      buildSessionCookieHeader,
+    );
+    const statuses: number[] = [];
+    for (let i = 0; i < ATTEMPTS_PER_MINUTE; i++)
+      statuses.push(
+        (
+          await sendDeletion(
+            signedInSession(owner, { cookie: cookies[i % cookies.length] }),
+            missingPasskeyId(),
+          )
+        ).status,
+      );
+
+    const afterwards = await Promise.all(
+      cookies.map(async (cookie) =>
+        statusAndBody(await sendDeletion(signedInSession(owner, { cookie }), missingPasskeyId())),
+      ),
+    );
+
+    expect(statuses.filter((status) => status === RATE_LIMITED.status)).toEqual([]);
+    expect(afterwards).toEqual([RATE_LIMITED, RATE_LIMITED, RATE_LIMITED]);
   });
 
   test("同じ session で試行枠を超えた後も、同じ user の別の session からはパスキーを削除できる", async () => {
@@ -389,6 +422,18 @@ describe("パスキーの削除の API", () => {
 
       expect(outcome.status).toBe(200);
       expect(await listedPasskeyIds(session)).toEqual([]);
+    });
+
+    test("通知メールの送信が型の無い例外で落ちる時も、削除の応答は成功で、パスキーは一覧から消え、Sentry に warning として 1 件送られる", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+      const session = signedInSession(owner, { layer: defectDuringPasskeyMail });
+
+      const outcome = await deleteAndAwaitMail(session, passkey);
+
+      expect(outcome.status).toBe(200);
+      expect(await listedPasskeyIds(session)).toEqual([]);
+      expect(sentry.warnings()).toHaveLength(1);
     });
 
     test("Resend への送信が失敗した削除は、Sentry に warning として 1 件送られる", async () => {

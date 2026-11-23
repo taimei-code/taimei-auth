@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import taimeiPlugin, { WEB_ONLY_DEPENDENCIES } from "../../lint/oxlint-plugin.mjs";
 import { repoFiles } from "./source-scan";
 
 const REPO_ROOT = join(import.meta.dir, "../..");
@@ -15,7 +16,6 @@ type Case = {
   readonly expectedRules: readonly string[];
 };
 
-const RESTRICTED_IMPORT = "eslint(no-restricted-imports)";
 const DB_IMPORT = "taimei(db-import-only-in-db)";
 const SCRIPTS_IMPORT = "taimei(scripts-import-only-node-builtins)";
 const DB_VALUE_IMPORT_IN_TEST = "taimei(db-value-import-only-in-db-in-tests)";
@@ -198,7 +198,7 @@ const CASES: readonly Case[] = [
     name: "web の画面は @foldkit/ui の Dialog を直接 import できない",
     path: "web/src/account/pages/DialogProbe.ts",
     source: 'import { Dialog } from "@foldkit/ui";\nexport { Dialog };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(foldkit-dialog-only-in-dialog-view)"],
   },
   {
     name: "house の dialog の file は @foldkit/ui の Dialog を import できる",
@@ -210,7 +210,7 @@ const CASES: readonly Case[] = [
     name: "house の dialog の file も react は import できない",
     path: "web/src/shared/ui/dialog-view.ts",
     source: 'import "react";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
     name: "scripts は依存を install する前に走るので、package を import できない",
@@ -247,25 +247,25 @@ const CASES: readonly Case[] = [
     name: "server は web 専用の依存を import できない",
     path: "src/handlers/web-only.ts",
     source: 'import "foldkit";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-web-only-dependency-in-server)"],
   },
   {
     name: "db は web 専用の依存を import できない",
     path: "db/web-only.ts",
     source: 'import "@foldkit/ui";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-web-only-dependency-in-server)"],
   },
   {
     name: "management は削除済みの connect-node を import できない",
     path: "management/connect-node.ts",
     source: 'import "@connectrpc/connect-node";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-connect-node)"],
   },
   {
     name: "testing は effect の subpath を import できない",
     path: "testing/effect-subpath.ts",
     source: 'import "effect/Schema";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-effect-subpath-in-server)"],
   },
   {
     name: "src は drizzle-orm を直接 import できない",
@@ -289,7 +289,7 @@ const CASES: readonly Case[] = [
     name: "src は getSessionCookie を import できない",
     path: "src/cookie.ts",
     source: 'import { getSessionCookie } from "better-auth/cookies"; export { getSessionCookie };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(get-session-cookie-only-in-auth)"],
   },
   {
     name: "src は better-auth/cookies の getSessionCookie 以外を import できる",
@@ -338,13 +338,13 @@ const CASES: readonly Case[] = [
     name: "src の test も web 専用の依存は import できない",
     path: "src/__tests__/web-only.test.ts",
     source: 'import "lucide";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-web-only-dependency-in-server)"],
   },
   {
     name: "契約は HttpApiBuilder を import できない",
     path: "src/account-contract.ts",
     source: 'import { HttpApiBuilder } from "effect/http-api"; export { HttpApiBuilder };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-server-implementation-in-contract)"],
   },
   {
     name: "契約は effect/http-api の HttpApi を import できる",
@@ -356,13 +356,13 @@ const CASES: readonly Case[] = [
     name: "契約は effect/http を import できない",
     path: "src/session-contract.ts",
     source: 'import "effect/http";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(effect-subpath-in-contract-only-http-api)"],
   },
   {
     name: "契約の表も web 専用の依存を import できない",
     path: "src/spa-contract-table.ts",
     source: 'import "clsx";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-web-only-dependency-in-server)"],
   },
   {
     name: "Hono に載せる実装は effect/http を import できる",
@@ -374,7 +374,7 @@ const CASES: readonly Case[] = [
     name: "Hono に載せる実装は effect/sql を import できない",
     path: "src/handlers/company-http-api.ts",
     source: 'import "effect/sql";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(effect-subpath-in-http-api-handlers-only-http)"],
   },
   {
     name: "Hono に載せる実装は drizzle-orm を import できない",
@@ -445,7 +445,7 @@ const CASES: readonly Case[] = [
     name: "e2e の spec は effect を import できない",
     path: "e2e/effect.spec.ts",
     source: 'import "effect";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-effect-in-e2e)"],
   },
   {
     name: "e2e/fixtures.ts も pg は import できない",
@@ -457,19 +457,19 @@ const CASES: readonly Case[] = [
     name: "web は react を import できない",
     path: "web/src/account/react.ts",
     source: 'import "react";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
     name: "web は react-dom の subpath を import できない",
     path: "web/non-production/react-dom.ts",
     source: 'import "react-dom/client";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
     name: "web は effect/reactivity を import できない",
     path: "web/src/account/reactivity.ts",
     source: 'import "effect/reactivity";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "web は effect/http を import できる",
@@ -481,7 +481,7 @@ const CASES: readonly Case[] = [
     name: "web はほかの effect の subpath を import できない",
     path: "web/src/account/schema.ts",
     source: 'import "effect/Schema";',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "web は drizzle-orm の subpath を import できない",
@@ -622,13 +622,13 @@ const CASES: readonly Case[] = [
     name: "web は @/ で import できない",
     path: "web/src/shared/at-alias.ts",
     source: 'import { cn } from "@/shared/utils"; export { cn };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-root-alias-in-web)"],
   },
   {
     name: "route は app/*/route.ts の外で import できない",
     path: "web/src/mfa/route-in-domain.ts",
     source: 'import { literal } from "foldkit/route"; export { literal };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(route-only-in-route-files)"],
   },
   {
     name: "app/*/route.ts は route を import できる",
@@ -641,33 +641,44 @@ const CASES: readonly Case[] = [
     name: "app/*/route.ts も web の import の禁止を失わない",
     path: "web/src/app/account/route.ts",
     source: 'import { useState } from "react"; export { useState };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
     name: "Foldkit の画面の file も、web の import の禁止を失わない",
     path: "web/src/mfa/react-program.ts",
     source:
       'import { Command } from "foldkit"; import { useState } from "react"; export { Command, useState };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
-    name: "Foldkit の画面の通信の client は、行ごとの許可を付ければ effect/http-api を import できる",
+    name: "Foldkit の画面の通信の client は、directive 無しで effect/http-api を import できる (例外は表の行が持つ)",
     path: "web/src/shared/spa-http-client.ts",
-    source:
-      '// oxlint-disable-next-line no-restricted-imports -- 理由\nimport { HttpApiClient } from "effect/http-api"; export { HttpApiClient };',
+    source: 'import { HttpApiClient } from "effect/http-api"; export { HttpApiClient };',
     expectedRules: [],
+  },
+  {
+    name: "コピーの結果を隠す待ちを仮想の時計で進める scene test は、directive 無しで effect/testing を import できる (例外は表の行が持つ)",
+    path: "web/src/account/__tests__/Security.scene.test.ts",
+    source: 'import { TestClock } from "effect/testing"; export { TestClock };',
+    expectedRules: [],
+  },
+  {
+    name: "ほかの画面の test は effect/testing を import できない",
+    path: "web/src/company/__tests__/Clock.scene.test.ts",
+    source: 'import { TestClock } from "effect/testing"; export { TestClock };',
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "Foldkit の画面の通信の client も、web の import の禁止を失わない",
     path: "web/src/shared/spa-http-client.ts",
     source: 'import { useState } from "react"; export { useState };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(no-react-in-web)"],
   },
   {
     name: "ほかの web の file は effect/http-api を import できない",
     path: "web/src/mfa/http-api-client.ts",
     source: 'import { HttpApiClient } from "effect/http-api"; export { HttpApiClient };',
-    expectedRules: [RESTRICTED_IMPORT],
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "web は effect/crypto と effect/persistence を import できる",
@@ -1171,7 +1182,7 @@ const CASES: readonly Case[] = [
     name: "web/src の effect の subpath は http・crypto・persistence だけ: web/src/shared に書くと lint が止める",
     path: "web/src/shared/Probe031.ts",
     source: 'import { Schema } from "effect/Schema"; export const s = Schema;',
-    expectedRules: ["eslint(no-restricted-imports)"],
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "web/src の effect の subpath は http・crypto・persistence だけ: web/src/shared では lint が止めない",
@@ -1184,13 +1195,12 @@ const CASES: readonly Case[] = [
     name: "effect/http-api は SpaHttpClient の file だけ: web/src/company に書くと lint が止める",
     path: "web/src/company/Probe033.ts",
     source: 'import { HttpApiClient } from "effect/http-api"; export const c = HttpApiClient;',
-    expectedRules: ["eslint(no-restricted-imports)"],
+    expectedRules: ["taimei(effect-subpath-in-web-only-listed)"],
   },
   {
     name: "effect/http-api は SpaHttpClient の file だけ: web/src/shared では lint が止めない",
     path: "web/src/shared/spa-http-client.ts",
-    source:
-      '// oxlint-disable-next-line no-restricted-imports -- Foldkit の画面の Command が SPA の API の契約から client を作るのはこの file だけ\nimport { HttpApiClient } from "effect/http-api"; export const c = HttpApiClient;',
+    source: 'import { HttpApiClient } from "effect/http-api"; export const c = HttpApiClient;',
     expectedRules: [],
   },
   {
@@ -2389,21 +2399,21 @@ const CASES: readonly Case[] = [
     name: "route は app/*/route.ts の外で foldkit の Route を import できない",
     path: "web/src/mfa/RouteClassProbe.ts",
     source: 'import { Route } from "foldkit";\nexport { Route };',
-    expectedRules: ["eslint(no-restricted-imports)"],
+    expectedRules: ["taimei(route-only-in-route-files)"],
   },
   {
     name: "app/*/route.ts も sonner は import できない",
     path: "web/src/app/account/route.ts",
     source:
       'import { literal } from "foldkit/route";\nimport { toast } from "sonner";\nexport { literal, toast };',
-    expectedRules: ["eslint(no-restricted-imports)"],
+    expectedRules: ["taimei(no-sonner-in-web)"],
   },
   {
     name: "Foldkit の file は sonner を import できない",
     path: "web/src/mfa/SonnerProbe.ts",
     source:
       'import { Command } from "foldkit";\nimport { toast } from "sonner";\nexport { Command, toast };',
-    expectedRules: ["eslint(no-restricted-imports)"],
+    expectedRules: ["taimei(no-sonner-in-web)"],
   },
   {
     name: "web の if は braces を付ければ書ける",
@@ -3113,6 +3123,83 @@ const CASES: readonly Case[] = [
     source: "export const root = process.cwd();",
     expectedRules: [],
   },
+  {
+    name: "src の test も effect の subpath を import できない",
+    path: "src/company/__tests__/effect-subpath.ts",
+    source: 'import "effect/sql";',
+    expectedRules: ["taimei(no-effect-subpath-in-server-tests)"],
+  },
+  {
+    name: "session ごとの鍵を作る code は、SDK の cookie の reader で生の値を読めない",
+    path: "src/handlers/SdkCookieReaderProbe.ts",
+    source:
+      'import { getSessionToken } from "@taimei-code/auth-client";\nexport const token = getSessionToken(() => undefined);',
+    expectedRules: ["taimei(raw-session-cookie-only-in-entry-redirects)"],
+  },
+  {
+    name: "session ごとの鍵を作る code は、session cookie の生の値を読めない (表記の違う同じ session が別の鍵になる)",
+    path: "src/handlers/RawSessionCookieProbe.ts",
+    source:
+      'import { sessionCookieOf } from "../session-cookie";\nexport const subject = (headers: Headers) => sessionCookieOf(headers);',
+    expectedRules: ["taimei(raw-session-cookie-only-in-entry-redirects)"],
+  },
+  {
+    name: "cookie の有無だけを見る入口は、session cookie の生の値を読める",
+    path: "src/handlers/login-shortcut.ts",
+    source:
+      'import { sessionCookieOf } from "../session-cookie";\nexport const signedIn = (headers: Headers) => sessionCookieOf(headers) !== undefined;',
+    expectedRules: [],
+  },
+  {
+    name: "画面は、パスキーの一覧の応答から行を自分で読めない",
+    path: "web/src/account/PasskeyListProbe.ts",
+    source: "export const rows = (list: { passkeys: unknown[] }) => list.passkeys;",
+    expectedRules: ["taimei(passkey-list-only-in-passkey-settings)"],
+  },
+  {
+    name: "検証の入口の外は、パスキーの challenge の key の接頭辞を書けない",
+    path: "src/passkey/ChallengeKeyProbe.ts",
+    source: 'export const key = "passkey:registration-challenge";',
+    expectedRules: ["taimei(passkey-challenge-keys-only-in-webauthn)"],
+  },
+  {
+    name: "検証の入口の外は、既知の transports の一覧で絞れない",
+    path: "src/passkey/TransportsProbe.ts",
+    source:
+      'import { PASSKEY_TRANSPORTS } from "@/db/enums";\nexport const known = PASSKEY_TRANSPORTS;',
+    expectedRules: ["taimei(passkey-transports-only-in-passkey-entry)"],
+  },
+  {
+    name: "失敗の class は、src/failures.ts と domain の errors.ts の外で作れない",
+    path: "src/company/FailureProbe.ts",
+    source: 'import { failure } from "../failure";\nexport const Gone = failure("Gone", 404);',
+    expectedRules: ["taimei(failure-only-in-failures-and-domain-errors)"],
+  },
+  {
+    name: "パスキーの一覧の応答は passkey-settings.ts だけが読む: web/src/passkey/passkey-settings.ts では lint が止めない",
+    path: "web/src/passkey/passkey-settings.ts",
+    source: "export const rows = (list: { passkeys: unknown[] }) => list.passkeys;",
+    expectedRules: [],
+  },
+  {
+    name: "パスキーの challenge の key の接頭辞は webauthn.ts だけが使う: src/passkey/webauthn.ts では lint が止めない",
+    path: "src/passkey/webauthn.ts",
+    source: 'export const key = "passkey:registration-challenge";',
+    expectedRules: [],
+  },
+  {
+    name: "既知の transports で絞る判定は検証の入口だけが持つ: db/schema.ts では lint が止めない",
+    path: "db/schema.ts",
+    source:
+      'import { PASSKEY_TRANSPORTS } from "./enums";\nexport const known = PASSKEY_TRANSPORTS;',
+    expectedRules: [],
+  },
+  {
+    name: "失敗の class の置き場は 2 つ: src/failures.ts と domain の errors.ts では failure() の呼び出しを lint が止めない",
+    path: "src/company/errors.ts",
+    source: 'import { failure } from "../failure";\nexport const Gone = failure("Gone", 404);',
+    expectedRules: [],
+  },
 ];
 
 const TYPE_AWARE_CASES: readonly Case[] = [
@@ -3240,7 +3327,11 @@ const TYPE_AWARE_CASES: readonly Case[] = [
   },
 ];
 
-type Diagnostic = { readonly code: string; readonly filename: string };
+type Diagnostic = {
+  readonly code: string;
+  readonly filename: string;
+  readonly labels: readonly { readonly span: { readonly line: number } }[];
+};
 
 const groupsWithDistinctPaths = (cases: readonly Case[]): Case[][] =>
   cases.reduce<Case[][]>((groups, testCase) => {
@@ -3287,7 +3378,10 @@ const OXLINT_ARGS: Record<LintMode, readonly string[]> = {
   TypeAware: ["--type-aware", "--format", "json", "."],
 };
 
-const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
+const lintFixtureFiles = (
+  files: readonly Pick<Case, "path" | "source">[],
+  mode: LintMode = "Syntax",
+): Diagnostic[] => {
   const fixtureDir = mkdtempSync(join(tmpdir(), "oxlint-rules-"));
   fixtureDirs.push(fixtureDir);
   writeFileSync(join(fixtureDir, ".oxlintrc.json"), configWithJsPluginsFromRepo());
@@ -3297,7 +3391,7 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
     join(fixtureDir, "packages/auth-client/package.json"),
     readFileSync(join(REPO_ROOT, "packages/auth-client/package.json"), "utf8"),
   );
-  for (const { path, source } of group) {
+  for (const { path, source } of files) {
     mkdirSync(dirname(join(fixtureDir, path)), { recursive: true });
     writeFileSync(join(fixtureDir, path), `${source}\n`);
   }
@@ -3307,6 +3401,7 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
   const result = spawnSync(OXLINT, [...OXLINT_ARGS[mode]], {
     cwd: fixtureDir,
     encoding: "utf8",
+    maxBuffer: 1 << 30,
     env: {
       ...process.env,
       OXLINT_TSGOLINT_PATH: join(REPO_ROOT, "node_modules/oxlint-tsgolint/bin/tsgolint.js"),
@@ -3316,7 +3411,12 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
     diagnostics: Diagnostic[];
     number_of_files: number;
   };
-  lintedFileCounts.push({ written: group.length + 1, linted: number_of_files });
+  lintedFileCounts.push({ written: files.length + 1, linted: number_of_files });
+  return diagnostics;
+};
+
+const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
+  const diagnostics = lintFixtureFiles(group, mode);
   for (const testCase of group) {
     rulesByCase.set(
       testCase,
@@ -3332,6 +3432,7 @@ const lintGroup = (group: readonly Case[], mode: LintMode = "Syntax"): void => {
 beforeAll(() => {
   for (const group of groupsWithDistinctPaths(CASES)) lintGroup(group);
   lintGroup(TYPE_AWARE_CASES, "TypeAware");
+  lintImportBanZones();
 });
 
 afterAll(() => {
@@ -3347,6 +3448,17 @@ describe("lint の rule は、oxlint で決めた path に効く", () => {
     expect(lintedFileCounts.map(({ linted }) => linted)).toEqual(
       lintedFileCounts.map(({ written }) => written),
     );
+  });
+
+  test("lint の plugin の rule は、どれもこの file の fixture が、その rule の指摘を期待している", () => {
+    const expected = new Set(
+      [...CASES, ...TYPE_AWARE_CASES].flatMap((testCase) => testCase.expectedRules),
+    );
+    expect(
+      Object.keys(taimeiPlugin.rules)
+        .toSorted()
+        .filter((rule) => !expected.has(`taimei(${rule})`)),
+    ).toEqual([]);
   });
 });
 
@@ -3453,5 +3565,295 @@ describe("型を使う lint は、CI の lint で走り、有効な rule ごと�
           .map((directive) => `${file}: ${directive}`),
       );
     expect(withoutReason).toEqual([]);
+  });
+});
+
+type ImportBanZone = {
+  readonly name: string;
+  readonly paths: readonly string[];
+  readonly everyForm: readonly string[];
+  readonly named: readonly (readonly [string, string])[];
+};
+
+const SERVER_EFFECT_SUBPATHS = [
+  "effect/crypto",
+  "effect/http",
+  "effect/http/HttpClient",
+  "effect/persistence",
+  "effect/sql",
+  "effect/testing",
+  "effect/unstable/http",
+];
+
+const WEB_EFFECT_SUBPATHS = [
+  "effect/http-api",
+  "effect/http/HttpClient",
+  "effect/sql",
+  "effect/testing",
+  "effect/unstable/http",
+];
+
+const WEB_FORBIDDEN_SPECIFIERS = [
+  "@/db/schema",
+  "@/x",
+  "react",
+  "react-dom",
+  "react-dom/client",
+  "react/jsx-runtime",
+  "sonner",
+];
+
+const SERVER_IMPLEMENTATION_PATHS = [
+  "src/handlers/probe.ts",
+  "src/session-cookie.ts",
+  "testing/probe.ts",
+];
+
+const SERVER_TEST_AND_TOOL_PATHS = [
+  "src/auth.ts",
+  "src/company/__tests__/probe.ts",
+  "src/company/__tests__/probe.test.ts",
+  "src/company/__tests__/probe-contract.ts",
+  "src/__tests__/probe-contract.ts",
+  "src/handlers/__tests__/probe-http-api.ts",
+  "db/probe.ts",
+  "db/testing/probe.ts",
+  "db/__tests__/probe.test.ts",
+  "management/probe.ts",
+  "testing/__tests__/probe.ts",
+];
+
+const BANNED_ACROSS_SERVER = [...WEB_ONLY_DEPENDENCIES, "@connectrpc/connect-node"];
+
+const BANNED_ACROSS_WEB = [...WEB_EFFECT_SUBPATHS, ...WEB_FORBIDDEN_SPECIFIERS];
+
+const IMPORT_BAN_ZONES: ImportBanZone[] = [
+  {
+    name: "server の実装 (src と testing の test 以外)",
+    paths: SERVER_IMPLEMENTATION_PATHS,
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    named: [["better-auth/cookies", "getSessionCookie"]],
+  },
+  {
+    name: "server の test・db・management・src/auth.ts",
+    paths: SERVER_TEST_AND_TOOL_PATHS,
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    named: [],
+  },
+  {
+    name: "契約の file (src/**/*-contract.ts と src/spa-contract-table.ts)",
+    paths: [
+      "src/probe-contract.ts",
+      "src/company/probe-contract.ts",
+      "src/mfa/totp/probe-contract.ts",
+      "src/spa-contract-table.ts",
+    ],
+    everyForm: [...BANNED_ACROSS_SERVER, ...SERVER_EFFECT_SUBPATHS],
+    named: [
+      ["better-auth/cookies", "getSessionCookie"],
+      ["effect/http-api", "HttpApiBuilder"],
+      ["effect/http-api", "HttpApiTest"],
+    ],
+  },
+  {
+    name: "Hono に載せる実装 (src/handlers/*-http-api.ts)",
+    paths: ["src/handlers/probe-http-api.ts"],
+    everyForm: [
+      ...BANNED_ACROSS_SERVER,
+      ...SERVER_EFFECT_SUBPATHS.filter((specifier) => specifier !== "effect/http"),
+    ],
+    named: [["better-auth/cookies", "getSessionCookie"]],
+  },
+  {
+    name: "e2e (e2e/fixtures.ts 以外)",
+    paths: ["e2e/probe.e2e.ts", "e2e/helpers.ts"],
+    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    named: [],
+  },
+  {
+    name: "web の画面と shared",
+    paths: [
+      "web/src/company/probe.ts",
+      "web/src/company/__tests__/probe.test.ts",
+      "web/src/app/account/main.ts",
+      "web/src/shared/ui/toast-view.ts",
+      "web/non-production/probe.ts",
+      "web/vite.config.ts",
+    ],
+    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route"],
+    named: [
+      ["@foldkit/ui", "Dialog"],
+      ["foldkit", "Route"],
+    ],
+  },
+  {
+    name: "web の route (web/src/app/*/route.ts)",
+    paths: ["web/src/app/account/route.ts"],
+    everyForm: [...BANNED_ACROSS_WEB],
+    named: [["@foldkit/ui", "Dialog"]],
+  },
+  {
+    name: "web の dialog の部品 (web/src/shared/ui/dialog-view.ts)",
+    paths: ["web/src/shared/ui/dialog-view.ts"],
+    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route"],
+    named: [["foldkit", "Route"]],
+  },
+  {
+    name: "禁止の範囲の外 (e2e/fixtures.ts・packages・infra・scripts)",
+    paths: [
+      "e2e/fixtures.ts",
+      "packages/auth-client/src/probe.ts",
+      "infra/probe.ts",
+      "scripts/probe.ts",
+    ],
+    everyForm: [],
+    named: [],
+  },
+];
+
+type ImportCell = {
+  readonly statement: string;
+  readonly specifier: string;
+  readonly name: string | undefined;
+  readonly isNamespaceForm: boolean;
+  readonly line: number;
+};
+
+const PROBED_SPECIFIERS = [
+  ...new Set([
+    ...IMPORT_BAN_ZONES.flatMap((zone) => [
+      ...zone.everyForm,
+      ...zone.named.map(([specifier]) => specifier),
+    ]),
+    "effect/http-api",
+    "@foldkit/ui/dialog",
+    "foldkit/html",
+    "effect",
+    "better-auth",
+    "@connectrpc/connect",
+    "@core/x",
+    "zod",
+  ]),
+];
+
+const PROBED_NAMES: readonly (readonly [string, string])[] = [
+  ["better-auth/cookies", "getSessionCookie"],
+  ["better-auth/cookies", "parseCookies"],
+  ["effect/http-api", "HttpApiBuilder"],
+  ["effect/http-api", "HttpApiTest"],
+  ["effect/http-api", "HttpApiEndpoint"],
+  ["foldkit", "Route"],
+  ["foldkit", "Command"],
+  ["@foldkit/ui", "Dialog"],
+  ["@foldkit/ui", "Button"],
+];
+
+const IMPORT_CELLS: readonly ImportCell[] = (() => {
+  const cells: ImportCell[] = [];
+  let locals = 0;
+  const nextLocal = (): string => `p${locals++}`;
+  for (const specifier of PROBED_SPECIFIERS) {
+    const forms: readonly (readonly [string, boolean])[] = [
+      [`import ${nextLocal()} from "${specifier}";`, false],
+      [`import * as ${nextLocal()} from "${specifier}";`, true],
+      [`import type ${nextLocal()} from "${specifier}";`, false],
+      [`import "${specifier}";`, false],
+      [`export * from "${specifier}";`, true],
+      [`export * as ${nextLocal()} from "${specifier}";`, true],
+      [`export const ${nextLocal()} = () => import("${specifier}");`, false],
+    ];
+    for (const [statement, isNamespaceForm] of forms) {
+      cells.push({
+        statement,
+        specifier,
+        name: undefined,
+        isNamespaceForm,
+        line: cells.length + 1,
+      });
+    }
+  }
+  for (const [specifier, name] of PROBED_NAMES) {
+    const statements = [
+      `import { ${name} as ${nextLocal()} } from "${specifier}";`,
+      `import type { ${name} as ${nextLocal()} } from "${specifier}";`,
+      `import { type ${name} as ${nextLocal()} } from "${specifier}";`,
+      `export { ${name} as ${nextLocal()} } from "${specifier}";`,
+      `export type { ${name} as ${nextLocal()} } from "${specifier}";`,
+      `import { "${name}" as ${nextLocal()} } from "${specifier}";`,
+      `export { "${name}" as ${nextLocal()} } from "${specifier}";`,
+    ];
+    for (const statement of statements) {
+      cells.push({ statement, specifier, name, isNamespaceForm: false, line: cells.length + 1 });
+    }
+  }
+  return cells;
+})();
+
+const isStoppedIn = (zone: ImportBanZone, cell: ImportCell): boolean =>
+  zone.everyForm.includes(cell.specifier) ||
+  zone.named.some(
+    ([specifier, name]) =>
+      specifier === cell.specifier &&
+      (cell.name === undefined ? cell.isNamespaceForm : name === cell.name),
+  );
+
+const RULES_STOPPING_IMPORTS_FOR_OTHER_REASONS = new Set([
+  "taimei(db-import-in-e2e-only-db-testing)",
+  "taimei(db-import-in-src-tests-only-in-test-db)",
+  "taimei(db-import-only-in-db)",
+  "taimei(db-value-import-only-in-db-in-tests)",
+  "taimei(listed-import-only-in-management)",
+  "taimei(no-effect-http-value-import-in-web)",
+  "taimei(no-effect-in-db)",
+  "taimei(no-react-outside-web)",
+  "taimei(scripts-import-only-node-builtins)",
+  "taimei(sdk-import-only-peer-dependencies)",
+]);
+
+const stoppedLines = new Map<string, Set<number>>();
+
+const lintImportBanZones = (): void => {
+  const source = IMPORT_CELLS.map(({ statement }) => statement).join("\n");
+  const diagnostics = lintFixtureFiles(
+    IMPORT_BAN_ZONES.flatMap((zone) => zone.paths.map((path) => ({ path, source }))),
+  );
+  for (const { code, filename, labels } of diagnostics) {
+    const line = labels[0]?.span.line;
+    if (
+      line !== undefined &&
+      code.startsWith("taimei(") &&
+      !RULES_STOPPING_IMPORTS_FOR_OTHER_REASONS.has(code)
+    ) {
+      stoppedLines.set(filename, (stoppedLines.get(filename) ?? new Set()).add(line));
+    }
+  }
+};
+
+describe("共有の import の禁止は、範囲ごとに、止める import と通す import が決まっている", () => {
+  const stopped = (path: string, cell: ImportCell): boolean =>
+    stoppedLines.get(path)?.has(cell.line) === true;
+
+  test.each(
+    IMPORT_BAN_ZONES,
+  )("$name: 止める import は、default・namespace・型だけ・副作用だけ・export *・動的 import のどの書き方でも止まる", (zone: ImportBanZone) => {
+    expect(
+      zone.paths.flatMap((path) =>
+        IMPORT_CELLS.filter((cell) => isStoppedIn(zone, cell) && !stopped(path, cell)).map(
+          ({ statement }) => `${path} :: ${statement}`,
+        ),
+      ),
+    ).toEqual([]);
+  });
+
+  test.each(
+    IMPORT_BAN_ZONES,
+  )("$name: 止める import と subpath・名前・書き方が少し違うだけの import は、止まらない", (zone: ImportBanZone) => {
+    expect(
+      zone.paths.flatMap((path) =>
+        IMPORT_CELLS.filter((cell) => !isStoppedIn(zone, cell) && stopped(path, cell)).map(
+          ({ statement }) => `${path} :: ${statement}`,
+        ),
+      ),
+    ).toEqual([]);
   });
 });
