@@ -14,7 +14,7 @@ export const nonProductionRoutes = ({
   featureFlags?: FakeFlagship;
 } & Pick<NonProductionEmail, "recordsEmailTo">): Hono[] => [
   testingApiRoutes(),
-  devHomeRoutes({ recordsEmailTo }),
+  devHomeRoutes({ recordsEmailTo, featureFlags }),
   ...(e2eLoginLinks ? [e2eLoginLinkRoutes()] : []),
   ...(featureFlags ? [featureFlagRoutes(featureFlags)] : []),
 ];

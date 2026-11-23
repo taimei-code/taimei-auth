@@ -6,6 +6,10 @@ type Rules = {
   readonly companyIds: readonly string[];
 };
 
+type FlagSwitchRequest =
+  | { readonly flag: string; readonly state: "on" | "off" }
+  | { readonly flag: string; readonly state: "onlyFor"; readonly companyIds: readonly string[] };
+
 const RELEASED: Rules = { enabled: true, everyone: true, companyIds: [] };
 
 const ruleMatches = (rules: Rules, context: Record<string, unknown>): boolean =>
@@ -40,12 +44,25 @@ export const fakeFlagship = () => {
     },
   };
 
+  const on = (flag: string): void => switchTo(flag, RELEASED);
+  const off = (flag: string): void => switchTo(flag, { ...rulesOf(flag), enabled: false });
+  const onlyFor = (flag: string, companyIds: readonly string[]): void =>
+    switchTo(flag, { enabled: true, everyone: false, companyIds });
+
   return {
     layer: flagshipFeatureFlags({ [FEATURE_FLAGS_BINDING]: binding }),
-    on: (flag: string): void => switchTo(flag, RELEASED),
-    off: (flag: string): void => switchTo(flag, { ...rulesOf(flag), enabled: false }),
-    onlyFor: (flag: string, companyIds: readonly string[]): void =>
-      switchTo(flag, { enabled: true, everyone: false, companyIds }),
+    on,
+    off,
+    onlyFor,
+    switchFlag: (request: FlagSwitchRequest): void =>
+      request.state === "onlyFor"
+        ? onlyFor(request.flag, request.companyIds)
+        : { on, off }[request.state](request.flag),
+    stateOf: (flag: string) => {
+      const rules = rulesOf(flag);
+      const status = !rules.enabled ? "Off" : rules.everyone ? "On" : "OnlyFor";
+      return { status, companyIds: rules.companyIds } as const;
+    },
     remove: (flag: string): void => {
       rulesByFlag.delete(flag);
       removed.add(flag);

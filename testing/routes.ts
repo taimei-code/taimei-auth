@@ -39,8 +39,7 @@ export const featureFlagRoutes = (featureFlags: FakeFlagship) =>
       c,
       Effect.gen(function* () {
         const request = yield* decodeJsonBody(c, FeatureFlagSwitchRequest);
-        if (request.state === "onlyFor") featureFlags.onlyFor(request.flag, request.companyIds);
-        else featureFlags[request.state](request.flag);
+        featureFlags.switchFlag(request);
         return c.json({ ok: true as const });
       }),
     ),

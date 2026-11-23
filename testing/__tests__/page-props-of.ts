@@ -8,8 +8,14 @@ const PAGE_PROPS_PATTERN = new RegExp(
 
 export const PAGE_PROPS_NOT_IN_PAGE = "the page props are not in the page";
 
-export const devHomePropsOf = (body: string) => {
+export const pagePropsOf = (body: string) => {
   const json = body.match(PAGE_PROPS_PATTERN)?.[1];
   if (json === undefined) throw new Error(PAGE_PROPS_NOT_IN_PAGE);
   return Schema.decodeSync(PagePropsFromJson)(json);
+};
+
+export const devHomePropsOf = (body: string) => {
+  const props = pagePropsOf(body);
+  if (props._tag !== "DevHome") throw new Error(`${props._tag} is not the dev home`);
+  return props;
 };

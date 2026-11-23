@@ -81,6 +81,10 @@
         "view",
         "visitOfCompanyChange"
       ]
+    },
+    {
+      "file": "web/non-production/*.ts",
+      "exports": ["Flags", "Model", "Message", "init", "update", "view"]
     }
   ]
 }

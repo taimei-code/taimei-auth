@@ -14,6 +14,7 @@ const opened = () =>
       destination: { _tag: "AccountPage" },
       signInAction: "/dev-home/sign-in",
       signOutAction: "/dev-home/sign-out",
+      featureFlagsHref: null,
     }),
   );
 

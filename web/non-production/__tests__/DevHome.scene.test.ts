@@ -55,6 +55,7 @@ const devHome = (overrides: Partial<DevHomeProps> = {}): Model =>
       destination: { _tag: "AccountPage" },
       signInAction: "/dev-home/sign-in?q=1",
       signOutAction: "/dev-home/sign-out?q=1",
+      featureFlagsHref: null,
       ...overrides,
     }),
   ).model;
@@ -222,6 +223,27 @@ describe("本番以外の画面の上端の帯", () => {
       expect(role("alert")).toHaveText(
         "開発者ホームの情報を読めませんでした。ページを再読み込みしてください。",
       ),
+    );
+  });
+});
+
+describe("開発者ホームは、フィーチャーフラグのページを開ける環境でだけ、その link を描く", () => {
+  test("link を渡されたら、「フィーチャーフラグ」の link をその href で描く", () => {
+    scene(
+      { update, view },
+      given(devHome({ featureFlagsHref: "/dev-home/feature-flags?q=1" })),
+      expect(role("link", { name: "フィーチャーフラグ" })).toHaveAttr(
+        "href",
+        "/dev-home/feature-flags?q=1",
+      ),
+    );
+  });
+
+  test("link を渡されなければ、「フィーチャーフラグ」の link を描かない", () => {
+    scene(
+      { update, view },
+      given(devHome()),
+      expect(role("link", { name: "フィーチャーフラグ" })).toBeAbsent(),
     );
   });
 });

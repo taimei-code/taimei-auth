@@ -1,8 +1,9 @@
-import { Input } from "@foldkit/ui";
+import { Input, Textarea } from "@foldkit/ui";
 import { Option } from "effect";
-import type { Attribute, Html, HtmlBuilder } from "foldkit/html";
+import type { Attribute, Html, HtmlBuilder, TextareaAttribute } from "foldkit/html";
 
 import { Submission } from "../submission";
+import { cn } from "../utils";
 import { inputClassName, labelClassName } from "./class-names";
 
 export type InputViewConfig<Message> = Readonly<{
@@ -111,12 +112,12 @@ export const inputView = <Message>(
   );
 
 export const hiddenInputView = <Message>(
-  config: Readonly<{ name: string; value: string }>,
+  config: Readonly<{ name: string; value: string; id?: string }>,
   h: HtmlBuilder<Message>,
 ): Html =>
   Input.view(
     {
-      id: config.name,
+      id: config.id ?? config.name,
       type: "hidden",
       name: config.name,
       value: config.value,
@@ -155,6 +156,58 @@ export const searchInputView = <Message>(
               h.Autocomplete("off"),
               ...autoCorrectionAttributes(true, h),
               h.AriaControls(config.controls),
+            ]),
+          ],
+        ),
+    },
+    h,
+  );
+
+const textareaAttributes = <Message>(
+  attributes: ReadonlyArray<Attribute<Message>>,
+): ReadonlyArray<TextareaAttribute<Message>> =>
+  attributes.filter(
+    (attribute): attribute is TextareaAttribute<Message> =>
+      // oxlint-disable-next-line taimei/no-tag-comparison-in-web
+      attribute._tag !== "InnerHTML",
+  );
+
+export const codeListTextareaView = <Message>(
+  config: Readonly<{
+    id: string;
+    name: string;
+    label: string;
+    hint: string;
+    value: string;
+    onInput: (value: string) => Message;
+  }>,
+  h: HtmlBuilder<Message>,
+): Html =>
+  Textarea.view<Message>(
+    {
+      id: config.id,
+      name: config.name,
+      value: config.value,
+      onInput: config.onInput,
+      rows: Math.max(3, config.value.split("\n").length + 1),
+      hasDescription: true,
+      toView: (attributes) =>
+        h.div(
+          [h.Class("space-y-2")],
+          [
+            h.label([...attributes.label, h.Class(labelClassName)], [config.label]),
+            h.p(
+              [...attributes.description, h.Class("text-xs text-muted-foreground")],
+              [config.hint],
+            ),
+            h.textarea([
+              ...attributes.textarea,
+              ...textareaAttributes([
+                h.Required(true),
+                h.Autocomplete("off"),
+                ...autoCorrectionAttributes(true, h),
+                h.Class(cn(inputClassName, "h-auto overflow-x-auto whitespace-pre font-mono")),
+              ]),
             ]),
           ],
         ),
