@@ -13,7 +13,7 @@ export class SpaHttpClient extends Context.Service<SpaHttpClient, SpaClient>()("
     );
 }
 
-type TransportFailure = HttpClientError.HttpClientError | Schema.SchemaError;
+export type TransportFailure = HttpClientError.HttpClientError | Schema.SchemaError;
 
 export type DeclaredFailure<
   Group extends keyof SpaClient,
