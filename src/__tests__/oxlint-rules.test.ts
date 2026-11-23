@@ -3124,6 +3124,69 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "Command は、通信の失敗 (HttpClientError) を catchTags の表で直接受けられない",
+    path: "web/src/passkey/transport-failure-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "HttpClientError" }>) => effect.pipe(Effect.catchTags({ HttpClientError: () => Effect.succeed("") }));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、応答の decode の失敗 (SchemaError) を catchTags の表で直接受けられない",
+    path: "web/src/passkey/decode-failure-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "SchemaError" }>) => effect.pipe(Effect.catchTags({ SchemaError: () => Effect.succeed("") }));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、通信の失敗を catchTag でも直接受けられない",
+    path: "web/src/passkey/transport-failure-tag-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "HttpClientError" }>) => effect.pipe(Effect.catchTag("HttpClientError", () => Effect.succeed("")));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、通信の失敗を catchTag の tag の一覧でも直接受けられない",
+    path: "web/src/passkey/transport-failure-tags-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "RateLimited" | "SchemaError" }>) => effect.pipe(Effect.catchTag(["RateLimited", "SchemaError"], () => Effect.succeed("")));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、helper が作った表を catchTags に渡せない (通信の失敗を受けていないと確かめられない)",
+    path: "web/src/passkey/handler-table-probe.ts",
+    source:
+      'import { Effect } from "effect";\nconst handlers = () => ({ RateLimited: () => Effect.succeed("") });\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "RateLimited" }>) => effect.pipe(Effect.catchTags(handlers()));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、変数に入れた tag を catchTag に渡せない",
+    path: "web/src/passkey/tag-variable-probe.ts",
+    source:
+      'import { Effect } from "effect";\nconst TAG = "RateLimited";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "RateLimited" }>) => effect.pipe(Effect.catchTag(TAG, () => Effect.succeed("")));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command は、通信の失敗を catchReason でも直接受けられない",
+    path: "web/src/passkey/transport-reason-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string>) => effect.pipe(Effect.catchReason("HttpClientError", "TransportError", () => Effect.succeed("")));',
+    expectedRules: ["taimei(spa-transport-failure-only-in-contract-failure)"],
+  },
+  {
+    name: "Command が契約の宣言した失敗だけを catchTags の表に書いても、lint は止めない",
+    path: "web/src/passkey/declared-failure-probe.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "RateLimited" }>) => effect.pipe(Effect.catchTags({ RateLimited: () => Effect.succeed("") }));',
+    expectedRules: [],
+  },
+  {
+    name: "契約の失敗を Message に写す module は、通信の失敗を受けられる",
+    path: "web/src/shared/spa-contract-failure.ts",
+    source:
+      'import { Effect } from "effect";\nexport const recover = (effect: Effect.Effect<string, { readonly _tag: "HttpClientError" }>) => effect.pipe(Effect.catchTags({ HttpClientError: () => Effect.succeed("") }));',
+    expectedRules: [],
+  },
+  {
     name: "src の test も effect の subpath を import できない",
     path: "src/company/__tests__/effect-subpath.ts",
     source: 'import "effect/sql";',
