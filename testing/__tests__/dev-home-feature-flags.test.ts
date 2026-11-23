@@ -6,7 +6,7 @@ import { requireLocalDatabase } from "../../db/testing/local-database";
 import { prepareNonProductionTables } from "../../db/testing/non-production-tables";
 import { buildApp } from "../../src/app";
 import { browserCookieHeaders } from "../../src/__tests__/session-helpers";
-import { enabled } from "../../src/feature-flags";
+import { enabled, FeatureFlags } from "../../src/feature-flags";
 import { devHomeRoutes } from "../dev-home";
 import { fakeFlagship } from "../feature-flags";
 import { recordingEmail } from "../sent-links";
@@ -121,6 +121,24 @@ describe("フィーチャーフラグのページから切り替えると、serv
       { id: firstCompany.id, name: firstCompany.name },
       { id: secondCompany.id, name: secondCompany.name },
     ]);
+  });
+
+  test("事業所で決まるフラグを事業所だけ on にすると、server の評価は書いた事業所だけ on になる", async () => {
+    const { flags, request } = localApp();
+
+    await switchFlag(request, {
+      flag: COMPANY_FLAG,
+      state: "onlyFor",
+      companyIds: firstCompany.id,
+    });
+
+    const evaluated = await Effect.runPromise(
+      Effect.forEach(
+        [{}, { companyId: firstCompany.id }, { companyId: secondCompany.id }],
+        (context) => FeatureFlags.use((each) => each.isOn(COMPANY_FLAG, context)),
+      ).pipe(Effect.provide(flags.layer)),
+    );
+    expect(evaluated).toEqual([false, true, false]);
   });
 
   test("DB に無い事業所の ID を 1 つでも含めると切り替えず、知らせにその ID を渡す", async () => {
