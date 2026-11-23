@@ -1,29 +1,46 @@
 import { FEATURE_FLAGS_BINDING, flagshipFeatureFlags } from "../src/feature-flags";
 
-type Rules = {
+export type FlagRules = {
   readonly enabled: boolean;
   readonly everyone: boolean;
   readonly companyIds: readonly string[];
+};
+
+export type FlagRulesStore = {
+  readonly read: (flag: string) => Promise<FlagRules | undefined>;
+  readonly update: (
+    flag: string,
+    next: (current: FlagRules | undefined) => FlagRules,
+  ) => Promise<void>;
 };
 
 type FlagSwitchRequest =
   | { readonly flag: string; readonly state: "on" | "off" }
   | { readonly flag: string; readonly state: "onlyFor"; readonly companyIds: readonly string[] };
 
-const RELEASED: Rules = { enabled: true, everyone: true, companyIds: [] };
+const RELEASED: FlagRules = { enabled: true, everyone: true, companyIds: [] };
 
-const ruleMatches = (rules: Rules, context: Record<string, unknown>): boolean =>
+const ruleMatches = (rules: FlagRules, context: Record<string, unknown>): boolean =>
   (typeof context.companyId === "string" && rules.companyIds.includes(context.companyId)) ||
   rules.everyone;
 
-export const fakeFlagship = () => {
-  const rulesByFlag = new Map<string, Rules>();
+const memoryFlagRulesStore = (): FlagRulesStore => {
+  const rulesByFlag = new Map<string, FlagRules>();
+  return {
+    read: async (flag) => rulesByFlag.get(flag),
+    update: async (flag, next) => {
+      rulesByFlag.set(flag, next(rulesByFlag.get(flag)));
+    },
+  };
+};
+
+export const fakeFlagship = (store: FlagRulesStore = memoryFlagRulesStore()) => {
   const removed = new Set<string>();
   let bindingFails = false;
-  const rulesOf = (flag: string) => rulesByFlag.get(flag) ?? RELEASED;
-  const switchTo = (flag: string, rules: Rules) => {
+  const rulesOf = async (flag: string) => (await store.read(flag)) ?? RELEASED;
+  const switchTo = async (flag: string, next: (current: FlagRules | undefined) => FlagRules) => {
+    await store.update(flag, next);
     removed.delete(flag);
-    rulesByFlag.set(flag, rules);
   };
 
   const binding = {
@@ -36,7 +53,7 @@ export const fakeFlagship = () => {
       if (removed.has(flagKey)) {
         return { flagKey, value: defaultValue, reason: "ERROR", errorCode: "FLAG_NOT_FOUND" };
       }
-      const rules = rulesOf(flagKey);
+      const rules = await rulesOf(flagKey);
       if (!rules.enabled) return { flagKey, value: defaultValue, reason: "DISABLED" };
       return ruleMatches(rules, context)
         ? { flagKey, value: true, reason: "TARGETING_MATCH" }
@@ -44,27 +61,27 @@ export const fakeFlagship = () => {
     },
   };
 
-  const on = (flag: string): void => switchTo(flag, RELEASED);
-  const off = (flag: string): void => switchTo(flag, { ...rulesOf(flag), enabled: false });
-  const onlyFor = (flag: string, companyIds: readonly string[]): void =>
-    switchTo(flag, { enabled: true, everyone: false, companyIds });
+  const on = (flag: string): Promise<void> => switchTo(flag, () => RELEASED);
+  const off = (flag: string): Promise<void> =>
+    switchTo(flag, (current) => ({ ...(current ?? RELEASED), enabled: false }));
+  const onlyFor = (flag: string, companyIds: readonly string[]): Promise<void> =>
+    switchTo(flag, () => ({ enabled: true, everyone: false, companyIds }));
 
   return {
     layer: flagshipFeatureFlags({ [FEATURE_FLAGS_BINDING]: binding }),
     on,
     off,
     onlyFor,
-    switchFlag: (request: FlagSwitchRequest): void =>
+    switchFlag: (request: FlagSwitchRequest): Promise<void> =>
       request.state === "onlyFor"
         ? onlyFor(request.flag, request.companyIds)
         : { on, off }[request.state](request.flag),
-    stateOf: (flag: string) => {
-      const rules = rulesOf(flag);
+    stateOf: async (flag: string) => {
+      const rules = await rulesOf(flag);
       const status = !rules.enabled ? "Off" : rules.everyone ? "On" : "OnlyFor";
       return { status, companyIds: rules.companyIds } as const;
     },
     remove: (flag: string): void => {
-      rulesByFlag.delete(flag);
       removed.add(flag);
     },
     breakBinding: (): void => {

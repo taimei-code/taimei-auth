@@ -39,7 +39,7 @@ export const featureFlagRoutes = (featureFlags: FakeFlagship) =>
       c,
       Effect.gen(function* () {
         const request = yield* decodeJsonBody(c, FeatureFlagSwitchRequest);
-        featureFlags.switchFlag(request);
+        yield* Effect.promise(() => featureFlags.switchFlag(request));
         return c.json({ ok: true as const });
       }),
     ),
