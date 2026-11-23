@@ -70,7 +70,12 @@ export const FlagNotice = Schema.Union([
 
 export type FlagNotice = typeof FlagNotice.Type;
 
+const FlagStateStore = Schema.Literals(["Memory", "Database"]);
+
+export type FlagStateStore = typeof FlagStateStore.Type;
+
 export const FeatureFlagsProps = Schema.TaggedStruct("FeatureFlags", {
+  storedIn: FlagStateStore,
   homeHref: Schema.String,
   switchAction: Schema.String,
   notice: Schema.NullOr(FlagNotice),

@@ -40,7 +40,7 @@ services:
 
   auth-service:
     build: *dev-build
-    command: bash scripts/wrangler-dev.sh --config testing/wrangler.jsonc
+    command: bash scripts/wrangler-dev.sh --cwd testing --config wrangler.jsonc dev-worker.ts
     ports:
       - "3100:3100"
     env_file:

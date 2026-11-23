@@ -1696,6 +1696,17 @@ const ROWS: readonly Row[] = [
       "db/testing/* (test の seed・観測・cleanup) を値で import するのは、src の test の面 src/__tests__/test-db.ts (ADR-0017)、e2e の seed (e2e/fixtures.ts)、本番以外の entry の testing/** (ADR-0020・ADR-0022) だけ",
   },
   {
+    name: "persisted-feature-flags-only-in-dev-worker",
+    within: ["**"],
+    allowedIn: ["testing/dev-worker.ts"],
+    matchers: [
+      { kind: "importTarget", target: /^db\/testing\/feature-flag-rules(\.ts)?$/ },
+      { kind: "importTarget", target: /^testing\/dev-worker(\.ts)?$/ },
+    ],
+    message:
+      "フィーチャーフラグを auth の DB に残す置き場を使うのは、開発環境の compose が起動する入口 testing/dev-worker.ts だけ。ほかの file はこの置き場もこの入口も import しない (ADR-0030 の Decision 6)",
+  },
+  {
     name: "pg-import-only-in-db-client",
     within: ["db/**"],
     allowedIn: ["db/client.ts"],

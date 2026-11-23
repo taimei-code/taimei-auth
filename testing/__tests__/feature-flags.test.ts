@@ -62,6 +62,7 @@ describe("Flagship の偽物は、本番の評価を通して Flagship のルー
 const swappedStore = (): FlagRulesStore => {
   const rulesByFlag = new Map<string, FlagRules>();
   return {
+    storedIn: "Memory",
     read: async (flag) => rulesByFlag.get(flag),
     update: async (flag, next) => {
       rulesByFlag.set(flag, next(rulesByFlag.get(flag)));

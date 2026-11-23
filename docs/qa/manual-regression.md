@@ -157,3 +157,15 @@
   4. 多要素認証 (MFA) を有効にした user で 1〜2 を行う
   5. パスキーに対応していない browser (例: Firefox の `about:config` で `security.webauth.webauthn` を `false` にしたもの) で、`/login` から開いた共通ログイン画面と `/account/security` を開く
 - **期待結果**: 1 で一覧に、同梱の表 (`src/passkey/passkey-providers.ts`) で aaguid から引いた提供元の名前が出る (表に無い提供元は「パスキー」)。2 で `/account` に移る。3 で削除したパスキーではログインできず、共通ログイン画面に失敗の文言が出て、そのまま Magic Link を送れる。4 で登録の前に TOTP のコードを求められ、ログインは MFA チャレンジの画面 (`/auth/mfa`) を経ずに `/account` へ移る。5 で共通ログイン画面に Magic Link の入力欄が出て「パスキーでログイン」は出ず、`/account/security` にも登録の入口が出ない。FAIL の時は本番のフラグ `passkey` を止める (`docs/runbook/production.md` の「フィーチャーフラグ」)
+
+## QA-MR-13: 開発環境のフィーチャーフラグが、立ち上げ直した後も残る
+
+- **契機**: 開発環境の compose の起動、開発環境の入口、フィーチャーフラグを DB に残す置き場を変える PR
+- **契機の path**: `docker-compose.yml`、`scripts/wrangler-dev.sh`、`testing/dev-worker.ts`、`db/testing/feature-flag-rules.ts`
+- **前提**: どの入口がフィーチャーフラグの切り替えを DB に残すかは ADR-0030 の Decision 6 にある。置き場の読み書きは `bun test` が確かめる。ここでは、compose がその入口を workerd で起動していることを見る。`docker compose up --watch` で開発環境を起動しておく
+- **手順**:
+  1. `http://auth.taimei-code.localhost:3100/dev-home/feature-flags` を開き、`passkey` の「全体 off にする」を押す
+  2. `src/` の file を 1 つ保存し直し、worker が読み直された後に 1 のページを開き直し、`http://auth.taimei-code.localhost:3100/login` を開く
+  3. `docker compose restart auth-service` の後に、2 と同じページを開く
+  4. 後片付け: 1 のページで `passkey` の「全体 on にする」を押す
+- **期待結果**: 1 のページは、立ち上げ直すと全体 on に戻るとは出さない。2 と 3 のページで `passkey` のステータスは「全体 off」のままで、共通ログイン画面に「パスキーでログイン」が出ない。`docker compose logs auth-service` に、フィーチャーフラグの評価に失敗した warning が出ていない

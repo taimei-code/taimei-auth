@@ -7,6 +7,7 @@ export type FlagRules = {
 };
 
 export type FlagRulesStore = {
+  readonly storedIn: "Memory" | "Database";
   readonly read: (flag: string) => Promise<FlagRules | undefined>;
   readonly update: (
     flag: string,
@@ -27,6 +28,7 @@ const ruleMatches = (rules: FlagRules, context: Record<string, unknown>): boolea
 const memoryFlagRulesStore = (): FlagRulesStore => {
   const rulesByFlag = new Map<string, FlagRules>();
   return {
+    storedIn: "Memory",
     read: async (flag) => rulesByFlag.get(flag),
     update: async (flag, next) => {
       rulesByFlag.set(flag, next(rulesByFlag.get(flag)));
@@ -38,9 +40,14 @@ export const fakeFlagship = (store: FlagRulesStore = memoryFlagRulesStore()) => 
   const removed = new Set<string>();
   let bindingFails = false;
   const rulesOf = async (flag: string) => (await store.read(flag)) ?? RELEASED;
-  const switchTo = async (flag: string, next: (current: FlagRules | undefined) => FlagRules) => {
-    await store.update(flag, next);
-    removed.delete(flag);
+  let switchedInOrder: Promise<void> = Promise.resolve();
+  const switchTo = (flag: string, next: (current: FlagRules | undefined) => FlagRules) => {
+    const switched = switchedInOrder.then(async () => {
+      await store.update(flag, next);
+      removed.delete(flag);
+    });
+    switchedInOrder = switched.catch(() => undefined);
+    return switched;
   };
 
   const binding = {
@@ -69,6 +76,7 @@ export const fakeFlagship = (store: FlagRulesStore = memoryFlagRulesStore()) => 
 
   return {
     layer: flagshipFeatureFlags({ [FEATURE_FLAGS_BINDING]: binding }),
+    storedIn: store.storedIn,
     on,
     off,
     onlyFor,

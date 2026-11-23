@@ -9,6 +9,7 @@ const opened = (notice: FeatureFlagsProps["notice"]) =>
   init(
     Option.some({
       _tag: "FeatureFlags",
+      storedIn: "Memory",
       homeHref: "/dev-home",
       switchAction: "/dev-home/feature-flags",
       notice,
