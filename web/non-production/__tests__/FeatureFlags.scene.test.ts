@@ -19,17 +19,24 @@ const COMPANY_FLAG: FlagOnPage = {
   companies: [{ id: "cmp-1", name: "事業所 1" }],
 };
 
-const props = (flags: ReadonlyArray<FlagOnPage>): FeatureFlagsProps => ({
+const props = (
+  flags: ReadonlyArray<FlagOnPage>,
+  storedIn: FeatureFlagsProps["storedIn"],
+): FeatureFlagsProps => ({
   _tag: "FeatureFlags",
+  storedIn,
   homeHref: "/dev-home?q=1",
   switchAction: "/dev-home/feature-flags?q=1",
   notice: null,
   flags,
 });
 
-const program = async (flags: ReadonlyArray<FlagOnPage>) => {
+const program = async (
+  flags: ReadonlyArray<FlagOnPage>,
+  storedIn: FeatureFlagsProps["storedIn"] = "Memory",
+) => {
   const { init, update, view } = await import("../FeatureFlags");
-  return { update, view, model: init(Option.some(props(flags))).model };
+  return { update, view, model: init(Option.some(props(flags, storedIn))).model };
 };
 
 const flagTable = role("table", { name: "フィーチャーフラグのステータスと切り替え" });
@@ -81,6 +88,32 @@ describe("フィーチャーフラグのページは、フラグごとのステ�
         role("button", { name: "example-company-flag を この事業所だけ on にする" }),
       ).toExist(),
       expect(role("button", { name: "passkey を この事業所だけ on にする" })).toBeAbsent(),
+    );
+  });
+});
+
+describe("フィーチャーフラグのページは、切り替えた状態が立ち上げ直しの後も残るかを描く", () => {
+  test("memory に置く環境では、立ち上げ直すと全体 on に戻ると描く", async () => {
+    const { update, view, model } = await program([PASSKEY], "Memory");
+
+    scene(
+      { update, view },
+      given(model),
+      expect(
+        text("この worker の memory にあります。立ち上げ直すと、すべて全体 on に戻ります。"),
+      ).toExist(),
+    );
+  });
+
+  test("DB に置く環境では、全体 on に戻るとは描かない", async () => {
+    const { update, view, model } = await program([PASSKEY], "Database");
+
+    scene(
+      { update, view },
+      given(model),
+      expect(
+        text("この worker の memory にあります。立ち上げ直すと、すべて全体 on に戻ります。"),
+      ).toBeAbsent(),
     );
   });
 });

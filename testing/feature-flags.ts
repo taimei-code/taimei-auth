@@ -7,6 +7,7 @@ export type FlagRules = {
 };
 
 export type FlagRulesStore = {
+  readonly storedIn: "Memory" | "Database";
   readonly read: (flag: string) => Promise<FlagRules | undefined>;
   readonly update: (
     flag: string,
@@ -27,6 +28,7 @@ const ruleMatches = (rules: FlagRules, context: Record<string, unknown>): boolea
 const memoryFlagRulesStore = (): FlagRulesStore => {
   const rulesByFlag = new Map<string, FlagRules>();
   return {
+    storedIn: "Memory",
     read: async (flag) => rulesByFlag.get(flag),
     update: async (flag, next) => {
       rulesByFlag.set(flag, next(rulesByFlag.get(flag)));
@@ -74,6 +76,7 @@ export const fakeFlagship = (store: FlagRulesStore = memoryFlagRulesStore()) => 
 
   return {
     layer: flagshipFeatureFlags({ [FEATURE_FLAGS_BINDING]: binding }),
+    storedIn: store.storedIn,
     on,
     off,
     onlyFor,

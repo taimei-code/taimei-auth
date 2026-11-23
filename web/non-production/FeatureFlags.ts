@@ -16,7 +16,13 @@ import {
 import { cn } from "../src/shared/utils";
 import { FILTER_SHOWN_ABOVE_ITEM_COUNT, itemsMatching, withQuery } from "./list-filter";
 import { nonProductionBannerView } from "./non-production-banner-view";
-import { FeatureFlagsProps, type FlagNotice, type FlagStatus, PAGE_TITLES } from "./page-props";
+import {
+  FeatureFlagsProps,
+  type FlagNotice,
+  type FlagStateStore,
+  type FlagStatus,
+  PAGE_TITLES,
+} from "./page-props";
 
 type FlagOnPage = FeatureFlagsProps["flags"][number];
 
@@ -60,6 +66,11 @@ export const update = (model: Model, message: Message) =>
     }),
     CompletedFocusNotice: () => ({ model }),
   });
+
+const STORED_IN_TEXTS: Record<FlagStateStore, string | null> = {
+  Memory: "この worker の memory にあります。立ち上げ直すと、すべて全体 on に戻ります。",
+  Database: null,
+};
 
 const STATE_LABELS: Record<FlagStatus, string> = {
   On: "全体 on",
@@ -277,10 +288,9 @@ const flagsCardView = (props: FeatureFlagsProps, model: Model, h: HtmlBuilder<Me
       h.div(
         [h.Class(`${cardClassNames.content} space-y-4`)],
         [
-          h.p(
-            [h.Class("text-sm text-muted-foreground")],
-            ["この worker の memory にあります。立ち上げ直すと、すべて全体 on に戻ります。"],
-          ),
+          ...(STORED_IN_TEXTS[props.storedIn] === null
+            ? []
+            : [h.p([h.Class("text-sm text-muted-foreground")], [STORED_IN_TEXTS[props.storedIn]])]),
           ...(props.notice === null
             ? []
             : [

@@ -144,6 +144,7 @@ const featureFlagsPage = (featureFlags: FakeFlagship, catalog: FeatureFlagCatalo
             deleteCookie(c, FLAG_NOTICE_COOKIE, NOTICE_COOKIE_OPTIONS);
             return {
               _tag: "FeatureFlags",
+              storedIn: featureFlags.storedIn,
               homeHref: `${DEV_HOME_PATH}${url.search}`,
               switchAction: `${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}`,
               notice,
