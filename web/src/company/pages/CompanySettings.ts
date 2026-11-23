@@ -10,6 +10,7 @@ import { OrgCodeSchema } from "@core/company/company-contract";
 import { accountPageHeaderView, separatorView } from "../../account/account-page-header-view";
 import * as CurrentCompany from "../../account/current-company";
 import type { FailureMessages } from "../../shared/failure-message";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
@@ -42,12 +43,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const UpdateCompanyFailure = Schema.Literals([
-  "Forbidden",
-  "NotFound",
-  "Unauthorized",
-  "Unexpected",
-]);
+const UpdateCompanyFailure = contractFailure(["Forbidden", "NotFound", "Unauthorized"]);
 type UpdateCompanyFailure = typeof UpdateCompanyFailure.Type;
 
 export const Message = defineMessageUnion({
@@ -109,9 +105,6 @@ const AFTER_UPDATE: CurrentCompany.RefreshTexts = {
 
 const ORG_CODE_OPTIONS = orgCodeOptionsIn(OrgCodeSchema.literals);
 
-const failedUpdateCompany = (visit: number, failure: UpdateCompanyFailure) => () =>
-  Effect.succeed(Message.FailedUpdateCompany({ visit, failure }));
-
 export const UpdateCompany = Command.define("UpdateCompany", {
   args: {
     visit: Schema.Int,
@@ -129,12 +122,10 @@ export const UpdateCompany = Command.define("UpdateCompany", {
       });
       return Message.SucceededUpdateCompany({ visit });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedUpdateCompany(visit, "Forbidden"),
-        NotFound: failedUpdateCompany(visit, "NotFound"),
-        Unauthorized: failedUpdateCompany(visit, "Unauthorized"),
-        HttpClientError: failedUpdateCompany(visit, "Unexpected"),
-        SchemaError: failedUpdateCompany(visit, "Unexpected"),
+      messageOnFailure({
+        failure: UpdateCompanyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedUpdateCompany({ visit, failure }),
       }),
     ),
 });

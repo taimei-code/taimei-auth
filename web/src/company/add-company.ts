@@ -17,6 +17,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { focusField, isBlank, maybeFieldError } from "../shared/required-field";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { formView } from "../shared/ui/form-view";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
@@ -50,7 +51,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const AddCompanyFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const AddCompanyFailure = contractFailure(["Unauthorized"]);
 
 export const Message = defineMessageUnion({
   ClickedAddCompany: {},
@@ -82,9 +83,6 @@ const DEFAULT_ORG_CODE: OrgCode = "CORPORATE";
 
 const ORG_CODE_OPTIONS = orgCodeOptionsIn(["CORPORATE", "PERSONAL"]);
 
-const failedAddCompany = (request: PageRequest, failure: typeof AddCompanyFailure.Type) => () =>
-  Effect.succeed(Message.FailedAddCompany({ ...request, failure }));
-
 export const AddCompany = Command.define("AddCompany", {
   args: { ...PageRequestFields, name: Schema.String, orgCode: OrgCodeSchema },
   messages: [Message.SucceededAddCompany, Message.FailedAddCompany],
@@ -94,10 +92,10 @@ export const AddCompany = Command.define("AddCompany", {
       yield* client.company.add({ payload: { name, org_code: orgCode } });
       return Message.SucceededAddCompany({ ...request, companyName: name });
     }).pipe(
-      Effect.catchTags({
-        Unauthorized: failedAddCompany(request, "Unauthorized"),
-        HttpClientError: failedAddCompany(request, "Unexpected"),
-        SchemaError: failedAddCompany(request, "Unexpected"),
+      messageOnFailure({
+        failure: AddCompanyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedAddCompany({ ...request, failure }),
       }),
     ),
 });

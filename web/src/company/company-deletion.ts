@@ -5,6 +5,7 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import type { FailureMessages } from "../shared/failure-message";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
@@ -18,12 +19,7 @@ import {
 } from "../shared/ui/dialog-view";
 import { NoticeTone } from "../shared/ui/toast-view";
 
-const DeleteCompanyFailure = Schema.Literals([
-  "Forbidden",
-  "LastOwner",
-  "Unauthorized",
-  "Unexpected",
-]);
+const DeleteCompanyFailure = contractFailure(["Forbidden", "LastOwner", "Unauthorized"]);
 type DeleteCompanyFailure = typeof DeleteCompanyFailure.Type;
 
 export const OutMessage = defineMessageUnion({
@@ -72,9 +68,6 @@ const DECLARED_FAILURE_MESSAGES: FailureMessages<DeclaredFailure<"company", "del
 
 const FAILURE_MESSAGES = { ...DECLARED_FAILURE_MESSAGES, Unexpected: DELETE_FAILED };
 
-const failedDeleteCompany = (visit: number, failure: DeleteCompanyFailure) => () =>
-  Effect.succeed(Message.FailedDeleteCompany({ visit, failure }));
-
 export const DeleteCompany = Command.define("DeleteCompany", {
   args: { visit: Schema.Int, companyId: Schema.String, companyName: Schema.String },
   messages: [
@@ -90,12 +83,10 @@ export const DeleteCompany = Command.define("DeleteCompany", {
         ? Message.SucceededDeleteLastCompany()
         : Message.SucceededDeleteCompany({ visit, companyName });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedDeleteCompany(visit, "Forbidden"),
-        LastOwner: failedDeleteCompany(visit, "LastOwner"),
-        Unauthorized: failedDeleteCompany(visit, "Unauthorized"),
-        HttpClientError: failedDeleteCompany(visit, "Unexpected"),
-        SchemaError: failedDeleteCompany(visit, "Unexpected"),
+      messageOnFailure({
+        failure: DeleteCompanyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedDeleteCompany({ visit, failure }),
       }),
     ),
 });
