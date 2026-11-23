@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import taimeiPlugin from "../../lint/oxlint-plugin.mjs";
 import { repoFiles } from "./source-scan";
 
 const REPO_ROOT = join(import.meta.dir, "../..");
@@ -3113,6 +3114,56 @@ const CASES: readonly Case[] = [
     source: "export const root = process.cwd();",
     expectedRules: [],
   },
+  {
+    name: "画面は、パスキーの一覧の応答から行を自分で読めない",
+    path: "web/src/account/PasskeyListProbe.ts",
+    source: "export const rows = (list: { passkeys: unknown[] }) => list.passkeys;",
+    expectedRules: ["taimei(passkey-list-only-in-passkey-settings)"],
+  },
+  {
+    name: "検証の入口の外は、パスキーの challenge の key の接頭辞を書けない",
+    path: "src/passkey/ChallengeKeyProbe.ts",
+    source: 'export const key = "passkey:registration-challenge";',
+    expectedRules: ["taimei(passkey-challenge-keys-only-in-webauthn)"],
+  },
+  {
+    name: "検証の入口の外は、既知の transports の一覧で絞れない",
+    path: "src/passkey/TransportsProbe.ts",
+    source:
+      'import { PASSKEY_TRANSPORTS } from "@/db/enums";\nexport const known = PASSKEY_TRANSPORTS;',
+    expectedRules: ["taimei(passkey-transports-only-in-passkey-entry)"],
+  },
+  {
+    name: "失敗の class は、src/failures.ts と domain の errors.ts の外で作れない",
+    path: "src/company/FailureProbe.ts",
+    source: 'import { failure } from "../failure";\nexport const Gone = failure("Gone", 404);',
+    expectedRules: ["taimei(failure-only-in-failures-and-domain-errors)"],
+  },
+  {
+    name: "パスキーの一覧の応答は passkey-settings.ts だけが読む: web/src/passkey/passkey-settings.ts では lint が止めない",
+    path: "web/src/passkey/passkey-settings.ts",
+    source: "export const rows = (list: { passkeys: unknown[] }) => list.passkeys;",
+    expectedRules: [],
+  },
+  {
+    name: "パスキーの challenge の key の接頭辞は webauthn.ts だけが使う: src/passkey/webauthn.ts では lint が止めない",
+    path: "src/passkey/webauthn.ts",
+    source: 'export const key = "passkey:registration-challenge";',
+    expectedRules: [],
+  },
+  {
+    name: "既知の transports で絞る判定は検証の入口だけが持つ: db/schema.ts では lint が止めない",
+    path: "db/schema.ts",
+    source:
+      'import { PASSKEY_TRANSPORTS } from "./enums";\nexport const known = PASSKEY_TRANSPORTS;',
+    expectedRules: [],
+  },
+  {
+    name: "失敗の class の置き場は 2 つ: src/failures.ts と domain の errors.ts では failure() の呼び出しを lint が止めない",
+    path: "src/company/errors.ts",
+    source: 'import { failure } from "../failure";\nexport const Gone = failure("Gone", 404);',
+    expectedRules: [],
+  },
 ];
 
 const TYPE_AWARE_CASES: readonly Case[] = [
@@ -3347,6 +3398,17 @@ describe("lint の rule は、oxlint で決めた path に効く", () => {
     expect(lintedFileCounts.map(({ linted }) => linted)).toEqual(
       lintedFileCounts.map(({ written }) => written),
     );
+  });
+
+  test("lint の plugin の rule は、どれもこの file の fixture が、その rule の指摘を期待している", () => {
+    const expected = new Set(
+      [...CASES, ...TYPE_AWARE_CASES].flatMap((testCase) => testCase.expectedRules),
+    );
+    expect(
+      Object.keys(taimeiPlugin.rules)
+        .toSorted()
+        .filter((rule) => !expected.has(`taimei(${rule})`)),
+    ).toEqual([]);
   });
 });
 
