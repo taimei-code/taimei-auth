@@ -148,6 +148,8 @@ better-auth は `options.hooks.after` を全プラグインの after-hook より
 
 ### 5. 登録・有効化の直前に再認証 (step-up) を置かない (受容したリスク)
 
+(2026-11-23 追記) この節の、再認証を置かないという判断は [ADR-0031](./0031-reauthentication-by-recent-sign-in.md) が改める。通知と復旧の経路は残る。
+
 パスワードレス構成のため twoFactor プラグインには `allowPasswordless: true` が必須で、**この設定が
 プラグイン内蔵の「有効化前にパスワードを要求する」step-up を無効化する**。代替の step-up (操作直前の
 Magic Link 再送など) も本件では実装しない。

@@ -193,6 +193,10 @@ _Avoid_: logout (英語との混在を避ける), session 終了 (より広義)
 user 自身の意思とは独立に、**session** を **TTL store** から消して無効にする操作。**sign-out** (ユーザーの自発) と対比される。契機は **多要素認証 (MFA)** の有効化と無効化 (操作した session 以外が対象) と、アカウントの削除 (退会と、所属が 0 件になったアカウントの削除。手順: ADR-0010)。アカウントの削除では、user の削除を確定した後に session を消す。消えた session は、consumer app からは存在しない session に見える。
 _Avoid_: invalidate (より広義), terminate, kill
 
+**再認証**:
+認証手段を足す操作 (**多要素認証 (MFA)** の登録と有効化、**パスキー** の登録) の前に、本人であることを確かめ直すこと。操作した **session** の発行から 10 分以内なら済んだものとし、過ぎていれば操作を拒否する。user はログインし直して再認証を満たす。詳細: ADR-0031。
+_Avoid_: step-up (手段を強めることを含意する語), fresh session (外部ライブラリの設定の語), 再ログイン (ログインし直しの別表記)
+
 **Service Key**:
 consumer app が **auth ホスト** の RPC を呼ぶ時に示す、サービス間の認証のための共有の秘密の値。end user の **session** とは独立で、consumer app の server 側だけが持つ。入れ替えのため、新旧の 2 本を同時に受け付ける。設定されていない時は **fail-closed** にする。**本番以外** でも同じで、値を渡して動かす。手順: `docs/runbook/service-key-rotation.md`。
 _Avoid_: API key (end user 向けの credential と紛らわしい), shared secret (認証全体の署名の鍵と紛らわしい), サービスキー (カタカナ表記の混在)
