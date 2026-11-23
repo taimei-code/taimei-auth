@@ -23,7 +23,7 @@
 
 `bunfig.toml` を新規作成し、`[install]` セクションに `minimumReleaseAge = 604800` (秒指定で 7 日) を設定する。`minimumReleaseAgeExcludes` は空配列で始め、CVE の緊急 patch などで「7 日待てない」場合にだけ、ADR の改訂と PR で明示的に追加する運用にする (bypass の監査証跡を git 履歴に残すため)。
 
-Bun 1.3 以降で対応している (このリポジトリは `bun-version: "1.3"`)。既に `bun.lock` にある version はそのまま install され続けるため、この設定は **`bun add` / `bun update`** の時点で働く。Dependabot が PR の `bun.lock` を作る時にも働くかは、Dependabot が `bunfig.toml` を読むかによるが、確かめていない。
+Bun 1.3 以降で対応している (このリポジトリの Bun の版は `Dockerfile` と workflow でそろえ、一致を `src/__tests__/bun-version-pin.test.ts` が確かめる)。既に `bun.lock` にある version はそのまま install され続けるため、この設定は **`bun add` / `bun update`** の時点で働く。Dependabot が PR の `bun.lock` を作る時にも働くかは、Dependabot が `bunfig.toml` を読むかによるが、確かめていない。
 
 `.github/dependabot.yml` の bun の `cooldown` も同じ 7 日にする (`default-days: 7`)。Dependabot は、公開から 7 日未満の版へ上げる PR を出さない。7 日未満の版を止めるのは、この `cooldown` と、lockfile に無い版を resolve する時の `minimumReleaseAge` と、CI の検査の 3 つである。CI の `bun install --frozen-lockfile` は、lockfile が固定した版の公開からの日数を調べない (「4 回目の除外の撤去」の実測)。`cooldown` を `minimumReleaseAge` より短くすると、Dependabot は CI の検査で落ちる版の PR を出す。
 
@@ -203,7 +203,7 @@ install 時の RCE は今回の TanStack worm の主経路だった (payload は
 ### F. `bun.lock` 差分の CODEOWNERS 必須レビュー化
 lockfile を作る側では H (`minimumReleaseAge`) が、PR の側では §H の CI の検査が、7 日未満の版を止める。lockfile 経由の侵害の主な窓はこの 2 つで塞いだので、bun.lock 専用の reviewer を上乗せしても効果が薄い。
 
-### G. base image `oven/bun:1.3` の digest pin
+### G. base image `oven/bun` の digest pin
 Actions は §A で SHA pin する一方、Dockerfile の base image は minor tag 止まり (patch は動く) という非対称がある。これを承知のうえで当面は pin しない。patch のずれによってリポジトリに変更が無いまま docker job が赤くなった場合は原因を都度切り分ける運用とし、頻発するようなら digest pin へ切り替える。
 
 ## Appendix: Mini Shai-Hulud worm IoC 手動検査手順
