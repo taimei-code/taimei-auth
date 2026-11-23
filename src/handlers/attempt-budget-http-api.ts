@@ -1,4 +1,4 @@
-import { sessionCookieOf } from "../session-cookie";
+import { sessionTokenAsBetterAuthReads } from "../session-cookie";
 import { Effect, Layer } from "effect";
 import { HttpServerRequest } from "effect/http";
 import {
@@ -14,7 +14,7 @@ import type { TtlStore } from "../ttl-store-service";
 import { headersOf } from "./request-http-api";
 
 export async function sessionAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
-  const sessionToken = sessionCookieOf(headers);
+  const sessionToken = sessionTokenAsBetterAuthReads(headers);
   if (!sessionToken) return `ip:${fallbackIp}`;
   return `session:${await sha256Hex(sessionToken)}`;
 }

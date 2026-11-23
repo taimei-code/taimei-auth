@@ -128,6 +128,16 @@ describe("session ごとの試行枠の subject", () => {
     expect(fromOneIp).toStartWith("session:");
     expect(fromOneIp).not.toContain("tok");
   });
+
+  test("percent-decode できない列を含む session cookie でも subject を作る (better-auth と同じく、decode できない値はそのまま読む)", async () => {
+    const headers = new Headers({ cookie: "__Secure-better-auth.session_token=tok%E0%A4%A.sig" });
+    expect(await sessionAttemptSubject(headers, "203.0.113.1")).toStartWith("session:");
+  });
+
+  test("引用符だけの session cookie は session token が空なので、better-auth が session を引かないのと同じく IP の枠に倒れる", async () => {
+    const headers = new Headers({ cookie: '__Secure-better-auth.session_token=""' });
+    expect(await sessionAttemptSubject(headers, "203.0.113.1")).toBe("ip:203.0.113.1");
+  });
 });
 
 test.each([

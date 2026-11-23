@@ -56,6 +56,9 @@ export const freshSessionCookie = () => ({
   cookie: `__Secure-better-auth.session_token=${crypto.randomUUID()}`,
 });
 
+export const signedLookingSessionValue = () =>
+  `${crypto.randomUUID()}.c2lnbmF0dXJl+/c2lnbmF0dXJl+/c2lnbmF0dXJl=`;
+
 export function buildAppWith<A extends AppServices>(overrides: Layer.Layer<A>): Hono {
   const app = new Hono();
   mountSpaApi(app, Layer.merge(runtimeServices(), overrides));

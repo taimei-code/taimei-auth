@@ -2,10 +2,11 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { Effect } from "effect";
 import { auth } from "../auth";
 import { CLIENT_IP_HEADER } from "../client-ip";
-import { sessionCookieOf } from "../session-cookie";
+import { sessionCookieOf, sessionTokenAsBetterAuthReads } from "../session-cookie";
 import { dbTest } from "./live-runner";
 import {
   browserCookieHeaders,
+  cookieValueNotations,
   createSessionFor,
   followMagicLink,
   loginWithMagicLink,
@@ -53,6 +54,34 @@ describe("better-auth の既定に頼らず、auth の設定が前提を言い�
         });
 
         expect(sessionCookieOf(browserCookieHeaders(login))).toBeString();
+      }),
+    ));
+
+  test("better-auth は session cookie の値を、そのまま、percent-encode、前後を引用符で囲んだ表記のどれで受けても、同じ session を引き、sessionTokenAsBetterAuthReads はその session の token を返す (試行枠の主体はこの読み方に合わせる)", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) => db.seedUser("notation"));
+        const { headers } = yield* createSessionFor(user.id);
+        const raw = sessionCookieOf(headers) ?? "";
+        const name = (yield* Effect.promise(() => auth.$context)).authCookies.sessionToken.name;
+
+        const tokens = yield* Effect.forEach(Object.values(cookieValueNotations(raw)), (value) => {
+          const notated = new Headers({ cookie: `${name}=${value}` });
+          return Effect.promise(() => auth.api.getSession({ headers: notated })).pipe(
+            Effect.map((session) => ({
+              resolvedByBetterAuth: session?.session.token,
+              readByUs: sessionTokenAsBetterAuthReads(notated),
+            })),
+          );
+        });
+
+        expect(new Set(tokens.map(({ resolvedByBetterAuth }) => resolvedByBetterAuth)).size).toBe(
+          1,
+        );
+        expect(tokens[0]?.resolvedByBetterAuth).toBeString();
+        expect(tokens.map(({ readByUs }) => readByUs)).toEqual(
+          tokens.map(({ resolvedByBetterAuth }) => resolvedByBetterAuth),
+        );
       }),
     ));
 

@@ -1,3 +1,4 @@
+import { buildSessionCookieHeader } from "@taimei-code/auth-client/cookie";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { CLIENT_IP_HEADER } from "../../client-ip";
 import { Effect } from "effect";
@@ -8,7 +9,8 @@ import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { ttlStoreLayer } from "../../ttl-store-service";
 import { JSON_HEADERS } from "../client-facing-error";
 import { signedIn as signedInLayer } from "../../membership/__tests__/test-layers";
-import { buildAppWith, freshSessionCookie } from "./helpers";
+import { cookieValueNotations } from "../../__tests__/session-helpers";
+import { buildAppWith, freshSessionCookie, signedLookingSessionValue } from "./helpers";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
@@ -149,6 +151,46 @@ describe("MFA の状態変更の試行枠 (session ごとに 60 秒で 10 回、
           429,
           { _tag: "RateLimited" },
         ]);
+      }),
+    ));
+
+  const disable = async (app: Hono, cookie: string) =>
+    post(app, cookie, "/api/account/mfa/disable", { code: "000000", kind: "totp" });
+  const sendAlternating = async (app: Hono, cookies: [string, string], n: number) => {
+    const statuses: number[] = [];
+    for (let i = 0; i < n; i++) statuses.push((await disable(app, cookies[i % 2]!)).status);
+    return statuses;
+  };
+
+  test.each([
+    ["percent-encode した", "percentEncoded"],
+    ["前後を引用符で囲んだ", "quoted"],
+  ] as const)("同じ session の cookie を、そのままの値と、%s値で交互に送っても、合わせて 10 回目までは 429 にならず、11 回目は表記によらず 429 になる", (_, notation) =>
+    run(
+      Effect.gen(function* () {
+        const { app } = yield* signedIn;
+        const notations = cookieValueNotations(signedLookingSessionValue());
+        const plain = buildSessionCookieHeader(notations.plain);
+        const other = buildSessionCookieHeader(notations[notation]);
+
+        const statuses = yield* Effect.promise(() => sendAlternating(app, [plain, other], 10));
+        const eleventh = yield* Effect.promise(() => disable(app, other));
+        const twelfth = yield* Effect.promise(() => disable(app, plain));
+
+        expect(statuses.filter((s) => s === 429)).toEqual([]);
+        expect([eleventh.status, twelfth.status]).toEqual([429, 429]);
+      }),
+    ));
+
+  test("別の session は、ほかの session が試行枠を使い切った後も 429 にならない", () =>
+    run(
+      Effect.gen(function* () {
+        const { app, cookie } = yield* signedIn;
+        yield* Effect.promise(() => sendMixed(app, cookie, 11));
+
+        const other = yield* Effect.promise(() => disable(app, freshSessionCookie().cookie));
+
+        expect(other.status).not.toBe(429);
       }),
     ));
 });
