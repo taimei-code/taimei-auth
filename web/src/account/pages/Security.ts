@@ -9,6 +9,7 @@ import { isDialogVisible } from "../../shared/ui/dialog-view";
 import * as MfaDisabling from "../../mfa/mfa-disabling";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
 import * as PasskeySettings from "../../passkey/passkey-settings";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { alertTextView } from "../../shared/ui/alert-text-view";
 import { settingRowView } from "../../shared/ui/setting-row-view";
@@ -36,7 +37,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const LoadFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const LoadFailure = contractFailure(["Unauthorized"]);
 
 export const Message = defineMessageUnion({
   SucceededLoadSecuritySettings: {
@@ -88,18 +89,6 @@ const AFTER_DELETING_PASSKEY: ReloadTexts = {
 
 const LOW_RECOVERY_CODE_THRESHOLD = 3;
 
-const failedLoadSecuritySettings =
-  (
-    visit: number,
-    refreshNumber: number,
-    maybeTexts: Option.Option<ReloadTexts>,
-    failure: typeof LoadFailure.Type,
-  ) =>
-  () =>
-    Effect.succeed(
-      Message.FailedLoadSecuritySettings({ visit, refreshNumber, failure, maybeTexts }),
-    );
-
 export const LoadSecuritySettings = Command.define("LoadSecuritySettings", {
   args: {
     visit: Schema.Int,
@@ -127,10 +116,11 @@ export const LoadSecuritySettings = Command.define("LoadSecuritySettings", {
           : MfaState.Disabled(),
       });
     }).pipe(
-      Effect.catchTags({
-        Unauthorized: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unauthorized"),
-        HttpClientError: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unexpected"),
-        SchemaError: failedLoadSecuritySettings(visit, refreshNumber, maybeTexts, "Unexpected"),
+      messageOnFailure({
+        failure: LoadFailure,
+        asUnexpected: [],
+        toMessage: (failure) =>
+          Message.FailedLoadSecuritySettings({ visit, refreshNumber, failure, maybeTexts }),
       }),
     ),
 });

@@ -30,6 +30,7 @@ import * as CompanySettings from "../../company/pages/CompanySettings";
 import * as Members from "../../membership/pages/Members";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
 import { leaveSpaToCompanySignup } from "../../shared/leave-spa";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
@@ -83,7 +84,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const LoadCompanyStateFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const LoadCompanyStateFailure = contractFailure(["Unauthorized"]);
 
 export const Message = defineMessageUnion({
   GotDocumentNavigationMessage: { message: DocumentNavigation.Message },
@@ -114,17 +115,14 @@ type Step = Update.Step<Model, Message, SpaHttpClient>;
 const navigate = (command: Command.Command<DocumentNavigation.Message>) =>
   Command.mapMessage(command, (message) => Message.GotDocumentNavigationMessage({ message }));
 
-const failedLoadCompanyState = (failure: typeof LoadCompanyStateFailure.Type) => () =>
-  Effect.succeed(Message.FailedLoadCompanyState({ failure }));
-
 export const LoadCompanyState = Command.define("LoadCompanyState", {
   messages: [Message.SucceededLoadCompanyState, Message.FailedLoadCompanyState],
   execute: CurrentCompany.readCompanyState.pipe(
     Effect.map((state) => Message.SucceededLoadCompanyState({ state })),
-    Effect.catchTags({
-      Unauthorized: failedLoadCompanyState("Unauthorized"),
-      HttpClientError: failedLoadCompanyState("Unexpected"),
-      SchemaError: failedLoadCompanyState("Unexpected"),
+    messageOnFailure({
+      failure: LoadCompanyStateFailure,
+      asUnexpected: [],
+      toMessage: (failure) => Message.FailedLoadCompanyState({ failure }),
     }),
   ),
 });
