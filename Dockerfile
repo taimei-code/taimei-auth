@@ -1,4 +1,4 @@
-FROM oven/bun:1.3 AS base
+FROM oven/bun:1.4 AS base
 WORKDIR /app
 # TLS を復号する proxy 配下では bun install が SELF_SIGNED_CERT_IN_CHAIN で落ちるため certs/palo-root.pem に CA を置く。無い環境では bun が "ignoring extra certs" を 1 行出すだけ
 COPY certs/ /opt/certs/

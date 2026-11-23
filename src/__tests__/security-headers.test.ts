@@ -1,8 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { Effect } from "effect";
 import { Hono } from "hono";
 
 import { buildApp } from "../app";
 import { clearSiteDataOnSignOut } from "../security-headers";
+import { dbTest } from "./live-runner";
+import { createSessionFor } from "./session-helpers";
+import { TestDb } from "./test-db";
 
 const signOutReturning = (status: 200 | 401) => {
   const app = new Hono();
@@ -80,5 +84,69 @@ describe("SPA の document と API の応答の security の header", () => {
       body: "{}",
     });
     expect(response.headers.get("Clear-Site-Data")).not.toBeNull();
+  });
+});
+
+const { run, cleanup } = dbTest("cache-control-test-");
+
+const signedInGet = (path: string) =>
+  Effect.gen(function* () {
+    const db = yield* TestDb;
+    const user = yield* db.seedUser("u1");
+    const { headers } = yield* createSessionFor(user.id);
+    return yield* Effect.promise(async () => app().request(`${ORIGIN}${path}`, { headers }));
+  });
+
+const appServingAt = (path: string, cacheControl: string | undefined) =>
+  buildApp({
+    mountStatic: (spa) =>
+      spa.get(path, (c) => {
+        if (cacheControl !== undefined) c.header("Cache-Control", cacheControl);
+        return c.body("export {};", 200, { "content-type": "text/javascript" });
+      }),
+  });
+
+describe("sign-out が HTTP cache を消さないので、session を読む API の私的な応答を browser に cache させない", () => {
+  beforeEach(cleanup);
+  afterAll(cleanup);
+
+  test.each([
+    "/api/account/memberships",
+    "/api/auth/list-sessions",
+  ])("ログインした利用者への %s の応答は Cache-Control: no-store を持つ", (path) =>
+    run(
+      Effect.gen(function* () {
+        const response = yield* signedInGet(path);
+        expect([response.status, response.headers.get("Cache-Control")]).toEqual([200, "no-store"]);
+      }),
+    ));
+
+  test("session の無い要求への /api/account/memberships の 401 の応答も Cache-Control: no-store を持つ", async () => {
+    const response = await app().request(`${ORIGIN}/api/account/memberships`);
+    expect([response.status, response.headers.get("Cache-Control")]).toEqual([401, "no-store"]);
+  });
+});
+
+describe("配信元が付けた Cache-Control は変えず、/api の外の応答には no-store を付けない", () => {
+  test("API の handler が自分で付けた Cache-Control は、そのまま利用者に届く", async () => {
+    const response = await appServingAt("/api/handler-owned", "private, max-age=60").request(
+      `${ORIGIN}/api/handler-owned`,
+    );
+    expect(response.headers.get("Cache-Control")).toBe("private, max-age=60");
+  });
+
+  test("静的な file の応答は、配信元が付けた Cache-Control のまま", async () => {
+    const response = await appServingAt(
+      "/auth/assets/*",
+      "public, max-age=31536000, immutable",
+    ).request(`${ORIGIN}/auth/assets/index-abc123.js`);
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=31536000, immutable");
+  });
+
+  test("配信元が Cache-Control を付けない静的な file の応答は、Cache-Control を持たないまま", async () => {
+    const response = await appServingAt("/auth/assets/*", undefined).request(
+      `${ORIGIN}/auth/assets/index-abc123.js`,
+    );
+    expect(response.headers.get("Cache-Control")).toBeNull();
   });
 });

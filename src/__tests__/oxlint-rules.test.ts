@@ -1116,6 +1116,20 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "/api/* の全体に載せる middleware の wildcard は SPA の API の path でないので、src に書いても lint が止めない",
+    path: "src/Probe024b.ts",
+    source: 'export const register = (app: { use(path: string): void }) => app.use("/api/*");',
+    expectedRules: [],
+  },
+  {
+    name: "/api/* の wildcard を middleware の use の外で書く (catch-all の route を Hono に直接登録する) と、lint が止める",
+    path: "src/Probe024c.ts",
+    source:
+      'export const register = (app: { all(path: string, handler: () => void): void }) => app.all("/api/*", () => {});',
+    expectedRules: ["taimei(spa-api-path-only-in-contract)"],
+  },
+
+  {
     name: "HttpApi の handler は HttpServerResponse を直接組まない: src/handlers に書くと lint が止める",
     path: "src/handlers/Probe025-http-api.ts",
     source:

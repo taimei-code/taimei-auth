@@ -346,3 +346,70 @@ export const readWorkflow = <Workflow>(name: string): Workflow =>
 
 export const indexOfStepRunning = (steps: readonly { run?: string }[], fragment: string): number =>
   steps.findIndex(({ run = "" }) => run.includes(fragment));
+
+type BunVersionPin = { readonly place: string; readonly version: unknown };
+
+type SetupStep = { readonly uses?: string; readonly with?: Record<string, unknown> };
+
+type StepsFile = {
+  readonly jobs?: Record<string, { readonly steps?: readonly SetupStep[] }>;
+  readonly runs?: { readonly steps?: readonly SetupStep[] };
+};
+
+export function setupBunPins(yaml: string, place: string): BunVersionPin[] {
+  const parsed = (Bun.YAML.parse(yaml) ?? {}) as StepsFile;
+  const steps = [
+    ...Object.values(parsed.jobs ?? {}).flatMap((job) => job.steps ?? []),
+    ...(parsed.runs?.steps ?? []),
+  ];
+  return steps
+    .filter((step) => step.uses?.startsWith("oven-sh/setup-bun@"))
+    .map((step) => ({ place, version: step.with?.["bun-version"] }));
+}
+
+export function dockerBunPins(dockerfile: string): BunVersionPin[] {
+  return dockerfile.split("\n").flatMap((line) => {
+    const image = fromTokens(line)?.[0];
+    return image?.startsWith("oven/bun:")
+      ? [{ place: "Dockerfile", version: image.slice("oven/bun:".length) }]
+      : [];
+  });
+}
+
+export function bunVersionPinsInRepo(): BunVersionPin[] {
+  const actionsDir = join(REPO_ROOT, ".github/actions");
+  const actionFiles = readdirSync(actionsDir).flatMap((name) =>
+    ["action.yml", "action.yaml"]
+      .map((file) => `.github/actions/${name}/${file}`)
+      .filter((path) => existsSync(join(REPO_ROOT, path))),
+  );
+  const workflowFiles = workflowFileNames().map((name) => `.github/workflows/${name}`);
+  return [
+    ...dockerBunPins(readFileSync(join(REPO_ROOT, "Dockerfile"), "utf8")),
+    ...[...workflowFiles, ...actionFiles].flatMap((path) =>
+      setupBunPins(readFileSync(join(REPO_ROOT, path), "utf8"), path),
+    ),
+  ];
+}
+
+export function bunVersionPinViolations(pins: readonly BunVersionPin[]): string[] {
+  const unpinned = pins
+    .filter((pin) => pin.version === undefined)
+    .map((pin) => `${pin.place}: setup-bun が bun-version を固定していない`);
+  const unquoted = pins
+    .filter((pin) => pin.version !== undefined && typeof pin.version !== "string")
+    .map(
+      (pin) =>
+        `${pin.place}: setup-bun の bun-version (${String(pin.version)}) を引用符で囲む。囲まないと YAML が数として読み、1.10 が 1.1 になる`,
+    );
+  const versions = new Set(
+    pins.flatMap((pin) => (typeof pin.version === "string" ? [pin.version] : [])),
+  );
+  const split =
+    versions.size > 1
+      ? [
+          `Bun の版が場所によって分かれている (${pins.map((pin) => `${pin.place}=${String(pin.version)}`).join(", ")})。手元、CI、Docker、deploy で同じ Bun を使うため、すべて同じ版にそろえる`,
+        ]
+      : [];
+  return [...unpinned, ...unquoted, ...split];
+}
