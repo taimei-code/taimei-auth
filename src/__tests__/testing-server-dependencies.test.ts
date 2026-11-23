@@ -5,6 +5,7 @@ import { readPackageJson } from "./config-invariant-helpers";
 
 const TESTING_SERVER_ENTRIES = [
   "testing/worker.ts",
+  "testing/dev-worker.ts",
   "testing/staging-worker.ts",
   "testing/server.ts",
 ];

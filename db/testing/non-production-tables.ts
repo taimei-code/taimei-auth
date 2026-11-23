@@ -17,6 +17,13 @@ export const prepareNonProductionTables = async (_database: NonProductionDatabas
       value text NOT NULL,
       expires_at timestamptz
     )`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS testing_feature_flag_rules (
+      flag text PRIMARY KEY,
+      enabled boolean NOT NULL,
+      everyone boolean NOT NULL,
+      company_ids text[] NOT NULL
+    )`);
   await seedDevAccounts();
 };
 

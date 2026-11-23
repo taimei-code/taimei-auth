@@ -3,6 +3,7 @@
   "entry": [
     "testing/server.ts",
     "testing/worker.ts",
+    "testing/dev-worker.ts",
     "testing/staging-worker.ts",
     "testing/prepare-staging-database.ts",
     "testing/check-staging-database.ts",

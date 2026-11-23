@@ -88,6 +88,16 @@ describe("ローカルの開発者ホームは、フィーチャーフラグの�
       [COMPANY_FLAG, "On"],
     ]);
   });
+
+  test("作り直したアプリは、前のアプリで全体 off にしたフラグも全体 on から始める", async () => {
+    const before = localApp();
+    expect((await switchFlag(before.request, { flag: "passkey", state: "off" })).status).toBe(303);
+    expect(await passkeyEvaluated(before.flags)).toBe(false);
+    const { flags, request } = localApp();
+
+    expect(flagOn(await openFlagsPage(request), "passkey").status).toBe("On");
+    expect(await passkeyEvaluated(flags)).toBe(true);
+  });
 });
 
 describe("フィーチャーフラグのページから切り替えると、server の評価が変わる", () => {
