@@ -19,7 +19,7 @@ Cloudflare Flagship (2026-11 時点で open beta、料金は未公表) は、Wor
 3. **評価に失敗したら off にする**。binding の呼び出しの失敗、2 秒の timeout、結果の `errorCode` (flag が無い、型が違う) は、warning の log を出して off にする。呼び出し側の既定の値は常に `false` を渡す
 4. **flag の既定の値は常に off にし、ルールは 2 つの形に限る**。「事業所のリスト (`companyId`) → on」と「全体公開 (条件の無いルール) → on」で、両方を使う時は事業所のリストを先に置く。条件の無いルールはすべての評価に当たる。actor を渡す評価は `companyId` を渡し、渡さない評価は何も渡さないので、actor の無い評価が on になるのは全体公開の時だけである (Flipper の「全体 on」と「actor ごとの on」の区別)。既定の値を on にすると、無効にしても on のまま止まらない
 5. **事業所は現在の事業所だけで決める**。所属先すべては見ない。現在の事業所が無い user は `companyId` を渡さず、事業所のルールに当たらない
-6. **本番以外はメモリの実装を入口から渡す** (ADR-0021)。開発環境、`bun test`、e2e は `testing/feature-flags.ts` の実装を使い、「全体 on」「全体 off」「事業所 off」を作れる。staging は自分のアカウントの Flagship の app を使う
+6. **本番以外は Flagship の代わりの実装を入口から渡し、切り替えた状態の置き場も入口で決める** (ADR-0021)。開発環境、`bun test`、e2e、試験用の image は `testing/feature-flags.ts` の実装を使い、「全体 on」「全体 off」「事業所 off」を作れる。開発環境だけは、`docker-compose.yml` が起動する入口 `testing/dev-worker.ts` が本番以外の DB の表を置き場として渡し、worker の読み直しと `docker compose restart auth-service` の後も切り替えを残す。e2e、`bun test`、試験用の image の入口 (`testing/worker.ts`、`testing/server.ts`) は memory の置き場を渡し、起動のたびに全体 on から始める。e2e と開発環境は同じ local の Postgres を使うので、開発環境で切り替えた状態が e2e の結果を変えないよう、DB の置き場を渡す入口は 1 つに限る。staging は自分のアカウントの Flagship の app を使う。(2026-11-23 改訂、#565。それまでは本番以外のすべての入口が memory の置き場を渡していた)
 7. **Workers Free で動くことを前提にする**。Flagship が GA で有料になったら、この ADR を見直す
 
 ## Considered Options
