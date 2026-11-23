@@ -35,3 +35,10 @@ export const clearSiteDataOnSignOut = createMiddleware(async (c, next) => {
     c.header("Clear-Site-Data", '"storage"');
   }
 });
+
+export const noStoreUnlessCacheControlSet = createMiddleware(async (c, next) => {
+  await next();
+  if (!c.res.headers.has("Cache-Control")) {
+    c.header("Cache-Control", "no-store");
+  }
+});

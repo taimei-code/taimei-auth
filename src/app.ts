@@ -17,7 +17,11 @@ import { attemptBudgetMiddleware } from "./handlers/attempt-budget-hono";
 import { getClientContext } from "./request-context";
 import { verifyServiceKey } from "./service-key";
 import { getTrustedOrigins } from "./env";
-import { clearSiteDataOnSignOut, securityHeaders } from "./security-headers";
+import {
+  clearSiteDataOnSignOut,
+  noStoreUnlessCacheControlSet,
+  securityHeaders,
+} from "./security-headers";
 
 async function readEmailWithoutCloningBody(c: Context): Promise<string> {
   const body = await c.req
@@ -36,6 +40,7 @@ export function buildApp(options: AppOptions): Hono {
   const app = new Hono();
 
   app.use("*", securityHeaders);
+  app.use("/api/*", noStoreUnlessCacheControlSet);
 
   const allowedOrigins = getTrustedOrigins();
   app.use(

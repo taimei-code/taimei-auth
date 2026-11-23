@@ -12,6 +12,14 @@ describe("SPA の API 契約から、endpoint の path と宣言した失敗の 
     expect(verify?.failures.get("ChallengeExpired")).toBe(401);
   });
 
+  test("契約のすべての endpoint の path は /api/ の下にあり、buildApp が /api/* の応答に付ける Cache-Control: no-store が届く", () => {
+    expect(
+      spaEndpointTable()
+        .map((endpoint) => endpoint.path)
+        .filter((path) => !path.startsWith("/api/")),
+    ).toEqual([]);
+  });
+
   test("endpoint の path から作る pattern は、その path に一致し、下に続く別の path に一致しない", () => {
     const state = endpointPattern("mfaChallenge.state");
     expect(state.test(`${BASE}/api/mfa/challenge`)).toBe(true);

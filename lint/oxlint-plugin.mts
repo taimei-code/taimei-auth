@@ -437,6 +437,15 @@ const isOnlyArgumentOf = (node: AstNode, calleeName: string) => {
   );
 };
 
+const isFirstArgumentOf = (node: AstNode, calleeName: string) => {
+  const call = node.parent;
+  return (
+    call?.type === "CallExpression" &&
+    calleeNameOf(call.callee) === calleeName &&
+    call.arguments?.[0] === node
+  );
+};
+
 const isAppEnvPassedToOutsideProductionCheck = (read: AstNode | undefined) =>
   read !== undefined &&
   memberPathOf(read) === "process.env.APP_ENV" &&
@@ -713,7 +722,24 @@ const ROWS: readonly Row[] = [
     name: "spa-api-path-only-in-contract",
     within: ["src/**"],
     allowedIn: ["src/**/*-contract.ts"],
-    matchers: [{ kind: "literal", pattern: /^\/api\/(?!auth(\/|$))/ }],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => {
+          const check = (node: AstNode) => {
+            const text = stringOf(node);
+            if (
+              text !== undefined &&
+              /^\/api\/(?!auth(\/|$))/.test(text) &&
+              !(text === "/api/*" && isFirstArgumentOf(node, "use"))
+            ) {
+              report(node);
+            }
+          };
+          return { Literal: check, TemplateLiteral: check };
+        },
+      },
+    ],
     message:
       "SPA の API (/api/auth 以外の /api/*) は Hono に直接登録せず、契約 (*-contract.ts) を handlers/*-http-api.ts で実装して mountSpaApi で載せる",
   },
