@@ -122,4 +122,8 @@ describe("import の禁止は lint の表の行が持ち、.oxlintrc.json に写
       oxlintConfigText().match(/"name": "(next|next\/[a-z]+|@connectrpc\/connect-web)"/g) ?? [],
     ).toEqual([]);
   });
+
+  test(".oxlintrc.json は no-restricted-imports を設定しない (override は merge されず、範囲の重なる override が禁止を消すので、import の禁止は表の行に書く)", () => {
+    expect(oxlintConfigText()).not.toContain("no-restricted-imports");
+  });
 });

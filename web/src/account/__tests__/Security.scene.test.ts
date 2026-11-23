@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect as expectBun, test } from "bun:test";
 import { DateTime, Effect, Fiber, Option, Redacted } from "effect";
-// oxlint-disable-next-line no-restricted-imports -- コピーの結果を隠す 3 秒の待ちを、仮想の時計 (TestClock) で進めて確かめる
 import { TestClock } from "effect/testing";
 import {
   all,

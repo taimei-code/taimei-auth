@@ -5,45 +5,8 @@ import { REPO_ROOT } from "./source-scan";
 
 export { REPO_ROOT };
 
-export const WEB_ONLY_DEP_MESSAGE =
-  "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)";
-const CONNECT_NODE_BAN_MESSAGE = "削除済み依存。再導入しない (ADR-0011 / ADR-0014)";
-
-export const EXPECTED_WEB_ONLY_COPY_COUNT = 4;
-export const EXPECTED_CONNECT_NODE_COPY_COUNT = 4;
-
-export const REPRESENTATIVE_SERVER_FILE = "src/handlers/run-route.ts";
-export const REPRESENTATIVE_DB_FILE = "db/schema.ts";
-export const REPRESENTATIVE_MANAGEMENT_FILE = "management/disable-user-mfa.ts";
-const REPRESENTATIVE_BANNED_SCOPE_FILES = [
-  REPRESENTATIVE_SERVER_FILE,
-  REPRESENTATIVE_DB_FILE,
-  REPRESENTATIVE_MANAGEMENT_FILE,
-];
-
-export const CONNECT_NODE = "@connectrpc/connect-node";
-export interface RestrictedPattern {
-  group?: string[];
-  message?: string;
-}
-
-interface RestrictedPath {
-  name: string;
-  message?: string;
-  importNames?: string[];
-}
-
-interface RestrictedImportsOptions {
-  paths?: RestrictedPath[];
-  patterns?: RestrictedPattern[];
-}
-
 export interface OxlintOverride {
   files: string[];
-  excludeFiles?: string[];
-  rules?: {
-    "no-restricted-imports"?: [string, RestrictedImportsOptions];
-  };
 }
 
 export interface OxlintConfig {
@@ -57,81 +20,6 @@ export function parseJsonc(text: string): unknown {
     )
     .replace(/,(\s*[}\]])/g, "$1");
   return JSON.parse(withoutComments);
-}
-
-export function restrictedImports(override: OxlintOverride): RestrictedImportsOptions | null {
-  return override.rules?.["no-restricted-imports"]?.[1] ?? null;
-}
-
-export function restrictedPatterns(override: OxlintOverride): RestrictedPattern[] {
-  return restrictedImports(override)?.patterns ?? [];
-}
-
-export function webOnlyGroupOf(override: OxlintOverride): string[] | null {
-  const found = restrictedPatterns(override).find((p) => p.message === WEB_ONLY_DEP_MESSAGE);
-  return found?.group ?? null;
-}
-
-export function webOnlyGroups(config: OxlintConfig): string[][] {
-  const groups: string[][] = [];
-  for (const override of config.overrides ?? []) {
-    const group = webOnlyGroupOf(override);
-    if (group !== null) groups.push(group);
-  }
-  return groups;
-}
-
-export function overrideMatches(override: OxlintOverride, path: string): boolean {
-  const matches = (pattern: string) => new Bun.Glob(pattern).match(path);
-  return override.files.some(matches) && !(override.excludeFiles ?? []).some(matches);
-}
-
-export function effectiveOverride(config: OxlintConfig, path: string): OxlintOverride | null {
-  let effective: OxlintOverride | null = null;
-  for (const override of config.overrides ?? []) {
-    if (!overrideMatches(override, path)) continue;
-    if (restrictedImports(override) !== null) effective = override;
-  }
-  return effective;
-}
-
-export function effectiveWebOnlyGroup(config: OxlintConfig, path: string): string[] | null {
-  const effective = effectiveOverride(config, path);
-  return effective === null ? null : webOnlyGroupOf(effective);
-}
-
-export function hasConnectNodeBan(override: OxlintOverride): boolean {
-  return restrictedPatterns(override).some(
-    (p) => p.message === CONNECT_NODE_BAN_MESSAGE && (p.group ?? []).includes(CONNECT_NODE),
-  );
-}
-
-export function webOnlyBanViolations(config: OxlintConfig): string[] {
-  const violations: string[] = [];
-  const sorted = webOnlyGroups(config).map((group) => [...group].sort());
-
-  if (sorted.length !== EXPECTED_WEB_ONLY_COPY_COUNT) {
-    violations.push(
-      `web 専用 ban の copy 数が ${sorted.length} 個 (期待 ${EXPECTED_WEB_ONLY_COPY_COUNT} 個)。message 文言を変えたなら .oxlintrc.json の全 copy と本 test の WEB_ONLY_DEP_MESSAGE を同時に直す (期待 message: ${WEB_ONLY_DEP_MESSAGE})`,
-    );
-  }
-  for (const [index, group] of sorted.entries()) {
-    const diff = symmetricDifference(group, sorted[0] ?? []);
-    if (diff.length > 0) {
-      violations.push(
-        `web 専用 group が override 間で食い違う (copy ${index} との差分: ${diff.join(", ")})。.oxlintrc.json の override の group を同一内容に保つ`,
-      );
-    }
-  }
-  for (const path of REPRESENTATIVE_BANNED_SCOPE_FILES) {
-    const effective = effectiveWebOnlyGroup(config, path);
-    if (effective === null || symmetricDifference(effective, sorted[0] ?? []).length > 0) {
-      violations.push(
-        `${path} に最後にマッチする override が web 専用 ban を持っていない。同じ path にマッチする override を後ろに足すと oxlint の後勝ち置換で ban が実効的に消える`,
-      );
-    }
-  }
-  return violations;
 }
 
 export interface ClassificationDiff {
@@ -164,7 +52,7 @@ export function classificationDiff(
 export function classificationViolations(diff: ClassificationDiff): string[] {
   const violations: string[] = [];
   const fixHint =
-    "直す場所: .oxlintrc.json の override の group (message が WEB_ONLY_DEP_MESSAGE のもの) と、本 test の ALLOWED_DEV_DEPENDENCIES (許可するなら build-tool / type-only / test-only-runtime のいずれかの理由を書く)";
+    "直す場所: lint/oxlint-plugin.mts の WEB_ONLY_DEPENDENCIES と、本 test の ALLOWED_DEV_DEPENDENCIES (許可するなら build-tool / type-only / test-only-runtime のいずれかの理由を書く)";
   if (diff.missingFromBan.length > 0) {
     violations.push(
       `web 専用 ban にも許可リストにも無い devDependency: ${diff.missingFromBan.join(", ")}。${fixHint}`,
