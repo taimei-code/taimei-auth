@@ -38,9 +38,14 @@ export const fakeFlagship = (store: FlagRulesStore = memoryFlagRulesStore()) => 
   const removed = new Set<string>();
   let bindingFails = false;
   const rulesOf = async (flag: string) => (await store.read(flag)) ?? RELEASED;
-  const switchTo = async (flag: string, next: (current: FlagRules | undefined) => FlagRules) => {
-    await store.update(flag, next);
-    removed.delete(flag);
+  let switchedInOrder: Promise<void> = Promise.resolve();
+  const switchTo = (flag: string, next: (current: FlagRules | undefined) => FlagRules) => {
+    const switched = switchedInOrder.then(async () => {
+      await store.update(flag, next);
+      removed.delete(flag);
+    });
+    switchedInOrder = switched.catch(() => undefined);
+    return switched;
   };
 
   const binding = {
