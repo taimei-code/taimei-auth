@@ -44,3 +44,13 @@ oxlint 1.90.0 で確かめた振る舞いは次のとおりである。
 - 禁止と例外を行に移し、`.oxlintrc.json` の db の項を消した。Decision 3 の「今ある group の禁止だけ」のうち、db の禁止は表が持つ
 - 例外の file と理由は、行 `db-import-only-in-db` と `db-testing-import-only-in-listed-files` の `allowedMatches`・`allowedIn` と message だけが持つ (ここに写しを置かない)。`testing/**` に `db/testing/*` を許す根拠は ADR-0020 Decision 6・7 と ADR-0022 Decision 9・15 である
 - 型だけの import は、`drizzle-orm`・`db/client`・`db/schema` を本番の file で止める。`db/repositories`・`db/transaction` の型は ports が使うので通す。test は値の import だけを止める
+
+## 共通の import の禁止の行 (2026-11-23 追記、#578)
+
+server・契約・e2e・web に共通の import の禁止は、`.oxlintrc.json` の `no-restricted-imports` の 8 つの override にあった。範囲の重なる override は同じ禁止を互いに写していた。写しの数と中身の一致は、oxlint の override の解決 (最後に当たった override が勝つ) を再現する test が確かめていた。
+
+- 禁止と例外を行に移し、`.oxlintrc.json` から `no-restricted-imports` を消した。Decision 3 の「今ある group の禁止だけ」に当たる禁止は無くなり、import の禁止は表だけが持つ。`.oxlintrc.json` に `no-restricted-imports` が戻ると `src/__tests__/static-check-index.test.ts` が落ちる
+- 移す前後で、止める import と通す import を変えていない。override の `files` と `excludeFiles` が分けていた範囲ごとに代表の path を選び、その path と import の書き方の組を移す前の oxlint に通して、止まるか通るかを記録した。その結果を `src/__tests__/oxlint-rules.test.ts` の fixture にした (止める import の書き方の一覧は、その test の名前に書いてある)
+- source の `oxlint-disable-next-line no-restricted-imports` (2 か所) は、行の `allowedMatches` に移した。例外の file と理由は行だけが持つ
+- web 専用の依存の一覧は plugin の `WEB_ONLY_DEPENDENCIES` に置く。行も、`package.json` の依存の分類を突き合わせる test も、この一覧を読む
+- 名前付きの import の禁止 (`getSessionCookie`、`Route`、`Dialog` など) は、移す前の `importNames` と同じく、specifier と名前の組で比べる
