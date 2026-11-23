@@ -16,12 +16,13 @@ export const notifyMfaDisabled = (
 ): Effect.Effect<void, never, EmailSender | Background | SentryService> =>
   notifyInBackground(MFA_NOTIFICATION, (sender) => sender.sendMfaDisabled(email));
 
+const capturedAsNotNotified = captureCauseAs(false, { tags: { component: MFA_NOTIFICATION } });
+
 export const notifyMfaDisabledForManagement = Effect.fnUntraced(function* (email: string) {
   const sender = yield* EmailSender;
-  return yield* sender
-    .sendMfaDisabled(email)
-    .pipe(
-      Effect.as(true),
-      Effect.catch(captureCauseAs(false, { tags: { component: MFA_NOTIFICATION } })),
-    );
+  return yield* sender.sendMfaDisabled(email).pipe(
+    Effect.as(true),
+    Effect.catch(capturedAsNotNotified),
+    Effect.catchDefect((defect) => capturedAsNotNotified({ cause: defect })),
+  );
 });

@@ -20,6 +20,7 @@ import {
   awaitingBackground,
   buildAppWith,
   challengeOf,
+  defectDuringPasskeyMail,
   CLIENT_IP,
   CLIENT_USER_AGENT,
   clientHeaders,
@@ -813,6 +814,17 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
 
       expect(outcome.status).toBe(200);
       expect(await listedPasskeyIds(session)).toHaveLength(1);
+    });
+
+    test("通知メールの送信が型の無い例外で落ちる時も、登録の応答は成功で、パスキーは一覧に出て、Sentry に warning として 1 件送られる", async () => {
+      const owner = await createUser("owner");
+      const session = signedInSession(owner, { layer: defectDuringPasskeyMail });
+
+      const outcome = await register(session);
+
+      expect(outcome.status).toBe(200);
+      expect(await listedPasskeyIds(session)).toHaveLength(1);
+      expect(sentry.warnings()).toHaveLength(1);
     });
 
     test("Resend への送信が失敗した登録は、Sentry に warning として 1 件送られる", async () => {

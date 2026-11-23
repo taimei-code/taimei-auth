@@ -895,6 +895,7 @@ const ROWS: readonly Row[] = [
       "src/audit/append.ts",
       "src/auth-plugins/mfa-challenge.ts",
       "src/auth-plugins/sign-in-observer.ts",
+      "src/background.ts",
       "src/invitation/create.ts",
       "src/email/notify-in-background.ts",
       "src/membership/guard/core.ts",

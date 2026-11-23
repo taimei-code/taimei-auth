@@ -21,6 +21,7 @@ import {
   CLIENT_IP,
   CLIENT_USER_AGENT,
   clientHeaders,
+  defectDuringPasskeyMail,
   liveApp,
   listedPasskeyIds,
   type Outcome,
@@ -421,6 +422,18 @@ describe("パスキーの削除の API", () => {
 
       expect(outcome.status).toBe(200);
       expect(await listedPasskeyIds(session)).toEqual([]);
+    });
+
+    test("通知メールの送信が型の無い例外で落ちる時も、削除の応答は成功で、パスキーは一覧から消え、Sentry に warning として 1 件送られる", async () => {
+      const owner = await createUser("owner");
+      const passkey = await storePasskey(owner);
+      const session = signedInSession(owner, { layer: defectDuringPasskeyMail });
+
+      const outcome = await deleteAndAwaitMail(session, passkey);
+
+      expect(outcome.status).toBe(200);
+      expect(await listedPasskeyIds(session)).toEqual([]);
+      expect(sentry.warnings()).toHaveLength(1);
     });
 
     test("Resend への送信が失敗した削除は、Sentry に warning として 1 件送られる", async () => {
