@@ -3115,6 +3115,27 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "session ごとの鍵を作る code は、SDK の cookie の reader で生の値を読めない",
+    path: "src/handlers/SdkCookieReaderProbe.ts",
+    source:
+      'import { getSessionToken } from "@taimei-code/auth-client";\nexport const token = getSessionToken(() => undefined);',
+    expectedRules: ["taimei(raw-session-cookie-only-in-entry-redirects)"],
+  },
+  {
+    name: "session ごとの鍵を作る code は、session cookie の生の値を読めない (表記の違う同じ session が別の鍵になる)",
+    path: "src/handlers/RawSessionCookieProbe.ts",
+    source:
+      'import { sessionCookieOf } from "../session-cookie";\nexport const subject = (headers: Headers) => sessionCookieOf(headers);',
+    expectedRules: ["taimei(raw-session-cookie-only-in-entry-redirects)"],
+  },
+  {
+    name: "cookie の有無だけを見る入口は、session cookie の生の値を読める",
+    path: "src/handlers/login-shortcut.ts",
+    source:
+      'import { sessionCookieOf } from "../session-cookie";\nexport const signedIn = (headers: Headers) => sessionCookieOf(headers) !== undefined;',
+    expectedRules: [],
+  },
+  {
     name: "画面は、パスキーの一覧の応答から行を自分で読めない",
     path: "web/src/account/PasskeyListProbe.ts",
     source: "export const rows = (list: { passkeys: unknown[] }) => list.passkeys;",

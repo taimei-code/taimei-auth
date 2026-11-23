@@ -2194,6 +2194,28 @@ const ROWS: readonly Row[] = [
     message:
       "どの application を起動するかは URL の path だけで決める。build の mode や環境の値を読まない (ADR-0021)",
   },
+  {
+    name: "raw-session-cookie-only-in-entry-redirects",
+    within: ["src/**"],
+    allowedIn: [
+      "src/session-cookie.ts",
+      "src/handlers/auth-entry-redirect.ts",
+      "src/handlers/login-shortcut.ts",
+    ],
+    matchers: [
+      {
+        kind: "identifier",
+        names: [
+          "sessionCookieOf",
+          "extractSessionTokenFromCookieHeader",
+          "getSessionToken",
+          "hasAuthCookie",
+        ],
+      },
+    ],
+    message:
+      "session cookie の生の値を読むのは、cookie の有無だけを見る入口 (auth-entry-redirect.ts・login-shortcut.ts) だけ。session ごとの鍵 (試行枠の主体など) は、better-auth が session を引く時と同じ読み方の sessionTokenAsBetterAuthReads から作る (表記の違う同じ session を別の鍵にしない。#514)",
+  },
 ];
 
 const BROWSER_GLOBALS = new Set([
