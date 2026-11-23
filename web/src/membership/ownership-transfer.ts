@@ -13,6 +13,7 @@ import {
   pageRequestOf,
   withNextPageRequest,
 } from "../shared/page-request";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission, submissionWhile } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
@@ -65,7 +66,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const RequestFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const RequestFailure = contractFailure(["Unauthorized"]);
 
 export const Message = defineMessageUnion({
   GotDialogMessage: { message: Dialog.Message },
@@ -84,9 +85,6 @@ export const visitOfCompanyChange = (message: Message): Option.Option<number> =>
 
 const TRANSFER_FAILED = "オーナー委譲に失敗しました。";
 
-const failedLoadCandidates = (request: PageRequest, failure: typeof RequestFailure.Type) => () =>
-  Effect.succeed(Message.FailedLoadCandidates({ ...request, failure }));
-
 export const LoadCandidates = Command.define("LoadCandidates", {
   args: { ...PageRequestFields, target: Target },
   messages: [Message.SucceededLoadCandidates, Message.FailedLoadCandidates],
@@ -103,17 +101,13 @@ export const LoadCandidates = Command.define("LoadCandidates", {
           .map((member) => ({ userId: member.user_id, label: memberLabel(member) })),
       });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedLoadCandidates(request, "Unexpected"),
-        Unauthorized: failedLoadCandidates(request, "Unauthorized"),
-        HttpClientError: failedLoadCandidates(request, "Unexpected"),
-        SchemaError: failedLoadCandidates(request, "Unexpected"),
+      messageOnFailure({
+        failure: RequestFailure,
+        asUnexpected: ["Forbidden"],
+        toMessage: (failure) => Message.FailedLoadCandidates({ ...request, failure }),
       }),
     ),
 });
-
-const failedTransfer = (request: PageRequest, failure: typeof RequestFailure.Type) => () =>
-  Effect.succeed(Message.FailedTransferOwnership({ ...request, failure }));
 
 export const TransferOwnership = Command.define("TransferOwnership", {
   args: { ...PageRequestFields, companyId: Schema.String, candidate: Candidate },
@@ -127,15 +121,10 @@ export const TransferOwnership = Command.define("TransferOwnership", {
       });
       return Message.SucceededTransferOwnership({ ...request, memberLabel: candidate.label });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedTransfer(request, "Unexpected"),
-        NotFound: failedTransfer(request, "Unexpected"),
-        InvalidArgument: failedTransfer(request, "Unexpected"),
-        AlreadyOwner: failedTransfer(request, "Unexpected"),
-        LastOwner: failedTransfer(request, "Unexpected"),
-        Unauthorized: failedTransfer(request, "Unauthorized"),
-        HttpClientError: failedTransfer(request, "Unexpected"),
-        SchemaError: failedTransfer(request, "Unexpected"),
+      messageOnFailure({
+        failure: RequestFailure,
+        asUnexpected: ["Forbidden", "NotFound", "InvalidArgument", "AlreadyOwner", "LastOwner"],
+        toMessage: (failure) => Message.FailedTransferOwnership({ ...request, failure }),
       }),
     ),
 });

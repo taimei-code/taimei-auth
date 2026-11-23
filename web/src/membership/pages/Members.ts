@@ -18,6 +18,7 @@ import * as CurrentCompany from "../../account/current-company";
 import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as MemberInvitations from "../../invitation/member-invitations";
 import type { FailureMessages } from "../../shared/failure-message";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission, submissionWhile } from "../../shared/submission";
 import { alertTextView } from "../../shared/ui/alert-text-view";
@@ -92,14 +93,8 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const RequestFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
-const MemberChangeFailure = Schema.Literals([
-  "Forbidden",
-  "NotFound",
-  "LastOwner",
-  "Unauthorized",
-  "Unexpected",
-]);
+const RequestFailure = contractFailure(["Unauthorized"]);
+const MemberChangeFailure = contractFailure(["Forbidden", "NotFound", "LastOwner", "Unauthorized"]);
 type MemberChangeFailure = typeof MemberChangeFailure.Type;
 
 export const Message = defineMessageUnion({
@@ -165,10 +160,8 @@ export const ReadSelfUserId = Command.define("ReadSelfUserId", {
 export const LoadMembers = Command.define("LoadMembers", {
   args: { visit: Schema.Int, companyId: Schema.String, reload: Reload },
   messages: [Message.SucceededLoadMembers, Message.FailedLoadMembers],
-  execute: ({ visit, companyId, reload }) => {
-    const failedLoad = (failure: typeof RequestFailure.Type) => () =>
-      Effect.succeed(Message.FailedLoadMembers({ visit, failure, reload }));
-    return Effect.gen(function* () {
+  execute: ({ visit, companyId, reload }) =>
+    Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       const { members } = yield* client.membership.list({ params: { companyId } });
       return Message.SucceededLoadMembers({
@@ -182,27 +175,13 @@ export const LoadMembers = Command.define("LoadMembers", {
         })),
       });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedLoad("Unexpected"),
-        Unauthorized: failedLoad("Unauthorized"),
-        HttpClientError: failedLoad("Unexpected"),
-        SchemaError: failedLoad("Unexpected"),
+      messageOnFailure({
+        failure: RequestFailure,
+        asUnexpected: ["Forbidden"],
+        toMessage: (failure) => Message.FailedLoadMembers({ visit, failure, reload }),
       }),
-    );
-  },
+    ),
 });
-
-const memberChangeFailureHandlers = <A>(toMessage: (failure: MemberChangeFailure) => A) => {
-  const failed = (failure: MemberChangeFailure) => () => Effect.succeed(toMessage(failure));
-  return {
-    Forbidden: failed("Forbidden"),
-    NotFound: failed("NotFound"),
-    LastOwner: failed("LastOwner"),
-    Unauthorized: failed("Unauthorized"),
-    HttpClientError: failed("Unexpected"),
-    SchemaError: failed("Unexpected"),
-  };
-};
 
 export const ChangeRole = Command.define("ChangeRole", {
   args: { visit: Schema.Int, companyId: Schema.String, member: Member, role: RoleSchema },
@@ -222,9 +201,11 @@ export const ChangeRole = Command.define("ChangeRole", {
         },
       });
     }).pipe(
-      Effect.catchTags(
-        memberChangeFailureHandlers((failure) => Message.FailedChangeRole({ visit, failure })),
-      ),
+      messageOnFailure({
+        failure: MemberChangeFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedChangeRole({ visit, failure }),
+      }),
     ),
 });
 
@@ -239,9 +220,11 @@ export const RemoveMember = Command.define("RemoveMember", {
       });
       return Message.SucceededRemoveMember({ visit, texts: textsAfterRemoval(account_deleted) });
     }).pipe(
-      Effect.catchTags(
-        memberChangeFailureHandlers((failure) => Message.FailedRemoveMember({ visit, failure })),
-      ),
+      messageOnFailure({
+        failure: MemberChangeFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedRemoveMember({ visit, failure }),
+      }),
     ),
 });
 
