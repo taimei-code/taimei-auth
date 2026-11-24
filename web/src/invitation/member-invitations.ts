@@ -11,6 +11,7 @@ import { roleLabelJa } from "@core/membership/role-label";
 
 import { separatorView } from "../account/account-page-header-view";
 import type { FailureMessages } from "../shared/failure-message";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { Submission } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
@@ -70,19 +71,13 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const RequestFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
-const CreateInvitationFailure = Schema.Literals([
-  "Forbidden",
-  "RateLimited",
-  "Unauthorized",
-  "Unexpected",
-]);
+const RequestFailure = contractFailure(["Unauthorized"]);
+const CreateInvitationFailure = contractFailure(["Forbidden", "RateLimited", "Unauthorized"]);
 type CreateInvitationFailure = typeof CreateInvitationFailure.Type;
-const RevokeInvitationFailure = Schema.Literals([
+const RevokeInvitationFailure = contractFailure([
   "Forbidden",
   "NotFoundOrNotPending",
   "Unauthorized",
-  "Unexpected",
 ]);
 type RevokeInvitationFailure = typeof RevokeInvitationFailure.Type;
 
@@ -170,10 +165,8 @@ export const expiresAtTextOf = (expiresAt: string): Option.Option<string> =>
 export const LoadInvitations = Command.define("LoadInvitations", {
   args: { visit: Schema.Int, listNumber: Schema.Int, companyId: Schema.String, reload: Reload },
   messages: [Message.SucceededLoadInvitations, Message.FailedLoadInvitations],
-  execute: ({ visit, listNumber, companyId, reload }) => {
-    const failedLoad = (failure: typeof RequestFailure.Type) => () =>
-      Effect.succeed(Message.FailedLoadInvitations({ visit, listNumber, failure, reload }));
-    return Effect.gen(function* () {
+  execute: ({ visit, listNumber, companyId, reload }) =>
+    Effect.gen(function* () {
       const client = yield* SpaHttpClient;
       const { invitations } = yield* client.invitation.pending({ params: { companyId } });
       const maybeRows = Option.all(
@@ -193,18 +186,14 @@ export const LoadInvitations = Command.define("LoadInvitations", {
           Message.SucceededLoadInvitations({ visit, listNumber, reload, invitations: rows }),
       });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedLoad("Unexpected"),
-        Unauthorized: failedLoad("Unauthorized"),
-        HttpClientError: failedLoad("Unexpected"),
-        SchemaError: failedLoad("Unexpected"),
+      messageOnFailure({
+        failure: RequestFailure,
+        asUnexpected: ["Forbidden"],
+        toMessage: (failure) =>
+          Message.FailedLoadInvitations({ visit, listNumber, failure, reload }),
       }),
-    );
-  },
+    ),
 });
-
-const failedCreate = (visit: number, failure: CreateInvitationFailure) => () =>
-  Effect.succeed(Message.FailedCreateInvitation({ visit, failure }));
 
 export const CreateInvitation = Command.define("CreateInvitation", {
   args: {
@@ -229,18 +218,13 @@ export const CreateInvitation = Command.define("CreateInvitation", {
       });
       return Message.SucceededCreateInvitation({ visit, reused });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedCreate(visit, "Forbidden"),
-        RateLimited: failedCreate(visit, "RateLimited"),
-        Unauthorized: failedCreate(visit, "Unauthorized"),
-        HttpClientError: failedCreate(visit, "Unexpected"),
-        SchemaError: failedCreate(visit, "Unexpected"),
+      messageOnFailure({
+        failure: CreateInvitationFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedCreateInvitation({ visit, failure }),
       }),
     ),
 });
-
-const failedRevoke = (visit: number, failure: RevokeInvitationFailure) => () =>
-  Effect.succeed(Message.FailedRevokeInvitation({ visit, failure }));
 
 export const RevokeInvitation = Command.define("RevokeInvitation", {
   args: { visit: Schema.Int, companyId: Schema.String, invitationId: Schema.String },
@@ -251,12 +235,10 @@ export const RevokeInvitation = Command.define("RevokeInvitation", {
       yield* client.invitation.revoke({ params: { companyId, invitationId } });
       return Message.SucceededRevokeInvitation({ visit });
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedRevoke(visit, "Forbidden"),
-        NotFoundOrNotPending: failedRevoke(visit, "NotFoundOrNotPending"),
-        Unauthorized: failedRevoke(visit, "Unauthorized"),
-        HttpClientError: failedRevoke(visit, "Unexpected"),
-        SchemaError: failedRevoke(visit, "Unexpected"),
+      messageOnFailure({
+        failure: RevokeInvitationFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedRevokeInvitation({ visit, failure }),
       }),
     ),
 });

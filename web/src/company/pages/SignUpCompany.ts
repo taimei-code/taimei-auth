@@ -10,6 +10,7 @@ import { OrgCodeSchema } from "@core/company/company-contract";
 import { authPageCardView } from "../../auth/auth-page-card-view";
 import { checkSession } from "../../auth/sign-in-client";
 import { SIGN_OUT_FAILED, signOut } from "../../auth/sign-out";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { maybeRejectedMessage, Submission, withoutRejection } from "../../shared/submission";
 import { maybeAlertTextView } from "../../shared/ui/alert-text-view";
@@ -21,9 +22,9 @@ import { focusField, isBlank, maybeFieldError } from "../../shared/required-fiel
 import { radioFieldsetView } from "../../shared/ui/radio-fieldset-view";
 import { orgCodeOptionsIn } from "../org-code-options";
 
-const LoadMembershipsFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const LoadMembershipsFailure = contractFailure(["Unauthorized"]);
 
-const CreateCompanyFailure = Schema.Literals(["AlreadyExists", "Unauthorized", "Unexpected"]);
+const CreateCompanyFailure = contractFailure(["AlreadyExists", "Unauthorized"]);
 
 const Phase = defineTaggedUnion({
   Checking: {},
@@ -90,9 +91,6 @@ export const CheckSession = Command.define("CheckSession", {
     ),
 });
 
-const failedLoadMemberships = (visit: number, failure: typeof LoadMembershipsFailure.Type) => () =>
-  Effect.succeed(Message.FailedLoadMemberships({ visit, failure }));
-
 export const LoadMemberships = Command.define("LoadMemberships", {
   args: { visit: Schema.Int },
   messages: [Message.SucceededLoadMemberships, Message.FailedLoadMemberships],
@@ -105,16 +103,13 @@ export const LoadMemberships = Command.define("LoadMemberships", {
         isCompanyMember: Array.isReadonlyArrayNonEmpty(memberships),
       });
     }).pipe(
-      Effect.catchTags({
-        Unauthorized: failedLoadMemberships(visit, "Unauthorized"),
-        HttpClientError: failedLoadMemberships(visit, "Unexpected"),
-        SchemaError: failedLoadMemberships(visit, "Unexpected"),
+      messageOnFailure({
+        failure: LoadMembershipsFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedLoadMemberships({ visit, failure }),
       }),
     ),
 });
-
-const failedCreateCompany = (visit: number, failure: typeof CreateCompanyFailure.Type) => () =>
-  Effect.succeed(Message.FailedCreateCompany({ visit, failure }));
 
 export const CreateCompany = Command.define("CreateCompany", {
   args: { visit: Schema.Int, name: Schema.String, orgCode: OrgCodeSchema },
@@ -125,11 +120,10 @@ export const CreateCompany = Command.define("CreateCompany", {
       yield* client.company.create({ payload: { name, org_code: orgCode } });
       return Message.SucceededCreateCompany({ visit });
     }).pipe(
-      Effect.catchTags({
-        AlreadyExists: failedCreateCompany(visit, "AlreadyExists"),
-        Unauthorized: failedCreateCompany(visit, "Unauthorized"),
-        HttpClientError: failedCreateCompany(visit, "Unexpected"),
-        SchemaError: failedCreateCompany(visit, "Unexpected"),
+      messageOnFailure({
+        failure: CreateCompanyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedCreateCompany({ visit, failure }),
       }),
     ),
 });

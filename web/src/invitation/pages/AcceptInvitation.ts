@@ -8,16 +8,16 @@ import { modifyFields } from "foldkit/struct";
 import { checkSession } from "../../auth/sign-in-client";
 import type { FailureMessages } from "../../shared/failure-message";
 import { ACCOUNT_HOME_PATH } from "../../shared/landing-paths";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../../shared/spa-http-client";
 import { cardClassNames, textLinkClassName } from "../../shared/ui/class-names";
 import { fullScreenStatusView } from "../../shared/ui/icon-view";
 
-const AcceptFailure = Schema.Literals([
+const AcceptFailure = contractFailure([
   "EmailMismatch",
   "ExpiredOrUsed",
   "NotFound",
   "Unauthorized",
-  "Unexpected",
 ]);
 type AcceptFailure = typeof AcceptFailure.Type;
 
@@ -59,9 +59,6 @@ const DECLARED_FAILURE_MESSAGES: FailureMessages<DeclaredFailure<"invitation", "
 
 const FAILURE_MESSAGES = { ...DECLARED_FAILURE_MESSAGES, Unexpected: ACCEPT_FAILED };
 
-const failedAcceptInvitation = (visit: number, failure: AcceptFailure) => () =>
-  Effect.succeed(Message.FailedAcceptInvitation({ visit, failure }));
-
 export const AcceptInvitation = Command.define("AcceptInvitation", {
   args: { visit: Schema.Int, invitationToken: Schema.String },
   messages: [Message.SucceededAcceptInvitation, Message.FailedAcceptInvitation],
@@ -75,14 +72,10 @@ export const AcceptInvitation = Command.define("AcceptInvitation", {
       yield* client.invitation.accept({ payload: { invitation_token: invitationToken } });
       return Message.SucceededAcceptInvitation({ visit });
     }).pipe(
-      Effect.catchTags({
-        EmailMismatch: failedAcceptInvitation(visit, "EmailMismatch"),
-        ExpiredOrUsed: failedAcceptInvitation(visit, "ExpiredOrUsed"),
-        NotFound: failedAcceptInvitation(visit, "NotFound"),
-        Unauthorized: failedAcceptInvitation(visit, "Unauthorized"),
-        UnknownError: failedAcceptInvitation(visit, "Unexpected"),
-        HttpClientError: failedAcceptInvitation(visit, "Unexpected"),
-        SchemaError: failedAcceptInvitation(visit, "Unexpected"),
+      messageOnFailure({
+        failure: AcceptFailure,
+        asUnexpected: ["UnknownError"],
+        toMessage: (failure) => Message.FailedAcceptInvitation({ visit, failure }),
       }),
     ),
 });

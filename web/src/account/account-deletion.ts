@@ -7,6 +7,7 @@ import { Trash2 } from "lucide";
 
 import { signOut } from "../auth/sign-out";
 import type { FailureMessages } from "../shared/failure-message";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { type DeclaredFailure, SpaHttpClient } from "../shared/spa-http-client";
 import { maybeRejectedMessage, Submission } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
@@ -19,12 +20,7 @@ import {
   dialogView,
 } from "../shared/ui/dialog-view";
 
-const DeleteAccountFailure = Schema.Literals([
-  "LastOwner",
-  "NotFound",
-  "Unauthorized",
-  "Unexpected",
-]);
+const DeleteAccountFailure = contractFailure(["LastOwner", "NotFound", "Unauthorized"]);
 type DeleteAccountFailure = typeof DeleteAccountFailure.Type;
 
 export const OutMessage = defineMessageUnion({
@@ -58,9 +54,6 @@ const DECLARED_FAILURE_MESSAGES: FailureMessages<DeclaredFailure<"account", "del
 
 const FAILURE_MESSAGES = { ...DECLARED_FAILURE_MESSAGES, Unexpected: DELETE_FAILED };
 
-const failedDeleteAccount = (visit: number, failure: DeleteAccountFailure) => () =>
-  Effect.succeed(Message.FailedDeleteAccount({ visit, failure }));
-
 export const DeleteAccount = Command.define("DeleteAccount", {
   args: { visit: Schema.Int },
   messages: [Message.SucceededDeleteAccount, Message.FailedDeleteAccount],
@@ -71,12 +64,10 @@ export const DeleteAccount = Command.define("DeleteAccount", {
       yield* Effect.promise(() => signOut());
       return Message.SucceededDeleteAccount({ visit });
     }).pipe(
-      Effect.catchTags({
-        LastOwner: failedDeleteAccount(visit, "LastOwner"),
-        NotFound: failedDeleteAccount(visit, "NotFound"),
-        Unauthorized: failedDeleteAccount(visit, "Unauthorized"),
-        HttpClientError: failedDeleteAccount(visit, "Unexpected"),
-        SchemaError: failedDeleteAccount(visit, "Unexpected"),
+      messageOnFailure({
+        failure: DeleteAccountFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedDeleteAccount({ visit, failure }),
       }),
     ),
 });

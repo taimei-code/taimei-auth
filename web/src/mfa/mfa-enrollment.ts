@@ -15,6 +15,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { maybeRejectedMessage, Submission, withoutRejection } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
 import { buttonView } from "../shared/ui/button-view";
@@ -82,16 +83,15 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const EnrollFailure = Schema.Literals([
+const EnrollFailure = contractFailure([
   "AlreadyEnabled",
   "ChallengeExpired",
   "RateLimited",
   "Unauthorized",
-  "Unexpected",
 ]);
 type EnrollFailure = typeof EnrollFailure.Type;
 
-const ActivateFailure = Schema.Literals([
+const ActivateFailure = contractFailure([
   "InvalidCode",
   "Locked",
   "EnrollmentChanged",
@@ -99,7 +99,6 @@ const ActivateFailure = Schema.Literals([
   "MfaNotFound",
   "RateLimited",
   "Unauthorized",
-  "Unexpected",
 ]);
 type ActivateFailure = typeof ActivateFailure.Type;
 
@@ -133,9 +132,6 @@ const FocusEnrollmentCode = Command.define("FocusEnrollmentCode", {
 const DIALOG_ID = "mfa-enrollment-dialog";
 const ENROLL_DESCRIPTION = "認証アプリを登録すると、ログイン時に確認コードの入力を求めます。";
 
-const failedEnroll = (request: PageRequest, failure: EnrollFailure) => () =>
-  Effect.succeed(Message.FailedEnrollMfa({ ...request, failure }));
-
 export const EnrollMfa = Command.define("EnrollMfa", {
   args: PageRequestFields,
   messages: [Message.SucceededEnrollMfa, Message.FailedEnrollMfa],
@@ -152,19 +148,13 @@ export const EnrollMfa = Command.define("EnrollMfa", {
         },
       });
     }).pipe(
-      Effect.catchTags({
-        AlreadyEnabled: failedEnroll(request, "AlreadyEnabled"),
-        ChallengeExpired: failedEnroll(request, "ChallengeExpired"),
-        RateLimited: failedEnroll(request, "RateLimited"),
-        Unauthorized: failedEnroll(request, "Unauthorized"),
-        HttpClientError: failedEnroll(request, "Unexpected"),
-        SchemaError: failedEnroll(request, "Unexpected"),
+      messageOnFailure({
+        failure: EnrollFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedEnrollMfa({ ...request, failure }),
       }),
     ),
 });
-
-const failedActivate = (request: PageRequest, failure: ActivateFailure) => () =>
-  Effect.succeed(Message.FailedActivateMfa({ ...request, failure }));
 
 export const ActivateMfa = Command.define("ActivateMfa", {
   args: { ...PageRequestFields, code: Schema.String, enrollmentId: Schema.String },
@@ -175,16 +165,10 @@ export const ActivateMfa = Command.define("ActivateMfa", {
       yield* client.mfa.activate({ payload: { code, enrollment_id: enrollmentId } });
       return Message.SucceededActivateMfa(request);
     }).pipe(
-      Effect.catchTags({
-        InvalidCode: failedActivate(request, "InvalidCode"),
-        Locked: failedActivate(request, "Locked"),
-        EnrollmentChanged: failedActivate(request, "EnrollmentChanged"),
-        AlreadyEnabled: failedActivate(request, "AlreadyEnabled"),
-        MfaNotFound: failedActivate(request, "MfaNotFound"),
-        RateLimited: failedActivate(request, "RateLimited"),
-        Unauthorized: failedActivate(request, "Unauthorized"),
-        HttpClientError: failedActivate(request, "Unexpected"),
-        SchemaError: failedActivate(request, "Unexpected"),
+      messageOnFailure({
+        failure: ActivateFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedActivateMfa({ ...request, failure }),
       }),
     ),
 });

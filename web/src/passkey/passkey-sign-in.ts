@@ -1,6 +1,7 @@
 import { Effect, Schema } from "effect";
 import { defineTaggedUnion } from "foldkit/schema";
 
+import { messageOnFailure, UndistinguishedFailure } from "../shared/spa-contract-failure";
 import type { SpaHttpClient } from "../shared/spa-http-client";
 import { getPasskey, isPasskeySupported, PasskeyAssertion } from "./webauthn";
 
@@ -16,14 +17,10 @@ export type PasskeySignIn = typeof PasskeySignIn.Type;
 export const PASSKEY_SIGN_IN_FAILED_MESSAGE =
   "パスキーでログインできませんでした。もう一度試すか、Magic Link か GitHub でログインしてください。";
 
-const entryHidden = () => Effect.succeed(false);
-
-const signInFailed = () => Effect.succeed(PasskeySignIn.Failed());
-
 export const loadPasskeySignInEntry = (client: SpaClient): Effect.Effect<boolean> =>
   Effect.all([client.passkeySignInEntry.availability(), isPasskeySupported]).pipe(
     Effect.map(([{ available }, browserSupported]) => available && browserSupported),
-    Effect.catchTags({ HttpClientError: entryHidden, SchemaError: entryHidden }),
+    messageOnFailure({ failure: UndistinguishedFailure, asUnexpected: [], toMessage: () => false }),
   );
 
 export const signInWithPasskey = (
@@ -45,11 +42,9 @@ export const signInWithPasskey = (
         Cancelled: () => Effect.succeed(PasskeySignIn.Cancelled()),
       }),
     ),
-    Effect.catchTags({
-      PasskeyRejected: signInFailed,
-      RateLimited: signInFailed,
-      PasskeyAssertionFailed: signInFailed,
-      HttpClientError: signInFailed,
-      SchemaError: signInFailed,
+    messageOnFailure({
+      failure: UndistinguishedFailure,
+      asUnexpected: ["PasskeyRejected", "RateLimited", "PasskeyAssertionFailed"],
+      toMessage: () => PasskeySignIn.Failed(),
     }),
   );

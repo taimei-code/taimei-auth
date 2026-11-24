@@ -549,6 +549,46 @@ const DECIDED_EFFECT_SUBPATHS_MESSAGE =
 
 const ROWS: readonly Row[] = [
   {
+    name: "spa-transport-failure-only-in-contract-failure",
+    within: ["web/src/**"],
+    allowedIn: ["web/src/shared/spa-contract-failure.ts"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => {
+          const isSettledElsewhere = (tag: string | undefined) =>
+            tag === undefined || tag === "HttpClientError" || tag === "SchemaError";
+          const tagsOf: Readonly<
+            Record<string, (first: AstNode | undefined) => (string | undefined)[]>
+          > = {
+            catchTags: (table) =>
+              table?.type === "ObjectExpression"
+                ? (table.properties ?? []).map((property) =>
+                    property.type === "Property" && property.computed !== true
+                      ? (property.key?.name ?? stringOf(property.key))
+                      : undefined,
+                  )
+                : [undefined],
+            catchTag: (tags) =>
+              (tags?.type === "ArrayExpression" ? (tags.elements ?? []) : [tags]).map(stringOf),
+            catchReason: (tag) => [stringOf(tag)],
+            catchReasons: (tag) => [stringOf(tag)],
+          };
+          return {
+            CallExpression: (node) => {
+              const tags = tagsOf[calleeNameOf(node.callee) ?? ""]?.(node.arguments?.[0]);
+              if (tags?.some(isSettledElsewhere) === true) {
+                report(node);
+              }
+            },
+          };
+        },
+      },
+    ],
+    message:
+      "通信と応答の decode の失敗 (HttpClientError、SchemaError) を受けるのは web/src/shared/spa-contract-failure.ts の messageOnFailure だけ。Command は、区別する失敗の一覧を contractFailure に 1 回書き、想定外に倒す失敗と Message を作る関数を添えて messageOnFailure に渡す (通信の失敗の扱いを 1 か所にする。#580)。ほかの失敗を catchTag・catchTags・catchReason で受ける時は、tag をその場の文字列で書く (変数や helper が作った表は、通信の失敗を受けていないと確かめられない)",
+  },
+  {
     name: "no-fetch-in-web",
     within: ["web/src/**"],
     matchers: [{ kind: "identifier", names: ["fetch"], callOnly: true }],
@@ -706,7 +746,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "web は _tag を直接比べない。union の guards・match、Schema.is、Command の Effect.catchTags で分ける",
+      "web は _tag を直接比べない。union の guards・match、Schema.is で分ける。Command の失敗は、SPA の API の呼び出しなら shared/spa-contract-failure.ts の messageOnFailure、ほかは Effect.catchTag で分ける",
   },
   {
     name: "client-navigation-uses-own-routes",

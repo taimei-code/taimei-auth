@@ -12,6 +12,7 @@ import * as CurrentCompany from "../../account/current-company";
 import { pageTitleView, separatorView } from "../../account/account-page-header-view";
 import { readSignedInUserId } from "../../auth/sign-in-client";
 import * as OwnershipTransfer from "../../membership/ownership-transfer";
+import { contractFailure, messageOnFailure } from "../../shared/spa-contract-failure";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { Submission, submissionWhile } from "../../shared/submission";
 import { buttonView } from "../../shared/ui/button-view";
@@ -29,7 +30,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const LeaveCompanyFailure = Schema.Literals(["LastOwner", "Unauthorized", "Unexpected"]);
+const LeaveCompanyFailure = contractFailure(["LastOwner", "Unauthorized"]);
 
 export const Message = defineMessageUnion({
   CompletedReadSignedInUserId: { visit: Schema.Int, maybeUserId: Schema.Option(Schema.String) },
@@ -88,10 +89,6 @@ export const ReadSignedInUserId = Command.define("ReadSignedInUserId", {
     ),
 });
 
-const failedLeave =
-  (visit: number, companyId: string, failure: typeof LeaveCompanyFailure.Type) => () =>
-    Effect.succeed(Message.FailedLeaveCompany({ visit, companyId, failure }));
-
 export const LeaveCompany = Command.define("LeaveCompany", {
   args: {
     visit: Schema.Int,
@@ -113,13 +110,11 @@ export const LeaveCompany = Command.define("LeaveCompany", {
         ? Message.SucceededLeaveLastCompany()
         : Message.SucceededLeaveCompany({ visit, companyName: membership.companyName });
     }).pipe(
-      Effect.catchTags({
-        LastOwner: failedLeave(visit, membership.companyId, "LastOwner"),
-        Forbidden: failedLeave(visit, membership.companyId, "Unexpected"),
-        NotFound: failedLeave(visit, membership.companyId, "Unexpected"),
-        Unauthorized: failedLeave(visit, membership.companyId, "Unauthorized"),
-        HttpClientError: failedLeave(visit, membership.companyId, "Unexpected"),
-        SchemaError: failedLeave(visit, membership.companyId, "Unexpected"),
+      messageOnFailure({
+        failure: LeaveCompanyFailure,
+        asUnexpected: ["Forbidden", "NotFound"],
+        toMessage: (failure) =>
+          Message.FailedLeaveCompany({ visit, companyId: membership.companyId, failure }),
       }),
     ),
 });

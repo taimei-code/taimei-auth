@@ -184,6 +184,7 @@
     "taimei/sdk-import-only-peer-dependencies": "error",
     "taimei/no-react-outside-web": "error",
     "taimei/no-process-cwd-in-e2e": "error",
+    "taimei/spa-transport-failure-only-in-contract-failure": "error",
     "taimei/no-web-only-dependency-in-server": "error",
     "taimei/no-connect-node": "error",
     "taimei/no-effect-subpath-in-server": "error",

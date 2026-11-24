@@ -11,6 +11,7 @@ import { orgCodeLabelJa } from "@core/company/org-code";
 import { RoleSchema } from "@core/membership/membership-contract";
 import { roleLabelJa } from "@core/membership/role-label";
 
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { iconView, spinnerView } from "../shared/ui/icon-view";
 import { compactSelectView } from "../shared/ui/select-view";
@@ -44,8 +45,8 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const SwitchCompanyFailure = Schema.Literals(["Forbidden", "Unauthorized", "Unexpected"]);
-const RefreshFailure = Schema.Literals(["Unauthorized", "Unexpected"]);
+const SwitchCompanyFailure = contractFailure(["Forbidden", "Unauthorized"]);
+const RefreshFailure = contractFailure(["Unauthorized"]);
 
 export const Message = defineMessageUnion({
   SelectedCompany: { companyId: Schema.String },
@@ -99,9 +100,6 @@ export const readCompanyState = Effect.gen(function* () {
   } satisfies CompanyMemberships;
 });
 
-const failedSwitchCompany = (failure: typeof SwitchCompanyFailure.Type) => () =>
-  Effect.succeed(Message.FailedSwitchCompany({ failure }));
-
 export const SwitchCompany = Command.define("SwitchCompany", {
   args: { companyId: Schema.String },
   messages: [Message.SucceededSwitchCompany, Message.FailedSwitchCompany],
@@ -111,11 +109,10 @@ export const SwitchCompany = Command.define("SwitchCompany", {
       yield* client.account.switchCompany({ payload: { company_id: companyId } });
       return Message.SucceededSwitchCompany();
     }).pipe(
-      Effect.catchTags({
-        Forbidden: failedSwitchCompany("Forbidden"),
-        Unauthorized: failedSwitchCompany("Unauthorized"),
-        HttpClientError: failedSwitchCompany("Unexpected"),
-        SchemaError: failedSwitchCompany("Unexpected"),
+      messageOnFailure({
+        failure: SwitchCompanyFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedSwitchCompany({ failure }),
       }),
     ),
 });
@@ -123,12 +120,8 @@ export const SwitchCompany = Command.define("SwitchCompany", {
 export const RefreshCompanyState = Command.define("RefreshCompanyState", {
   args: { refreshNumber: Schema.Int, texts: RefreshTexts },
   messages: [Message.SucceededRefreshCompanyState, Message.FailedRefreshCompanyState],
-  execute: ({ refreshNumber, texts }) => {
-    const failedRefresh = (failure: typeof RefreshFailure.Type) => () =>
-      Effect.succeed(
-        Message.FailedRefreshCompanyState({ refreshNumber, failure, actionText: texts.actionText }),
-      );
-    return readCompanyState.pipe(
+  execute: ({ refreshNumber, texts }) =>
+    readCompanyState.pipe(
       Effect.map((state) =>
         Message.SucceededRefreshCompanyState({
           refreshNumber,
@@ -136,13 +129,17 @@ export const RefreshCompanyState = Command.define("RefreshCompanyState", {
           maybeDoneText: texts.maybeDoneText,
         }),
       ),
-      Effect.catchTags({
-        Unauthorized: failedRefresh("Unauthorized"),
-        HttpClientError: failedRefresh("Unexpected"),
-        SchemaError: failedRefresh("Unexpected"),
+      messageOnFailure({
+        failure: RefreshFailure,
+        asUnexpected: [],
+        toMessage: (failure) =>
+          Message.FailedRefreshCompanyState({
+            refreshNumber,
+            failure,
+            actionText: texts.actionText,
+          }),
       }),
-    );
-  },
+    ),
 });
 
 export const init = (state: CompanyMemberships): Model => ({

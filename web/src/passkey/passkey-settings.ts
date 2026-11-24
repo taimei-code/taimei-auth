@@ -21,6 +21,11 @@ import {
   normalizeMfaCode,
 } from "../mfa/mfa-code";
 import { focusField, requiredErrorText } from "../shared/required-field";
+import {
+  contractFailure,
+  messageOnFailure,
+  UndistinguishedFailure,
+} from "../shared/spa-contract-failure";
 import { SpaHttpClient } from "../shared/spa-http-client";
 import { Submission, submissionWhile } from "../shared/submission";
 import { alertTextView } from "../shared/ui/alert-text-view";
@@ -75,15 +80,13 @@ const passkeyListOf = (wire: PasskeyListResponse, browserSupported: boolean): Pa
         registrable: wire.can_register && browserSupported,
       });
 
-const listUnavailable = () => Effect.succeed(PasskeyList.Failed());
-
 export const loadPasskeyList = (passkeyApi: PasskeyApi) =>
   Effect.all([passkeyApi.list(), isPasskeySupported]).pipe(
     Effect.map(([wire, browserSupported]) => passkeyListOf(wire, browserSupported)),
-    Effect.catchTags({
-      RateLimited: listUnavailable,
-      HttpClientError: listUnavailable,
-      SchemaError: listUnavailable,
+    messageOnFailure({
+      failure: UndistinguishedFailure,
+      asUnexpected: ["RateLimited"],
+      toMessage: () => PasskeyList.Failed(),
     }),
   );
 
@@ -115,7 +118,7 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const RegistrationFailure = Schema.Literals([
+const RegistrationFailure = contractFailure([
   "RateLimited",
   "TotpRequired",
   "InvalidCode",
@@ -126,11 +129,10 @@ const RegistrationFailure = Schema.Literals([
   "PasskeyRegistrationUnavailable",
   "PasskeyLimitReached",
   "Unauthorized",
-  "Unexpected",
 ]);
 type RegistrationFailure = typeof RegistrationFailure.Type;
 
-const DeletionFailure = Schema.Literals(["RateLimited", "NotFound", "Unauthorized", "Unexpected"]);
+const DeletionFailure = contractFailure(["RateLimited", "NotFound", "Unauthorized"]);
 type DeletionFailure = typeof DeletionFailure.Type;
 
 export const Message = defineMessageUnion({
@@ -152,9 +154,6 @@ export const Message = defineMessageUnion({
 });
 export type Message = typeof Message.Type;
 
-const failedRegister = (request: PageRequest, failure: RegistrationFailure) => () =>
-  Effect.succeed(Message.FailedRegisterPasskey({ ...request, failure }));
-
 export const RegisterPasskey = Command.define("RegisterPasskey", {
   args: { ...PageRequestFields, maybeTotpCode: Schema.Option(Schema.String) },
   messages: [
@@ -174,26 +173,13 @@ export const RegisterPasskey = Command.define("RegisterPasskey", {
         Cancelled: () => Message.CancelledRegisterPasskey(request),
       });
     }).pipe(
-      Effect.catchTags({
-        RateLimited: failedRegister(request, "RateLimited"),
-        TotpRequired: failedRegister(request, "TotpRequired"),
-        InvalidCode: failedRegister(request, "InvalidCode"),
-        Locked: failedRegister(request, "Locked"),
-        NotEnabled: failedRegister(request, "NotEnabled"),
-        PasskeyRejected: failedRegister(request, "PasskeyRejected"),
-        PasskeyAlreadyRegistered: failedRegister(request, "PasskeyAlreadyRegistered"),
-        PasskeyRegistrationUnavailable: failedRegister(request, "PasskeyRegistrationUnavailable"),
-        PasskeyLimitReached: failedRegister(request, "PasskeyLimitReached"),
-        Unauthorized: failedRegister(request, "Unauthorized"),
-        PasskeyCreationFailed: failedRegister(request, "Unexpected"),
-        HttpClientError: failedRegister(request, "Unexpected"),
-        SchemaError: failedRegister(request, "Unexpected"),
+      messageOnFailure({
+        failure: RegistrationFailure,
+        asUnexpected: ["PasskeyCreationFailed"],
+        toMessage: (failure) => Message.FailedRegisterPasskey({ ...request, failure }),
       }),
     ),
 });
-
-const failedDelete = (request: PageRequest, failure: DeletionFailure) => () =>
-  Effect.succeed(Message.FailedDeletePasskey({ ...request, failure }));
 
 export const DeletePasskey = Command.define("DeletePasskey", {
   args: { ...PageRequestFields, passkeyId: Schema.String },
@@ -204,12 +190,10 @@ export const DeletePasskey = Command.define("DeletePasskey", {
       yield* client.passkey.delete({ params: { passkeyId } });
       return Message.SucceededDeletePasskey(request);
     }).pipe(
-      Effect.catchTags({
-        RateLimited: failedDelete(request, "RateLimited"),
-        NotFound: failedDelete(request, "NotFound"),
-        Unauthorized: failedDelete(request, "Unauthorized"),
-        HttpClientError: failedDelete(request, "Unexpected"),
-        SchemaError: failedDelete(request, "Unexpected"),
+      messageOnFailure({
+        failure: DeletionFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedDeletePasskey({ ...request, failure }),
       }),
     ),
 });

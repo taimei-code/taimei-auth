@@ -1,34 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { Effect, Layer } from "effect";
-import { FetchHttpClient } from "effect/http";
+import { Effect } from "effect";
 
-import { SpaHttpClient } from "../../shared/spa-http-client";
+import { replyingSpaHttpClient } from "../../shared/__tests__/replying-spa-http-client";
 import * as MfaDisabling from "../mfa-disabling";
 import * as MfaEnrollment from "../mfa-enrollment";
 import { Message, VerifyCode } from "../pages/MfaChallenge";
 
-let reply: () => Response = () => new Response(null, { status: 500 });
-
-const answerWith = (status: number, body?: unknown) => {
-  reply = () =>
-    new Response(body === undefined ? null : JSON.stringify(body), {
-      status,
-      headers: body === undefined ? {} : { "content-type": "application/json" },
-    });
-};
-
-const replyingFetch = (() => Promise.resolve(reply())) as unknown as typeof globalThis.fetch;
+const wire = replyingSpaHttpClient();
+const { answerWith } = wire;
 
 const VISIT = 1;
-
-const replyingSpaHttpClient = SpaHttpClient.layer("http://localhost").pipe(
-  Layer.provide(Layer.succeed(FetchHttpClient.Fetch, replyingFetch)),
-);
 
 const verify = () =>
   Effect.runPromise(
     VerifyCode({ visit: VISIT, code: "123456", kind: "totp" }).effect.pipe(
-      Effect.provide(replyingSpaHttpClient),
+      Effect.provide(wire.layer),
     ),
   );
 
@@ -79,7 +65,7 @@ describe("MFA の API の応答の status と body から、画面に出す結�
           requestNumber: REQUEST_NUMBER,
           code: "123456",
           kind: "totp",
-        }).effect.pipe(Effect.provide(replyingSpaHttpClient)),
+        }).effect.pipe(Effect.provide(wire.layer)),
       ),
     ).toEqual(
       MfaDisabling.Message.FailedDisableMfa({
@@ -95,7 +81,7 @@ describe("MFA の API の応答の status と body から、画面に出す結�
     expect(
       await Effect.runPromise(
         MfaEnrollment.EnrollMfa({ visit: VISIT, requestNumber: REQUEST_NUMBER }).effect.pipe(
-          Effect.provide(replyingSpaHttpClient),
+          Effect.provide(wire.layer),
         ),
       ),
     ).toEqual(

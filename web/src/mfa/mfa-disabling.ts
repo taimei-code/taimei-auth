@@ -14,6 +14,7 @@ import {
   withNextPageRequest,
 } from "../shared/page-request";
 import { SpaHttpClient } from "../shared/spa-http-client";
+import { contractFailure, messageOnFailure } from "../shared/spa-contract-failure";
 import { maybeRejectedMessage, Submission, withoutRejection } from "../shared/submission";
 import { buttonView } from "../shared/ui/button-view";
 import {
@@ -51,13 +52,12 @@ export const Model = Schema.Struct({
 });
 export type Model = typeof Model.Type;
 
-const DisableFailure = Schema.Literals([
+const DisableFailure = contractFailure([
   "InvalidCode",
   "Locked",
   "NotEnabled",
   "RateLimited",
   "Unauthorized",
-  "Unexpected",
 ]);
 type DisableFailure = typeof DisableFailure.Type;
 
@@ -82,9 +82,6 @@ const FocusDisablingCode = Command.define("FocusDisablingCode", {
 });
 const DIALOG_ID = "mfa-disabling-dialog";
 
-const failedDisable = (request: PageRequest, failure: DisableFailure) => () =>
-  Effect.succeed(Message.FailedDisableMfa({ ...request, failure }));
-
 export const DisableMfa = Command.define("DisableMfa", {
   args: { ...PageRequestFields, code: Schema.String, kind: MfaCodeKindSchema },
   messages: [Message.SucceededDisableMfa, Message.FailedDisableMfa],
@@ -94,14 +91,10 @@ export const DisableMfa = Command.define("DisableMfa", {
       yield* client.mfa.disable({ payload: { code, kind } });
       return Message.SucceededDisableMfa(request);
     }).pipe(
-      Effect.catchTags({
-        InvalidCode: failedDisable(request, "InvalidCode"),
-        Locked: failedDisable(request, "Locked"),
-        NotEnabled: failedDisable(request, "NotEnabled"),
-        RateLimited: failedDisable(request, "RateLimited"),
-        Unauthorized: failedDisable(request, "Unauthorized"),
-        HttpClientError: failedDisable(request, "Unexpected"),
-        SchemaError: failedDisable(request, "Unexpected"),
+      messageOnFailure({
+        failure: DisableFailure,
+        asUnexpected: [],
+        toMessage: (failure) => Message.FailedDisableMfa({ ...request, failure }),
       }),
     ),
 });
