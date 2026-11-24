@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
-import { Authenticated } from "../account/actor-contract";
+import { Authenticated, type CurrentSession } from "../account/actor-contract";
 import { RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
@@ -45,10 +45,10 @@ export class ChallengeStateBudget extends HttpApiMiddleware.Service<ChallengeSta
   { error: RateLimited },
 ) {}
 
-export class MfaChangeBudget extends HttpApiMiddleware.Service<MfaChangeBudget>()(
-  "taimei/MfaChangeBudget",
-  { error: RateLimited },
-) {}
+export class MfaChangeBudget extends HttpApiMiddleware.Service<
+  MfaChangeBudget,
+  { requires: CurrentSession }
+>()("taimei/MfaChangeBudget", { error: RateLimited }) {}
 
 export class MfaGroup extends HttpApiGroup.make("mfa")
   .add(

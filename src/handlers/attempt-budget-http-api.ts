@@ -1,6 +1,6 @@
-import { sessionTokenAsBetterAuthReads } from "../session-cookie";
 import { Effect, Layer } from "effect";
 import { HttpServerRequest } from "effect/http";
+import { CurrentSession } from "../account/actor-contract";
 import {
   ATTEMPT_BUDGETS,
   type AttemptBudget,
@@ -13,31 +13,30 @@ import type { SentryService } from "../sentry";
 import type { TtlStore } from "../ttl-store-service";
 import { headersOf } from "./request-http-api";
 
-export async function sessionAttemptSubject(headers: Headers, fallbackIp: string): Promise<string> {
-  const sessionToken = sessionTokenAsBetterAuthReads(headers);
-  if (!sessionToken) return `ip:${fallbackIp}`;
-  return `session:${await sha256Hex(sessionToken)}`;
-}
-
-async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-const budgetMiddleware = (
+const perIpBudget = (
   budget: AttemptBudget<"allow">,
-  subjectOf: (headers: Headers, ip: string, endpoint: string) => string | Promise<string>,
-): Effect.Effect<MfaChangeBudget["Service"], never, TtlStore | SentryService> =>
+  subjectOf: (ip: string, endpoint: string) => string,
+): Effect.Effect<ChallengeVerifyBudget["Service"], never, TtlStore | SentryService> =>
   Effect.gen(function* () {
     const services = yield* Effect.context<TtlStore | SentryService>();
     return Effect.fnUntraced(function* (httpEffect, { endpoint }) {
       const headers = headersOf(yield* HttpServerRequest.HttpServerRequest);
-      const subject = yield* Effect.promise(async () =>
-        subjectOf(headers, getClientContext(headers).ip, endpoint.identifier),
-      );
+      const subject = subjectOf(getClientContext(headers).ip, endpoint.identifier);
       yield* spendAttemptBudgetOrRateLimited(budget, subject).pipe(Effect.provideContext(services));
+      return yield* httpEffect;
+    });
+  });
+
+const perSessionBudget = (
+  budget: AttemptBudget<"allow">,
+): Effect.Effect<MfaChangeBudget["Service"], never, TtlStore | SentryService> =>
+  Effect.gen(function* () {
+    const services = yield* Effect.context<TtlStore | SentryService>();
+    return Effect.fnUntraced(function* (httpEffect) {
+      const session = yield* CurrentSession;
+      yield* spendAttemptBudgetOrRateLimited(budget, `session:${session.id}`).pipe(
+        Effect.provideContext(services),
+      );
       return yield* httpEffect;
     });
   });
@@ -45,25 +44,19 @@ const budgetMiddleware = (
 export const AttemptBudgetsLive = Layer.mergeAll(
   Layer.effect(
     ChallengeVerifyBudget,
-    budgetMiddleware(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, (_headers, ip) => ip),
+    perIpBudget(ATTEMPT_BUDGETS.mfaChallengeVerifyPerIp, (ip) => ip),
   ),
   Layer.effect(
     ChallengeStateBudget,
-    budgetMiddleware(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, (_headers, ip) => ip),
+    perIpBudget(ATTEMPT_BUDGETS.mfaChallengeStatePerIp, (ip) => ip),
   ),
-  Layer.effect(
-    MfaChangeBudget,
-    budgetMiddleware(ATTEMPT_BUDGETS.mfaChangePerSession, sessionAttemptSubject),
-  ),
+  Layer.effect(MfaChangeBudget, perSessionBudget(ATTEMPT_BUDGETS.mfaChangePerSession)),
   Layer.effect(
     PasskeyManagementBudget,
-    budgetMiddleware(ATTEMPT_BUDGETS.passkeyManagementPerSession, sessionAttemptSubject),
+    perSessionBudget(ATTEMPT_BUDGETS.passkeyManagementPerSession),
   ),
   Layer.effect(
     PasskeySignInBudget,
-    budgetMiddleware(
-      ATTEMPT_BUDGETS.passkeySignInPerIp,
-      (_headers, ip, endpoint) => `${endpoint}:${ip}`,
-    ),
+    perIpBudget(ATTEMPT_BUDGETS.passkeySignInPerIp, (ip, endpoint) => `${endpoint}:${ip}`),
   ),
 );

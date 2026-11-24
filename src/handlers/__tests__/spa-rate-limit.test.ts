@@ -1,4 +1,3 @@
-import { buildSessionCookieHeader } from "@taimei-code/auth-client/cookie";
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { CLIENT_IP_HEADER } from "../../client-ip";
 import { Effect } from "effect";
@@ -9,8 +8,8 @@ import { ATTEMPT_BUDGETS, attemptBudgetKey } from "../../attempt-budget";
 import { ttlStoreLayer } from "../../ttl-store-service";
 import { JSON_HEADERS } from "../client-facing-error";
 import { signedIn as signedInLayer } from "../../membership/__tests__/test-layers";
-import { cookieValueNotations } from "../../__tests__/session-helpers";
-import { buildAppWith, freshSessionCookie, signedLookingSessionValue } from "./helpers";
+import { createSessionCookieNotationsFor } from "../../__tests__/session-helpers";
+import { buildAppWith, freshSessionCookie, liveApp } from "./helpers";
 import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 
@@ -168,10 +167,11 @@ describe("MFA の状態変更の試行枠 (session ごとに 60 秒で 10 回、
   ] as const)("同じ session の cookie を、そのままの値と、%s値で交互に送っても、合わせて 10 回目までは 429 にならず、11 回目は表記によらず 429 になる", (_, notation) =>
     run(
       Effect.gen(function* () {
-        const { app } = yield* signedIn;
-        const notations = cookieValueNotations(signedLookingSessionValue());
-        const plain = buildSessionCookieHeader(notations.plain);
-        const other = buildSessionCookieHeader(notations[notation]);
+        const user = yield* TestDb.use((db) => db.seedUser("budget"));
+        const app = liveApp();
+        const notations = yield* createSessionCookieNotationsFor(user.id);
+        const plain = notations.plain;
+        const other = notations[notation];
 
         const statuses = yield* Effect.promise(() => sendAlternating(app, [plain, other], 10));
         const eleventh = yield* Effect.promise(() => disable(app, other));

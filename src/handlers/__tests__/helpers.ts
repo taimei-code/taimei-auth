@@ -18,6 +18,7 @@ import {
 } from "../../passkey/__tests__/helpers";
 import { CLIENT_IP_HEADER } from "../../client-ip";
 import { EmailSender } from "../../email/ports";
+import { sessionCookieOf } from "../../session-cookie";
 import type { AppServices } from "../../runtime";
 import { JSON_HEADERS } from "../client-facing-error";
 import { runtimeServices } from "../spa-http-api";
@@ -35,11 +36,11 @@ export const stubAuthApi = (
   overrides: Partial<AuthApi["Service"]> = {},
 ): Layer.Layer<AuthApi> =>
   authApiWith(() => ({
-    getSession: () =>
+    getSession: (headers) =>
       Effect.succeed(
         actor &&
           ({
-            session: { userId: actor.id },
+            session: { id: `stub-${actor.id}-${sessionCookieOf(headers)}`, userId: actor.id },
             user: { id: actor.id, email: actor.email },
           } as unknown as Session),
       ),
@@ -63,9 +64,6 @@ export const defectDuringPasskeyMail: Layer.Layer<EmailSender> = Layer.succeed(
 export const freshSessionCookie = () => ({
   cookie: `__Secure-better-auth.session_token=${crypto.randomUUID()}`,
 });
-
-export const signedLookingSessionValue = () =>
-  `${crypto.randomUUID()}.c2lnbmF0dXJl+/c2lnbmF0dXJl+/c2lnbmF0dXJl=`;
 
 export function buildAppWith<A extends AppServices>(overrides: Layer.Layer<A>): Hono {
   const app = new Hono();

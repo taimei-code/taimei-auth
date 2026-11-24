@@ -2366,7 +2366,7 @@ const ROWS: readonly Row[] = [
       },
     ],
     message:
-      "session cookie の生の値を読むのは、cookie の有無だけを見る入口 (auth-entry-redirect.ts・login-shortcut.ts) だけ。session ごとの鍵 (試行枠の主体など) は、better-auth が session を引く時と同じ読み方の sessionTokenAsBetterAuthReads から作る (表記の違う同じ session を別の鍵にしない。#514)",
+      "session cookie の生の値を読むのは、cookie の有無だけを見る入口 (auth-entry-redirect.ts・login-shortcut.ts) だけ。session ごとの鍵 (試行枠の主体など) は、認証が解決した session (CurrentSession) の id から作る (表記の違う同じ session を別の鍵にしない。#514・#585)",
   },
   {
     name: "get-session-cookie-only-in-auth",

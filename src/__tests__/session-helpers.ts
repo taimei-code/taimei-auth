@@ -37,12 +37,6 @@ export function requestHeaders(cookies: Record<string, string> = {}): Headers {
   return headers;
 }
 
-export const cookieValueNotations = (value: string) => ({
-  plain: value,
-  percentEncoded: encodeURIComponent(value),
-  quoted: `"${value}"`,
-});
-
 export const SIGNED_COOKIE_VALUE = /^[^%;]+\.[A-Za-z0-9+/]{43}=$/;
 
 export type TestSession = { token: string; headers: Headers };
@@ -62,6 +56,17 @@ export const createSessionFor = (userId: string): Effect.Effect<TestSession> =>
       (await auth.$context).internalAdapter.createSession(userId),
     );
     return { token: session.token, headers: yield* sessionHeaders(session.token) };
+  });
+
+export const createSessionCookieNotationsFor = (userId: string) =>
+  Effect.gen(function* () {
+    const name = yield* sessionCookieName();
+    const signed = yield* signCookieValue((yield* createSessionFor(userId)).token);
+    return {
+      plain: `${name}=${signed}`,
+      percentEncoded: `${name}=${encodeURIComponent(signed)}`,
+      quoted: `${name}="${signed}"`,
+    };
   });
 
 export const sessionUserIdOf = (headers: Headers) =>

@@ -1,10 +1,9 @@
-import { buildSessionCookieHeader } from "@taimei-code/auth-client/cookie";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { auditRowsFor, dbTest } from "../../__tests__/live-runner";
 import { recordSentry } from "../../__tests__/sentry-recorder";
 import {
   browserCookieHeaders,
-  cookieValueNotations,
+  createSessionCookieNotationsFor,
   loginWithMagicLink,
 } from "../../__tests__/session-helpers";
 import { TestDb } from "../../__tests__/test-db";
@@ -30,7 +29,6 @@ import {
   resendOutbox,
   restoreKvStoreAfterEach,
   SECURITY_PAGE_URL,
-  signedLookingSessionValue,
   sameOriginHeaders,
   type SignedInSession,
   type SignedInUser,
@@ -183,23 +181,19 @@ describe("パスキーの削除の API", () => {
 
   test("同じ session の cookie を、そのまま、percent-encode、前後を引用符で囲んだ表記で順に送っても、合わせて 10 回目までは試行枠の失敗にならず、11 回目は表記によらず試行枠を超えた時と同じ失敗になる", async () => {
     const owner = await createUser("owner");
-    const cookies = Object.values(cookieValueNotations(signedLookingSessionValue())).map(
-      buildSessionCookieHeader,
+    const app = liveApp();
+    const sessions = Object.values(await run(createSessionCookieNotationsFor(owner.id))).map(
+      (cookie): SignedInSession => ({ user: owner, app, cookie }),
     );
     const statuses: number[] = [];
     for (let i = 0; i < ATTEMPTS_PER_MINUTE; i++)
       statuses.push(
-        (
-          await sendDeletion(
-            signedInSession(owner, { cookie: cookies[i % cookies.length] }),
-            missingPasskeyId(),
-          )
-        ).status,
+        (await sendDeletion(sessions[i % sessions.length]!, missingPasskeyId())).status,
       );
 
     const afterwards = await Promise.all(
-      cookies.map(async (cookie) =>
-        statusAndBody(await sendDeletion(signedInSession(owner, { cookie }), missingPasskeyId())),
+      sessions.map(async (session) =>
+        statusAndBody(await sendDeletion(session, missingPasskeyId())),
       ),
     );
 
