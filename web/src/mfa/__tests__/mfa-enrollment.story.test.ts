@@ -121,3 +121,35 @@ describe("MFA を有効にした後の報告", () => {
     expect(activated.model.step._tag).toBe("Starting");
   });
 });
+
+describe("再認証が要る時の導き", () => {
+  test("登録が再認証を求めると、文言を出さずにログインし直しへ導く", () => {
+    const opened = send(init(VISIT), Message.ClickedEnable());
+    const failed = update(
+      opened,
+      Message.FailedEnrollMfa({ ...pageRequestOf(opened), failure: "ReauthenticationRequired" }),
+    );
+    expect(failed.outMessage).toEqual(OutMessage.RequiredReauthentication());
+    expect(failed.model.step._tag).toBe("Starting");
+  });
+
+  test("有効化が再認証を求めると、登録内容を残したままログインし直しへ導く", () => {
+    const submitted = send(
+      init(VISIT),
+      Message.ClickedEnable(),
+      Message.SucceededEnrollMfa({ visit: VISIT, requestNumber: 1, enrollment: ENROLLMENT }),
+      Message.ClickedNext(),
+      Message.UpdatedCode({ value: "123456" }),
+      Message.SubmittedCode(),
+    );
+    const failed = update(
+      submitted,
+      Message.FailedActivateMfa({
+        ...pageRequestOf(submitted),
+        failure: "ReauthenticationRequired",
+      }),
+    );
+    expect(failed.outMessage).toEqual(OutMessage.RequiredReauthentication());
+    expect(failed.model.maybeResumableEnrollment._tag).toBe("Some");
+  });
+});

@@ -16,6 +16,12 @@ export class InvalidArgument extends failure<InvalidArgument>()(
   400,
 ) {}
 
+export class ReauthenticationRequired extends failure<ReauthenticationRequired>()(
+  "ReauthenticationRequired",
+  {},
+  403,
+) {}
+
 export class RateLimited extends failure<RateLimited>()("RateLimited", {}, 429) {}
 
 export class ServiceKeyRejected extends failure<ServiceKeyRejected>()(

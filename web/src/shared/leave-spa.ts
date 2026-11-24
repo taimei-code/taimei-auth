@@ -12,7 +12,7 @@ export const leaveSpaTo = (url: string) => {
 
 export const loadDocument = (href: string) => window.location.assign(href);
 
-type AccountsServicePath = "/auth/" | "/auth" | "/auth/signup/company";
+type AccountsServicePath = "/auth/" | "/auth" | "/auth/signup/company" | "/auth/reauthenticate";
 
 const accountsServiceUrlFrom = (origin: string, path: AccountsServicePath, returnToHref: string) =>
   `${path}?service_name=accounts&redirect_url=${encodeURIComponent(`${origin}${returnToHref}`)}`;
@@ -38,5 +38,8 @@ const currentHref = () => {
 };
 
 export const leaveSpaToSignIn = () => leaveSpaTo(signInUrlReturningTo(currentHref()));
+
+export const leaveSpaToReauthentication = () =>
+  leaveSpaTo(accountsServiceUrl("/auth/reauthenticate", currentHref()));
 
 export const leaveSpaToCompanySignup = () => leaveSpaTo(companySignupUrlReturningTo(currentHref()));

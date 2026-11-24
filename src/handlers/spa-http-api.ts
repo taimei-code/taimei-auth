@@ -3,7 +3,11 @@ import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import type { Hono } from "hono";
 import { csrf } from "hono/csrf";
+import type { ReauthenticationOperation } from "@/db/enums";
 import { Authenticated, CurrentActor, CurrentSession } from "../account/actor-contract";
+import { requireRecentSignIn } from "../account/reauthentication";
+import { REAUTHENTICATED_OPERATIONS, Reauthenticated } from "../account/reauthentication-contract";
+import type { AuditLog } from "../audit/ports";
 import { UserRepo } from "../account/ports";
 import { AuthApi } from "../auth-service";
 import { requireActor } from "../membership/guard";
@@ -39,6 +43,33 @@ const AuthenticatedLive = Layer.effect(
           Effect.provideService(CurrentActor, actor),
           Effect.provideService(CurrentSession, session),
         );
+      }),
+    );
+  }),
+);
+
+const operationByEndpoint: ReadonlyMap<string, ReauthenticationOperation> = new Map(
+  Object.entries(REAUTHENTICATED_OPERATIONS),
+);
+
+const ReauthenticatedLive = Layer.effect(
+  Reauthenticated,
+  Effect.gen(function* () {
+    const services = yield* Effect.context<AuditLog | SentryService>();
+    return Reauthenticated.of(
+      Effect.fnUntraced(function* (httpEffect, { group, endpoint }) {
+        const key = `${group.identifier}.${endpoint.identifier}`;
+        const operation = operationByEndpoint.get(key);
+        if (operation === undefined) {
+          return yield* Effect.die(new Error(`再認証の表に無い endpoint: ${key}`));
+        }
+        yield* requireRecentSignIn({
+          actor: yield* CurrentActor,
+          session: yield* CurrentSession,
+          operation,
+          headers: headersOf(yield* HttpServerRequest.HttpServerRequest),
+        }).pipe(Effect.provideContext(services));
+        return yield* httpEffect;
       }),
     );
   }),
@@ -85,7 +116,7 @@ const makeSpaApiHandler = (services: Layer.Layer<AppServices>) =>
         PasskeySignInHandlers,
         PasskeySignInEntryHandlers,
       ]),
-      Layer.provide([AuthenticatedLive, AttemptBudgetsLive]),
+      Layer.provide([AuthenticatedLive, AttemptBudgetsLive, ReauthenticatedLive]),
       HttpRouter.provideRequest(services),
       Layer.provide(services),
       Layer.provide(ErrorReporter.layer([sentryReporter])),

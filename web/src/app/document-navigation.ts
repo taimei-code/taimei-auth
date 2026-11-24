@@ -7,6 +7,7 @@ import { toString as urlToString, type Url } from "foldkit/url";
 import {
   leaveSpaAfterAccountDeleted,
   leaveSpaTo,
+  leaveSpaToReauthentication,
   leaveSpaToSignIn,
   loadDocument,
 } from "../shared/leave-spa";
@@ -16,6 +17,7 @@ export const Message = defineMessageUnion({
   CompletedPushUrl: {},
   CompletedReplaceDocument: {},
   CompletedLeaveToSignIn: {},
+  CompletedLeaveToReauthentication: {},
   CompletedLeaveAfterAccountDeleted: {},
 });
 export type Message = typeof Message.Type;
@@ -43,6 +45,13 @@ export const ReplaceDocument = Command.define("ReplaceDocument", {
 export const LeaveToSignIn = Command.define("LeaveToSignIn", {
   messages: [Message.CompletedLeaveToSignIn],
   execute: Effect.sync(leaveSpaToSignIn).pipe(Effect.as(Message.CompletedLeaveToSignIn())),
+});
+
+export const LeaveToReauthentication = Command.define("LeaveToReauthentication", {
+  messages: [Message.CompletedLeaveToReauthentication],
+  execute: Effect.sync(leaveSpaToReauthentication).pipe(
+    Effect.as(Message.CompletedLeaveToReauthentication()),
+  ),
 });
 
 export const LeaveAfterAccountDeleted = Command.define("LeaveAfterAccountDeleted", {

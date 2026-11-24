@@ -29,6 +29,9 @@ import * as Companies from "../../company/pages/Companies";
 import * as CompanySettings from "../../company/pages/CompanySettings";
 import * as MemberInvitations from "../../invitation/member-invitations";
 import * as Members from "../../membership/pages/Members";
+import * as Security from "../../account/pages/Security";
+import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import { pageRequestOf } from "../../shared/page-request";
 import { Animation, Toast } from "@foldkit/ui";
 
 import {
@@ -38,6 +41,7 @@ import {
 import { Dialog } from "../../shared/ui/dialog-view";
 import {
   LeaveAfterAccountDeleted,
+  LeaveToReauthentication,
   LeaveToSignIn,
   LoadDocument,
   Message as DocumentNavigationMessage,
@@ -1281,5 +1285,35 @@ describe("サイドバーの nav", () => {
         }
       }),
     );
+  });
+});
+
+describe("セキュリティの画面の再認証", () => {
+  const enrollmentMessage = (message: MfaEnrollment.Message) =>
+    Message.GotSecurityMessage({
+      message: Security.Message.GotMfaEnrollmentMessage({ message }),
+    });
+
+  test("MFA の登録が再認証を求めると、今の URL を戻り先にして再認証の入口へ移る", () => {
+    const opening = update(
+      ready("/account/security"),
+      enrollmentMessage(MfaEnrollment.Message.ClickedEnable()),
+    ).model;
+    const enrollment =
+      opening.maybePage._tag === "Some" && opening.maybePage.value._tag === "Security"
+        ? opening.maybePage.value.model.enrollment
+        : MfaEnrollment.init(0);
+
+    expect(
+      update(
+        opening,
+        enrollmentMessage(
+          MfaEnrollment.Message.FailedEnrollMfa({
+            ...pageRequestOf(enrollment),
+            failure: "ReauthenticationRequired",
+          }),
+        ),
+      ).commands,
+    ).toMatchObject([{ name: LeaveToReauthentication.name }]);
   });
 });

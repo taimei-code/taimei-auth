@@ -17,6 +17,7 @@ import { transferOwnership } from "../../membership/transfer-ownership";
 import { enableMfaFor, totpCode } from "../../mfa/__tests__/helpers";
 import { loginWithMagicLink } from "../../__tests__/session-helpers";
 import { disable } from "../../mfa/totp";
+import { requireRecentSignIn } from "../../account/reauthentication";
 import { passkeyToSave, signedRegistration } from "../../passkey/__tests__/helpers";
 import { deleteOwnedPasskey } from "../../passkey/delete-passkey";
 import { PasskeyRepo } from "../../passkey/ports";
@@ -96,6 +97,21 @@ const PAYLOAD_KEYS_BY_EVENT = {
           headers: enabled.session.headers,
           code: yield* totpCode(enabled.secret, 1),
           kind: "totp",
+        }),
+      );
+      return user.id;
+    }),
+  },
+  reauthentication_rejected: {
+    keys: ["operation", "ip", "userAgent"],
+    drive: Effect.gen(function* () {
+      const user = yield* TestDb.use((db) => db.seedUser("reauthentication-rejected"));
+      yield* Effect.exit(
+        requireRecentSignIn({
+          actor: user,
+          session: { issuedAt: new Date(0) },
+          operation: "mfa_enroll",
+          headers: new Headers(),
         }),
       );
       return user.id;
@@ -290,8 +306,8 @@ describe("監査ログの payload の key 集合", () => {
   beforeEach(cleanup);
   afterAll(cleanup);
 
-  test("key 集合の表は 17 種の event を持つ", () => {
-    expect(Object.keys(PAYLOAD_KEYS_BY_EVENT)).toHaveLength(17);
+  test("key 集合の表は 18 種の event を持つ", () => {
+    expect(Object.keys(PAYLOAD_KEYS_BY_EVENT)).toHaveLength(18);
   });
 
   test.each(

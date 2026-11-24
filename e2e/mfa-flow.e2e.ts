@@ -433,3 +433,37 @@ test("有効化が EnrollmentChanged で失敗した後に開き直すと、登�
   await expect(page.getByRole("dialog").getByRole("button", { name: "次へ" })).toBeVisible();
   expect(enrollRequests).toBe(2);
 });
+
+test("有効化で再認証が要ると入口へ移り、ログインし直すとセキュリティの画面へ戻って、同じ secret のまま有効化できる", async ({
+  page,
+}) => {
+  const reauthenticationRequired = declaredFailure("mfa.activate", "ReauthenticationRequired");
+  await signInWithMagicLink(page, MFA_EMAIL);
+  await routeEndpoint(page, "mfa.activate", (route) => route.fulfill(reauthenticationRequired), {
+    times: 1,
+  });
+  await page.goto("/account/security");
+
+  const dialog = page.getByRole("dialog");
+  const enableShowingSecret = async (): Promise<string> => {
+    await mfaRow(page).getByRole("button", { name: "有効にする" }).click();
+    const secret = (await dialog.locator('p[translate="no"]').innerText()).trim();
+    await dialog.getByRole("button", { name: "次へ" }).click();
+    await dialog.locator("#mfa-enroll-code").fill(await totpCode(decodeTotpSecret(secret)));
+    await dialog.getByRole("button", { name: "有効にする" }).click();
+    return secret;
+  };
+
+  const firstSecret = await enableShowingSecret();
+
+  await expect(page).toHaveURL(/\/auth\/reauthenticate\?/);
+  const returnTo = new URL(page.url()).searchParams.get("redirect_url") ?? "";
+  expect(returnTo).toBe(new URL("/account/security", page.url()).toString());
+  await signInWithMagicLink(page, MFA_EMAIL, returnTo);
+  await expect(page).toHaveURL(/\/account\/security$/);
+
+  expect(await enableShowingSecret()).toBe(firstSecret);
+  await expect(dialog.getByText("このダイアログを閉じると再表示できません")).toBeVisible();
+  await dialog.getByRole("button", { name: "控えたので閉じる" }).click();
+  await expect(mfaRow(page).getByText("有効", { exact: true })).toBeVisible();
+});

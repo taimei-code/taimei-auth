@@ -4,6 +4,8 @@ export type Role = (typeof ROLES)[number];
 export const ORG_CODES = ["PERSONAL", "CORPORATE"] as const;
 export type OrgCode = (typeof ORG_CODES)[number];
 
+export type ReauthenticationOperation = "mfa_enroll" | "mfa_activate" | "passkey_register";
+
 export const PASSKEY_TRANSPORTS = [
   "ble",
   "cable",
