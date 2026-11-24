@@ -67,6 +67,25 @@ describe("共通ログイン画面と共通サインアップ画面への入り�
     ).toEqual([RedirectToInvalidRedirectUrlError.name]);
   });
 
+  test("再認証の入口は、accounts の戻り先でログインの手段を出し、下の link を戻り先に向ける", () => {
+    const returnTo = `${ORIGIN}/account/security`;
+    const page = signInOrSignUpOf(
+      modelAt(`/auth/reauthenticate?redirect_url=${encodeURIComponent(returnTo)}`),
+    );
+    expect(page.kind).toBe("Reauthenticate");
+    expect(page.params).toEqual({ service_name: "accounts", redirect_url: returnTo });
+    expect(page.otherPageHref).toBe(returnTo);
+  });
+
+  test.each([
+    "",
+    `?redirect_url=${encodeURIComponent("https://app.taimei-code.com/")}`,
+  ])("再認証の入口の戻り先 '%s' が auth ホストでなければ、不正なリダイレクト URL のエラー画面へ置き換える", (search) => {
+    expect(commandNamesAt(`/auth/reauthenticate${search}`)).toEqual([
+      RedirectToInvalidRedirectUrlError.name,
+    ]);
+  });
+
   test("ログイン画面の新規登録への link は、宣言した search だけを持つ", () => {
     expect(signInOrSignUpOf(modelAt(`/auth/?${SEARCH}&error=signin_failed`)).otherPageHref).toBe(
       `/auth/signup?${SEARCH}`,

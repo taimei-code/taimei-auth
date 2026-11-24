@@ -34,4 +34,14 @@ export const redirectTargetSchema = signInParamsObjectSchema
 
 export type RedirectTarget = z.infer<typeof redirectTargetSchema>;
 
+export const REAUTHENTICATION_SERVICE = "accounts" satisfies ServiceName;
+
+export const reauthenticationSearchSchema = signInParamsObjectSchema
+  .pick({ redirect_url: true })
+  .refine(
+    ({ redirect_url }) =>
+      isRedirectUrlAllowed({ service_name: REAUTHENTICATION_SERVICE, redirect_url }),
+    redirectUrlNotAllowedIssue,
+  );
+
 export const INVALID_REDIRECT_URL_PAGE = "/auth/error?reason=invalid_redirect_url";

@@ -3,7 +3,11 @@ import { Route } from "foldkit";
 import { defineRouteUnion, literal, slash, Transition } from "foldkit/route";
 
 import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
-import { type SignInParams, signInParamsSchema } from "@core/sign-in-params";
+import {
+  reauthenticationSearchSchema,
+  type SignInParams,
+  signInParamsSchema,
+} from "@core/sign-in-params";
 
 import { ErrorPageReason } from "../../auth/auth-error-reason";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
@@ -14,6 +18,7 @@ export const AuthRoute = defineRouteUnion({
   SignIn: SignInOrSignUp.Params.fields,
   SignUp: SignInOrSignUp.Params.fields,
   SignUpCompany: SignInOrSignUp.Params.fields,
+  Reauthenticate: { redirect_url: Schema.String },
   AcceptInvitation: {
     invitation_token: Schema.UndefinedOr(Schema.String),
     redirect_url: Schema.String,
@@ -45,6 +50,19 @@ export const signUpRouter = pipe(
 const signUpRejectedRouter = pipe(
   literal("auth"),
   slash(literal("signup")),
+  Route.mapTo(AuthRoute.RejectedSignInParams),
+);
+
+const reauthenticateRouter = pipe(
+  literal("auth"),
+  slash(literal("reauthenticate")),
+  Route.query(fromZodSearch(reauthenticationSearchSchema)),
+  Route.mapTo(AuthRoute.Reauthenticate),
+);
+
+const reauthenticateRejectedRouter = pipe(
+  literal("auth"),
+  slash(literal("reauthenticate")),
   Route.mapTo(AuthRoute.RejectedSignInParams),
 );
 
@@ -99,6 +117,8 @@ export const urlToAuthRoute = Route.parseUrlWithFallback(
     signUpRouter,
     signUpRejectedRouter,
     signUpCompanyRouter,
+    reauthenticateRouter,
+    reauthenticateRejectedRouter,
     acceptInvitationRouter,
     mfaChallengeRouter,
     errorRouter,

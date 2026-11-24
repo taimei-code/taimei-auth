@@ -7,6 +7,8 @@ import { replaceUrl, UrlRequest } from "foldkit/navigation";
 import { modifyFields } from "foldkit/struct";
 import { Url } from "foldkit/url";
 
+import { REAUTHENTICATION_SERVICE } from "@core/sign-in-params";
+
 import * as AuthError from "../../auth/pages/AuthError";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import * as SignUpCompany from "../../company/pages/SignUpCompany";
@@ -160,6 +162,13 @@ const enterRoute = (model: Model, route: AuthRoute): UpdateReturn => {
       enterSignInOrSignUp(entered, "SignIn", params, signUpRouter(params)),
     SignUp: ({ _tag, ...params }) =>
       enterSignInOrSignUp(entered, "SignUp", params, signInRouter(params)),
+    Reauthenticate: ({ redirect_url }) =>
+      enterSignInOrSignUp(
+        entered,
+        "Reauthenticate",
+        { service_name: REAUTHENTICATION_SERVICE, redirect_url },
+        redirect_url,
+      ),
     RejectedSignInParams: () => ({
       model: entered,
       commands: [...canaryIconRemovals, RedirectToInvalidRedirectUrlError()],
@@ -367,6 +376,7 @@ const PAGE_NAME_BY_ROUTE: Record<AuthRoute["_tag"], string> = {
   SignIn: "ログイン",
   SignUp: "新規登録",
   SignUpCompany: "事業所の登録",
+  Reauthenticate: "もう一度ログイン",
   AcceptInvitation: "招待の受諾",
   RejectedSignInParams: ERROR_PAGE_NAME,
   MfaChallenge: "多要素認証 (MFA)",
