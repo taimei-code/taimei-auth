@@ -1,9 +1,11 @@
 import { Cause, Option } from "effect";
 
-import type { Unauthorized } from "@core/failures";
+import type { ReauthenticationRequired, Unauthorized } from "@core/failures";
+
+type LeavingFailureTag = Unauthorized["_tag"] | ReauthenticationRequired["_tag"];
 
 export type FailureOutcomes<E extends { readonly _tag: string }, A> = {
-  readonly [Tag in Exclude<E["_tag"], Unauthorized["_tag"]>]: A;
+  readonly [Tag in Exclude<E["_tag"], LeavingFailureTag>]: A;
 };
 
 export type FailureMessages<E extends { readonly _tag: string }> = FailureOutcomes<E, string>;

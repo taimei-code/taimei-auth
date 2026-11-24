@@ -98,6 +98,7 @@ describe("失敗の宣言", () => {
       InvalidArgument: 400,
       NotFound: 404,
       RateLimited: 429,
+      ReauthenticationRequired: 403,
       Unauthorized: 401,
       LastOwner: 409,
       AlreadyExists: 409,

@@ -40,7 +40,11 @@ export const stubAuthApi = (
       Effect.succeed(
         actor &&
           ({
-            session: { id: `stub-${actor.id}-${sessionCookieOf(headers)}`, userId: actor.id },
+            session: {
+              id: `stub-${actor.id}-${sessionCookieOf(headers)}`,
+              userId: actor.id,
+              createdAt: new Date(),
+            },
             user: { id: actor.id, email: actor.email },
           } as unknown as Session),
       ),

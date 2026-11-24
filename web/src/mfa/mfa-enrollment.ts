@@ -71,6 +71,7 @@ type QrCode = typeof QrCode.Type;
 export const OutMessage = defineMessageUnion({
   ClosedAfterEnabling: {},
   RequiredSignIn: {},
+  RequiredReauthentication: {},
 });
 export type OutMessage = typeof OutMessage.Type;
 
@@ -88,6 +89,7 @@ const EnrollFailure = contractFailure([
   "ChallengeExpired",
   "RateLimited",
   "Unauthorized",
+  "ReauthenticationRequired",
 ]);
 type EnrollFailure = typeof EnrollFailure.Type;
 
@@ -99,6 +101,7 @@ const ActivateFailure = contractFailure([
   "MfaNotFound",
   "RateLimited",
   "Unauthorized",
+  "ReauthenticationRequired",
 ]);
 type ActivateFailure = typeof ActivateFailure.Type;
 
@@ -316,9 +319,17 @@ const submitCode = (model: Model): UpdateReturn =>
     };
   });
 
+const LEAVING_FAILURES = {
+  Unauthorized: OutMessage.RequiredSignIn(),
+  ReauthenticationRequired: OutMessage.RequiredReauthentication(),
+} as const;
+
+const isLeavingFailure = (failure: string): failure is keyof typeof LEAVING_FAILURES =>
+  Object.hasOwn(LEAVING_FAILURES, failure);
+
 const failActivate = (model: Model, failure: ActivateFailure): UpdateReturn =>
-  failure === "Unauthorized"
-    ? { model, outMessage: OutMessage.RequiredSignIn() }
+  isLeavingFailure(failure)
+    ? { model, outMessage: LEAVING_FAILURES[failure] }
     : withVerifying(model, (verifying) => ({
         model: modifyFields(
           withStep(
@@ -357,8 +368,8 @@ export const update = (model: Model, message: Message) =>
       ),
     FailedEnrollMfa: ({ failure, ...response }) =>
       forThisRequest(model, response, () =>
-        failure === "Unauthorized"
-          ? { model, outMessage: OutMessage.RequiredSignIn() }
+        isLeavingFailure(failure)
+          ? { model, outMessage: LEAVING_FAILURES[failure] }
           : { model: withStep(model, Step.Failed({ message: mfaFailureText(failure) })) },
       ),
     SucceededDrawQrCode: ({ enrollmentId, dataUrl }) =>

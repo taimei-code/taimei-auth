@@ -174,6 +174,11 @@ const leaveToSignIn: Step = (model) => ({
   commands: [navigate(DocumentNavigation.LeaveToSignIn())],
 });
 
+const leaveToReauthentication: Step = (model) => ({
+  model,
+  commands: [navigate(DocumentNavigation.LeaveToReauthentication())],
+});
+
 const leaveAfterAccountDeleted: Step = (model) => ({
   model,
   commands: [navigate(DocumentNavigation.LeaveAfterAccountDeleted())],
@@ -470,6 +475,7 @@ const foldSecurity = Update.foldChild({
   foldOutMessage: Security.OutMessage.match<Step>({
     Notified: ({ tone, text }) => notify(tone, text),
     RequiredSignIn: () => leaveToSignIn,
+    RequiredReauthentication: () => leaveToReauthentication,
   }),
 });
 

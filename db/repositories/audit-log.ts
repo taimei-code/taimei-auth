@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "../client";
 import { auditLog, type OrgCode, type Role } from "../schema";
 import type { DbOrTx } from "../transaction";
+import type { ReauthenticationOperation } from "../enums";
 import type { InviterSeen } from "./membership";
 
 export type RejectReason = "double_accept" | "inviter_not_owner_or_missing";
@@ -23,6 +24,11 @@ export type AuditLogEntry =
       eventType: "mfa_disabled";
       userId: string;
       payload: { ip: string | null; userAgent: string };
+    }
+  | {
+      eventType: "reauthentication_rejected";
+      userId: string;
+      payload: { operation: ReauthenticationOperation; ip: string; userAgent: string };
     }
   | {
       eventType: "passkey_registered";

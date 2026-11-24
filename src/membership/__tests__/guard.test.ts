@@ -12,6 +12,7 @@ import {
   sessionOf,
   signedIn,
   signedOut,
+  userOf,
   userRepoFailing,
   userRepoLayer,
 } from "./test-layers";
@@ -38,7 +39,21 @@ describe("requireActor", () => {
         Effect.provide(signedIn("u1", "a@x.jp")),
       ),
     );
-    expect(session).toEqual({ id: "s-u1-one" });
+    expect(session.id).toBe("s-u1-one");
+  });
+
+  test("session の発行時刻は better-auth の session の createdAt から取る (延長で動く updatedAt は使わない)", async () => {
+    const createdAt = new Date("2026-11-24T00:00:00.000Z");
+    const issued = sessionOf("u1");
+    const layer = Layer.mergeAll(
+      authLayer(() => ({
+        ...issued,
+        session: { ...issued.session, createdAt, updatedAt: new Date() },
+      })),
+      userRepoLayer([userOf("u1", "a@x.jp")]),
+    );
+    const { session } = await runOk(requireActor(headers).pipe(Effect.provide(layer)));
+    expect(session.issuedAt).toEqual(createdAt);
   });
 
   test("session はあるが user 行が無い (TTL store に session が残った) → Unauthorized (fail-closed)", async () => {

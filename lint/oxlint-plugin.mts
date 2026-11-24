@@ -1222,6 +1222,7 @@ const ROWS: readonly Row[] = [
     allowedMatches: {
       "src/handlers/spa-http-api.ts": [
         "effect(Authenticated)",
+        "effect(Reauthenticated)",
         "effectContext(getRuntime().contextEffect)",
       ],
       "src/handlers/attempt-budget-http-api.ts": [
@@ -1486,6 +1487,18 @@ const ROWS: readonly Row[] = [
     matchers: [{ kind: "identifier", names: ["verifiedAt"] }],
     message:
       "MFA の verifiedAt を読む本番の code は src/mfa/policy.ts だけ (有効かの判定を 1 つの述語に集める)",
+  },
+  {
+    name: "session-issued-at-only-in-reauthentication",
+    within: ["src/**", "web/src/**", "management/**"],
+    allowedIn: [
+      "src/account/actor-contract.ts",
+      "src/membership/guard/core.ts",
+      "src/account/reauthentication.ts",
+    ],
+    matchers: [{ kind: "identifier", names: ["issuedAt"] }],
+    message:
+      "session の発行時刻 (issuedAt) を比べるのは src/account/reauthentication.ts の requireRecentSignIn だけ (再認証の時間窓の判定を 1 つに集める。ADR-0031)。値を作るのは requireActor だけ",
   },
   {
     name: "passkey-transports-only-in-passkey-entry",

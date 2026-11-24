@@ -116,6 +116,7 @@
     "taimei/verified-at-only-in-mfa-policy": "error",
     "taimei/passkey-transports-only-in-passkey-entry": "error",
     "taimei/passkey-limit-only-in-passkey-policy": "error",
+    "taimei/session-issued-at-only-in-reauthentication": "error",
     "taimei/flagship-binding-only-in-feature-flags": "error",
     "taimei/feature-flags-port-only-in-flag-decisions": "error",
     "taimei/no-flag-decision-in-handlers-rpc-web": "error",

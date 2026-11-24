@@ -1814,6 +1814,19 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "session の発行時刻を比べるのは再認証の判定だけ: handler に書くと lint が止める",
+    path: "src/handlers/Probe568.ts",
+    source:
+      "export const recent = (session: { issuedAt: Date }, now: number) => now - session.issuedAt.getTime() < 600_000;",
+    expectedRules: ["taimei(session-issued-at-only-in-reauthentication)"],
+  },
+  {
+    name: "session の発行時刻を比べるのは再認証の判定だけ: src/account/reauthentication.ts では lint が止めない",
+    path: "src/account/reauthentication.ts",
+    source: "export const at = (session: { issuedAt: Date }) => session.issuedAt;",
+    expectedRules: [],
+  },
+  {
     name: "パスキーの数の上限と比べるのは保存の文と述語だけ: 画面に書くと lint が止める",
     path: "web/src/passkey/Probe494.ts",
     source: "export const full = (count: number) => count >= PASSKEY_LIMIT;",

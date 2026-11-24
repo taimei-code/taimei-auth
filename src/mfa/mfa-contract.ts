@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated, type CurrentSession } from "../account/actor-contract";
+import { Reauthenticated } from "../account/reauthentication-contract";
 import { RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
@@ -56,12 +57,16 @@ export class MfaGroup extends HttpApiGroup.make("mfa")
     HttpApiEndpoint.post("enroll", "/api/account/mfa/enroll", {
       success: MfaEnrollment,
       error: [AlreadyEnabled, ChallengeExpired],
-    }).middleware(MfaChangeBudget),
+    })
+      .middleware(Reauthenticated)
+      .middleware(MfaChangeBudget),
     HttpApiEndpoint.post("activate", "/api/account/mfa/activate", {
       payload: ActivateRequest,
       success: Ok,
       error: [InvalidCode, Locked, EnrollmentChanged, AlreadyEnabled, MfaNotFound],
-    }).middleware(MfaChangeBudget),
+    })
+      .middleware(Reauthenticated)
+      .middleware(MfaChangeBudget),
     HttpApiEndpoint.post("disable", "/api/account/mfa/disable", {
       payload: CodeWithKind,
       success: Ok,

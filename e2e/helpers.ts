@@ -134,9 +134,13 @@ export const expectSignInLanding = async (page: Page): Promise<void> => {
   await expect(page.getByRole("button", { name: "Magic Link を送信" })).toBeVisible();
 };
 
-export const signInWithMagicLink = async (page: Page, email: string): Promise<string> => {
+export const signInWithMagicLink = async (
+  page: Page,
+  email: string,
+  returnTo = `${BASE_URL}/account`,
+): Promise<string> => {
   const response = await page.request.post(`${BASE_URL}${TESTING_PATH}/login-links`, {
-    data: { email, returnTo: `${BASE_URL}/account` },
+    data: { email, returnTo },
   });
   expect(response.status()).toBe(200);
   const { loginUrl } = (await response.json()) as { loginUrl: string };

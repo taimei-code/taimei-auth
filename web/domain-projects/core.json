@@ -3,6 +3,7 @@
   "files": [
     "../../src/account/account-contract.ts",
     "../../src/account/actor-contract.ts",
+    "../../src/account/reauthentication-contract.ts",
     "../../src/company/company-contract.ts",
     "../../src/company/errors.ts",
     "../../src/company/org-code.ts",

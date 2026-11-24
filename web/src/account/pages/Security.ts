@@ -62,6 +62,7 @@ export type Message = typeof Message.Type;
 export const OutMessage = defineMessageUnion({
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},
+  RequiredReauthentication: {},
 });
 export type OutMessage = typeof OutMessage.Type;
 
@@ -196,6 +197,7 @@ const foldMfaEnrollment = Update.foldChild({
   foldOutMessage: MfaEnrollment.OutMessage.match<Step>({
     ClosedAfterEnabling: () => reloadSecuritySettings(AFTER_ENABLING),
     RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
+    RequiredReauthentication: () => forwarding(OutMessage.RequiredReauthentication()),
   }),
 });
 
