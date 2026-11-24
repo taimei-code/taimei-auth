@@ -50,7 +50,7 @@ export const Params = Schema.Struct({
 });
 export type Params = typeof Params.Type;
 
-export const SignKind = Schema.Literals(["SignIn", "SignUp"]);
+export const SignKind = Schema.Literals(["SignIn", "SignUp", "Reauthenticate"]);
 export type SignKind = typeof SignKind.Type;
 
 const Form = defineTaggedUnion({
@@ -116,18 +116,20 @@ type SignTexts = Readonly<{
   otherPageLabel: string;
 }>;
 
+const SIGN_IN_TEXTS: SignTexts = {
+  title: (serviceName) => `${serviceName} にログイン`,
+  description: "Magic Link または GitHub アカウントでログイン",
+  submitLabel: "Magic Link を送信",
+  gitHubLabel: "GitHub でログイン",
+  gitHubFailedMessage: "GitHub ログインに失敗しました",
+  sentTail:
+    " に Magic Link を送信しました。メール内のリンクをクリックしてログインを完了してください。",
+  otherPagePrompt: "アカウントをお持ちでない方は ",
+  otherPageLabel: "新規登録",
+};
+
 const TEXTS: Readonly<Record<SignKind, SignTexts>> = {
-  SignIn: {
-    title: (serviceName) => `${serviceName} にログイン`,
-    description: "Magic Link または GitHub アカウントでログイン",
-    submitLabel: "Magic Link を送信",
-    gitHubLabel: "GitHub でログイン",
-    gitHubFailedMessage: "GitHub ログインに失敗しました",
-    sentTail:
-      " に Magic Link を送信しました。メール内のリンクをクリックしてログインを完了してください。",
-    otherPagePrompt: "アカウントをお持ちでない方は ",
-    otherPageLabel: "新規登録",
-  },
+  SignIn: SIGN_IN_TEXTS,
   SignUp: {
     title: (serviceName) => `${serviceName} に登録`,
     description: "Magic Link または GitHub で新規登録",
@@ -138,6 +140,13 @@ const TEXTS: Readonly<Record<SignKind, SignTexts>> = {
       " に Magic Link を送信しました。メール内のリンクをクリックして登録を完了してください。",
     otherPagePrompt: "すでにアカウントをお持ちの方は ",
     otherPageLabel: "ログイン",
+  },
+  Reauthenticate: {
+    ...SIGN_IN_TEXTS,
+    title: (serviceName) => `${serviceName} にもう一度ログイン`,
+    description: "本人確認のため、もう一度ログインしてください",
+    otherPagePrompt: "",
+    otherPageLabel: "元の画面へ戻る",
   },
 };
 
@@ -286,8 +295,14 @@ export const SignInWithPasskey = Command.define("SignInWithPasskey", {
     }),
 });
 
+const OFFERS_PASSKEY: Readonly<Record<SignKind, boolean>> = {
+  SignIn: true,
+  SignUp: false,
+  Reauthenticate: true,
+};
+
 const offersPasskey = (kind: SignKind, params: Params): boolean =>
-  kind === "SignIn" && params.invitation_token === undefined;
+  OFFERS_PASSKEY[kind] && params.invitation_token === undefined;
 
 export const init = (
   start: Readonly<{

@@ -61,6 +61,25 @@ describe("Magic Link の送信", () => {
     );
   });
 
+  test("再認証の入口は名前を付けず、redirect_url を callback にする", () => {
+    story(
+      update,
+      given(
+        filled("Reauthenticate", { ...PARAMS, sign_up_url: "https://app.taimei-code.com/welcome" }),
+      ),
+      message(Message.SubmittedMagicLinkForm()),
+      Command.expectExact(
+        SendMagicLink({
+          visit: VISIT,
+          email: "user@example.com",
+          maybeName: Option.none(),
+          callbackUrl: "https://app.taimei-code.com/",
+        }),
+      ),
+      Command.resolve(SendMagicLink, Message.SucceededSendMagicLink({ visit: VISIT })),
+    );
+  });
+
   test("新規登録画面は名前を付け、sign_up_url を callback にする", () => {
     story(
       update,
@@ -188,6 +207,22 @@ describe("GitHub での認証", () => {
     );
   });
 
+  test("再認証の入口の GitHub は、redirect_url を callback にしてログインの文言で始める", () => {
+    story(
+      update,
+      given(filled("Reauthenticate")),
+      message(Message.ClickedGitHubSignIn()),
+      Command.expectExact(
+        StartGitHubSignIn({
+          visit: VISIT,
+          callbackUrl: "https://app.taimei-code.com/",
+          failedMessage: "GitHub ログインに失敗しました",
+        }),
+      ),
+      Command.resolve(StartGitHubSignIn, Message.SucceededStartGitHubSignIn()),
+    );
+  });
+
   test("新規登録画面の GitHub の失敗の既定の文言はサインアップの文言", () => {
     story(
       update,
@@ -219,6 +254,10 @@ const withPasskeyEntry = (kind: SignKind = "SignIn"): Model =>
 describe("パスキーのログインの入口", () => {
   test("ログイン画面は、開いた時にパスキーの入口を出すかを問い合わせる", () => {
     expect(commandNamesOf("SignIn")).toContain(LoadPasskeyEntry.name);
+  });
+
+  test("再認証の入口も、ログイン画面と同じくパスキーの入口を問い合わせる", () => {
+    expect(commandNamesOf("Reauthenticate")).toContain(LoadPasskeyEntry.name);
   });
 
   test("新規登録画面と招待の token を受けたログイン画面は、パスキーの入口を問い合わせない", () => {

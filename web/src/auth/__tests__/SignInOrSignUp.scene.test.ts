@@ -112,6 +112,23 @@ describe("ログイン画面", () => {
   });
 });
 
+describe("再認証の入口", () => {
+  test("もう一度ログインする見出しと説明、ログインの手段、元の画面へ戻る link を出す", () => {
+    scene(
+      { update, view },
+      given(pageOf("Reauthenticate")),
+      expect(text("taimei-auth にもう一度ログイン")).toExist(),
+      expect(text("本人確認のため、もう一度ログインしてください")).toExist(),
+      expect(label("メールアドレス")).toExist(),
+      expect(label("お名前")).toBeAbsent(),
+      expect(role("button", { name: "Magic Link を送信" })).toBeEnabled(),
+      expect(role("button", { name: "GitHub でログイン" })).toBeEnabled(),
+      expect(role("link", { name: "元の画面へ戻る" })).toHaveAttr("href", "/other"),
+      expect(role("link", { name: "新規登録" })).toBeAbsent(),
+    );
+  });
+});
+
 describe("必須の欄", () => {
   test("ログインで、メールアドレスが空のまま送信のボタンを押すと、「メールアドレスを入力してください。」が出て、入力欄が aria-invalid になる", () => {
     scene(
