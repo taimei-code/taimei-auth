@@ -3,7 +3,7 @@ import { HttpRouter, HttpServer, HttpServerRequest } from "effect/http";
 import { HttpApiBuilder } from "effect/http-api";
 import type { Hono } from "hono";
 import { csrf } from "hono/csrf";
-import { Authenticated, CurrentActor } from "../account/actor-contract";
+import { Authenticated, CurrentActor, CurrentSession } from "../account/actor-contract";
 import { UserRepo } from "../account/ports";
 import { AuthApi } from "../auth-service";
 import { requireActor } from "../membership/guard";
@@ -32,8 +32,13 @@ const AuthenticatedLive = Layer.effect(
     return Authenticated.of(
       Effect.fnUntraced(function* (httpEffect) {
         const request = yield* HttpServerRequest.HttpServerRequest;
-        const actor = yield* requireActor(headersOf(request)).pipe(Effect.provideContext(services));
-        return yield* Effect.provideService(httpEffect, CurrentActor, actor);
+        const { actor, session } = yield* requireActor(headersOf(request)).pipe(
+          Effect.provideContext(services),
+        );
+        return yield* httpEffect.pipe(
+          Effect.provideService(CurrentActor, actor),
+          Effect.provideService(CurrentSession, session),
+        );
       }),
     );
   }),

@@ -5,7 +5,6 @@ import { Hono } from "hono";
 import { buildApp as buildServerApp } from "../app";
 import { ATTEMPT_BUDGETS, type AttemptBudget, attemptBudgetKey } from "../attempt-budget";
 import { attemptBudgetMiddleware, attemptBudgetProgram } from "../handlers/attempt-budget-hono";
-import { sessionAttemptSubject } from "../handlers/attempt-budget-http-api";
 import { CONTINUE, type MiddlewareDecision } from "../handlers/run-route";
 import { RateLimited } from "../failures";
 import { toRateWindowResult } from "../ttl-store";
@@ -116,27 +115,6 @@ describe("magic link の送信の試行枠 (IP ごとに 60 秒で 5 回)", () =
     );
     expect([res.status, res.headers.get("retry-after")]).toEqual([429, null]);
     expect(await res.json<unknown>()).toEqual({ _tag: "RateLimited" });
-  });
-});
-
-describe("session ごとの試行枠の subject", () => {
-  test("session 軸の subject は IP を変えても同じ枠で、cookie の値を鍵に含めない (鍵を認証情報にしない)", async () => {
-    const headers = new Headers({ cookie: "__Secure-better-auth.session_token=tok.sig" });
-    const fromOneIp = await sessionAttemptSubject(headers, "203.0.113.1");
-    const fromAnotherIp = await sessionAttemptSubject(headers, "198.51.100.2");
-    expect(fromOneIp).toBe(fromAnotherIp);
-    expect(fromOneIp).toStartWith("session:");
-    expect(fromOneIp).not.toContain("tok");
-  });
-
-  test("percent-decode できない列を含む session cookie でも subject を作る (better-auth と同じく、decode できない値はそのまま読む)", async () => {
-    const headers = new Headers({ cookie: "__Secure-better-auth.session_token=tok%E0%A4%A.sig" });
-    expect(await sessionAttemptSubject(headers, "203.0.113.1")).toStartWith("session:");
-  });
-
-  test("引用符だけの session cookie は session token が空なので、better-auth が session を引かないのと同じく IP の枠に倒れる", async () => {
-    const headers = new Headers({ cookie: '__Secure-better-auth.session_token=""' });
-    expect(await sessionAttemptSubject(headers, "203.0.113.1")).toBe("ip:203.0.113.1");
   });
 });
 

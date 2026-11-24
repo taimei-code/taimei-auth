@@ -1,6 +1,6 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
-import { Authenticated } from "../account/actor-contract";
+import { Authenticated, type CurrentSession } from "../account/actor-contract";
 import { InvalidCode, Locked, NotEnabled } from "../mfa/errors";
 import { MfaCode } from "../mfa/mfa-contract";
 import { NotFound, RateLimited } from "../failures";
@@ -100,10 +100,10 @@ export const AuthenticationResponse = Schema.Struct({
 });
 export type AuthenticationResponse = typeof AuthenticationResponse.Type;
 
-export class PasskeyManagementBudget extends HttpApiMiddleware.Service<PasskeyManagementBudget>()(
-  "taimei/PasskeyManagementBudget",
-  { error: RateLimited },
-) {}
+export class PasskeyManagementBudget extends HttpApiMiddleware.Service<
+  PasskeyManagementBudget,
+  { requires: CurrentSession }
+>()("taimei/PasskeyManagementBudget", { error: RateLimited }) {}
 
 export class PasskeyGroup extends HttpApiGroup.make("passkey")
   .add(

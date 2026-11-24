@@ -26,8 +26,19 @@ describe("requireActor", () => {
   });
 
   test("session + user 行 → Actor (id / email / lastUsedCompanyId)", async () => {
-    const actor = await runOk(requireActor(headers).pipe(Effect.provide(signedIn("u1", "a@x.jp"))));
+    const { actor } = await runOk(
+      requireActor(headers).pipe(Effect.provide(signedIn("u1", "a@x.jp"))),
+    );
     expect(actor).toEqual({ id: "u1", email: "a@x.jp", lastUsedCompanyId: null });
+  });
+
+  test("session + user 行 → 認証が解決した session の id を返す (session ごとの試行枠の主体になる)", async () => {
+    const { session } = await runOk(
+      requireActor(new Headers({ cookie: "__Secure-better-auth.session_token=one" })).pipe(
+        Effect.provide(signedIn("u1", "a@x.jp")),
+      ),
+    );
+    expect(session).toEqual({ id: "s-u1-one" });
   });
 
   test("session はあるが user 行が無い (TTL store に session が残った) → Unauthorized (fail-closed)", async () => {

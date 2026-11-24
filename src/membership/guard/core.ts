@@ -19,12 +19,15 @@ export const requireActor = Effect.fnUntraced(
   function* (headers: Headers) {
     const status = yield* checkSession(headers);
     if (status._tag !== "Active") return yield* new Unauthorized();
-    const { user } = status;
+    const { user, session } = status;
     return {
-      id: user.id,
-      email: user.email,
-      lastUsedCompanyId: user.lastUsedCompanyId,
-    } satisfies Actor;
+      actor: {
+        id: user.id,
+        email: user.email,
+        lastUsedCompanyId: user.lastUsedCompanyId,
+      } satisfies Actor,
+      session: { id: session.session.id },
+    };
   },
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),
 );

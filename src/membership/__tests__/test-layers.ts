@@ -11,6 +11,7 @@ import { MembershipRepo } from "../ports";
 import { partial } from "../../__tests__/live-runner";
 import { authApiWith } from "../../__tests__/test-layers";
 import { SentryLive, type SentryService } from "../../sentry";
+import { sessionCookieOf } from "../../session-cookie";
 
 export const run = <A, E>(p: Effect.Effect<A, E, SentryService>) =>
   Effect.runPromise(Effect.flip(Effect.provide(p, SentryLive))) as Promise<
@@ -29,9 +30,9 @@ export type Membership = {
   joinedAt?: Date;
 };
 
-export const sessionOf = (userId: string): Session =>
+export const sessionOf = (userId: string, id = `s-${userId}`): Session =>
   ({
-    session: { id: `s-${userId}`, userId, expiresAt: new Date("2030-01-01") },
+    session: { id, userId, expiresAt: new Date("2030-01-01") },
     user: { id: userId },
   }) as unknown as Session;
 
@@ -39,13 +40,13 @@ const userOf = (id: string, email: string): UserRow =>
   ({ id, email, lastUsedCompanyId: null }) as unknown as UserRow;
 
 export const authLayer = (
-  getSession: () => Effect.Effect<Session | null, AuthApiError> | Session | null,
+  getSession: (headers: Headers) => Effect.Effect<Session | null, AuthApiError> | Session | null,
   signOut: (headers: Headers) => Effect.Effect<Headers, AuthApiError> = () =>
     Effect.succeed(new Headers()),
 ): Layer.Layer<AuthApi> =>
   authApiWith(() => ({
-    getSession: () => {
-      const r = getSession();
+    getSession: (headers) => {
+      const r = getSession(headers);
       return Effect.isEffect(r) ? r : Effect.succeed(r);
     },
     signOut,
@@ -115,7 +116,7 @@ export const invitationRepoLayer = (rows: InvitationRow[]): Layer.Layer<Invitati
 
 export const signedIn = (userId = "u1", email = "u1@example.com") =>
   Layer.mergeAll(
-    authLayer(() => sessionOf(userId)),
+    authLayer((headers) => sessionOf(userId, `s-${userId}-${sessionCookieOf(headers)}`)),
     userRepoLayer([userOf(userId, email)]),
   );
 
