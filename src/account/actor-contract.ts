@@ -10,9 +10,10 @@ export type Actor = {
 
 export class CurrentActor extends Context.Service<CurrentActor, Actor>()("taimei/CurrentActor") {}
 
-export class CurrentSession extends Context.Service<CurrentSession, { readonly id: string }>()(
-  "taimei/CurrentSession",
-) {}
+export class CurrentSession extends Context.Service<
+  CurrentSession,
+  { readonly id: string; readonly issuedAt: Date }
+>()("taimei/CurrentSession") {}
 
 export class Authenticated extends HttpApiMiddleware.Service<
   Authenticated,

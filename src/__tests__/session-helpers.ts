@@ -7,7 +7,7 @@ import { sentLinkIn } from "../../testing/local-delivery-log";
 import { TtlStore } from "../ttl-store-service";
 import type { Actor } from "../account/actor-contract";
 import { observing } from "./live-runner";
-import { betterAuthKeyOf } from "./test-ttl-store";
+import { betterAuthKeyOf, testKvStore } from "./test-ttl-store";
 
 export const TEST_CLIENT_IP = "203.0.113.9";
 export const TEST_USER_AGENT = "mfa-integration-test";
@@ -176,3 +176,16 @@ export function browserCookieHeaders(response: Response): Headers {
     ),
   );
 }
+
+export const ageStoredSession = (
+  token: string,
+  age: { readonly sinceCreatedMs: number; readonly sinceUpdatedMs?: number },
+) =>
+  Effect.sync(() => {
+    const key = betterAuthKeyOf(token);
+    const stored = JSON.parse(testKvStore.get(key) ?? "null");
+    const now = Date.now();
+    stored.session.createdAt = new Date(now - age.sinceCreatedMs).toISOString();
+    stored.session.updatedAt = new Date(now - (age.sinceUpdatedMs ?? 0)).toISOString();
+    testKvStore.set(key, JSON.stringify(stored), 60 * 60);
+  });

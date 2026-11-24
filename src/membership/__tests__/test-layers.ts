@@ -32,11 +32,11 @@ export type Membership = {
 
 export const sessionOf = (userId: string, id = `s-${userId}`): Session =>
   ({
-    session: { id, userId, expiresAt: new Date("2030-01-01") },
+    session: { id, userId, expiresAt: new Date("2030-01-01"), createdAt: new Date() },
     user: { id: userId },
   }) as unknown as Session;
 
-const userOf = (id: string, email: string): UserRow =>
+export const userOf = (id: string, email: string): UserRow =>
   ({ id, email, lastUsedCompanyId: null }) as unknown as UserRow;
 
 export const authLayer = (

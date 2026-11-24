@@ -26,7 +26,7 @@ export const requireActor = Effect.fnUntraced(
         email: user.email,
         lastUsedCompanyId: user.lastUsedCompanyId,
       } satisfies Actor,
-      session: { id: session.session.id },
+      session: { id: session.session.id, issuedAt: session.session.createdAt },
     };
   },
   Effect.catchTag(["AuthApiError", "DbError"], failClosedAsUnauthorized),

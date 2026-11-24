@@ -5,6 +5,7 @@ import { CLIENT_IP_HEADER } from "../client-ip";
 import { sessionCookieOf } from "../session-cookie";
 import { dbTest } from "./live-runner";
 import {
+  ageStoredSession,
   browserCookieHeaders,
   createSessionCookieNotationsFor,
   createSessionFor,
@@ -13,11 +14,33 @@ import {
   requestMagicLink,
 } from "./session-helpers";
 import { TestDb } from "./test-db";
+import { betterAuthKeyOf, testKvStore } from "./test-ttl-store";
 
 const P = "better-auth-assumptions-test-";
 const { run, cleanup } = dbTest(P);
 
 const CALLBACK = "http://localhost:3100/account";
+
+const TWO_DAYS_MS = 2 * 24 * 60 * 60 * 1000;
+
+const storedSessionTimes = (token: string) =>
+  Effect.sync(() => {
+    const stored = JSON.parse(testKvStore.get(betterAuthKeyOf(token)) ?? "null") as {
+      session: { createdAt: string; updatedAt: string };
+    };
+    return stored.session;
+  });
+
+const issuedTwoDaysAgo = (token: string) =>
+  Effect.sync(() => {
+    const key = betterAuthKeyOf(token);
+    const stored = JSON.parse(testKvStore.get(key) ?? "null");
+    const shift = (iso: string) => new Date(Date.parse(iso) - TWO_DAYS_MS).toISOString();
+    stored.session.createdAt = shift(stored.session.createdAt);
+    stored.session.updatedAt = shift(stored.session.updatedAt);
+    stored.session.expiresAt = shift(stored.session.expiresAt);
+    testKvStore.set(key, JSON.stringify(stored), 60 * 60);
+  });
 
 describe("better-auth の既定に頼らず、auth の設定が前提を言い切る", () => {
   beforeEach(cleanup);
@@ -128,6 +151,53 @@ describe("better-auth の既定に頼らず、auth の設定が前提を言い�
 
         expect(response.status).toBe(200);
         expect(revoked).toBeNull();
+      }),
+    ));
+
+  test("better-auth は session を延長しても createdAt を変えない (再認証の時間窓は createdAt から数える)", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) => db.seedUser("extend-created-at"));
+        const { token, headers } = yield* createSessionFor(user.id);
+        yield* issuedTwoDaysAgo(token);
+        const before = yield* storedSessionTimes(token);
+
+        const response = yield* Effect.promise(() =>
+          auth.handler(new Request("http://localhost:3100/api/auth/get-session", { headers })),
+        );
+        const after = yield* storedSessionTimes(token);
+
+        expect(response.status).toBe(200);
+        expect(after.updatedAt).not.toBe(before.updatedAt);
+        expect(after.createdAt).toBe(before.createdAt);
+      }),
+    ));
+
+  test("better-auth の update-session は、利用者が送った createdAt を更新の対象から外して拒み、session を書き換えない (再認証の時間窓を利用者が延ばせない)", () =>
+    run(
+      Effect.gen(function* () {
+        const user = yield* TestDb.use((db) => db.seedUser("update-created-at"));
+        const { token, headers } = yield* createSessionFor(user.id);
+        yield* ageStoredSession(token, { sinceCreatedMs: TWO_DAYS_MS });
+        const before = yield* storedSessionTimes(token);
+        headers.set("content-type", "application/json");
+
+        const response = yield* Effect.promise(() =>
+          auth.handler(
+            new Request("http://localhost:3100/api/auth/update-session", {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ createdAt: new Date().toISOString() }),
+            }),
+          ),
+        );
+        const after = yield* storedSessionTimes(token);
+
+        expect(response.status).toBe(400);
+        expect(yield* Effect.promise(() => response.json())).toMatchObject({
+          message: "No fields to update",
+        });
+        expect(after.createdAt).toBe(before.createdAt);
       }),
     ));
 });
