@@ -1,0 +1,6 @@
+{
+  "name": "poc-simplewebauthn-on-workerd",
+  "main": "worker.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat", "delete_all_deletes_alarm"]
+}
