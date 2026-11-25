@@ -276,15 +276,6 @@ export const sendMfaDisable = async (session: SignedInSession, code: string): Pr
     ),
   );
 
-export const readMfaStatus = async (
-  session: SignedInSession,
-): Promise<{ enabled: boolean; recovery_codes_remaining: number }> => {
-  const response = await session.app.request("/api/account/mfa", {
-    headers: { ...JSON_HEADERS, cookie: session.cookie },
-  });
-  return (await response.json()) as { enabled: boolean; recovery_codes_remaining: number };
-};
-
 export const sendRegistration = async (
   session: SignedInSession,
   response: unknown,

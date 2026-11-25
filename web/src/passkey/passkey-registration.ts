@@ -17,12 +17,11 @@ export const PasskeyRegistration = Data.taggedEnum<PasskeyRegistration>();
 
 export const registerPasskey = (
   passkeyApi: PasskeyApi,
-  totpCode?: string,
 ): Effect.Effect<
   PasskeyRegistration,
   ApiFailure<"registrationOptions" | "register"> | PasskeyCreationFailed
 > =>
-  passkeyApi.registrationOptions({ payload: { totp_code: totpCode } }).pipe(
+  passkeyApi.registrationOptions().pipe(
     Effect.flatMap(createPasskey),
     Effect.flatMap(
       PasskeyCreation.$match({

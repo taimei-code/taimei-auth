@@ -313,22 +313,19 @@ const mfaRowView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<
     h,
   );
 
-const passkeySettingsView = (model: Model, mfaEnabled: boolean, h: HtmlBuilder<Message>): Html =>
+const passkeySettingsView = (model: Model, h: HtmlBuilder<Message>): Html =>
   h.submodel({
     slotId: "passkey-settings",
     view: PasskeySettings.view,
     model: model.passkeySettings,
-    viewInputs: { list: model.passkeyList, mfaEnabled },
+    viewInputs: { list: model.passkeyList },
     toParentMessage: toPasskeySettingsMessage,
   });
 
 const mfaListView = (model: Model, registration: MfaRegistration, h: HtmlBuilder<Message>): Html =>
   h.ul(
     [h.Role("list"), h.Class("divide-y")],
-    [
-      mfaRowView(model, registration, h),
-      passkeySettingsView(model, MfaState.guards.Enabled(registration), h),
-    ],
+    [mfaRowView(model, registration, h), passkeySettingsView(model, h)],
   );
 
 const mfaStateView = (model: Model, h: HtmlBuilder<Message>): Html =>

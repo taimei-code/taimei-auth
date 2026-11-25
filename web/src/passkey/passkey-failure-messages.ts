@@ -1,4 +1,3 @@
-import { MFA_FAILURE_MESSAGES } from "../mfa/mfa-failure-messages";
 import type { FailureMessages } from "../shared/failure-message";
 import type { PasskeyFailure } from "./passkey-registration";
 
@@ -7,10 +6,6 @@ const PASSKEY_GENERIC_FAILURE_MESSAGE =
 
 export const PASSKEY_FAILURE_MESSAGES: FailureMessages<PasskeyFailure> = {
   RateLimited: "操作の回数が上限に達しました。しばらく待ってからもう一度お試しください。",
-  TotpRequired: "多要素認証 (MFA) が有効になっています。ページを再読み込みしてください。",
-  InvalidCode: MFA_FAILURE_MESSAGES.InvalidCode,
-  Locked: MFA_FAILURE_MESSAGES.Locked,
-  NotEnabled: MFA_FAILURE_MESSAGES.NotEnabled,
   PasskeyRejected:
     "パスキーを登録できませんでした。時間が経ちすぎた可能性があります。もう一度登録してください。",
   PasskeyAlreadyRegistered: "このパスキーはすでに登録されています。",

@@ -121,7 +121,7 @@ const PAYLOAD_KEYS_BY_EVENT = {
     keys: ["passkey_id", "aaguid", "ip", "userAgent"],
     drive: Effect.gen(function* () {
       const user = yield* TestDb.use((db) => db.seedUser("passkey-registered"));
-      const options = yield* issueRegistrationOptions(user, undefined);
+      const options = yield* issueRegistrationOptions(user);
       const signed = signedRegistration({
         algorithm: "ES256",
         challenge: options.challenge,
