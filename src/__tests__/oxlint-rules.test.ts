@@ -2422,6 +2422,24 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(no-sonner-in-web)"],
   },
   {
+    name: "server の file は、直接の依存に無い zod を import できない",
+    path: "src/passkey/ZodProbe.ts",
+    source: 'import { z } from "zod";\nexport const id = z.string();',
+    expectedRules: ["taimei(no-zod-import)"],
+  },
+  {
+    name: "web の file は、zod を型だけでも import できない",
+    path: "web/src/mfa/ZodTypeProbe.ts",
+    source: 'import type { z } from "zod";\nexport type Id = z.ZodString;',
+    expectedRules: ["taimei(no-zod-import)"],
+  },
+  {
+    name: "試験の環境の file は、zod を import できない",
+    path: "testing/ZodProbe.ts",
+    source: 'import { z } from "zod";\nexport const id = z.uuid();',
+    expectedRules: ["taimei(no-zod-import)"],
+  },
+  {
     name: "Foldkit の file は sonner を import できない",
     path: "web/src/mfa/SonnerProbe.ts",
     source:
@@ -3742,13 +3760,13 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "server の実装 (src と testing の test 以外)",
     paths: SERVER_IMPLEMENTATION_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [["better-auth/cookies", "getSessionCookie"]],
   },
   {
     name: "server の test・db・management・src/auth.ts",
     paths: SERVER_TEST_AND_TOOL_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [],
   },
   {
@@ -3759,7 +3777,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "src/mfa/totp/probe-contract.ts",
       "src/spa-contract-table.ts",
     ],
-    everyForm: [...BANNED_ACROSS_SERVER, ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "zod", ...SERVER_EFFECT_SUBPATHS],
     named: [
       ["better-auth/cookies", "getSessionCookie"],
       ["effect/http-api", "HttpApiBuilder"],
@@ -3771,6 +3789,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
     paths: ["src/handlers/probe-http-api.ts"],
     everyForm: [
       ...BANNED_ACROSS_SERVER,
+      "zod",
       ...SERVER_EFFECT_SUBPATHS.filter((specifier) => specifier !== "effect/http"),
     ],
     named: [["better-auth/cookies", "getSessionCookie"]],
@@ -3778,7 +3797,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "e2e (e2e/fixtures.ts 以外)",
     paths: ["e2e/probe.e2e.ts", "e2e/helpers.ts"],
-    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS, "zod"],
     named: [],
   },
   {
@@ -3791,7 +3810,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "web/non-production/probe.ts",
       "web/vite.config.ts",
     ],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route"],
+    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
     named: [
       ["@foldkit/ui", "Dialog"],
       ["foldkit", "Route"],
@@ -3800,23 +3819,24 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "web の route (web/src/app/*/route.ts)",
     paths: ["web/src/app/account/route.ts"],
-    everyForm: [...BANNED_ACROSS_WEB],
+    everyForm: [...BANNED_ACROSS_WEB, "zod"],
     named: [["@foldkit/ui", "Dialog"]],
   },
   {
     name: "web の dialog の部品 (web/src/shared/ui/dialog-view.ts)",
     paths: ["web/src/shared/ui/dialog-view.ts"],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route"],
+    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
     named: [["foldkit", "Route"]],
   },
   {
-    name: "禁止の範囲の外 (e2e/fixtures.ts・packages・infra・scripts)",
-    paths: [
-      "e2e/fixtures.ts",
-      "packages/auth-client/src/probe.ts",
-      "infra/probe.ts",
-      "scripts/probe.ts",
-    ],
+    name: "e2e/fixtures.ts (effect は使えるが、zod は使えない)",
+    paths: ["e2e/fixtures.ts"],
+    everyForm: ["zod"],
+    named: [],
+  },
+  {
+    name: "禁止の範囲の外 (packages・infra・scripts)",
+    paths: ["packages/auth-client/src/probe.ts", "infra/probe.ts", "scripts/probe.ts"],
     everyForm: [],
     named: [],
   },

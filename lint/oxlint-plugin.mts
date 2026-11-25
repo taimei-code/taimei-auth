@@ -2351,6 +2351,14 @@ const ROWS: readonly Row[] = [
       "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)",
   },
   {
+    name: "no-zod-import",
+    within: ["src/**", "db/**", "e2e/**", "management/**", "testing/**", "web/**"],
+    includesTestFiles: true,
+    matchers: [importOrTypeImport(/^zod(\/|$)/)],
+    message:
+      "zod はこの repo の直接の依存ではない (better-auth が持ち込む)。入力の検査は effect の Schema で書く (docs/adr/0017-effect-v4-full-adoption.md)",
+  },
+  {
     name: "no-connect-node",
     within: SERVER_RUNTIME_ROOTS,
     includesTestFiles: true,

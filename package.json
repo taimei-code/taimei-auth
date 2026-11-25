@@ -42,8 +42,7 @@
     "nanoid": "^5.1.11",
     "otpauth": "9.5.1",
     "pg": "^8.16.3",
-    "resend": "^6.6.0",
-    "zod": "^4.6.7"
+    "resend": "^6.6.0"
   },
   "devDependencies": {
     "@alchemy.run/cloudflare": "2.0.0-beta.85",
