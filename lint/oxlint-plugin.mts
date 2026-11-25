@@ -2025,6 +2025,14 @@ const ROWS: readonly Row[] = [
       "ログインは helpers.ts の signInWithMagicLink で行う (e2e 専用の試験 API から URL を取って開く)。ログイン画面から Magic Link を送るのは、その画面を確かめる spec だけ (signInThroughMagicLinkForm)",
   },
   {
+    name: "session-age-only-in-helpers",
+    within: ["e2e/**"],
+    allowedIn: ["e2e/helpers.ts"],
+    matchers: [{ kind: "literal", pattern: /\/session-age/ }],
+    message:
+      "session を古くするのは helpers.ts の agePastReauthenticationWindow で行う (e2e 専用の試験 API の path と body の形を spec ごとに書かない)",
+  },
+  {
     name: "declared-failure-only-in-contract-mock",
     within: ["e2e/**"],
     allowedIn: ["e2e/contract-mock.ts"],

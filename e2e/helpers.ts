@@ -148,6 +148,22 @@ export const signInWithMagicLink = async (
   return loginUrl;
 };
 
+export const agePastReauthenticationWindow = async (page: Page): Promise<void> => {
+  const response = await page.request.post(`${BASE_URL}${TESTING_PATH}/session-age`, {
+    headers: { origin: new URL(BASE_URL).origin },
+    data: { issuedSecondsAgo: 10 * 60 + 1 },
+  });
+  expect(response.status()).toBe(204);
+};
+
+export const signInAgainReturningToSecurity = async (page: Page, email: string): Promise<void> => {
+  await expect(page).toHaveURL(/\/auth\/reauthenticate\?/);
+  const returnTo = new URL(page.url()).searchParams.get("redirect_url") ?? "";
+  expect(returnTo).toBe(new URL("/account/security", page.url()).toString());
+  await signInWithMagicLink(page, email, returnTo);
+  await expect(page).toHaveURL(/\/account\/security$/);
+};
+
 export const sendMagicLinkFromForm = async (page: Page, email: string): Promise<string> => {
   await page.getByPlaceholder("you@example.com").fill(email);
   return sentLinkAfter(email, async () => {

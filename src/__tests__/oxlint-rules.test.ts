@@ -2924,6 +2924,12 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(login-links-only-in-helpers)"],
   },
   {
+    name: "spec が /session-age を書くと、lint が止める",
+    path: "e2e/SessionAgeProbe.e2e.ts",
+    source: 'export const path = "/testing/v1/session-age";',
+    expectedRules: ["taimei(session-age-only-in-helpers)"],
+  },
+  {
     name: "spec が _tag を key に書くと、lint が止める",
     path: "e2e/TagProbe.e2e.ts",
     source: 'export const body = { _tag: "LastOwner" };',
@@ -2936,9 +2942,10 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
-    name: "helpers.ts は .server.log と /login-links を書ける",
+    name: "helpers.ts は .server.log と /login-links と /session-age を書ける",
     path: "e2e/helpers.ts",
-    source: 'export const log = "e2e/.server.log";\nexport const path = "/testing/v1/login-links";',
+    source:
+      'export const log = "e2e/.server.log";\nexport const path = "/testing/v1/login-links";\nexport const age = "/testing/v1/session-age";',
     expectedRules: [],
   },
   {
