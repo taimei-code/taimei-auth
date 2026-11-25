@@ -406,7 +406,7 @@ describe("チャレンジ強制プラグイン", () => {
       }),
     ));
 
-  test("連携アカウントの追加ではチャレンジを出さない (実 OAuth は QA-MR-02)", () =>
+  test("session を作らない OAuth の callback (連携の追加) ではチャレンジを出さない", () =>
     run(
       Effect.gen(function* () {
         const db = yield* TestDb;
