@@ -196,12 +196,32 @@ const flagSwitchOf = Effect.fnUntraced(function* (
   return { _tag: "Accepted", request: { flag: form.flag, state: form.state, companyIds } } as const;
 });
 
+const LOCAL_EXPLORER_HOST = "localhost";
+
+const localExplorerHrefOf = (url: URL, flagshipApp: string): string => {
+  const explorer = new URL(`/cdn-cgi/local/explorer/flagship/${flagshipApp}`, url);
+  explorer.hostname = LOCAL_EXPLORER_HOST;
+  return explorer.href;
+};
+
+const featureFlagsHrefOf = (
+  url: URL,
+  switchedIn: { featureFlags?: FakeFlagship; localExplorerFlagshipApp?: string },
+): string | null => {
+  if (switchedIn.featureFlags) return `${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}`;
+  if (switchedIn.localExplorerFlagshipApp)
+    return localExplorerHrefOf(url, switchedIn.localExplorerFlagshipApp);
+  return null;
+};
+
 export const devHomeRoutes = ({
   recordsEmailTo,
   featureFlags,
+  localExplorerFlagshipApp,
   flagCatalog = FEATURE_FLAG_CATALOG,
 }: Pick<NonProductionEmail, "recordsEmailTo"> & {
   featureFlags?: FakeFlagship;
+  localExplorerFlagshipApp?: string;
   flagCatalog?: FeatureFlagCatalog;
 }) => {
   const routes = new Hono()
@@ -229,7 +249,7 @@ export const devHomeRoutes = ({
               destination: destinationOf(redirectTarget),
               signInAction: `${DEV_HOME_SIGN_IN_PATH}${url.search}`,
               signOutAction: `${DEV_HOME_SIGN_OUT_PATH}${url.search}`,
-              featureFlagsHref: featureFlags ? `${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}` : null,
+              featureFlagsHref: featureFlagsHrefOf(url, { featureFlags, localExplorerFlagshipApp }),
             } as const;
           }),
         ),

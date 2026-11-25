@@ -11,10 +11,12 @@ import type { NonProductionEmail } from "./sent-links";
 export const nonProductionWorker = ({
   email,
   featureFlags,
+  localExplorerFlagshipApp,
   beforeFirstRequest,
 }: {
   email: NonProductionEmail;
   featureFlags?: FakeFlagship;
+  localExplorerFlagshipApp?: string;
   beforeFirstRequest: () => Promise<void>;
 }) =>
   serveOnlyOutsideProduction(
@@ -27,6 +29,7 @@ export const nonProductionWorker = ({
         extendBeforeStatic: mountNonProductionRoutes({
           recordsEmailTo: email.recordsEmailTo,
           featureFlags,
+          localExplorerFlagshipApp,
         }),
       }),
     ),
