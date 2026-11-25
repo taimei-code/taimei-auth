@@ -28,7 +28,7 @@
 - 選んだ理由: 遷移先の path と search が型検査され、存在しない path、定義していない search の値、必須の search の欠落への遷移が tsc で落ちる。search は route の `validateSearch` で 1 か所で parse し、遷移を起点とする処理 (`/account` を開く前の session と所属の確認、事業所登録の画面を開く前の確認、招待の受諾、MFA チャレンジの状態の取得) は route の `beforeLoad` / `loader` に置ける。React Router 8 は search の値と、`href()` を通さない path の誤りが型エラーにならなかった (draft PR #257 の PoC)
 - `trailingSlash` は `preserve` にする。既定の `never` は `/auth/` を `/auth` に替え、上の session に応じた redirect (`/auth/` と `/auth/signup` だけが対象) を通らなくなる。逆に、ログアウトや退会の後に開くログイン画面は、意図して `/auth` (スラッシュ無し) にする。2 つの入口 (`leaveSpaToSignIn` と `signInUrlAfterSignOut`) は `web/src/shared/leave-spa.ts` が定義する
 - `/auth` と `/account` をまたぐ遷移と、認証の状態が変わった後の遷移は、client 側の遷移ではなく document を読み直す (`reloadDocument`)。理由は 2 つある。session に応じた redirect は、document の要求でしか動かない。もう 1 つは cache の鮮度で、Effect Atom の registry (取得したデータの cache) に古い所属の一覧が残ったまま `/account` を開く前の確認がそれを読むと、事業所の作成や招待の受諾の直後でも事業所登録へ戻してしまう
-- search の値は文字列のまま読む (`web/src/app/search-params.ts`)。router の既定は数字だけの値を数に、`true` を boolean に変え、consumer が渡す query が zod の検査で落ちる
+- search の値は文字列のまま読む。route の `Route.query` に渡す Schema (`web/src/app/*/route.ts`、検査の本体は `src/sign-in-params.ts`) は値を文字列として検査する。数字だけの値を数に、`true` を boolean に変えて読むと、consumer が渡す query がこの検査で落ちる
 
 ### security の header は buildApp の最初の middleware で付ける (2026-11-15 追記、#463)
 
@@ -38,7 +38,7 @@
 - `Cross-Origin-Resource-Policy` は付けない (hono の既定の `same-origin` を外す)。ほかの origin が `/auth/assets/*` や canary の icon を読んでいないかを確かめていないためで、#477 で決める
 - sign-out の成功の応答には `Clear-Site-Data: "storage"` を付ける。`"cookies"` は応答の登録 domain 全体 (consumer の subdomain を含む) の cookie を消すので入れない。session の cookie は better-auth の sign-out が `Set-Cookie` で消す
 - `"cache"` も入れない (2026-11-22 変更、#559)。browser は HTTP cache を消し終えるまで、sign-out の応答を header ごと page に渡さない。消す時間は別の origin の分も含む browser の HTTP cache 全体の件数に応じて伸びる。手元の Chrome 157 (Mac) では、別の origin の cache が 2 万件ある時に約 1 秒かかった。staging では応答の受け取りに約 17 秒かかり、その間ログアウトの後の画面が移らなかった。`"storage"` は cache の量に関わらず数 ms で済む。`"cache"` を消さない代わりに、私的な応答を HTTP cache に入れさせない。`buildApp` が `/api/*` の応答に `Cache-Control: no-store` を付ける (2026-11-23、#561。付ける範囲は `src/__tests__/security-headers.test.ts` が固定する)。そのため `"cache"` で消すものは静的な file だけである
-- zod 4 は schema を作る時に `Function("")` で eval を使えるかを試し、CSP の下ではこれが違反として報告される。SPA の 2 つの application の entry (`web/src/app/*/entry.ts`) の最初で `web/src/shared/zod-jitless.ts` を import し、schema を作る前に試しを止める。bundle の root (`web/src/main.ts`) に置くと zod の一部が entry の chunk に写り、本番の JS が増える
+- zod 4 は schema を作る時に `Function("")` で eval を使えるかを試し、CSP の下ではこれが違反として報告される。SPA の 2 つの application の entry (`web/src/app/*/entry.ts`) の最初で `web/src/shared/zod-jitless.ts` を import し、schema を作る前に試しを止めていた。(2026-11-26 改訂、#521) zod を使わなくなり (ADR-0017 の Decision の zod の項)、build した bundle に zod が残らない (better-auth の client も zod を持ち込まない) ので、`zod-jitless.ts` と entry の import を消した
 
 ## Why
 

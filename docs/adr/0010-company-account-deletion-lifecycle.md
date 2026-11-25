@@ -114,7 +114,7 @@ signup 中の一時的な 0 件アカウントは許容するが、恒久化さ�
 
 ### レイヤ配置
 
-- handler (薄い): RBAC、zod、`requireActor` / `requireMembership` の guard、`runInTransaction` の起動、エラーから status への変換だけを行う。
+- handler (薄い): RBAC、入力の decode、`requireActor` / `requireMembership` の guard、`runInTransaction` の起動、エラーから status への変換だけを行う。
 - use-case (厚い): `src/company/delete.ts` の DeleteCompany の orchestration と、`src/account/orphan.ts` の `deleteAccountIfOrphaned(userId, tx)` (orphan 判定はドメインルールなので use-case 層に置く)。
 - repository (純粋なクエリ): `countActiveMembershipsByUserId` / `removeMembershipsOfCompany` を新設する。user 削除は既存の `deleteUser`、company は既存の `softDeleteCompany` を再利用する。`deleteMembership` のような「判定と削除」の複合を repository に置かない。
 
