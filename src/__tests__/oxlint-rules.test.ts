@@ -2991,17 +2991,45 @@ const CASES: readonly Case[] = [
     expectedRules: ["taimei(mfa-failure-messages-import-only-in-mfa)"],
   },
   {
-    name: "パスキーの文言の表は、登録の前の MFA のコードの失敗に同じ文言を出すために MFA の表を import できる",
-    path: "web/src/passkey/passkey-failure-messages.ts",
-    source:
-      'import { mfaFailureText } from "../mfa/mfa-failure-messages";\nexport const text = mfaFailureText;',
-    expectedRules: [],
-  },
-  {
     name: "mfa の file は MFA の表を import できる",
     path: "web/src/mfa/MfaTableProbe.ts",
     source:
       'import { mfaFailureText } from "./mfa-failure-messages";\nexport const text = mfaFailureText;',
+    expectedRules: [],
+  },
+  {
+    name: "パスキーの文言の表が MFA の表を import すると、lint が止める",
+    path: "web/src/passkey/passkey-failure-messages.ts",
+    source:
+      'import { mfaFailureText } from "../mfa/mfa-failure-messages";\nexport const text = mfaFailureText;',
+    expectedRules: ["taimei(mfa-failure-messages-import-only-in-mfa)"],
+  },
+  {
+    name: "パスキーの登録が MFA の無効化の試行枠を import すると、lint が止める",
+    path: "src/passkey/register-passkey.ts",
+    source:
+      'import { spendDisableAttempt } from "../mfa/disable-attempt-budget";\nexport const spend = spendDisableAttempt;',
+    expectedRules: ["taimei(mfa-disable-attempt-budget-only-in-disable)"],
+  },
+  {
+    name: "無効化の試行枠の定義を、無効化の試行枠の module の外から直接数えると、lint が止める",
+    path: "src/passkey/register-passkey.ts",
+    source:
+      'import { ATTEMPT_BUDGETS, spendAttemptBudgetFailClosed } from "../attempt-budget";\nexport const spend = (id: string) => spendAttemptBudgetFailClosed(ATTEMPT_BUDGETS.mfaDisablePerUser, id);',
+    expectedRules: ["taimei(mfa-disable-budget-only-via-disable-attempt-budget)"],
+  },
+  {
+    name: "無効化の試行枠の module は、無効化の試行枠の定義を使える",
+    path: "src/mfa/disable-attempt-budget.ts",
+    source:
+      'import { ATTEMPT_BUDGETS } from "../attempt-budget";\nexport const BUDGET = ATTEMPT_BUDGETS.mfaDisablePerUser;',
+    expectedRules: [],
+  },
+  {
+    name: "MFA の無効化は無効化の試行枠を import できる",
+    path: "src/mfa/totp/disable-mfa.ts",
+    source:
+      'import { spendDisableAttempt } from "../disable-attempt-budget";\nexport const spend = spendDisableAttempt;',
     expectedRules: [],
   },
   {

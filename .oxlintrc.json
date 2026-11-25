@@ -173,6 +173,8 @@
     "taimei/dialog-transition-state-only-in-dialog-view": "error",
     "taimei/dialog-visible-only-by-is-dialog-visible": "error",
     "taimei/mfa-failure-messages-import-only-in-mfa": "error",
+    "taimei/mfa-disable-attempt-budget-only-in-disable": "error",
+    "taimei/mfa-disable-budget-only-via-disable-attempt-budget": "error",
     "taimei/page-request-only-in-page-request": "error",
     "taimei/form-only-in-form-view": "error",
     "taimei/no-external-font-host": "error",

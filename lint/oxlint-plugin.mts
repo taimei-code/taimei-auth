@@ -2220,10 +2220,26 @@ const ROWS: readonly Row[] = [
   {
     name: "mfa-failure-messages-import-only-in-mfa",
     within: ["web/src/**"],
-    allowedIn: ["web/src/mfa/**", "web/src/passkey/passkey-failure-messages.ts"],
+    allowedIn: ["web/src/mfa/**"],
     matchers: [{ kind: "valueImport", source: /(^|\/)mfa-failure-messages$/ }],
     message:
-      "MFA の失敗の文言の表 (mfa/mfa-failure-messages.ts) を使うのは MFA の画面 (web/src/mfa/**) と、登録の前に MFA のコードを確かめるパスキーの文言の表 (passkey/passkey-failure-messages.ts) だけ。同じ失敗に同じ文言を出すために共有している",
+      "MFA の失敗の文言の表 (mfa/mfa-failure-messages.ts) を使うのは MFA の画面 (web/src/mfa/**) だけ。同じ失敗に同じ文言を出すために共有している",
+  },
+  {
+    name: "mfa-disable-attempt-budget-only-in-disable",
+    within: ["src/**"],
+    allowedIn: ["src/mfa/totp/disable-mfa.ts"],
+    matchers: [{ kind: "valueImport", source: /(^|\/)disable-attempt-budget$/ }],
+    message:
+      "MFA の無効化の試行枠 (mfa/disable-attempt-budget.ts) を使うのは MFA の無効化 (mfa/totp/disable-mfa.ts) だけ。ほかの確認と枠を共有すると、ほかの確認の誤りで無効化がロックされる",
+  },
+  {
+    name: "mfa-disable-budget-only-via-disable-attempt-budget",
+    within: ["src/**"],
+    allowedIn: ["src/mfa/disable-attempt-budget.ts"],
+    matchers: [{ kind: "member", paths: ["ATTEMPT_BUDGETS.mfaDisablePerUser"] }],
+    message:
+      "MFA の無効化の試行枠 (ATTEMPT_BUDGETS.mfaDisablePerUser) は mfa/disable-attempt-budget.ts を通して使う。直接数えると、MFA の無効化の外の確認が無効化の枠を使える",
   },
   {
     name: "sdk-import-only-peer-dependencies",
