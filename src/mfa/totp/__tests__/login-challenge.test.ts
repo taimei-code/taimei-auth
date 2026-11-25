@@ -109,6 +109,32 @@ describe("ログインチャレンジ", () => {
       }),
     ));
 
+  test("前の版が保存した形のチャレンジも、cookie を持つ request から pending として読め、保存された user と戻り先と方法を返す", () =>
+    run(
+      Effect.gen(function* () {
+        const challenge = yield* issueTestChallenge({
+          userId: `${P}placeholder`,
+          redirectUrl: "/account",
+          method: "magic_link",
+        });
+        yield* TtlStore.use((r) =>
+          r.set(
+            challengeKey(challenge.challengeId),
+            `{"userId":"${P}stored","redirectUrl":"${CONSUMER_CALLBACK}","method":"github"}`,
+            600,
+          ),
+        );
+
+        expect(yield* challengeState(challenge.headers)).toEqual({ pending: true });
+        expect(yield* peekLoginChallenge(challenge.headers)).toEqual({
+          userId: `${P}stored`,
+          redirectUrl: CONSUMER_CALLBACK,
+          method: "github",
+          challengeId: challenge.challengeId,
+        });
+      }),
+    ));
+
   test("TOTP で通過すると session を発行して audit を残し、チャレンジは 1 回だけ使える", () =>
     run(
       Effect.gen(function* () {

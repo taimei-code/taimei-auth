@@ -1,28 +1,25 @@
-import { Effect, Option, pipe, Schema } from "effect";
+import { Effect, Option, pipe, Schema, SchemaGetter, SchemaTransformation } from "effect";
 import { Route } from "foldkit";
 import { defineRouteUnion, literal, slash, Transition } from "foldkit/route";
 
-import { acceptInvitationSearchSchema } from "@core/invitation/accept-path";
-import {
-  reauthenticationSearchSchema,
-  type SignInParams,
-  signInParamsSchema,
-} from "@core/sign-in-params";
+import { AcceptInvitationSearch } from "@core/invitation/accept-path";
+import { ReauthenticationSearch, SignInParams } from "@core/sign-in-params";
 
 import { ErrorPageReason } from "../../auth/auth-error-reason";
 import * as SignInOrSignUp from "../../auth/pages/SignInOrSignUp";
 import { redirectUrlAfterAccept } from "../../invitation/redirect-target";
-import { fromZodSearch } from "../zod-search";
+
+const acceptInvitationFields = {
+  invitation_token: Schema.UndefinedOr(Schema.String),
+  redirect_url: Schema.String,
+};
 
 export const AuthRoute = defineRouteUnion({
   SignIn: SignInOrSignUp.Params.fields,
   SignUp: SignInOrSignUp.Params.fields,
   SignUpCompany: SignInOrSignUp.Params.fields,
   Reauthenticate: { redirect_url: Schema.String },
-  AcceptInvitation: {
-    invitation_token: Schema.UndefinedOr(Schema.String),
-    redirect_url: Schema.String,
-  },
+  AcceptInvitation: acceptInvitationFields,
   RejectedSignInParams: {},
   MfaChallenge: {},
   Error: { reason: Schema.Option(ErrorPageReason) },
@@ -30,11 +27,43 @@ export const AuthRoute = defineRouteUnion({
 });
 export type AuthRoute = typeof AuthRoute.Type;
 
-const signInSearch = fromZodSearch<SignInParams>(signInParamsSchema);
+const COMPANY_SIGNUP_FALLBACK: SignInOrSignUp.Params = {
+  service_name: "accounts",
+  redirect_url: "/account",
+};
+
+const decodeSignInParams = Schema.decodeUnknownOption(SignInParams);
+
+const companySignUpSearch = Schema.Record(Schema.String, Schema.String).pipe(
+  Schema.decodeTo(
+    SignInOrSignUp.Params,
+    SchemaTransformation.transform({
+      decode: (search) =>
+        Option.getOrElse(decodeSignInParams(search), () => COMPANY_SIGNUP_FALLBACK),
+      encode: (params) => ({ ...params }),
+    }),
+  ),
+);
+
+const acceptInvitationSearch = AcceptInvitationSearch.pipe(
+  Schema.decodeTo(
+    Schema.Struct(acceptInvitationFields),
+    new SchemaTransformation.Transformation(
+      SchemaGetter.transform((search: typeof AcceptInvitationSearch.Type) => ({
+        invitation_token: search.invitation_token,
+        redirect_url: redirectUrlAfterAccept(search),
+      })),
+      SchemaGetter.forbidden(
+        () =>
+          "招待の受諾の URL は acceptInvitationPath で組み立てる (戻り先の組を route の値から戻せない)",
+      ),
+    ),
+  ),
+);
 
 export const signInRouter = pipe(
   literal("auth"),
-  Route.query(signInSearch),
+  Route.query(SignInParams),
   Route.mapTo(AuthRoute.SignIn),
 );
 
@@ -43,7 +72,7 @@ const signInRejectedRouter = pipe(literal("auth"), Route.mapTo(AuthRoute.Rejecte
 export const signUpRouter = pipe(
   literal("auth"),
   slash(literal("signup")),
-  Route.query(signInSearch),
+  Route.query(SignInParams),
   Route.mapTo(AuthRoute.SignUp),
 );
 
@@ -56,7 +85,7 @@ const signUpRejectedRouter = pipe(
 const reauthenticateRouter = pipe(
   literal("auth"),
   slash(literal("reauthenticate")),
-  Route.query(fromZodSearch(reauthenticationSearchSchema)),
+  Route.query(ReauthenticationSearch),
   Route.mapTo(AuthRoute.Reauthenticate),
 );
 
@@ -70,11 +99,7 @@ const signUpCompanyRouter = pipe(
   literal("auth"),
   slash(literal("signup")),
   slash(literal("company")),
-  Route.query(
-    fromZodSearch<SignInParams>(
-      signInParamsSchema.catch({ service_name: "accounts", redirect_url: "/account" }),
-    ),
-  ),
+  Route.query(companySignUpSearch),
   Route.mapTo(AuthRoute.SignUpCompany),
 );
 
@@ -82,14 +107,7 @@ const acceptInvitationRouter = pipe(
   literal("auth"),
   slash(literal("signup")),
   slash(literal("accept-invitation")),
-  Route.query(
-    fromZodSearch(
-      acceptInvitationSearchSchema.transform((search) => ({
-        invitation_token: search.invitation_token,
-        redirect_url: redirectUrlAfterAccept(search),
-      })),
-    ),
-  ),
+  Route.query(acceptInvitationSearch),
   Route.mapTo(AuthRoute.AcceptInvitation),
 );
 

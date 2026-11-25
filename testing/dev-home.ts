@@ -11,11 +11,7 @@ import {
 import { AuthApi } from "../src/auth-service";
 import { InvalidArgument } from "../src/failures";
 import { runRoute } from "../src/handlers/run-route";
-import {
-  INVALID_REDIRECT_URL_PAGE,
-  type RedirectTarget,
-  redirectTargetSchema,
-} from "../src/sign-in-params";
+import { INVALID_REDIRECT_URL_PAGE, RedirectTarget } from "../src/sign-in-params";
 import { requireAuthHostOrigin } from "./auth-host-origin";
 import { browserKeyIssuedIfMissing } from "./browser-key";
 import {
@@ -36,14 +32,18 @@ export const DEV_HOME_SIGN_IN_PATH = `${DEV_HOME_PATH}/sign-in`;
 export const DEV_HOME_SIGN_OUT_PATH = `${DEV_HOME_PATH}/sign-out`;
 const DEV_HOME_FEATURE_FLAGS_PATH = `${DEV_HOME_PATH}/feature-flags`;
 
+const decodeRedirectTarget = Schema.decodeUnknownEffect(RedirectTarget);
+
 const redirectTargetOf = (
   url: URL,
 ): Effect.Effect<Option.Option<RedirectTarget>, InvalidArgument> => {
   const query = Object.fromEntries(url.searchParams);
   if (query.service_name === undefined && query.redirect_url === undefined)
     return Effect.succeedNone;
-  const parsed = redirectTargetSchema.safeParse(query);
-  return parsed.success ? Effect.succeedSome(parsed.data) : Effect.fail(new InvalidArgument({}));
+  return decodeRedirectTarget(query).pipe(
+    Effect.asSome,
+    Effect.mapError(() => new InvalidArgument({})),
+  );
 };
 
 const devHomeCallbackURLOf = (url: URL) => {

@@ -101,4 +101,37 @@ describe("CheckMemberships は、事業所が使えるか・削除済みか・�
         });
       }),
     ));
+
+  test("64 文字の id と 1000 人の user_ids は受け付ける", () =>
+    run(
+      Effect.gen(function* () {
+        const longId = "c".repeat(64);
+        const userIds = Array.from({ length: 1000 }, (_, i) => `${P}u${i}`);
+
+        expect(yield* check(longId, userIds)).toEqual({
+          companyActive: false,
+          companyActivationStatus: CompanyActivationStatus.NOT_FOUND,
+          memberUserIds: [],
+        });
+      }),
+    ));
+
+  test.each([
+    { label: "65 文字の company_id", companyId: "c".repeat(65), userIds: [`${P}u`] },
+    { label: "空の company_id", companyId: "", userIds: [`${P}u`] },
+    { label: "65 文字の user_id", companyId: `${P}co`, userIds: ["u".repeat(65)] },
+    { label: "空の user_id", companyId: `${P}co`, userIds: [""] },
+    {
+      label: "1001 人の user_ids",
+      companyId: `${P}co`,
+      userIds: Array.from({ length: 1001 }, (_, i) => `${P}u${i}`),
+    },
+  ])("$label は InvalidArgument で拒む", ({ companyId, userIds }) =>
+    run(
+      Effect.gen(function* () {
+        const failure = yield* Effect.flip(checkMembershipsProgram({ companyId, userIds }));
+
+        expect(failure._tag).toBe("InvalidArgument");
+      }),
+    ));
 });

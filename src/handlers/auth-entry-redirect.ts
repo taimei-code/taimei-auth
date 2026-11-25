@@ -1,16 +1,17 @@
 import { buildCompanySignupUrl } from "@taimei-code/auth-client";
 import { sessionCookieOf } from "../session-cookie";
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import type { Context, Next } from "hono";
 
 import { acceptInvitationPath } from "../invitation/accept-path";
 import { MembershipRepo } from "../membership/ports";
 import { captureCauseAs } from "../sentry";
 import { checkSession } from "../session-check";
-import { signInParamsSchema } from "../sign-in-params";
+import { SignInParams } from "../sign-in-params";
 import { CONTINUE, respondWith, runMiddleware } from "./run-route";
 
 const AUTH_ENTRY_PATHS = new Set(["/auth/", "/auth/signup"]);
+const decodeSignInParams = Schema.decodeUnknownOption(SignInParams);
 
 export const authEntryRedirect = (c: Context, next: Next) => {
   const headers = c.req.raw.headers;
@@ -22,14 +23,15 @@ export const authEntryRedirectProgram = Effect.fnUntraced(
   function* (c: Context) {
     const headers = c.req.raw.headers;
     const requestUrl = new URL(c.req.url);
-    const params = signInParamsSchema.safeParse(Object.fromEntries(requestUrl.searchParams));
-    if (!params.success) return CONTINUE;
+    const decoded = decodeSignInParams(Object.fromEntries(requestUrl.searchParams));
+    if (Option.isNone(decoded)) return CONTINUE;
+    const params = decoded.value;
 
     const status = yield* checkSession(headers);
     if (status._tag !== "Active") return CONTINUE;
 
-    if (params.data.invitation_token) {
-      return respondWith(c.redirect(acceptInvitationPath(params.data.invitation_token)));
+    if (params.invitation_token) {
+      return respondWith(c.redirect(acceptInvitationPath(params.invitation_token)));
     }
 
     const activeMembershipCount = yield* MembershipRepo.use((repo) =>
@@ -39,14 +41,14 @@ export const authEntryRedirectProgram = Effect.fnUntraced(
       const { pathname, search } = new URL(
         buildCompanySignupUrl({
           authBaseUrl: requestUrl.origin,
-          service: params.data.service_name,
-          returnTo: params.data.redirect_url,
+          service: params.service_name,
+          returnTo: params.redirect_url,
         }),
       );
       return respondWith(c.redirect(pathname + search));
     }
 
-    return respondWith(c.redirect(params.data.redirect_url));
+    return respondWith(c.redirect(params.redirect_url));
   },
   Effect.catchTag(
     ["AuthApiError", "DbError"],

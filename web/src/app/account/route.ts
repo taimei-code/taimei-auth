@@ -1,11 +1,8 @@
 import { Equal, Option, pipe, Schema } from "effect";
 import { Route } from "foldkit";
 import { defineRouteUnion, literal, slash } from "foldkit/route";
-import type { z } from "zod";
 
-import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
-
-import { fromZodSearch } from "../zod-search";
+import { RedirectTargetSearch } from "@core/invitation/accept-path";
 
 export const AccountRoute = defineRouteUnion({
   Profile: {},
@@ -51,9 +48,7 @@ export const companiesRouter = pipe(
 export const membersRouter = pipe(
   literal("account"),
   slash(literal("members")),
-  Route.query(
-    fromZodSearch<z.output<typeof redirectTargetSearchSchema>>(redirectTargetSearchSchema),
-  ),
+  Route.query(RedirectTargetSearch),
   Route.mapTo(AccountRoute.Members),
 );
 

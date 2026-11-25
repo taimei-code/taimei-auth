@@ -60,4 +60,28 @@ describe("利用者ごとの session の一覧を、同時に書いても項目�
 
     expect(merged.ttlSeconds).toBe(600);
   });
+
+  test("前の版が保存した形の一覧に書き込みを合わせると、期限内の項目が残り、項目は token と expiresAt だけで保存する", () => {
+    const stored = `[{"token":"kept","expiresAt":${NOW + 60_000},"note":"x"}]`;
+
+    const merged = mergeSessionIndex(stored, JSON.stringify([entry("s1", 120)]), NOW);
+
+    expect(merged.value).toBe(
+      `[{"token":"kept","expiresAt":${NOW + 60_000}},{"token":"s1","expiresAt":${NOW + 120_000}}]`,
+    );
+  });
+
+  test("保存された一覧のうち、期限が有限でない項目と形の違う項目は捨て、残りの項目は残す", () => {
+    const stored = `[{"token":"infinite","expiresAt":1e999},{"token":"no-expiry"},"text",{"token":"kept","expiresAt":${NOW + 60_000}}]`;
+
+    const merged = mergeSessionIndex(stored, "[]", NOW);
+
+    expect(tokensOf(merged.value)).toEqual(["kept"]);
+  });
+
+  test("配列でない保存済みの値は、空の一覧として扱う", () => {
+    const merged = mergeSessionIndex('{"token":"s0"}', JSON.stringify([entry("s1", 60)]), NOW);
+
+    expect(tokensOf(merged.value)).toEqual(["s1"]);
+  });
 });

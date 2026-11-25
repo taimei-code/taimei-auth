@@ -96,6 +96,31 @@ describe("Hono に載せた SPA の HttpApi", () => {
     expect([res.status, await res.text()]).toEqual([400, ""]);
   });
 
+  test.each([
+    "a.b+c@example.co.jp",
+    "O'Neil@example.com",
+  ])("招待のメールの %s は decode で拒まず、所属の無い人には guard の 403 を返す", async (email) => {
+    const res = await signedInApp().request(
+      "/api/account/companies/co_none/invitations",
+      signedPost({ email, role: "MEMBER" }),
+    );
+    expect(res.status).toBe(403);
+  });
+
+  test.each([
+    "a@b",
+    "a..b@example.com",
+    ".a@example.com",
+    "a@-example.com",
+    "ａ@example.com",
+  ])("招待のメールの %s は decode の 400 で拒む", async (email) => {
+    const res = await signedInApp().request(
+      "/api/account/companies/co_none/invitations",
+      signedPost({ email, role: "MEMBER" }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   test("入力の decode 失敗 (400) は Sentry に送らない", async () => {
     const res = await signedInApp().request(
       "/api/account/companies/co_none/invitations",

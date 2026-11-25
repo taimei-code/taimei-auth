@@ -1,24 +1,29 @@
-import { z } from "zod";
+import { Effect, Schema } from "effect";
 import type { RedirectTarget } from "../sign-in-params";
 
-const optionalString = z.string().optional().catch(undefined);
+const IgnoredIfNotString = Schema.optional(
+  Schema.UndefinedOr(Schema.String).pipe(Schema.catchDecoding(() => Effect.succeedSome(undefined))),
+);
 
-export const redirectTargetSearchSchema = z.object({
-  service_name: optionalString,
-  redirect_url: optionalString,
+export const RedirectTargetSearch = Schema.Struct({
+  service_name: IgnoredIfNotString,
+  redirect_url: IgnoredIfNotString,
 });
 
-export const acceptInvitationSearchSchema = redirectTargetSearchSchema.extend({
-  invitation_token: optionalString,
+export type RedirectTargetSearch = typeof RedirectTargetSearch.Type;
+
+export const AcceptInvitationSearch = Schema.Struct({
+  ...RedirectTargetSearch.fields,
+  invitation_token: IgnoredIfNotString,
 });
 
-export const ACCEPT_INVITATION_ROUTE = "/signup/accept-invitation";
-export const ACCEPT_INVITATION_PATH = `/auth${ACCEPT_INVITATION_ROUTE}` as const;
+const ACCEPT_INVITATION_ROUTE = "/signup/accept-invitation";
+const ACCEPT_INVITATION_PATH = `/auth${ACCEPT_INVITATION_ROUTE}` as const;
 
 export const acceptInvitationPath = (invitationToken: string, target?: RedirectTarget): string => {
   const search = {
     invitation_token: invitationToken,
     ...target,
-  } satisfies z.input<typeof acceptInvitationSearchSchema>;
+  } satisfies typeof AcceptInvitationSearch.Encoded;
   return `${ACCEPT_INVITATION_PATH}?${new URLSearchParams(search)}`;
 };

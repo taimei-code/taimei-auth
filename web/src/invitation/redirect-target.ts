@@ -1,17 +1,12 @@
-import type { z } from "zod";
+import { Option, Schema } from "effect";
 
-import {
-  type acceptInvitationSearchSchema,
-  type redirectTargetSearchSchema,
-} from "@core/invitation/accept-path";
-import { type RedirectTarget, redirectTargetSchema } from "@core/sign-in-params";
+import type { RedirectTargetSearch } from "@core/invitation/accept-path";
+import { RedirectTarget } from "@core/sign-in-params";
 
-export type RedirectTargetSearch = z.output<typeof redirectTargetSearchSchema>;
-
-export type AcceptInvitationSearch = z.output<typeof acceptInvitationSearchSchema>;
+const decodeRedirectTarget = Schema.decodeUnknownOption(RedirectTarget);
 
 export const parseRedirectTarget = (search: RedirectTargetSearch): RedirectTarget | undefined =>
-  redirectTargetSchema.safeParse(search).data;
+  Option.getOrUndefined(decodeRedirectTarget(search));
 
 export const redirectUrlAfterAccept = (search: RedirectTargetSearch): string =>
   parseRedirectTarget(search)?.redirect_url ?? "/account";

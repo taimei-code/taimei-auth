@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { acceptInvitationPath, acceptInvitationSearchSchema } from "../accept-path";
+import { Schema } from "effect";
+import { AcceptInvitationSearch, acceptInvitationPath } from "../accept-path";
 
 const target = {
   service_name: "taimei",
@@ -26,9 +27,11 @@ describe("acceptInvitationPath", () => {
   test("作った URL の search を web の受諾の route の schema で読むと、同じ token と組に戻る", () => {
     const url = new URL(acceptInvitationPath("inv/+abc", target), "http://localhost");
 
-    expect(acceptInvitationSearchSchema.parse(Object.fromEntries(url.searchParams))).toEqual({
-      invitation_token: "inv/+abc",
-      ...target,
-    });
+    expect(Schema.decodeSync(AcceptInvitationSearch)(Object.fromEntries(url.searchParams))).toEqual(
+      {
+        invitation_token: "inv/+abc",
+        ...target,
+      },
+    );
   });
 });

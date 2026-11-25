@@ -1,13 +1,11 @@
 import { Schema, SchemaTransformation } from "effect";
 import { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
-import { z } from "zod";
 import { Authenticated } from "../account/actor-contract";
 import { EmailMismatch, ExpiredOrUsed } from "./errors";
 import { Forbidden, NotFound, RateLimited } from "../failures";
 import { RoleSchema } from "../membership/membership-contract";
 import { CompanyParams, Ok } from "../spa-contract-schemas";
-import { SERVICE_NAMES } from "../services";
-import { redirectTargetSchema } from "../sign-in-params";
+import { InvitationToken, RedirectTarget } from "../sign-in-params";
 import { NotFoundOrNotPending } from "./errors";
 
 const PendingInvitation = Schema.Struct({
@@ -18,16 +16,8 @@ const PendingInvitation = Schema.Struct({
   created_at: Schema.String,
 });
 
-export type PendingInvitation = typeof PendingInvitation.Type;
-
-const AllowedRedirectTarget = Schema.Struct({
-  service_name: Schema.Literals(SERVICE_NAMES),
-  redirect_url: Schema.String,
-}).check(
-  Schema.makeFilter((target) => redirectTargetSchema.safeParse(target).success, {
-    expected: "redirect_url in allowlist",
-  }),
-);
+const INVITABLE_EMAIL =
+  /^(?:[A-Za-z0-9_'+-]+\.)*[A-Za-z0-9_'+-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/;
 
 export class InvitationGroup extends HttpApiGroup.make("invitation")
   .add(
@@ -39,11 +29,11 @@ export class InvitationGroup extends HttpApiGroup.make("invitation")
     HttpApiEndpoint.post("create", "/api/account/companies/:companyId/invitations", {
       params: CompanyParams,
       payload: Schema.Struct({
-        email: Schema.String.check(Schema.isMaxLength(320), Schema.isPattern(z.regexes.email)).pipe(
+        email: Schema.String.check(Schema.isMaxLength(320), Schema.isPattern(INVITABLE_EMAIL)).pipe(
           Schema.decode(SchemaTransformation.toLowerCase()),
         ),
         role: RoleSchema,
-        redirect_target: Schema.optional(AllowedRedirectTarget),
+        redirect_target: Schema.optional(RedirectTarget),
       }),
       success: Schema.Struct({
         invitation: Schema.Struct({
@@ -67,7 +57,7 @@ export class InvitationGroup extends HttpApiGroup.make("invitation")
     ),
     HttpApiEndpoint.post("accept", "/api/account/accept-invitation", {
       payload: Schema.Struct({
-        invitation_token: Schema.String.check(Schema.isBetweenLength(1, 256)),
+        invitation_token: InvitationToken,
       }),
       success: Schema.Struct({
         ...Ok.fields,
