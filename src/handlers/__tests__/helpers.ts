@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, type Mock, spyOn } from "bun:test";
+import { afterEach, beforeEach, expect, type Mock, spyOn } from "bun:test";
 import { Effect, Layer } from "effect";
 import { Hono, type MiddlewareHandler } from "hono";
 import { mountSpaApi } from "../spa-http-api";
@@ -20,6 +20,7 @@ import { CLIENT_IP_HEADER } from "../../client-ip";
 import { EmailSender } from "../../email/ports";
 import { sessionCookieOf } from "../../session-cookie";
 import type { AppServices } from "../../runtime";
+import { spaEndpointTable } from "../../spa-contract-table";
 import { JSON_HEADERS } from "../client-facing-error";
 import { runtimeServices } from "../spa-http-api";
 
@@ -193,6 +194,18 @@ export const outcomeOf = async (response: Response): Promise<Outcome> => ({
 });
 
 export const statusAndBody = ({ status, body }: Outcome) => ({ status, body });
+
+export const expectReauthenticationRequired = (
+  endpointName: string,
+  { status, body }: Pick<Outcome, "status" | "body">,
+) => {
+  expect(body).toEqual({ _tag: "ReauthenticationRequired" });
+  expect(
+    spaEndpointTable()
+      .find((endpoint) => endpoint.name === endpointName)
+      ?.failures.get("ReauthenticationRequired"),
+  ).toBe(status);
+};
 
 export const sameOriginHeaders = (cookie: string) => ({
   ...JSON_HEADERS,

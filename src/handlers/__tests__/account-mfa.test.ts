@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
-import { buildAppWith, requestApp, responseJson } from "./helpers";
+import { buildAppWith, expectReauthenticationRequired, requestApp, responseJson } from "./helpers";
 import { Effect, Schema } from "effect";
 import { Hono } from "hono";
 import {
@@ -11,7 +11,12 @@ import {
   totpCode,
   wrongTotpCode,
 } from "../../mfa/__tests__/helpers";
-import { ageStoredSession, createSessionFor } from "../../__tests__/session-helpers";
+import {
+  PAST_REAUTHENTICATION_WINDOW_MS,
+  WITHIN_REAUTHENTICATION_WINDOW_MS,
+  ageStoredSession,
+  createSessionFor,
+} from "../../__tests__/session-helpers";
 import { AuthApi, SessionRejected } from "../../auth-service";
 import { auditFailingLayer, auditLogWith, authApiWith } from "../../__tests__/test-layers";
 import { ATTEMPT_BUDGETS } from "../../attempt-budget";
@@ -20,7 +25,6 @@ import { dbTest } from "../../__tests__/live-runner";
 import { TestDb } from "../../__tests__/test-db";
 import { mountSpaApi } from "../spa-http-api";
 import type { AuditLogEntry } from "@/db/repositories/audit-log";
-import { spaEndpointTable } from "../../spa-contract-table";
 
 const P = "mfa-h-account-";
 const { run, cleanup } = dbTest(P);
@@ -372,11 +376,6 @@ describe("account MFA API", () => {
     ));
 });
 
-const MINUTE_MS = 60 * 1000;
-const SECOND_MS = 1000;
-const PAST_WINDOW_MS = 10 * MINUTE_MS + SECOND_MS;
-const WITHIN_WINDOW_MS = 9 * MINUTE_MS;
-
 const recordingAudit = () => {
   const recorded: AuditLogEntry[] = [];
   const layer = auditLogWith((live) => ({
@@ -392,16 +391,10 @@ const recordingAudit = () => {
   return { recorded, app: buildAppWith(layer) };
 };
 
-const declaredStatusOf = (endpointName: string, tag: unknown) =>
-  spaEndpointTable()
-    .find((endpoint) => endpoint.name === endpointName)
-    ?.failures.get(String(tag));
-
-const expectDeclaredNewFailure = (endpointName: string, res: Response) =>
+const readReauthenticationRequired = (endpointName: string, res: Response) =>
   Effect.gen(function* () {
     const body = (yield* responseJson(res)) as { _tag?: unknown };
-    expect(["Unauthorized", "RateLimited"]).not.toContain(body._tag);
-    expect(declaredStatusOf(endpointName, body._tag)).toBe(res.status);
+    expectReauthenticationRequired(endpointName, { status: res.status, body });
     return body;
   });
 
@@ -424,12 +417,12 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const db = yield* TestDb;
         const user = yield* db.seedUser("reauth-enroll");
         const session = yield* createSessionFor(user.id);
-        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS });
         const app = buildApp();
 
         const res = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
 
-        yield* expectDeclaredNewFailure("mfa.enroll", res);
+        yield* readReauthenticationRequired("mfa.enroll", res);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
         expect(yield* mfaEnabledOf(app, session.headers)).toBe(false);
       }),
@@ -445,14 +438,14 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const enrollment = yield* enrollmentOf(
           yield* postJson(app, "/api/account/mfa/enroll", session.headers),
         );
-        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS });
 
         const res = yield* postJson(app, "/api/account/mfa/activate", session.headers, {
           code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),
           enrollment_id: enrollment.enrollment_id,
         });
 
-        yield* expectDeclaredNewFailure("mfa.activate", res);
+        yield* readReauthenticationRequired("mfa.activate", res);
         expect((yield* findMfaTotpRow(user.id))?.verifiedAt).toBeNull();
         expect(yield* mfaEnabledOf(app, session.headers)).toBe(false);
       }),
@@ -464,7 +457,9 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const db = yield* TestDb;
         const user = yield* db.seedUser("reauth-fresh");
         const session = yield* createSessionFor(user.id);
-        yield* ageStoredSession(session.token, { sinceCreatedMs: WITHIN_WINDOW_MS });
+        yield* ageStoredSession(session.token, {
+          sinceCreatedMs: WITHIN_REAUTHENTICATION_WINDOW_MS,
+        });
         const app = buildApp();
 
         const enrolled = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
@@ -490,13 +485,15 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const first = yield* enrollmentOf(
           yield* postJson(app, "/api/account/mfa/enroll", oldSession.headers),
         );
-        yield* ageStoredSession(oldSession.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(oldSession.token, {
+          sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
+        });
         const secret = secretFromTotpUri(first.totp_uri);
         const rejected = yield* postJson(app, "/api/account/mfa/activate", oldSession.headers, {
           code: yield* totpCode(secret),
           enrollment_id: first.enrollment_id,
         });
-        yield* expectDeclaredNewFailure("mfa.activate", rejected);
+        yield* readReauthenticationRequired("mfa.activate", rejected);
 
         const newSession = yield* createSessionFor(user.id);
         const replayed = yield* enrollmentOf(
@@ -521,10 +518,12 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const user = yield* db.seedUser("reauth-audit");
         const { recorded, app } = recordingAudit();
         const oldSession = yield* createSessionFor(user.id);
-        yield* ageStoredSession(oldSession.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(oldSession.token, {
+          sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
+        });
         const freshSession = yield* createSessionFor(user.id);
 
-        yield* expectDeclaredNewFailure(
+        yield* readReauthenticationRequired(
           "mfa.enroll",
           yield* postJson(app, "/api/account/mfa/enroll", oldSession.headers),
         );
@@ -532,9 +531,11 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const enrollment = yield* enrollmentOf(
           yield* postJson(app, "/api/account/mfa/enroll", freshSession.headers),
         );
-        yield* ageStoredSession(freshSession.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(freshSession.token, {
+          sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
+        });
         const beforeActivateRejection = recorded.length;
-        yield* expectDeclaredNewFailure(
+        yield* readReauthenticationRequired(
           "mfa.activate",
           yield* postJson(app, "/api/account/mfa/activate", freshSession.headers, {
             code: yield* totpCode(secretFromTotpUri(enrollment.totp_uri)),
@@ -584,7 +585,7 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const db = yield* TestDb;
         const user = yield* db.seedUser("reauth-audit-down");
         const session = yield* createSessionFor(user.id);
-        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS });
 
         const recordedResponse = yield* postJson(
           buildApp(),
@@ -597,7 +598,7 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
           session.headers,
         );
 
-        const recordedBody = yield* expectDeclaredNewFailure("mfa.enroll", recordedResponse);
+        const recordedBody = yield* readReauthenticationRequired("mfa.enroll", recordedResponse);
         expect(failingResponse.status).toBe(recordedResponse.status);
         expect(yield* responseJson(failingResponse)).toEqual(recordedBody);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
@@ -610,7 +611,9 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const db = yield* TestDb;
         const user = yield* db.seedUser("reauth-disable");
         const enabled = yield* enableMfaFor(user);
-        yield* ageStoredSession(enabled.session.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(enabled.session.token, {
+          sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
+        });
         const app = buildApp();
 
         const res = yield* postJson(app, "/api/account/mfa/disable", enabled.session.headers, {
@@ -631,13 +634,13 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const user = yield* db.seedUser("reauth-extended");
         const session = yield* createSessionFor(user.id);
         yield* ageStoredSession(session.token, {
-          sinceCreatedMs: PAST_WINDOW_MS,
+          sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
           sinceUpdatedMs: 0,
         });
 
         const res = yield* postJson(buildApp(), "/api/account/mfa/enroll", session.headers);
 
-        yield* expectDeclaredNewFailure("mfa.enroll", res);
+        yield* readReauthenticationRequired("mfa.enroll", res);
         expect(yield* countMfaTotpRows(user.id)).toBe(0);
       }),
     ));
@@ -649,7 +652,7 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
         const user = yield* db.seedUser("reauth-budget");
         const { recorded, app } = recordingAudit();
         const session = yield* createSessionFor(user.id);
-        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_WINDOW_MS });
+        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS });
         const limit = ATTEMPT_BUDGETS.mfaChangePerSession.maxAttempts();
         for (let attempt = 0; attempt < limit; attempt++) {
           yield* postJson(app, "/api/account/mfa/enroll", session.headers);
