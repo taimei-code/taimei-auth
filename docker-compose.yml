@@ -40,7 +40,9 @@ services:
 
   auth-service:
     build: *dev-build
-    command: bash scripts/wrangler-dev.sh --cwd testing --config wrangler.jsonc dev-worker.ts
+    command: sh -c "bun testing/seed-dev-feature-flags.ts && exec bash scripts/wrangler-dev.sh --cwd testing --config wrangler.jsonc dev-worker.ts"
+    volumes:
+      - auth-wrangler-state:/app/testing/.wrangler/state
     ports:
       - "3100:3100"
     env_file:
@@ -88,3 +90,4 @@ services:
 
 volumes:
   auth-postgres-data:
+  auth-wrangler-state:

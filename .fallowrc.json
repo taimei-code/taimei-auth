@@ -4,6 +4,7 @@
     "testing/server.ts",
     "testing/worker.ts",
     "testing/dev-worker.ts",
+    "testing/seed-dev-feature-flags.ts",
     "testing/staging-worker.ts",
     "testing/prepare-staging-database.ts",
     "testing/check-staging-database.ts",
