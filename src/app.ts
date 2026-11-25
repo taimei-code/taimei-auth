@@ -32,6 +32,8 @@ async function readEmailWithoutCloningBody(c: Context): Promise<string> {
 
 export const BETTER_AUTH_METHODS = ["GET", "POST"] as const;
 
+const LINK_SOCIAL_CLOSED_BEFORE_BETTER_AUTH = `/api/auth${"/link-social" satisfies typeof auth.api.linkSocialAccount.path}`;
+
 export type AppOptions = {
   mountStatic: (app: Hono) => void;
 };
@@ -87,6 +89,8 @@ export function buildApp(options: AppOptions): Hono {
   );
 
   app.use("/api/auth/sign-out", clearSiteDataOnSignOut);
+
+  app.all(LINK_SOCIAL_CLOSED_BEFORE_BETTER_AUTH, (c) => runRoute(c, new NotFound()));
 
   app.on([...BETTER_AUTH_METHODS], "/api/auth/*", async (c) => {
     const body = c.req.method === "GET" ? undefined : await c.req.arrayBuffer();

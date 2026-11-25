@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray, like } from "drizzle-orm";
 import { db } from "../client";
 import { pendingAt } from "../repositories/invitation";
 import {
+  account,
   auditLog,
   company,
   invitation,
@@ -50,6 +51,14 @@ export function countMemberships(companyId: string): Promise<number> {
     .select({ n: count() })
     .from(membership)
     .where(eq(membership.companyId, companyId))
+    .then((rows) => rows[0]?.n ?? 0);
+}
+
+export function countAccounts(userId: string): Promise<number> {
+  return db
+    .select({ n: count() })
+    .from(account)
+    .where(eq(account.userId, userId))
     .then((rows) => rows[0]?.n ?? 0);
 }
 
