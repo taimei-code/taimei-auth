@@ -2,6 +2,12 @@ import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { Effect, Layer } from "effect";
 import { auditRowsFor, dbTest, partial } from "../../__tests__/live-runner";
 import { recordSentry } from "../../__tests__/sentry-recorder";
+import {
+  PAST_REAUTHENTICATION_WINDOW_MS,
+  WITHIN_REAUTHENTICATION_WINDOW_MS,
+  ageStoredSession,
+  createSessionFor,
+} from "../../__tests__/session-helpers";
 import { TestDb } from "../../__tests__/test-db";
 import { auditFailingLayer } from "../../__tests__/test-layers";
 import {
@@ -24,6 +30,7 @@ import {
   CLIENT_IP,
   CLIENT_USER_AGENT,
   clientHeaders,
+  expectReauthenticationRequired,
   freshSessionCookie,
   inBackgroundScope,
   listedPasskeyIds,
@@ -1020,5 +1027,149 @@ describe("MFA が有効な user の登録の前の TOTP の確認", () => {
 
     expectKnownClientFailure(outcome);
     expect(ttlValuesHolding(user.id)).toBe(heldBefore);
+  });
+});
+
+describe("パスキーの登録は、発行から 10 分以内の session にだけ許す", () => {
+  const { run, cleanup } = dbTest("passkey-registration-reauth-test-");
+  restoreKvStoreAfterEach();
+  afterEach(cleanup);
+
+  const createUser = (name: string) =>
+    run(TestDb.use((db) => db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`)));
+
+  const issuedSession = async (user: SignedInUser) => {
+    const issued = await Effect.runPromise(createSessionFor(user.id));
+    const session: SignedInSession = {
+      user,
+      app: buildAppWith(Layer.empty),
+      cookie: issued.headers.get("cookie") ?? "",
+    };
+    const ageBy = (sinceCreatedMs: number) =>
+      Effect.runPromise(ageStoredSession(issued.token, { sinceCreatedMs }));
+    return { session, ageBy };
+  };
+
+  const agedSession = async (user: SignedInUser, sinceCreatedMs: number) => {
+    const { session, ageBy } = await issuedSession(user);
+    await ageBy(sinceCreatedMs);
+    return session;
+  };
+
+  const savedCredentialIdsOf = async (user: { readonly id: string }) =>
+    (await run(passkeysOf(user.id))).map(({ credentialId }) => credentialId);
+
+  const reauthenticationRejectionsOf = async (user: { readonly id: string }) =>
+    (await run(auditRowsFor(user.id, "reauthentication_rejected"))).map((row) => row.payload);
+
+  const saveSomePasskey = async (user: { readonly id: string }) => {
+    const saved = await run(savePasskey(user.id, passkeyToSave()));
+    if (!saved) throw new Error("パスキーを保存できなかった");
+  };
+
+  test("発行から 10 分を過ぎた session の options は、画面が判別できる宣言された失敗になり、challenge を返さず TTL store にも置かない", async () => {
+    const owner = await createUser("reauth-options");
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+    const heldBefore = ttlValuesHolding(owner.id);
+
+    const outcome = await requestRegistrationOptions(session);
+
+    expectReauthenticationRequired("passkey.registrationOptions", outcome);
+    expect(outcome.body).not.toHaveProperty("challenge");
+    expect(ttlValuesHolding(owner.id)).toBe(heldBefore);
+  });
+
+  test("options を取った後に session の発行から 10 分を過ぎると、その challenge で署名した応答も宣言された失敗になり、パスキーは増えない", async () => {
+    const owner = await createUser("reauth-register");
+    const { session, ageBy } = await issuedSession(owner);
+    await ageBy(WITHIN_REAUTHENTICATION_WINDOW_MS);
+    const challenge = challengeOf(await requestRegistrationOptions(session));
+    await ageBy(PAST_REAUTHENTICATION_WINDOW_MS);
+
+    const outcome = await sendRegistration(session, signedRegistrationFor(challenge).response);
+
+    expectReauthenticationRequired("passkey.register", outcome);
+    expect(await savedCredentialIdsOf(owner)).toEqual([]);
+    expect(await reauthenticationRejectionsOf(owner)).toEqual([
+      expect.objectContaining({ operation: "passkey_register" }),
+    ]);
+  });
+
+  test("発行から 9 分の session は、options を取って署名した応答を送るとパスキーを 1 つ登録できる", async () => {
+    const owner = await createUser("reauth-fresh");
+    const session = await agedSession(owner, WITHIN_REAUTHENTICATION_WINDOW_MS);
+
+    const signed = signedRegistrationFor(challengeOf(await requestRegistrationOptions(session)));
+    const outcome = await sendRegistration(session, signed.response);
+
+    expect(outcome.status).toBe(200);
+    expect(await savedCredentialIdsOf(owner)).toEqual([signed.made.id]);
+  });
+
+  test("発行から 10 分を過ぎた session でも、パスキーの一覧は読めて保存済みのパスキーが出る", async () => {
+    const owner = await createUser("reauth-list");
+    await saveSomePasskey(owner);
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+
+    expect(await listedPasskeyIds(session)).toHaveLength(1);
+  });
+
+  test("発行から 10 分を過ぎた session でも、自分のパスキーを削除でき、一覧から消える", async () => {
+    const owner = await createUser("reauth-delete");
+    await saveSomePasskey(owner);
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+    const [passkeyId] = await listedPasskeyIds(session);
+
+    const outcome = await postJson(
+      session.app,
+      `/api/account/passkeys/${passkeyId}/delete`,
+      sameOriginHeaders(session.cookie),
+      "{}",
+    );
+
+    expect(outcome.status).toBe(200);
+    expect(await listedPasskeyIds(session)).toEqual([]);
+  });
+
+  test("発行から 10 分を過ぎた session の options の拒否は、パスキーの登録を拒否した audit event を 1 件だけ残す", async () => {
+    const owner = await createUser("reauth-audit");
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+
+    await requestRegistrationOptions(session);
+
+    expect(await reauthenticationRejectionsOf(owner)).toEqual([
+      expect.objectContaining({ operation: "passkey_register" }),
+    ]);
+  });
+
+  test("一覧で試行枠を使い切った古い session の options は試行枠の失敗になり、再認証による拒否の audit event を残さない", async () => {
+    const owner = await createUser("reauth-budget");
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+    for (let i = 0; i < ATTEMPTS_PER_MINUTE; i++) await listedPasskeyIds(session);
+
+    const outcome = await requestRegistrationOptions(session);
+
+    expect(statusAndBody(outcome)).toEqual(RATE_LIMITED);
+    expect(await reauthenticationRejectionsOf(owner)).toEqual([]);
+  });
+
+  test("MFA が有効な user の古い session が正しい確認コードを載せた options は再認証で拒まれ、そのコードは新しい session でまだ使える", async () => {
+    const { user, secret } = await run(
+      Effect.gen(function* () {
+        const seeded = yield* TestDb.use((db) =>
+          db.seedUser(`reauth-totp-${crypto.randomUUID().slice(0, 8)}`),
+        );
+        return { user: seeded, secret: (yield* enableMfaFor(seeded)).secret };
+      }),
+    );
+    const code = await Effect.runPromise(totpCode(secret));
+    const oldSession = await agedSession(user, PAST_REAUTHENTICATION_WINDOW_MS);
+    const { session: newSession } = await issuedSession(user);
+
+    const rejected = await requestRegistrationOptionsWith(oldSession, { totp_code: code });
+    const accepted = await requestRegistrationOptionsWith(newSession, { totp_code: code });
+
+    expectReauthenticationRequired("passkey.registrationOptions", rejected);
+    expect(accepted.status).toBe(200);
   });
 });

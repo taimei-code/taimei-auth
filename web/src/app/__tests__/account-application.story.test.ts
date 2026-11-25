@@ -31,6 +31,7 @@ import * as MemberInvitations from "../../invitation/member-invitations";
 import * as Members from "../../membership/pages/Members";
 import * as Security from "../../account/pages/Security";
 import * as MfaEnrollment from "../../mfa/mfa-enrollment";
+import * as PasskeySettings from "../../passkey/passkey-settings";
 import { pageRequestOf } from "../../shared/page-request";
 import { Animation, Toast } from "@foldkit/ui";
 
@@ -1289,6 +1290,13 @@ describe("サイドバーの nav", () => {
 });
 
 describe("セキュリティの画面の再認証", () => {
+  const securityModelOf = (model: Model): Security.Model => {
+    if (model.maybePage._tag === "Some" && model.maybePage.value._tag === "Security") {
+      return model.maybePage.value.model;
+    }
+    throw new Error("セキュリティの画面が開いていない");
+  };
+
   const enrollmentMessage = (message: MfaEnrollment.Message) =>
     Message.GotSecurityMessage({
       message: Security.Message.GotMfaEnrollmentMessage({ message }),
@@ -1299,10 +1307,7 @@ describe("セキュリティの画面の再認証", () => {
       ready("/account/security"),
       enrollmentMessage(MfaEnrollment.Message.ClickedEnable()),
     ).model;
-    const enrollment =
-      opening.maybePage._tag === "Some" && opening.maybePage.value._tag === "Security"
-        ? opening.maybePage.value.model.enrollment
-        : MfaEnrollment.init(0);
+    const enrollment = securityModelOf(opening).enrollment;
 
     expect(
       update(
@@ -1310,6 +1315,30 @@ describe("セキュリティの画面の再認証", () => {
         enrollmentMessage(
           MfaEnrollment.Message.FailedEnrollMfa({
             ...pageRequestOf(enrollment),
+            failure: "ReauthenticationRequired",
+          }),
+        ),
+      ).commands,
+    ).toMatchObject([{ name: LeaveToReauthentication.name }]);
+  });
+
+  test("パスキーの登録が再認証を求めると、今の URL を戻り先にして再認証の入口へ移る", () => {
+    const passkeyMessage = (message: PasskeySettings.Message) =>
+      Message.GotSecurityMessage({
+        message: Security.Message.GotPasskeySettingsMessage({ message }),
+      });
+    const registering = update(
+      ready("/account/security"),
+      passkeyMessage(PasskeySettings.Message.ClickedRegister()),
+    ).model;
+    const passkeySettings = securityModelOf(registering).passkeySettings;
+
+    expect(
+      update(
+        registering,
+        passkeyMessage(
+          PasskeySettings.Message.FailedRegisterPasskey({
+            ...pageRequestOf(passkeySettings),
             failure: "ReauthenticationRequired",
           }),
         ),

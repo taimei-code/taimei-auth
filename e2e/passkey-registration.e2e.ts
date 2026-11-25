@@ -2,6 +2,7 @@ import { type Browser, expect, type Page, test } from "@playwright/test";
 import { declaredFailure, routeEndpoint } from "./contract-mock";
 import {
   addVirtualAuthenticator,
+  agePastReauthenticationWindow,
   BASE_URL,
   featureFlags,
   mfaRow,
@@ -11,6 +12,7 @@ import {
   registerPasskeyButton as registerButton,
   reseedFixture,
   securityRows,
+  signInAgainReturningToSecurity,
   signInWithMagicLink,
 } from "./helpers";
 
@@ -287,4 +289,21 @@ test("パスキーが 0 本で登録できない時は、MFA の応答が一覧�
   await expect(mfaRow(page)).toBeVisible();
 
   await expect(securityRows(page)).toHaveCount(1);
+});
+
+test("登録で再認証が要ると入口へ移り、ログインし直すとセキュリティの画面へ戻って、そのまま登録できる", async ({
+  page,
+}) => {
+  await addVirtualAuthenticator(page);
+  await openSecurity(page);
+  await agePastReauthenticationWindow(page);
+
+  await registerButton(page).click();
+
+  await signInAgainReturningToSecurity(page, PASSKEY_EMAIL);
+
+  await registerButton(page).click();
+
+  await expect(passkeyRow(page).getByRole("listitem")).toHaveCount(1);
+  await expect(page.getByText("パスキーを登録しました。")).toBeVisible();
 });
