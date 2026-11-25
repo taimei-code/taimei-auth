@@ -116,6 +116,15 @@ describe("パスキーを登録する", () => {
     expect(failed.outMessage).toEqual(OutMessage.RequiredSignIn());
   });
 
+  test("再認証が要ると、文言を出さずにログインし直しへ導く", () => {
+    const failed = update(
+      registering(),
+      Message.FailedRegisterPasskey({ ...CURRENT, failure: "ReauthenticationRequired" }),
+    );
+    expect(failed.outMessage).toEqual(OutMessage.RequiredReauthentication());
+    expect(failed.model.busy._tag).toBe("Idle");
+  });
+
   test("前の画面の登録の応答は、今の登録を終わらせない", () => {
     const stale = update(
       registering(),
@@ -344,6 +353,17 @@ describe("MFA が有効な user がパスキーを登録する", () => {
     );
     expect(closing.model.dialog.isOpen).toBe(false);
     expect(afterDialogClosed(closing.model).outMessage).toEqual(OutMessage.RequiredSignIn());
+  });
+
+  test("確認コードを送った後に再認証が要ると、dialog が閉じ切ってからログインし直しへ導く", () => {
+    const closing = update(
+      registeringWithTotp(),
+      Message.FailedRegisterPasskey({ ...CURRENT, failure: "ReauthenticationRequired" }),
+    );
+    expect(closing.model.dialog.isOpen).toBe(false);
+    expect(afterDialogClosed(closing.model).outMessage).toEqual(
+      OutMessage.RequiredReauthentication(),
+    );
   });
 
   test("閉じ切った後は、入力した確認コードと誤りを持たない", () => {

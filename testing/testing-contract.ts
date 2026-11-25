@@ -26,6 +26,15 @@ export const LoginLinkRequest = Schema.Struct({
   returnTo: TrustedReturnTo,
 });
 
+const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
+
+export const SessionAgeRequest = Schema.Struct({
+  issuedSecondsAgo: Schema.Int.check(
+    Schema.isGreaterThan(0),
+    Schema.isLessThanOrEqualTo(SECONDS_PER_YEAR),
+  ),
+});
+
 export const FeatureFlagSwitchRequest = Schema.Union([
   Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("on") }),
   Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("off") }),

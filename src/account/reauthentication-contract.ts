@@ -12,6 +12,8 @@ export class Reauthenticated extends HttpApiMiddleware.Service<
 export const REAUTHENTICATED_OPERATIONS = {
   "mfa.enroll": "mfa_enroll",
   "mfa.activate": "mfa_activate",
+  "passkey.registrationOptions": "passkey_register",
+  "passkey.register": "passkey_register",
 } as const satisfies Record<string, ReauthenticationOperation>;
 
 type EndpointKey<Group, Endpoint> =

@@ -163,6 +163,7 @@
     "taimei/server-log-only-in-helpers": "error",
     "taimei/feature-flag-switch-only-in-helpers": "error",
     "taimei/login-links-only-in-helpers": "error",
+    "taimei/session-age-only-in-helpers": "error",
     "taimei/declared-failure-only-in-contract-mock": "error",
     "taimei/leave-spa-import-only-in-app": "error",
     "taimei/account-deleted-message-only-in-owning-page": "error",

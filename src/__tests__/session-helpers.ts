@@ -189,3 +189,7 @@ export const ageStoredSession = (
     stored.session.updatedAt = new Date(now - (age.sinceUpdatedMs ?? 0)).toISOString();
     testKvStore.set(key, JSON.stringify(stored), 60 * 60);
   });
+
+const MINUTE_MS = 60 * 1000;
+export const PAST_REAUTHENTICATION_WINDOW_MS = 10 * MINUTE_MS + 1000;
+export const WITHIN_REAUTHENTICATION_WINDOW_MS = 9 * MINUTE_MS;

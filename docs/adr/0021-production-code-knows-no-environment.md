@@ -35,6 +35,6 @@ Accepted (2026-10-24)。判断主体は maintainer。実装は taimei-code/taime
 
 - 本番以外の Bun の server は `--preload=./testing/redirect-hosts-plugin.ts` を付けて起動する (試験の環境の compose の断片が付ける)
 - 開発環境の host は `*.taimei-code.localhost` で、http でも `Secure` の cookie が使える。browser が container の中で動く時は `--host-resolver-rules` が要る
-- e2e のログイン用の試験 API (`POST /testing/v1/login-links`、既存の利用者の email でログインの URL を返す) は、taimei-auth 自身の e2e の起動 script (`e2e/start-server.sh`) が build の定数 `TAIMEI_AUTH_E2E_LOGIN_LINKS` を渡した時だけ、本番以外の worker が載せる。開発環境と試験の環境には載らない。資格情報なしに既存の利用者になれる能力なので、ADR-0020 の Decision 7 (候補をその browser でログインした利用者に絞る) を開発環境と試験の環境で保つためである。定数を渡すのが e2e の起動 script だけであることは `testing/__tests__/e2e-login-links-entry.test.ts` が確かめる
+- e2e のログイン用の試験 API (`POST /testing/v1/login-links`、既存の利用者の email でログインの URL を返す) は、taimei-auth 自身の e2e の起動 script (`e2e/start-server.sh`) が build の定数 `TAIMEI_AUTH_E2E_LOGIN_LINKS` を渡した時だけ、本番以外の worker が載せる。開発環境と試験の環境には載らない。資格情報なしに既存の利用者になれる能力なので、ADR-0020 の Decision 7 (候補をその browser でログインした利用者に絞る) を開発環境と試験の環境で保つためである。定数を渡すのが e2e の起動 script だけであることは `testing/__tests__/e2e-login-links-entry.test.ts` が確かめる。同じ定数の時だけ、ログイン中の session の発行時刻を過去へずらす試験 API (`POST /testing/v1/session-age`) も載せる。**再認証** の時間窓を待たずに越えるためである
 - build の失敗の文言は、「code を `src/` に移す」「一覧を縮める」直し方をしないよう固定してある
 - 手で書いた `hostname === "localhost"` のような分岐は構造では止められない。公認の書き方と、緩めたい理由が無いことで、書かれた時にレビューで目立つようにする

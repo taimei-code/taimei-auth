@@ -223,7 +223,7 @@ describe("画面の登録の手順を、実際の登録の API につなげる",
   });
 });
 
-test("SPA の API 契約がパスキーの API に宣言する失敗の種類 (未ログインを除く) のそれぞれに、空でない文言がある", () => {
+test("SPA の API 契約がパスキーの API に宣言する失敗の種類 (未ログインと再認証が要る失敗を除く) のそれぞれに、空でない文言がある", () => {
   const texts: { readonly [tag: string]: string | undefined } = PASSKEY_FAILURE_MESSAGES;
   const tags = [
     ...new Set(
@@ -232,7 +232,7 @@ test("SPA の API 契約がパスキーの API に宣言する失敗の種類 (�
         .flatMap(({ failures }) => [...failures.keys()]),
     ),
   ]
-    .filter((tag) => tag !== "Unauthorized")
+    .filter((tag) => tag !== "Unauthorized" && tag !== "ReauthenticationRequired")
     .toSorted();
   expect(tags.length).toBeGreaterThan(0);
   for (const tag of tags) {

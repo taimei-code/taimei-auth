@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated, type CurrentSession } from "../account/actor-contract";
+import { Reauthenticated } from "../account/reauthentication-contract";
 import { InvalidCode, Locked, NotEnabled } from "../mfa/errors";
 import { MfaCode } from "../mfa/mfa-contract";
 import { NotFound, RateLimited } from "../failures";
@@ -119,7 +120,7 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
         PasskeyRegistrationUnavailable,
         PasskeyLimitReached,
       ],
-    }),
+    }).middleware(Reauthenticated),
     HttpApiEndpoint.post("register", "/api/account/passkeys", {
       payload: RegistrationResponse,
       success: Ok,
@@ -129,7 +130,7 @@ export class PasskeyGroup extends HttpApiGroup.make("passkey")
         PasskeyRegistrationUnavailable,
         PasskeyLimitReached,
       ],
-    }),
+    }).middleware(Reauthenticated),
     HttpApiEndpoint.post("delete", "/api/account/passkeys/:passkeyId/delete", {
       params: { passkeyId: Schema.String },
       success: Ok,

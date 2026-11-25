@@ -101,6 +101,7 @@ export const OutMessage = defineMessageUnion({
   Deleted: {},
   Notified: { tone: NoticeTone, text: Schema.String },
   RequiredSignIn: {},
+  RequiredReauthentication: {},
 });
 export type OutMessage = typeof OutMessage.Type;
 
@@ -129,6 +130,7 @@ const RegistrationFailure = contractFailure([
   "PasskeyRegistrationUnavailable",
   "PasskeyLimitReached",
   "Unauthorized",
+  "ReauthenticationRequired",
 ]);
 type RegistrationFailure = typeof RegistrationFailure.Type;
 
@@ -338,7 +340,9 @@ const reportRegistration = (
 const outMessageOfFailure = (failure: RegistrationFailure | DeletionFailure): OutMessage =>
   failure === "Unauthorized"
     ? OutMessage.RequiredSignIn()
-    : OutMessage.Notified({ tone: "Error", text: passkeyFailureText(failure) });
+    : failure === "ReauthenticationRequired"
+      ? OutMessage.RequiredReauthentication()
+      : OutMessage.Notified({ tone: "Error", text: passkeyFailureText(failure) });
 
 const failRegistration = (model: Model, failure: RegistrationFailure): UpdateReturn => {
   const maybeEntry = maybeOpenTotpEntry(model);

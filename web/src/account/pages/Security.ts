@@ -227,6 +227,7 @@ const foldPasskeySettings = Update.foldChild({
     Deleted: () => reloadSecuritySettings(AFTER_DELETING_PASSKEY),
     Notified: (notice) => forwarding(OutMessage.Notified(notice)),
     RequiredSignIn: () => forwarding(OutMessage.RequiredSignIn()),
+    RequiredReauthentication: () => forwarding(OutMessage.RequiredReauthentication()),
   }),
 });
 
