@@ -32,8 +32,8 @@
   2. GitHub の認可画面で許可する
   3. callback 後の遷移先と、`/account` → 外部連携画面に GitHub 連携が表示されることを確認する
   4. 多要素認証 (MFA) を有効にした user で 1〜3 を繰り返す
-  5. 多要素認証 (MFA) を有効にした user がログイン済みの状態で GitHub アカウント連携を実行する
-- **期待結果**: callback が 500 にならず、新規 user は事業所登録へ、既存 user は redirect_url へ遷移する。audit log に `sign_in` (method=github) が記録される。**MFA 有効ユーザーは callback 後にチャレンジ画面 (`/auth/mfa`) へ遷移し、TOTP 通過後に本来の遷移先へ着地する** (その時点で `sign_in` が 1 件記録される)。既ログイン状態からのアカウント連携はチャレンジに飛ばされず、既存 session が維持される
+  5. 多要素認証 (MFA) を有効にした user で browser からログインし、その session の cookie を付けて `POST /api/auth/link-social` に `{"provider":"github"}` を送る
+- **期待結果**: callback が 500 にならず、新規 user は事業所登録へ、既存 user は redirect_url へ遷移する。audit log に `sign_in` (method=github) が記録される。**MFA 有効ユーザーは callback 後にチャレンジ画面 (`/auth/mfa`) へ遷移し、TOTP 通過後に本来の遷移先へ着地する** (その時点で `sign_in` が 1 件記録される)。ログイン済みの user による連携の追加は 404 で失敗し、外部連携画面の連携は増えず、既存 session は維持される
 
 ## QA-MR-03: workerd 固有挙動 (Worker hung 非再発、#91)
 
