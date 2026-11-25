@@ -1,8 +1,16 @@
-import { createAuthClient } from "better-auth/client";
+import {
+  type AuthClient,
+  type BetterAuthClientOptions,
+  createAuthClient,
+} from "better-auth/client";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { Effect, Option } from "effect";
 
-export const signInClient = createAuthClient({
+type SignInClientOptions = BetterAuthClientOptions & {
+  plugins: [ReturnType<typeof magicLinkClient>];
+};
+
+export const signInClient: AuthClient<SignInClientOptions> = createAuthClient<SignInClientOptions>({
   baseURL: typeof window !== "undefined" ? `${window.location.origin}/api/auth` : "",
   plugins: [magicLinkClient()],
   // oxlint-disable-next-line taimei/no-fetch-in-web
