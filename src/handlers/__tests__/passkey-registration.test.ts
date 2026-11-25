@@ -16,8 +16,7 @@ import {
   ttlValuesHolding,
 } from "../../__tests__/test-ttl-store";
 import { signedIn } from "../../membership/__tests__/test-layers";
-import { enableMfaFor, totpCode, wrongTotpCode } from "../../mfa/__tests__/helpers";
-import { MfaTotpRepo } from "../../mfa/totp/ports";
+import { enableMfaFor, wrongTotpCode } from "../../mfa/__tests__/helpers";
 import { EmailSenderLive } from "../../email/wiring";
 import { passkeysOf, passkeyToSave, savePasskey } from "../../passkey/__tests__/helpers";
 import { PasskeyRepo } from "../../passkey/ports";
@@ -36,7 +35,6 @@ import {
   listedPasskeyIds,
   type Outcome,
   postJson,
-  readMfaStatus,
   requestRegistrationOptions,
   requestRegistrationOptionsWith,
   resendOutbox,
@@ -76,6 +74,14 @@ const browserShapedResponse = {
   },
 };
 
+const seedMfaEnabledUser = (name: string) =>
+  Effect.gen(function* () {
+    const user = yield* TestDb.use((db) =>
+      db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`),
+    );
+    return { user, secret: (yield* enableMfaFor(user)).secret };
+  });
+
 const register = (body: unknown, app = buildAppWith(signedIn())) =>
   app.request("/api/account/passkeys", {
     method: "POST",
@@ -112,10 +118,6 @@ describe("パスキーの登録の要求の形", () => {
     const app = buildAppWith(
       Layer.mergeAll(
         signedIn("u-options", "owner@example.com"),
-        Layer.succeed(
-          MfaTotpRepo,
-          partial<MfaTotpRepo["Service"]>({ readMfaStatusRow: () => Effect.succeed(undefined) }),
-        ),
         Layer.succeed(
           PasskeyRepo,
           partial<PasskeyRepo["Service"]>({
@@ -232,17 +234,6 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
 
   const createUser = (name: string) =>
     run(TestDb.use((db) => db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`)));
-
-  const createMfaEnabledUser = (name: string) =>
-    run(
-      Effect.gen(function* () {
-        const user = yield* TestDb.use((db) =>
-          db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`),
-        );
-        yield* enableMfaFor(user);
-        return user;
-      }),
-    );
 
   const savedCredentialIdsOf = async (user: { readonly id: string }) =>
     (await run(passkeysOf(user.id))).map(({ credentialId }) => credentialId);
@@ -390,17 +381,6 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
 
     expectKnownClientFailure(outcome);
     expect(await savedCredentialIdsOf(owner)).toEqual([]);
-  });
-
-  test("MFA が有効な user の options は既知の失敗になり、challenge を返さず、TTL store にもその user の challenge を置かない", async () => {
-    const owner = await createMfaEnabledUser("mfa-owner");
-    const heldBefore = ttlValuesHolding(owner.id);
-
-    const outcome = await requestRegistrationOptions(signedInSession(owner));
-
-    expectKnownClientFailure(outcome);
-    expect(outcome.body).not.toHaveProperty("challenge");
-    expect(ttlValuesHolding(owner.id)).toBe(heldBefore);
   });
 
   test("自分が既に保存した credential の応答は既知の失敗になり、行が増えない", async () => {
@@ -621,15 +601,6 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
 
   const LIMIT_REACHED = { status: 409, body: { _tag: "PasskeyLimitReached" } };
 
-  test("MFA が有効な user も、10 本あれば options の失敗は上限を表す", async () => {
-    const owner = await createMfaEnabledUser("mfa-owner");
-    await saveCredentials(owner, 10);
-
-    const outcome = await requestRegistrationOptions(signedInSession(owner));
-
-    expect(statusAndBody(outcome)).toEqual(LIMIT_REACHED);
-  });
-
   test("10 本になった後に送った新しい credential の応答の失敗は上限を表し、9 本以下で送った保存済みの credential の応答の失敗は登録済みを表す", async () => {
     const full = await createUser("full");
     const roomy = await createUser("roomy");
@@ -845,191 +816,6 @@ describe("パスキーの登録の API を、保存した行と challenge の寿
   });
 });
 
-describe("MFA が有効な user の登録の前の TOTP の確認", () => {
-  const { run, cleanup } = dbTest("passkey-registration-totp-test-");
-  restoreKvStoreAfterEach();
-  afterEach(cleanup);
-
-  const createMfaEnabledUser = (name: string) =>
-    run(
-      Effect.gen(function* () {
-        const user = yield* TestDb.use((db) =>
-          db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`),
-        );
-        const enabled = yield* enableMfaFor(user);
-        return { user, secret: enabled.secret, recoveryCodes: enabled.recoveryCodes };
-      }),
-    );
-
-  const createUser = (name: string) =>
-    run(TestDb.use((db) => db.seedUser(`${name}-${crypto.randomUUID().slice(0, 8)}`)));
-
-  const currentCode = (secret: string) => Effect.runPromise(totpCode(secret));
-  const wrongCode = (secret: string) => Effect.runPromise(wrongTotpCode(secret));
-
-  const savedCredentialIdsOf = async (user: { readonly id: string }) =>
-    (await run(passkeysOf(user.id))).map(({ credentialId }) => credentialId);
-
-  test("MFA が有効な user が正しい TOTP のコードを載せると options が返り、その challenge で署名した応答で登録できる", async () => {
-    const { user, secret } = await createMfaEnabledUser("totp-owner");
-    const session = signedInSession(user);
-
-    const options = await requestRegistrationOptionsWith(session, {
-      totp_code: await currentCode(secret),
-    });
-    const signed = signedRegistrationFor(challengeOf(options));
-    const outcome = await sendRegistration(session, signed.response);
-
-    expect(outcome.status).toBe(200);
-    expect(await savedCredentialIdsOf(user)).toEqual([signed.made.id]);
-  });
-
-  test("誤った TOTP のコードを載せた options は既知の失敗になり、challenge を返さず、TTL store にもその user の challenge を置かない", async () => {
-    const { user, secret } = await createMfaEnabledUser("wrong-code");
-    const heldBefore = ttlValuesHolding(user.id);
-
-    const outcome = await requestRegistrationOptionsWith(signedInSession(user), {
-      totp_code: await wrongCode(secret),
-    });
-
-    expectKnownClientFailure(outcome);
-    expect(outcome.body).not.toHaveProperty("challenge");
-    expect(ttlValuesHolding(user.id)).toBe(heldBefore);
-  });
-
-  test("1 度使った TOTP のコードを同じ時間枠でもう 1 度載せた options は既知の失敗になり、challenge を置かない", async () => {
-    const { user, secret } = await createMfaEnabledUser("reused-code");
-    const session = signedInSession(user);
-    const code = await currentCode(secret);
-    challengeOf(await requestRegistrationOptionsWith(session, { totp_code: code }));
-    const heldAfterFirst = ttlValuesHolding(user.id);
-
-    const outcome = await requestRegistrationOptionsWith(session, { totp_code: code });
-
-    expectKnownClientFailure(outcome);
-    expect(ttlValuesHolding(user.id)).toBe(heldAfterFirst);
-  });
-
-  test("リカバリーコードを載せた options は既知の失敗になり、未使用のリカバリーコードの数が変わらない", async () => {
-    const { user, recoveryCodes } = await createMfaEnabledUser("recovery-code");
-    const session = signedInSession(user);
-    const [recoveryCode] = recoveryCodes;
-    if (recoveryCode === undefined) throw new Error("リカバリーコードが無い");
-    const remainingBefore = (await readMfaStatus(session)).recovery_codes_remaining;
-
-    const asTotp = await requestRegistrationOptionsWith(session, { totp_code: recoveryCode });
-    const asRecoveryKind = await requestRegistrationOptionsWith(session, {
-      code: recoveryCode,
-      kind: "recovery_code",
-    });
-
-    expectKnownClientFailure(asTotp);
-    expectKnownClientFailure(asRecoveryKind);
-    expect((await readMfaStatus(session)).recovery_codes_remaining).toBe(remainingBefore);
-  });
-
-  test("MFA の無効化の誤り 2 回と登録の誤ったコード 3 回の後は、MFA の無効化に正しいコードを送ってもロックされ、MFA は有効のまま", async () => {
-    const { user, secret } = await createMfaEnabledUser("shared-budget");
-    const session = signedInSession(user);
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      await sendMfaDisable(session, await wrongCode(secret));
-    }
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await requestRegistrationOptionsWith(session, { totp_code: await wrongCode(secret) });
-    }
-    const outcome = await sendMfaDisable(session, await currentCode(secret));
-
-    expect(statusAndBody(outcome)).toEqual({ status: 429, body: { _tag: "Locked" } });
-    expect((await readMfaStatus(session)).enabled).toBe(true);
-  });
-
-  test("MFA の無効化の誤りを 5 回続けた後は、正しいコードを載せた options も既知の失敗になり、challenge を置かない", async () => {
-    const { user, secret } = await createMfaEnabledUser("disable-locked");
-    const session = signedInSession(user);
-    for (let attempt = 0; attempt < 5; attempt++) {
-      await sendMfaDisable(session, await wrongCode(secret));
-    }
-    const heldBefore = ttlValuesHolding(user.id);
-
-    const outcome = await requestRegistrationOptionsWith(session, {
-      totp_code: await currentCode(secret),
-    });
-
-    expectKnownClientFailure(outcome);
-    expect(ttlValuesHolding(user.id)).toBe(heldBefore);
-  });
-
-  test("誤ったコード 4 回の後に正しいコードで options を取ると、共有の試行枠が戻り、続く MFA の無効化の誤り 5 回はどれもロックにならない", async () => {
-    const { user, secret } = await createMfaEnabledUser("budget-reset");
-    const session = signedInSession(user);
-    for (let attempt = 0; attempt < 4; attempt++) {
-      await requestRegistrationOptionsWith(session, { totp_code: await wrongCode(secret) });
-    }
-    challengeOf(
-      await requestRegistrationOptionsWith(session, { totp_code: await currentCode(secret) }),
-    );
-
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt < 5; attempt++) {
-      statuses.push((await sendMfaDisable(session, await wrongCode(secret))).status);
-    }
-
-    expect(statuses).toEqual([400, 400, 400, 400, 400]);
-  });
-
-  test("コードを載せない options は試行枠を使わず、5 回の後も MFA の無効化の誤り 5 回はどれもロックにならない", async () => {
-    const { user, secret } = await createMfaEnabledUser("no-code-budget");
-    const session = signedInSession(user);
-    for (let attempt = 0; attempt < 5; attempt++) {
-      expect(statusAndBody(await requestRegistrationOptionsWith(session, {}))).toEqual({
-        status: 403,
-        body: { _tag: "TotpRequired" },
-      });
-    }
-
-    const statuses: number[] = [];
-    for (let attempt = 0; attempt < 5; attempt++) {
-      statuses.push((await sendMfaDisable(session, await wrongCode(secret))).status);
-    }
-
-    expect(statuses).toEqual([400, 400, 400, 400, 400]);
-  });
-
-  test("MFA の状態の読みは有効で、照合の時には無効になっていた時は、MFA が無効である既知の失敗になり challenge を置かない", async () => {
-    const user = await createUser("disabled-meanwhile");
-    const heldBefore = ttlValuesHolding(user.id);
-    const session = signedInSession(user, {
-      layer: Layer.succeed(
-        MfaTotpRepo,
-        partial<MfaTotpRepo["Service"]>({
-          readMfaStatusRow: () =>
-            Effect.succeed({ verifiedAt: new Date(), unusedRecoveryCodes: 8 }),
-          findMfaTotp: () => Effect.succeed(undefined),
-        }),
-      ),
-    });
-
-    const outcome = await requestRegistrationOptionsWith(session, { totp_code: "123456" });
-
-    expect(statusAndBody(outcome)).toEqual({ status: 409, body: { _tag: "NotEnabled" } });
-    expect(ttlValuesHolding(user.id)).toBe(heldBefore);
-  });
-
-  test("TTL store で試行の回数を数えられない時は、正しいコードを載せた options も既知の失敗になり、challenge を置かない", async () => {
-    const { user, secret } = await createMfaEnabledUser("uncountable");
-    const heldBefore = ttlValuesHolding(user.id);
-
-    const outcome = await requestRegistrationOptionsWith(
-      signedInSession(user, { layer: ttlStoreWithoutCounting }),
-      { totp_code: await currentCode(secret) },
-    );
-
-    expectKnownClientFailure(outcome);
-    expect(ttlValuesHolding(user.id)).toBe(heldBefore);
-  });
-});
-
 describe("パスキーの登録は、発行から 10 分以内の session にだけ許す", () => {
   const { run, cleanup } = dbTest("passkey-registration-reauth-test-");
   restoreKvStoreAfterEach();
@@ -1153,23 +939,62 @@ describe("パスキーの登録は、発行から 10 分以内の session にだ
     expect(await reauthenticationRejectionsOf(owner)).toEqual([]);
   });
 
-  test("MFA が有効な user の古い session が正しい確認コードを載せた options は再認証で拒まれ、そのコードは新しい session でまだ使える", async () => {
-    const { user, secret } = await run(
-      Effect.gen(function* () {
-        const seeded = yield* TestDb.use((db) =>
-          db.seedUser(`reauth-totp-${crypto.randomUUID().slice(0, 8)}`),
-        );
-        return { user: seeded, secret: (yield* enableMfaFor(seeded)).secret };
-      }),
-    );
-    const code = await Effect.runPromise(totpCode(secret));
-    const oldSession = await agedSession(user, PAST_REAUTHENTICATION_WINDOW_MS);
-    const { session: newSession } = await issuedSession(user);
+  test("MFA が有効な user の古い session がコードを載せずに要求した options は、再認証が要る失敗になる", async () => {
+    const { user } = await run(seedMfaEnabledUser("reauth-mfa"));
+    const session = await agedSession(user, PAST_REAUTHENTICATION_WINDOW_MS);
 
-    const rejected = await requestRegistrationOptionsWith(oldSession, { totp_code: code });
-    const accepted = await requestRegistrationOptionsWith(newSession, { totp_code: code });
+    const outcome = await requestRegistrationOptions(session);
 
-    expectReauthenticationRequired("passkey.registrationOptions", rejected);
-    expect(accepted.status).toBe(200);
+    expectReauthenticationRequired("passkey.registrationOptions", outcome);
+  });
+});
+
+describe("MFA が有効な user も、確認コード無しでパスキーを登録できる", () => {
+  const { run, cleanup } = dbTest("passkey-registration-mfa-test-");
+  restoreKvStoreAfterEach();
+  afterEach(cleanup);
+
+  const createMfaEnabledUser = (name: string) => run(seedMfaEnabledUser(name));
+
+  const wrongCode = (secret: string) => Effect.runPromise(wrongTotpCode(secret));
+
+  test("MFA が有効な user が、発行から 10 分以内の session でコードを載せずに options を要求すると challenge を受け取り、その challenge で署名した応答で登録できる", async () => {
+    const { user } = await createMfaEnabledUser("mfa-owner");
+    const session = signedInSession(user);
+
+    const options = await requestRegistrationOptions(session);
+    const signed = signedRegistrationFor(challengeOf(options));
+    const outcome = await sendRegistration(session, signed.response);
+
+    expect(outcome.status).toBe(200);
+    expect((await run(passkeysOf(user.id))).map(({ credentialId }) => credentialId)).toEqual([
+      signed.made.id,
+    ]);
+  });
+
+  test("MFA が有効な user が options の要求に誤った確認コードを載せても、コードは確かめられず challenge を受け取る", async () => {
+    const { user, secret } = await createMfaEnabledUser("ignored-code");
+
+    const outcome = await requestRegistrationOptionsWith(signedInSession(user), {
+      totp_code: await wrongCode(secret),
+    });
+
+    expect(outcome.status).toBe(200);
+    expect(typeof challengeOf(outcome)).toBe("string");
+  });
+
+  test("MFA が有効な user が誤った確認コードを載せた options を 5 回要求した後も、MFA の無効化の誤り 5 回はどれもロックにならない", async () => {
+    const { user, secret } = await createMfaEnabledUser("disable-budget-only");
+    const session = signedInSession(user);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await requestRegistrationOptionsWith(session, { totp_code: await wrongCode(secret) });
+    }
+
+    const statuses: number[] = [];
+    for (let attempt = 0; attempt < 5; attempt++) {
+      statuses.push((await sendMfaDisable(session, await wrongCode(secret))).status);
+    }
+
+    expect(statuses).toEqual([400, 400, 400, 400, 400]);
   });
 });

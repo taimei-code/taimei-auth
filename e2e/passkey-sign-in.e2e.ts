@@ -12,7 +12,6 @@ import {
   reseedFixture,
   sentLinkAfter,
   signInWithMagicLink,
-  totpCode,
 } from "./helpers";
 
 const PASSKEY = "passkey";
@@ -110,12 +109,9 @@ test("MFA を有効にした user は、パスキーでログインすると MFA
 }) => {
   await addVirtualAuthenticator(page);
   await signInWithMagicLink(page, PASSKEY_EMAIL);
-  const { secret } = await enableMfaViaApi(page);
+  await enableMfaViaApi(page);
   await page.goto("/account/security");
   await registerPasskeyButton(page).click();
-  const codeInput = page.getByRole("dialog").getByRole("textbox");
-  await codeInput.fill(await totpCode(secret));
-  await codeInput.press("Enter");
   await expect(passkeyItems(page)).toHaveCount(1);
   await page.context().clearCookies();
   await page.goto(signInUrl());

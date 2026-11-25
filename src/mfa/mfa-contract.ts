@@ -14,7 +14,7 @@ import {
   NotEnabled,
 } from "./errors";
 
-export const MfaCode = Schema.String.check(Schema.isBetweenLength(1, 64));
+const MfaCode = Schema.String.check(Schema.isBetweenLength(1, 64));
 const CodeKind = Schema.Literals(["totp", "recovery_code"]);
 export type MfaCodeKind = typeof CodeKind.Type;
 

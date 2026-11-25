@@ -145,10 +145,6 @@ const registrationThroughSpa = async (session: SignedInSession) => {
 
 const PASSKEY_TAGS = {
   RateLimited: true,
-  TotpRequired: true,
-  InvalidCode: true,
-  Locked: true,
-  NotEnabled: true,
   PasskeyRejected: true,
   PasskeyAlreadyRegistered: true,
   PasskeyRegistrationUnavailable: true,

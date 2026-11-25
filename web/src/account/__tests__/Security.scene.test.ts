@@ -123,16 +123,14 @@ describe("セキュリティの画面", () => {
       );
     });
 
-    test("MFA が有効でも、登録できれば「登録する」を出し、押すと確認コードの入力の dialog を出す", () => {
+    test("MFA が有効でも、登録できれば「登録する」を出し、押すと確認コードを求めずに登録を始める", () => {
       const listed = loaded(
         { _tag: "Enabled", recoveryCodesRemaining: 8 },
         { _tag: "Shown", passkeys: [USED], registrable: true },
       );
-      const opened = update(
+      const clicked = update(
         listed,
-        Message.GotPasskeySettingsMessage({
-          message: PasskeySettings.Message.ClickedRegisterWithTotp(),
-        }),
+        Message.GotPasskeySettingsMessage({ message: PasskeySettings.Message.ClickedRegister() }),
       ).model;
       scene(
         { update, view },
@@ -141,14 +139,11 @@ describe("セキュリティの画面", () => {
       );
       scene(
         { update, view },
-        given(opened),
-        Mount.resolve(Dialog.AcquireResources, Dialog.Message.SucceededAcquireResources()),
-        Command.resolveAll(...pendingDialogTransitionResolvers(opened.passkeySettings.dialog)),
-        expect(role("heading", { name: "パスキーを登録する" })).toExist(),
-        expect(role("textbox", { name: "確認コード" })).toExist(),
-        expect(role("button", { name: "次へ" })).toExist(),
-        expect(role("button", { name: "リカバリーコードを使う" })).toBeAbsent(),
+        given(clicked),
+        expect(role("textbox", { name: "確認コード" })).toBeAbsent(),
       );
+      expectBun(clicked.passkeySettings.busy._tag).toBe("Registering");
+      expectBun(clicked.passkeySettings.dialog.isOpen).toBe(false);
     });
 
     test("一覧の各項目に登録日と最後に使った日を出し、使っていないパスキーは最後に使った日を「未使用」と出す", () => {

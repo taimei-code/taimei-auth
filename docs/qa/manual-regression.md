@@ -156,7 +156,7 @@
   3. `/account/security` で 1 のパスキーを削除し、ログアウトして 2 をもう一度行う
   4. 多要素認証 (MFA) を有効にした user で 1〜2 を行う
   5. パスキーに対応していない browser (例: Firefox の `about:config` で `security.webauth.webauthn` を `false` にしたもの) で、`/login` から開いた共通ログイン画面と `/account/security` を開く
-- **期待結果**: 1 で一覧に、同梱の表 (`src/passkey/passkey-providers.ts`) で aaguid から引いた提供元の名前が出る (表に無い提供元は「パスキー」)。2 で `/account` に移る。3 で削除したパスキーではログインできず、共通ログイン画面に失敗の文言が出て、そのまま Magic Link を送れる。4 で登録の前に TOTP のコードを求められ、ログインは MFA チャレンジの画面 (`/auth/mfa`) を経ずに `/account` へ移る。5 で共通ログイン画面に Magic Link の入力欄が出て「パスキーでログイン」は出ず、`/account/security` にも登録の入口が出ない。FAIL の時は本番のフラグ `passkey` を止める (`docs/runbook/production.md` の「フィーチャーフラグ」)
+- **期待結果**: 1 で一覧に、同梱の表 (`src/passkey/passkey-providers.ts`) で aaguid から引いた提供元の名前が出る (表に無い提供元は「パスキー」)。2 で `/account` に移る。3 で削除したパスキーではログインできず、共通ログイン画面に失敗の文言が出て、そのまま Magic Link を送れる。4 でログインは MFA チャレンジの画面 (`/auth/mfa`) を経ずに `/account` へ移る。5 で共通ログイン画面に Magic Link の入力欄が出て「パスキーでログイン」は出ず、`/account/security` にも登録の入口が出ない。FAIL の時は本番のフラグ `passkey` を止める (`docs/runbook/production.md` の「フィーチャーフラグ」)
 
 ## QA-MR-13: 開発環境のフィーチャーフラグが、立ち上げ直した後も残る
 

@@ -1,15 +1,16 @@
 import { expect, type Page, test } from "@playwright/test";
 import {
   addVirtualAuthenticator,
+  agePastReauthenticationWindow,
   enableMfaViaApi,
   PASSKEY_EMAIL,
   passkeyItems,
   passkeyRow,
+  passMfaChallenge,
   registerPasskeyButton,
   reseedFixture,
+  signInAgainFromReauthentication,
   signInWithMagicLink,
-  totpCode,
-  wrongTotpCode,
 } from "./helpers";
 
 const countCreationCalls = () => {
@@ -38,36 +39,35 @@ const openSecurityWithMfa = async (page: Page) => {
   return enabled;
 };
 
-const sendCode = async (page: Page, code: string) => {
+const expectRegisteredByOneCreation = async (page: Page) => {
   await registerPasskeyButton(page).click();
-  const codeInput = page.getByRole("dialog").getByRole("textbox");
-  await codeInput.fill(code);
-  await codeInput.press("Enter");
-  return codeInput;
+
+  await expect(passkeyItems(page)).toHaveCount(1);
+  expect(await creationCalls(page)).toBe(1);
 };
+
+test.describe.configure({ timeout: 90_000 });
 
 test.beforeEach(() => reseedFixture("passkey"));
 
-test("MFA が有効な user が誤った確認コードを送ると、入力欄に誤りが示され、browser のパスキーの作成は呼ばれない", async ({
+test("MFA が有効な user が「登録する」を押すと、確認コードの入力の dialog を出さずに browser のパスキーの作成へ進み、一覧に 1 行増える", async ({
   page,
 }) => {
-  const { secret } = await openSecurityWithMfa(page);
+  await openSecurityWithMfa(page);
 
-  const codeInput = await sendCode(page, await wrongTotpCode(secret));
-
-  await expect(codeInput).toHaveAccessibleDescription(/正しくありません/);
-  expect(await creationCalls(page)).toBe(0);
-  expect(await passkeyItems(page).count()).toBe(0);
+  await expectRegisteredByOneCreation(page);
 });
 
-test("MFA が有効な user が正しい確認コードを送ると、browser のパスキーの作成を経て、一覧に未使用のパスキーが 1 行増える", async ({
+test("MFA が有効な user は、古い session で「登録する」を押すとログインし直しへ送られ、Magic Link と MFA チャレンジを通った後は確認コード無しでパスキーを登録できる", async ({
   page,
 }) => {
   const { secret } = await openSecurityWithMfa(page);
+  await agePastReauthenticationWindow(page);
 
-  await sendCode(page, await totpCode(secret));
+  await registerPasskeyButton(page).click();
+  await signInAgainFromReauthentication(page, PASSKEY_EMAIL);
+  await passMfaChallenge(page, secret);
+  await expect(page).toHaveURL(/\/account\/security$/);
 
-  await expect(passkeyItems(page)).toHaveCount(1);
-  await expect(passkeyRow(page)).toContainText("未使用");
-  expect(await creationCalls(page)).toBe(1);
+  await expectRegisteredByOneCreation(page);
 });

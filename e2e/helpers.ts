@@ -28,7 +28,7 @@ export const PASSKEY_EMAIL = "e2e-passkey@example.com";
 export const addVirtualAuthenticator = async (
   page: Page,
   { userVerified = true, presence = true }: { userVerified?: boolean; presence?: boolean } = {},
-) => {
+): Promise<{ verifyUser: () => Promise<unknown>; refuseUser: () => Promise<unknown> }> => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -156,12 +156,22 @@ export const agePastReauthenticationWindow = async (page: Page): Promise<void> =
   expect(response.status()).toBe(204);
 };
 
-export const signInAgainReturningToSecurity = async (page: Page, email: string): Promise<void> => {
+export const signInAgainFromReauthentication = async (page: Page, email: string): Promise<void> => {
   await expect(page).toHaveURL(/\/auth\/reauthenticate\?/);
   const returnTo = new URL(page.url()).searchParams.get("redirect_url") ?? "";
   expect(returnTo).toBe(new URL("/account/security", page.url()).toString());
   await signInWithMagicLink(page, email, returnTo);
+};
+
+export const signInAgainReturningToSecurity = async (page: Page, email: string): Promise<void> => {
+  await signInAgainFromReauthentication(page, email);
   await expect(page).toHaveURL(/\/account\/security$/);
+};
+
+export const passMfaChallenge = async (page: Page, secret: string): Promise<void> => {
+  await expect(page).toHaveURL(/\/auth\/mfa/);
+  await page.locator("#mfa-challenge-code").fill(await totpCode(secret));
+  await page.getByRole("button", { name: "ログインを続ける" }).click();
 };
 
 export const sendMagicLinkFromForm = async (page: Page, email: string): Promise<string> => {

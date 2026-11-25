@@ -7,11 +7,11 @@ import {
   MFA_EMAIL,
   PASSKEY_EMAIL,
   passkeyItems,
+  passMfaChallenge,
   registerPasskeyButton,
   reseedFixture,
   sendMagicLinkFromForm,
   signInWithMagicLink,
-  totpCode,
 } from "./helpers";
 
 const SIGN_IN_EMAIL = "e2e-signin@example.com";
@@ -98,9 +98,7 @@ test("MFA を有効にした user は、MFA チャレンジを通ってから指
   const { secret } = await enableMfaViaApi(page);
 
   await signInAgainWithMagicLink(page, MFA_EMAIL);
-  await expect(page).toHaveURL(/\/auth\/mfa/);
-  await page.locator("#mfa-challenge-code").fill(await totpCode(secret));
-  await page.getByRole("button", { name: "ログインを続ける" }).click();
+  await passMfaChallenge(page, secret);
 
   await expect(page).toHaveURL(RETURN_TO);
 });
