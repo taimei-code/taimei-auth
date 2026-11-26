@@ -26,6 +26,8 @@ const casesIn = (document: string): Case[] =>
       body: section,
     }));
 
+const stepsOf = (body: string) => body.slice(body.indexOf("- **手順**"));
+
 const matchesAny = (globs: readonly string[], path: string) =>
   globs.some((glob) => new Bun.Glob(glob).match(path));
 
@@ -99,9 +101,20 @@ describe("パスキーの実機の確認は、パスキーの file を契機に�
   test("パスキーの file を契機にする QA-MR は staging で、登録、ログイン、削除と、パスキーに対応していない browser を確かめる", () => {
     const body = passkeyDeviceCase?.body ?? "";
     expect(body).toContain("staging");
-    const steps = body.slice(body.indexOf("- **手順**"));
+    const steps = stepsOf(body);
     for (const topic of ["登録", "ログイン", "削除", "パスキーに対応していない browser"]) {
       expect(steps).toContain(topic);
     }
+  });
+});
+
+const DEV_ENVIRONMENT_ENTRY = "testing/dev-worker.ts";
+
+describe("開発環境のフィーチャーフラグの確認は、開発環境の入口を契機にする手動回帰に書く", () => {
+  test("開発環境の入口を契機の path に名指しする QA-MR が、Local Explorer でフィーチャーフラグを切り替える手順を書く", () => {
+    const steps = cases
+      .filter(({ globs }) => globs.includes(DEV_ENVIRONMENT_ENTRY))
+      .map(({ body }) => stepsOf(body));
+    expect(steps.some((step) => step.includes("Local Explorer"))).toBe(true);
   });
 });
