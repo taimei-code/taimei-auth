@@ -1,4 +1,5 @@
 import { createWorker } from "../src/worker";
+import type { LocalFlagStoreApp } from "./dev-home";
 import type { FakeFlagship } from "./feature-flags";
 import { mountNonProductionRoutes } from "./non-production-routes";
 import {
@@ -11,10 +12,12 @@ import type { NonProductionEmail } from "./sent-links";
 export const nonProductionWorker = ({
   email,
   featureFlags,
+  localFlagStoreApp,
   beforeFirstRequest,
 }: {
   email: NonProductionEmail;
   featureFlags?: FakeFlagship;
+  localFlagStoreApp?: LocalFlagStoreApp;
   beforeFirstRequest: () => Promise<void>;
 }) =>
   serveOnlyOutsideProduction(
@@ -27,6 +30,7 @@ export const nonProductionWorker = ({
         extendBeforeStatic: mountNonProductionRoutes({
           recordsEmailTo: email.recordsEmailTo,
           featureFlags,
+          localFlagStoreApp,
         }),
       }),
     ),

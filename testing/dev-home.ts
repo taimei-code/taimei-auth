@@ -10,6 +10,7 @@ import {
 } from "../db/testing/dev-accounts";
 import { AuthApi } from "../src/auth-service";
 import { InvalidArgument } from "../src/failures";
+import type { FEATURE_FLAGS_BINDING } from "../src/feature-flags";
 import { runRoute } from "../src/handlers/run-route";
 import { INVALID_REDIRECT_URL_PAGE, RedirectTarget } from "../src/sign-in-params";
 import { requireAuthHostOrigin } from "./auth-host-origin";
@@ -196,12 +197,30 @@ const flagSwitchOf = Effect.fnUntraced(function* (
   return { _tag: "Accepted", request: { flag: form.flag, state: form.state, companyIds } } as const;
 });
 
+const LOCAL_EXPLORER_HOSTNAME = "localhost";
+
+export type LocalFlagStoreApp = typeof FEATURE_FLAGS_BINDING;
+
+const featureFlagsHrefOf = (
+  url: URL,
+  featureFlags: FakeFlagship | undefined,
+  localFlagStoreApp: LocalFlagStoreApp | undefined,
+): string | null => {
+  if (featureFlags) return `${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}`;
+  if (!localFlagStoreApp) return null;
+  const localExplorer = new URL(`/cdn-cgi/local/explorer/flagship/${localFlagStoreApp}`, url);
+  localExplorer.hostname = LOCAL_EXPLORER_HOSTNAME;
+  return localExplorer.href;
+};
+
 export const devHomeRoutes = ({
   recordsEmailTo,
   featureFlags,
+  localFlagStoreApp,
   flagCatalog = FEATURE_FLAG_CATALOG,
 }: Pick<NonProductionEmail, "recordsEmailTo"> & {
   featureFlags?: FakeFlagship;
+  localFlagStoreApp?: LocalFlagStoreApp;
   flagCatalog?: FeatureFlagCatalog;
 }) => {
   const routes = new Hono()
@@ -229,7 +248,7 @@ export const devHomeRoutes = ({
               destination: destinationOf(redirectTarget),
               signInAction: `${DEV_HOME_SIGN_IN_PATH}${url.search}`,
               signOutAction: `${DEV_HOME_SIGN_OUT_PATH}${url.search}`,
-              featureFlagsHref: featureFlags ? `${DEV_HOME_FEATURE_FLAGS_PATH}${url.search}` : null,
+              featureFlagsHref: featureFlagsHrefOf(url, featureFlags, localFlagStoreApp),
             } as const;
           }),
         ),

@@ -6,7 +6,7 @@ import { requireLocalDatabase } from "../../db/testing/local-database";
 import { prepareNonProductionTables } from "../../db/testing/non-production-tables";
 import { buildApp } from "../../src/app";
 import { browserCookieHeaders } from "../../src/__tests__/session-helpers";
-import { enabled, FeatureFlags } from "../../src/feature-flags";
+import { enabled, FEATURE_FLAGS_BINDING, FeatureFlags } from "../../src/feature-flags";
 import { devHomeRoutes } from "../dev-home";
 import { fakeFlagship } from "../feature-flags";
 import { recordingEmail } from "../sent-links";
@@ -38,6 +38,18 @@ const localApp = () => {
 const stagingApp = () =>
   requestInBrowser(
     buildApp({ mountStatic: (honoApp) => honoApp.route("/", devHomeRoutes(recordingEmail)) }),
+    crypto.randomUUID(),
+  );
+
+const devEnvironmentApp = () =>
+  requestInBrowser(
+    buildApp({
+      mountStatic: (honoApp) =>
+        honoApp.route(
+          "/",
+          devHomeRoutes({ ...recordingEmail, localFlagStoreApp: FEATURE_FLAGS_BINDING }),
+        ),
+    }),
     crypto.randomUUID(),
   );
 
@@ -214,7 +226,35 @@ describe("フィーチャーフラグのページから切り替えると、serv
   });
 });
 
-describe("偽物の Flagship を渡さない環境 (staging) には、フィーチャーフラグのページが無い", () => {
+describe("手元の置き場の app を渡す開発環境の開発者ホームは、フィーチャーフラグの link に、要求と同じ port の localhost の Local Explorer を渡す", () => {
+  test.each([
+    ["3100", "http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS"],
+    ["4200", "http://localhost:4200/cdn-cgi/local/explorer/flagship/FLAGS"],
+  ])("port %s で開いた開発者ホームは、link に %s を渡す", async (port, localExplorer) => {
+    const request = devEnvironmentApp();
+    const query = new URLSearchParams({
+      service_name: "accounts",
+      redirect_url: "http://localhost:3100/account",
+    });
+
+    const home = devHomePropsOf(
+      await (
+        await request(`http://auth.taimei-code.localhost:${port}${DEV_HOME_PATH}?${query}`)
+      ).text(),
+    );
+
+    expect(home.featureFlagsHref).toBe(localExplorer);
+  });
+
+  test("開発者ホームのフィーチャーフラグのページは載せず、GET と POST は 404 を返す", async () => {
+    const request = devEnvironmentApp();
+
+    expect((await request(FEATURE_FLAGS_PAGE)).status).toBe(404);
+    expect((await switchFlag(request, { flag: "passkey", state: "off" })).status).toBe(404);
+  });
+});
+
+describe("偽物の Flagship も手元の置き場の app も渡さない入口 (staging) には、フィーチャーフラグのページも link も無い", () => {
   test("ページの GET と POST は 404 で、開発者ホームに link を渡さない", async () => {
     const request = stagingApp();
 
