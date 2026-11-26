@@ -9,7 +9,7 @@ cp .env.example .env
 docker compose up --build --watch
 ```
 
-http://auth.taimei-code.localhost:3100/ を開く。Magic Link と招待メールは送信されず、URL がサーバの log に出る。フィーチャーフラグは初めて起動した時はどれも off で、Local Explorer (http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS) で作って切り替える ([ADR-0030](./docs/adr/0030-feature-flags-by-flagship.md) の Decision 6)。compose を使わない起動は `e2e/start-server.sh` に倣う。
+http://auth.taimei-code.localhost:3100/ を開く。Magic Link と招待メールは送信されず、URL がサーバの log に出る。フィーチャーフラグは初めて起動した時はどれも off で、Local Explorer (http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS) で作って切り替える。この扱いと、切り替えが残る範囲と消し方は [ADR-0030](./docs/adr/0030-feature-flags-by-flagship.md) の Decision 6 にある。compose を使わない起動は `e2e/start-server.sh` に倣う。
 
 ## スキーマと Proto の変更
 

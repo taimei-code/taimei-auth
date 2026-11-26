@@ -109,6 +109,9 @@ describe("パスキーの実機の確認は、パスキーの file を契機に�
 });
 
 const DEV_ENVIRONMENT_ENTRY = "testing/dev-worker.ts";
+const devEntrySteps = cases
+  .filter(({ globs }) => globs.includes(DEV_ENVIRONMENT_ENTRY))
+  .map(({ body }) => stepsOf(body));
 
 describe("開発環境のフィーチャーフラグの確認は、開発環境の入口を契機にする手動回帰に書く", () => {
   test("開発環境の入口を契機の path に名指しする QA-MR が、Local Explorer でフィーチャーフラグを切り替える手順を書く", () => {
@@ -116,5 +119,13 @@ describe("開発環境のフィーチャーフラグの確認は、開発環境�
       .filter(({ globs }) => globs.includes(DEV_ENVIRONMENT_ENTRY))
       .map(({ body }) => stepsOf(body));
     expect(steps.some((step) => step.includes("Local Explorer"))).toBe(true);
+  });
+
+  test("開発環境の入口を契機の path に名指しする QA-MR が、image を作り直した後も切り替えが残ることを確かめる手順を書く", () => {
+    expect(
+      devEntrySteps
+        .flatMap((steps) => steps.split("\n"))
+        .some((line) => line.includes("image") && line.includes("作り直")),
+    ).toBe(true);
   });
 });

@@ -2,6 +2,8 @@ x-dev-build: &dev-build
   context: .
   target: dev
 
+x-wrangler-state: &wrangler-state /wrangler-state
+
 # taimei 側の compose が external として参照する
 networks:
   taimei-network:
@@ -40,7 +42,11 @@ services:
 
   auth-service:
     build: *dev-build
-    command: bash scripts/wrangler-dev.sh --cwd testing --config wrangler.jsonc dev-worker.ts
+    command: ["bash", "scripts/wrangler-dev.sh", "--cwd", "testing", "--config", "wrangler.jsonc", "--persist-to", *wrangler-state, "dev-worker.ts"]
+    volumes:
+      - type: volume
+        source: auth-wrangler-state
+        target: *wrangler-state
     ports:
       - "3100:3100"
     env_file:
@@ -88,3 +94,4 @@ services:
 
 volumes:
   auth-postgres-data:
+  auth-wrangler-state:
