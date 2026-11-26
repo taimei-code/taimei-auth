@@ -1,0 +1,11 @@
+services:
+  taimei-auth-postgres:
+    profiles: [testing-image]
+  taimei-auth:
+    image: !override alpine/socat:1.8.0.3
+    command: !override ["TCP-LISTEN:3100,fork,reuseaddr", "TCP:host.docker.internal:3100"]
+    ports: !reset []
+    depends_on: !reset {}
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    healthcheck:
+      test: !override ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/health"]

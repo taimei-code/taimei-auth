@@ -1,0 +1,8 @@
+services:
+  taimei-auth-postgres:
+    profiles: [testing-image]
+  taimei-auth:
+    command: !override ["bun", "-e", "const net=require(\"node:net\");const host=process.env.DEV_ENVIRONMENT_HOST??\"host.docker.internal\";const port=Number(process.env.PORT);net.createServer((c)=>{const u=net.connect(port,host);c.pipe(u).pipe(c);c.on(\"error\",()=>u.destroy());u.on(\"error\",()=>c.destroy());}).listen(port,\"0.0.0.0\");"]
+    ports: !reset []
+    depends_on: !reset {}
+    extra_hosts: ["host.docker.internal:host-gateway"]
