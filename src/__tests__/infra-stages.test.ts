@@ -23,6 +23,7 @@ type WranglerConfig = {
   assets: { run_worker_first: boolean; not_found_handling: string };
   vars: Record<string, string>;
   durable_objects: { bindings: { name: string; class_name: string }[] };
+  flagship?: unknown;
 };
 
 const production = parseJsonc(
@@ -97,6 +98,14 @@ describe("IaC の stage の表は、本番の wrangler.jsonc とずれない", (
   test("Durable Object の binding は wrangler.jsonc と同じ (alchemy は binding を外すとデータごと namespace を消し、plan には update としか出さない)", () => {
     expect(durableObjectBindingsOf(DURABLE_OBJECT_BINDINGS)).toEqual(
       production.durable_objects.bindings,
+    );
+  });
+
+  test("Flagship の binding は IaC の表と同じ名前だけを持ち、app_id を持たない (app は alchemy が作り、wrangler の設定は app を指さない)", () => {
+    expect(production.flagship).toEqual(
+      expectedBindings("production")
+        .filter(({ type }) => type === "flagship")
+        .map(({ name }) => ({ binding: name })),
     );
   });
 
