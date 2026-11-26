@@ -5,7 +5,7 @@ import { grepFiles } from "../../src/__tests__/source-scan";
 
 const DEV_WORKER_ENTRY = basename(fileURLToPath(new URL("../dev-worker.ts", import.meta.url)));
 
-describe("フィーチャーフラグを auth の DB に残す入口は、開発環境の compose だけが起動する", () => {
+describe("フィーチャーフラグを wrangler の手元の置き場で評価する入口は、開発環境の compose だけが起動する", () => {
   test("その入口を名指しするのは docker-compose.yml だけで、e2e・試験用の image・CI の起動は名指ししない", () => {
     expect(
       grepFiles(

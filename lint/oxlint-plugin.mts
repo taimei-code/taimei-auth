@@ -1842,15 +1842,21 @@ const ROWS: readonly Row[] = [
       "db/testing/* (test の seed・観測・cleanup) を値で import するのは、src の test の面 src/__tests__/test-db.ts (ADR-0017)、e2e の seed (e2e/fixtures.ts)、本番以外の entry の testing/** (ADR-0020・ADR-0022) だけ",
   },
   {
-    name: "persisted-feature-flags-only-in-dev-worker",
+    name: "local-flag-store-entry-only-from-compose",
     within: ["**"],
-    allowedIn: ["testing/dev-worker.ts"],
     matchers: [
       { kind: "importTarget", target: /^db\/testing\/feature-flag-rules(\.ts)?$/ },
       { kind: "importTarget", target: /^testing\/dev-worker(\.ts)?$/ },
     ],
     message:
-      "フィーチャーフラグを auth の DB に残す置き場を使うのは、開発環境の compose が起動する入口 testing/dev-worker.ts だけ。ほかの file はこの置き場もこの入口も import しない (ADR-0030 の Decision 6)",
+      "フィーチャーフラグを wrangler の手元の置き場で評価する入口 testing/dev-worker.ts は、開発環境の compose だけが起動する。ほかの file はこの入口を import せず、フィーチャーフラグを auth の DB に残す置き場はどの入口も使わない (ADR-0030 の Decision 6)",
+  },
+  {
+    name: "dev-worker-passes-no-fake-flagship",
+    within: ["testing/dev-worker.ts"],
+    matchers: [{ kind: "importTarget", target: /^testing\/feature-flags(\.ts)?$/ }],
+    message:
+      "開発環境の入口 testing/dev-worker.ts は Flagship の偽物を渡さず、本番と同じ評価の実装で wrangler の手元の置き場を読む (ADR-0030 の Decision 6)",
   },
   {
     name: "pg-import-only-in-db-client",

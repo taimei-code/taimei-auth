@@ -399,19 +399,31 @@ const CASES: readonly Case[] = [
     path: "testing/worker.ts",
     source:
       'import { postgresFlagRulesStore } from "../db/testing/feature-flag-rules";\nexport { postgresFlagRulesStore };',
-    expectedRules: ["taimei(persisted-feature-flags-only-in-dev-worker)"],
+    expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
   },
   {
     name: "e2e と試験用の image の入口は、開発環境の入口を re-export できない",
     path: "testing/worker.ts",
     source: 'export { default, KvStore } from "./dev-worker";',
-    expectedRules: ["taimei(persisted-feature-flags-only-in-dev-worker)"],
+    expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
   },
   {
-    name: "開発環境の compose の入口は、フィーチャーフラグを DB に残す置き場を import できる",
+    name: "開発環境の入口も、フィーチャーフラグを DB に残す置き場を import できない",
     path: "testing/dev-worker.ts",
     source:
       'import { postgresFlagRulesStore } from "../db/testing/feature-flag-rules";\nexport { postgresFlagRulesStore };',
+    expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
+  },
+  {
+    name: "開発環境の入口は、Flagship の偽物を import できない",
+    path: "testing/dev-worker.ts",
+    source: 'import { fakeFlagship } from "./feature-flags";\nexport { fakeFlagship };',
+    expectedRules: ["taimei(dev-worker-passes-no-fake-flagship)"],
+  },
+  {
+    name: "e2e と試験用の image の入口は、Flagship の偽物を import できる",
+    path: "testing/worker.ts",
+    source: 'import { fakeFlagship } from "./feature-flags";\nexport { fakeFlagship };',
     expectedRules: [],
   },
   {
