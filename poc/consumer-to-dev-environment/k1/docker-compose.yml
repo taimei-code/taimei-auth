@@ -1,0 +1,9 @@
+include:
+  - path: ./sdk/compose.yml
+    env_file: ./taimei-auth.env
+services:
+  application:
+    image: node:22-slim
+    env_file: ./sdk/dev-environment.env
+    environment:
+      AUTH_SERVICE_URL: http://auth.taimei-code.localhost:3100

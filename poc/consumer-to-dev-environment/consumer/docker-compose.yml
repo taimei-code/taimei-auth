@@ -1,0 +1,18 @@
+include:
+  - path:
+      - ${TAIMEI_REPO:?taimei の checkout の絶対 path}/node_modules/@taimei-code/auth-client/testing/compose.yml
+      - ./port.yml
+    env_file: ./taimei-auth.env
+services:
+  application:
+    image: node:22-slim
+    working_dir: /consumer
+    env_file: ../sdk/dev-environment.env
+    command: ["node", "/consumer/probe.bundle.mjs"]
+    environment:
+      AUTH_SERVICE_URL: http://auth.taimei-code.localhost:3100
+    volumes:
+      - ./probe.bundle.mjs:/consumer/probe.bundle.mjs:ro
+    depends_on:
+      taimei-auth:
+        condition: service_healthy

@@ -1,0 +1,5 @@
+services:
+  taimei-auth-postgres:
+    profiles: [testing-image]
+  taimei-auth:
+    profiles: [testing-image]

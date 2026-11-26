@@ -1,0 +1,6 @@
+services:
+  auth-service:
+    env_file:
+      - ./poc/consumer-to-dev-environment/sdk/dev-environment.env
+    environment:
+      AUTH_SERVICE_KEY: !reset null

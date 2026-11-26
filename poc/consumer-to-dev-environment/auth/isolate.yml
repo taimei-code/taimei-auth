@@ -1,0 +1,3 @@
+networks:
+  taimei-network:
+    name: poc-taimei-network

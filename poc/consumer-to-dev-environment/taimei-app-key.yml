@@ -1,0 +1,7 @@
+services:
+  application:
+    image: taimei-e2e-e2e-application:latest
+    pull_policy: never
+    build: !reset null
+    environment:
+      AUTH_SERVICE_KEY: poc-key-from-the-sdk-file
