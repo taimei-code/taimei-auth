@@ -1,17 +1,19 @@
-import { z } from "zod";
+import { Option, Schema } from "effect";
 
-const sessionIndexEntry = z.object({ token: z.string(), expiresAt: z.number() });
+const SessionIndexEntry = Schema.Struct({ token: Schema.String, expiresAt: Schema.Finite });
+type SessionIndexEntry = typeof SessionIndexEntry.Type;
+
+const decodeStoredItems = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Array(Schema.Unknown)),
+);
+const decodeEntry = Schema.decodeUnknownOption(SessionIndexEntry);
 
 export type MergedSessionIndex = { readonly value: string; readonly ttlSeconds: number };
 
-const entriesOf = (raw: string | null): z.infer<typeof sessionIndexEntry>[] => {
-  try {
-    const parsed = z.array(z.unknown()).safeParse(JSON.parse(raw ?? "[]")).data ?? [];
-    return parsed.flatMap((item) => sessionIndexEntry.safeParse(item).data ?? []);
-  } catch {
-    return [];
-  }
-};
+const entriesOf = (raw: string | null): SessionIndexEntry[] =>
+  Option.getOrElse(decodeStoredItems(raw ?? "[]"), () => []).flatMap((item) =>
+    Option.toArray(decodeEntry(item)),
+  );
 
 export const mergeSessionIndex = (
   stored: string | null,

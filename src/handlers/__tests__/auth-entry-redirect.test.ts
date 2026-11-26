@@ -293,4 +293,54 @@ describe("authEntryRedirect", () => {
         }),
       ));
   });
+
+  describe("query の各項目の検査 (検査に通らない query では redirect しない)", () => {
+    const passesThrough = (suffix: string, query: string) =>
+      run(
+        Effect.gen(function* () {
+          const actor = yield* seedAuthenticated(suffix);
+          const res = yield* request(actor, `/auth/?${query}`, { headers: SESSION_COOKIE_HEADER });
+          yield* expectPassThrough(res);
+        }),
+      );
+    const longSignUpUrl = (total: number) => {
+      const base = `${REDIRECT_URL}?p=`;
+      return base + "a".repeat(total - base.length);
+    };
+
+    test("sign_up_url が allowlist 外なら認証済でも pass-through", () =>
+      passesThrough(
+        "signup-evil",
+        `${VALID_QUERY}&sign_up_url=${encodeURIComponent("https://evil.com/")}`,
+      ));
+
+    test("sign_up_url が 2049 文字なら認証済でも pass-through", () =>
+      passesThrough(
+        "signup-len",
+        `${VALID_QUERY}&sign_up_url=${encodeURIComponent(longSignUpUrl(2049))}`,
+      ));
+
+    test("redirect_url が空なら認証済でも pass-through", () =>
+      passesThrough("empty-redirect", "service_name=accounts&redirect_url="));
+
+    test("invitation_token が 257 文字なら認証済でも pass-through", () =>
+      passesThrough("inv-len", `${VALID_QUERY}&invitation_token=${"t".repeat(257)}`));
+
+    test("invitation_token が 256 文字なら招待の受諾へ 302", () =>
+      run(
+        Effect.gen(function* () {
+          const actor = yield* seedAuthenticated("inv-256");
+          const token = "t".repeat(256);
+
+          const res = yield* request(actor, `/auth/?${VALID_QUERY}&invitation_token=${token}`, {
+            headers: SESSION_COOKIE_HEADER,
+          });
+
+          expect(res.status).toBe(302);
+          const location = new URL(res.headers.get("location") ?? "", "http://localhost");
+          expect(location.pathname).toBe("/auth/signup/accept-invitation");
+          expect(location.searchParams.get("invitation_token")).toBe(token);
+        }),
+      ));
+  });
 });

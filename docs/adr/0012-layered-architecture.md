@@ -37,7 +37,7 @@ OWNER になれる TOCTOU の窓が残っていた。
 
 | 層 | 場所 | 責務 |
 |---|---|---|
-| Transport | `src/handlers/`, `src/rpc/` | protocol の変換のみ (パラメータと zod の parse、guard、use-case、JSON 化の順) |
+| Transport | `src/handlers/`, `src/rpc/` | protocol の変換のみ (パラメータの decode、guard、use-case、JSON 化の順) |
 | Guard | `src/membership/guard/` + `src/membership/policy.ts` | 操作単位の認可を一度に判定する。Hono 非依存 |
 | Use-case | `src/company/`, `src/membership/`, `src/invitation/`, `src/account/` | 業務手続を関数 1 つで表す。tx / audit / 不変条件 (OWNER が 1 人以上、orphan の連動削除) / TOCTOU 再検証を所有する |
 | Repository | `db/repositories/` | 薄いままにする (DB への接触を db/ に閉じる lint の行を維持)。判定を持たない |

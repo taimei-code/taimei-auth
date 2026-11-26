@@ -7,10 +7,10 @@ import {
   buildCompanySignupUrl,
   buildMembersUrl,
 } from "@taimei-code/auth-client";
-import { Option } from "effect";
+import { Option, Schema } from "effect";
 import { fromString } from "foldkit/url";
 
-import { redirectTargetSearchSchema } from "@core/invitation/accept-path";
+import { RedirectTargetSearch } from "@core/invitation/accept-path";
 
 import { AccountRoute, urlToAccountRoute } from "../account/route";
 import { AuthRoute, urlToAuthRoute } from "../auth/route";
@@ -104,7 +104,7 @@ describe("auth-client が組む画面の URL の query は、その画面の sea
   });
 
   test("メンバー画面は service_name と redirect_url を読む", () => {
-    expect(redirectTargetSearchSchema.parse(searchOf(buildMembersUrl(fromTaimei)))).toEqual({
+    expect(Schema.decodeSync(RedirectTargetSearch)(searchOf(buildMembersUrl(fromTaimei)))).toEqual({
       service_name: "taimei",
       redirect_url: fromTaimei.returnTo,
     });

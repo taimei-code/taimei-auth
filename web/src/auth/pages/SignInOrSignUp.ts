@@ -7,7 +7,8 @@ import { modifyFields } from "foldkit/struct";
 import { Github, KeyRound, Mail } from "lucide";
 
 import { acceptInvitationPath } from "@core/invitation/accept-path";
-import { SERVICE_NAMES, TAIMEI_SERVICES } from "@core/services";
+import { TAIMEI_SERVICES } from "@core/services";
+import { SignInParams } from "@core/sign-in-params";
 
 import {
   loadPasskeySignInEntry,
@@ -42,12 +43,7 @@ import {
 } from "../canary-tokens";
 import { signInClient } from "../sign-in-client";
 
-export const Params = Schema.Struct({
-  service_name: Schema.Literals(SERVICE_NAMES),
-  redirect_url: Schema.String,
-  sign_up_url: Schema.optional(Schema.String),
-  invitation_token: Schema.optional(Schema.String),
-});
+export const Params = Schema.Struct(SignInParams.fields);
 export type Params = typeof Params.Type;
 
 export const SignKind = Schema.Literals(["SignIn", "SignUp", "Reauthenticate"]);

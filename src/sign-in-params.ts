@@ -1,47 +1,45 @@
-import { z } from "zod";
+import { Schema } from "effect";
 import { SERVICE_NAMES, type ServiceName } from "./services";
 import { validateRedirectUrl } from "./url-allowlist";
 
-const serviceNameSchema = z.enum(SERVICE_NAMES);
-
-const signInParamsObjectSchema = z.object({
-  service_name: serviceNameSchema,
-  redirect_url: z.string().min(1).max(2048),
-  sign_up_url: z.string().min(1).max(2048).optional(),
-  invitation_token: z.string().min(1).max(256).optional(),
-});
+const ServiceNameSchema = Schema.Literals(SERVICE_NAMES);
+const BoundedUrl = Schema.String.check(Schema.isBetweenLength(1, 2048));
+export const InvitationToken = Schema.String.check(Schema.isBetweenLength(1, 256));
 
 const isRedirectUrlAllowed = (data: { service_name: ServiceName; redirect_url: string }) =>
   validateRedirectUrl(data.redirect_url, data.service_name);
-const redirectUrlNotAllowedIssue = {
-  path: ["redirect_url"],
-  message: "redirect_url is not in allowlist",
-};
+const REDIRECT_URL_IN_ALLOWLIST = { expected: "redirect_url in allowlist" };
+const redirectUrlInAllowlist = Schema.makeFilter(isRedirectUrlAllowed, REDIRECT_URL_IN_ALLOWLIST);
 
-export const signInParamsSchema = signInParamsObjectSchema
-  .refine(isRedirectUrlAllowed, redirectUrlNotAllowedIssue)
-  .refine(
+export const SignInParams = Schema.Struct({
+  service_name: ServiceNameSchema,
+  redirect_url: BoundedUrl,
+  sign_up_url: Schema.optional(BoundedUrl),
+  invitation_token: Schema.optional(InvitationToken),
+}).check(
+  redirectUrlInAllowlist,
+  Schema.makeFilter(
     (data) =>
       data.sign_up_url === undefined || validateRedirectUrl(data.sign_up_url, data.service_name),
-    { path: ["sign_up_url"], message: "sign_up_url is not in allowlist" },
-  );
+    { expected: "sign_up_url in allowlist" },
+  ),
+);
 
-export type SignInParams = z.infer<typeof signInParamsSchema>;
+export const RedirectTarget = Schema.Struct({
+  service_name: ServiceNameSchema,
+  redirect_url: BoundedUrl,
+}).check(redirectUrlInAllowlist);
 
-export const redirectTargetSchema = signInParamsObjectSchema
-  .pick({ service_name: true, redirect_url: true })
-  .refine(isRedirectUrlAllowed, redirectUrlNotAllowedIssue);
-
-export type RedirectTarget = z.infer<typeof redirectTargetSchema>;
+export type RedirectTarget = typeof RedirectTarget.Type;
 
 export const REAUTHENTICATION_SERVICE = "accounts" satisfies ServiceName;
 
-export const reauthenticationSearchSchema = signInParamsObjectSchema
-  .pick({ redirect_url: true })
-  .refine(
+export const ReauthenticationSearch = Schema.Struct({ redirect_url: BoundedUrl }).check(
+  Schema.makeFilter(
     ({ redirect_url }) =>
       isRedirectUrlAllowed({ service_name: REAUTHENTICATION_SERVICE, redirect_url }),
-    redirectUrlNotAllowedIssue,
-  );
+    REDIRECT_URL_IN_ALLOWLIST,
+  ),
+);
 
 export const INVALID_REDIRECT_URL_PAGE = "/auth/error?reason=invalid_redirect_url";

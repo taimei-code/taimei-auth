@@ -1,4 +1,3 @@
-import "../../shared/zod-jitless";
 import { crashView } from "../../shared/crash-view";
 import { SpaHttpClient } from "../../shared/spa-http-client";
 import { startApplication } from "../start-application";

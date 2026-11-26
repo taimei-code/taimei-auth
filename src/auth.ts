@@ -17,6 +17,17 @@ import { requireAuthSecret } from "./auth-secret";
 import { betterAuthStorage } from "./ttl-store-better-auth";
 import type { AppRuntime } from "./runtime";
 
+interface MagicLinkPlugin extends ReturnType<typeof magicLink> {}
+
+const magicLinkSentBy = (runtime: AppRuntime): MagicLinkPlugin =>
+  magicLink({
+    sendMagicLink: async ({ email, url }) => {
+      await runtime.runPromise(dispatchMagicLink(email, url));
+    },
+    expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
+    storeToken: "hashed",
+  });
+
 function buildAuth(runtime: AppRuntime) {
   return betterAuth({
     baseURL: process.env.AUTH_SERVICE_URL,
@@ -73,17 +84,7 @@ function buildAuth(runtime: AppRuntime) {
         : {}),
     },
 
-    plugins: [
-      magicLink({
-        sendMagicLink: async ({ email, url }) => {
-          await runtime.runPromise(dispatchMagicLink(email, url));
-        },
-        expiresIn: MAGIC_LINK_EXPIRES_IN_SECONDS,
-        storeToken: "hashed",
-      }),
-      primaryAuth(runtime),
-      revokeOnlySessionTokens(),
-    ],
+    plugins: [magicLinkSentBy(runtime), primaryAuth(runtime), revokeOnlySessionTokens()],
 
     session: {
       cookieCache: {

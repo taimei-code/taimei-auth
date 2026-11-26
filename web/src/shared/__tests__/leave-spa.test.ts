@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Option, Schema } from "effect";
 
-import { signInParamsSchema } from "@core/sign-in-params";
+import { SignInParams } from "@core/sign-in-params";
 
 import {
   companySignupUrlReturningTo,
@@ -84,12 +85,14 @@ describe("signInUrlAfterSignOut", () => {
     expect(url.searchParams.get("redirect_url")).toBe(`${ORIGIN}/account`);
   });
 
-  test("遷移先の query は signInParamsSchema を通る (欠けると SignIn が invalid_redirect_url の画面へ移す)", () => {
+  test("遷移先の query は sign-in の query の検査を通る (欠けると SignIn が invalid_redirect_url の画面へ移す)", () => {
     stubWindow({ pathname: "/account" });
 
     const url = new URL(signInUrlAfterSignOut(), ORIGIN);
 
-    expect(signInParamsSchema.safeParse(Object.fromEntries(url.searchParams)).success).toBe(true);
+    expect(
+      Option.isSome(Schema.decodeUnknownOption(SignInParams)(Object.fromEntries(url.searchParams))),
+    ).toBe(true);
   });
 });
 

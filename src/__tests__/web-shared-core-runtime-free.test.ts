@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { disallowedImportsReachableFrom, REPO_ROOT, sourceFiles } from "./source-scan";
 
-const BROWSER_SAFE_PACKAGES = new Set(["zod", "effect", "effect/http-api"]);
+const BROWSER_SAFE_PACKAGES = new Set(["effect", "effect/http-api"]);
 
 function coreFilesImportedFromWeb(): string[] {
   const modules = new Set<string>();

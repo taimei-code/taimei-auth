@@ -1,7 +1,6 @@
 import { constantTimeEqual, makeSignature } from "better-auth/crypto";
-import { Effect } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { parse as parseCookieHeader, serialize as serializeSetCookie } from "hono/utils/cookie";
-import { z } from "zod";
 import { AuthApi } from "../../auth-service";
 import { IdGenerator } from "../../id-generator";
 import { TtlStore } from "../../ttl-store-service";
@@ -71,8 +70,12 @@ export const peekLoginChallenge = Effect.fnUntraced(function* (headers: Headers)
   const challengeId = yield* resolveChallengeId(headers);
   if (!challengeId) return null;
   const raw = yield* TtlStore.use((r) => r.get(challengeKey(challengeId)));
-  const challenge = parseChallenge(raw);
-  return challenge ? ({ ...challenge, challengeId } satisfies OpenedLoginChallenge) : null;
+  return Option.getOrNull(
+    Option.map(
+      decodeStoredChallenge(raw),
+      (challenge) => ({ ...challenge, challengeId }) satisfies OpenedLoginChallenge,
+    ),
+  );
 });
 
 export const consumeLoginChallenge = Effect.fnUntraced(function* (challengeId: string) {
@@ -109,20 +112,15 @@ export const spendLoginChallengeAttempt = Effect.fnUntraced(
     }),
 );
 
-const challengeSchema = z.object({
-  userId: z.string().min(1),
-  redirectUrl: z.string(),
-  method: z.enum(CHALLENGE_METHODS),
-});
-
-function parseChallenge(raw: string | null): LoginChallenge | null {
-  if (!raw) return null;
-  try {
-    return challengeSchema.safeParse(JSON.parse(raw)).data ?? null;
-  } catch {
-    return null;
-  }
-}
+const decodeStoredChallenge = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      userId: Schema.String.check(Schema.isNonEmpty()),
+      redirectUrl: Schema.String,
+      method: Schema.Literals(CHALLENGE_METHODS),
+    }),
+  ),
+);
 
 function clearCookieHeaders(): Headers {
   const headers = new Headers();

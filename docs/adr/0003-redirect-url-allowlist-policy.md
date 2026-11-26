@@ -21,7 +21,7 @@ freee-accounts の `lib/freee/url_validator.rb` は host の suffix matching だ
 - 本番: `.taimei-code.com` の host を完全一致で許可する
 - 本番以外: 本番の host に加えて `.taimei-code.localhost` / `localhost` を完全一致で許可する
 
-`signInParamsSchema` (`src/sign-in-params.ts`) は `redirect_url` と `sign_up_url` に `min(1).max(2048)` の Zod 制約を加える。**共通画面 SPA** で parse に失敗した場合は `/auth/error?reason=invalid_redirect_url` に誘導する。
+`SignInParams` (`src/sign-in-params.ts`) は `redirect_url` と `sign_up_url` に 1〜2048 文字の制約を加える。**共通画面 SPA** で parse に失敗した場合は `/auth/error?reason=invalid_redirect_url` に誘導する。
 
 ## Why
 
@@ -35,4 +35,4 @@ freee-accounts の `lib/freee/url_validator.rb` は host の suffix matching だ
 
 - production で長い URL が必要になったら個別に緩める (現状は不要)
 - IDN を意図的に許可したいケース (例: 日本語ドメイン) は出ないため、Punycode の正規化任せで十分である。要求が出たらこの ADR を再検討する
-- `service_name` 自体は `signInParamsSchema` の Zod enum で validate するため、`TAIMEI_SERVICES[service]` の lookup は安全である
+- `service_name` 自体は `SignInParams` が既知の service 名だけを受け付けるため、`TAIMEI_SERVICES[service]` の lookup は安全である
