@@ -97,8 +97,8 @@ WHERE c.relnamespace = 'public'::regnamespace AND c.relkind = 'S'
 ### 最初の 1 回
 
 1. Environment `production` の `CLOUDFLARE_API_TOKEN` に Flagship Edit の権限を足す (無いと deploy の alchemy が app を作れずに止まる)
-2. 権限を足した後に、app と binding を定義に足した PR を merge し、Deploy で app と binding を出す。flag を作るまでは flag が無いので off になり、パスキーの登録とログインは止まる (一覧と削除は使える)
-3. 下の「flag を作る」で flag を作る
+2. 権限を足した後に、app と binding を定義に足した PR を merge し、Deploy で app と binding を出す。flag を作るまでは flag が無いので off になり、パスキーの登録とログインは止まる (一覧と削除は使える)。この間、Workers の log に warning は出ない (ADR-0030 の Decision 3)
+3. 下の「flag を作る」で flag を作る。有効にしても機能が出ない時は、dashboard の flag の key が code の名前と同じかを確かめる (key が違っても warning は出ない。ADR-0030 の Decision 3)
 
 ### flag を作る
 
