@@ -161,15 +161,15 @@
 ## QA-MR-13: 開発環境のフィーチャーフラグを Local Explorer で切り替え、worker の読み直し、再起動、image の作り直しの後も残る
 
 - **契機**: 開発環境の compose の起動、開発環境の入口、本番以外の wrangler の設定、フィーチャーフラグの評価を変える PR
-- **契機の path**: `docker-compose.yml`、`Dockerfile`、`scripts/wrangler-dev.sh`、`testing/dev-worker.ts`、`testing/wrangler.jsonc`、`testing/non-production-routes.ts`、`src/feature-flags.ts`
-- **前提**: 開発環境がフィーチャーフラグを wrangler の手元の置き場 (`wrangler dev` が手元に持つ flag の保存先) で評価することは ADR-0030 の Decision 6 にある。`bun test` は workerd の中の手元の置き場に届かないので、ここで compose ごと見る。`docker compose up --build --watch` で開発環境を起動しておく。Local Explorer は手順 2 の URL のとおり `localhost` で開く (ほかの host 名では開けない。同じ Decision 6)。手元の置き場に `passkey` が残っていれば、手順 2 の画面の「Row actions」の「Delete」で消しておく。`docker compose down -v` は使わない (開発環境の DB も消える。同じ Decision 6)
+- **契機の path**: `docker-compose.yml`、`Dockerfile`、`scripts/wrangler-dev.sh`、`testing/dev-worker.ts`、`testing/wrangler.jsonc`、`testing/non-production-routes.ts`、`testing/non-production-worker.ts`、`src/feature-flags.ts`
+- **前提**: 開発環境がフィーチャーフラグを wrangler の手元の置き場 (`wrangler dev` が手元に持つ flag の保存先) で評価することは ADR-0030 の Decision 6 にある。`bun test` は workerd の中の手元の置き場に届かないので、ここで compose ごと見る。`docker compose up --build --watch` で開発環境を起動しておく。手元の置き場に `passkey` が残っていれば、手順 2 の画面の「Row actions」の「Delete」で消しておく。`docker compose down -v` は使わない (開発環境の DB も消える。同じ Decision 6)
 - **手順**:
   1. `http://auth.taimei-code.localhost:3100/login` を開き、続けて `http://auth.taimei-code.localhost:3100/dev-home` を開く
-  2. Local Explorer の Flagship の画面 (`http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS`) を開き、「Create flag」で Key に `passkey` を入れ、Default は off のまま、「Add rule」の後に「Remove condition」で条件の無いルール (Serve は `on`) にして作る。1 の共通ログイン画面を開き直す
+  2. 1 の開発者ホームの「フィーチャーフラグ」の link を押して Local Explorer の Flagship の画面 (`http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS`) を開き、「Create flag」で Key に `passkey` を入れ、Default は off のまま、「Add rule」の後に「Remove condition」で条件の無いルール (Serve は `on`) にして作る。1 の共通ログイン画面を開き直す
   3. 2 の画面の `passkey` の「Row actions」で「Disable」を押し、共通ログイン画面を開き直す。続けて「Enable」を押し、もう一度開き直す
   4. もう一度「Disable」を押し、`src/` の file を 1 つ保存し直し、worker が読み直された後に共通ログイン画面を開き直す
   5. `docker compose restart auth-service` の後に、共通ログイン画面と 2 の画面を開き直す
   6. `package.json` の末尾に空行を 1 つ足して保存し、watch が image を作り直して `docker compose ps auth-service` の CREATED が新しくなった後に、共通ログイン画面と 2 の画面を開き直す。足した空行を消して保存し直し、watch がもう一度 image を作り直し終えるのを待つ
   7. `docker compose down` の後に `docker compose up --build --watch` で起動し直し、共通ログイン画面と 2 の画面を開き直す
   8. 後片付け: 2 の画面で `passkey` を「Delete」で消す
-- **期待結果**: 1 の共通ログイン画面に「パスキーでログイン」が出ず、開発者ホームに「フィーチャーフラグ」の link が出ない。2 で「パスキーでログイン」が出る。3 の Disable の後は出ず、Enable の後は出る。4〜7 の共通ログイン画面に「パスキーでログイン」が出ず、5〜7 の画面で `passkey` は Disabled のまま残る。`docker compose logs auth-service` に、フィーチャーフラグの評価に失敗した warning が出ていない
+- **期待結果**: 1 の共通ログイン画面に「パスキーでログイン」が出ず、開発者ホームに「フィーチャーフラグ」の link が出る。2 で link を押すと Local Explorer の Flagship の画面が開き、URL は手順 2 の URL と同じである。2 の後の共通ログイン画面に「パスキーでログイン」が出る。3 の Disable の後は出ず、Enable の後は出る。4〜7 の共通ログイン画面に「パスキーでログイン」が出ず、5〜7 の画面で `passkey` は Disabled のまま残る。`docker compose logs auth-service` に、フィーチャーフラグの評価に失敗した warning が出ていない

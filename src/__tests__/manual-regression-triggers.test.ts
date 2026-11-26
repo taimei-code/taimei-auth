@@ -121,6 +121,20 @@ describe("開発環境のフィーチャーフラグの確認は、開発環境�
     expect(steps.some((step) => step.includes("Local Explorer"))).toBe(true);
   });
 
+  test("開発環境の入口を契機の path に名指しする QA-MR が、開発者ホームの link から Local Explorer を開く手順を書く", () => {
+    expect(
+      devEntrySteps
+        .flatMap((steps) => steps.split("\n"))
+        .filter((line) => /^\s+\d+\. /.test(line))
+        .some(
+          (line) =>
+            line.includes("開発者ホーム") &&
+            line.includes("link") &&
+            line.includes("Local Explorer"),
+        ),
+    ).toBe(true);
+  });
+
   test("開発環境の入口を契機の path に名指しする QA-MR が、image を作り直した後も切り替えが残ることを確かめる手順を書く", () => {
     expect(
       devEntrySteps
