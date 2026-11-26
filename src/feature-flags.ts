@@ -42,6 +42,8 @@ const OFF_WHEN_UNEVALUATED = false;
 
 const EVALUATION_TIMEOUT = "2 seconds";
 
+const MISSING_FLAG_ERROR_CODE = "FLAG_NOT_FOUND";
+
 const offAfterFailure = (flag: string, reason: string) =>
   Effect.logWarning("feature-flags: evaluation failed", flag, reason).pipe(
     Effect.as(OFF_WHEN_UNEVALUATED),
@@ -63,7 +65,9 @@ export const flagshipFeatureFlags = (env: {
           onSuccess: (details) =>
             details.errorCode === undefined
               ? Effect.succeed(details.value)
-              : offAfterFailure(flag, details.errorCode),
+              : details.errorCode === MISSING_FLAG_ERROR_CODE
+                ? Effect.succeed(OFF_WHEN_UNEVALUATED)
+                : offAfterFailure(flag, details.errorCode),
         }),
       ),
   });
