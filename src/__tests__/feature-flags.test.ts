@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Effect } from "effect";
+import { Effect, Layer, Logger } from "effect";
 import {
   enabled,
   FEATURE_FLAGS_BINDING,
@@ -22,12 +22,18 @@ const bindingAnswering = (answer: () => Promise<{ value: boolean; errorCode?: st
   return { calls, env: { [FEATURE_FLAGS_BINDING]: binding } as never };
 };
 
-const evaluate = (env: never, context: FlagContext = {}) =>
-  Effect.runPromise(
+const evaluate = async (env: never, context: FlagContext = {}) => {
+  let warnings = 0;
+  const countWarnings = Logger.make((options) => {
+    if (options.logLevel === "Warn") warnings++;
+  });
+  const value = await Effect.runPromise(
     FeatureFlags.use((flags) => flags.isOn("example", context)).pipe(
-      Effect.provide(flagshipFeatureFlags(env)),
+      Effect.provide(Layer.mergeAll(flagshipFeatureFlags(env), Logger.layer([countWarnings]))),
     ),
   );
+  return { value, warnings };
+};
 
 describe("actor から評価の context を作る", () => {
   test("actor が無い時と、現在の事業所が無い actor は、空の context になる", () => {
@@ -56,14 +62,27 @@ describe("Flagship での評価", () => {
     expect(calls.map(({ defaultValue }) => defaultValue)).toEqual([false]);
   });
 
-  test("binding の評価が 2 秒たっても終わらなければ、待ち続けずに off にする", async () => {
-    const { env } = bindingAnswering(() => new Promise(() => {}));
-    expect(await evaluate(env)).toBe(false);
+  test.each([
+    true,
+    false,
+  ])("flag が無い (FLAG_NOT_FOUND) と、返した値 (%p) によらず off にし、warning を出さない", async (value) => {
+    const { env } = bindingAnswering(async () => ({ value, errorCode: "FLAG_NOT_FOUND" }));
+    expect(await evaluate(env)).toEqual({ value: false, warnings: 0 });
   });
 
-  test("binding の呼び出しが失敗すると、失敗を返さずに off にする", async () => {
+  test("binding の呼び出しが失敗すると、off にして warning を出す", async () => {
     const { env } = bindingAnswering(() => Promise.reject(new Error("flagship is down")));
-    expect(await evaluate(env)).toBe(false);
+    expect(await evaluate(env)).toEqual({ value: false, warnings: 1 });
+  });
+
+  test("binding の評価が 2 秒たっても終わらないと、off にして warning を出す", async () => {
+    const { env } = bindingAnswering(() => new Promise(() => {}));
+    expect(await evaluate(env)).toEqual({ value: false, warnings: 1 });
+  });
+
+  test("FLAG_NOT_FOUND 以外の errorCode が返ると、off にして warning を出す", async () => {
+    const { env } = bindingAnswering(async () => ({ value: true, errorCode: "TYPE_MISMATCH" }));
+    expect(await evaluate(env)).toEqual({ value: false, warnings: 1 });
   });
 });
 
