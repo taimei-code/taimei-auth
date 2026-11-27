@@ -40,6 +40,11 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - (2026-10-25 改訂 (#354)) 2026-10-21 から、共通ログイン画面の URL (`GET /auth/`) にアカウント選択画面を返していた。開発者ホームで利用者の選択・切り替え・ログアウトができるようになったので、consumer の開発者が試験の環境で本番と同じログイン画面を見られるよう、差し替えをやめた。本番の共通ログイン画面は開発者ホームへの link を持てない (Decision 5 の bundle の検査が `/dev-home` を探す) ので、consumer は試験の環境で開発者ホームの URL を自分で開く
    - (2026-10-24 追記) **開発者ホーム** の候補は、開発用アカウントと、その browser でログインしたことがある利用者だけにする。本番以外の環境を複数の人が共有しても、資格情報なしに他人の利用者を見たりその利用者でログインしたりできないようにするためである。browser は開発者ホームを開いた時に置く鍵の cookie で見分ける。ログイン中に開発者ホームを開くと、その利用者を鍵に結びつけて表 `testing_browser_account` に残し、選ぶ POST はその鍵に結びついた利用者と開発用アカウントだけを受ける。表は本番以外の entry が起動の時に作り、本番の migration には入れない。browser を見分けずに一覧を隠すだけの案は、POST で任意の id を送ればログインできるので採らない。持ち主を「その browser で作った利用者」に限る案は、試験 API が server から作った利用者を候補に出せず、新規登録の処理 (`src/`) に試験の記録を入れることになるので採らない
 
+8. **consumer の auth ホストを、SDK の上書きの file で開発環境への中継に差し替えられる (2026-11-27 追加 (#617))**。SDK は `testing/compose.development.yml` を配る。consumer が自分の compose の後ろに 2 つ目の `-f` で足すと、断片の `taimei-auth` は、試験用の image の中継 (`testing/dev-environment-relay.ts`、#614) を起動し、同じ machine の開発環境へ通信を渡す。service の名前、network の上の別名、`environment`、health check は変えないので、consumer の compose が `taimei-auth` の healthy を待つ形は、そのまま開発環境が答えるまでの待ちになる。試験用の image の DB は profile で起動させず、`ports` と `depends_on` は `!reset` で消す (Docker Compose 2.24 以降が要る)。この file の package の中の場所と名前は、Decision 3 の公開の契約に加わる
+   - 宛先は開発環境の compose が名前を付けた network `taimei-network` の中の service `auth-service` とする (host の port にしない理由は「採らなかった案」)。宛先を network の上の別名 (`auth.taimei-code.localhost`) にしないのは、consumer が `TAIMEI_AUTH_HOSTNAME` に同じ名前を選ぶと、中継の container 自身がその別名を持ち、名前が自分に向きうるためである
+   - 上書きの file は変数を持たない。consumer は断片の変数を `include:` に閉じた env の file で渡すので、2 つ目の `-f` の file からは見えない
+   - 上書きを足した consumer の環境は **試験の環境** ではない (GLOSSARY.md の **試験の環境**)
+
 ## 採らなかった案
 
 - **submodule に置いた断片を `include:` する**: 起動の手順は consumer から消えるが、版の固定が SDK と submodule に分かれたまま残り、taimei-auth の更新に consumer の手順が 2 つ要る
@@ -52,6 +57,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - **session を名前付き volume の file に置く** (2026-10-21): volume が 2 つになり、`down -v` で利用者と session が一緒に消えることを 2 か所で保つことになる
 - **session を better-auth の session の表にも書く (`storeSessionInDatabase`)** (2026-10-21): 試験の環境だけ session の置き場が本番と変わり、TTL store を前提にした session の削除と食い違う
 - **開発用アカウントを既存の use-case で作る** (2026-10-21): use-case は id を自分で作り、ADMIN と MEMBER の所属は招待と受諾を経るので、固定の id で冪等に書けない
+- **中継の宛先を host の port (`host.docker.internal:3100`) にする** (2026-11-27): 開発環境を落としていても、同じ port で動く別の auth (ほかの project の試験用の image など) に黙ってつながり、つながった先が開発環境かどうかを consumer が見分けられない
+- **中継に既製の image (socat など) を使う** (2026-11-27): consumer が pull して信頼する配布物が、SDK と試験用の image の 2 つから増える
+- **`taimei-auth` を消して中継を置かない** (2026-11-27): consumer の compose の `depends_on` が無い service を指し、compose が不正になる
 
 ## Consequences
 
@@ -67,3 +75,4 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - (2026-10-21) 試験の環境の Postgres の major を上げると、残った volume を読めずに起動しない。断片の Postgres の image を上げる時は、consumer に `down -v` を求める版の扱いを決めてから上げる
 - (2026-10-21) ADR-0019 の「Bun の TTL store は in-memory」の例外が試験用の entry に 1 つできる。`testing-server.test.ts` が本物の entry を local の DB に向けて起動するので、開発者の local の DB にも試験用の TTL store の表と開発用アカウントの行ができる
 - (2026-10-21) 開発用アカウントを退会させ、同じ email で別の利用者を作った後に起動すると、開発用アカウントの所属を足せずに起動が止まる。`down -v` で戻す
+- (2026-11-27) 開発環境の compose の network の名前 `taimei-network`、service の名前 `auth-service`、その container の中の port 3100 は、SDK の上書きの file を通じて consumer が依存する契約になる。変える時は SDK の版の扱いを決めてから変える。上書きの file と開発環境の compose の一致は `src/__tests__/testing-fragment.test.ts` が固定する
