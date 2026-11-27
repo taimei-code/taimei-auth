@@ -137,6 +137,23 @@ describe("consumer が書く設定は TAIMEI_AUTH_* だけで、DB は断片の�
   });
 });
 
+const SERVICE_KEY_FILE = "testing/service-key.env";
+
+describe("consumer と共有する service key は、SDK に同梱する 1 つの file に置く", () => {
+  test("service key の file は git に無視されず、SDK の files に入る", () => {
+    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
+
+    expect(pkg.files).toContain(SERVICE_KEY_FILE);
+    expect(run(["git", "check-ignore", "-q", SERVICE_KEY_FILE], SDK_DIR).exitCode).toBe(1);
+  });
+
+  test("service key の file は AUTH_SERVICE_KEY=<値> の 1 行だけを持ち、値は compose の env_file と wrangler の env-file の quote と展開に触れない文字だけでできている", () => {
+    expect(readFileSync(join(SDK_DIR, SERVICE_KEY_FILE), "utf8")).toMatch(
+      /^AUTH_SERVICE_KEY=[A-Za-z0-9._-]+\n$/,
+    );
+  });
+});
+
 describe("断片は repo の試験の値を使う", () => {
   test("断片の MFA の暗号鍵は、repo の試験の鍵と同じ値である", () => {
     expect(template()).toContain(`MFA_TOTP_ENCRYPTION_KEYS: ${TEST_MFA_TOTP_ENCRYPTION_KEYS}\n`);
