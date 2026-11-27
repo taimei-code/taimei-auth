@@ -147,7 +147,7 @@
     "taimei/db-value-import-only-in-db-in-tests": "error",
     "taimei/db-testing-import-only-in-listed-files": "error",
     "taimei/local-flag-store-entry-only-from-compose": "error",
-    "taimei/dev-worker-passes-no-fake-flagship": "error",
+    "taimei/entry-passes-no-fake-flagship": "error",
     "taimei/pg-import-only-in-db-client": "error",
     "taimei/tagged-error-only-in-failure": "error",
     "taimei/failure-only-in-failures-and-domain-errors": "error",

@@ -1852,11 +1852,11 @@ const ROWS: readonly Row[] = [
       "フィーチャーフラグを wrangler の手元の置き場で評価する入口 testing/dev-worker.ts は、開発環境の compose だけが起動する。ほかの file はこの入口を import せず、フィーチャーフラグを auth の DB に残す置き場はどの入口も使わない (ADR-0030 の Decision 6)",
   },
   {
-    name: "dev-worker-passes-no-fake-flagship",
-    within: ["testing/dev-worker.ts"],
+    name: "entry-passes-no-fake-flagship",
+    within: ["testing/dev-worker.ts", "testing/server.ts"],
     matchers: [{ kind: "importTarget", target: /^testing\/feature-flags(\.ts)?$/ }],
     message:
-      "開発環境の入口 testing/dev-worker.ts は Flagship の偽物を渡さず、本番と同じ評価の実装で wrangler の手元の置き場を読む (ADR-0030 の Decision 6)",
+      "開発環境の入口 testing/dev-worker.ts と試験用の image の入口 testing/server.ts は Flagship の偽物を渡さない。開発環境は本番と同じ評価の実装で wrangler の手元の置き場を読み、試験用の image は featureFlagsAllOff ですべての flag を未公開にする (ADR-0030 の Decision 6)",
   },
   {
     name: "pg-import-only-in-db-client",
