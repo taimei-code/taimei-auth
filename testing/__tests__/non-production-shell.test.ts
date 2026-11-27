@@ -28,7 +28,7 @@ describe("本番以外の画面の HTML は、web の build が本番以外の�
     expect(body).toContain('<div id="root"></div>');
   });
 
-  test("viewport の meta と、画面ごとの title を持つ", async () => {
+  test("viewport の meta と、開発者ホームの title を持つ", async () => {
     const body = await shell();
 
     expect(body).toContain(

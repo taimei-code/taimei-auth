@@ -132,17 +132,3 @@ export const findChoosableAccount = (browserKey: string | undefined, userId: str
     columns: { id: true, email: true },
     where: and(eq(user.id, userId), choosableBy(browserKey)),
   });
-
-export const companyNamesByIds = async (
-  ids: readonly string[],
-): Promise<ReadonlyMap<string, string>> =>
-  ids.length === 0
-    ? new Map()
-    : new Map(
-        (
-          await db
-            .select({ id: company.id, name: company.name })
-            .from(company)
-            .where(inArray(company.id, [...ids]))
-        ).map(({ id, name }) => [id, name]),
-      );

@@ -1,6 +1,4 @@
-import type { FeatureFlag, FeatureFlagRegistry, FlagAudience } from "../src/feature-flags";
-
-export type FeatureFlagCatalog = Readonly<Record<string, FlagAudience>>;
+import type { FeatureFlag, FeatureFlagRegistry } from "../src/feature-flags";
 
 export type RegisteredFlagCatalog = { readonly [F in FeatureFlag]: FeatureFlagRegistry[F] };
 

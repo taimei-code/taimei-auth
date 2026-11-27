@@ -16,7 +16,7 @@ export const nonProductionRoutes = ({
   localFlagStoreApp?: LocalFlagStoreApp;
 } & Pick<NonProductionEmail, "recordsEmailTo">): Hono[] => [
   testingApiRoutes(),
-  devHomeRoutes({ recordsEmailTo, featureFlags, localFlagStoreApp }),
+  devHomeRoutes({ recordsEmailTo, localFlagStoreApp }),
   ...(e2eLoginLinks ? [e2eLoginLinkRoutes()] : []),
   ...(featureFlags ? [featureFlagRoutes(featureFlags)] : []),
 ];

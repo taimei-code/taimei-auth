@@ -6,17 +6,17 @@ import {
 } from "../web/non-production/assets";
 import {
   PAGE_PROPS_ELEMENT_ID,
+  type DevHomeProps,
   PAGE_TITLES,
-  type PageProps,
   PagePropsFromJson,
 } from "../web/non-production/page-props";
 
 const encodePageProps = Schema.encodeSync(PagePropsFromJson);
 
-const jsonInsideScriptElement = (props: PageProps) =>
+const jsonInsideScriptElement = (props: DevHomeProps) =>
   encodePageProps(props).replaceAll("<", "\\u003c");
 
-export const nonProductionShell = (props: PageProps) => html`<!doctype html>
+export const nonProductionShell = (props: DevHomeProps) => html`<!doctype html>
 <html lang="ja">
   <head>
     <meta charset="utf-8" />

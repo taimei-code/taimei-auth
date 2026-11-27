@@ -228,10 +228,8 @@ describe("本番以外の画面の上端の帯", () => {
 });
 
 describe("開発者ホームは、フィーチャーフラグを切り替える画面の link を渡された時だけ、その link を描く", () => {
-  test.each([
-    "/dev-home/feature-flags?q=1",
-    "http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS",
-  ])("link %s を渡されたら、「フィーチャーフラグ」の link をその href で描く", (href) => {
+  test("link を渡されたら、「フィーチャーフラグ」の link をその href で描く", () => {
+    const href = "http://localhost:3100/cdn-cgi/local/explorer/flagship/FLAGS";
     scene(
       { update, view },
       given(devHome({ featureFlagsHref: href })),

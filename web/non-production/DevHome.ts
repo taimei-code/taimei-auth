@@ -10,7 +10,6 @@ import { buttonLinkView, buttonView } from "../src/shared/ui/button-view";
 import { alertVariants, badgeVariants, cardClassNames } from "../src/shared/ui/class-names";
 import { searchInputView } from "../src/shared/ui/input-view";
 import { cn } from "../src/shared/utils";
-import { accountsMatching, FILTER_SHOWN_ABOVE_ITEM_COUNT, withQuery } from "./list-filter";
 import { nonProductionBannerView } from "./non-production-banner-view";
 import {
   type Destination,
@@ -40,8 +39,17 @@ export const init = (maybeProps: Flags): Update.Return<Model, Message> => ({
 
 export const update = (model: Model, message: Message) =>
   Message.match<Update.Return<Model, Message>>(message, {
-    UpdatedQuery: ({ query }) => ({ model: withQuery(model, query) }),
+    UpdatedQuery: ({ query }) => ({ model: { ...model, query } }),
   });
+
+const FILTER_SHOWN_ABOVE_ITEM_COUNT = 8;
+
+const accountsMatching = (accounts: readonly PageAccount[], query: string) => {
+  const normalizedQuery = query.trim().toLowerCase();
+  return accounts.filter(({ name, email }) =>
+    `${name} ${email}`.toLowerCase().includes(normalizedQuery),
+  );
+};
 
 const ACCOUNTS_FORM_ID = "accounts";
 
