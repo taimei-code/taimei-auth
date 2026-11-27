@@ -1,7 +1,8 @@
-import { Schema } from "effect";
+import { Record, Schema } from "effect";
 import { CompanyNameSchema } from "../src/company/company-contract";
 import { getTrustedOrigins } from "../src/env";
 import { RoleSchema } from "../src/membership/membership-contract";
+import { FEATURE_FLAG_CATALOG } from "./feature-flag-catalog";
 
 const TrustedReturnTo = Schema.String.check(
   Schema.makeFilter(
@@ -35,11 +36,13 @@ export const SessionAgeRequest = Schema.Struct({
   ),
 });
 
+const RegisteredFeatureFlag = Schema.Literals(Record.keys(FEATURE_FLAG_CATALOG));
+
 export const FeatureFlagSwitchRequest = Schema.Union([
-  Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("on") }),
-  Schema.Struct({ flag: Schema.NonEmptyString, state: Schema.Literal("off") }),
+  Schema.Struct({ flag: RegisteredFeatureFlag, state: Schema.Literal("on") }),
+  Schema.Struct({ flag: RegisteredFeatureFlag, state: Schema.Literal("off") }),
   Schema.Struct({
-    flag: Schema.NonEmptyString,
+    flag: RegisteredFeatureFlag,
     state: Schema.Literal("onlyFor"),
     companyIds: Schema.Array(Schema.String),
   }),
