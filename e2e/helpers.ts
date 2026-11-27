@@ -10,6 +10,7 @@ import {
   TOTP_PERIOD_SECONDS,
   TOTP_WINDOW_STEPS,
 } from "../src/mfa/totp/totp-parameters";
+import type { SwitchableFeatureFlag } from "../testing/feature-flag-catalog";
 import { sentLinkIn } from "../testing/local-delivery-log";
 import { SIGN_IN_LANDING_PATH } from "../web/src/shared/landing-paths";
 import { routeEndpoint } from "./contract-mock";
@@ -62,9 +63,9 @@ export const featureFlags = (request: APIRequestContext) => {
     expect(response.status()).toBe(200);
   };
   return {
-    on: (flag: string) => send({ flag, state: "on" }),
-    off: (flag: string) => send({ flag, state: "off" }),
-    onlyFor: (flag: string, companyIds: readonly string[]) =>
+    on: (flag: SwitchableFeatureFlag) => send({ flag, state: "on" }),
+    off: (flag: SwitchableFeatureFlag) => send({ flag, state: "off" }),
+    onlyFor: (flag: SwitchableFeatureFlag, companyIds: readonly string[]) =>
       send({ flag, state: "onlyFor", companyIds }),
   };
 };

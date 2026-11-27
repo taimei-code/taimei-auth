@@ -1,14 +1,12 @@
 import { FEATURE_FLAGS_BINDING, flagshipFeatureFlags } from "../src/feature-flags";
+import type { SwitchableFeatureFlag } from "./feature-flag-catalog";
+import type { FeatureFlagSwitchRequest } from "./testing-contract";
 
 type FlagRules = {
   readonly enabled: boolean;
   readonly everyone: boolean;
   readonly companyIds: readonly string[];
 };
-
-type FlagSwitchRequest =
-  | { readonly flag: string; readonly state: "on" | "off" }
-  | { readonly flag: string; readonly state: "onlyFor"; readonly companyIds: readonly string[] };
 
 const RELEASED: FlagRules = { enabled: true, everyone: true, companyIds: [] };
 
@@ -43,9 +41,10 @@ export const fakeFlagship = () => {
     },
   };
 
-  const on = (flag: string): Promise<void> => switchTo(flag, RELEASED);
-  const off = (flag: string): Promise<void> => switchTo(flag, { ...RELEASED, enabled: false });
-  const onlyFor = (flag: string, companyIds: readonly string[]): Promise<void> =>
+  const on = (flag: SwitchableFeatureFlag): Promise<void> => switchTo(flag, RELEASED);
+  const off = (flag: SwitchableFeatureFlag): Promise<void> =>
+    switchTo(flag, { ...RELEASED, enabled: false });
+  const onlyFor = (flag: SwitchableFeatureFlag, companyIds: readonly string[]): Promise<void> =>
     switchTo(flag, { enabled: true, everyone: false, companyIds });
 
   return {
@@ -53,11 +52,11 @@ export const fakeFlagship = () => {
     on,
     off,
     onlyFor,
-    switchFlag: (request: FlagSwitchRequest): Promise<void> =>
+    switchFlag: (request: typeof FeatureFlagSwitchRequest.Type): Promise<void> =>
       request.state === "onlyFor"
         ? onlyFor(request.flag, request.companyIds)
         : { on, off }[request.state](request.flag),
-    remove: (flag: string): void => {
+    remove: (flag: SwitchableFeatureFlag): void => {
       removed.add(flag);
     },
     breakBinding: (): void => {

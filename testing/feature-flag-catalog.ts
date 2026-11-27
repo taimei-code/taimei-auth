@@ -5,3 +5,5 @@ export type RegisteredFlagCatalog = { readonly [F in FeatureFlag]: FeatureFlagRe
 export const FEATURE_FLAG_CATALOG = {
   passkey: "everyone",
 } as const satisfies RegisteredFlagCatalog;
+
+export type SwitchableFeatureFlag = keyof typeof FEATURE_FLAG_CATALOG;

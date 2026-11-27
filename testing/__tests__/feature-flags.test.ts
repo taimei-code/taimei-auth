@@ -7,7 +7,7 @@ import { FEATURE_FLAG_CATALOG } from "../feature-flag-catalog";
 import { type FakeFlagship, fakeFlagship } from "../feature-flags";
 import { featureFlagRoutes } from "../routes";
 
-const FLAG = "example";
+const FLAG = "passkey";
 
 const CONTEXTS: readonly FlagContext[] = [{}, { companyId: "listed" }, { companyId: "other" }];
 
@@ -70,6 +70,21 @@ describe("Flagship の偽物は、本番の評価を通して Flagship のルー
     await Promise.all([flags.off(FLAG), flags.onlyFor(FLAG, ["listed"])]);
 
     expect(await evaluations(flags)).toEqual([false, true, false]);
+  });
+
+  test("登録していない名前は、全体 on、全体 off、事業所だけ on、flag を無くす関数に渡せない (typecheck が固定する)", () => {
+    const flags = fakeFlagship();
+    const switchUnregisteredFlag = () => [
+      // @ts-expect-error
+      flags.on(UNREGISTERED_FLAG),
+      // @ts-expect-error
+      flags.off(UNREGISTERED_FLAG),
+      // @ts-expect-error
+      flags.onlyFor(UNREGISTERED_FLAG, ["listed"]),
+      // @ts-expect-error
+      flags.remove(UNREGISTERED_FLAG),
+    ];
+    expect(switchUnregisteredFlag).toBeFunction();
   });
 });
 
