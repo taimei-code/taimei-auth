@@ -9,7 +9,7 @@ export interface FeatureFlagRegistry {}
 
 export type FeatureFlag = Extract<keyof FeatureFlagRegistry, string>;
 
-type FlagsEvaluatedFor<Audience extends FlagAudience> = {
+export type FlagsEvaluatedFor<Audience extends FlagAudience> = {
   [F in FeatureFlag]: FeatureFlagRegistry[F] extends Audience ? F : never;
 }[FeatureFlag];
 

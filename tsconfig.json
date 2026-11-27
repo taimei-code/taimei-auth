@@ -59,6 +59,8 @@
     "web/src/passkey/passkey-failure-messages.ts",
     "testing/sent-links.ts",
     "testing/feature-flags.ts",
+    "testing/feature-flag-catalog.ts",
+    "testing/testing-contract.ts",
     "testing/local-delivery-log.ts",
     "testing/redirect-hosts.ts",
     "playwright.config.ts"

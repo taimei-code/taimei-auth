@@ -7,12 +7,14 @@ import {
   type SignedInUser,
   TESTING_PATH,
 } from "@taimei-code/auth-client/testing";
+import { Record } from "effect";
 import { deleteCompaniesByNames, deleteUsersByIds } from "../../db/testing/cleanup";
 import { DEV_ACCOUNTS } from "../../db/testing/dev-accounts";
 import { readUserIdsByEmails } from "../../db/testing/read";
 import { buildApp } from "../../src/app";
 import { getTrustedOrigins } from "../../src/env";
 import { DEV_HOME_SIGN_IN_PATH } from "../dev-home";
+import { FEATURE_FLAG_CATALOG } from "../feature-flag-catalog";
 import { REDIRECT_HOSTS_NOT_SWAPPED_IN_SERVER } from "../non-production-redirect-hosts-check";
 import { nonProductionRoutes } from "../non-production-routes";
 import { recordingEmail } from "../sent-links";
@@ -20,6 +22,8 @@ import { fakeFlagship } from "../feature-flags";
 import { OUTSIDE_PRODUCTION_ONLY_MESSAGE } from "../serve-only-outside-production";
 import { AUTH_HOST_ORIGIN } from "./origins";
 import { devHomePropsOf, PAGE_PROPS_NOT_IN_PAGE } from "./page-props-of";
+
+const [REGISTERED_FLAG] = Record.keys(FEATURE_FLAG_CATALOG);
 
 const TESTING_ENTRY = join(import.meta.dir, "../server.ts");
 
@@ -379,7 +383,7 @@ describe("試験用の entry は、フィーチャーフラグをすべて未公
           await fetch(`${baseUrl}${TESTING_PATH}/feature-flags`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ flag: "passkey", state: "on" }),
+            body: JSON.stringify({ flag: REGISTERED_FLAG, state: "on" }),
           })
         ).status,
     );
@@ -396,7 +400,7 @@ describe("試験用の entry は、フィーチャーフラグをすべて未公
           await fetch(`${baseUrl}${DEV_HOME_FEATURE_FLAGS_PATH}`, {
             method: "POST",
             headers: { origin: AUTH_HOST_ORIGIN },
-            body: new URLSearchParams({ flag: "passkey", state: "on" }),
+            body: new URLSearchParams({ flag: REGISTERED_FLAG, state: "on" }),
             redirect: "manual",
           })
         ).status,

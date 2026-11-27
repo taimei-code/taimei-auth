@@ -1,16 +1,20 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { DEV_HOME_PATH } from "@taimei-code/auth-client/testing";
+import { Record } from "effect";
 import { requireLocalDatabase } from "../../db/testing/local-database";
 import { prepareNonProductionTables } from "../../db/testing/non-production-tables";
 import { buildApp } from "../../src/app";
 import { FEATURE_FLAGS_BINDING } from "../../src/feature-flags";
 import { devHomeRoutes } from "../dev-home";
+import { FEATURE_FLAG_CATALOG } from "../feature-flag-catalog";
 import { fakeFlagship } from "../feature-flags";
 import { mountNonProductionRoutes } from "../non-production-routes";
 import { recordingEmail } from "../sent-links";
 import { requestInBrowser } from "./in-browser";
 import { AUTH_HOST_ORIGIN } from "./origins";
 import { devHomePropsOf } from "./page-props-of";
+
+const [REGISTERED_FLAG] = Record.keys(FEATURE_FLAG_CATALOG);
 
 const FEATURE_FLAGS_PAGE = `${DEV_HOME_PATH}/feature-flags`;
 
@@ -72,7 +76,7 @@ describe("どの入口の本番以外の route にも、開発者ホームのフ
         await request(FEATURE_FLAGS_PAGE, {
           method: "POST",
           headers: { origin: AUTH_HOST_ORIGIN },
-          body: new URLSearchParams({ flag: "passkey", state: "off" }),
+          body: new URLSearchParams({ flag: REGISTERED_FLAG, state: "off" }),
         })
       ).status,
     ).toBe(404);
