@@ -8,6 +8,7 @@ const TESTING_SERVER_ENTRIES = [
   "testing/dev-worker.ts",
   "testing/staging-worker.ts",
   "testing/server.ts",
+  "testing/dev-environment-relay.ts",
 ];
 
 const isRuntimeBuiltin = (specifier: string) =>
