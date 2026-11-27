@@ -188,3 +188,83 @@ describe("断片は repo の試験の値を使う", () => {
     expect(template()).toContain(`MFA_TOTP_ENCRYPTION_KEYS: ${TEST_MFA_TOTP_ENCRYPTION_KEYS}\n`);
   });
 });
+
+const DEVELOPMENT_OVERLAY_FILE = "testing/compose.development.yml";
+const DEVELOPMENT_OVERLAY_PATH = `packages/auth-client/${DEVELOPMENT_OVERLAY_FILE}`;
+
+type ComposeNetworks = string[] | Record<string, unknown>;
+type DevelopmentOverlay = {
+  services: Record<string, Record<string, unknown>>;
+  networks?: Record<string, { name?: string; external?: boolean }>;
+};
+type DevEnvironmentCompose = {
+  services: Record<string, { networks?: ComposeNetworks; environment?: Record<string, unknown> }>;
+  networks?: Record<string, { name?: string }>;
+};
+
+const developmentOverlayText = () =>
+  readFileSync(join(REPO_ROOT, DEVELOPMENT_OVERLAY_PATH), "utf8");
+const developmentOverlay = () => Bun.YAML.parse(developmentOverlayText()) as DevelopmentOverlay;
+const networkKeys = (networks: ComposeNetworks | undefined) =>
+  Array.isArray(networks) ? networks : Object.keys(networks ?? {});
+
+describe("consumer は SDK の上書きの file を 2 つ目の -f で足し、taimei-auth を開発環境への中継に差し替える", () => {
+  test("上書きの file は SDK の files に入り、git の対象である", () => {
+    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
+
+    expect(pkg.files).toContain(DEVELOPMENT_OVERLAY_FILE);
+    expect(run(["git", "check-ignore", "-q", DEVELOPMENT_OVERLAY_FILE], SDK_DIR).exitCode).toBe(1);
+  });
+
+  test("上書きの file は、consumer の compose が足した ports と depends_on を !reset で消し、command を !override で置き換える (tag の無い値は consumer の値と merge され、残る)", () => {
+    const text = developmentOverlayText();
+
+    expect(text).toMatch(/^ {4}ports: !reset /m);
+    expect(text).toMatch(/^ {4}depends_on: !reset /m);
+    expect(text).toMatch(/^ {4}command: !override /m);
+  });
+
+  test("上書きの file は変数を参照しない (consumer は断片の変数を include に閉じた env の file で渡すので、2 つ目の file からは見えない)", () => {
+    expect(developmentOverlayText()).not.toContain("$");
+  });
+
+  test("上書きの file は taimei-auth の名前、別名、environment、health check を設定し直さない (consumer の healthy の待ちが、開発環境が答えるまでの待ちになる)", () => {
+    const relay = developmentOverlay().services["taimei-auth"];
+
+    expect(relay).toBeDefined();
+    expect(
+      Object.keys(relay ?? {}).filter((key) =>
+        ["environment", "env_file", "healthcheck"].includes(key),
+      ),
+    ).toEqual([]);
+    expect(
+      Object.keys((relay?.networks as Record<string, unknown> | undefined) ?? {}),
+    ).not.toContain("default");
+  });
+
+  test("中継の宛先は、開発環境の compose が上書きの file と同じ名前の network に置いた service で、port はその service が待ち受ける port である (host の port に渡すと、同じ port で動く別の auth に黙ってつながる)", () => {
+    const overlay = developmentOverlay();
+    const command = overlay.services["taimei-auth"]?.command as string[];
+    const [, host = "", port = ""] = /^(.+):(\d+)$/.exec(command.at(-1) ?? "") ?? [];
+    const devCompose = Bun.YAML.parse(
+      readFileSync(join(REPO_ROOT, "docker-compose.yml"), "utf8"),
+    ) as DevEnvironmentCompose;
+    const target = devCompose.services[host];
+    const targetNetworkNames = networkKeys(target?.networks).map(
+      (key) => devCompose.networks?.[key]?.name ?? key,
+    );
+    const externalNetworkNames = Object.values(overlay.networks ?? {})
+      .filter((network) => network.external === true)
+      .map((network) => network.name);
+
+    const relayNetworkNames = Object.keys(
+      (overlay.services["taimei-auth"]?.networks as Record<string, unknown> | undefined) ?? {},
+    ).map((key) => overlay.networks?.[key]?.name ?? key);
+
+    expect(target).toBeDefined();
+    expect(externalNetworkNames.length).toBeGreaterThan(0);
+    expect(relayNetworkNames).toEqual(expect.arrayContaining(externalNetworkNames));
+    expect(targetNetworkNames).toEqual(expect.arrayContaining(externalNetworkNames));
+    expect(String(target?.environment?.PORT)).toBe(port);
+  });
+});

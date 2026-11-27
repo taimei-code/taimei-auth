@@ -4,12 +4,18 @@ cd "$(dirname "$0")/.."
 
 image="${1:?usage: testing-image-smoke.sh <image> [compose template]}"
 template=$(realpath "${2:-packages/auth-client/testing/compose.template.yml}")
-port="${TESTING_IMAGE_SMOKE_PORT:-3199}"
-relay_port="${TESTING_IMAGE_SMOKE_RELAY_PORT:-3198}"
+development_overlay="$(dirname "$template")/compose.development.yml"
+port=3100
+relay_port=3198
+relay_hostname=taimei-auth-relay
 project=testing-image-smoke
 relay_project=testing-image-smoke-relay
-dev_environment_network=testing-image-smoke-dev-environment
-dev_environment_auth=dev-environment-auth
+dev_environment_network=taimei-network
+dev_environment_auth=auth-service
+if docker network inspect "$dev_environment_network" >/dev/null 2>&1; then
+  echo "network $dev_environment_network が既にある。開発環境を落としてから流す (docker compose down)" >&2
+  exit 1
+fi
 work=$(mktemp -d)
 consumer="$work/compose.yml"
 override="$work/override.yml"
@@ -34,19 +40,9 @@ networks:
 YAML
 cat > "$relay_override" <<YAML
 services:
-  taimei-auth-postgres:
-    profiles: [relay-has-no-database]
   taimei-auth:
     image: "$image"
-    command: !override ["bun", "testing/dev-environment-relay.ts", "$dev_environment_auth:$port"]
     ports: ["127.0.0.1:$relay_port:$relay_port"]
-    depends_on: !reset {}
-    networks:
-      dev-environment: {}
-networks:
-  dev-environment:
-    name: $dev_environment_network
-    external: true
 YAML
 
 export TAIMEI_AUTH_URL="http://localhost:$port"
@@ -61,8 +57,8 @@ export TAIMEI_AUTH_PORT="$port"
 
 compose() { docker compose -p "$project" -f "$consumer" "$@"; }
 relay() {
-  TAIMEI_AUTH_PORT="$relay_port" TAIMEI_AUTH_URL="http://localhost:$relay_port" \
-    docker compose -p "$relay_project" -f "$relay_consumer" "$@"
+  TAIMEI_AUTH_PORT="$relay_port" TAIMEI_AUTH_URL="http://$relay_hostname:$relay_port" TAIMEI_AUTH_HOSTNAME="$relay_hostname" \
+    docker compose -p "$relay_project" -f "$relay_consumer" -f "$development_overlay" "$@"
 }
 cleanup() {
   relay down -v >/dev/null 2>&1 || true
@@ -93,9 +89,22 @@ relay_reports_unreachable() {
   docker logs "$relay_container" 2>&1 | grep -F "開発環境 ($dev_environment_auth:$port) に届かない" >/dev/null
 }
 
-docker network inspect "$dev_environment_network" >/dev/null 2>&1 || docker network create "$dev_environment_network" >/dev/null
+if output=$(relay up -d --quiet-pull 2>&1); then
+  echo "開発環境の network が無いのに、上書きの file を足した起動が止まらない" >&2
+  exit 1
+fi
+grep -F "declared as external, but could not be found" <<<"$output" >/dev/null ||
+  { echo "$output" >&2; echo "開発環境の network が無い起動が、network が見つからないことを出さずに止まった" >&2; exit 1; }
+echo "ok: 開発環境の network が無いと、上書きの file を足した起動はすぐに止まる"
+
+docker network create "$dev_environment_network" >/dev/null
 relay up -d --quiet-pull
 relay_container=$(relay ps -aq taimei-auth)
+relay_services=$(relay ps -a --services)
+[ "$relay_services" = taimei-auth ] || fail_relay "上書きの file を足した起動が、taimei-auth 以外の container を起動した: $relay_services"
+relay_published_ports=$(docker port "$relay_container")
+[ -z "$relay_published_ports" ] || fail_relay "上書きの file を足した taimei-auth が host の port を公開した: $relay_published_ports"
+echo "ok: 上書きの file を足すと、試験用の image の DB は起動せず、taimei-auth は host の port を公開しない"
 relay_started_at=$(relay_state StartedAt)
 wait_until 30 relay_reports_unreachable || fail_relay "宛先が居ない中継が、開発環境に届かないことを log に出さない"
 ! relay_is_healthy || fail_relay "宛先が居ない中継が healthy になった"
@@ -116,12 +125,21 @@ expect_rpc_status "$TAIMEI_AUTH_URL" "$service_key" 200 "SDK の file"
 expect_rpc_status "$TAIMEI_AUTH_URL" "$TAIMEI_AUTH_SERVICE_KEY" 401 TAIMEI_AUTH_SERVICE_KEY
 echo "ok: SDK の file の service key の RPC は 200、TAIMEI_AUTH_SERVICE_KEY の値の RPC は 401"
 
-relay_url="http://localhost:$relay_port"
 wait_until 60 relay_is_healthy || fail_relay "宛先が起動しても、中継が healthy にならない"
 [ "$(relay_state StartedAt)" = "$relay_started_at" ] || fail_relay "中継の container が起動し直された"
-curl -fsS -o /dev/null "$relay_url/health"
-expect_rpc_status "$relay_url" "$service_key" 200 "中継へ SDK の file"
-echo "ok: 宛先が後から起動すると、中継は起動し直さずに healthy になり、/health と RPC を宛先へ渡す"
+# shellcheck disable=SC2016
+docker run --rm --network "${relay_project}_default" -e RELAY_URL="http://$relay_hostname:$relay_port" -e SERVICE_KEY="$service_key" \
+  --entrypoint bun "$image" -e '
+const health = await fetch(`${process.env.RELAY_URL}/health`);
+if (health.status !== 200) throw new Error(`別名の先の /health が ${health.status} を返す`);
+const rpc = await fetch(`${process.env.RELAY_URL}/rpc/auth.v1.UserService/FindUserByEmail`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "X-Service-Key": process.env.SERVICE_KEY },
+  body: JSON.stringify({ email: "nobody@example.com" }),
+});
+if (rpc.status !== 200) throw new Error(`別名の先の RPC が ${rpc.status} を返す`);
+' || fail_relay "consumer の network の別名の先から、宛先の auth の応答が返らない"
+echo "ok: 宛先が後から起動すると、中継は起動し直さずに healthy になり、consumer の network の別名の先から /health と RPC を宛先へ渡す"
 
 # shellcheck disable=SC2016
 compose exec -T -e TAIMEI_AUTH_URL="http://localhost:$port" taimei-auth bun -e '

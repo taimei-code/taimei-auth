@@ -139,6 +139,26 @@ include:
 - 断片は auth ホスト専用の DB を起動する。利用者・事業所・所属と session、ログインの試行回数の制限の計数は compose の volume に残り、`docker compose down` の後の `up` でも消えない。消すには `docker compose down -v` を使う。
 - 手元の確認で host から auth ホストに届かせる時は、override の file で `taimei-auth` に `ports` を足す。host で待ち受ける address は `127.0.0.1:3100:3100` のように loopback に限る。
 
+### 開発環境につなぐ
+
+試験の環境の auth ホストの代わりに、同じ machine で動いている taimei-auth の開発環境 (taimei-auth の開発者が、taimei-auth の repo の compose で手元に動かし続ける auth ホスト) を使う時は、consumer の compose の後ろに、この package の上書きの file を 2 つ目の `-f` で足す。consumer の compose の file は変えない。
+
+```sh
+docker compose -f compose.yml -f ./node_modules/@taimei-code/auth-client/testing/compose.development.yml up
+```
+
+- 上書きの file は `!reset` と `!override` を使うので、Docker Compose 2.24 以降が要る
+- 足すと、service `taimei-auth` は開発環境の auth へ通信を渡す中継になる。service の名前、network の上の別名、health check は変わらず、`taimei-auth` は開発環境が `/health` に答えた時に healthy になる。`depends_on` の `service_healthy` は、開発環境が答えるまでの待ちになる
+- 中継は開発環境の compose が名前を付けた network の中の auth の service へ渡す。host の port へは渡さないので、同じ port で動く別の auth にはつながらない
+- 試験の環境の DB は起動せず、`taimei-auth` は host の port を公開しない (override の file で足した `ports` も消える)。host の port は開発環境が持つ
+- 応える auth は開発環境なので、試験の環境とは違い、taimei-auth の版は開発環境の checkout の版で、フィーチャーフラグは開発環境で切り替えたとおりになる。auth ホストの URL、cookie の domain、許可する origin、secret も開発環境の compose の値になる。`TAIMEI_AUTH_*` のうち、中継が使うのは `TAIMEI_AUTH_PORT` (中継が待ち受ける port) と `TAIMEI_AUTH_HOSTNAME` (network の上の別名) だけで、ほかの値は auth ホストに届かない。必須の変数は使われなくても値を書いておく (無いと compose が起動しない)。browser と consumer の app が同じ auth ホストに届くよう、`TAIMEI_AUTH_URL`、`TAIMEI_AUTH_HOSTNAME`、`TAIMEI_AUTH_PORT` を、開発環境の auth ホストの URL とその host 名と port にそろえる。service key は開発環境も `testing/service-key.env` から読む
+
+失敗した時は次のようになる。
+
+- 開発環境を落としている時は、network が無いので、起動がすぐに止まる (`network taimei-network declared as external, but could not be found`)。上書きの file を足した consumer の compose が動いている間に開発環境を落とすと、中継がつながっている network は消えずに残り、次の起動は下の「container を止めているだけの時」と同じになる。開発環境を落とす前に consumer の compose を落とす
+- 開発環境の container を止めているだけの時は、`taimei-auth` が healthy にならず、health check が尽きた時に止まる (約 60 秒)
+- 開発環境が動いている時に上書きの file を足さずに起動すると、host の port の取り合いで止まる (`port is already allocated`)。この時、試験の環境の DB の container は起動したまま残る
+
 ### 開発用アカウントでログインする
 
 試験の環境で利用者を選んでログインする時は、開発者ホーム (`buildDevHomeUrl` の URL) を開く。ログイン画面 (`buildAuthLoginUrl` の URL) は本番と同じ画面を出し、そこでは利用者を選べない。開発者ホームの一覧には次の開発用アカウントと、その browser の一覧に足された利用者が出る。利用者はログイン中にその browser で開発者ホームを開いた時に足される。試験 API で作った利用者は、その browser で `loginUrl` を開いてから開発者ホームを開く。ほかの browser でログインした利用者は出ず、選べない。
