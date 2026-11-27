@@ -51,6 +51,7 @@ services:
       - "3100:3100"
     env_file:
       - .env
+      - packages/auth-client/testing/service-key.env
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
@@ -63,8 +64,6 @@ services:
       APP_NAME: taimei
       # taimei 側の compose と同じ値にする (Cookie の署名検証を一致させる)
       AUTH_SECRET: dev-secret-for-local-development-32chars
-      # taimei 側の AUTH_SERVICE_KEY と同じ値にする。.env 任せにすると設定し忘れたまま検証が省略される経路に入るため直接書く
-      AUTH_SERVICE_KEY: local-dev-key
       AUTH_SERVICE_KEY_PREVIOUS: ${AUTH_SERVICE_KEY_PREVIOUS:-}
     depends_on:
       auth-postgres:
