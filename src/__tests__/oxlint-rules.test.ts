@@ -418,10 +418,16 @@ const CASES: readonly Case[] = [
     name: "開発環境の入口は、Flagship の偽物を import できない",
     path: "testing/dev-worker.ts",
     source: 'import { fakeFlagship } from "./feature-flags";\nexport { fakeFlagship };',
-    expectedRules: ["taimei(dev-worker-passes-no-fake-flagship)"],
+    expectedRules: ["taimei(entry-passes-no-fake-flagship)"],
   },
   {
-    name: "e2e と試験用の image の入口は、Flagship の偽物を import できる",
+    name: "試験用の image の入口は、Flagship の偽物を import できない",
+    path: "testing/server.ts",
+    source: 'import { fakeFlagship } from "./feature-flags";\nexport { fakeFlagship };',
+    expectedRules: ["taimei(entry-passes-no-fake-flagship)"],
+  },
+  {
+    name: "e2e の入口は、Flagship の偽物を import できる",
     path: "testing/worker.ts",
     source: 'import { fakeFlagship } from "./feature-flags";\nexport { fakeFlagship };',
     expectedRules: [],

@@ -61,10 +61,10 @@ const removeDevAccounts = async () => {
   await deleteCompaniesByNames(DEV_ACCOUNTS.companies.map((devCompany) => devCompany.name));
 };
 
-const withTestingServer = async <A>(
+const withTestingServerLog = async <A>(
   run: (baseUrl: string) => Promise<A>,
   env: Record<string, string> = {},
-): Promise<A> => {
+): Promise<{ result: A; log: string }> => {
   const port = unusedPort();
   const child = Bun.spawn(testingServerCommand, {
     cwd: tmpdir(),
@@ -72,13 +72,19 @@ const withTestingServer = async <A>(
     stdout: "pipe",
     stderr: "pipe",
   });
+  let result: A;
   try {
     await waitForResponse(`http://localhost:${port}/api/auth/ok`, child);
-    return await run(`http://localhost:${port}`);
+    result = await run(`http://localhost:${port}`);
   } finally {
     child.kill();
     await child.exited;
   }
+  const [stdout, stderr] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  return { result, log: `${stdout}${stderr}` };
 };
 
 const waitForResponse = async (
@@ -92,6 +98,14 @@ const waitForResponse = async (
   }
   throw new Error(`exit ${child.exitCode}: ${await new Response(child.stderr).text()}`);
 };
+
+const withTestingServer = async <A>(
+  run: (baseUrl: string) => Promise<A>,
+  env: Record<string, string> = {},
+): Promise<A> => (await withTestingServerLog(run, env)).result;
+
+const PASSKEY_AVAILABILITY_PATH = "/api/passkey/sign-in/availability";
+const DEV_HOME_FEATURE_FLAGS_PATH = `${DEV_HOME_PATH}/feature-flags`;
 
 describe("試験用の entry は本番以外の APP_ENV の時だけ起動する", () => {
   test.each([
@@ -345,4 +359,61 @@ describe("本番の worker と同じ app", () => {
       test: allNotFound,
     });
   });
+});
+
+describe("試験用の entry は、フィーチャーフラグをすべて未公開として評価し、切り替える口を持たない", () => {
+  test("パスキーの公開を尋ねる endpoint は、未公開と答える", async () => {
+    const { status, body } = await withTestingServer(async (baseUrl) => {
+      const response = await fetch(`${baseUrl}${PASSKEY_AVAILABILITY_PATH}`);
+      return { status: response.status, body: await response.json() };
+    });
+
+    expect(status).toBe(200);
+    expect(body).toEqual({ available: false });
+  }, 15_000);
+
+  test("試験 API の切り替えの POST は 404", async () => {
+    const status = await withTestingServer(
+      async (baseUrl) =>
+        (
+          await fetch(`${baseUrl}${TESTING_PATH}/feature-flags`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ flag: "passkey", state: "on" }),
+          })
+        ).status,
+    );
+
+    expect(status).toBe(404);
+  }, 15_000);
+
+  test("開発者ホームは「フィーチャーフラグ」の link を出さず、フィーチャーフラグのページも載せない", async () => {
+    const { devHome, featureFlagsPage, switchStatus } = await withTestingServer(
+      async (baseUrl) => ({
+        devHome: await (await fetch(`${baseUrl}${DEV_HOME_PATH}`)).text(),
+        featureFlagsPage: await (await fetch(`${baseUrl}${DEV_HOME_FEATURE_FLAGS_PATH}`)).text(),
+        switchStatus: (
+          await fetch(`${baseUrl}${DEV_HOME_FEATURE_FLAGS_PATH}`, {
+            method: "POST",
+            headers: { origin: AUTH_HOST_ORIGIN },
+            body: new URLSearchParams({ flag: "passkey", state: "on" }),
+            redirect: "manual",
+          })
+        ).status,
+      }),
+    );
+
+    expect(devHomePropsOf(devHome).featureFlagsHref).toBeNull();
+    expect(() => devHomePropsOf(featureFlagsPage)).toThrow(PAGE_PROPS_NOT_IN_PAGE);
+    expect(switchStatus).toBe(404);
+  }, 15_000);
+
+  test("パスキーの公開を尋ねても、log に flag の評価の warning が出ない", async () => {
+    const { result: status, log } = await withTestingServerLog(
+      async (baseUrl) => (await fetch(`${baseUrl}${PASSKEY_AVAILABILITY_PATH}`)).status,
+    );
+
+    expect(status).toBe(200);
+    expect(log).not.toContain("feature-flags:");
+  }, 15_000);
 });
