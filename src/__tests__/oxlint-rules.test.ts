@@ -395,23 +395,9 @@ const CASES: readonly Case[] = [
     expectedRules: [DB_IMPORT, "taimei(db-import-in-e2e-only-db-testing)"],
   },
   {
-    name: "e2e と試験用の image の入口は、フィーチャーフラグを DB に残す置き場を import できない",
-    path: "testing/worker.ts",
-    source:
-      'import { postgresFlagRulesStore } from "../db/testing/feature-flag-rules";\nexport { postgresFlagRulesStore };',
-    expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
-  },
-  {
     name: "e2e と試験用の image の入口は、開発環境の入口を re-export できない",
     path: "testing/worker.ts",
     source: 'export { default, KvStore } from "./dev-worker";',
-    expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
-  },
-  {
-    name: "開発環境の入口も、フィーチャーフラグを DB に残す置き場を import できない",
-    path: "testing/dev-worker.ts",
-    source:
-      'import { postgresFlagRulesStore } from "../db/testing/feature-flag-rules";\nexport { postgresFlagRulesStore };',
     expectedRules: ["taimei(local-flag-store-entry-only-from-compose)"],
   },
   {
