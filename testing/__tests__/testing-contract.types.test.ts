@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
 import type * as Sdk from "@taimei-code/auth-client/testing";
 import type { Effect, Schema } from "effect";
+import type { FeatureFlag } from "../../src/feature-flags";
 import type { createSignedInUser } from "../create-signed-in-user";
 import type { setCurrentCompany } from "../set-current-company";
-import type { SetCurrentCompanyRequest, SignedInUserRequest } from "../testing-contract";
+import type {
+  FeatureFlagSwitchRequest,
+  SetCurrentCompanyRequest,
+  SignedInUserRequest,
+} from "../testing-contract";
 
 type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -33,4 +38,13 @@ test("server が decode する request の型と返す response の型は、SDK 
     setCurrentCompanyRequestTypesMatch,
     setCurrentCompanyResponseTypesMatch,
   ]).toEqual([true, true, true, true]);
+});
+
+const switchableFlagsAreRegisteredFlags: Same<
+  Schema.Schema.Type<typeof FeatureFlagSwitchRequest>["flag"],
+  FeatureFlag
+> = true;
+
+test("試験 API の切り替えが受けるフラグの名前の型は、登録したフラグの型と同じ (typecheck で検査する)", () => {
+  expect(switchableFlagsAreRegisteredFlags).toBe(true);
 });
