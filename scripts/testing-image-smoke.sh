@@ -3,15 +3,16 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 image="${1:?usage: testing-image-smoke.sh <image> [compose template]}"
-template="${2:-packages/auth-client/testing/compose.template.yml}"
+template=$(realpath "${2:-packages/auth-client/testing/compose.template.yml}")
 port="${TESTING_IMAGE_SMOKE_PORT:-3199}"
 project=testing-image-smoke
 work=$(mktemp -d)
-fragment="$work/compose.yml"
+consumer="$work/compose.yml"
 override="$work/override.yml"
+service_key=$(sed -n 's/^AUTH_SERVICE_KEY=//p' "$(dirname "$template")/service-key.env")
 
-sed "s|__TAIMEI_AUTH_TESTING_IMAGE__|$image|" "$template" > "$fragment"
-printf 'services:\n  taimei-auth:\n    ports: ["127.0.0.1:%s:%s"]\n' "$port" "$port" > "$override"
+printf 'include:\n  - path:\n      - "%s"\n      - "%s"\n' "$template" "$override" > "$consumer"
+printf 'services:\n  taimei-auth:\n    image: "%s"\n    ports: ["127.0.0.1:%s:%s"]\n' "$image" "$port" "$port" > "$override"
 
 export TAIMEI_AUTH_URL="http://localhost:$port"
 export TAIMEI_AUTH_HOSTNAME=localhost
@@ -19,11 +20,11 @@ export TAIMEI_AUTH_COOKIE_DOMAIN=
 export TAIMEI_AUTH_CONSUMER_ORIGINS=http://localhost:3000
 TAIMEI_AUTH_SECRET="$(openssl rand -hex 32)"
 export TAIMEI_AUTH_SECRET
-export TAIMEI_AUTH_SERVICE_KEY=testing-image-smoke-service-key
+export TAIMEI_AUTH_SERVICE_KEY=testing-image-smoke-ignored-service-key
 export TAIMEI_AUTH_APP_NAME=testing-image-smoke
 export TAIMEI_AUTH_PORT="$port"
 
-compose() { docker compose -p "$project" -f "$fragment" -f "$override" "$@"; }
+compose() { docker compose -p "$project" -f "$consumer" "$@"; }
 cleanup() {
   compose down -v >/dev/null 2>&1 || true
   rm -rf "$work"
@@ -34,6 +35,16 @@ compose up --wait --quiet-pull
 
 curl -fsS -o /dev/null "$TAIMEI_AUTH_URL/health"
 echo "ok: /health は 200"
+
+expect_rpc_status() {
+  local status
+  status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$TAIMEI_AUTH_URL/rpc/auth.v1.UserService/FindUserByEmail" \
+    -H 'Content-Type: application/json' -H "X-Service-Key: $1" -d '{"email":"nobody@example.com"}')
+  [ "$status" = "$2" ] || { echo "$3 の service key を送った RPC が $2 でなく $status を返す" >&2; exit 1; }
+}
+expect_rpc_status "$service_key" 200 "SDK の file"
+expect_rpc_status "$TAIMEI_AUTH_SERVICE_KEY" 401 TAIMEI_AUTH_SERVICE_KEY
+echo "ok: SDK の file の service key の RPC は 200、TAIMEI_AUTH_SERVICE_KEY の値の RPC は 401"
 
 # shellcheck disable=SC2016
 compose exec -T -e TAIMEI_AUTH_URL="http://localhost:$port" taimei-auth bun -e '

@@ -41,6 +41,21 @@ describe("SDK の版と、CHANGELOG・README の対応", () => {
     expect(exportsMissingFrom(readPackageFile("README.md"), names)).toEqual([]);
   });
 
+  test("6.0.0 の CHANGELOG は、service key を SDK の file から読む移行の手順を持つ", () => {
+    const section =
+      /^## 6\.0\.0 [\s\S]*?(?=^## )/m.exec(readPackageFile("CHANGELOG.md"))?.[0] ?? "";
+
+    expect(section).toMatch(/^### 移行$/m);
+    expect(section).toContain("testing/service-key.env");
+  });
+
+  test("README の試験の環境の変数の表は TAIMEI_AUTH_SERVICE_KEY を持たず、service key を読む SDK の file を示す", () => {
+    const readme = readPackageFile("README.md");
+
+    expect(readme).not.toMatch(/^\| `TAIMEI_AUTH_SERVICE_KEY` \|/m);
+    expect(readme).toContain("testing/service-key.env");
+  });
+
   test("README の code の中に名前の無い export は、地の文に出ても漏れとして報告される", () => {
     expect(
       exportsMissingFrom("`createAuthClient(options)` と NEW_EXPORT", [

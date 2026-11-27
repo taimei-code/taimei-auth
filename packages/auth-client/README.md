@@ -126,10 +126,10 @@ include:
 | `TAIMEI_AUTH_COOKIE_DOMAIN` | 必須。session cookie の domain (例 `example.localhost`)。localhost で動かす時は空にする |
 | `TAIMEI_AUTH_CONSUMER_ORIGINS` | 必須。consumer の origin。複数なら `,` でつなぐ |
 | `TAIMEI_AUTH_SECRET` | 必須。試験の環境だけで使う 32 文字以上の値 |
-| `TAIMEI_AUTH_SERVICE_KEY` | 必須。consumer が auth ホストの RPC を呼ぶ時に送る service key と同じ値。試験の環境でも service key の無い RPC は通さない |
 | `TAIMEI_AUTH_APP_NAME` | 必須。メールなどに出す service の表示名 |
 | `TAIMEI_AUTH_PORT` | 任意。auth ホストが container の中で待ち受ける port (既定 3100) |
 
+- auth ホストは service key をこの package の `testing/service-key.env` の `AUTH_SERVICE_KEY` から読む。consumer の app も、試験の環境で auth ホストの RPC を呼ぶ時は、同じ file の値を service key として送る。compose なら、app の service の `env_file` でこの file を読む。`env_file` は変数の名前を変えないので、app が別の名前で service key を読むなら、名前を `AUTH_SERVICE_KEY` に合わせる。試験の環境でも service key の無い RPC は通さない。この値は package に入って配られるので、本番の service key に使わない
 - auth ホストの service 名は `taimei-auth` である。auth ホストは migrate を終えて `/health` が 200 を返すと healthy になる。consumer の service は `depends_on: { taimei-auth: { condition: service_healthy } }` で待つ。
 - 断片は compose の project の `default` network を使う。consumer の service も `default` network に置き、`TAIMEI_AUTH_HOSTNAME` で auth ホストに届くようにする。
 - browser が container の中で動く時、Chromium は `*.localhost` を自分の loopback に向けるので、auth ホストに届かない。Chromium の起動引数に、host ごとに `--host-resolver-rules=MAP auth.example.localhost <auth ホストの container の host 名>, MAP <consumer の host> <consumer の container の host 名>` を付ける。1 行の wildcard では宛先を 1 つにしか向けられない

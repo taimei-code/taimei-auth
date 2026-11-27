@@ -14,6 +14,7 @@ services:
 
   taimei-auth:
     image: __TAIMEI_AUTH_TESTING_IMAGE__
+    env_file: service-key.env
     command: sh -c "bun run db:migrate && bun run db:migrate-manual && bun --preload=./testing/redirect-hosts-plugin.ts testing/server.ts"
     environment:
       PORT: ${TAIMEI_AUTH_PORT:-3100}
@@ -22,7 +23,6 @@ services:
       AUTH_COOKIE_DOMAIN: ${TAIMEI_AUTH_COOKIE_DOMAIN?TAIMEI_AUTH_COOKIE_DOMAIN is required (empty for localhost)}
       AUTH_TRUSTED_ORIGINS: ${TAIMEI_AUTH_URL},${TAIMEI_AUTH_CONSUMER_ORIGINS:?TAIMEI_AUTH_CONSUMER_ORIGINS is required}
       AUTH_SECRET: ${TAIMEI_AUTH_SECRET:?TAIMEI_AUTH_SECRET is required}
-      AUTH_SERVICE_KEY: ${TAIMEI_AUTH_SERVICE_KEY:?TAIMEI_AUTH_SERVICE_KEY is required (the same value as the service key of the consumer)}
       AUTH_TRUSTED_PROXY_HOPS: "0"
       APP_ENV: test
       APP_NAME: ${TAIMEI_AUTH_APP_NAME:?TAIMEI_AUTH_APP_NAME is required}
