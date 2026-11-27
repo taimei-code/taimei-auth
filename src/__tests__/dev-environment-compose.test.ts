@@ -5,7 +5,14 @@ import { REPO_ROOT } from "./config-invariant-helpers";
 
 type VolumeMount = { type?: string; source?: string; target?: string };
 type DevCompose = {
-  services: { "auth-service": { command: string[]; volumes?: (VolumeMount | string)[] } };
+  services: {
+    "auth-service": {
+      command: string[];
+      volumes?: (VolumeMount | string)[];
+      env_file: string[];
+      environment: Record<string, unknown> | string[];
+    };
+  };
   volumes?: Record<string, unknown>;
 };
 
@@ -55,5 +62,22 @@ describe("開発環境の wrangler の手元の状態は名前付き volume に�
     const compose = structuredClone(devCompose);
     breakCompose(compose.services["auth-service"]);
     expect(persistenceProblems(compose)).toEqual([problem]);
+  });
+});
+
+const SDK_SERVICE_KEY_FILE = "packages/auth-client/testing/service-key.env";
+
+describe("開発環境は consumer と共有する service key を SDK の file から読み、開発者の .env より優先する (.env 任せにすると、設定し忘れた時に検証が省かれる経路に入る)", () => {
+  test("auth-service は service key の値を直に書かない (environment の値は env_file の値に勝つ)", () => {
+    const { environment } = devCompose.services["auth-service"];
+    const names = Array.isArray(environment)
+      ? environment.map((entry) => entry.split("=")[0])
+      : Object.keys(environment);
+
+    expect(names).not.toContain("AUTH_SERVICE_KEY");
+  });
+
+  test("auth-service は env_file の最後に SDK の file を置く (後ろの file の値が開発者の .env の値に勝つ)", () => {
+    expect(devCompose.services["auth-service"].env_file.at(-1)).toBe(SDK_SERVICE_KEY_FILE);
   });
 });

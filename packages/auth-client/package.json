@@ -32,6 +32,7 @@
   "files": [
     "dist",
     "testing/compose.yml",
+    "testing/service-key.env",
     "CHANGELOG.md"
   ],
   "scripts": {
