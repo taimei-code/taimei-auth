@@ -56,6 +56,21 @@ describe("SDK の版と、CHANGELOG・README の対応", () => {
     expect(readme).toContain("testing/service-key.env");
   });
 
+  test("6.1.0 の CHANGELOG は、開発環境につなぐ上書きの file を示す", () => {
+    const section =
+      /^## 6\.1\.0 [\s\S]*?(?=^## )/m.exec(readPackageFile("CHANGELOG.md"))?.[0] ?? "";
+
+    expect(section).toContain("testing/compose.development.yml");
+  });
+
+  test("README の開発環境につなぐ節は、上書きの file の path と、それが要る Docker Compose の版の下限を示す", () => {
+    const section =
+      /^### 開発環境につなぐ$[\s\S]*?(?=^##)/m.exec(readPackageFile("README.md"))?.[0] ?? "";
+
+    expect(section).toContain("testing/compose.development.yml");
+    expect(section).toMatch(/Docker Compose 2\.24/);
+  });
+
   test("README の code の中に名前の無い export は、地の文に出ても漏れとして報告される", () => {
     expect(
       exportsMissingFrom("`createAuthClient(options)` と NEW_EXPORT", [

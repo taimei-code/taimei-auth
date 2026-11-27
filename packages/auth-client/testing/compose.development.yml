@@ -1,0 +1,13 @@
+services:
+  taimei-auth-postgres:
+    profiles: [testing-image-database]
+  taimei-auth:
+    command: !override ["bun", "testing/dev-environment-relay.ts", "auth-service:3100"]
+    ports: !reset []
+    depends_on: !reset {}
+    networks:
+      taimei-network: {}
+networks:
+  taimei-network:
+    name: taimei-network
+    external: true

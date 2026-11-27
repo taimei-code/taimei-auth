@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.1.0 — 2026-11-27
+
+試験の環境の compose に足すと、auth ホストを同じ machine の taimei-auth の開発環境への中継に差し替える上書きの file を足した。SDK の export と wire は変えていない。
+
+### Features
+
+- `testing/compose.development.yml` を足した。consumer の compose の後ろに 2 つ目の `-f` で足すと、service `taimei-auth` は名前、network の上の別名、health check を保ったまま、開発環境の auth へ通信を渡す。使い方は README の「開発環境につなぐ」にある。上書きの file は `!reset` と `!override` を使うので、Docker Compose 2.24 以降が要る
+
+### Breaking changes
+
+なし。上書きの file を足さない起動は変わらない。
+
 ## 6.0.0 — 2026-11-27
 
 試験の環境の auth ホストは service key をこの package の `testing/service-key.env` から読む。consumer が渡す `TAIMEI_AUTH_SERVICE_KEY` は読まない。SDK の export と wire は変えていない。
