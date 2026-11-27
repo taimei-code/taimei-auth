@@ -1844,12 +1844,9 @@ const ROWS: readonly Row[] = [
   {
     name: "local-flag-store-entry-only-from-compose",
     within: ["**"],
-    matchers: [
-      { kind: "importTarget", target: /^db\/testing\/feature-flag-rules(\.ts)?$/ },
-      { kind: "importTarget", target: /^testing\/dev-worker(\.ts)?$/ },
-    ],
+    matchers: [{ kind: "importTarget", target: /^testing\/dev-worker(\.ts)?$/ }],
     message:
-      "フィーチャーフラグを wrangler の手元の置き場で評価する入口 testing/dev-worker.ts は、開発環境の compose だけが起動する。ほかの file はこの入口を import せず、フィーチャーフラグを auth の DB に残す置き場はどの入口も使わない (ADR-0030 の Decision 6)",
+      "フィーチャーフラグを wrangler の手元の置き場で評価する入口 testing/dev-worker.ts は、開発環境の compose だけが起動する。ほかの file はこの入口を import しない (ADR-0030 の Decision 6)",
   },
   {
     name: "entry-passes-no-fake-flagship",

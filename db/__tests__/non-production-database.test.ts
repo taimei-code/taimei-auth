@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { db } from "../client";
+import { requireLocalDatabase } from "../testing/local-database";
 import { requireMarkedDatabase } from "../testing/non-production-database";
 import {
   prepareMarkedNonProductionTables,
@@ -38,6 +39,37 @@ describe("staging の入口と表の準備は、本番以外の DB の印の表�
 
     await expect(prepareMarkedNonProductionTables()).rejects.toThrow("non_production_database");
     expect(await browserAccountTable()).toBe(before);
+  });
+});
+
+describe("フィーチャーフラグの切り替えを残す表が残っている DB でも、本番以外の表の準備は進み、表の行を消さない", () => {
+  const LEFT_FLAG = "non-production-tables-left-flag";
+  const leftRows = async () =>
+    (
+      await db.execute<{ flag: string }>(
+        sql`SELECT flag FROM testing_feature_flag_rules WHERE flag = ${LEFT_FLAG}`,
+      )
+    ).rows;
+
+  afterEach(async () => {
+    await db.execute(sql`DELETE FROM testing_feature_flag_rules WHERE flag = ${LEFT_FLAG}`);
+  });
+
+  test("表と行が残っていても、表の準備は成功し、その行は残る", async () => {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS testing_feature_flag_rules (
+        flag text PRIMARY KEY,
+        enabled boolean NOT NULL,
+        everyone boolean NOT NULL,
+        company_ids text[] NOT NULL
+      )`);
+    await db.execute(sql`
+      INSERT INTO testing_feature_flag_rules (flag, enabled, everyone, company_ids)
+      VALUES (${LEFT_FLAG}, false, true, '{}')`);
+
+    await prepareNonProductionTables(requireLocalDatabase(process.env.DATABASE_URL));
+
+    expect(await leftRows()).toEqual([{ flag: LEFT_FLAG }]);
   });
 });
 
