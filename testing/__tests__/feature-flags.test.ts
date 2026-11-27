@@ -3,12 +3,7 @@ import { TESTING_PATH } from "@taimei-code/auth-client/testing";
 import { Effect } from "effect";
 import { FeatureFlags, type FlagContext } from "../../src/feature-flags";
 import { buildApp } from "../../src/app";
-import {
-  type FakeFlagship,
-  type FlagRules,
-  type FlagRulesStore,
-  fakeFlagship,
-} from "../feature-flags";
+import { type FakeFlagship, fakeFlagship } from "../feature-flags";
 import { featureFlagRoutes } from "../routes";
 
 const FLAG = "example";
@@ -57,77 +52,19 @@ describe("Flagship の偽物は、本番の評価を通して Flagship のルー
       [false, false, false],
     ]);
   });
-});
 
-const swappedStore = (): FlagRulesStore => {
-  const rulesByFlag = new Map<string, FlagRules>();
-  return {
-    storedIn: "Memory",
-    read: async (flag) => rulesByFlag.get(flag),
-    update: async (flag, next) => {
-      rulesByFlag.set(flag, next(rulesByFlag.get(flag)));
-    },
-  };
-};
+  test("前の偽物で全体 off にした後に作り直した偽物は、全員 on と評価する", async () => {
+    await fakeFlagship().off(FLAG);
 
-describe("Flagship の偽物は、渡された置き場の状態で評価とステータスを決める (actor なし、リストの事業所、ほかの事業所)", () => {
-  test("置き場に全体 off が書かれていれば、全員 off で、ステータスは Off", async () => {
-    const store = swappedStore();
-    await store.update(FLAG, () => ({ enabled: false, everyone: true, companyIds: [] }));
-    const flags = fakeFlagship(store);
-    expect([await evaluations(flags), (await flags.stateOf(FLAG)).status]).toEqual([
-      [false, false, false],
-      "Off",
-    ]);
+    expect(await evaluations(fakeFlagship())).toEqual([true, true, true]);
   });
 
-  test("置き場に事業所だけ on が書かれていれば、リストの事業所だけ on で、ステータスは OnlyFor とその事業所", async () => {
-    const store = swappedStore();
-    await store.update(FLAG, () => ({ enabled: true, everyone: false, companyIds: ["listed"] }));
-    const flags = fakeFlagship(store);
-    expect([await evaluations(flags), await flags.stateOf(FLAG)]).toEqual([
-      [false, true, false],
-      { status: "OnlyFor", companyIds: ["listed"] },
-    ]);
-  });
-
-  test("同じ置き場を渡した偽物どうしでは、片方で切り替えた状態が、もう片方の評価とステータスに出る", async () => {
-    const store = swappedStore();
-    const switching = fakeFlagship(store);
-    const reading = fakeFlagship(store);
-
-    await switching.off(FLAG);
-    const afterOff = [await evaluations(reading), (await reading.stateOf(FLAG)).status];
-    await switching.onlyFor(FLAG, ["listed"]);
-    const afterOnlyFor = [await evaluations(reading), (await reading.stateOf(FLAG)).status];
-    await switching.on(FLAG);
-    const afterOn = [await evaluations(reading), (await reading.stateOf(FLAG)).status];
-
-    expect([afterOff, afterOnlyFor, afterOn]).toEqual([
-      [[false, false, false], "Off"],
-      [[false, true, false], "OnlyFor"],
-      [[true, true, true], "On"],
-    ]);
-  });
-
-  test("待たずに続けて送った切り替えは、送った順に置き場へ反映される", async () => {
+  test("待たずに続けて全体 off と事業所だけ on を送ると、後に送った事業所だけ on で評価する", async () => {
     const flags = fakeFlagship();
 
     await Promise.all([flags.off(FLAG), flags.onlyFor(FLAG, ["listed"])]);
 
-    expect(await flags.stateOf(FLAG)).toEqual({ status: "OnlyFor", companyIds: ["listed"] });
-  });
-
-  test("置き場を渡さずに作り直した偽物は、前の偽物で切り替えた後でも、全体 on から始まる", async () => {
-    const before = fakeFlagship();
-    await before.off(FLAG);
-
-    const restarted = fakeFlagship();
-
-    expect([await evaluations(restarted), (await restarted.stateOf(FLAG)).status]).toEqual([
-      [true, true, true],
-      "On",
-    ]);
+    expect(await evaluations(flags)).toEqual([false, true, false]);
   });
 });
 
