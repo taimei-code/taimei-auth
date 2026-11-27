@@ -5,6 +5,7 @@ import {
   FEATURE_FLAGS_BINDING,
   FeatureFlags,
   type FlagContext,
+  type FlagsEvaluatedFor,
   flagContextOf,
   flagshipFeatureFlags,
 } from "../feature-flags";
@@ -88,9 +89,10 @@ describe("Flagship での評価", () => {
 
 describe("機能の code は、フラグの評価の対象どおりに enabled を呼ぶ", () => {
   test("ログイン前にも評価するフラグに actor を渡すと、型検査で落ちる", () => {
-    // @ts-expect-error passkey は actor を渡さずに評価する
-    const withActor = enabled("passkey", { lastUsedCompanyId: "c1" });
+    const evaluateWithActor = (flag: FlagsEvaluatedFor<"everyone">) =>
+      // @ts-expect-error
+      enabled(flag, { lastUsedCompanyId: "c1" });
 
-    expect(Effect.isEffect(withActor)).toBe(true);
+    expect(evaluateWithActor).toBeFunction();
   });
 });

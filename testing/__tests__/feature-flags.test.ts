@@ -7,71 +7,73 @@ import { FEATURE_FLAG_CATALOG } from "../feature-flag-catalog";
 import { type FakeFlagship, fakeFlagship } from "../feature-flags";
 import { featureFlagRoutes } from "../routes";
 
-const FLAG = "passkey";
-
 const CONTEXTS: readonly FlagContext[] = [{}, { companyId: "listed" }, { companyId: "other" }];
 
 const REGISTERED_FLAGS = Record.keys(FEATURE_FLAG_CATALOG);
 
 const UNREGISTERED_FLAG = "pass-key";
 
-const evaluations = (flags: FakeFlagship, flag: string = FLAG) =>
+const evaluations = (flags: FakeFlagship, flag: string) =>
   Effect.runPromise(
     Effect.forEach(CONTEXTS, (context) =>
       FeatureFlags.use((each) => each.isOn(flag, context)),
     ).pipe(Effect.provide(flags.layer)),
   );
 
-describe("Flagship の偽物は、本番の評価を通して Flagship のルールの順で評価する (actor なし、リストの事業所、ほかの事業所)", () => {
+describe.each(
+  REGISTERED_FLAGS,
+)("Flagship の偽物は、一覧のフラグ %s を、本番の評価を通して Flagship のルールの順で評価する (actor なし、リストの事業所、ほかの事業所)", (flag) => {
   test("off にすると、事業所のリストがあっても全員 off", async () => {
     const flags = fakeFlagship();
-    await flags.onlyFor(FLAG, ["listed"]);
-    await flags.off(FLAG);
-    expect(await evaluations(flags)).toEqual([false, false, false]);
+    await flags.onlyFor(flag, ["listed"]);
+    await flags.off(flag);
+    expect(await evaluations(flags, flag)).toEqual([false, false, false]);
   });
 
   test("onlyFor にすると、リストの事業所だけが on で、actor なしは off", async () => {
     const flags = fakeFlagship();
-    await flags.onlyFor(FLAG, ["listed"]);
-    expect(await evaluations(flags)).toEqual([false, true, false]);
+    await flags.onlyFor(flag, ["listed"]);
+    expect(await evaluations(flags, flag)).toEqual([false, true, false]);
   });
 
   test("on にすると、actor の有無に関係なく on", async () => {
     const flags = fakeFlagship();
-    await flags.off(FLAG);
-    await flags.on(FLAG);
-    expect(await evaluations(flags)).toEqual([true, true, true]);
+    await flags.off(flag);
+    await flags.on(flag);
+    expect(await evaluations(flags, flag)).toEqual([true, true, true]);
   });
 
   test("切り替えていない flag は、全体 on として評価する", async () => {
-    expect(await evaluations(fakeFlagship())).toEqual([true, true, true]);
+    expect(await evaluations(fakeFlagship(), flag)).toEqual([true, true, true]);
   });
 
   test("remove した flag と、binding が失敗する時は、全員 off", async () => {
     const removed = fakeFlagship();
-    removed.remove(FLAG);
+    removed.remove(flag);
     const broken = fakeFlagship();
     broken.breakBinding();
-    expect([await evaluations(removed), await evaluations(broken)]).toEqual([
+    expect([await evaluations(removed, flag), await evaluations(broken, flag)]).toEqual([
       [false, false, false],
       [false, false, false],
     ]);
   });
 
   test("前の偽物で全体 off にした後に作り直した偽物は、全員 on と評価する", async () => {
-    await fakeFlagship().off(FLAG);
+    await fakeFlagship().off(flag);
 
-    expect(await evaluations(fakeFlagship())).toEqual([true, true, true]);
+    expect(await evaluations(fakeFlagship(), flag)).toEqual([true, true, true]);
   });
 
   test("待たずに続けて全体 off と事業所だけ on を送ると、後に送った事業所だけ on で評価する", async () => {
     const flags = fakeFlagship();
 
-    await Promise.all([flags.off(FLAG), flags.onlyFor(FLAG, ["listed"])]);
+    await Promise.all([flags.off(flag), flags.onlyFor(flag, ["listed"])]);
 
-    expect(await evaluations(flags)).toEqual([false, true, false]);
+    expect(await evaluations(flags, flag)).toEqual([false, true, false]);
   });
+});
 
+describe("Flagship の偽物の切り替えは、一覧に登録した名前だけを受ける", () => {
   test("登録していない名前は、全体 on、全体 off、事業所だけ on、flag を無くす関数に渡せない (typecheck が固定する)", () => {
     const flags = fakeFlagship();
     const switchUnregisteredFlag = () => [
