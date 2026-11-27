@@ -1,5 +1,19 @@
 # Changelog
 
+## 6.0.0 — 2026-11-27
+
+試験の環境の auth ホストは service key をこの package の `testing/service-key.env` から読む。consumer が渡す `TAIMEI_AUTH_SERVICE_KEY` は読まない。SDK の export と wire は変えていない。
+
+### Breaking changes
+
+- 試験の環境の auth ホストが受ける service key は、`testing/service-key.env` の `AUTH_SERVICE_KEY` の値になる。版だけを上げると、consumer の app が送る service key と食い違い、RPC が 401 になる
+- `TAIMEI_AUTH_SERVICE_KEY` を渡しても compose は起動するが、値は使われない
+
+### 移行
+
+- consumer の app が試験の環境で送る service key を、`node_modules/@taimei-code/auth-client/testing/service-key.env` の `AUTH_SERVICE_KEY` の値にする。読み方と、本番で使わないことは README の「起動」にある
+- compose に直に書いた service key の値と、`taimei-auth.env` の `TAIMEI_AUTH_SERVICE_KEY` を消す
+
 ## 5.3.0 — 2026-11-27
 
 試験の環境の auth ホストはフィーチャーフラグ (auth ホストの機能を deploy せずに公開するか止めるかを切り替える設定) をすべて未公開として評価する。フィーチャーフラグを切り替える口も無くした。SDK の export と wire は変えていない。
