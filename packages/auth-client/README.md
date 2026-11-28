@@ -133,7 +133,7 @@ include:
 - auth ホストの service 名は `taimei-auth` である。auth ホストは migrate を終えて `/health` が 200 を返すと healthy になる。consumer の service は `depends_on: { taimei-auth: { condition: service_healthy } }` で待つ。
 - 断片は compose の project の `default` network を使う。consumer の service も `default` network に置き、`TAIMEI_AUTH_HOSTNAME` で auth ホストに届くようにする。
 - browser が container の中で動く時、Chromium は `*.localhost` を自分の loopback に向けるので、auth ホストに届かない。Chromium の起動引数に、host ごとに `--host-resolver-rules=MAP auth.example.localhost <auth ホストの container の host 名>, MAP <consumer の host> <consumer の container の host 名>` を付ける。1 行の wildcard では宛先を 1 つにしか向けられない
-- 断片の image は linux/amd64 だけである。arm64 の host では amd64 のエミュレーションで動く。エミュレーションには Rosetta を使う。Docker Desktop は既定で使わないので、設定の「Use Rosetta for x86_64/amd64 emulation on Apple Silicon」を有効にする。colima は `colima start --vz-rosetta` で起動する。Rosetta を使わないと QEMU で動き、起動と応答が遅くなる。
+- 断片の image は linux/amd64 だけである。断片は auth ホストの `platform` を `linux/amd64` に指定するので、arm64 の host の docker も `DOCKER_DEFAULT_PLATFORM` を付けずに image を pull し、amd64 のエミュレーションで動かす。エミュレーションには Rosetta を使う。Docker Desktop は既定で使わないので、設定の「Use Rosetta for x86_64/amd64 emulation on Apple Silicon」を有効にする。colima は `colima start --vz-rosetta` で起動する。Rosetta を使わないと QEMU で動き、起動と応答が遅くなる。
 - 断片の image は private である。pull する前に、この package を入れるのと同じ `read:packages` の token で `docker login ghcr.io` する。
 - `include:` は host の `node_modules` を読むので、compose を起動する前に、この package を host に install しておく。
 - 断片は auth ホスト専用の DB を起動する。利用者・事業所・所属と session、ログインの試行回数の制限の計数は compose の volume に残り、`docker compose down` の後の `up` でも消えない。消すには `docker compose down -v` を使う。
