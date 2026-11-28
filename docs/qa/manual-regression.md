@@ -173,3 +173,19 @@
   7. `docker compose down` の後に `docker compose up --build --watch` で起動し直し、共通ログイン画面と 2 の画面を開き直す
   8. 後片付け: 2 の画面で `passkey` を「Delete」で消す
 - **期待結果**: 1 の共通ログイン画面に「パスキーでログイン」が出ず、開発者ホームに「フィーチャーフラグ」の link が出る。2 で link を押すと Local Explorer の Flagship の画面が開き、URL は手順 2 の URL と同じである。2 の後の共通ログイン画面に「パスキーでログイン」が出る。3 の Disable の後は出ず、Enable の後は出る。4〜7 の共通ログイン画面に「パスキーでログイン」が出ず、5〜7 の画面で `passkey` は Disabled のまま残る。`docker compose logs auth-service` に、フィーチャーフラグの評価に失敗した warning が出ていない
+
+## QA-MR-14: 実物の consumer (taimei) を開発環境につなぎ、開発環境のログインとフィーチャーフラグが consumer から見える
+
+- **契機**: 開発環境の compose、SDK の compose の上書きの file、service key の file、開発環境の固定の値の file、試験用の image の中継を変える PR
+- **契機の path**: `docker-compose.yml`、`packages/auth-client/testing/compose.development.yml`、`packages/auth-client/testing/service-key.env`、`packages/auth-client/testing/development-environment.env`、`testing/dev-environment-relay.ts`
+- **前提**: 中継の起動と応答は `scripts/testing-image-smoke.sh` が確かめる。このケースは、実物の consumer の compose と開発環境を組み合わせた時の、browser のログイン、フィーチャーフラグ、失敗の止まり方を見る。macOS で行う (Linux の host は範囲の外)。taimei の repo を手元に置き、その `bun install` で入る SDK が上書きの file を含む版である。taimei の image を build するので、taimei の `NPM_TOKEN` が有効である。taimei の compose と開発環境の compose は、どちらも `down -v` を使わない (taimei の DB は 2 つの場面で同じものを使い続け、手順 7 がそれを見る)。起動は開発環境が先、taimei が後で、落とす時は taimei が先である。以下、「開発環境」は本 repo の compose、「つなぐ方」は taimei の `bun run up:auth-dev`、「つながない方」は taimei の `docker compose up --build --watch` を指す
+- **手順**:
+  1. 本 repo で `docker compose up --build --watch` で開発環境を起動し、taimei の repo でつなぐ方を起動する。`http://app.taimei-code.localhost:3001/dev-home` を開いて `dev-owner@example.com` を選び、`http://app.taimei-code.localhost:3001/dashboard/teams` でチームを 1 つ作る
+  2. ログインしていない別の browser (Chrome の別の profile など) で `http://app.taimei-code.localhost:3001/auth` を開く。手順 1 の開発者ホームの「フィーチャーフラグ」の link から Local Explorer を開き、`passkey` が残っていれば「Row actions」の「Delete」で消して、共通ログイン画面を開き直す。`passkey` を QA-MR-13 の手順 2 のとおりに作り、共通ログイン画面を開き直す。続けて `passkey` を「Disable」にして開き直し、「Enable」に戻す
+  3. taimei の `src/` の file を 1 つ保存し直し、watch が taimei の app を読み直した後に、手順 1 のチームの一覧と手順 2 の共通ログイン画面を開き直す。保存し直した変更は戻す
+  4. taimei の compose を落とし (`docker compose -f docker-compose.yml -f ./node_modules/@taimei-code/auth-client/testing/compose.development.yml -f docker-compose.auth-dev.yml down`)、開発環境を動かしたまま、つながない方を起動する。止まったら `docker compose down` で落とす
+  5. 本 repo で `docker compose stop auth-service` の後に、つなぐ方を起動し、止まったら taimei の repo で `docker compose -f docker-compose.yml -f ./node_modules/@taimei-code/auth-client/testing/compose.development.yml -f docker-compose.auth-dev.yml logs taimei-auth` を見て、手順 4 と同じ command で落とす
+  6. 本 repo で `docker compose down` の後に、つなぐ方を起動する
+  7. 開発環境を落としたまま、つながない方を起動し、`http://app.taimei-code.localhost:3001/dev-home` で `dev-owner@example.com` を選び直して (場面ごとに auth が違い、前の場面の session は使えない)、チームの一覧を開き、チームを 1 つ作る。taimei を落とし、開発環境を起動してからつなぐ方を起動し、同じく開発者ホームで `dev-owner@example.com` を選び直して、チームの一覧を開く
+  8. 後片付け: 手順 1 と 7 で作ったチームを「チームを削除」で消し、taimei を手順 4 と同じ command で落とす。Local Explorer の `passkey` は、手順 2 の前の状態に戻す
+- **期待結果**: 手順 1 の開発者ホームは auth ホスト (`http://auth.taimei-code.localhost:3100`) に開き、「フィーチャーフラグ」の link を出す (試験用の image は出さないので、開発環境が応えていることが分かる)。選んだ利用者で taimei のチームの一覧に入り、チームを作れる。手順 2 の共通ログイン画面は、`passkey` が無い時は「パスキーでログイン」を出さず、作った後に「パスキーでログイン」を出し、Disable の後は出さない。手順 3 は watch が app を読み直してもログインしたままで、共通ログイン画面は Local Explorer の状態のとおりである。手順 4 は `port is already allocated` で止まり、taimei の DB と試験用の image の DB の container が起動したまま残る。手順 5 は約 1 分で `container taimei-taimei-auth-1 is unhealthy` で止まり、`taimei-auth` の log に `開発環境 (auth-service:3100) に届かない` が出る。手順 6 は数秒で `network taimei-network declared as external, but could not be found` で止まる (中継の container は作られず、log は出ない)。手順 7 は、つながない方の開発者ホームが「フィーチャーフラグ」の link を出さず、どちらの場面のチームの一覧にも、手順 1 と 7 で作ったチームが両方出る
