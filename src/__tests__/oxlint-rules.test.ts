@@ -2012,6 +2012,20 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "session ごとの試行枠を数えた後だという印を渡せるのは試行枠の実装だけ: 他の handler に書くと lint が止める",
+    path: "src/handlers/Probe637.ts",
+    source:
+      'import { Effect } from "effect";\nimport { WithinSessionAttemptBudget } from "../account/reauthentication-contract";\nexport const pass = Effect.provideService(WithinSessionAttemptBudget, true);',
+    expectedRules: ["taimei(within-session-attempt-budget-only-from-session-budget)"],
+  },
+  {
+    name: "session ごとの試行枠を数えた後だという印を渡せるのは試行枠の実装だけ: src/handlers/attempt-budget-http-api.ts では lint が止めない",
+    path: "src/handlers/attempt-budget-http-api.ts",
+    source:
+      'import { Effect } from "effect";\nimport { WithinSessionAttemptBudget } from "../account/reauthentication-contract";\nexport const pass = Effect.provideService(WithinSessionAttemptBudget, true);',
+    expectedRules: [],
+  },
+  {
     name: "パスキーの数の上限と比べるのは保存の文と述語だけ: 画面に書くと lint が止める",
     path: "web/src/passkey/Probe494.ts",
     source: "export const full = (count: number) => count >= PASSKEY_LIMIT;",

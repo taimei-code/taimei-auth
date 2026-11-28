@@ -1709,6 +1709,19 @@ const ROWS: readonly Row[] = [
       "session の発行時刻 (issuedAt) を比べるのは src/account/reauthentication.ts の requireRecentSignIn だけ (再認証の時間窓の判定を 1 つに集める。ADR-0031)。値を作るのは requireActor だけ",
   },
   {
+    name: "within-session-attempt-budget-only-from-session-budget",
+    within: ["src/**"],
+    allowedIn: [
+      "src/account/reauthentication-contract.ts",
+      "src/mfa/mfa-contract.ts",
+      "src/passkey/passkey-contract.ts",
+      "src/handlers/attempt-budget-http-api.ts",
+    ],
+    matchers: [{ kind: "identifier", names: ["WithinSessionAttemptBudget"] }],
+    message:
+      "WithinSessionAttemptBudget (session ごとの試行枠を数えた後だという印) を書けるのは、定義と提供を宣言する契約と、試行枠を数えた後に渡す src/handlers/attempt-budget-http-api.ts だけ (再認証による拒否は audit event に残るので、再認証は試行枠を数えた後に評価する。ほかの所が印を渡すと、試行枠を数えずに再認証を求める宣言が型検査を通る)",
+  },
+  {
     name: "passkey-transports-only-in-passkey-entry",
     within: ["src/**", "db/**", "web/src/**", "management/**"],
     allowedIn: ["db/enums.ts", "db/schema.ts", "src/passkey/webauthn.ts"],
