@@ -939,6 +939,18 @@ describe("パスキーの登録は、発行から 10 分以内の session にだ
     expect(await reauthenticationRejectionsOf(owner)).toEqual([]);
   });
 
+  test("一覧で試行枠を使い切った古い session の登録は試行枠の失敗になり、再認証による拒否の audit event を残さない", async () => {
+    const owner = await createUser("reauth-budget-register");
+    const challenge = challengeOf(await requestRegistrationOptions(signedInSession(owner)));
+    const session = await agedSession(owner, PAST_REAUTHENTICATION_WINDOW_MS);
+    for (let i = 0; i < ATTEMPTS_PER_MINUTE; i++) await listedPasskeyIds(session);
+
+    const outcome = await sendRegistration(session, signedRegistrationFor(challenge).response);
+
+    expect(statusAndBody(outcome)).toEqual(RATE_LIMITED);
+    expect(await reauthenticationRejectionsOf(owner)).toEqual([]);
+  });
+
   test("MFA が有効な user の古い session がコードを載せずに要求した options は、再認証が要る失敗になる", async () => {
     const { user } = await run(seedMfaEnabledUser("reauth-mfa"));
     const session = await agedSession(user, PAST_REAUTHENTICATION_WINDOW_MS);

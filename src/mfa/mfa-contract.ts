@@ -1,7 +1,10 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated, type CurrentSession } from "../account/actor-contract";
-import { Reauthenticated } from "../account/reauthentication-contract";
+import {
+  Reauthenticated,
+  type WithinSessionAttemptBudget,
+} from "../account/reauthentication-contract";
 import { RateLimited } from "../failures";
 import { Ok, SignedIn } from "../spa-contract-schemas";
 import {
@@ -48,7 +51,7 @@ export class ChallengeStateBudget extends HttpApiMiddleware.Service<ChallengeSta
 
 export class MfaChangeBudget extends HttpApiMiddleware.Service<
   MfaChangeBudget,
-  { requires: CurrentSession }
+  { requires: CurrentSession; provides: WithinSessionAttemptBudget }
 >()("taimei/MfaChangeBudget", { error: RateLimited }) {}
 
 export class MfaGroup extends HttpApiGroup.make("mfa")
@@ -74,6 +77,20 @@ export class MfaGroup extends HttpApiGroup.make("mfa")
     }).middleware(MfaChangeBudget),
   )
   .middleware(Authenticated) {}
+
+type MfaEndpoint = HttpApiGroup.Endpoints<typeof MfaGroup>;
+
+export type MfaStateChangingEndpointsLackingChangeBudget = [MfaEndpoint] extends [never]
+  ? "MFA の群に endpoint が無い"
+  : MfaEndpoint extends infer Endpoint
+    ? Endpoint extends unknown
+      ? Endpoint extends { readonly method: "GET" }
+        ? never
+        : [MfaChangeBudget] extends [HttpApiEndpoint.Middleware<Endpoint>]
+          ? never
+          : Endpoint
+      : never
+    : never;
 
 export class MfaChallengeGroup extends HttpApiGroup.make("mfaChallenge").add(
   HttpApiEndpoint.get("state", "/api/mfa/challenge", { success: ChallengeState }).middleware(
