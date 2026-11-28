@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import taimeiPlugin, { WEB_ONLY_DEPENDENCIES } from "../../lint/oxlint-plugin.mjs";
+import { readPackageJson } from "./config-invariant-helpers";
 import { repoFiles } from "./source-scan";
 
 const REPO_ROOT = join(import.meta.dir, "../..");
@@ -2096,6 +2097,24 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: pg の subpath も src に書くと lint が止める",
+    path: "src/runtime.ts",
+    source: 'import { types } from "pg/lib/types"; export const t = types;',
+    expectedRules: ["taimei(db-import-only-in-db)", "taimei(no-io-resource-import-in-runtime)"],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: pg の subpath でも型だけなら lint が止めない",
+    path: "src/runtime.ts",
+    source: 'import type { types } from "pg/lib/types"; export type T = typeof types;',
+    expectedRules: [],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: 名前が pg で始まるだけの別の package は lint が止めない",
+    path: "src/runtime.ts",
+    source: 'import { Pool } from "pg-pool"; export const p = Pool;',
+    expectedRules: [],
+  },
+  {
     name: "試験の module で現在の事業所を書き換えるのは 2 つの use-case だけ: testing に書くと lint が止める",
     path: "testing/Probe113.ts",
     source: 'export const r = switchCurrentCompany({ userId: "u", companyId: "c" });',
@@ -3726,6 +3745,11 @@ const WEB_EFFECT_SUBPATHS = [
   "effect/unstable/http",
 ];
 
+const SUBPATH_PROBE = "probe-subpath";
+
+const withSubpaths = (packages: readonly string[]): string[] =>
+  packages.flatMap((name) => [name, `${name}/${SUBPATH_PROBE}`]);
+
 const WEB_FORBIDDEN_SPECIFIERS = [
   "@/db/schema",
   "@/x",
@@ -3733,7 +3757,7 @@ const WEB_FORBIDDEN_SPECIFIERS = [
   "react-dom",
   "react-dom/client",
   "react/jsx-runtime",
-  "sonner",
+  ...withSubpaths(["sonner"]),
 ];
 
 const SERVER_IMPLEMENTATION_PATHS = [
@@ -3756,21 +3780,29 @@ const SERVER_TEST_AND_TOOL_PATHS = [
   "testing/__tests__/probe.ts",
 ];
 
-const BANNED_ACROSS_SERVER = [...WEB_ONLY_DEPENDENCIES, "@connectrpc/connect-node"];
+const BANNED_ACROSS_SERVER = [
+  ...withSubpaths([...WEB_ONLY_DEPENDENCIES, "@connectrpc/connect-node", "zod"]),
+  "foldkit/html",
+  ...withSubpaths(["foldkit/route"]),
+  "lucide/icons",
+  "@foldkit/ui/dialog",
+];
 
 const BANNED_ACROSS_WEB = [...WEB_EFFECT_SUBPATHS, ...WEB_FORBIDDEN_SPECIFIERS];
+
+const BANNED_OUTSIDE_DIALOG_VIEW = [...BANNED_ACROSS_WEB, "@foldkit/ui/dialog"];
 
 const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "server の実装 (src と testing の test 以外)",
     paths: SERVER_IMPLEMENTATION_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [["better-auth/cookies", "getSessionCookie"]],
   },
   {
     name: "server の test・db・management・src/auth.ts",
     paths: SERVER_TEST_AND_TOOL_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [],
   },
   {
@@ -3781,7 +3813,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "src/mfa/totp/probe-contract.ts",
       "src/spa-contract-table.ts",
     ],
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, ...SERVER_EFFECT_SUBPATHS],
     named: [
       ["better-auth/cookies", "getSessionCookie"],
       ["effect/http-api", "HttpApiBuilder"],
@@ -3793,7 +3825,6 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
     paths: ["src/handlers/probe-http-api.ts"],
     everyForm: [
       ...BANNED_ACROSS_SERVER,
-      "zod",
       ...SERVER_EFFECT_SUBPATHS.filter((specifier) => specifier !== "effect/http"),
     ],
     named: [["better-auth/cookies", "getSessionCookie"]],
@@ -3801,7 +3832,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "e2e (e2e/fixtures.ts 以外)",
     paths: ["e2e/probe.e2e.ts", "e2e/helpers.ts"],
-    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS, "zod"],
+    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS, ...withSubpaths(["zod"])],
     named: [],
   },
   {
@@ -3814,7 +3845,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "web/non-production/probe.ts",
       "web/vite.config.ts",
     ],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
+    everyForm: [...BANNED_OUTSIDE_DIALOG_VIEW, ...withSubpaths(["foldkit/route", "zod"])],
     named: [
       ["@foldkit/ui", "Dialog"],
       ["foldkit", "Route"],
@@ -3823,19 +3854,19 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "web の route (web/src/app/*/route.ts)",
     paths: ["web/src/app/account/route.ts"],
-    everyForm: [...BANNED_ACROSS_WEB, "zod"],
+    everyForm: [...BANNED_OUTSIDE_DIALOG_VIEW, ...withSubpaths(["zod"])],
     named: [["@foldkit/ui", "Dialog"]],
   },
   {
     name: "web の dialog の部品 (web/src/shared/ui/dialog-view.ts)",
     paths: ["web/src/shared/ui/dialog-view.ts"],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
+    everyForm: [...BANNED_ACROSS_WEB, ...withSubpaths(["foldkit/route", "zod"])],
     named: [["foldkit", "Route"]],
   },
   {
     name: "e2e/fixtures.ts (effect は使えるが、zod は使えない)",
     paths: ["e2e/fixtures.ts"],
-    everyForm: ["zod"],
+    everyForm: withSubpaths(["zod"]),
     named: [],
   },
   {
@@ -3868,6 +3899,12 @@ const PROBED_SPECIFIERS = [
     "@connectrpc/connect",
     "@core/x",
     "zod",
+    "@connectrpc/connect-node-extra",
+    "foldkit-extra",
+    "lucide-react",
+    "react-dom-extra",
+    "sonner-extra",
+    "zod-extra",
   ]),
 ];
 
@@ -3881,6 +3918,7 @@ const PROBED_NAMES: readonly (readonly [string, string])[] = [
   ["foldkit", "Command"],
   ["@foldkit/ui", "Dialog"],
   ["@foldkit/ui", "Button"],
+  ["@foldkit/ui/dialog", "Dialog"],
 ];
 
 const IMPORT_CELLS: readonly ImportCell[] = (() => {
@@ -3988,6 +4026,47 @@ describe("共有の import の禁止は、範囲ごとに、止める import と
         IMPORT_CELLS.filter((cell) => !isStoppedIn(zone, cell) && stopped(path, cell)).map(
           ({ statement }) => `${path} :: ${statement}`,
         ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("依存の package は、root の import を止める範囲で、subpath の import も止まる", () => {
+  const { dependencies = {}, devDependencies = {} } = readPackageJson();
+  const names = Object.keys({ ...dependencies, ...devDependencies }).toSorted();
+  const probedPaths = [
+    ...new Set([...IMPORT_BAN_ZONES.flatMap((zone) => zone.paths), "src/runtime.ts"]),
+  ];
+  const source = names
+    .flatMap((name) => [`import "${name}";`, `import "${name}/${SUBPATH_PROBE}";`])
+    .join("\n");
+  const stoppedLinesByPath = new Map<string, Set<number>>();
+
+  beforeAll(() => {
+    for (const { code, filename, labels } of lintFixtureFiles(
+      probedPaths.map((path) => ({ path, source })),
+    )) {
+      const line = labels[0]?.span.line;
+      if (
+        line !== undefined &&
+        code.startsWith("taimei(") &&
+        !RULES_STOPPING_IMPORTS_FOR_OTHER_REASONS.has(code)
+      ) {
+        stoppedLinesByPath.set(filename, (stoppedLinesByPath.get(filename) ?? new Set()).add(line));
+      }
+    }
+  });
+
+  test("root を止める範囲では、同じ package の subpath も止まる", () => {
+    expect(
+      probedPaths.flatMap((path) =>
+        names.flatMap((name, index) => {
+          const stoppedLines = stoppedLinesByPath.get(path) ?? new Set<number>();
+          const rootLine = index * 2 + 1;
+          return stoppedLines.has(rootLine) && !stoppedLines.has(rootLine + 1)
+            ? [`${path} :: ${name}`]
+            : [];
+        }),
       ),
     ).toEqual([]);
   });

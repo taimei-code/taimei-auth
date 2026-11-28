@@ -293,6 +293,17 @@ const importOrTypeImport = (source: RegExp): Matcher => ({
   includesTypeImports: true,
 });
 
+const packageImport = (names: readonly string[]): Matcher => ({
+  kind: "custom",
+  visitors: (report) =>
+    importVisitors(
+      (source) =>
+        names.some((name) => source === name || source.startsWith(`${name}/`)) ? source : undefined,
+      "valueAndType",
+      report,
+    ),
+});
+
 const valueImportVisitors = (
   matcher: Extract<Matcher, { kind: "valueImport" }>,
   report: Report,
@@ -1786,7 +1797,10 @@ const ROWS: readonly Row[] = [
   {
     name: "no-io-resource-import-in-runtime",
     within: ["src/runtime.ts"],
-    matchers: [{ kind: "valueImport", source: /^(@\/db\/client|\.\/ttl-store|pg)$/ }],
+    matchers: [
+      { kind: "valueImport", source: /^(@\/db\/client|\.\/ttl-store)$/ },
+      { kind: "importTarget", target: PG_TARGET },
+    ],
     message:
       "runtime.ts は db/client と ttl-store を値で import しない (Layer に I/O resource を持たせない。ADR-0011)",
   },
@@ -2345,11 +2359,7 @@ const ROWS: readonly Row[] = [
     name: "no-web-only-dependency-in-server",
     within: SERVER_RUNTIME_ROOTS,
     includesTestFiles: true,
-    matchers: [
-      importOrTypeImport(
-        new RegExp(`^(${WEB_ONLY_DEPENDENCIES.join("|").replaceAll(".", "\\.")})$`),
-      ),
-    ],
+    matchers: [packageImport(WEB_ONLY_DEPENDENCIES)],
     message:
       "web 専用 devDependency のため server runtime に存在しない。server で必要になったら dependencies へ戻す (docs/adr/0014-docker-runner-dev-stage-separation.md)",
   },
@@ -2357,7 +2367,7 @@ const ROWS: readonly Row[] = [
     name: "no-zod-import",
     within: ["src/**", "db/**", "e2e/**", "management/**", "testing/**", "web/**"],
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^zod(\/|$)/)],
+    matchers: [packageImport(["zod"])],
     message:
       "zod はこの repo の直接の依存ではない (better-auth が持ち込む)。入力の検査は effect の Schema で書く (docs/adr/0017-effect-v4-full-adoption.md)",
   },
@@ -2365,7 +2375,7 @@ const ROWS: readonly Row[] = [
     name: "no-connect-node",
     within: SERVER_RUNTIME_ROOTS,
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^@connectrpc\/connect-node$/)],
+    matchers: [packageImport(["@connectrpc/connect-node"])],
     message: "削除済み依存。再導入しない (ADR-0011 / ADR-0014)",
   },
   {
@@ -2436,7 +2446,7 @@ const ROWS: readonly Row[] = [
     within: ["e2e/**"],
     allowedIn: ["e2e/fixtures.ts"],
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^effect(\/|$)/)],
+    matchers: [packageImport(["effect"])],
     message:
       "e2e は effect を直接 import しない。モックの path と失敗の応答は e2e/contract-mock.ts で契約から作る (docs/adr/0017-effect-v4-full-adoption.md)",
   },
@@ -2444,7 +2454,7 @@ const ROWS: readonly Row[] = [
     name: "no-sonner-in-web",
     within: ["web/**"],
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^sonner$/)],
+    matchers: [packageImport(["sonner"])],
     message:
       "通知は web/src/shared/ui/toast-view.ts の Toast で出す。sonner は React の部品なので web では使わない (docs/adr/0023-web-foldkit.md)",
   },
@@ -2452,7 +2462,7 @@ const ROWS: readonly Row[] = [
     name: "no-react-in-web",
     within: ["web/**"],
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^(react|react-dom)(\/|$)/)],
+    matchers: [packageImport(["react", "react-dom"])],
     message: "web は React を使わない。画面は Foldkit で書く (docs/adr/0023-web-foldkit.md)",
   },
   {
@@ -2479,7 +2489,7 @@ const ROWS: readonly Row[] = [
     within: ["web/**"],
     allowedIn: ["web/src/app/*/route.ts"],
     includesTestFiles: true,
-    matchers: [importOrTypeImport(/^foldkit\/route$/), namedImport("foldkit", ["Route"])],
+    matchers: [packageImport(["foldkit/route"]), namedImport("foldkit", ["Route"])],
     message: "route は app/*/route.ts だけが定義する (docs/adr/0023-web-foldkit.md)",
   },
   {
@@ -2487,7 +2497,7 @@ const ROWS: readonly Row[] = [
     within: ["web/**"],
     allowedIn: ["web/src/shared/ui/dialog-view.ts"],
     includesTestFiles: true,
-    matchers: [namedImport("@foldkit/ui", ["Dialog"])],
+    matchers: [packageImport(["@foldkit/ui/dialog"]), namedImport("@foldkit/ui", ["Dialog"])],
     message:
       "dialog は web/src/shared/ui/dialog-view.ts の dialogView と Dialog で書く (class を受け取らない house の dialog。docs/adr/0023-web-foldkit.md)",
   },
