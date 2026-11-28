@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.2.0 — 2026-11-28
+
+taimei-auth の開発環境の固定の値を、この package の file で公開した。既存の export と wire は変えていない。
+
+### Features
+
+- `testing/development-environment.env` を足した。開発環境の auth ホストの URL、cookie の domain、開発環境が信頼する consumer の origin と、信頼する origin の一覧を持ち、開発環境の compose もこの file を読む。変数名と、consumer の app と TypeScript が読む方法は、README の「開発環境につなぐ」にある
+
+### Breaking changes
+
+なし。
+
 ## 6.1.0 — 2026-11-27
 
 試験の環境の compose に足すと、auth ホストを同じ machine の taimei-auth の開発環境への中継に差し替える上書きの file を足した。SDK の export と wire は変えていない。
