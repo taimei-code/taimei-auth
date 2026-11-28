@@ -18,7 +18,7 @@ const template = () => readFileSync(join(REPO_ROOT, TEMPLATE_PATH), "utf8");
 const composeService = (composePath: string, service: string) =>
   (
     Bun.YAML.parse(readFileSync(join(REPO_ROOT, composePath), "utf8")) as {
-      services: Record<string, { env_file?: string | string[] }>;
+      services: Record<string, { env_file?: string | string[]; platform?: string }>;
     }
   ).services[service] ?? {};
 
@@ -304,5 +304,23 @@ describe("開発環境の固定の値は SDK の 1 つの file に置き、開�
       expect(url.origin).toBe(origin ?? "");
       expect(url.hostname.endsWith(`.${variables.AUTH_COOKIE_DOMAIN}`)).toBe(true);
     }
+  });
+});
+
+const TESTING_IMAGE_PLATFORM = "linux/amd64";
+
+describe("arm64 の host の docker も、断片のとおりに試験用の image を pull する", () => {
+  test("断片は auth ホストの platform を linux/amd64 に指定する (試験用の image は linux/amd64 だけの index で、arm64 の host の docker は platform の指定が無いと pull しない)", () => {
+    expect(composeService(TEMPLATE_PATH, "taimei-auth").platform).toBe(TESTING_IMAGE_PLATFORM);
+  });
+
+  test("上書きの file を足しても、auth ホストの platform は linux/amd64 のまま (上書きの file に無い key は、compose が断片の値を引き継ぐ)", () => {
+    const relay = developmentOverlay().services["taimei-auth"] ?? {};
+
+    expect(
+      Object.hasOwn(relay, "platform")
+        ? relay.platform
+        : composeService(TEMPLATE_PATH, "taimei-auth").platform,
+    ).toBe(TESTING_IMAGE_PLATFORM);
   });
 });

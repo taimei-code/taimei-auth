@@ -1,5 +1,17 @@
 # Changelog
 
+## 6.2.1 — 2026-11-28
+
+試験の環境の断片を arm64 の host の docker でも pull できるようにした。SDK の export と wire は変えていない。
+
+### Fixes
+
+- 断片は auth ホストの `platform` を `linux/amd64` に指定する。試験用の image は linux/amd64 だけの image index なので、6.2.0 までの断片は、arm64 の host の docker では `no matching manifest for linux/arm64/v8` で pull に失敗することがあった。6.2.1 からは、arm64 の host の docker も `DOCKER_DEFAULT_PLATFORM` を付けずに image を pull し、amd64 のエミュレーションで動かす
+
+### Breaking changes
+
+なし。
+
 ## 6.2.0 — 2026-11-28
 
 taimei-auth の開発環境の固定の値を、この package の file で公開した。既存の export と wire は変えていない。

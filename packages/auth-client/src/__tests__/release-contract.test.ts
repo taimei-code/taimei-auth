@@ -92,6 +92,18 @@ describe("SDK の版と、CHANGELOG・README の対応", () => {
     }
   });
 
+  test("6.2.1 の CHANGELOG は、断片が auth ホストの platform を指定したことを示す", () => {
+    const section =
+      /^## 6\.2\.1 [\s\S]*?(?=^## )/m.exec(readPackageFile("CHANGELOG.md"))?.[0] ?? "";
+
+    expect(section).toContain("platform");
+    expect(section).toContain("DOCKER_DEFAULT_PLATFORM");
+  });
+
+  test("README の arm64 の host の説明は、DOCKER_DEFAULT_PLATFORM が要るかどうかを示す (consumer は README で、arm64 の host の起動に足す設定を知る)", () => {
+    expect(readPackageFile("README.md")).toMatch(/^- .*arm64.*DOCKER_DEFAULT_PLATFORM/m);
+  });
+
   test("README の code の中に名前の無い export は、地の文に出ても漏れとして報告される", () => {
     expect(
       exportsMissingFrom("`createAuthClient(options)` と NEW_EXPORT", [
