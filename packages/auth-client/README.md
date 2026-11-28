@@ -147,11 +147,43 @@ include:
 docker compose -f compose.yml -f ./node_modules/@taimei-code/auth-client/testing/compose.development.yml up
 ```
 
+開発環境は自分の固定の値で動き、consumer が渡した `TAIMEI_AUTH_*` の値 (`TAIMEI_AUTH_URL`、`TAIMEI_AUTH_COOKIE_DOMAIN`、`TAIMEI_AUTH_CONSUMER_ORIGINS` など) を使わない。固定の値はこの package の `testing/development-environment.env` にあり、開発環境の compose もこの file を読む。consumer の設定がこの値と違うと、ログインが通らないか cookie が届かない。
+
+| 変数 | 値 |
+|---|---|
+| `AUTH_SERVICE_URL` | auth ホストの URL |
+| `AUTH_COOKIE_DOMAIN` | cookie の domain |
+| `AUTH_CONSUMER_ORIGIN` | 開発環境が信頼する consumer の origin |
+| `AUTH_TRUSTED_ORIGINS` | 開発環境が信頼する origin の一覧。`AUTH_CONSUMER_ORIGIN` と `AUTH_SERVICE_URL` を並べたもの |
+
+- consumer の app は開発環境につなぐ時にこの file を `env_file` で読み、上の変数名で値を読む。consumer の app の service に file を足す上書きは consumer が持ち、この package の上書きの file と一緒に `-f` で足す (この package の上書きの file は consumer の app の service を知らない)
+
+  ```yaml
+  services:
+    <consumer の app の service>:
+      env_file:
+        - ./node_modules/@taimei-code/auth-client/testing/development-environment.env
+  ```
+
+- consumer の app の service の `environment` には、file と同じ名前の変数を書かない。`environment` の値は `env_file` の値に勝つ
+- consumer の TypeScript (E2E など) も同じ file を `node:util` の `parseEnv` (Node 20.12 以降と Bun) で読み、返った object から値を取る (`@types/node` は戻り値を `object` と書くので、`Record<string, string>` として受ける)。`process.loadEnvFile` は `process.env` にすでにある変数を上書きしないので、shell や CI の値が file の値に勝つ。path は consumer の repo の root から数える
+
+  ```ts
+  import { readFileSync } from "node:fs";
+  import { parseEnv } from "node:util";
+
+  const { AUTH_SERVICE_URL, AUTH_COOKIE_DOMAIN, AUTH_CONSUMER_ORIGIN } = parseEnv(
+    readFileSync("node_modules/@taimei-code/auth-client/testing/development-environment.env", "utf8"),
+  ) as Record<string, string>;
+  ```
+
+- file から読めない consumer の設定 (compose の `ports` と host 名、dev server の port) は、consumer の repo の試験で、file の値と一致することを確かめる
+
 - 上書きの file は `!reset` と `!override` を使うので、Docker Compose 2.24 以降が要る
 - 足すと、service `taimei-auth` は開発環境の auth へ通信を渡す中継になる。service の名前、network の上の別名、health check は変わらず、`taimei-auth` は開発環境が `/health` に答えた時に healthy になる。`depends_on` の `service_healthy` は、開発環境が答えるまでの待ちになる
 - 中継は開発環境の compose が名前を付けた network の中の auth の service へ渡す。host の port へは渡さないので、同じ port で動く別の auth にはつながらない
 - 試験の環境の DB は起動せず、`taimei-auth` は host の port を公開しない (override の file で足した `ports` も消える)。host の port は開発環境が持つ
-- 応える auth は開発環境なので、試験の環境とは違い、taimei-auth の版は開発環境の checkout の版で、フィーチャーフラグは開発環境で切り替えたとおりになる。auth ホストの URL、cookie の domain、許可する origin、secret も開発環境の compose の値になる。`TAIMEI_AUTH_*` のうち、中継が使うのは `TAIMEI_AUTH_PORT` (中継が待ち受ける port) と `TAIMEI_AUTH_HOSTNAME` (network の上の別名) だけで、ほかの値は auth ホストに届かない。必須の変数は使われなくても値を書いておく (無いと compose が起動しない)。browser と consumer の app が同じ auth ホストに届くよう、`TAIMEI_AUTH_URL`、`TAIMEI_AUTH_HOSTNAME`、`TAIMEI_AUTH_PORT` を、開発環境の auth ホストの URL とその host 名と port にそろえる。service key は開発環境も `testing/service-key.env` から読む
+- 応える auth は開発環境なので、試験の環境とは違い、taimei-auth の版は開発環境の checkout の版で、フィーチャーフラグは開発環境で切り替えたとおりになる。secret も開発環境の compose の値になる。`TAIMEI_AUTH_*` のうち、中継が使うのは `TAIMEI_AUTH_PORT` (中継が待ち受ける port) と `TAIMEI_AUTH_HOSTNAME` (network の上の別名) だけで、ほかの値は auth ホストに届かない。必須の変数は使われなくても値を書いておく (無いと compose が起動しない)。browser と consumer の app が同じ auth ホストに届くよう、`TAIMEI_AUTH_URL`、`TAIMEI_AUTH_HOSTNAME`、`TAIMEI_AUTH_PORT` を、file の `AUTH_SERVICE_URL` とその host 名と port にそろえる。service key は開発環境も `testing/service-key.env` から読む
 
 失敗した時は次のようになる。
 

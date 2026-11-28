@@ -23,6 +23,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 1. **起動は SDK に同梱した compose の断片で配る**。断片は `@taimei-code/auth-client` の package に入り、consumer の compose が `include:` する。断片は試験用の image と Postgres を起動し、migrate のあとに試験用の entry `testing/server.ts` を動かす
 2. **試験用の image は private の GHCR に置き、SDK と同じ版で出して digest で固定する**。publish の workflow が image を build して push し、その digest を断片に埋めてから npm に publish する。consumer は image を build せず、公開した digest を pull する。consumer が固定する版は root の SDK の 1 か所になる。(2026-10-26 追記) publish は main の CI が成功した後か main からの手動の起動でだけ始まり、build した image を断片の template と断片の変数だけで起動し、`/health`・試験 API の利用者のログイン・開発者ホーム・`APP_ENV=production` で止まることを `scripts/testing-image-smoke.sh` で確かめてから push と npm publish へ進む。PR の CI の docker job も同じ script を流す。workflow の形は `testing/__tests__/publish-workflow.test.ts` が固定する
 3. **断片の変数名 (`TAIMEI_AUTH_*`) と service 名 `taimei-auth` は、consumer が依存する公開の契約とする**。内部の環境変数名 (`AUTH_SERVICE_URL` など) と `DATABASE_URL` は断片の中で対応させ、consumer には書かせない
+   - (2026-11-28 追記 (#615)) 例外として、開発環境の固定の値の file (`testing/development-environment.env`) の変数名は、内部の環境変数名のまま consumer が読む (Decision 8 の #615 の追記)
    - (2026-11-27 追記 (#616)) service key は断片の変数に含めない。断片は package の中で断片と同じ dir にある `testing/service-key.env` を `env_file` で読み、auth ホストに `AUTH_SERVICE_KEY` として渡す。開発環境の compose も同じ file を読む (#613)。この file の package の中の場所と、その中の変数名 `AUTH_SERVICE_KEY` も公開の契約に加わる。consumer の app が同じ file を読めば、版上げで値が変わっても auth ホストと食い違わない。変数があればその値、無ければ file の値を使う形は、key の渡し方が 2 通りになり、どちらで動いているかを取り違えるので採らない
 4. **試験の利用者は試験 API と SDK の client で作る**。consumer は `@taimei-code/auth-client/testing` の `createTestingClient(authBaseUrl).createSignedInUser(...)` を呼び、返る `loginUrl` を browser で開いてログインする。`loginUrl` は本物の Magic Link で、試験用の entry だけが Magic Link の URL を記録する `EmailSender` を使う。利用者は `AuthApi.createUser` で作り、事業所と所属は既存の use-case で作る (2026-10-20 改訂: OWNER の所属は事業所の作成で、ADMIN と MEMBER の所属は招待と受諾で作る。記録する `EmailSender` は招待のメールも記録し、試験 API は記録のうち戻り先が `returnTo` の送信の URL を `loginUrl` として返す)。試験の利用者の現在の事業所も、同じ client の `setCurrentCompany(...)` で既存の切り替えの use-case を通して切り替える
 5. **試験 API を本番に出さない守りを 3 段にする**。どの段も単独で、試験 API が本番に出ることを止める
@@ -44,6 +45,7 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
    - 宛先は開発環境の compose が名前を付けた network `taimei-network` の中の service `auth-service` とする (host の port にしない理由は「採らなかった案」)。宛先を network の上の別名 (`auth.taimei-code.localhost`) にしないのは、consumer が `TAIMEI_AUTH_HOSTNAME` に同じ名前を選ぶと、中継の container 自身がその別名を持ち、名前が自分に向きうるためである
    - 上書きの file は変数を持たない。consumer は断片の変数を `include:` に閉じた env の file で渡すので、2 つ目の `-f` の file からは見えない
    - 上書きを足した consumer の環境は **試験の環境** ではない (GLOSSARY.md の **試験の環境**)
+   - (2026-11-28 追記 (#615)) 開発環境は consumer が渡した値を使わず、自分の固定の値で動く。そのうち auth ホストの URL、cookie の domain、開発環境が信頼する consumer の origin の 3 つは、service key と同じく、SDK の `testing/development-environment.env` に置く。開発環境の compose はこの file を `.env` より後ろの `env_file` で読み、consumer の app は開発環境につなぐ時に同じ file を `env_file` で読む。信頼する origin の一覧 (`AUTH_TRUSTED_ORIGINS`) は consumer の origin と auth ホストの URL を直に並べ、同じ file の 2 つの値と等しいことを test が固定する。consumer の TypeScript も同じ file を標準の関数で読む (読み方は SDK の README の「開発環境につなぐ」にある)。この file の package の中の場所と変数名は、Decision 3 の公開の契約に加わる。変数名は auth が決め、consumer の app はその名前で読む。値の意味を知っているのは auth だけだからである。値を変えると、consumer のログインが通らないか cookie が届かなくなるので、SDK の版の扱いを決めてから変える。consumer の origin は consumer の host を含むが、開発環境の compose がもともと 1 つに決めて consumer が合わせる値なので、SDK に置いても SDK が consumer を知ることには当たらない ([ADR-0028](./0028-sdk-public-interface.md) の 5 層目の例外)
 
 ## 採らなかった案
 
@@ -60,6 +62,9 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - **中継の宛先を host の port (`host.docker.internal:3100`) にする** (2026-11-27): 開発環境を落としていても、同じ port で動く別の auth (ほかの project の試験用の image など) に黙ってつながり、つながった先が開発環境かどうかを consumer が見分けられない
 - **中継に既製の image (socat など) を使う** (2026-11-27): consumer が pull して信頼する配布物が、SDK と試験用の image の 2 つから増える
 - **`taimei-auth` を消して中継を置かない** (2026-11-27): consumer の compose の `depends_on` が無い service を指し、compose が不正になる
+- **開発環境の固定の値を、SDK の定数と開発環境の compose の両方に書き、test で一致を確かめる** (2026-11-28): 同じ値を taimei-auth の中で 2 か所に手で書くことになる。consumer の app も値を自分の compose に書き写して定数と比べることになり、写しが consumer の数だけ増える
+- **信頼する origin の一覧を、同じ file の変数の参照 (`${AUTH_CONSUMER_ORIGIN},${AUTH_SERVICE_URL}`) で組み立てる** (2026-11-28): Compose は `env_file` の中の参照を、file の前の行より先に shell の環境変数とプロジェクトの `.env` から埋める。開発者の `.env` に `AUTH_SERVICE_URL` があると、一覧だけがその値で組み立てられる
+- **SDK が同じ値を、file から生成したコードの定数としても公開する** (2026-11-28): 値の写しと、生成の script と、生成し忘れの検査が増え、SDK の公開物に開発環境の値が入る。consumer の TypeScript は標準の関数で同じ file を読める
 
 ## Consequences
 
@@ -76,3 +81,4 @@ consumer app の e2e と手元の確認 (以下、試験の環境) は、taimei-
 - (2026-10-21) ADR-0019 の「Bun の TTL store は in-memory」の例外が試験用の entry に 1 つできる。`testing-server.test.ts` が本物の entry を local の DB に向けて起動するので、開発者の local の DB にも試験用の TTL store の表と開発用アカウントの行ができる
 - (2026-10-21) 開発用アカウントを退会させ、同じ email で別の利用者を作った後に起動すると、開発用アカウントの所属を足せずに起動が止まる。`down -v` で戻す
 - (2026-11-27) 開発環境の compose の network の名前 `taimei-network`、service の名前 `auth-service`、その container の中の port 3100 は、SDK の上書きの file を通じて consumer が依存する契約になる。変える時は SDK の版の扱いを決めてから変える。上書きの file と開発環境の compose の一致は `src/__tests__/testing-fragment.test.ts` が固定する
+- (2026-11-28) SDK の `testing/development-environment.env` の場所と変数名も、consumer が依存する契約になる (Decision 8 の #615 の追記)

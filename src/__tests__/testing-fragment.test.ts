@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { REPO_ROOT } from "./config-invariant-helpers";
+import { REPO_ROOT, readEnvFile } from "./config-invariant-helpers";
 import { TEST_MFA_TOTP_ENCRYPTION_KEYS } from "./test-env";
 
 const GENERATE_FRAGMENT_SCRIPT = join(REPO_ROOT, "scripts/generate-testing-fragment.sh");
@@ -266,5 +266,43 @@ describe("consumer は SDK の上書きの file を 2 つ目の -f で足し、t
     expect(relayNetworkNames).toEqual(expect.arrayContaining(externalNetworkNames));
     expect(targetNetworkNames).toEqual(expect.arrayContaining(externalNetworkNames));
     expect(String(target?.environment?.PORT)).toBe(port);
+  });
+});
+
+const DEVELOPMENT_ENVIRONMENT_FILE = "testing/development-environment.env";
+
+describe("開発環境の固定の値は SDK の 1 つの file に置き、開発環境の compose と consumer の app が同じ file から読む", () => {
+  test("固定の値の file は SDK の files に入り、git の対象である (consumer は node_modules の中の file を読む)", () => {
+    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
+
+    expect(pkg.files).toContain(DEVELOPMENT_ENVIRONMENT_FILE);
+    expect(run(["git", "check-ignore", "-q", DEVELOPMENT_ENVIRONMENT_FILE], SDK_DIR).exitCode).toBe(
+      1,
+    );
+  });
+
+  test("file は値を変数の参照なしで直に書き、信頼する origin の一覧は同じ file の consumer の origin と auth の住所を並べたものと等しい (Compose は env_file の中の変数の参照を file の前の行より先に shell と .env から埋めるので、参照すると開発者の手元の値で一覧だけが変わる)", () => {
+    const variables = readEnvFile(join(SDK_DIR, DEVELOPMENT_ENVIRONMENT_FILE));
+
+    expect(Object.keys(variables)).toEqual([
+      "AUTH_SERVICE_URL",
+      "AUTH_COOKIE_DOMAIN",
+      "AUTH_CONSUMER_ORIGIN",
+      "AUTH_TRUSTED_ORIGINS",
+    ]);
+    expect(Object.values(variables).join("\n")).not.toContain("$");
+    expect(variables.AUTH_TRUSTED_ORIGINS).toBe(
+      `${variables.AUTH_CONSUMER_ORIGIN},${variables.AUTH_SERVICE_URL}`,
+    );
+  });
+
+  test("auth の住所と consumer の origin は path の無い origin で、どちらも cookie の domain の subdomain である (auth と consumer が subdomain をまたいで cookie を共有するため)", () => {
+    const variables = readEnvFile(join(SDK_DIR, DEVELOPMENT_ENVIRONMENT_FILE));
+
+    for (const origin of [variables.AUTH_SERVICE_URL, variables.AUTH_CONSUMER_ORIGIN]) {
+      const url = new URL(origin ?? "");
+      expect(url.origin).toBe(origin ?? "");
+      expect(url.hostname.endsWith(`.${variables.AUTH_COOKIE_DOMAIN}`)).toBe(true);
+    }
   });
 });

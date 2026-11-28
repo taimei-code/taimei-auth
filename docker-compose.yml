@@ -51,14 +51,11 @@ services:
       - "3100:3100"
     env_file:
       - .env
+      - packages/auth-client/testing/development-environment.env
       - packages/auth-client/testing/service-key.env
     environment:
       PORT: "3100"
       DATABASE_URL: postgres://postgres:password@auth-postgres:5432/auth
-      # taimei (app.taimei-code.localhost:3001) とサブドメインをまたぐ Cookie を成立させるため localhost でなく .taimei-code.localhost の host を使う
-      AUTH_SERVICE_URL: http://auth.taimei-code.localhost:3100
-      AUTH_COOKIE_DOMAIN: taimei-code.localhost
-      AUTH_TRUSTED_ORIGINS: http://app.taimei-code.localhost:3001,http://auth.taimei-code.localhost:3100
       MFA_TOTP_ENCRYPTION_KEYS: ${MFA_TOTP_ENCRYPTION_KEYS}
       APP_ENV: development
       APP_NAME: taimei

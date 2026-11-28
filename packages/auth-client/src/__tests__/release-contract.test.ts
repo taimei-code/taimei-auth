@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseEnv } from "node:util";
 
 const PACKAGE_ROOT = join(import.meta.dir, "../..");
 
@@ -69,6 +70,26 @@ describe("SDK の版と、CHANGELOG・README の対応", () => {
 
     expect(section).toContain("testing/compose.development.yml");
     expect(section).toMatch(/Docker Compose 2\.24/);
+  });
+
+  test("6.2.0 の CHANGELOG は、開発環境の固定の値の file を示す", () => {
+    const section =
+      /^## 6\.2\.0 [\s\S]*?(?=^## )/m.exec(readPackageFile("CHANGELOG.md"))?.[0] ?? "";
+
+    expect(section).toContain("testing/development-environment.env");
+  });
+
+  test("README の開発環境につなぐ節は、固定の値の file と、その変数名と、TypeScript から file を読む関数を示す (consumer は README で、値を読む方法を知る)", () => {
+    const section =
+      /^### 開発環境につなぐ$[\s\S]*?(?=^##)/m.exec(readPackageFile("README.md"))?.[0] ?? "";
+
+    expect(section).toContain("testing/development-environment.env");
+    expect(section).toContain("parseEnv");
+    for (const name of Object.keys(
+      parseEnv(readPackageFile("testing/development-environment.env")),
+    )) {
+      expect(section).toContain(`\`${name}\``);
+    }
   });
 
   test("README の code の中に名前の無い export は、地の文に出ても漏れとして報告される", () => {

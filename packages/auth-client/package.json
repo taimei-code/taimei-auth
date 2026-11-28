@@ -1,6 +1,6 @@
 {
   "name": "@taimei-code/auth-client",
-  "version": "6.1.0",
+  "version": "6.2.0",
   "description": "taimei-auth 認証サービスのクライアント SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,6 +33,7 @@
     "dist",
     "testing/compose.yml",
     "testing/compose.development.yml",
+    "testing/development-environment.env",
     "testing/service-key.env",
     "CHANGELOG.md"
   ],

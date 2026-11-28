@@ -8,8 +8,12 @@ const CONSUMER_KNOWLEDGE = [/\btaimei\b(?!-)/, /app\.taimei-code\./, /callbackUr
 const mentionsConsumer = (line: string) => CONSUMER_KNOWLEDGE.some((pattern) => pattern.test(line));
 
 describe("auth-client は taimei-auth の決めごとだけを持ち、consumer の知識を持たない", () => {
-  test("SDK の code・試験・文書に、consumer の名前・host・path が出てこない", () => {
-    const files = repoFiles("packages/auth-client", ":!packages/auth-client/src/gen");
+  test("SDK の code・試験・文書に、consumer の名前・host・path が出てこない (開発環境の固定の値の file は除く。開発環境が信頼する consumer の origin は consumer が合わせる値で、file の中身は testing-fragment.test.ts が固定する)", () => {
+    const files = repoFiles(
+      "packages/auth-client",
+      ":!packages/auth-client/src/gen",
+      ":!packages/auth-client/testing/development-environment.env",
+    );
     expect(files.length).toBeGreaterThan(10);
 
     const hits = files.flatMap((file) =>
@@ -26,6 +30,7 @@ describe("auth-client は taimei-auth の決めごとだけを持ち、consumer 
     "taimei-code/taimei#628",
     "https://app.taimei-code.com/",
     "/auth?callbackUrl=",
+    "http://app.taimei-code.localhost:3001",
   ])("consumer の知識 %s を見つける", (line) => {
     expect(mentionsConsumer(line)).toBe(true);
   });
