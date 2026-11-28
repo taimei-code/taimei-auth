@@ -1,9 +1,13 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { parseEnv } from "node:util";
 
 import { REPO_ROOT } from "./source-scan";
 
 export { REPO_ROOT };
+
+export const readEnvFile = (path: string) =>
+  parseEnv(readFileSync(path, "utf8")) as Record<string, string>;
 
 export interface OxlintOverride {
   files: string[];
