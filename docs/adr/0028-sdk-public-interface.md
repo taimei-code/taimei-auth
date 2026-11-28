@@ -23,7 +23,7 @@ root の境界は consumer から SDK への向きを制限する。逆向きの
 | 2. 戻り型 | `redirect: (url) => never` (Next.js の throw 前提) | 副作用 callback を持たず、consumer に `getSession()` の戻り値で分岐させる | test が `=> never` を止める。ほかは `api/` の差分を読む |
 | 3. データ shape | `CookieReader { get(name): { value: string } }` (Next.js `cookies()` 専用) | 最大公約数の `(name) => string \| undefined` で受ける | `api/` の差分を読む (判定する仕組みは無い) |
 | 4. runtime API | `@connectrpc/connect-node` の hardcode と peerDeps | transport は `createAuthClient({ transport })` で注入する | Decision 1・2 |
-| 5. URL / path | consumer の login の入口など、consumer 固有の path のハードコード | consumer が持つ path は consumer 側の helper が組む。taimei-auth が持つ画面の URL は SDK が組む | consumer の名前・host・path が出ないことを SDK の test が見る |
+| 5. URL / path | consumer の login の入口など、consumer 固有の path のハードコード | consumer が持つ path は consumer 側の helper が組む。taimei-auth が持つ画面の URL は SDK が組む | consumer の名前・host・path が出ないことを SDK の test が見る。例外は、開発環境が信頼する consumer の origin を持つ `testing/development-environment.env` の 1 つで、test はこの file を照合から外す (理由は ADR-0020 の Decision 8) |
 
 5. `src/testing.ts` の相対 import は `.js` まで書く。consumer の e2e は `@taimei-code/auth-client/testing` を bundler を通さずに Node で読み、Node の ESM は拡張子の無い相対 import を解決できない。この repo の試験は Bun で走り、拡張子が無くても解決するので、誤りは試験では見つからない。静的な import と re-export の拡張子は lint (`import/extensions`) が、動的な `import()` と `.ts` の拡張子は `tsconfig.testing-node.json` (`nodenext`) の typecheck が止める。この package は `"type": "module"` を書いていないので、TS は静的な import の拡張子を求めない。そのため両方が要る
 
