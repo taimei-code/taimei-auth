@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import taimeiPlugin, { WEB_ONLY_DEPENDENCIES } from "../../lint/oxlint-plugin.mjs";
+import { readPackageJson } from "./config-invariant-helpers";
 import { repoFiles } from "./source-scan";
 
 const REPO_ROOT = join(import.meta.dir, "../..");
@@ -44,6 +45,26 @@ const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
 const BRACES_REQUIRED = "eslint(curly)";
 const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
+const FOLDKIT_IMPURE_CALL = "foldkit(no-impure-call-at-decision-time)";
+
+const RAW_BUTTON_SOURCE =
+  "type Builder = { readonly button: (attributes: unknown[]) => unknown };\nexport const view = (h: Builder) => h.button([]);";
+const MAKE_APPLICATION_IMPORT_SOURCE =
+  'import { makeApplication } from "foldkit/runtime";\nexport { makeApplication };';
+const WINDOW_IN_VIEW_SOURCE =
+  'import { Command } from "foldkit";\nexport const view = () => [window.location.href, Command];';
+const DATE_NOW_SOURCE =
+  'import { Command } from "foldkit";\nexport const read = () => [Date.now(), Command];';
+const EVERY_SCREEN_FORM_SOURCE =
+  'import { Effect } from "effect";\nimport { Command, Runtime } from "foldkit";\nimport { mfaStatusAtom } from "./mfa-atom";\ntype Builder = { readonly button: (attributes: unknown[]) => unknown };\nexport const all = (h: Builder) => [Effect.runPromise(Effect.void), window.location.href, setTimeout(() => undefined, 1), mfaStatusAtom, h.button([]), Runtime.run, Command];';
+const EVERY_SCREEN_FORM_RULES = [
+  ATOM_IMPORT_IN_FOLDKIT,
+  BROWSER_GLOBAL_OUTSIDE_COMMAND,
+  DIRECT_APPLICATION_START,
+  EFFECT_RUN_IN_WEB,
+  RAW_FORM_ELEMENT,
+  TIMER_CLOCK_RANDOM_IN_FOLDKIT,
+];
 
 const CASES: readonly Case[] = [
   {
@@ -621,6 +642,166 @@ const CASES: readonly Case[] = [
     source:
       'import { Runtime } from "foldkit"; export const start = (config: Parameters<typeof Runtime.makeApplication>[0]) => Runtime.run(Runtime.makeApplication(config));',
     expectedRules: [],
+  },
+  {
+    name: "web/src の Foldkit の file は、Effect の実行・browser の global・timer・*-atom の import・h.button・application の起動を 1 つの file に書いても、6 つとも止まる",
+    path: "web/src/mfa/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "本番以外の shell の Foldkit の file も、Effect の実行・browser の global・timer・*-atom の import・h.button・application の起動を 1 つの file に書くと、6 つとも止まる",
+    path: "web/non-production/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "web/src の test の file (__tests__ の下) は、6 つの止める形を 1 つの file に書ける",
+    path: "web/src/mfa/__tests__/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "web/src の __tests__ 直下の file も、6 つの止める形を 1 つの file に書ける",
+    path: "web/src/__tests__/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "本番以外の shell の test の file (__tests__ の下) は、6 つの止める形を 1 つの file に書ける",
+    path: "web/non-production/__tests__/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "web/src では、__tests__ の外に置いた *.test.ts の file に 6 つの止める形を書くと止まる",
+    path: "web/src/mfa/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "本番以外の shell では、__tests__ の外に置いた *.test.ts の file に 6 つの止める形を書くと止まる",
+    path: "web/non-production/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "web/src と web/non-production の外の web の file は、6 つの止める形を 1 つの file に書ける",
+    path: "web/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  ...[
+    {
+      exemption: "shared/ui の部品は h.button を書けるが",
+      path: "web/src/shared/ui/EveryScreenForm.ts",
+      allowed: RAW_FORM_ELEMENT,
+    },
+    {
+      exemption: "起動の関数の file は application を起動できるが",
+      path: "web/src/app/start-application.ts",
+      allowed: DIRECT_APPLICATION_START,
+    },
+    {
+      exemption: "application の entry は Foldkit の view で window を読めるが",
+      path: "web/src/app/auth/entry.ts",
+      allowed: BROWSER_GLOBAL_OUTSIDE_COMMAND,
+    },
+    {
+      exemption: "本番以外の shell の main.ts は Foldkit の view で window を読めるが",
+      path: "web/non-production/main.ts",
+      allowed: BROWSER_GLOBAL_OUTSIDE_COMMAND,
+    },
+  ].map(({ exemption, path, allowed }) => ({
+    name: `${exemption}、6 つの止める形のうち残りの 5 つは止まる`,
+    path,
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES.filter((rule) => rule !== allowed),
+  })),
+  {
+    name: "Foldkit を import しない file は、window・setTimeout・*-atom の import を書ける",
+    path: "web/src/mfa/PlainBrowserUse.ts",
+    source:
+      'import { mfaStatusAtom } from "./mfa-atom";\nexport const all = () => [window.location.href, setTimeout(() => undefined, 1), mfaStatusAtom];',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit を import しない file の Date.now と Math.random を止めるのは Foldkit の rule だけで、taimei の rule は止めない",
+    path: "web/src/mfa/PlainClockUse.ts",
+    source: "export const all = () => [Date.now(), Math.random()];",
+    expectedRules: [FOLDKIT_IMPURE_CALL],
+  },
+  {
+    name: "shared/ui の下の深い階層の部品も h.button を書ける",
+    path: "web/src/shared/ui/inner/deep/DeepRawButton.ts",
+    source: RAW_BUTTON_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "shared/ui に名前が似ているだけの shared/ui-kit の下では h.button を書けない",
+    path: "web/src/shared/ui-kit/SimilarDirRawButton.ts",
+    source: RAW_BUTTON_SOURCE,
+    expectedRules: [RAW_FORM_ELEMENT],
+  },
+  {
+    name: "起動の関数の file は foldkit/runtime から makeApplication を import できる",
+    path: "web/src/app/start-application.ts",
+    source: MAKE_APPLICATION_IMPORT_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "起動の関数と同じ名前の file でも、app の下の別の dir に置くと makeApplication を import できない",
+    path: "web/src/app/other/start-application.ts",
+    source: MAKE_APPLICATION_IMPORT_SOURCE,
+    expectedRules: [DIRECT_APPLICATION_START],
+  },
+  {
+    name: "app 直下の entry.ts は Foldkit の view で window を読めない",
+    path: "web/src/app/entry.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "app の 2 階層下の entry.ts は Foldkit の view で window を読めない",
+    path: "web/src/app/auth/deep/entry.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "application の entry の dir にある entry.ts 以外の file は Foldkit の view で window を読めない",
+    path: "web/src/app/auth/other.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "本番以外の shell の別の dir の main.ts は Foldkit の view で window を読めない",
+    path: "web/non-production/sub/main.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "本番以外の shell の main.ts 以外の file は Foldkit の view で window を読めない",
+    path: "web/non-production/other.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "application の entry の Date.now を止めるのは taimei の rule だけで、Foldkit の rule は止めない",
+    path: "web/src/app/auth/entry.ts",
+    source: DATE_NOW_SOURCE,
+    expectedRules: [TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "本番以外の shell の main.ts の Date.now を止めるのは taimei の rule だけで、Foldkit の rule は止めない",
+    path: "web/non-production/main.ts",
+    source: DATE_NOW_SOURCE,
+    expectedRules: [TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "本番以外の shell は型の cast を書けない",
+    path: "web/non-production/CastProbe.ts",
+    source: "export const asText = (value: unknown) => value as string;",
+    expectedRules: [TYPE_ASSERTION],
   },
   {
     name: "web は @/ で import できない",
@@ -1831,6 +2012,20 @@ const CASES: readonly Case[] = [
     expectedRules: [],
   },
   {
+    name: "session ごとの試行枠を数えた後だという印を渡せるのは試行枠の実装だけ: 他の handler に書くと lint が止める",
+    path: "src/handlers/Probe637.ts",
+    source:
+      'import { Effect } from "effect";\nimport { WithinSessionAttemptBudget } from "../account/reauthentication-contract";\nexport const pass = Effect.provideService(WithinSessionAttemptBudget, true);',
+    expectedRules: ["taimei(within-session-attempt-budget-only-from-session-budget)"],
+  },
+  {
+    name: "session ごとの試行枠を数えた後だという印を渡せるのは試行枠の実装だけ: src/handlers/attempt-budget-http-api.ts では lint が止めない",
+    path: "src/handlers/attempt-budget-http-api.ts",
+    source:
+      'import { Effect } from "effect";\nimport { WithinSessionAttemptBudget } from "../account/reauthentication-contract";\nexport const pass = Effect.provideService(WithinSessionAttemptBudget, true);',
+    expectedRules: [],
+  },
+  {
     name: "パスキーの数の上限と比べるのは保存の文と述語だけ: 画面に書くと lint が止める",
     path: "web/src/passkey/Probe494.ts",
     source: "export const full = (count: number) => count >= PASSKEY_LIMIT;",
@@ -2093,6 +2288,24 @@ const CASES: readonly Case[] = [
     name: "runtime.ts は db/client と ttl-store を値で import しない: src では lint が止めない",
     path: "src/runtime.ts",
     source: 'import type { Pool } from "pg"; export type P = Pool;',
+    expectedRules: [],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: pg の subpath も src に書くと lint が止める",
+    path: "src/runtime.ts",
+    source: 'import { types } from "pg/lib/types"; export const t = types;',
+    expectedRules: ["taimei(db-import-only-in-db)", "taimei(no-io-resource-import-in-runtime)"],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: pg の subpath でも型だけなら lint が止めない",
+    path: "src/runtime.ts",
+    source: 'import type { types } from "pg/lib/types"; export type T = typeof types;',
+    expectedRules: [],
+  },
+  {
+    name: "runtime.ts は db/client と ttl-store を値で import しない: 名前が pg で始まるだけの別の package は lint が止めない",
+    path: "src/runtime.ts",
+    source: 'import { Pool } from "pg-pool"; export const p = Pool;',
     expectedRules: [],
   },
   {
@@ -3726,6 +3939,11 @@ const WEB_EFFECT_SUBPATHS = [
   "effect/unstable/http",
 ];
 
+const SUBPATH_PROBE = "probe-subpath";
+
+const withSubpaths = (packages: readonly string[]): string[] =>
+  packages.flatMap((name) => [name, `${name}/${SUBPATH_PROBE}`]);
+
 const WEB_FORBIDDEN_SPECIFIERS = [
   "@/db/schema",
   "@/x",
@@ -3733,7 +3951,7 @@ const WEB_FORBIDDEN_SPECIFIERS = [
   "react-dom",
   "react-dom/client",
   "react/jsx-runtime",
-  "sonner",
+  ...withSubpaths(["sonner"]),
 ];
 
 const SERVER_IMPLEMENTATION_PATHS = [
@@ -3756,21 +3974,29 @@ const SERVER_TEST_AND_TOOL_PATHS = [
   "testing/__tests__/probe.ts",
 ];
 
-const BANNED_ACROSS_SERVER = [...WEB_ONLY_DEPENDENCIES, "@connectrpc/connect-node"];
+const BANNED_ACROSS_SERVER = [
+  ...withSubpaths([...WEB_ONLY_DEPENDENCIES, "@connectrpc/connect-node", "zod"]),
+  "foldkit/html",
+  ...withSubpaths(["foldkit/route"]),
+  "lucide/icons",
+  "@foldkit/ui/dialog",
+];
 
 const BANNED_ACROSS_WEB = [...WEB_EFFECT_SUBPATHS, ...WEB_FORBIDDEN_SPECIFIERS];
+
+const BANNED_OUTSIDE_DIALOG_VIEW = [...BANNED_ACROSS_WEB, "@foldkit/ui/dialog"];
 
 const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "server の実装 (src と testing の test 以外)",
     paths: SERVER_IMPLEMENTATION_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [["better-auth/cookies", "getSessionCookie"]],
   },
   {
     name: "server の test・db・management・src/auth.ts",
     paths: SERVER_TEST_AND_TOOL_PATHS,
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, "effect/http-api", ...SERVER_EFFECT_SUBPATHS],
     named: [],
   },
   {
@@ -3781,7 +4007,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "src/mfa/totp/probe-contract.ts",
       "src/spa-contract-table.ts",
     ],
-    everyForm: [...BANNED_ACROSS_SERVER, "zod", ...SERVER_EFFECT_SUBPATHS],
+    everyForm: [...BANNED_ACROSS_SERVER, ...SERVER_EFFECT_SUBPATHS],
     named: [
       ["better-auth/cookies", "getSessionCookie"],
       ["effect/http-api", "HttpApiBuilder"],
@@ -3793,7 +4019,6 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
     paths: ["src/handlers/probe-http-api.ts"],
     everyForm: [
       ...BANNED_ACROSS_SERVER,
-      "zod",
       ...SERVER_EFFECT_SUBPATHS.filter((specifier) => specifier !== "effect/http"),
     ],
     named: [["better-auth/cookies", "getSessionCookie"]],
@@ -3801,7 +4026,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "e2e (e2e/fixtures.ts 以外)",
     paths: ["e2e/probe.e2e.ts", "e2e/helpers.ts"],
-    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS, "zod"],
+    everyForm: ["effect", "effect/http-api", ...SERVER_EFFECT_SUBPATHS, ...withSubpaths(["zod"])],
     named: [],
   },
   {
@@ -3814,7 +4039,7 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
       "web/non-production/probe.ts",
       "web/vite.config.ts",
     ],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
+    everyForm: [...BANNED_OUTSIDE_DIALOG_VIEW, ...withSubpaths(["foldkit/route", "zod"])],
     named: [
       ["@foldkit/ui", "Dialog"],
       ["foldkit", "Route"],
@@ -3823,19 +4048,19 @@ const IMPORT_BAN_ZONES: ImportBanZone[] = [
   {
     name: "web の route (web/src/app/*/route.ts)",
     paths: ["web/src/app/account/route.ts"],
-    everyForm: [...BANNED_ACROSS_WEB, "zod"],
+    everyForm: [...BANNED_OUTSIDE_DIALOG_VIEW, ...withSubpaths(["zod"])],
     named: [["@foldkit/ui", "Dialog"]],
   },
   {
     name: "web の dialog の部品 (web/src/shared/ui/dialog-view.ts)",
     paths: ["web/src/shared/ui/dialog-view.ts"],
-    everyForm: [...BANNED_ACROSS_WEB, "foldkit/route", "zod"],
+    everyForm: [...BANNED_ACROSS_WEB, ...withSubpaths(["foldkit/route", "zod"])],
     named: [["foldkit", "Route"]],
   },
   {
     name: "e2e/fixtures.ts (effect は使えるが、zod は使えない)",
     paths: ["e2e/fixtures.ts"],
-    everyForm: ["zod"],
+    everyForm: withSubpaths(["zod"]),
     named: [],
   },
   {
@@ -3868,6 +4093,12 @@ const PROBED_SPECIFIERS = [
     "@connectrpc/connect",
     "@core/x",
     "zod",
+    "@connectrpc/connect-node-extra",
+    "foldkit-extra",
+    "lucide-react",
+    "react-dom-extra",
+    "sonner-extra",
+    "zod-extra",
   ]),
 ];
 
@@ -3881,6 +4112,7 @@ const PROBED_NAMES: readonly (readonly [string, string])[] = [
   ["foldkit", "Command"],
   ["@foldkit/ui", "Dialog"],
   ["@foldkit/ui", "Button"],
+  ["@foldkit/ui/dialog", "Dialog"],
 ];
 
 const IMPORT_CELLS: readonly ImportCell[] = (() => {
@@ -3988,6 +4220,47 @@ describe("共有の import の禁止は、範囲ごとに、止める import と
         IMPORT_CELLS.filter((cell) => !isStoppedIn(zone, cell) && stopped(path, cell)).map(
           ({ statement }) => `${path} :: ${statement}`,
         ),
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("依存の package は、root の import を止める範囲で、subpath の import も止まる", () => {
+  const { dependencies = {}, devDependencies = {} } = readPackageJson();
+  const names = Object.keys({ ...dependencies, ...devDependencies }).toSorted();
+  const probedPaths = [
+    ...new Set([...IMPORT_BAN_ZONES.flatMap((zone) => zone.paths), "src/runtime.ts"]),
+  ];
+  const source = names
+    .flatMap((name) => [`import "${name}";`, `import "${name}/${SUBPATH_PROBE}";`])
+    .join("\n");
+  const stoppedLinesByPath = new Map<string, Set<number>>();
+
+  beforeAll(() => {
+    for (const { code, filename, labels } of lintFixtureFiles(
+      probedPaths.map((path) => ({ path, source })),
+    )) {
+      const line = labels[0]?.span.line;
+      if (
+        line !== undefined &&
+        code.startsWith("taimei(") &&
+        !RULES_STOPPING_IMPORTS_FOR_OTHER_REASONS.has(code)
+      ) {
+        stoppedLinesByPath.set(filename, (stoppedLinesByPath.get(filename) ?? new Set()).add(line));
+      }
+    }
+  });
+
+  test("root を止める範囲では、同じ package の subpath も止まる", () => {
+    expect(
+      probedPaths.flatMap((path) =>
+        names.flatMap((name, index) => {
+          const stoppedLines = stoppedLinesByPath.get(path) ?? new Set<number>();
+          const rootLine = index * 2 + 1;
+          return stoppedLines.has(rootLine) && !stoppedLines.has(rootLine + 1)
+            ? [`${path} :: ${name}`]
+            : [];
+        }),
       ),
     ).toEqual([]);
   });

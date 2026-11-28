@@ -645,25 +645,37 @@ describe("MFA の登録と有効化は、発行から 10 分以内の session �
       }),
     ));
 
-  test("試行枠を使い切った古い session の登録は試行枠の失敗になり、再認証の拒否の audit event を増やさない", () =>
-    run(
-      Effect.gen(function* () {
-        const db = yield* TestDb;
-        const user = yield* db.seedUser("reauth-budget");
-        const { recorded, app } = recordingAudit();
-        const session = yield* createSessionFor(user.id);
-        yield* ageStoredSession(session.token, { sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS });
-        const limit = ATTEMPT_BUDGETS.mfaChangePerSession.maxAttempts();
-        for (let attempt = 0; attempt < limit; attempt++) {
-          yield* postJson(app, "/api/account/mfa/enroll", session.headers);
-        }
-        const auditedWithinBudget = recorded.length;
+  for (const { operation, endpoint, body } of [
+    { operation: "登録", endpoint: "enroll", body: undefined },
+    {
+      operation: "有効化",
+      endpoint: "activate",
+      body: { code: "000000", enrollment_id: "enrollment" },
+    },
+  ]) {
+    const path = `/api/account/mfa/${endpoint}`;
+    test(`試行枠を使い切った古い session の${operation}は試行枠の失敗になり、再認証の拒否の audit event を増やさない`, () =>
+      run(
+        Effect.gen(function* () {
+          const db = yield* TestDb;
+          const user = yield* db.seedUser(`reauth-budget-${endpoint}`);
+          const { recorded, app } = recordingAudit();
+          const session = yield* createSessionFor(user.id);
+          yield* ageStoredSession(session.token, {
+            sinceCreatedMs: PAST_REAUTHENTICATION_WINDOW_MS,
+          });
+          const limit = ATTEMPT_BUDGETS.mfaChangePerSession.maxAttempts();
+          for (let attempt = 0; attempt < limit; attempt++) {
+            yield* postJson(app, path, session.headers, body);
+          }
+          const auditedWithinBudget = recorded.length;
 
-        const res = yield* postJson(app, "/api/account/mfa/enroll", session.headers);
+          const res = yield* postJson(app, path, session.headers, body);
 
-        expect(auditedWithinBudget).toBe(limit);
-        expect([res.status, yield* responseJson(res)]).toEqual([429, { _tag: "RateLimited" }]);
-        expect(recorded).toHaveLength(limit);
-      }),
-    ));
+          expect(auditedWithinBudget).toBe(limit);
+          expect([res.status, yield* responseJson(res)]).toEqual([429, { _tag: "RateLimited" }]);
+          expect(recorded).toHaveLength(limit);
+        }),
+      ));
+  }
 });

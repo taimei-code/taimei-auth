@@ -1,7 +1,10 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, HttpApiMiddleware } from "effect/http-api";
 import { Authenticated, type CurrentSession } from "../account/actor-contract";
-import { Reauthenticated } from "../account/reauthentication-contract";
+import {
+  Reauthenticated,
+  type WithinSessionAttemptBudget,
+} from "../account/reauthentication-contract";
 import { NotFound, RateLimited } from "../failures";
 import { IsoDateTime, Ok, SignedIn } from "../spa-contract-schemas";
 import {
@@ -100,7 +103,7 @@ export type AuthenticationResponse = typeof AuthenticationResponse.Type;
 
 export class PasskeyManagementBudget extends HttpApiMiddleware.Service<
   PasskeyManagementBudget,
-  { requires: CurrentSession }
+  { requires: CurrentSession; provides: WithinSessionAttemptBudget }
 >()("taimei/PasskeyManagementBudget", { error: RateLimited }) {}
 
 export class PasskeyGroup extends HttpApiGroup.make("passkey")

@@ -117,6 +117,7 @@
     "taimei/passkey-transports-only-in-passkey-entry": "error",
     "taimei/passkey-limit-only-in-passkey-policy": "error",
     "taimei/session-issued-at-only-in-reauthentication": "error",
+    "taimei/within-session-attempt-budget-only-from-session-budget": "error",
     "taimei/flagship-binding-only-in-feature-flags": "error",
     "taimei/feature-flags-port-only-in-flag-decisions": "error",
     "taimei/no-flag-decision-in-handlers-rpc-web": "error",
@@ -206,7 +207,13 @@
     "taimei/no-root-alias-in-web": "error",
     "taimei/effect-subpath-in-web-only-listed": "error",
     "taimei/route-only-in-route-files": "error",
-    "taimei/foldkit-dialog-only-in-dialog-view": "error"
+    "taimei/foldkit-dialog-only-in-dialog-view": "error",
+    "taimei/no-effect-run-in-web": "error",
+    "taimei/no-browser-global-outside-command": "error",
+    "taimei/no-timer-clock-random-in-foldkit": "error",
+    "taimei/no-atom-import-in-foldkit": "error",
+    "taimei/no-raw-form-element": "error",
+    "taimei/no-direct-application-start": "error"
   },
   "overrides": [
     {
@@ -226,12 +233,6 @@
       "files": ["web/src/**", "web/non-production/**"],
       "excludeFiles": ["web/src/**/__tests__/**", "web/non-production/**/__tests__/**"],
       "rules": {
-        "taimei/no-effect-run-in-web": "error",
-        "taimei/no-browser-global-outside-command": "error",
-        "taimei/no-timer-clock-random-in-foldkit": "error",
-        "taimei/no-atom-import-in-foldkit": "error",
-        "taimei/no-raw-form-element": "error",
-        "taimei/no-direct-application-start": "error",
         "typescript/consistent-type-assertions": [
           "error",
           {
@@ -328,21 +329,8 @@
       }
     },
     {
-      "files": ["web/src/shared/ui/**"],
-      "rules": {
-        "taimei/no-raw-form-element": "off"
-      }
-    },
-    {
-      "files": ["web/src/app/start-application.ts"],
-      "rules": {
-        "taimei/no-direct-application-start": "off"
-      }
-    },
-    {
       "files": ["web/src/app/*/entry.ts", "web/non-production/main.ts"],
       "rules": {
-        "taimei/no-browser-global-outside-command": "off",
         "foldkit/no-impure-call-at-decision-time": "off"
       }
     },

@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { REPO_ROOT, readEnvFile } from "./config-invariant-helpers";
 import { TEST_MFA_TOTP_ENCRYPTION_KEYS } from "./test-env";
 
@@ -49,6 +58,25 @@ const packageDirWithFragment = (fragment: string | undefined) => {
     writeFileSync(join(dir, "testing/compose.yml"), fragment);
   }
   return dir;
+};
+
+const sdkPackageDir = () => {
+  const dir = mkdtempSync(join(tmpdir(), "auth-client-package-"));
+  packageDirs.push(dir);
+  cpSync(SDK_DIR, dir, {
+    recursive: true,
+    filter: (source) => basename(source) !== "node_modules",
+  });
+  writeFileSync(join(dir, "testing/compose.yml"), generateFragment(IMAGE_WITH_DIGEST).stdout);
+  return dir;
+};
+
+const packedPaths = (dir: string) => {
+  const result = run(["npm", "pack", "--dry-run", "--json", "--ignore-scripts"], dir);
+  expect(result.exitCode).toBe(0);
+  return (JSON.parse(result.stdout) as [{ files: { path: string }[] }])[0].files.map(
+    ({ path }) => path,
+  );
 };
 
 describe("断片の生成は、digest で固定した試験用の image だけを受ける", () => {
@@ -115,12 +143,6 @@ describe("digest の無い断片は publish しない", () => {
 });
 
 describe("断片は git で管理せず、SDK の package に入れる", () => {
-  test("SDK の files に、生成した断片が入る", () => {
-    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
-
-    expect(pkg.files).toContain("testing/compose.yml");
-  });
-
   test("生成した断片は git の対象外で、template は git の対象", () => {
     expect(run(["git", "check-ignore", "-q", FRAGMENT_PATH]).exitCode).toBe(0);
     expect(run(["git", "check-ignore", "-q", TEMPLATE_PATH]).exitCode).toBe(1);
@@ -155,10 +177,7 @@ describe("consumer が書く設定は TAIMEI_AUTH_* だけで、DB は断片の�
 const SERVICE_KEY_FILE = "testing/service-key.env";
 
 describe("consumer と共有する service key は、SDK に同梱する 1 つの file に置く", () => {
-  test("service key の file は git に無視されず、SDK の files に入る", () => {
-    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
-
-    expect(pkg.files).toContain(SERVICE_KEY_FILE);
+  test("service key の file は git に無視されない", () => {
     expect(run(["git", "check-ignore", "-q", SERVICE_KEY_FILE], SDK_DIR).exitCode).toBe(1);
   });
 
@@ -180,6 +199,32 @@ describe("consumer と共有する service key は、SDK に同梱する 1 つ�
 
     expect(lastEnvFile(TEMPLATE_PATH, "taimei-auth")).toBe(join(SDK_DIR, SERVICE_KEY_FILE));
     expect(lastEnvFile("docker-compose.yml", "auth-service")).toBe(join(SDK_DIR, SERVICE_KEY_FILE));
+  });
+});
+
+describe("SDK の testing/ に置いた file は、package.json の files に書き足さなくても package に入る", () => {
+  test("testing/ に file を足すと、files を変えなくても npm pack の一覧に入り、template は入らない (npm は files の ! の行を除外として扱う)", () => {
+    const dir = sdkPackageDir();
+    writeFileSync(join(dir, "testing/added-file.env"), "ADDED=1\n");
+
+    const paths = packedPaths(dir);
+
+    expect(paths).toContain("testing/added-file.env");
+    expect(paths).not.toContain(TEMPLATE_PATH.slice("packages/auth-client/".length));
+  });
+
+  test("npm pack の一覧は、今 package に入っている file をすべて含み、dist と testing/ の外に足した覚えのない file を含まない", () => {
+    const paths = packedPaths(sdkPackageDir());
+    const committedTestingFiles = readdirSync(join(SDK_DIR, "testing"))
+      .filter((name) => name !== basename(TEMPLATE_PATH))
+      .map((name) => `testing/${name}`);
+
+    expect(paths).toEqual(
+      expect.arrayContaining(["dist/index.js", "testing/compose.yml", ...committedTestingFiles]),
+    );
+    expect(
+      paths.filter((path) => !path.startsWith("dist/") && !path.startsWith("testing/")).sort(),
+    ).toEqual(["CHANGELOG.md", "README.md", "package.json"]);
   });
 });
 
@@ -209,10 +254,7 @@ const networkKeys = (networks: ComposeNetworks | undefined) =>
   Array.isArray(networks) ? networks : Object.keys(networks ?? {});
 
 describe("consumer は SDK の上書きの file を 2 つ目の -f で足し、taimei-auth を開発環境への中継に差し替える", () => {
-  test("上書きの file は SDK の files に入り、git の対象である", () => {
-    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
-
-    expect(pkg.files).toContain(DEVELOPMENT_OVERLAY_FILE);
+  test("上書きの file は git の対象である", () => {
     expect(run(["git", "check-ignore", "-q", DEVELOPMENT_OVERLAY_FILE], SDK_DIR).exitCode).toBe(1);
   });
 
@@ -272,10 +314,7 @@ describe("consumer は SDK の上書きの file を 2 つ目の -f で足し、t
 const DEVELOPMENT_ENVIRONMENT_FILE = "testing/development-environment.env";
 
 describe("開発環境の固定の値は SDK の 1 つの file に置き、開発環境の compose と consumer の app が同じ file から読む", () => {
-  test("固定の値の file は SDK の files に入り、git の対象である (consumer は node_modules の中の file を読む)", () => {
-    const pkg = JSON.parse(readFileSync(join(SDK_DIR, "package.json"), "utf8"));
-
-    expect(pkg.files).toContain(DEVELOPMENT_ENVIRONMENT_FILE);
+  test("固定の値の file は git の対象である (consumer は node_modules の中の file を読む)", () => {
     expect(run(["git", "check-ignore", "-q", DEVELOPMENT_ENVIRONMENT_FILE], SDK_DIR).exitCode).toBe(
       1,
     );

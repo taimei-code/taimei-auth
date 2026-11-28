@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { parseEnv } from "node:util";
@@ -9,11 +10,15 @@ export { REPO_ROOT };
 export const readEnvFile = (path: string) =>
   parseEnv(readFileSync(path, "utf8")) as Record<string, string>;
 
+type OxlintRuleSeverities = Readonly<Record<string, unknown>>;
+
 export interface OxlintOverride {
   files: string[];
+  rules?: OxlintRuleSeverities;
 }
 
 export interface OxlintConfig {
+  rules?: OxlintRuleSeverities;
   overrides?: OxlintOverride[];
 }
 
@@ -209,6 +214,21 @@ export function symmetricDifference(a: string[], b: string[]): string[] {
 
 export function readOxlintConfig(): OxlintConfig {
   return parseJsonc(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8")) as OxlintConfig;
+}
+
+let effectTsgoExecutable: string | undefined;
+
+export function effectTsgo(): string {
+  if (effectTsgoExecutable === undefined) {
+    const resolved = spawnSync(join(REPO_ROOT, "node_modules/.bin/effect-tsgo"), ["get-exe-path"], {
+      encoding: "utf8",
+    }).stdout.trim();
+    if (!existsSync(resolved)) {
+      throw new Error(`effect-tsgo の実行 file を解決できない: ${resolved}`);
+    }
+    effectTsgoExecutable = resolved;
+  }
+  return effectTsgoExecutable;
 }
 
 export function readPackageJson(): {

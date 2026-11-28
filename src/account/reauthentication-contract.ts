@@ -1,12 +1,17 @@
 import type { ReauthenticationOperation } from "../../db/enums";
+import { Context } from "effect";
 import type { HttpApiEndpoint, HttpApiGroup } from "effect/http-api";
 import { HttpApiMiddleware } from "effect/http-api";
 import { ReauthenticationRequired } from "../failures";
 import type { CurrentActor, CurrentSession } from "./actor-contract";
 
+export class WithinSessionAttemptBudget extends Context.Service<WithinSessionAttemptBudget, true>()(
+  "taimei/WithinSessionAttemptBudget",
+) {}
+
 export class Reauthenticated extends HttpApiMiddleware.Service<
   Reauthenticated,
-  { requires: CurrentActor | CurrentSession }
+  { requires: CurrentActor | CurrentSession | WithinSessionAttemptBudget }
 >()("taimei/Reauthenticated", { error: ReauthenticationRequired }) {}
 
 export const REAUTHENTICATED_OPERATIONS = {

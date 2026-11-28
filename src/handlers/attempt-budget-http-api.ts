@@ -1,6 +1,7 @@
 import { Effect, Layer } from "effect";
 import { HttpServerRequest } from "effect/http";
 import { CurrentSession } from "../account/actor-contract";
+import { WithinSessionAttemptBudget } from "../account/reauthentication-contract";
 import {
   ATTEMPT_BUDGETS,
   type AttemptBudget,
@@ -37,7 +38,7 @@ const perSessionBudget = (
       yield* spendAttemptBudgetOrRateLimited(budget, `session:${session.id}`).pipe(
         Effect.provideContext(services),
       );
-      return yield* httpEffect;
+      return yield* httpEffect.pipe(Effect.provideService(WithinSessionAttemptBudget, true));
     });
   });
 

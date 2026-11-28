@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 
+import { effectTsgo } from "./config-invariant-helpers";
 import { REPO_ROOT, repoFiles } from "./source-scan";
 import {
   analyzeWebStructure,
@@ -162,11 +163,6 @@ describe("Foldkit の page", () => {
     expect(drawn).toMatch(/\bh\.label\(/);
   });
 });
-
-const effectTsgo = () =>
-  spawnSync(join(REPO_ROOT, "node_modules/.bin/effect-tsgo"), ["get-exe-path"], {
-    encoding: "utf8",
-  }).stdout.trim();
 
 const probeDirectories: string[] = [];
 
