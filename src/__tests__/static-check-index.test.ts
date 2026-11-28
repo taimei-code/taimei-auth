@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, lstatSync, readFileSync, readlinkSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import taimeiPlugin from "../../lint/oxlint-plugin.mjs";
+import { type OxlintConfig, readOxlintConfig } from "./config-invariant-helpers";
 import { REPO_ROOT, repoFiles } from "./source-scan";
 
 const RULE_NUMBER_REFERENCE = /CLAUDE\.md`? ルール ?[0-9]/;
@@ -43,18 +44,14 @@ const resolvesTo = (document: RepoText, mentioned: string): string[] => [
   normalize(join(dirname(document.path), mentioned)),
 ];
 
-type RuleSeverities = Readonly<Record<string, unknown>>;
+const taimeiRuleNames = (rules: OxlintConfig["rules"] = {}): string[] =>
+  Object.keys(rules).filter((name) => name.startsWith("taimei/"));
 
 const enabledTaimeiRules = (): string[] => {
-  const config: {
-    readonly rules: RuleSeverities;
-    readonly overrides: ReadonlyArray<{ readonly rules?: RuleSeverities }>;
-  } = JSON.parse(readFileSync(join(REPO_ROOT, ".oxlintrc.json"), "utf8"));
-  const enabled = [config.rules, ...config.overrides.map(({ rules = {} }) => rules)]
-    .flatMap((rules) => Object.entries(rules))
-    .filter(([name, severity]) => name.startsWith("taimei/") && severity === "error")
-    .map(([name]) => name.slice("taimei/".length));
-  return [...new Set(enabled)];
+  const { rules = {} } = readOxlintConfig();
+  return taimeiRuleNames(rules)
+    .filter((name) => rules[name] === "error")
+    .map((name) => name.slice("taimei/".length));
 };
 
 describe("規則の正本は違反した時の message と test 名で、CLAUDE.md は担保の写しを持たない (ADR-0027)", () => {
@@ -76,6 +73,12 @@ describe("規則の正本は違反した時の message と test 名で、CLAUDE.
 
   test("lint の plugin が持つ rule と、.oxlintrc.json で error にした taimei の rule は同じ", () => {
     expect(enabledTaimeiRules().toSorted()).toEqual(Object.keys(taimeiPlugin.rules).toSorted());
+  });
+
+  test(".oxlintrc.json の override は taimei の rule を持たない (override は merge されず、範囲の重なる override が有効化と例外を消すので、範囲と例外は表の行に書く)", () => {
+    expect(
+      (readOxlintConfig().overrides ?? []).flatMap(({ rules }) => taimeiRuleNames(rules)),
+    ).toEqual([]);
   });
 
   test("文書への参照は CLAUDE.md の規則の番号でなく見出しで書く", () => {

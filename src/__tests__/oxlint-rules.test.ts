@@ -45,6 +45,26 @@ const DIRECT_APPLICATION_START = "taimei(no-direct-application-start)";
 const MODULE_LEVEL_MUTABLE_STATE = "foldkit(no-module-level-mutable-state)";
 const BRACES_REQUIRED = "eslint(curly)";
 const TYPE_ASSERTION = "typescript(consistent-type-assertions)";
+const FOLDKIT_IMPURE_CALL = "foldkit(no-impure-call-at-decision-time)";
+
+const RAW_BUTTON_SOURCE =
+  "type Builder = { readonly button: (attributes: unknown[]) => unknown };\nexport const view = (h: Builder) => h.button([]);";
+const MAKE_APPLICATION_IMPORT_SOURCE =
+  'import { makeApplication } from "foldkit/runtime";\nexport { makeApplication };';
+const WINDOW_IN_VIEW_SOURCE =
+  'import { Command } from "foldkit";\nexport const view = () => [window.location.href, Command];';
+const DATE_NOW_SOURCE =
+  'import { Command } from "foldkit";\nexport const read = () => [Date.now(), Command];';
+const EVERY_SCREEN_FORM_SOURCE =
+  'import { Effect } from "effect";\nimport { Command, Runtime } from "foldkit";\nimport { mfaStatusAtom } from "./mfa-atom";\ntype Builder = { readonly button: (attributes: unknown[]) => unknown };\nexport const all = (h: Builder) => [Effect.runPromise(Effect.void), window.location.href, setTimeout(() => undefined, 1), mfaStatusAtom, h.button([]), Runtime.run, Command];';
+const EVERY_SCREEN_FORM_RULES = [
+  ATOM_IMPORT_IN_FOLDKIT,
+  BROWSER_GLOBAL_OUTSIDE_COMMAND,
+  DIRECT_APPLICATION_START,
+  EFFECT_RUN_IN_WEB,
+  RAW_FORM_ELEMENT,
+  TIMER_CLOCK_RANDOM_IN_FOLDKIT,
+];
 
 const CASES: readonly Case[] = [
   {
@@ -622,6 +642,166 @@ const CASES: readonly Case[] = [
     source:
       'import { Runtime } from "foldkit"; export const start = (config: Parameters<typeof Runtime.makeApplication>[0]) => Runtime.run(Runtime.makeApplication(config));',
     expectedRules: [],
+  },
+  {
+    name: "web/src の Foldkit の file は、Effect の実行・browser の global・timer・*-atom の import・h.button・application の起動を 1 つの file に書いても、6 つとも止まる",
+    path: "web/src/mfa/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "本番以外の shell の Foldkit の file も、Effect の実行・browser の global・timer・*-atom の import・h.button・application の起動を 1 つの file に書くと、6 つとも止まる",
+    path: "web/non-production/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "web/src の test の file (__tests__ の下) は、6 つの止める形を 1 つの file に書ける",
+    path: "web/src/mfa/__tests__/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "web/src の __tests__ 直下の file も、6 つの止める形を 1 つの file に書ける",
+    path: "web/src/__tests__/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "本番以外の shell の test の file (__tests__ の下) は、6 つの止める形を 1 つの file に書ける",
+    path: "web/non-production/__tests__/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "web/src では、__tests__ の外に置いた *.test.ts の file に 6 つの止める形を書くと止まる",
+    path: "web/src/mfa/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "本番以外の shell では、__tests__ の外に置いた *.test.ts の file に 6 つの止める形を書くと止まる",
+    path: "web/non-production/EveryScreenForm.test.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES,
+  },
+  {
+    name: "web/src と web/non-production の外の web の file は、6 つの止める形を 1 つの file に書ける",
+    path: "web/EveryScreenForm.ts",
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: [],
+  },
+  ...[
+    {
+      exemption: "shared/ui の部品は h.button を書けるが",
+      path: "web/src/shared/ui/EveryScreenForm.ts",
+      allowed: RAW_FORM_ELEMENT,
+    },
+    {
+      exemption: "起動の関数の file は application を起動できるが",
+      path: "web/src/app/start-application.ts",
+      allowed: DIRECT_APPLICATION_START,
+    },
+    {
+      exemption: "application の entry は Foldkit の view で window を読めるが",
+      path: "web/src/app/auth/entry.ts",
+      allowed: BROWSER_GLOBAL_OUTSIDE_COMMAND,
+    },
+    {
+      exemption: "本番以外の shell の main.ts は Foldkit の view で window を読めるが",
+      path: "web/non-production/main.ts",
+      allowed: BROWSER_GLOBAL_OUTSIDE_COMMAND,
+    },
+  ].map(({ exemption, path, allowed }) => ({
+    name: `${exemption}、6 つの止める形のうち残りの 5 つは止まる`,
+    path,
+    source: EVERY_SCREEN_FORM_SOURCE,
+    expectedRules: EVERY_SCREEN_FORM_RULES.filter((rule) => rule !== allowed),
+  })),
+  {
+    name: "Foldkit を import しない file は、window・setTimeout・*-atom の import を書ける",
+    path: "web/src/mfa/PlainBrowserUse.ts",
+    source:
+      'import { mfaStatusAtom } from "./mfa-atom";\nexport const all = () => [window.location.href, setTimeout(() => undefined, 1), mfaStatusAtom];',
+    expectedRules: [],
+  },
+  {
+    name: "Foldkit を import しない file の Date.now と Math.random を止めるのは Foldkit の rule だけで、taimei の rule は止めない",
+    path: "web/src/mfa/PlainClockUse.ts",
+    source: "export const all = () => [Date.now(), Math.random()];",
+    expectedRules: [FOLDKIT_IMPURE_CALL],
+  },
+  {
+    name: "shared/ui の下の深い階層の部品も h.button を書ける",
+    path: "web/src/shared/ui/inner/deep/DeepRawButton.ts",
+    source: RAW_BUTTON_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "shared/ui に名前が似ているだけの shared/ui-kit の下では h.button を書けない",
+    path: "web/src/shared/ui-kit/SimilarDirRawButton.ts",
+    source: RAW_BUTTON_SOURCE,
+    expectedRules: [RAW_FORM_ELEMENT],
+  },
+  {
+    name: "起動の関数の file は foldkit/runtime から makeApplication を import できる",
+    path: "web/src/app/start-application.ts",
+    source: MAKE_APPLICATION_IMPORT_SOURCE,
+    expectedRules: [],
+  },
+  {
+    name: "起動の関数と同じ名前の file でも、app の下の別の dir に置くと makeApplication を import できない",
+    path: "web/src/app/other/start-application.ts",
+    source: MAKE_APPLICATION_IMPORT_SOURCE,
+    expectedRules: [DIRECT_APPLICATION_START],
+  },
+  {
+    name: "app 直下の entry.ts は Foldkit の view で window を読めない",
+    path: "web/src/app/entry.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "app の 2 階層下の entry.ts は Foldkit の view で window を読めない",
+    path: "web/src/app/auth/deep/entry.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "application の entry の dir にある entry.ts 以外の file は Foldkit の view で window を読めない",
+    path: "web/src/app/auth/other.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "本番以外の shell の別の dir の main.ts は Foldkit の view で window を読めない",
+    path: "web/non-production/sub/main.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "本番以外の shell の main.ts 以外の file は Foldkit の view で window を読めない",
+    path: "web/non-production/other.ts",
+    source: WINDOW_IN_VIEW_SOURCE,
+    expectedRules: [BROWSER_GLOBAL_OUTSIDE_COMMAND],
+  },
+  {
+    name: "application の entry の Date.now を止めるのは taimei の rule だけで、Foldkit の rule は止めない",
+    path: "web/src/app/auth/entry.ts",
+    source: DATE_NOW_SOURCE,
+    expectedRules: [TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "本番以外の shell の main.ts の Date.now を止めるのは taimei の rule だけで、Foldkit の rule は止めない",
+    path: "web/non-production/main.ts",
+    source: DATE_NOW_SOURCE,
+    expectedRules: [TIMER_CLOCK_RANDOM_IN_FOLDKIT],
+  },
+  {
+    name: "本番以外の shell は型の cast を書けない",
+    path: "web/non-production/CastProbe.ts",
+    source: "export const asText = (value: unknown) => value as string;",
+    expectedRules: [TYPE_ASSERTION],
   },
   {
     name: "web は @/ で import できない",

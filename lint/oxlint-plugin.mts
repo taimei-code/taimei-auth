@@ -558,7 +558,204 @@ const EFFECT_FROM_ROOT_MESSAGE =
 const DECIDED_EFFECT_SUBPATHS_MESSAGE =
   "effect の subpath は使い道を決めたものだけ許す。契約 (*-contract.ts) は effect/http-api、Hono に載せる実装 (handlers/*-http-api.ts) は加えて effect/http (docs/adr/0017-effect-v4-full-adoption.md)";
 
+const BROWSER_GLOBALS = new Set([
+  "window",
+  "document",
+  "navigator",
+  "location",
+  "history",
+  "localStorage",
+  "sessionStorage",
+  "fetch",
+]);
+
+const TIMER_GLOBALS = new Set(["setTimeout", "setInterval", "requestAnimationFrame"]);
+
+const CLOCK_AND_RANDOM_CALLS = new Set(["Date.now", "Math.random", "crypto.randomUUID"]);
+
+const FORM_ELEMENTS = new Set(["button", "input", "textarea", "select"]);
+
+const APPLICATION_STARTS = new Set(["Runtime.makeApplication", "Runtime.run"]);
+
+const DEFERRED_EFFECT_CONSTRUCTORS = new Set(
+  ["sync", "try", "tryPromise", "promise", "suspend", "callback"].map((name) => `Effect.${name}`),
+);
+
+const isExecuteProperty = (node: AstNode) =>
+  node.type === "Property" && node.key?.name === "execute";
+
+const isDeferredEffectCall = (node: AstNode) =>
+  node.type === "CallExpression" && DEFERRED_EFFECT_CONSTRUCTORS.has(memberPathOf(node.callee));
+
+const isDeferredByRuntime = (node: AstNode) =>
+  isExecuteProperty(node) || isDeferredEffectCall(node);
+
+const isDeclaredIn = (scope: Scope | null, name: string): boolean =>
+  scope !== null && (scope.set.has(name) || isDeclaredIn(scope.upper, name));
+
+const namedNode = (parent: AstNode | undefined) =>
+  parent?.type === "MemberExpression" ? parent.property : parent?.key;
+
+const isPropertyName = (node: AstNode) =>
+  node.parent?.computed !== true && namedNode(node.parent) === node;
+
+const isGlobalReference = (context: RuleContext, node: AstNode, name: string) =>
+  !isPropertyName(node) && !isDeclaredIn(context.sourceCode.getScope(node), name);
+
+const inFoldkitFiles = (create: (context: RuleContext, report: Report) => Visitors): Matcher => ({
+  kind: "custom",
+  visitors: (report, _path, context) => {
+    let isFoldkitFile = false;
+    const visitors = Object.entries(create(context, report)).map(([selector, visit]) => [
+      selector,
+      (node: AstNode) => {
+        if (isFoldkitFile) {
+          visit(node);
+        }
+      },
+    ]);
+    return Object.fromEntries([
+      [
+        "Program",
+        (node: AstNode) => {
+          isFoldkitFile = importsFoldkit(node);
+        },
+      ],
+      ...visitors,
+    ]);
+  },
+});
+
+const SCREEN_PATHS = ["web/src/**", "web/non-production/**"];
+
 const ROWS: readonly Row[] = [
+  {
+    name: "no-effect-run-in-web",
+    within: SCREEN_PATHS,
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          MemberExpression: (node) => {
+            if (memberPathOf(node).startsWith("Effect.run")) {
+              report(node);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "web の画面は Effect を自分で走らせない。Foldkit の update か init が Command を返し、runtime が走らせる",
+  },
+  {
+    name: "no-browser-global-outside-command",
+    within: SCREEN_PATHS,
+    allowedIn: ["web/src/app/*/entry.ts", "web/non-production/main.ts"],
+    matchers: [
+      inFoldkitFiles((context, report) => ({
+        Identifier: (node) => {
+          const name = node.name ?? "";
+          if (
+            BROWSER_GLOBALS.has(name) &&
+            isGlobalReference(context, node, name) &&
+            !context.sourceCode.getAncestors(node).some(isDeferredByRuntime)
+          ) {
+            report(node);
+          }
+        },
+      })),
+    ],
+    message:
+      "Foldkit の update・view・init は window・document・navigator・location・history・localStorage・sessionStorage・fetch に触れない。Command の execute か、Effect.sync などの中に置く",
+  },
+  {
+    name: "no-timer-clock-random-in-foldkit",
+    within: SCREEN_PATHS,
+    matchers: [
+      inFoldkitFiles((context, report) => ({
+        Identifier: (node) => {
+          const name = node.name ?? "";
+          if (TIMER_GLOBALS.has(name) && isGlobalReference(context, node, name)) {
+            report(node);
+          }
+        },
+        MemberExpression: (node) => {
+          if (CLOCK_AND_RANDOM_CALLS.has(memberPathOf(node))) {
+            report(node);
+          }
+        },
+      })),
+    ],
+    message:
+      "Foldkit の file は setTimeout・setInterval・requestAnimationFrame・Date.now・Math.random・crypto.randomUUID を使わない。待つのは Effect.sleep、次の描画は Foldkit の Subscription で書き、時刻は Clock、乱数と ID は Random か SecureRandom を Command の中で使う",
+  },
+  {
+    name: "no-atom-import-in-foldkit",
+    within: SCREEN_PATHS,
+    matchers: [
+      inFoldkitFiles((_context, report) => ({
+        ImportDeclaration: (node) => {
+          if (/-atom(\.tsx?)?$/.test(stringOf(node.source) ?? "")) {
+            report(node);
+          }
+        },
+      })),
+    ],
+    message: "Foldkit の file は *-atom.ts を import しない。状態は Model、通信は Command に置く",
+  },
+  {
+    name: "no-raw-form-element",
+    within: SCREEN_PATHS,
+    allowedIn: ["web/src/shared/ui/**"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          MemberExpression: (node) => {
+            if (
+              node.computed !== true &&
+              node.object?.name === "h" &&
+              FORM_ELEMENTS.has(node.property?.name ?? "")
+            ) {
+              report(node);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "h.button・h.input・h.textarea・h.select は shared/ui/ の部品だけが書く。画面は shared/ui/ の部品を使う",
+  },
+  {
+    name: "no-direct-application-start",
+    within: SCREEN_PATHS,
+    allowedIn: ["web/src/app/start-application.ts"],
+    matchers: [
+      {
+        kind: "custom",
+        visitors: (report) => ({
+          MemberExpression: (node) => {
+            if (APPLICATION_STARTS.has(memberPathOf(node))) {
+              report(node);
+            }
+          },
+          ImportDeclaration: (node) => {
+            if ((stringOf(node.source) ?? "") !== "foldkit/runtime") {
+              return;
+            }
+            const started = (node.specifiers ?? []).find((specifier) =>
+              APPLICATION_STARTS.has(`Runtime.${specifier.imported?.name}`),
+            );
+            if (started !== undefined) {
+              report(started);
+            }
+          },
+        }),
+      },
+    ],
+    message:
+      "Runtime.makeApplication と Runtime.run は app/start-application.ts の startApplication だけが呼ぶ (resources の渡し忘れを型で止めるため)",
+  },
   {
     name: "spa-transport-failure-only-in-contract-failure",
     within: ["web/src/**"],
@@ -789,7 +986,7 @@ const ROWS: readonly Row[] = [
   },
   {
     name: "no-inner-html-in-web",
-    within: ["web/src/**", "web/non-production/**"],
+    within: SCREEN_PATHS,
     includesTestFiles: true,
     matchers: [
       { kind: "member", paths: [".InnerHTML"] },
@@ -1155,7 +1352,7 @@ const ROWS: readonly Row[] = [
   },
   {
     name: "webauthn-call-only-in-passkey-webauthn",
-    within: ["web/src/**", "web/non-production/**"],
+    within: SCREEN_PATHS,
     allowedIn: ["web/src/passkey/webauthn.ts"],
     matchers: [
       { kind: "identifier", names: ["PublicKeyCredential"] },
@@ -2281,14 +2478,14 @@ const ROWS: readonly Row[] = [
   },
   {
     name: "no-effect-die-in-web",
-    within: ["web/src/**", "web/non-production/**"],
+    within: SCREEN_PATHS,
     matchers: [{ kind: "member", paths: ["Effect.die", "Effect.orDie"] }],
     message:
       "期待される失敗は型付きの失敗として返し、Effect.die・Effect.orDie で欠陥にしない。画面は失敗を Message に直して表示する (ADR-0023)",
   },
   {
     name: "no-hand-rolled-page-builders",
-    within: ["web/src/**", "web/non-production/**"],
+    within: SCREEN_PATHS,
     matchers: [
       { kind: "identifier", names: ["definePage", "defineElement", "startRoutingApplication"] },
     ],
@@ -2503,197 +2700,7 @@ const ROWS: readonly Row[] = [
   },
 ];
 
-const BROWSER_GLOBALS = new Set([
-  "window",
-  "document",
-  "navigator",
-  "location",
-  "history",
-  "localStorage",
-  "sessionStorage",
-  "fetch",
-]);
-
-const TIMER_GLOBALS = new Set(["setTimeout", "setInterval", "requestAnimationFrame"]);
-
-const CLOCK_AND_RANDOM_CALLS = new Set(["Date.now", "Math.random", "crypto.randomUUID"]);
-
-const FORM_ELEMENTS = new Set(["button", "input", "textarea", "select"]);
-
-const APPLICATION_STARTS = new Set(["Runtime.makeApplication", "Runtime.run"]);
-
-const DEFERRED_EFFECT_CONSTRUCTORS = new Set(
-  ["sync", "try", "tryPromise", "promise", "suspend", "callback"].map((name) => `Effect.${name}`),
-);
-
-const isExecuteProperty = (node: AstNode) =>
-  node.type === "Property" && node.key?.name === "execute";
-
-const isDeferredEffectCall = (node: AstNode) =>
-  node.type === "CallExpression" && DEFERRED_EFFECT_CONSTRUCTORS.has(memberPathOf(node.callee));
-
-const isDeferredByRuntime = (node: AstNode) =>
-  isExecuteProperty(node) || isDeferredEffectCall(node);
-
-const isDeclaredIn = (scope: Scope | null, name: string): boolean =>
-  scope !== null && (scope.set.has(name) || isDeclaredIn(scope.upper, name));
-
-const namedNode = (parent: AstNode | undefined) =>
-  parent?.type === "MemberExpression" ? parent.property : parent?.key;
-
-const isPropertyName = (node: AstNode) =>
-  node.parent?.computed !== true && namedNode(node.parent) === node;
-
-const isGlobalReference = (context: RuleContext, node: AstNode, name: string) =>
-  !isPropertyName(node) && !isDeclaredIn(context.sourceCode.getScope(node), name);
-
-const inFoldkitFiles = (create: (context: RuleContext) => Visitors) => ({
-  create: (context: RuleContext): Visitors => {
-    let isFoldkitFile = false;
-    const visitors = Object.entries(create(context)).map(([selector, visit]) => [
-      selector,
-      (node: AstNode) => {
-        if (isFoldkitFile) {
-          visit(node);
-        }
-      },
-    ]);
-    return Object.fromEntries([
-      [
-        "Program",
-        (node: AstNode) => {
-          isFoldkitFile = importsFoldkit(node);
-        },
-      ],
-      ...visitors,
-    ]);
-  },
-});
-
-const noEffectRunInWeb = {
-  create: (context: RuleContext): Visitors => ({
-    MemberExpression: (node) => {
-      if (!memberPathOf(node).startsWith("Effect.run")) {
-        return;
-      }
-      context.report({
-        node,
-        message:
-          "web の画面は Effect を自分で走らせない。Foldkit の update か init が Command を返し、runtime が走らせる",
-      });
-    },
-  }),
-};
-
-const noBrowserGlobalOutsideCommand = inFoldkitFiles((context) => ({
-  Identifier: (node) => {
-    const name = node.name ?? "";
-    if (
-      !BROWSER_GLOBALS.has(name) ||
-      !isGlobalReference(context, node, name) ||
-      context.sourceCode.getAncestors(node).some(isDeferredByRuntime)
-    ) {
-      return;
-    }
-    context.report({
-      node,
-      message: `Foldkit の update・view・init は ${name} に触れない。Command の execute か、Effect.sync などの中に置く`,
-    });
-  },
-}));
-
-const noTimerClockRandomInFoldkit = inFoldkitFiles((context) => ({
-  Identifier: (node) => {
-    const name = node.name ?? "";
-    if (!TIMER_GLOBALS.has(name) || !isGlobalReference(context, node, name)) {
-      return;
-    }
-    context.report({
-      node,
-      message: `Foldkit の file は ${name} を使わない。待つのは Effect.sleep、次の描画は Foldkit の Subscription で書く`,
-    });
-  },
-  MemberExpression: (node) => {
-    const path = memberPathOf(node);
-    if (!CLOCK_AND_RANDOM_CALLS.has(path)) {
-      return;
-    }
-    context.report({
-      node,
-      message: `Foldkit の file は ${path} を使わない。時刻は Clock、乱数と ID は Random か SecureRandom を Command の中で使う`,
-    });
-  },
-}));
-
-const noAtomImportInFoldkit = inFoldkitFiles((context) => ({
-  ImportDeclaration: (node) => {
-    if (!/-atom(\.tsx?)?$/.test(stringOf(node.source) ?? "")) {
-      return;
-    }
-    context.report({
-      node,
-      message: "Foldkit の file は *-atom.ts を import しない。状態は Model、通信は Command に置く",
-    });
-  },
-}));
-
-const noRawFormElement = {
-  create: (context: RuleContext): Visitors => ({
-    MemberExpression: (node) => {
-      if (
-        node.computed === true ||
-        node.object?.name !== "h" ||
-        !FORM_ELEMENTS.has(node.property?.name ?? "")
-      ) {
-        return;
-      }
-      context.report({
-        node,
-        message: `h.${node.property?.name} は shared/ui/ の部品だけが書く。画面は shared/ui/ の部品を使う`,
-      });
-    },
-  }),
-};
-
-const APPLICATION_START_MESSAGE =
-  "は app/start-application.ts の startApplication だけが呼ぶ (resources の渡し忘れを型で止めるため)";
-
-const noDirectApplicationStart = {
-  create: (context: RuleContext): Visitors => ({
-    MemberExpression: (node) => {
-      const path = memberPathOf(node);
-      if (!APPLICATION_STARTS.has(path)) {
-        return;
-      }
-      context.report({ node, message: `${path} ${APPLICATION_START_MESSAGE}` });
-    },
-    ImportDeclaration: (node) => {
-      if ((stringOf(node.source) ?? "") !== "foldkit/runtime") {
-        return;
-      }
-      const started = (node.specifiers ?? []).find((specifier) =>
-        APPLICATION_STARTS.has(`Runtime.${specifier.imported?.name}`),
-      );
-      if (started === undefined) {
-        return;
-      }
-      context.report({
-        node: started,
-        message: `${started.imported?.name} ${APPLICATION_START_MESSAGE}`,
-      });
-    },
-  }),
-};
-
 export default {
   meta: { name: "taimei" },
-  rules: {
-    ...Object.fromEntries(ROWS.map((row) => [row.name, ruleOf(row)])),
-    "no-effect-run-in-web": noEffectRunInWeb,
-    "no-browser-global-outside-command": noBrowserGlobalOutsideCommand,
-    "no-timer-clock-random-in-foldkit": noTimerClockRandomInFoldkit,
-    "no-atom-import-in-foldkit": noAtomImportInFoldkit,
-    "no-raw-form-element": noRawFormElement,
-    "no-direct-application-start": noDirectApplicationStart,
-  },
+  rules: Object.fromEntries(ROWS.map((row) => [row.name, ruleOf(row)])),
 };

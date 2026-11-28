@@ -9,11 +9,15 @@ export { REPO_ROOT };
 export const readEnvFile = (path: string) =>
   parseEnv(readFileSync(path, "utf8")) as Record<string, string>;
 
+type OxlintRuleSeverities = Readonly<Record<string, unknown>>;
+
 export interface OxlintOverride {
   files: string[];
+  rules?: OxlintRuleSeverities;
 }
 
 export interface OxlintConfig {
+  rules?: OxlintRuleSeverities;
   overrides?: OxlintOverride[];
 }
 
